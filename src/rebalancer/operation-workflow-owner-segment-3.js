@@ -217,6 +217,7 @@ class OperationWorkflowOwnerSegment3
   async completeOperation(operation) {
     this.clearDispatchRetry(operation?.operationId);
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
+    this.clearExecutorOutcomeRetry(operation?.operationId);
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
@@ -355,6 +356,7 @@ class OperationWorkflowOwnerSegment3
   async failOperation(operation, errorMessage, options = {}) {
     this.clearDispatchRetry(operation?.operationId);
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
+    this.clearExecutorOutcomeRetry(operation?.operationId);
     const now = Date.now();
     if (
       operation.workflowStep === WORKFLOW_STEP.FAILED &&

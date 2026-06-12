@@ -996,12 +996,20 @@ test('Owner-path convergence: all progression entry points ' +
           new RegExp(`^${operationId}:${WORKFLOW_STEP.FAILED}`),
           'FAILED transition should use the shared FAILED session key',
         );
+        // CL-029: the outcome arriving while the timeout path holds the
+        // lane is coalesced away by runExclusive and then RE-DRIVEN after
+        // the holder settles (redriveExecutorOutcomeReconcile), so the
+        // outcome path may enter the lane more than once — every entry
+        // must still use the shared per-operation owner key, and the
+        // re-driven reconcile no-ops on the terminal row (asserted above
+        // via failedBeginCalls/beginCalls).
+        t.ok(
+          recordedOwnerKeys.length >= 2,
+          'timeout and outcome paths must both enter the owner lane',
+        );
         t.same(
-          recordedOwnerKeys,
-          [
-            buildOperationOwnerKey(operationId),
-            buildOperationOwnerKey(operationId),
-          ],
+          [...new Set(recordedOwnerKeys)],
+          [buildOperationOwnerKey(operationId)],
           'timeout and outcome paths must share the same owner key',
         );
       } finally {

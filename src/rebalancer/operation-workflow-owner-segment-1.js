@@ -91,6 +91,10 @@ class OperationWorkflowOwnerSegment1 {
     });
     this.executorOutcomeRetryTimerByOperationId = new Map();
     this.executorOutcomeRetryPayloadByOperationId = new Map();
+    // CL-029: per-operation re-drive guard + retry backoff for executor
+    // outcome evidence (retained payloads must keep a driver until applied).
+    this.executorOutcomeRedriveInFlightByOperationId = new Set();
+    this.executorOutcomeRetryDelayMsByOperationId = new Map();
     this.transitionExecutionAttemptByStepOwnerKey = new Map();
 
     if (
@@ -151,6 +155,8 @@ class OperationWorkflowOwnerSegment1 {
     }
     this.executorOutcomeRetryTimerByOperationId.clear();
     this.executorOutcomeRetryPayloadByOperationId.clear();
+    this.executorOutcomeRedriveInFlightByOperationId.clear();
+    this.executorOutcomeRetryDelayMsByOperationId.clear();
   }
 
   /**

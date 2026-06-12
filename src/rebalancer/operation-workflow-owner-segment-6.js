@@ -577,11 +577,11 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       await this.adoptMostAdvancedObservedReplaceState(operation);
     if (observedOperation) {
       if (this.repository.isOperationTerminal(operation)) {
-        return;
+        return true;
       }
       if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
         await this.reconcileOperationProgress(operation);
-        return;
+        return true;
       }
       if (operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
         const replaceResumeResult =
@@ -589,7 +589,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         if (replaceResumeResult?.skipped === true) {
           this.ensurePriorityActiveReplaceRetryArmed(operation);
         }
-        return;
+        return true;
       }
     }
 
@@ -603,7 +603,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       if (
         await this.replayReplaceActiveSourceRemovalFromObservedTarget(operation)
       ) {
-        return;
+        return true;
       }
       throw error;
     }
@@ -613,9 +613,15 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       if (replaceResumeResult?.skipped === true) {
         this.ensurePriorityActiveReplaceRetryArmed(operation);
       }
-      return;
+      return true;
     }
-    await this.replayReplaceActiveSourceRemovalFromAuthoritative(operation);
+    // CL-029: an uncommitted CAS (stale read) followed by a replay that
+    // found nothing actionable means the ACTIVE evidence was NOT applied;
+    // report it so the caller keeps a retry owner instead of dropping the
+    // completion silently.
+    return (
+      await this.replayReplaceActiveSourceRemovalFromAuthoritative(operation)
+    ) === true;
   }
 
   /**
