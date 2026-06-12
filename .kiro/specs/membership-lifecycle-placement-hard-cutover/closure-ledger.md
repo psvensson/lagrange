@@ -2612,3 +2612,20 @@ Each record below represents one violated invariant.
   mid-restart — a rolling-restart ORDERING constraint (don't restart
   the next node until the seed's join admission is re-open;
    'Seed bootstrap not ready' x121 supports this).
+- REFINEMENT (report data): stabilityGates.restart_recovery shows
+  restartBoundaryCount=3 with blocker admin_reachability_refused —
+  restart #1 completed (before_stop+after_ready), restart #2
+  (11601fe0) recorded before_stop only. Harness restart = docker
+  stop+start of the SAME container (chaos.js:217+), so captures DO
+  span restarts — 11601fe0's 06:37:01+ resume loop IS its restarted
+  process: fresh boot wedges in the JOIN phase ('Seed bootstrap not
+  ready', x121/2min) so SQL-engine/admin never initialize →
+  recovery-ready timeout. OPEN QUESTION for the rung: which node was
+  restart #1 (the seed's log ends 06:36:03 with NO post-restart
+  output — if the seed was #1 and passed after_ready while logging
+  nothing, the recovery-ready predicate for restart #1 passed on
+  weaker evidence than the bootstrap-not-ready state the rejoiner
+  then hits). Next: read _recordRestartBoundarySnapshot artifacts +
+  the recovery-ready predicate; likely invariant: a restarted SEED
+  must re-open join admission before the next node restarts
+  (rolling-restart ordering/readiness contract).
