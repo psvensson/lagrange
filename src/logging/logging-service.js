@@ -206,6 +206,23 @@ class LoggingService {
   }
 
   /**
+   * Build the console-sink payload. The top-level nodeId is always the
+   * EMITTING node (harness analyzers key on it); a context nodeId naming a
+   * DIFFERENT node is preserved as contextNodeId instead of being silently
+   * overwritten. Prefer role-specific keys (targetNodeId, peerNodeId, ...)
+   * in new call sites.
+   * @param {Object} context - Additional context.
+   * @return {Object} Payload for the pino/console sink.
+   * @private
+   */
+  buildConsolePayload(context) {
+    if (context.nodeId === undefined || context.nodeId === this.nodeId) {
+      return {...context, nodeId: this.nodeId};
+    }
+    return {...context, nodeId: this.nodeId, contextNodeId: context.nodeId};
+  }
+
+  /**
    * Log a message at the specified level.
    * @param {string} level - Log level.
    * @param {string} message - Log message.
@@ -239,16 +256,17 @@ class LoggingService {
     });
 
     if (!this.initialized) {
-      // Fallback to console during pre-initialization
+      // Fallback to console during pre-initialization. level and message are
+      // authoritative: context keys must not overwrite them.
       if (shouldWriteToConsole) {
-        console.log(JSON.stringify({level: normalizedLevel, message, ...context}));
+        console.log(JSON.stringify({...context, level: normalizedLevel, message}));
       }
       return;
     }
 
     // Log to pino
     if (shouldWriteToConsole) {
-      this.logger[normalizedLevel]({...context, nodeId: this.nodeId}, message);
+      this.logger[normalizedLevel](this.buildConsolePayload(context), message);
     }
 
     if (!shouldPersist) {
@@ -290,11 +308,11 @@ class LoggingService {
     }
     if (!this.initialized) {
       console.log(
-        JSON.stringify({level: normalizedLevel, message, ...context}),
+        JSON.stringify({...context, level: normalizedLevel, message}),
       );
       return;
     }
-    this.logger[normalizedLevel]({...context, nodeId: this.nodeId}, message);
+    this.logger[normalizedLevel](this.buildConsolePayload(context), message);
   }
 
   /**

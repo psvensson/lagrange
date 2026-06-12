@@ -567,6 +567,62 @@ test('LoggingService exposes subsystem and metric-tag diagnostics', async (t) =>
   LoggingService.resetInstance();
 });
 
+
+test('console payload preserves a differing context nodeId', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'local-node', level: 'debug'});
+
+  const direct = logger.buildConsolePayload({nodeId: 'remote-node', op: 'x'});
+  t.equal(direct.nodeId, 'local-node',
+    'top-level nodeId is always the emitting node');
+  t.equal(direct.contextNodeId, 'remote-node',
+    'differing context nodeId is preserved, not clobbered');
+  t.equal(direct.op, 'x', 'other context keys pass through');
+
+  const sameId = logger.buildConsolePayload({nodeId: 'local-node'});
+  t.notOk('contextNodeId' in sameId,
+    'matching context nodeId adds no extra key');
+  const noId = logger.buildConsolePayload({op: 'y'});
+  t.notOk('contextNodeId' in noId, 'absent context nodeId adds no extra key');
+  t.equal(noId.nodeId, 'local-node', 'emitter nodeId stamped when absent');
+
+  const captured = [];
+  logger.logger.info = (payload, message) => captured.push({payload, message});
+  logger.info('witness line', {nodeId: 'remote-node'});
+  t.equal(captured.length, 1, 'console sink received the line');
+  t.equal(captured[0].payload.nodeId, 'local-node',
+    'log() console path stamps the emitter');
+  t.equal(captured[0].payload.contextNodeId, 'remote-node',
+    'log() console path preserves the payload nodeId');
+
+  logger.logConsoleOnly('info', 'console-only witness', {nodeId: 'remote-node'});
+  t.equal(captured.length, 2, 'logConsoleOnly reached the sink');
+  t.equal(captured[1].payload.contextNodeId, 'remote-node',
+    'logConsoleOnly preserves the payload nodeId');
+
+  LoggingService.resetInstance();
+});
+
+test('pre-init console fallback keeps level and message authoritative', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    logger.log('warn', 'real message', {level: 'spoofed', message: 'spoofed', op: 'z'});
+  } finally {
+    console.log = originalLog;
+  }
+  t.equal(lines.length, 1, 'pre-init fallback wrote to console');
+  const parsed = JSON.parse(lines[0]);
+  t.equal(parsed.level, 'warn', 'context cannot clobber level');
+  t.equal(parsed.message, 'real message', 'context cannot clobber message');
+  t.equal(parsed.op, 'z', 'context keys still pass through');
+  LoggingService.resetInstance();
+});
+
 test('cleanup', async (t) => {
   LoggingService.resetInstance();
   ConfigurationManager.resetInstance();
