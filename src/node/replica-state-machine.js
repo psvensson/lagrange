@@ -13,6 +13,8 @@ import {
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
   REPLICA_STATE_MACHINE_ERROR_MSG,
+  REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
+  REPLICA_STATE_MACHINE_LOG_MSG,
   REPLICA_STATE_MACHINE_NOW,
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_STATE,
@@ -121,6 +123,11 @@ class ReplicaStateMachine extends EventEmitter {
     // durable write commits, because the local cache no longer proxies
     // remote existence for them.
     this.localOnlyServiceRowIds = new Set();
+    // CL-021: per-row retry backoff for converging those deferred durable
+    // writes on the timeout-checker tick (serviceId -> {delayMs,
+    // notBeforeMs}); entries clear with the local-only marker.
+    this.localOnlyServiceRowRetryStateByServiceId = new Map();
+    this.localOnlyServiceRowReconcileInFlight = false;
 
     this.replicas = new Map();
     this.stateCounts = {
@@ -374,6 +381,82 @@ class ReplicaStateMachine extends EventEmitter {
    */
   clearServiceRowLocalOnly(serviceId) {
     this.localOnlyServiceRowIds.delete(serviceId);
+    this.localOnlyServiceRowRetryStateByServiceId.delete(serviceId);
+  }
+
+  /**
+   * CL-021: converge deferred durable services rows. A priority replica
+   * activated via the local-commit fallback (CL-016) defers its durable
+   * services-row write because that write goes through the very control
+   * plane being recovered — and when the replica's FINAL state transition
+   * is the one that deferred, nothing ever retried: the row stayed
+   * local-only forever, spread planners on other nodes never saw the
+   * replica as ready, and priority spread recovery wedged planning
+   * REPLACEs from already-retired sources into the safety guard (the
+   * mode=load ACTIVE-wait surface). Runs on the existing timeout-checker
+   * tick; per-row exponential backoff bounds the failure-log rate while
+   * the control plane is still recovering. The durable write is the same
+   * idempotent UPSERT lifecycle persistence already uses for local-only
+   * rows, and success clears the marker inside _updateReplicaStateInCdc.
+   * @return {Promise<number>} Rows durably converged this pass.
+   */
+  async _reconcileLocalOnlyServiceRows() {
+    if (
+      this.localOnlyServiceRowReconcileInFlight === true ||
+      this.localOnlyServiceRowIds.size === REPLICA_STATE_MACHINE_NUM.ZERO
+    ) {
+      return REPLICA_STATE_MACHINE_NUM.ZERO;
+    }
+    this.localOnlyServiceRowReconcileInFlight = true;
+    let persisted = REPLICA_STATE_MACHINE_NUM.ZERO;
+    try {
+      for (const serviceId of [...this.localOnlyServiceRowIds]) {
+        const nowMs = this.now();
+        const retryState =
+          this.localOnlyServiceRowRetryStateByServiceId.get(serviceId) ||
+          null;
+        if (retryState && nowMs < retryState.notBeforeMs) {
+          continue;
+        }
+        const replicaState = this.replicas.get(serviceId) || null;
+        if (!replicaState) {
+          // The replica is no longer tracked — there is no local truth
+          // left to converge durably; drop the marker so the set stays
+          // bounded.
+          this.clearServiceRowLocalOnly(serviceId);
+          continue;
+        }
+        try {
+          await this._updateReplicaStateInCdc(replicaState, replicaState);
+          // The persistence helper cleared the marker (and this row's
+          // retry state) on commit.
+          persisted += REPLICA_STATE_MACHINE_NUM.ONE;
+          this.logger.info(
+            REPLICA_STATE_MACHINE_LOG_MSG.LOCAL_ONLY_ROW_CONVERGED,
+            {
+              replicaId: replicaState.replicaId,
+              partitionId: replicaState.partitionId,
+              state: replicaState.state,
+              nodeId: this.nodeId,
+            },
+          );
+        } catch (_error) {
+          const previousDelayMs =
+            retryState?.delayMs ?? this.timeoutCheckIntervalMs;
+          const delayMs = Math.min(
+            previousDelayMs * REPLICA_STATE_MACHINE_NUM.TWO,
+            REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
+          );
+          this.localOnlyServiceRowRetryStateByServiceId.set(serviceId, {
+            delayMs,
+            notBeforeMs: nowMs + delayMs,
+          });
+        }
+      }
+    } finally {
+      this.localOnlyServiceRowReconcileInFlight = false;
+    }
+    return persisted;
   }
 
   async handleNodeRecovery(options = {}) {

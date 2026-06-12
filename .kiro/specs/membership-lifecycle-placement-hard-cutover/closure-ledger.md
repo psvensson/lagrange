@@ -2439,3 +2439,26 @@ Each record below represents one violated invariant.
   the owner derives priority service rows from live raft peer
   view; (c) DX: planner spread analysis should log WHICH service rows
   it counted (node ids + statuses) when blocked.
+- Sub-mode (A) FIX LANDED (2026-06-12): local-only durable-row
+  convergence on the replica state machine's EXISTING timeout-checker
+  tick (5s). _reconcileLocalOnlyServiceRows
+  (replica-state-machine.js) re-attempts the durable services-row
+  write for every serviceId still in localOnlyServiceRowIds, via the
+  SAME idempotent UPSERT path lifecycle persistence uses for
+  local-only rows (_updateReplicaStateInCdc — marker + retry state
+  clear on commit inside the helper); per-row exponential backoff
+  (5s doubling, 60s cap) bounds the failure-log rate while the
+  control plane is still recovering (observer-effect lesson);
+  untracked replicas drop their marker (bounded set). Witness on
+  success: 'Deferred durable services row converged after
+  control-plane recovery'. Guard:
+  test/node/replica-local-only-row-convergence.test.js (12 asserts —
+  retry+marker-clear, UPSERT semantics, backoff, ghost-drop, tick
+  wiring). Node suite 1,196 pass.
+- NOTE: the gate launched before this fix validates ONLY the fence
+  instrumentation; the CL-021 fix needs its own gate round.
+  Pre-registered prediction for that round: spread recovers
+  (readyDistinctNodeCount reaches 3 on priority partitions; the
+  safety_blocked storm collapses; 'converged' witness lines appear);
+  sub-mode (A) surface clears; remaining stalls (if any) show the
+  fence gap reasons for sub-mode (B).

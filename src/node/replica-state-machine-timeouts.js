@@ -19,6 +19,10 @@ function startTimeoutChecker(stateMachine) {
 
   stateMachine.timeoutCheckInterval = setInterval(() => {
     stateMachine._checkTimeouts();
+    // CL-021: converge deferred durable services rows (local-only marker)
+    // on the same tick. Fire-and-forget — failures back off per row and
+    // retry on later ticks.
+    stateMachine._reconcileLocalOnlyServiceRows?.()?.catch?.(() => null);
   }, stateMachine.timeoutCheckIntervalMs);
   stateMachine.timeoutCheckInterval.unref();
 

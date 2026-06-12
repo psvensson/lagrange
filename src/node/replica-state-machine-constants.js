@@ -102,6 +102,8 @@ const REPLICA_STATE_MACHINE_LOG_MSG = Object.freeze({
   REMOVE_TRACKING_SUCCESS: 'Removed replica from tracking',
   TIMEOUT_CHECKER_STARTED: 'Timeout checker started',
   TIMEOUT_CHECKER_STOPPED: 'Timeout checker stopped',
+  LOCAL_ONLY_ROW_CONVERGED:
+    'Deferred durable services row converged after control-plane recovery',
   OPERATION_TIMEOUT: 'Replica operation timed out',
   RECOVERY_START: 'Handling node recovery in state machine',
   RECOVERY_NO_CACHE: 'No system table cache provided for recovery',
@@ -134,7 +136,13 @@ const REPLICA_STATE_MACHINE_ERROR_MSG = Object.freeze({
 const REPLICA_STATE_MACHINE_NUM = Object.freeze({
   ZERO: NUM.ZERO,
   ONE: NUM.ONE,
+  TWO: NUM.TWO,
 });
+
+// CL-021: backoff ceiling for re-attempting deferred durable services-row
+// writes (local-only rows) on the timeout-checker tick.
+const REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS =
+  TIME_MS.MINUTE;
 
 const REPLICA_STATE_MACHINE_LOAD_READY_STATES = Object.freeze([
   REPLICA_STATE_MACHINE_STATE.ACTIVE,
@@ -178,6 +186,7 @@ export {
   REPLICA_STATE_MACHINE_EVENT,
   REPLICA_STATE_MACHINE_EVENT_TYPE,
   REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
+  REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
   REPLICA_STATE_MACHINE_LOG_MSG,
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_OPERATION,
