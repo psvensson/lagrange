@@ -4474,3 +4474,47 @@ Each record below represents one violated invariant.
   serialization; (3) oracle blindness zero; (4) the genuine
   over-target settle residual (212016Z-run1 class) becomes the
   binding constraint.
+
+### CL-031 GATE VERDICT (stat-gate-20260612T223302Z, 4 runs, fingerprint 4f9c5ecd248702cb) — CL-031 GUARDED (a)-(d); ALL FOUR pre-registered expectations MET; best round ever at full depth
+
+- TOPLINE: 4/4 publication CONVERGED (convergeRate 1.0 — first
+  ever at full rolling-restart depth), healthyRate 1.0, stallRate
+  0, 0 corrupt, 0 stale, 0 ORACLE_BLIND, 0 NODE_EXIT; walls
+  417-544s (p50 441 — also fastest round ever).
+- Expectation (1) MET: control-snapshot attribution warns GONE
+  (was 9-13/node/run at up to 233MB; now 0-1/run TOTAL and the
+  1-2 remaining warns attribute results[5] of a 13.4MB LOGS-TABLE
+  query result — a different, one-off payload at failure-log
+  collection time; note for Task-28, not a growth curve).
+- Expectation (2) MET: ZERO fatals/heap OOMs/kernel OOM kills/
+  unexpected node exits across all 20 node-runs. The CL-030
+  secondary (seed OOM) mechanism — repeated giant snapshot
+  stringifies — is dead with the growth; CL-030 watch stays open
+  for one more round out of caution.
+- Expectation (3) MET: zero blind oracles; every failure surface
+  this round carries full readable evidence (quiesce reported
+  inFlightCount=7/5 with criticalSystemDistribution — previously
+  'unknown' across 11 blind attempts).
+- Expectation (4) MET: the binding constraints are now the two
+  GENUINE residuals, cleanly split 2+2:
+  (i) CL-001 published-set disagreement — runs 2+4, 'Published
+  active-node sets disagree' between the seed (publishes a 4-set)
+  and 35a891b8 (publishes the 5-set); run2's seed set is missing
+  8be8d30f. FIRST REPRODUCIBLE OCCURRENCES WITH SURVIVING
+  ARTIFACTS (223302Z-run2 + -run4) — CL-001 work starts here.
+  (ii) over-target surplus-drain / leadership-churn settle class —
+  runs 1+3 ('did not quiesce: replica_operations 5/3 +
+  sql_transactions 5/3 on all five nodes, inFlightCount=7' /
+  'quiescence stalled: leadership_churn, leadership_unstable,
+  inFlightCount=5'); same class as 212016Z-run1 (122s over-target,
+  7 leader changes, REPLACE drain ops wedged pending/creating
+  while effective in-flight = 0 via the stale discount) and
+  173105Z-run3 + 145024Z runs 1+4. Open question for that record:
+  does leader churn block the drain ops, or do the drain REPLACEs
+  CAUSE the churn (membership changes)?
+- CL-031 STATUS: GUARDED — one root (unbounded readiness-history
+  contracts in the served snapshot), three symptoms all retired
+  (seed OOM + cluster-wide joiner OOM kills; blind oracles; giant
+  report details). The at-rest/accumulation variant of the
+  unbounded-diagnostics family is now closed alongside the
+  hot-path variants (CL-010/011/020/026).
