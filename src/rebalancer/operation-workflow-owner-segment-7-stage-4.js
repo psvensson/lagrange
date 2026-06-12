@@ -10,6 +10,7 @@ const {
   OperationType,
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_ABSENT_SOURCE_STATE_BY_WORKFLOW_STEP,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES,
   PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES,
@@ -58,11 +59,21 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     );
   }
 
-  resolvePriorityRecoveryOperationDrainSourceState(observation) {
+  resolvePriorityRecoveryOperationDrainSourceState(observation, operation) {
     const observationKey =
       this.resolvePriorityRecoveryOperationDrainSourceObservationKey(
         observation,
       );
+    if (
+      observationKey ===
+      PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_OBSERVATION_KEY.ABSENT
+    ) {
+      return (
+        PRIORITY_RECOVERY_OPERATION_DRAIN_ABSENT_SOURCE_STATE_BY_WORKFLOW_STEP
+          .get(operation?.workflowStep) ||
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE
+      );
+    }
     return (
       PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE_BY_OBSERVATION_KEY.get(
         observationKey,
@@ -232,6 +243,7 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
         ),
       targetState:
         this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation),
+      stepStale: this.isPriorityRecoveryOperationDrainStepStale(operation),
     });
   }
 
@@ -335,6 +347,7 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     return Object.freeze({
       state: this.resolvePriorityRecoveryOperationDrainSourceState(
         observation,
+        operation,
       ),
       sourceReplicaId,
       observationState: observation?.state || null,
@@ -355,6 +368,30 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
+    }
+    if (
+      drainAction ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
+    ) {
+      // Stale-FAIL settles remotely only against an unavailable owner: an
+      // available owner may merely have deferred visibility (its progress not
+      // yet readable here) and must be woken, not have its work killed.
+      const ownerNodeId =
+        this.repository.resolveOperationOwnerNodeId(operation) || null;
+      if (this.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation)) {
+        return (
+          PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
+        );
+      }
+      if (
+        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
+        this.isDispatchRetryableWorkflowStep(operation)
+      ) {
+        return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+          .REMOTE_REARM_REQUIRED;
+      }
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+        .REMOTE_OWNER_REQUIRED;
     }
     if (
       this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
@@ -497,6 +534,7 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
         completion,
         sourceSnapshot,
         releaseEvidence,
+        operation,
       );
     const action =
       PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
@@ -521,6 +559,25 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     });
   }
 
+  logPriorityRecoveryOperationDrainSettle(operation, drainSnapshot) {
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.PRIORITY_RECOVERY_DRAIN_SETTLED,
+      {
+        operationId: operation?.operationId || null,
+        partitionId: operation?.partitionId || null,
+        operationType: operation?.type || null,
+        workflowStep: operation?.workflowStep || null,
+        action: drainSnapshot?.action || null,
+        drainState: drainSnapshot?.state || null,
+        completionState: drainSnapshot?.completionState || null,
+        sourceState: drainSnapshot?.sourceState || null,
+        sourceObservationState:
+          drainSnapshot?.sourceObservationState || null,
+        ownerState: drainSnapshot?.ownerState || null,
+      },
+    );
+  }
+
   async reconcilePriorityRecoveryOperationDrain(
     operation,
     drainSnapshot = null,
@@ -532,9 +589,35 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
       resolvedDrainSnapshot.action ===
       OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
     ) {
+      this.logPriorityRecoveryOperationDrainSettle(
+        operation,
+        resolvedDrainSnapshot,
+      );
       await this.failOperation(
         operation,
         resolvedDrainSnapshot.supersededTargetError,
+        {logLevel: FAILURE_LOG_LEVEL.WARN},
+      );
+      return true;
+    }
+    if (
+      resolvedDrainSnapshot.action ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
+    ) {
+      if (
+        resolvedDrainSnapshot.ownerAction !==
+        PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE
+      ) {
+        return false;
+      }
+      this.logPriorityRecoveryOperationDrainSettle(
+        operation,
+        resolvedDrainSnapshot,
+      );
+      await this.failOperation(
+        operation,
+        OPERATION_WORKFLOW_OWNER_LITERAL
+          .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
         {logLevel: FAILURE_LOG_LEVEL.WARN},
       );
       return true;
@@ -545,6 +628,10 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     ) {
       return false;
     }
+    this.logPriorityRecoveryOperationDrainSettle(
+      operation,
+      resolvedDrainSnapshot,
+    );
     await this.completeOperation(operation);
     return true;
   }

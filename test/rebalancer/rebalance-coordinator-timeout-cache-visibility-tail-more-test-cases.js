@@ -889,20 +889,22 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       try {
         await coordinator.checkTimeouts();
 
-        t.equal(
+        t.not(
           operationRow.workflow_step,
           TEST_REMOVED_STEP,
-          'timeout reconciliation should drain stale priority REPLACE target creation after converged target evidence',
+          'a REPLACE whose source services row is still ACTIVE must never ' +
+            'terminalize as REMOVED off target evidence alone',
+        );
+        t.equal(
+          operationRow.workflow_step,
+          'FAILED',
+          'stale priority REPLACE without source-retirement evidence ' +
+            'should settle as FAILED (re-plannable)',
         );
         t.equal(
           operationRow.status,
-          ReplicaStatus.REMOVED,
-          'converged priority REPLACE target creation should persist terminal removed status',
-        );
-        t.equal(
-          operationRow.error_message,
-          null,
-          'cache-visible target activation should avoid timeout failure metadata',
+          ReplicaStatus.FAILED,
+          'stale priority REPLACE drain settle should persist failed status',
         );
         t.equal(
           gatewayCalls.length >= TEST_EXPECTED_MIN_GATEWAY_CALLS,

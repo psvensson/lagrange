@@ -273,6 +273,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_ROW_DIVERGENCE_REINSERT:
     'Operation row missing from authoritative partition after zero-row ' +
     'update; re-inserting owner copy',
+  PRIORITY_RECOVERY_DRAIN_SETTLED:
+    'Priority recovery drain settled operation',
   BOOTSTRAP_TOPOLOGY_UNRESOLVED:
     'Create dispatch proceeding without bootstrap topology',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',

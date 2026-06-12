@@ -12,6 +12,7 @@ const {
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES,
   PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES,
   PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE,
@@ -354,10 +355,60 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     );
   }
 
+  resolvePriorityRecoveryOperationDrainStepAgeMs(
+    operation,
+    now = Date.now(),
+  ) {
+    const updatedAtMs = this.normalizeOperationDrainEpochMillis(
+      operation?.updatedAt,
+    );
+    const createdAtMs = this.normalizeOperationDrainEpochMillis(
+      operation?.createdAt,
+    );
+    const baseMs = updatedAtMs ?? createdAtMs;
+    if (baseMs === null) {
+      return null;
+    }
+    return Math.max(NUM.ZERO, Math.floor(now - baseMs));
+  }
+
+  normalizeOperationDrainEpochMillis(value) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > NUM.ZERO) {
+      return Math.floor(numeric);
+    }
+    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+      const parsed = Date.parse(value);
+      if (Number.isFinite(parsed) && parsed > NUM.ZERO) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  isPriorityRecoveryOperationDrainStepStale(operation, now = Date.now()) {
+    const ageMs = this.resolvePriorityRecoveryOperationDrainStepAgeMs(
+      operation,
+      now,
+    );
+    if (ageMs === null) {
+      return false;
+    }
+    const timeoutMs = Number(
+      this.getTimeoutForStep(operation?.workflowStep, operation),
+    );
+    return (
+      Number.isFinite(timeoutMs) &&
+      timeoutMs > NUM.ZERO &&
+      ageMs >= timeoutMs
+    );
+  }
+
   resolvePriorityRecoveryOperationDrainState(
     completion,
     sourceSnapshot,
     releaseEvidence = null,
+    operation = null,
   ) {
     if (!completion || typeof completion !== TYPEOF.OBJECT) {
       return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
@@ -381,12 +432,26 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
         .OWNER_UNAVAILABLE_RELEASED;
     }
-    return (
+    const mappedState =
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE_BY_SOURCE_STATE.get(
         sourceState,
       ) ||
-      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE
-    );
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
+    if (
+      mappedState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE &&
+      completion.state === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED &&
+      operation &&
+      this.isPriorityRecoveryOperationDrainStepStale(operation)
+    ) {
+      // Without this escape a remote-owned op whose owner never returns and
+      // whose source evidence stays unprovable would hold quiesce forever.
+      // CONVERGED-only: in-flight-counted spread satisfaction must not get a
+      // stale op killed while its own placement is what satisfies the spread.
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .STALE_WITHOUT_RETIREMENT_EVIDENCE;
+    }
+    return mappedState;
   }
 
   decidePriorityRecoveryOperationDrainRelease(evidence) {

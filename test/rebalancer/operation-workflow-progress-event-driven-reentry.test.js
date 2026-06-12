@@ -1226,12 +1226,20 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     buildEventDrivenOperationRow(),
   );
 
+  const failedOperationIds = [];
+
   try {
     coordinator.initialize();
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
       return true;
     };
+    coordinator.workflowOwner.failOperation = async (failedOperation) => {
+      failedOperationIds.push(failedOperation.operationId);
+      return true;
+    };
+    coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
+      () => true;
     const planningSnapshot = buildEventDrivenPlanningSnapshot({
       operationId: TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
       partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
@@ -1265,9 +1273,15 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     });
 
     t.same(
-      completedOperationIds,
+      failedOperationIds,
       [TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID],
       TEST_ASSERT_SPREAD_SATISFIED_WAIT_PROGRESS_DRAIN,
+    );
+    t.same(
+      completedOperationIds,
+      [],
+      'an undispatched REPLACE must never settle as completed/REMOVED ' +
+        'without source-retirement evidence',
     );
     t.same(
       [deliveries.length, deferredTimers.length],
@@ -1281,6 +1295,7 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
 
 test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
   const completedOperationIds = [];
+  const failedOperationIds = [];
   const originalDateNow = Date.now;
   Date.now = () => TEST_CAPTURED_AT_MS;
 
@@ -1329,6 +1344,13 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
             completedOperationIds.push(completedOperation.operationId);
             return true;
           };
+        coordinator.workflowOwner.failOperation =
+          async (failedOperation) => {
+            failedOperationIds.push(failedOperation.operationId);
+            return true;
+          };
+        coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
+          () => true;
         coordinator.workflowOwner.repository
           .getOperationsByEntityAuthoritativeObservation = async () => {
             return Object.freeze({
@@ -1356,8 +1378,13 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
           'the focused fixture should preserve the priority partition',
         );
         t.ok(
-          completedOperationIds.includes(witness.operationId),
+          failedOperationIds.includes(witness.operationId),
           TEST_ASSERT_SPREAD_SATISFIED_DRAIN,
+        );
+        t.notOk(
+          completedOperationIds.includes(witness.operationId),
+          'an undispatched REPLACE must never settle as completed/REMOVED ' +
+            'without source-retirement evidence',
         );
         t.equal(
           deliveries.length,

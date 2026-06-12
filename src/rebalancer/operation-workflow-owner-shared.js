@@ -178,6 +178,9 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     ' replacement leader ownership pending before safe removal',
   REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND:
     ' replacement leader election returned not_found before safe removal',
+  PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE:
+    'Priority recovery drain settled stale operation without ' +
+    'source-retirement evidence',
   PRIORITY_SPREAD: 'priority spread',
   PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
   PROGRESS: 'progress',
@@ -297,6 +300,7 @@ const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS = Object.freeze(
 
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
+  FAIL_PRIORITY_RECOVERY_DRAIN_STALE: 'fail_priority_recovery_drain_stale',
   FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET:
     'fail_priority_recovery_superseded_target',
   FAIL_PRE_SYNC_RECOVERY: 'fail_pre_sync_recovery',

@@ -761,6 +761,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
       completion,
       sourceSnapshot,
       releaseEvidence,
+      operation,
     );
   const action =
     PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||

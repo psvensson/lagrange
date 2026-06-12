@@ -3258,3 +3258,135 @@ Each record below represents one violated invariant.
   with the same pressure. CL-023 is the binding constraint for the
   entire restart phase. Fix next (locus + checklist in the CL-023
   pin entry).
+
+### CL-023 FIX LANDED (2026-06-12) — status: fix-landed (gate pending)
+
+- DESIGN (rubber-ducked via adversarial subagent BEFORE landing; the
+  review changed the design in four load-bearing ways, listed below):
+  (1) The pre-sync override no longer maps TARGET_UNMATERIALIZED ->
+  NOT_REQUIRED (the ghost-complete). Fresh rows (step age <
+  getTimeoutForStep, updatedAt-based) -> EVIDENCE_UNAVAILABLE (held,
+  no source observation) so an in-flight dispatch can land; STALE rows
+  -> RETIREMENT_UNPROVEN_STALE -> new drain state
+  STALE_WITHOUT_RETIREMENT_EVIDENCE -> new action
+  FAIL_PRIORITY_RECOVERY_DRAIN_STALE -> failOperation (terminal
+  FAILED, re-plannable, asserts NO retirement). Applies under BOTH
+  accepted completion states: with an unmaterialized target the op
+  did nothing, so even self-counted in-flight spread satisfaction is
+  fictional; staleness (not completion state) is the fresh-work guard.
+  (2) ABSENT confirms removal ONLY at STOPPING (removal actually
+  dispatched; row deletion is the expected terminal observation).
+  All other steps: ABSENT -> EVIDENCE_UNAVAILABLE. LEDGER CORRECTION:
+  ABSENT is authoritative-read absence, NOT cache absence (failed
+  reads map to UNAVAILABLE; cache fallback never yields ABSENT) —
+  still a forbidden pre-dispatch input because CL-016-deferred
+  priority source rows can be durably absent while alive (exactly the
+  recovery window the drain runs in).
+  (3) WEDGE PREVENTION (review counterexample: remote-owned REMOVE at
+  SENDING whose row was already deleted, owner decommissioned — under
+  (2) alone it would hold quiesce FOREVER): source state
+  EVIDENCE_UNAVAILABLE + completion CONVERGED (strictly — NOT
+  spread_satisfied_in_flight, which can be satisfied by live work) +
+  stale -> the same FAIL settle. Covers REPLACE/REMOVE/ADD
+  evidence-unavailable wedges.
+  (4) OWNER GATING (review caught the first design's hazard: adding
+  the new action to the REMOTE_SETTLE carve-out unconditionally would
+  BYPASS the wake path and let the seed kill a live owner's
+  deferred-visibility work): stale-FAIL settles remotely ONLY when
+  isPriorityRecoveryDrainOwnerUnavailable(owner); an available owner
+  is woken (REMOTE_REARM) or skipped (it settles locally).
+  reconcilePriorityRecoveryOperationDrain enforces ownerAction
+  ALLOW_RECONCILE for the new action itself — several callers
+  (reconcileOperationLifecycle, dispatch-pending drain) settle on
+  action without re-checking ownerAction.
+  Both drain-snapshot builders (stage-4 + the duplicated
+  dispatch-pending builder, a review finding) flow through the shared
+  decision table + resolvers, so neither path diverges.
+- FILES: operation-workflow-recovery-reconcile-shared.js (decision
+  table, ABSENT-by-step map, new states/action mapping),
+  operation-workflow-owner-segment-7-stage-3.js (staleness helpers +
+  CONVERGED-stale escape in resolvePriorityRecoveryOperationDrainState),
+  operation-workflow-owner-segment-7-stage-4.js (evidence stepStale,
+  step-aware ABSENT, owner gating, settle handling + DX log),
+  operation-workflow-recovery-reconcile-dispatch-pending.js (passes
+  operation to the state resolver), operation-workflow-owner-shared.js
+  + rebalancer-constants.js (action/literal/log-msg constants).
+- NEVER-BREAK CHECKLIST (walked, with code evidence):
+  FAILED settle writes only the replica_operations row — no services
+  rows created, so CL-013 topology-hint pollution and CL-016
+  failure-path symmetry are unaffected (the create never ran). A
+  dispatch that races the FAIL and materializes the target late is
+  cleaned by the EXISTING getTerminalFailedReplaceTargetReplicaIds ->
+  move-planner failed-target removal (matches only existing service
+  rows; an unmaterialized target id matches nothing).
+  spread_satisfied_in_flight REMAINS a completion state for post-sync
+  steps (source observation is the load-bearing evidence there).
+  failOperation/completeOperation persist without expectedWorkflowStep
+  CAS (last-writer-wins) but resurrection after FAILED is blocked:
+  the claim CAS expects PENDING and priority updateStep CASes on
+  previousStep. FAILED is terminal for quiesce/pressure counting
+  (isTerminalReplicaOperationRecord).
+- RESIDUALS / FOLLOW-UPS (recorded, deliberately NOT fixed here):
+  (a) reconcileActiveReplaceSourceRemovalProgress +
+  isActiveReplaceSourceRetirementObserved (stage-1.js:670-706,
+  stage-2.js:39-57) complete a REPLACE at step ACTIVE on
+  authoritative ABSENT BEFORE any removal dispatch — the same
+  forbidden promotion input on a different code path (runs on the
+  owner/target node whose cache need not contain the source's
+  locally-committed row). NOT the pinned run mechanism (run ops were
+  pre-sync). Next-record candidate together with
+  OWNER_UNAVAILABLE_RELEASED (completes with sourceRemovalPending
+  when the remote owner is unavailable — same ghost class in
+  principle). If the gate's ghost witness is nonzero post-fix, look
+  HERE first.
+  (b) Replica-id reuse hazard (pre-existing, WIDENED by more FAILED
+  rows): allocateCanonicalReplicaId is monotonic over op history
+  including terminal rows, but a FAILED row invisible during a
+  visibility-deferral window can let another coordinator reuse its
+  target id; when the FAILED row becomes visible the move-planner
+  hard-REMOVEs the healthy reused replica (failed-target cleanup
+  bypasses target-count logic). No GC of replica_operations rows
+  exists. Slow-only today (remove-safety evaluation downstream).
+  (c) STOPPING+ABSENT completion is 'dispatched + row gone' — weaker
+  than the record's allowed-evidence definition; NOTHING anywhere
+  checks the raft-membership-change half.
+  (d) Residual wedge honestly noted: a remote-owned op whose
+  completion is NOT in {converged, spread_satisfied_in_flight} (the
+  deepest livelock state) still has no drain settle path — unchanged
+  from before this fix.
+- GUARDS (all red-on-revert verified by stashing src/):
+  rebalance-coordinator-stopping-reconcile-stale-priority.test.js —
+  the 3 tests that PINNED the ghost as desired (SENDING/PENDING
+  converged/spread-satisfied -> REMOVED) rewritten into 6 invariant
+  tests: fresh-held (x2), stale->FAILED-never-REMOVED with ACTIVE
+  source row (x2, local + remote-dead-owner), ABSENT@CREATING held,
+  stale-with-LIVE-owner NOT remotely failed.
+  operation-workflow-progress-event-driven-reentry.test.js
+  spread-satisfied drain tests now assert FAIL-settle (owner
+  unavailable) + completeOperation NEVER called.
+  rebalance-coordinator-timeout-cache-visibility tail-more CREATING
+  REPLACE test now asserts never-REMOVED-while-source-ACTIVE
+  (it previously pinned the forbidden 'target-ACTIVE alone' input);
+  tail-final REMOVE test asserts fail-not-complete on unproven
+  absence. Suites: rebalancer 5036/5045 pass (the 9 fails are the
+  pre-existing unified-rebalancer part-5/6 set, identical on clean
+  tree).
+- DX: 'Priority recovery drain settled operation' info log fires on
+  EVERY drain settle (complete | superseded-fail | stale-fail) with
+  {operationId, partitionId, operationType, workflowStep, action,
+  drainState, completionState, sourceState, sourceObservationState,
+  ownerState}.
+- STABLE WITNESS TOOLING: scripts/analyze-replace-ghost-retirements.js
+  (npm run analyze:replace-ghost-retirements -- <run-dir>) computes
+  the per-priority-partition |REMOVED-REPLACE sources INTERSECT
+  ACTIVE services| from the FINAL snapshot (final-only to avoid
+  transient false positives from snapshot lag on legit completions);
+  exit 1 when nonzero. VALIDATED RED on 085908Z-run2: 22 ghost
+  retirements 4/4/4/5/5 across ALL FIVE priority partitions — the
+  pinned 17 was an undercount that missed sql_transactions-p1.
+- GATE PREDICTION (pre-registered): ghost witness 0 in all runs;
+  drain-stale WARN settles appear instead (bounded, re-plannable);
+  quiesce control_plane_pressure clears or the surface moves; the
+  CL-024 wholesale-hydration crash sites (#2 'Leader metadata
+  incomplete', #3 'Table not found: nodes') should decay if the
+  livelock was starving the seed's serving during rejoin.

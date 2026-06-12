@@ -1159,8 +1159,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     );
   });
 
-  test('priority REMOVE drain completes when remote removal is already proven',
-    async (t) => {
+  test('priority REMOVE drain fails (never completes) a stale undispatched ' +
+    'REMOVE on unproven absence when the owner is unavailable',
+  async (t) => {
       const TEST_LOCAL_NODE_ID = 'node-local-remove-drain';
       const TEST_REMOTE_TARGET_NODE_ID = 'node-remote-remove-drain';
       const TEST_PARTITION_ID = 'replica_operations-p1';
@@ -1176,8 +1177,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       const TEST_ACKNOWLEDGED = true;
       const TEST_DELIVERY_STATUS_COMPLETED = 'completed';
       const TEST_MIN_REPLICA_COUNT = 3;
+      const TEST_STALE_STEP_AGE_MS = 70000;
       const observedReplicaChecks = [];
       const completedOperationIds = [];
+      const failedOperationIds = [];
 
       const coordinator = createCoordinator({
         nodeId: TEST_LOCAL_NODE_ID,
@@ -1233,6 +1236,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           completedOperationIds.push(operation.operationId);
           return true;
         };
+        workflowOwner.failOperation = async (operation) => {
+          failedOperationIds.push(operation.operationId);
+          return true;
+        };
+        workflowOwner.isPriorityRecoveryDrainOwnerUnavailable = () => true;
 
         const reconciled =
           await workflowOwner.reconcilePriorityRecoveryOperationDrain({
@@ -1246,13 +1254,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
             targetNodeId: TEST_REMOTE_TARGET_NODE_ID,
             status: TEST_OPERATION_STATUS_PENDING,
             workflowStep: TEST_WORKFLOW_STEP_SENDING,
+            createdAt: Date.now() - TEST_STALE_STEP_AGE_MS,
+            updatedAt: Date.now() - TEST_STALE_STEP_AGE_MS,
             completedAt: TEST_NULL_VALUE,
           });
 
         t.equal(
           reconciled,
           true,
-          'proven priority REMOVE drain should settle without target ownership',
+          'stale undispatched REMOVE with an unavailable owner should settle',
         );
         t.same(
           observedReplicaChecks,
@@ -1264,9 +1274,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           'REMOVE drain should observe the replica targeted by the REMOVE row',
         );
         t.same(
-          completedOperationIds,
+          failedOperationIds,
           [TEST_OPERATION_ID],
-          'remote settlement should complete the stale REMOVE operation',
+          'remote settlement should fail the stale REMOVE: absence before ' +
+            'a dispatched removal is not removal evidence',
+        );
+        t.same(
+          completedOperationIds,
+          [],
+          'an undispatched REMOVE must not complete off unproven absence',
         );
       } finally {
         await coordinator.shutdown();

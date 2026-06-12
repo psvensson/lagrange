@@ -91,6 +91,7 @@
     "analyze:owner-glossary": "node scripts/analyze-topology-convergence.js --glossary",
     "analyze:owner-files": "node scripts/analyze-owner-files.js",
     "analyze:priority-recovery-residuals": "node scripts/analyze-priority-recovery-residuals.js",
+    "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
     "debug:admin:ws": "node scripts/debug/admin-ws-connection-check.mjs",
