@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-12T08:05:17.095Z",
+  "generatedAt": "2026-06-12T08:11:26.703Z",
   "rawViolationCount": 783,
   "violations": [
     {
@@ -3356,7 +3356,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-1.js",
-      "line": 446,
+      "line": 464,
       "column": 3,
       "functionName": "resolvePriorityRecoverySnapshotSemanticState",
       "kind": "raw_null_empty_state_outcome",
@@ -3374,7 +3374,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 423,
+      "line": 433,
       "column": 5,
       "functionName": "buildUnknownPriorityRecoveryPlanner",
       "kind": "raw_null_empty_state_outcome",
@@ -3383,7 +3383,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 425,
+      "line": 435,
       "column": 5,
       "functionName": "buildUnknownPriorityRecoveryPlanner",
       "kind": "raw_null_empty_state_outcome",
@@ -3392,7 +3392,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 426,
+      "line": 436,
       "column": 5,
       "functionName": "buildUnknownPriorityRecoveryPlanner",
       "kind": "raw_null_empty_state_outcome",
@@ -3401,7 +3401,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 467,
+      "line": 477,
       "column": 5,
       "functionName": "buildPriorityRecoveryPlannerEntry",
       "kind": "raw_null_empty_state_outcome",
@@ -3410,7 +3410,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 470,
+      "line": 480,
       "column": 5,
       "functionName": "buildPriorityRecoveryPlannerEntry",
       "kind": "raw_null_empty_state_outcome",
@@ -6410,7 +6410,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 646,
+      "line": 653,
       "column": 7,
       "functionName": "getStartupAuthoritySnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -6419,7 +6419,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 654,
+      "line": 661,
       "column": 7,
       "functionName": "getStartupAuthoritySnapshot",
       "kind": "raw_null_empty_state_outcome",
