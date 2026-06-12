@@ -2270,3 +2270,48 @@ Each record below represents one violated invariant.
   six mute semantics subtests + a new default-shared-mute subtest.
   Suites: raft 562/562, partition+message-group 3510 pass,
   rebalancer at baseline.
+
+## Surface Analysis: mode=load ACTIVE Wait (CL-021 candidate, pre-fix notes)
+
+- Analyzed from 203619Z run1 artifacts (freeze-free run, max gap 7.5s —
+  the freeze is NOT the binding constraint here).
+- CHAIN: harness ACTIVE wait (mode=load) stalls because the
+  publication-active-gate handoff contract is DEGRADED with
+  runtimePromotionAllowed=false. The seed's convergence decision trace
+  shows the aliasing: owner no-deficit (5/5 published, missing=0,
+  pendingRecovery=0, pendingReconcile=0, epoch=4) but
+  contractReason=published_active_coverage_incomplete — that reason
+  code is REUSED by the promotionDeniedByFence path
+  (publication-active-gate-handoff-contract.js:280-289) when the
+  decision table reached COMPLETE and the CATCHUP FENCE denied; with
+  missing=0 the decision-table coverage row cannot have matched. DX
+  GAP: the trace does not carry the fence gap reasons
+  (resolvePublicationActiveGateCatchupFenceMissingProofReasons —
+  targets/presence/durable-publication/snapshot-coverage proofs); add
+  them before pinning.
+- UNDERLYING STATE: recoveryProtocolState=priority_spread_pending,
+  priorityRecoveryReasonCodes=['priority_partitions_not_spread'].
+  Rebalancer diagnostic at 20:40:55: blockedPartitions=
+  [sql_transaction_participants-p1 readyDistinctNodeCount=1
+  spreadGap=2] — ONE priority partition wedged. Its history: dropped
+  BELOW MINIMUM (replica_count_below_minimum 0<3 x26, 1<3 x6) — not
+  just unspread, it lost ready replicas; operations DO step
+  (REPLACE completed 20:37:04 on 11601fe0; another op
+  PENDING→SENDING→CREATING→SYNCING 20:37:16; STOPPING/removing
+  20:38:50) yet 62 'Rebalancing move skipped: blocked' + 16
+  safety_blocked + 14 in-flight reuse rearm; 9 'Cache/authoritative
+  divergence detected during reconciliation' + 4 'No row found for CDC
+  update' on this partition (CL-017 divergence family witness
+  present). ALSO: selectedControlPlaneOwnerQueueDepth pendingWrites=102
+  with pendingWriteGrowthCount=1612 — the owner write queue grows
+  without draining (stable witness from the closure grammar).
+- NEXT falsification loop (after CL-020 gate verdict): (1) add fence
+  gap reasons to the decision trace; (2) pin WHY
+  sql_transaction_participants-p1 cannot re-establish 3-node spread —
+  candidates: move skip reason 'blocked'/'safety_blocked' loop
+  (which gate blocks?), CL-017 divergence residue (no-row updates →
+  reconciliation reverts), owner queue starvation; (3) check whether
+  the below-minimum episode is the trigger (replicas lost during the
+  4/3 churn, recovery never re-admits because spread moves are
+  blocked by the very state they would fix — circular-dependency
+  class candidate).
