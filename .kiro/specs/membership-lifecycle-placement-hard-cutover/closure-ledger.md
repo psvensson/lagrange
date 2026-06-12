@@ -3219,3 +3219,42 @@ Each record below represents one violated invariant.
   closed per partition preserved); the only cost is temporary RF-1
   on that partition until repair, which is the same state the
   cluster was already in while the node was down.
+
+### Gate Verdict 20260612T111041Z (CL-024 + CL-025 validation) — both mechanisms LOAD-BEARING; CL-023 confirmed as the binding constraint
+
+- 4/4 publication CONVERGED, 0 corrupt, 0 stale; walls 422-1082s.
+- CL-025 GUARDED->WITNESS FIRED IN PRODUCTION (run4): 'Restarted node
+  lost recovery readiness after the post-restart boundary' for
+  ebc4aa0b — a node that passed the readiness wait then died was
+  caught BY THE NEW RECHECK at the right node. Run2's crash is now
+  honestly attributed (chaos.fault.failed, reachable=false) instead
+  of the previous false 'recovered' + misattribution. CL-025 status:
+  guarded (one more clean round for closed).
+- CL-024 ENGAGED AND HELD (run4): 3-4 'Durable rejoin restore
+  skipped' warns per restarted node (missing PARTITION metadata for
+  priority replicas incl. sql_write_operations-p1-r4,
+  control_plane_publications-p1-r7) — the planner skipped per
+  partition and the rejoin CONTINUED past restore. Status: guarded.
+  RECORD EXTENDED — the class has more sites: the same boots then
+  died at OTHER non-retryable join asserts:
+  site #2 (run2, 11601fe0): 'Leader metadata incomplete:
+  missingPartitionLeaders=nodes-p1,node_endpoints-p1' -> exit 1;
+  site #3 (run4, ebc4aa0b): 'Failed to register node: Table not
+  found: nodes' -> exit 1. The skip-warn content answers the
+  ordering-vs-wipe question DECISIVELY toward a deeper cause: whole
+  PARTITION rows (not just schema columns) for PRIORITY partitions —
+  and even the nodes TABLE — are absent from the rejoiner's join
+  cache at querying_state. The rejoin hydration is WHOLESALE
+  incomplete on these boots, almost certainly because the cluster is
+  under the CL-023 control-plane-pressure livelock when restarts
+  begin (quiesce never completed; the seed serves incomplete state).
+  Do NOT whack-a-mole the remaining assert sites one by one before
+  CL-023 lands; re-evaluate the residual crash rate after CL-023,
+  then decide between per-site degradation and a single
+  hydration-completeness gate before querying_state.
+- CL-023 (still open): 2/4 runs failed quiesce at
+  control_plane_pressure (the pinned ghost-retirement livelock
+  downstream), and the rejoin-hydration gaps above are consistent
+  with the same pressure. CL-023 is the binding constraint for the
+  entire restart phase. Fix next (locus + checklist in the CL-023
+  pin entry).
