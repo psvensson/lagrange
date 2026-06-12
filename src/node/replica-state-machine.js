@@ -63,6 +63,16 @@ import {
  */
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 
+// CL-021: terminal states the local-only reconcile must NOT durably re-write
+// (their own removal/failure paths own durability, and re-writing them late
+// would run the canonical-leader clear with stale row context). Mirrors
+// CLEARS_CANONICAL_PARTITION_LEADER_STATES in the transition module.
+const REPLICA_STATE_MACHINE_LOCAL_ONLY_TERMINAL_SKIP_STATES = new Set([
+  REPLICA_STATE_MACHINE_STATE.REMOVING,
+  REPLICA_STATE_MACHINE_STATE.REMOVED,
+  REPLICA_STATE_MACHINE_STATE.FAILED,
+]);
+
 /**
  * Valid state transitions matrix.
  * Key: current state (or null for new replica)
@@ -128,6 +138,11 @@ class ReplicaStateMachine extends EventEmitter {
     // notBeforeMs}); entries clear with the local-only marker.
     this.localOnlyServiceRowRetryStateByServiceId = new Map();
     this.localOnlyServiceRowReconcileInFlight = false;
+    // CL-021: per-row durable-write serialization between transition
+    // persistence and the local-only reconcile (serviceId -> in-flight
+    // persist promise). Unserialized, the slower write lands second and
+    // can regress the durable row to an older state.
+    this.serviceRowPersistInFlightByServiceId = new Map();
 
     this.replicas = new Map();
     this.stateCounts = {
@@ -411,11 +426,25 @@ class ReplicaStateMachine extends EventEmitter {
     let persisted = REPLICA_STATE_MACHINE_NUM.ZERO;
     try {
       for (const serviceId of [...this.localOnlyServiceRowIds]) {
+        // Re-check per iteration: a concurrent transition persist may have
+        // cleared this marker while an earlier row awaited — without the
+        // marker, the persistence helper would take the UPDATE branch with
+        // previousState === replicaState and write a diff of identical
+        // states (verification finding).
+        if (!this.localOnlyServiceRowIds.has(serviceId)) {
+          continue;
+        }
         const nowMs = this.now();
         const retryState =
           this.localOnlyServiceRowRetryStateByServiceId.get(serviceId) ||
           null;
         if (retryState && nowMs < retryState.notBeforeMs) {
+          continue;
+        }
+        if (this.serviceRowPersistInFlightByServiceId.has(serviceId)) {
+          // A transition persist is in flight for this row — it carries
+          // newer truth and clears the marker on success; racing it could
+          // land an older full-row write second. Next tick re-checks.
           continue;
         }
         const replicaState = this.replicas.get(serviceId) || null;
@@ -426,8 +455,37 @@ class ReplicaStateMachine extends EventEmitter {
           this.clearServiceRowLocalOnly(serviceId);
           continue;
         }
+        if (
+          REPLICA_STATE_MACHINE_LOCAL_ONLY_TERMINAL_SKIP_STATES.has(
+            replicaState.state,
+          )
+        ) {
+          // Terminal rows have their own durable removal/failure paths
+          // (CL-016 failure symmetry); reconciling them here would also
+          // run the canonical-leader clear with stale row context. Drop
+          // the marker — planner blindness only matters for live replicas.
+          this.clearServiceRowLocalOnly(serviceId);
+          continue;
+        }
+        // Fresh-stamped copy: the durable apply is a full-row replace and
+        // cache merges resolve by updated_at — a write stamped with the
+        // (arbitrarily old) state-entry time could lose to merges yet
+        // overwrite the durable row for later hydrators (verification
+        // finding). The copy never mutates tracked state.
+        const stampedState = {
+          ...replicaState,
+          stateEnteredAt: nowMs,
+        };
+        const reconcilePromise = this._updateReplicaStateInCdc(
+          stampedState,
+          stampedState,
+        );
+        this.serviceRowPersistInFlightByServiceId.set(
+          serviceId,
+          reconcilePromise,
+        );
         try {
-          await this._updateReplicaStateInCdc(replicaState, replicaState);
+          await reconcilePromise;
           // The persistence helper cleared the marker (and this row's
           // retry state) on commit.
           persisted += REPLICA_STATE_MACHINE_NUM.ONE;
@@ -451,6 +509,13 @@ class ReplicaStateMachine extends EventEmitter {
             delayMs,
             notBeforeMs: nowMs + delayMs,
           });
+        } finally {
+          if (
+            this.serviceRowPersistInFlightByServiceId.get(serviceId) ===
+            reconcilePromise
+          ) {
+            this.serviceRowPersistInFlightByServiceId.delete(serviceId);
+          }
         }
       }
     } finally {

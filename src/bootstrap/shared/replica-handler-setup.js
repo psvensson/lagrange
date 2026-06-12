@@ -127,10 +127,14 @@ class ReplicaHandlerSetup {
       hasRpcClient: !!rpcClient,
     });
 
-    // Create ReplicaStateMachine for tracking replica lifecycle states
+    // Create ReplicaStateMachine for tracking replica lifecycle states.
+    // systemTableCache wired so lifecycle persistence can consult the local
+    // row view (UPSERT-vs-UPDATE choice, canonical-leader retention check) —
+    // previously absent, which forced worst-case fallbacks (CL-021 review).
     const replicaStateMachine = new ReplicaStateMachine({
       nodeId,
       cdcIntegrationService,
+      systemTableCache,
     });
 
     // Start the timeout checker for transitional state monitoring

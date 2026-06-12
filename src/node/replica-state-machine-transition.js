@@ -159,14 +159,37 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
     return true;
   }
 
-  const persistenceResult = previousState === null ?
+  // CL-021: serialize this row's durable writes against the local-only
+  // reconcile (replica-state-machine.js _reconcileLocalOnlyServiceRows).
+  // Both paths submit full-row writes; unserialized, a reconcile carrying
+  // the PRE-transition state could land after this transition's write and
+  // regress the durable row. The reconcile skips rows with an in-flight
+  // transition persist; transitions chain after an in-flight reconcile.
+  const startPersist = () => previousState === null ?
     stateMachine._createReplicaRowInCdc(replicaState) :
     stateMachine._updateReplicaStateInCdc(replicaState, previousState);
+  const inFlightMap = stateMachine.serviceRowPersistInFlightByServiceId;
+  const previousInFlight = inFlightMap?.get(replicaId) || null;
+  // No previous in-flight write: start synchronously (callers and tests
+  // depend on the persist beginning within the current microtask).
+  const persistencePromise = previousInFlight ?
+    previousInFlight.catch(() => null).then(startPersist) :
+    Promise.resolve(startPersist());
+  const clearInFlight = () => {
+    if (inFlightMap?.get(replicaId) === persistencePromise) {
+      inFlightMap.delete(replicaId);
+    }
+  };
+  inFlightMap?.set(replicaId, persistencePromise);
 
-  return Promise.resolve(persistenceResult).then((result) => {
+  return persistencePromise.then((result) => {
+    clearInFlight();
     commitTransition();
     stateMachine._armTimeoutClock(replicaId);
     return result;
+  }, (error) => {
+    clearInFlight();
+    throw error;
   });
 }
 

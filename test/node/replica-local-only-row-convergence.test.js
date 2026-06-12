@@ -150,44 +150,124 @@ test('CL-021: deferred durable services rows converge', async (t) => {
   });
 
   await t.test(
-    'timeout-checker tick is wired to the reconcile',
+    'timeout-checker tick is wired to the reconcile (real interval)',
     async (t) => {
       const nowRef = {value: 1_760_000_000_000};
       const {gateway} = createGateway();
       gateway.failNext = false;
+      const stateMachine = new ReplicaStateMachine({
+        nodeId: NODE_ID,
+        cdcIntegrationService: gateway,
+        controlPlaneSystemTableGateway: gateway,
+        now: () => nowRef.value,
+        timeoutCheckIntervalMs: 5,
+      });
+      await seedLocalOnlyReplica(stateMachine);
+      t.equal(stateMachine.isServiceRowLocalOnly(REPLICA_ID), true);
+
+      stateMachine.startTimeoutChecker();
+      // Wait for real ticks (5ms interval) to drive the reconcile —
+      // red if the tick wiring is removed.
+      const deadline = Date.now() + 2_000;
+      while (
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID) &&
+        Date.now() < deadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      stateMachine.stopTimeoutChecker();
+
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        false,
+        'a real tick converged the row (wiring is live)',
+      );
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
+    'reconcile writes carry a fresh updated_at stamp',
+    async (t) => {
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      gateway.failNext = false;
       const stateMachine = createStateMachine({gateway, nowRef});
       await seedLocalOnlyReplica(stateMachine);
+      // Time advances long after the state was entered.
+      nowRef.value += 120_000;
 
-      let reconcileCalls = 0;
-      const original =
-        stateMachine._reconcileLocalOnlyServiceRows.bind(stateMachine);
-      stateMachine._reconcileLocalOnlyServiceRows = () => {
-        reconcileCalls += 1;
-        return original();
-      };
+      await stateMachine._reconcileLocalOnlyServiceRows();
 
-      stateMachine.startTimeoutChecker?.() ??
-        stateMachine._startTimeoutChecker?.();
-      // Drive one tick manually if the interval API is not exposed.
-      if (reconcileCalls === 0 && stateMachine.timeoutCheckInterval === null) {
-        t.skip('timeout checker not startable in this harness');
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      if (reconcileCalls === 0) {
-        // Interval is real (5s) — invoke the tick body equivalently by
-        // asserting the wiring exists on the interval callback path.
-        stateMachine._checkTimeouts();
-        stateMachine._reconcileLocalOnlyServiceRows();
-        t.ok(
-          reconcileCalls >= 1,
-          'reconcile callable on the tick path',
-        );
-      } else {
-        t.ok(reconcileCalls >= 1, 'tick invoked the reconcile');
-      }
-      stateMachine.stopTimeoutChecker?.() ??
-        stateMachine._stopTimeoutChecker?.();
+      t.equal(calls.mutations.length, 1, 'one durable write');
+      const row = calls.mutations[0].row || calls.mutations[0].data;
+      t.equal(
+        row.updated_at,
+        nowRef.value,
+        'full-row replace is stamped at reconcile time, not state-entry ' +
+          'time (a stale stamp would lose cache merges yet overwrite the ' +
+          'durable row for later hydrators)',
+      );
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
+    'terminal-state rows drop their marker without a durable write',
+    async (t) => {
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      const stateMachine = createStateMachine({gateway, nowRef});
+      await seedLocalOnlyReplica(stateMachine);
+      await stateMachine._applyTransition(
+        REPLICA_ID,
+        'failed',
+        {partitionId: PARTITION_ID, nodeId: NODE_ID, serviceId: REPLICA_ID},
+        {persist: false, validate: false},
+      );
+      // The persist:false transition does not clear the marker.
+      stateMachine.markServiceRowLocalOnly(REPLICA_ID);
+
+      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+
+      t.equal(persisted, 0, 'no durable convergence for terminal rows');
+      t.equal(calls.mutations.length, 0, 'no write submitted');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        false,
+        'marker dropped (failure paths own terminal durability)',
+      );
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
+    'reconcile skips rows with an in-flight transition persist',
+    async (t) => {
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      gateway.failNext = false;
+      const stateMachine = createStateMachine({gateway, nowRef});
+      await seedLocalOnlyReplica(stateMachine);
+      let release;
+      stateMachine.serviceRowPersistInFlightByServiceId.set(
+        REPLICA_ID,
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+
+      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+
+      t.equal(persisted, 0, 'row skipped while a transition persist runs');
+      t.equal(calls.mutations.length, 0, 'no racing write submitted');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        true,
+        'marker kept for the next tick',
+      );
+      release();
+      stateMachine.serviceRowPersistInFlightByServiceId.delete(REPLICA_ID);
       stateMachine.shutdown?.();
     },
   );

@@ -2462,3 +2462,45 @@ Each record below represents one violated invariant.
   safety_blocked storm collapses; 'converged' witness lines appear);
   sub-mode (A) surface clears; remaining stalls (if any) show the
   fence gap reasons for sub-mode (B).
+- Sub-mode (B) PINNED BY INSTRUMENTATION (gate 045003Z, 4/4 publication
+  CONVERGED): 163/165 fence-denial traces show missingProofReasons =
+  ['snapshot_coverage_unavailable'] (the other 2 add
+  durable_publication_incomplete during publication_pending). Matches
+  the smoke test exactly: the owner-driver call site
+  (membership-publication-coordinator-class-stage-2.js:905) passes no
+  snapshotCoverage/activeNodeViews, so the fence can NEVER prove
+  coverage THERE — and the harness does not consume this contract's
+  promotion flag. VERDICT: sub-mode (B) is a structural artifact of
+  the owner-driver call shape (diagnostic-only aliasing), NOT a
+  blocker. CL-021's load-bearing path is sub-mode (A) alone. Residual
+  cleanup option: pass activeNodeViews at the owner-driver site or
+  rename the aliased reason code (defer to Task-28 audit).
+- VERIFICATION CORRECTIONS LANDED (subagent found a never-break
+  hazard in the first CL-021(A) landing): (1) HIGH — the reconcile's
+  full-row durable REPLACE was stamped with stateEnteredAt
+  (arbitrarily old): it could lose cache merges yet overwrite the
+  durable row for later HYDRATORS (resurrecting e.g. a FAILED row as
+  ACTIVE@old — permanent cache/durable divergence), and a tick firing
+  while the final transition persist was in flight could land an
+  OLDER state second and clear the marker with no retry left. FIXES:
+  fresh-stamped copy (updated_at = reconcile time); per-row persist
+  SERIALIZATION between transition persistence and the reconcile
+  (serviceRowPersistInFlightByServiceId — transitions chain after an
+  in-flight reconcile, the reconcile skips rows with an in-flight
+  transition persist); per-iteration marker re-check (a cleared
+  marker mid-pass would have taken the UPDATE branch and written an
+  object diff into a TEXT column); terminal-state rows (REMOVING/
+  REMOVED/FAILED) drop the marker WITHOUT a durable write (their own
+  paths own durability; avoids the late canonical-leader clear).
+  (2) systemTableCache now wired into the production
+  ReplicaStateMachine (replica-handler-setup.js — was absent, forcing
+  worst-case fallbacks in the UPSERT-choice and leader-retention
+  checks). (3) The tick-wiring guard subtest was TAUTOLOGICAL
+  (verifier proved it passed with the wiring deleted) — rewritten
+  against a real 5ms interval; new guards: fresh-stamp,
+  terminal-skip, in-flight-skip. RESIDUAL accepted (pre-existing for
+  all CL-016 upserts): the full-row REPLACE omits raft_role/group_id;
+  noted for Task-28. Known sub-case for the gate: if the final ACTIVE
+  persist failed before commitTransition, the map may hold an earlier
+  state and the reconcile converges a non-ACTIVE row (witness lines
+  carry the state field).
