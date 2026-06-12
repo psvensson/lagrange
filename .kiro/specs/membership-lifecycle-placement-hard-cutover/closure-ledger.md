@@ -2402,3 +2402,40 @@ Each record below represents one violated invariant.
   (final traces show steady_published+empty reasons in runs that
   STALLED — 'green at the end'); check lastMeaningfulChange timestamps
   vs gate-green transition in the next gated run.
+- Sub-mode (A) ROOT CANDIDATE PINNED (2026-06-12, 041945Z run2
+  artifacts, control_plane_publications-p1 trace): the spread wedge is
+  a PLANNER-BLINDNESS LOOP. Timeline: REPLACE operations COMPLETE
+  (3 REPLACEs to 3 distinct targets + 2 ADDs, 04:25:13-04:27:14), the
+  new replicas exist and participate in raft (r5 on 11601fe0 at terms
+  5/7), YET the rebalancer still reports readyDistinctNodeCount=1
+  spreadGap=2 at 04:28:28 and plans MORE replaces — every one from an
+  ALREADY-RETIRED source replica (r1 ×13, then r3, then r2 — chasing
+  each newly-retired source), each correctly refused by the
+  REPLACE-source-retirement safety guard
+  (rebalance-coordinator-topology-guard-methods.js:596,
+  SOURCE_RETIRED → safety_blocked; 123 skips/run across priority
+  partitions). The planner never sees the new replicas as ready
+  because their durable services-row writes were DEFERRED — 12
+  'Replica create status write deferred after retryable control-plane
+  failure' events (the CL-016 local-commit fallback) and, per the
+  CL-016 record's open follow-up, THE DEFER DROPS WITHOUT RETRY: the
+  ACTIVE status exists only in the replica's own node's local cache
+  (markServiceRowLocalOnly), never persisted durably, never
+  CDC-propagated to the planner's node. Loop: replicas activate
+  locally → planner blind → spread still 'pending' → plan REPLACE
+  from a retired source → safety_blocked → forever. Same circular
+  class: the durable write needs the recovered control plane; the
+  control plane's ACTIVE gate waits on the spread the durable write
+  would prove.
+- First Violated Invariant (sub-mode A, candidate): a priority replica
+  activated via the local-commit fallback must CONVERGE ITS DURABLE
+  SERVICES ROW once the control plane can accept writes (retry the
+  deferred write / owner-side reconciliation from raft-membership
+  truth) — local-only activation must not be a terminal state.
+  Fix directions: (a) retry lane for deferred durable status writes
+  (event: control-plane writability restored, or bounded interval),
+  clearing the local-only marker on success (the CL-016 marker
+  machinery already exists); (b) and/or seed-side peer reconciliation:
+  the owner derives priority service rows from live raft peer
+  view; (c) DX: planner spread analysis should log WHICH service rows
+  it counted (node ids + statuses) when blocked.
