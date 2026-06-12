@@ -29,12 +29,40 @@ const SCRIPT_BASENAME = 'check-guideline-constant-names.js';
 const OPAQUE_LOCAL_CONSTANT_NAME_PATTERN =
   /^(?:LOCAL|TEST)_(?:STR|NUM)_[A-Z0-9]*\d[A-Z0-9]*$/u;
 
+// The retired naming codemod also emitted LETTERS-ONLY base36 hashes, which
+// the digit pattern above cannot see (and no regex can separate ABFPD from
+// ABSENT). The generator is gone, so the survivors are a closed set —
+// enumerated here verbatim. A future letters-only hash evades this list by
+// construction; the staged-diff pre-commit gate plus review is the backstop.
+const KNOWN_OPAQUE_LETTER_SUFFIX = Object.freeze(new Set([
+  'ABFPD', 'AGEMS', 'ASBFD', 'ATDIQ', 'AUVHV', 'BFOQF', 'BYITH', 'CDEXS',
+  'CJLUB', 'CQURS', 'CZGPU', 'DDIFL', 'DNLJZ', 'DNQMM', 'ELZSM', 'ESDKR',
+  'EVRPI', 'FEBQQ', 'FTIWW', 'FVBQP', 'FVIDI', 'GDTVK', 'GPAJS', 'GVGHU',
+  'IBFUE', 'KFWKK', 'KRDOX', 'LIZAB', 'LLYQW', 'LMXQX', 'LSYAT', 'LXQUA',
+  'NISIJ', 'NOOVZ', 'NPQTQ', 'NYBVK', 'OMLJF', 'PXUDN', 'RGXNE', 'RNTKK',
+  'RORIR', 'RZRDP', 'SGZMJ', 'SVWDT', 'TGPWE', 'THDRR', 'THMXD', 'TVUBB',
+  'VFLNU', 'VFPMM', 'VPBYI', 'VQFON', 'VWYJO', 'WQVRR', 'WSWCG', 'WXJQD',
+  'XKEQN', 'YWKFO', 'ZBNMX', 'ZQJIK', 'ZYDCF',
+]));
+
+const LETTER_SUFFIX_CONSTANT_NAME_PATTERN =
+  /^(?:LOCAL|TEST)_(?:STR|NUM)_([A-Z]{5})$/u;
+
+function isOpaqueConstantName(name) {
+  if (OPAQUE_LOCAL_CONSTANT_NAME_PATTERN.test(name)) {
+    return true;
+  }
+  const letterSuffixMatch = LETTER_SUFFIX_CONSTANT_NAME_PATTERN.exec(name);
+  return letterSuffixMatch !== null &&
+    KNOWN_OPAQUE_LETTER_SUFFIX.has(letterSuffixMatch[1]);
+}
+
 function isOpaqueConstantDeclarator(node, parent) {
   return node?.type === VARIABLE_DECLARATOR_NODE &&
     parent?.type === VARIABLE_DECLARATION_NODE &&
     parent.kind === CONST_DECLARATION_KIND &&
     node.id?.type === IDENTIFIER_NODE &&
-    OPAQUE_LOCAL_CONSTANT_NAME_PATTERN.test(node.id.name);
+    isOpaqueConstantName(node.id.name);
 }
 
 function collectOpaqueConstantNameViolationsFromSource(source, filePath) {
@@ -122,4 +150,5 @@ export {
   collectOpaqueConstantNameViolations,
   collectOpaqueConstantNameViolationsFromSource,
   isOpaqueConstantDeclarator,
+  isOpaqueConstantName,
 };

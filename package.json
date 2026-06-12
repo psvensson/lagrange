@@ -110,6 +110,7 @@
     "steering:check": "npm run steering:llm:pack && git diff --quiet -- .kiro/steering/llm",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",
     "guard:guideline:constant-names:file": "node scripts/check-guideline-constant-names.js",
+    "guard:staged:constant-names": "node scripts/check-staged-constant-names.js",
     "commands": "node scripts/list-commands.js",
     "solve": "node scripts/solve.js",
     "solve:new": "node scripts/solve.js new",

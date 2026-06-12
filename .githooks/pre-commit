@@ -5,3 +5,4 @@ set -euo pipefail
 if [ "${LAGRANGE_SKIP_HOOKS:-0}" = "1" ]; then exit 0; fi
 npm run -s audit:file-size
 npm run -s audit:guideline:hot-path-diagnostics
+node scripts/check-staged-constant-names.js
