@@ -7,9 +7,15 @@
 // replica is still alive (ghost retirement); the planner's retirement
 // projection then filters live replicas out of planning.
 //
+// The snapshot intersection alone false-positives on LEGIT completions whose
+// services-row DELETE hasn't reached the snapshot node's view (the CL-014
+// remote-DELETE propagation residual). When the run's .full-logs are present
+// each hit is corroborated against the source node's 'Replica removal
+// completed' log line; only uncorroborated hits count as ghosts.
+//
 // Usage:
 //   node scripts/analyze-replace-ghost-retirements.js <snapshots.ndjson | run-dir>
-// Exit code 0 when the witness holds (all intersections empty), 1 otherwise.
+// Exit code 0 when the witness holds (no uncorroborated hits), 1 otherwise.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,6 +59,46 @@ function resolveSnapshotsPath(inputPath) {
   throw new Error(`No ${SNAPSHOTS_FILENAME} under ${inputPath}`);
 }
 
+const REMOVAL_COMPLETED_LOG_LINE = 'Replica removal completed';
+const FULL_LOGS_DIRNAME = '.full-logs';
+const NODE_LOG_FILENAME = 'node.ndjson';
+
+function collectRemovalCompletedReplicaIds(snapshotsPath) {
+  const runDir = path.dirname(path.dirname(snapshotsPath));
+  const fullLogsRoot = path.join(runDir, FULL_LOGS_DIRNAME);
+  if (!fs.existsSync(fullLogsRoot)) {
+    return null;
+  }
+  const removedReplicaIds = new Set();
+  for (const scenario of fs.readdirSync(fullLogsRoot)) {
+    const scenarioDir = path.join(fullLogsRoot, scenario);
+    if (!fs.statSync(scenarioDir).isDirectory()) {
+      continue;
+    }
+    for (const node of fs.readdirSync(scenarioDir)) {
+      const logPath = path.join(scenarioDir, node, NODE_LOG_FILENAME);
+      if (!fs.existsSync(logPath)) {
+        continue;
+      }
+      for (const line of fs.readFileSync(logPath, 'utf8').split('\n')) {
+        if (!line.includes(REMOVAL_COMPLETED_LOG_LINE)) {
+          continue;
+        }
+        try {
+          const entry = JSON.parse(line);
+          const replicaId = String(entry.replicaId || '').trim();
+          if (replicaId.length > 0) {
+            removedReplicaIds.add(replicaId);
+          }
+        } catch {
+          // skip unparseable lines
+        }
+      }
+    }
+  }
+  return removedReplicaIds;
+}
+
 function readFinalSnapshot(snapshotsPath) {
   const lines = fs
     .readFileSync(snapshotsPath, 'utf8')
@@ -86,7 +132,7 @@ function resolveReplaceSourceReplicaId(operation) {
   return null;
 }
 
-function computeGhostRetirementWitness(snapshot) {
+function computeGhostRetirementWitness(snapshot, removalCompletedReplicaIds) {
   const operations = Array.isArray(snapshot.replicaOperations) ?
     snapshot.replicaOperations :
     [];
@@ -130,11 +176,17 @@ function computeGhostRetirementWitness(snapshot) {
         partitionId,
         removedReplaceCount: 0,
         ghostRetiredSourceReplicaIds: [],
+        corroboratedRemovalSourceReplicaIds: [],
       });
     }
     const entry = byPartition.get(partitionId);
     entry.removedReplaceCount += 1;
-    if (activeIds.has(sourceReplicaId)) {
+    if (!activeIds.has(sourceReplicaId)) {
+      continue;
+    }
+    if (removalCompletedReplicaIds?.has(sourceReplicaId)) {
+      entry.corroboratedRemovalSourceReplicaIds.push(sourceReplicaId);
+    } else {
       entry.ghostRetiredSourceReplicaIds.push(sourceReplicaId);
     }
   }
@@ -142,6 +194,7 @@ function computeGhostRetirementWitness(snapshot) {
   const partitions = [...byPartition.values()].map((entry) => ({
     ...entry,
     ghostRetirementCount: entry.ghostRetiredSourceReplicaIds.length,
+    staleSnapshotRowCount: entry.corroboratedRemovalSourceReplicaIds.length,
   }));
   const totalGhostRetirements = partitions.reduce(
     (sum, entry) => sum + entry.ghostRetirementCount,
@@ -150,6 +203,9 @@ function computeGhostRetirementWitness(snapshot) {
   return {
     witness: 'cl-023-replace-ghost-retirements',
     snapshotTimestamp: snapshot.timestamp ?? null,
+    corroboration: removalCompletedReplicaIds ?
+      'full-logs-removal-completed' :
+      'none-snapshot-only',
     totalGhostRetirements,
     healthy: totalGhostRetirements === 0,
     partitions,
@@ -164,7 +220,12 @@ function main() {
   }
   const snapshotsPath = resolveSnapshotsPath(inputPath);
   const snapshot = readFinalSnapshot(snapshotsPath);
-  const witness = computeGhostRetirementWitness(snapshot);
+  const removalCompletedReplicaIds =
+    collectRemovalCompletedReplicaIds(snapshotsPath);
+  const witness = computeGhostRetirementWitness(
+    snapshot,
+    removalCompletedReplicaIds,
+  );
   console.log(JSON.stringify(witness, null, JSON_INDENT_SPACES));
   process.exit(witness.healthy ? EXIT_SUCCESS : EXIT_FAILURE);
 }

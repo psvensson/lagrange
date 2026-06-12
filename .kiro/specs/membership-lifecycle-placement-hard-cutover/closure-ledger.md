@@ -3418,3 +3418,60 @@ Each record below represents one violated invariant.
   (ACTIVE-step ABSENT-complete) and OWNER_UNAVAILABLE_RELEASED as the
   candidate set for the next record if the ghost witness stays
   nonzero post-fix. The witness script catches all three in run data.
+
+### Gate Verdict 20260612T131408Z — CL-023 GUARDED (mechanism dead; prediction confirmed on every measurable point)
+
+- 3 CONVERGED + 1 NO_REPORT (harness reporting crash, below), 0
+  corrupt, 0 stale, 0 stalls; walls 203/302/565/1253s.
+- GHOST WITNESS 0 IN 4/4 RUNS. The raw snapshot intersection fired
+  (3-9/run) but EVERY hit corroborated as an executed removal
+  ('Replica removal completed' on the source node) — snapshot-stale
+  ACTIVE rows from the CL-014 remote-DELETE propagation residual, not
+  ghosts. The witness script is now HARDENED with that corroboration
+  step (counts only uncorroborated hits; reports staleSnapshotRowCount
+  separately); re-validated RED on 085908Z-run2 (20 real ghosts, 2
+  stale rows) and GREEN on all four new runs.
+- THE MECHANISM IS DEAD: zero pre-sync REPLACE completes anywhere;
+  ALL drain completes are STOPPING+removal_confirmed (6-48/run);
+  every REMOVED REPLACE shows the FULL lifecycle
+  (PENDING->...->STOPPING->REMOVED) with an executed source removal.
+  Sources are ACTUALLY retiring for the first time — CL-021's
+  'co-location surplus awaiting source removal' is draining.
+- quiesce control_plane_pressure: 0/4 (was 2/4 in 111041Z) — the
+  CL-023 downstream surface is GONE. No rejoin crashes this round
+  (CL-024 sites #2/#3 decayed as predicted).
+- STALE-FAIL LANE ENGAGED ONCE (run4, op 3602fc02
+  replica_operations-p1 at SENDING, retirement_unproven_stale): 174
+  attempts over 3min, transition NEVER committed (remote-owned op,
+  owner mid-restart); the op meanwhile progressed normally (target
+  created the replica) and settled honestly via the SYNCING step
+  timeout. Never-break HELD even under the loop (never REMOVED).
+  Follow-up notes (both slow-only): (i) the settle log fires per
+  ATTEMPT before commit — noisy on retry loops; move after commit or
+  rate-limit; (ii) the owner-unavailable gate read a transient
+  restart window as dead — the op survived because the remote
+  transition could not commit, NOT because the gate held; principled
+  hardening = expectedWorkflowStep CAS on the remote stale-FAIL
+  persist (note (f)) and/or consecutive-unavailable confirmation.
+- NEW HARNESS DEFECT (run2 NO_REPORT, oracle family):
+  writeFailureBundlesForReport dies on JSON.stringify RangeError
+  'Invalid string length' (failure-bundle-segment-7.js:417) — the
+  report is LOST on exactly the longest/deepest runs. Run2 was the
+  DEEPEST RUN EVER: 1220/1220 load success, ALL restarts recovered,
+  post-restart waiting-active passed on attempt 1, post-restart
+  load-readiness STABLE — then failed late (~13:44) and the bundle
+  writer crashed before recording WHAT failed. Fix candidate: stream
+  or cap the bundle serialization. Until fixed, long-run failures
+  classify NO_REPORT and their surface must be dug from
+  .full-logs/events.ndjson.
+- Scenario surfaces (all 4 runs still fail the scenario; NONE are
+  CL-023): run1 restart rung 'did not become recovery-ready within
+  120000ms' (35a891b8 reachable=true adminReady=false — the SLOW
+  rejoin mode, the parked CL-025 predicate follow-up); run3 mode=load
+  ACTIVE stall active=1/5 coverage complete (the 085908Z-run1
+  owner-reconcile family); run4 mode=load ACTIVE stall active=5/5
+  everything green (the known stable-window family); run2 unrecorded
+  (bundle crash).
+- CL-023 status: GUARDED. The restart-phase frontier is now:
+  mode=load owner-reconcile ACTIVE stalls (2/4) -> restart
+  slow-rejoin recovery-ready (1/4) -> harness bundle crash (oracle).
