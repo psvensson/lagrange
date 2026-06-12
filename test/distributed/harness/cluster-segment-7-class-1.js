@@ -1400,6 +1400,7 @@ class Cluster1 {
     }
     await this._waitForNodeAdminReadiness(id, options);
     await this._recordRestartBoundarySnapshot(id, 'after_ready');
+    await this._assertRestartedNodeRecoveryHeld(id, options);
   }
 
   _resolveRestartShutdownObservationTimeoutMs() {

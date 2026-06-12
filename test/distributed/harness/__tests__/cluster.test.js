@@ -196,6 +196,9 @@ test('Unit: restartNode stages stop, shutdown boundary, start, and admin readine
       ['startNode', 'node-a'],
       ['closeQueryConnection'],
       ['waitForNodeAdminReadiness', 'node-a'],
+      // CL-025 recovery-held recheck: readiness must still hold after the
+      // post-restart boundary snapshot.
+      ['waitForNodeAdminReadiness', 'node-a'],
     ]);
   });
 
@@ -239,6 +242,9 @@ test('Unit: restartNode tolerates ignorable already-stopped stop errors',
       ['waitForRestartShutdownBoundary', 'node-a'],
       ['startNode', 'node-a'],
       ['closeQueryConnection'],
+      ['waitForNodeAdminReadiness', 'node-a'],
+      // CL-025 recovery-held recheck: readiness must still hold after the
+      // post-restart boundary snapshot.
       ['waitForNodeAdminReadiness', 'node-a'],
     ]);
   });

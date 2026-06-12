@@ -3141,3 +3141,44 @@ Each record below represents one violated invariant.
 - DX (one line, fires ~17x/run): info log at the settle branch
   (stage-4.js:~537) carrying {operationId, workflowStep, drainState,
   completionState, sourceState, ownerState, trigger}.
+
+### CL-025 FIX LANDED (2026-06-12) — status: guarded
+
+- MECHANISM CONFIRMED before fixing (085908Z-run2, 35a891b8 second
+  boot): Admin WebSocket API started at +3s of boot (09:10:02.345)
+  while join-readiness was still blocked in INIT; the recovery wait's
+  single adminReady probe passed; the process exited code 1 at
+  09:10:09.715; the failing after_ready boundary snapshot was
+  swallowed (_recordRestartBoundarySnapshot catch-all); _runChaosAction
+  declared the fault recovered at 09:10:11.729.
+- FIX (test/distributed/harness/cluster-segment-7-class-2.js +
+  class-1.js): (i) _waitForNodeAdminReadiness now requires TWO
+  consecutive ready probes (RESTART_RECOVERY_CONSECUTIVE_READY_PROBES;
+  a single transient ready sample is not recovery); (ii) NEW
+  _assertRestartedNodeRecoveryHeld runs AFTER the after_ready boundary
+  snapshot in _restartNodeWithObservation — the same readiness
+  predicate re-verified within a bounded budget (default 15s,
+  config timeouts.restartRecoveryHoldRecheckMs); a node that died
+  after the wait now FAILS the restart action loudly ('Restarted node
+  lost recovery readiness after the post-restart boundary'). The
+  scenario's per-node loop therefore stops at the ACTUAL dead node —
+  the driver-level previous-node-alive pre-check from the record is
+  satisfied at the source (failure attribution fixed where it
+  arises), no extra driver machinery added.
+- Guards: cluster-restart-recovery-held.test.js (3 tests: dies-after-
+  readiness fails; healthy restart passes with >=4 probes; single
+  transient ready probe never satisfies the wait) — all red on
+  revert. Existing restartNode staging-sequence tests updated for the
+  recheck call. Full harness __tests__ suite green.
+- OPEN FOLLOW-UP (parked, written boundary): the predicate itself
+  remains weak — adminReady comes up seconds into a boot that is
+  still JOINING, so a slow-but-alive rejoiner is declared recovered
+  while mid-rejoin and the driver proceeds to restart the next node
+  (rolling N-1 premise can still be violated by SLOW rejoin, just no
+  longer by DEATH). Strengthening (e.g. requiring readinessPhase
+  beyond INIT or controlPlaneRecoveryReady in addition to adminReady)
+  changes what the scenario gate measures — decide deliberately at
+  the restart-rung record (CL-024/CL-023 follow-ups), not as a
+  harness patch.
+- Gate evidence: next stat-gate round (any) — a CL-024-style rejoin
+  crash must now surface as chaos.fault.failed on the CRASHED node.

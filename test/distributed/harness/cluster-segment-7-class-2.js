@@ -43,6 +43,13 @@ const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_BLOCKER =
   'bootstrapJoinProjectionBlocker';
 const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE =
   'bootstrapJoinProjectionRule';
+// CL-025: a single ready probe is satisfiable by a node mid-crash (admin came
+// up early in boot, process exited between the probe and the recovered
+// declaration — observed in stat-gate 085908Z-run2). Readiness must hold
+// across consecutive probes, and must still hold after the post-restart
+// boundary snapshot.
+const RESTART_RECOVERY_CONSECUTIVE_READY_PROBES = 2;
+const RESTART_RECOVERY_HOLD_RECHECK_TIMEOUT_MS = 15000;
 
 class Cluster2 extends Cluster1 {
   _formatRestartShutdownBoundary(observation) {
@@ -395,6 +402,7 @@ class Cluster2 extends Cluster1 {
         null;
     const requireAdminReady = options?.requireAdminReady === true;
     const deadline = Date.now() + timeoutMs;
+    let consecutiveReadyProbeCount = 0;
     const pollResult = await pollUntilCondition({
       deadline,
       intervalMs: RESTART_POLL_INTERVAL_MS,
@@ -404,18 +412,24 @@ class Cluster2 extends Cluster1 {
           const diagnostics = await node.getReachabilityDiagnostics({
             timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
           });
+          const ready =
+            (requireAdminReady === true ?
+              diagnostics?.adminReady === true :
+              diagnostics?.adminReady === true ||
+                diagnostics?.controlPlaneRecoveryReady === true) &&
+            (expectedPublicationEpoch === null ||
+              Number(diagnostics?.publishedControlPlaneEpoch) ===
+                expectedPublicationEpoch);
+          consecutiveReadyProbeCount = ready ?
+            consecutiveReadyProbeCount + 1 :
+            ZERO;
           return {
             ...diagnostics,
-            ready:
-              (requireAdminReady === true ?
-                diagnostics?.adminReady === true :
-                diagnostics?.adminReady === true ||
-                  diagnostics?.controlPlaneRecoveryReady === true) &&
-              (expectedPublicationEpoch === null ||
-                Number(diagnostics?.publishedControlPlaneEpoch) ===
-                  expectedPublicationEpoch),
+            ready,
+            consecutiveReadyProbeCount,
           };
         } catch (error) {
+          consecutiveReadyProbeCount = ZERO;
           return {
             nodeId: targetNodeId,
             ready: false,
@@ -429,7 +443,10 @@ class Cluster2 extends Cluster1 {
           };
         }
       },
-      isSuccess: (result) => result?.ready === true,
+      isSuccess: (result) =>
+        result?.ready === true &&
+        result?.consecutiveReadyProbeCount >=
+          RESTART_RECOVERY_CONSECUTIVE_READY_PROBES,
     });
 
     if (pollResult.success) {
@@ -450,6 +467,40 @@ class Cluster2 extends Cluster1 {
         ) +
         ')',
     );
+  }
+
+  /**
+   * Re-verify that a restarted node still satisfies the recovery-ready
+   * predicate after the post-restart boundary snapshot. A node whose process
+   * exits right after the readiness wait must fail the restart action loudly
+   * instead of being declared recovered (CL-025).
+   * @param {string} targetNodeId
+   * @param {Object} [options={}]
+   * @return {Promise<void>}
+   */
+  async _assertRestartedNodeRecoveryHeld(targetNodeId, options = {}) {
+    const configuredRecheckTimeoutMs = Number(
+      this._config?.timeouts?.restartRecoveryHoldRecheckMs,
+    );
+    const recheckTimeoutMs =
+      Number.isFinite(configuredRecheckTimeoutMs) &&
+      configuredRecheckTimeoutMs > ZERO ?
+        Math.floor(configuredRecheckTimeoutMs) :
+        RESTART_RECOVERY_HOLD_RECHECK_TIMEOUT_MS;
+    try {
+      await this._waitForNodeAdminReadiness(targetNodeId, {
+        ...options,
+        readinessTimeoutMs: recheckTimeoutMs,
+      });
+    } catch (error) {
+      throw new Error(
+        'Restarted node lost recovery readiness after the post-restart ' +
+          'boundary for node ' +
+          targetNodeId +
+          ': ' +
+          (error?.message || String(error)),
+      );
+    }
   }
 
   _formatRestartRecoveryReadinessObservation(
