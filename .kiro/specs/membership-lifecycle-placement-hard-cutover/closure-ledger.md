@@ -4028,3 +4028,25 @@ Each record below represents one violated invariant.
   REPLACE completion path, so this fix may help there too),
   restart slow-rejoin (run2 class), CL-001 published-set
   disagreement.
+
+### CL-029 PRE-GATE EVIDENCE EXPANSION (2026-06-12, while gate 173105Z runs) — the post-restart convergence-settle over-target stalls (frontier item 2) are the SAME mechanism
+
+- 145024Z-run1 (the 'Convergence timeout, max over-target 121876ms'
+  NO_REPORT run): 6 ops' durable rows END at SYNCING; four of them
+  (bd7a55a0, b50afe70, b3e05917, 1b6c6c1a — three distinct
+  partitions incl. a dynamic table) show 'Replica creation
+  completed' AT/AFTER the row's final step change, then NOTHING for
+  the remaining 2-6 minutes — the exact CL-029 lost-completion
+  signature, four more production instances. b1e7159e additionally
+  shows 'Failed to persist operation' = the exit-(b) witness.
+  Cluster-wide: 19 creations completed vs 13 removals completed +
+  157 'No row found for CDC update' divergence hits (seed 140).
+  Surplus sources cannot retire because their REPLACEs never leave
+  target_sync -> over-target never drains -> settle budget expires.
+- 145024Z-run4 (the 'stalled, over-target 16013ms' run): 6 of 23
+  ops end at SYNCING — same class.
+- IMPLICATION for gate 173105Z: CL-029's fix is predicted to move
+  BOTH frontier items 1 (run3 mode=load active=0/5) and 2 (runs 1+4
+  settle over-target) together. If post-fix runs still stall
+  over-target, that residual is a DIFFERENT mechanism and gets a
+  new record — do not stretch CL-029.
