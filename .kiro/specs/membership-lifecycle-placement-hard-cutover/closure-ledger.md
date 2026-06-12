@@ -3586,3 +3586,137 @@ Each record below represents one violated invariant.
   without forced repair was not chased (the fix is mode-independent:
   forward-dating is forbidden regardless of why the capture is
   fresh).
+
+## CL-028 Priority Recovery Actuation Must Not Be Admission-Vetoed By The Readiness It Reopens
+
+- Status: narrowed (2026-06-12; pinned by dedicated investigation on
+  131408Z-run3 — full per-node log chain, all loci file:line-verified)
+- Concern: placement-priority-spread
+- Failure Class: priority-invariant-breach (the
+  formation-vs-steady-state circular-dependency class: recovery
+  actuation gated on readiness that only recovery can reopen —
+  see [[circular-dependency-class-formation-vs-steady-state]])
+- First Violated Invariant: a dispatched priority-control-plane
+  recovery operation must always retain a live convergence driver.
+  Priority-recovery follow-up ADD/REPLACE moves are hard-coded
+  controlPlaneMutationWorkClass=BACKGROUND
+  (unified-rebalancer-segment-4-stage-3.js:416,444,463); BACKGROUND
+  requires stable CONTROL_PLANE_WRITABLE +
+  METADATA_PUBLICATION_HEALTHY
+  (control-plane-mutation-readiness.js:39-42,95-98) — dimensions
+  that stay CLOSED while priority recovery is in flight. When
+  rebalance leadership lands on a recovery-degraded node, every
+  planned recovery move is vetoed local_mutation_unhealthy BEFORE
+  the dedup/reuse-in-flight path
+  (RebalanceCoordinator.createOperation,
+  rebalance-coordinator-segment-3.js:73 ->
+  provisioning-admission-policy.js:207-226), so the in-flight op
+  loses driver (b) leader reuse-execution; driver (a) the target's
+  durable status write was CL-016-deferred with retryAfterMs=null
+  and NEVER retried (owner sees authoritativeVisibilityState=
+  cache_visible and correctly refuses to promote). Only fallback:
+  the 300s target_sync step deadline > the gate's 150s no-progress
+  budget.
+- THE DESIGNED ESCAPE EXISTS AND IS NOT WIRED: allowPriorityRecoveryBypass
+  / PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS
+  (control-plane-mutation-readiness.js:187-235, doc comment names
+  'a circular bootstrap deadlock') — the rebalancer admission call
+  site does not pass it (provisioning-admission-policy.js:214-217).
+- Run evidence (131408Z-run3, restart phase NEVER started — this is
+  the initial mode=load wait): attempt 1 was FULLY READY (active=5/5
+  gateReasons=none); spread recovery then closed readyz cluster-wide
+  (REPLACE ops 13:45:10-13 moving priority replicas off the seed).
+  4/5 partitions reached spread_satisfied_in_flight; only
+  sql_transactions-p1 stayed recovering_in_flight: op 4de000b0
+  (seed->35a891b8) wedged at target_sync/dispatched, stepAge 56s,
+  last row update 13:46:43.075. Target finished its part in <1s
+  (voter-ready 178ms — CL-009(ii)/CL-015/CL-016 all demonstrably
+  working) but its durable status write deferred (localProgress
+  Committed=true, no retry anywhere). Seed lost rebalancer
+  leadership 13:46:44; new leader 35a891b8 then planned the recovery
+  move 14x and skipped it local_mutation_unhealthy every ~6s
+  (13:46:49-13:47:39), itself reporting [cluster_member_unhealthy,
+  control_plane_write_unhealthy, serve_not_eligible]. Per-node
+  reason on all 4 inactive nodes: PRIORITY_CONTROL_PLANE_RECOVERY_PENDING
+  (control-plane-readiness-service-segment-3.js:234-248, by design).
+  Seed convergence traces healthy (no-deficit, epoch 2 PUBLISHED).
+- NOT the 085908Z-run1 precedent (that was the CL-027 oracle
+  livelock; run3 has ownerQueue=0, zero write_deferred markers).
+  IS the CL-003 witness surface (gate tagged closure=CL-003
+  publication_converged_priority_spread_pending) but with a NEW
+  first-violated mechanism — CL-003's prior root (learner voter-ready
+  starvation) is demonstrably fixed here. Cross-reference from CL-003.
+- Authoritative Owner: operation_workflow_owner via
+  RebalanceCoordinator.createOperation admission on the current
+  rebalance leader, fed by UnifiedRebalancer priority-recovery
+  follow-up planning.
+- Authoritative State: replica_operations row of the blocked
+  partition + priority partition witness (recovering_in_flight).
+- Forbidden Promotion Inputs: cache-visible service rows as
+  completion proof; local-only rows as durable existence;
+  serve-grade readiness dimensions (CONTROL_PLANE_WRITABLE,
+  METADATA_PUBLICATION_HEALTHY, SERVE_ELIGIBLE) as admission inputs
+  for the recovery actuation that reopens them.
+- Stable Witness: per-partition priority witness tuple
+  (semanticStateId, currentStepId/state, stepAgeMs vs stepTimeoutMs,
+  authoritativeVisibilityState) + leader skip-reason
+  local_mutation_unhealthy count + readyDistinctNodeCount.
+- Entry Gate: rolling-restart mode=load ACTIVE wait (CL-003 witness
+  class), pre-restart formation window.
+- Next Falsification Step: characterization test on createOperation
+  with a priority-recovery follow-up move (BACKGROUND class),
+  degraded local CONTROL_PLANE_WRITABLE, recovery lane open —
+  assert today's veto fires even for the reuse path of an in-flight
+  recovery op (red guard); falsified if reuse is admitted via a path
+  the investigation missed.
+- Required Guard: priority-recovery follow-up moves must not be
+  admission-deferred by assertLocalControlPlaneMutationReady while
+  CONTROL_PLANE_RECOVERY_ELIGIBLE is open (work-class or bypass fix
+  locus, never-break: the bypass must stay scoped to exactly the
+  relaxable dimensions); plus harness mapping rule:
+  recovering_in_flight + growing stepAgeMs + leader
+  local_mutation_unhealthy skips => this record, not generic CL-003.
+- SECONDARY (recorded, separate candidates): (i) the deferred durable
+  status write has NO retry owner (retryAfterMs=null — CL-016
+  follow-up; CL-021's reconcile should cover it, verify why it
+  didn't within 56s); (ii) harness invariant
+  priority_recovery_readyz_closed_during_priority_recovery failed
+  the OTHER way (11601fe0 alone reopened readyz at ~119s while 4
+  stayed blocked — expectedBlockedNodeCount=5 observed=4);
+  (iii) harness lastMeaningfulProgress is measured against the
+  best-ever sample (attempt 1 active=5/5), so later 5->4 inactive
+  improvement did not reset the no-progress clock — oracle note.
+
+### CL-028 FIX LANDED (2026-06-12) — status: fix-landed (gate pending)
+
+- FIX: assertLocalControlPlaneMutationReady
+  (provisioning-admission-policy.js) now passes
+  allowPriorityRecoveryBypass to
+  getLocalControlPlaneMutationReadinessBlocker SCOPED to moves whose
+  partitionId/entityId is a priority control-plane partition. The
+  designed bypass mechanism then applies its OWN gating: it relaxes
+  ONLY {CONTROL_PLANE_WRITABLE, METADATA_PUBLICATION_HEALTHY} and
+  ONLY while isPriorityRecoveryWriteLaneOpen (recovery lane dimension
+  true AND projection contract priorityRecovery.active) — i.e. the
+  veto yields exactly for the actuation that reopens the vetoing
+  dimensions, and nothing else. Work-class stays BACKGROUND
+  (reclassification rejected: wider blast radius through other
+  BACKGROUND-gated protections).
+- Never-break: non-priority BACKGROUND moves unchanged (no bypass
+  flag); priority moves with recovery lane CLOSED still vetoed;
+  custom required dimensions outside the relaxable pair are retained
+  even under bypass; all downstream safety (storage admission,
+  remove-safety, dedup/reuse) untouched — the change only lets
+  createOperation REACH the dedup/reuse path it was vetoed before.
+- Guards (red-on-revert verified): provisioning-admission-policy
+  .test.js +3 tests — bypass admits priority-recovery move with
+  lane open (RED pre-fix); lane-closed still defers; non-priority
+  still defers with lane open. Rebalancer suite 5039/5048 (the 9
+  fails = the known pre-existing unified-rebalancer set).
+- Gate expectation (pre-registered): the run3 signature (mode=load
+  active=1/5, one partition recovering_in_flight with leader
+  local_mutation_unhealthy skips every ~6s) disappears; spread
+  recovery completes even when rebalance leadership lands on a
+  recovery-degraded node. Note the same gate round also validates
+  CL-027 (green-stall oracle livelock) — expect mode=load
+  everything-green stalls gone as a class.

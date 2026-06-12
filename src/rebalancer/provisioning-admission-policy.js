@@ -14,6 +14,9 @@ import {
   requiresStableLocalControlPlaneMutationReadiness,
 } from '../control-plane/control-plane-mutation-readiness.js';
 import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
@@ -211,9 +214,17 @@ class ProvisioningAdmissionPolicy {
       return;
     }
 
+    // Priority control-plane recovery moves are the actuation that REOPENS
+    // the writability dimensions this veto checks; vetoing them on a
+    // recovery-degraded leader severs the in-flight operation's only
+    // convergence driver (CL-028). The bypass itself only relaxes the two
+    // circular dimensions and only while the recovery lane is open.
     const blocker = getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.getNodeId(),
       controlPlaneReadinessService: this.getControlPlaneReadinessService(),
+      allowPriorityRecoveryBypass: isPriorityControlPlanePartition({
+        partitionId: move?.partitionId || move?.entityId || null,
+      }),
     });
     if (!blocker) {
       return;

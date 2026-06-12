@@ -283,3 +283,105 @@ test('assertLocalControlPlaneMutationReady defers background mutation on readine
       'background mutations should defer when local control-plane readiness is degraded',
     );
   });
+
+function buildRecoveryDegradedReadiness({recoveryLaneOpen}) {
+  return {
+    dimensions: {
+      controlPlaneWritable: false,
+      metadataPublicationHealthy: false,
+      controlPlaneRecoveryEligible: recoveryLaneOpen,
+    },
+    projectionReadinessContract: {
+      priorityRecovery: {active: true},
+    },
+    reasons: [
+      {code: 'control_plane_write_unhealthy'},
+    ],
+  };
+}
+
+test('assertLocalControlPlaneMutationReady admits priority-recovery moves ' +
+  'through the recovery bypass while the recovery lane is open',
+async (t) => {
+  const {policy} = createPolicy({
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildRecoveryDegradedReadiness({recoveryLaneOpen: true});
+      },
+    },
+  });
+
+  const error = await Promise.resolve().then(() => {
+    policy.assertLocalControlPlaneMutationReady({
+      type: 'REPLACE',
+      partitionId: 'sql_transactions-p1',
+      entityId: 'sql_transactions-p1',
+      nodeId: 'node-remote',
+      sourceNodeId: 'node-source',
+      replicaId: 'sql_transactions-p1-r1',
+      controlPlaneMutationWorkClass: 'background',
+    });
+  }).catch((caught) => caught);
+
+  t.equal(
+    error,
+    undefined,
+    'the recovery actuation that reopens the writability dimensions must ' +
+      'not be vetoed by those same dimensions (CL-028)',
+  );
+});
+
+test('assertLocalControlPlaneMutationReady still defers priority-partition ' +
+  'moves when the recovery lane is closed', async (t) => {
+  const {policy} = createPolicy({
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildRecoveryDegradedReadiness({recoveryLaneOpen: false});
+      },
+    },
+  });
+
+  const error = await Promise.resolve().then(() => {
+    policy.assertLocalControlPlaneMutationReady({
+      type: 'REPLACE',
+      partitionId: 'sql_transactions-p1',
+      entityId: 'sql_transactions-p1',
+      nodeId: 'node-remote',
+      controlPlaneMutationWorkClass: 'background',
+    });
+  }).catch((caught) => caught);
+
+  t.equal(
+    error?.rebalanceSkipReason,
+    REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY,
+    'the bypass must stay scoped to an open recovery lane',
+  );
+});
+
+test('assertLocalControlPlaneMutationReady still defers non-priority ' +
+  'moves even while the recovery lane is open', async (t) => {
+  const {policy} = createPolicy({
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildRecoveryDegradedReadiness({recoveryLaneOpen: true});
+      },
+    },
+  });
+
+  const error = await Promise.resolve().then(() => {
+    policy.assertLocalControlPlaneMutationReady({
+      type: 'ADD',
+      partitionId: 'partition-1',
+      entityId: 'partition-1',
+      nodeId: 'node-remote',
+      controlPlaneMutationWorkClass: 'background',
+    });
+  }).catch((caught) => caught);
+
+  t.equal(
+    error?.rebalanceSkipReason,
+    REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY,
+    'optional background churn must stay deferred on degraded nodes; the ' +
+      'bypass is for priority control-plane recovery actuation only',
+  );
+});
