@@ -3073,3 +3073,71 @@ Each record below represents one violated invariant.
   alive before stopping the next one.
 - Notes: same oracle family as the CL-006-era capture gaps; this one
   actively GREEN-LIGHTS an N-2 cluster.
+
+### CL-023 PINNED (2026-06-12, second investigation round) — status: reproduced (code-path deterministic; unit repro designed)
+
+- THE CALLER: reconcilePriorityRecoveryOperationDrain ->
+  completeOperation (operation-workflow-owner-segment-7-stage-4.js:548).
+  Decision chain, all file:line-verified: (1) drain candidate =
+  REPLACE + priority partition + step in {PENDING..STOPPING}
+  (stage-3.js:340, recovery-reconcile-shared.js:282-291);
+  (2) completion accepted from the priority-recovery PLANNING
+  SNAPSHOT when state in {converged, spread_satisfied_in_flight}
+  (segment-6.js:119, shared.js:331-336 — the latter counts IN-FLIGHT
+  placement, itself a forbidden promotion input); (3) THE BUG: for a
+  pre-sync REPLACE (PENDING/SENDING/CREATING) whose target replica is
+  UNMATERIALIZED (no observed services row), the override table maps
+  TARGET_UNMATERIALIZED -> SOURCE_STATE.NOT_REQUIRED
+  (recovery-reconcile-shared.js:475-482) — THE SOURCE REPLICA IS
+  NEVER OBSERVED AT ALL; (4) NOT_REQUIRED -> CONVERGED ->
+  COMPLETE_PRIORITY_RECOVERY_DRAIN -> completeOperation -> terminal
+  REMOVED from SENDING (or even PENDING), reason operation_completed.
+- Run evidence: f93eec38 completed :40.319 while its target's
+  services-row write was DEFERRED (status write deferred :36.689;
+  r4 active only :43.700). Cross-check op 8358e75f
+  (control_plane_publications-p1): PENDING -> REMOVED, NEVER
+  DISPATCHED AT ALL (no claim on any node) — kills every
+  dispatch/response/outcome theory for the class; only the drain can
+  complete an undispatched PENDING op.
+- SECOND forbidden input adjacent: ABSENT -> REMOVAL_CONFIRMED
+  (recovery-reconcile-shared.js:405-412) treats CACHE-ABSENCE of the
+  source services row as confirmed removal.
+- Ownership wrinkle (explains the dual-node logs, NOT the bug): for
+  unsettled priority REPLACEs the TARGET owns the workflow
+  (resolveOperationOwnerNodeId,
+  replica-operation-repository-row-methods.js:124-159; seed wakes the
+  remote owner; target claims via CAS — its 'step changed
+  PENDING->SENDING ingress priority_claim_cas' log). The seed settled
+  as a NON-owner via the explicit REMOTE_SETTLE_ALLOWED carve-out
+  (stage-4.js:348+, shared.js:581-584). The drain runs from
+  checkTimeouts' periodic scan over ALL incomplete ops with no
+  ownership filter (stage-3.js:121) — serial completion cadence of
+  all 5 priority REPLACEs :30.981-:40.319 matches.
+- Eliminated by evidence: step-timeout (SENDING budget 30s, elapsed
+  12.3s; timeout path FAILS not completes), reconcileReplaceActualActive
+  (commits ACTIVE first, never direct-completes), dispatch responses
+  (unreachable for REPLACE; response went to the target),
+  stop-phase NOT_FOUND (forces STOPPING first), already-active
+  idempotency (create handled exactly once, replica didn't pre-exist).
+- FIX LOCUS (one sentence): the pre-sync drain override
+  TARGET_UNMATERIALIZED -> NOT_REQUIRED (and the ABSENT ->
+  REMOVAL_CONFIRMED mapping) must not terminalize a REPLACE as
+  REMOVED — the step filterReplicasRetiredByTerminalReplaceOperations
+  reads as confirmed source retirement; settle as FAILED/cancelled
+  (re-plannable) instead. NEVER-BREAK CHECK REQUIRED before landing:
+  FAILED rows interact with CL-013's 'hints don't filter FAILED rows'
+  follow-up and the failure-path removal symmetry from CL-016 —
+  verify a FAILED-settled REPLACE cannot strand topology hints or
+  ghost service rows; also decide whether spread_satisfied_in_flight
+  may remain a completion state for POST-sync steps.
+- Required Guard (red today): workflow-owner unit test driving
+  reconcilePriorityRecoveryOperationDrain with a priority REPLACE in
+  SENDING (and PENDING), completion CONVERGED or
+  spread_satisfied_in_flight, unmaterialized target, ACTIVE source
+  services row -> op must NOT reach workflow_step=REMOVED. Plus the
+  stable witness in run reports: |{sourceReplicaId of REMOVED
+  REPLACEs} INTERSECT {ACTIVE services replica_ids}| == 0 (currently
+  4/5/4/4).
+- DX (one line, fires ~17x/run): info log at the settle branch
+  (stage-4.js:~537) carrying {operationId, workflowStep, drainState,
+  completionState, sourceState, ownerState, trigger}.
