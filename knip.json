@@ -1,11 +1,14 @@
 {
   "entry": [
-    "src/index.js",
     "src/sea-entry.js",
-    "src/cli/bin/ddb-admin.js",
     "src/test-helpers/worker/entry-runner.js",
     "src/test-helpers/worker/admin-cli-direct-runner.js",
+    "src/threading/service-worker.js",
     "test/**/*.test.js",
+    "test/**/*.test-part-*.js",
+    "test/**/*test-cases.js",
+    "test/distributed/validate-node-join-under-load.js",
+    "test/integration/cdc-debug-test.js",
     "test/distributed/scenarios/*.js",
     "test/runtime/pgwire-test-matrix.js",
     "scripts/**/*.js"
@@ -24,6 +27,7 @@
   "ignoreDependencies": [
     "postject",
     "@pulumi/pulumi",
-    "@pulumi/gcp"
+    "@pulumi/gcp",
+    "jscpd"
   ]
 }

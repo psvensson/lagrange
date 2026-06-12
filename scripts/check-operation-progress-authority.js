@@ -56,7 +56,6 @@ const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
   'src/rebalancer/operation-workflow-owner-segment-7-stage-2.js',
   'src/rebalancer/operation-workflow-owner-segment-7-stage-3.js',
   'src/rebalancer/operation-workflow-owner-segment-7-stage-4.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-5.js',
   'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
   'src/rebalancer/operation-workflow-owner-segment-7.js',
   'src/rebalancer/rebalance-coordinator-segment-1.js',

@@ -9,7 +9,6 @@ import {
 const ENCODING_UTF8 = 'utf8';
 const OWNER_MAP_PATH = 'architecture/current-owner-maps.md';
 const NAMED_LEGACY_FILES = Object.freeze([
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-5.js',
   'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
   'src/control-plane/priority-recovery-snapshot-stage-10.js',
 ]);
@@ -30,7 +29,7 @@ test('operation progress authority guard requires semantic successor targets', (
 
 test('operation progress authority guard rejects new ordinal files', (t) => {
   const violations = collectOrdinalFileViolations([
-    'src/rebalancer/operation-workflow-owner-segment-7-stage-5.js',
+    'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
     'src/rebalancer/operation-workflow-owner-segment-99.js',
     'src/control-plane/priority-recovery-snapshot-stage-10.js',
     'src/control-plane/priority-recovery-snapshot-stage-99.js',
