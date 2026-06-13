@@ -22,6 +22,13 @@ function leaderCache(leaderNodeId) {
   };
 }
 
+// The driver emits console-only convergence decision traces and readiness trace
+// fields on every path; stub them on the mock `this`.
+const traceStubs = () => ({
+  _emitConvergenceDecisionTrace: () => {},
+  _buildPublicationReadinessTraceFields: () => ({}),
+});
+
 t.test('drive: no-op when this node is NOT the publications leader', async (t) => {
   let planningCalls = 0;
   const ctx = {
@@ -30,6 +37,7 @@ t.test('drive: no-op when this node is NOT the publications leader', async (t) =
     readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
     reconcileActiveGateMembershipPublication: async () => {},
     logger: {},
+    ...traceStubs(),
   };
   t.equal(await drive.call(ctx), false, 'returns false');
   t.equal(planningCalls, 0, 'gated before reading planning snapshot');
@@ -43,6 +51,7 @@ t.test('drive: no-op while a prior drive is in flight', async (t) => {
     systemTableCache: leaderCache('seed'),
     readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
     logger: {},
+    ...traceStubs(),
   };
   t.equal(await drive.call(ctx), false);
   t.equal(planningCalls, 0, 'in-flight guard short-circuits');
@@ -57,10 +66,58 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
     reconcileActiveGateMembershipPublication: async () => {},
     assertSingleMembershipPartition: () => {},
     logger: {},
+    ...traceStubs(),
   };
   t.equal(await drive.call(ctx), false, 'null snapshot -> false');
   t.equal(planningCalls, 1, 'leader proceeds past the gate');
   t.equal(ctx.ownerMembershipReconcileInFlight, false, 'in-flight reset in finally');
+});
+
+// CL-001 variant A guard: an OPEN publication whose published set has NO deficit
+// (missingPublishedCount === 0) but is still awaiting a recovery-eligible ack must
+// re-drive the owner reconcile to CLOSE it, instead of skipping with no-deficit.
+function ackCompletionCtx({recoveryEligible}) {
+  let reconcileCalls = 0;
+  const ctx = {
+    nodeId: 'seed',
+    systemTableCache: leaderCache('seed'),
+    assertSingleMembershipPartition: () => {},
+    now: () => 1,
+    reconcileActiveGateMembershipPublication: async () => {reconcileCalls += 1;},
+    readPublicationPlanningSnapshot: async () => ({
+      // empty nodeRows -> expectedNodeIds empty -> missingPublishedCount === 0,
+      // isolating the ack-completion path.
+      nodeRows: [],
+      readinessByNodeId: {
+        peer: {dimensions: {controlPlaneRecoveryEligible: recoveryEligible}},
+      },
+      latestPublicationRow: {
+        publicationEpoch: 20,
+        status: 'OPEN',
+        publishedActiveNodeIds: ['seed', 'peer'],
+        requiredAckNodeIds: ['seed', 'peer'],
+        acknowledgedNodeIds: ['seed'],
+      },
+      latestPublishedPublicationRow: null,
+    }),
+    logger: {warn: () => {}},
+    ...traceStubs(),
+  };
+  return {ctx, reconcileCalls: () => reconcileCalls};
+}
+
+t.test('drive: re-drives an OPEN publication awaiting a recovery-eligible ack (CL-001)', async (t) => {
+  const {ctx, reconcileCalls} = ackCompletionCtx({recoveryEligible: true});
+  const drove = await drive.call(ctx);
+  t.equal(drove, true, 'drives despite zero published-set deficit');
+  t.equal(reconcileCalls(), 1, 'reconcile invoked to close the OPEN publication');
+});
+
+t.test('drive: does NOT re-drive when the pending-ack node is not recovery-eligible (thrash guard)', async (t) => {
+  const {ctx, reconcileCalls} = ackCompletionCtx({recoveryEligible: false});
+  const drove = await drive.call(ctx);
+  t.equal(drove, false, 'skips: a non-eligible pending ack must not spin the driver');
+  t.equal(reconcileCalls(), 0, 'no reconcile when the ack cannot complete');
 });
 
 t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {

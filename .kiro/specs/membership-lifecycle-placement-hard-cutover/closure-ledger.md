@@ -36,12 +36,18 @@ Each record below represents one violated invariant.
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
-- Status: narrowed
+- Status: pinned (root mechanism identified 2026-06-13 from reproducible
+  artifacts; see "CL-001 PINNED" section below — fix not yet landed)
 - Concern: membership-publication
 - Failure Class: convergence-lag
-- First Violated Invariant: All nodes in the load-active gate must converge on
-  one published membership epoch and one published active-node set before the
-  cluster can be considered active.
+- First Violated Invariant: A published membership epoch raised to re-include a
+  node that just rejoined from a rolling restart must reach CLOSED (the rejoined
+  node's acknowledgement must complete) AND every surviving node's local
+  projection must advance to that latest epoch — otherwise the cluster never
+  quiesces on one published active-node set. (Refined from the original "all
+  nodes converge on one epoch/set"; the EARLIER violated invariant is the
+  ack-completion / projection-advance around a rejoin, not the final all-nodes
+  comparison, which is the downstream symptom.)
 - Authoritative Owner: membership lifecycle and publication owner path,
   centered on published membership artifacts consumed by the readiness gate.
 - Authoritative State: published membership epoch and published active-node set.
@@ -60,9 +66,22 @@ Each record below represents one violated invariant.
   publication convergence pending.
 - Scope: rolling restart under load remains the smallest known scenario that
   reproduces the disagreement with current evidence.
-- Next Falsification Step: extend the cluster-active progress snapshot to emit
-  the per-node published epoch and active-set witness that the gate is using
-  when it reports publication convergence pending.
+- Next Falsification Step: (UPDATED 2026-06-13 — original step below is DONE;
+  the per-node witness now exists and pinned the root.) NEXT: trace the
+  ack-evidence path for variant A (run2) — find where `planningAcknowledgedNodeIds`
+  / per-node ack-readiness evidence (membership-publication-target-selection.js
+  `buildPublicationAcknowledgementReadinessDecision` + the
+  `MEMBERSHIP_PUBLICATION_ACK_CARRY_RULES`) is fed for a node that rejoined AFTER
+  the epoch was raised, and prove WHY the freshly-rejoined node never enters that
+  set (candidate: CL-014-class catch-up gap — the owner's readiness/ack evidence
+  for the rejoined node is stale or never refreshed once `publicationChanged`
+  forced the OBSERVED_ACK carry rule instead of RECOVERY_ELIGIBLE_ACK). For
+  variant B (run4) — find why a restarted node's LOCAL published-membership
+  projection never advances past the epoch that excluded it (the owner row closed
+  fine; the node's projection is stale). ORIGINAL (now satisfied): extend the
+  cluster-active progress snapshot to emit the per-node published epoch and
+  active-set witness that the gate is using when it reports publication
+  convergence pending.
 - Required Guard: a targeted characterization or harness assertion proving the
   gate reports which node or nodes disagree on published epoch or active set.
 
@@ -125,6 +144,291 @@ Each record below represents one violated invariant.
   owner of exactly this; the failed-join full-cleanup path is legacy
   node-joining behavior — do not build a parallel retry/preservation
   mechanism.
+
+### CL-001 PINNED (2026-06-13) — root mechanism from reproducible artifacts (gate 223302Z runs 2+4)
+
+These are the FIRST reproducible occurrences with surviving full per-node
+logs. The disagreement is NOT corruption and NOT a same-epoch divergence: the
+canonical control_plane_publications raft row is term-fenced consistent on
+every node (only `cache_missing` cache-vs-authoritative diagnostics, no
+conflicting-epoch-at-index, no reinsert). It is a LIVENESS / stale-projection
+failure that surfaces at the harness's FINAL consistency probe, which compares
+each node's locally-projected published active-set (the ungated
+`authoritativeActiveNodes` path in
+test/distributed/harness/assertions-consistency-comparison.js:604) and is
+captured during cluster shutdown/drain.
+
+THE BINDING WITNESS (run2, seed 7493b0ab's own durable publication-row log,
+reconstructed from authoritativeValue across the run):
+```
+<=22:46:10  epochs 10-19: PUBLISHED, CLOSED, notAcked=[]   (converged fine THROUGH the restarts)
+ 22:46:15   epoch 20: pub#=5 (all five), status=OPEN, notAcked=[8be8d30f]   <-- WEDGES
+ 22:50:12   epoch 21 (shutdown drain): OPEN, notAcked=[8be8d30f]
+ 22:50:16   epoch 22: OPEN, notAcked=[7493b0ab, 8be8d30f]
+```
+Every epoch up to 19 CLOSED (all required acks received). At 22:46:15 epoch 20
+re-includes the just-rejoined 8be8d30f, stays OPEN with 8be8d30f pending-ack,
+and NEVER closes for ~4 minutes until the run's budget expires. `pendingAckCount=1`
+(8be8d30f) is the persistent gate blocker through the whole tail. The
+`published_active_nodes_disagree` oracle failure is DOWNSTREAM of this
+never-quiescing publication.
+
+REJOIN TIMING IS THE TRIGGER (run2): 8be8d30f is the node restarted in the
+round that raised epoch 20 — first boot 22:42:17, drain/shutdown 22:45:17,
+SECOND boot 22:45:58, "Join canonical readiness converged" 22:46:03. Epoch 20
+(re-adding it) publishes 22:46:15, immediately after its rejoin. (NOTE: an
+earlier investigation pass mis-reported 8be8d30f as single-boot — it restarted;
+verify boot markers, do not trust a single grep.)
+
+TWO DISTINCT VARIANTS (same family — published membership fails to quiesce
+around a rolling-restart's remove+re-add of a node):
+- VARIANT A — ACK NEVER COMPLETES (run2, epoch 20, pendingAckCount=1): the
+  republication that re-adds the rejoined node never reaches CLOSED because the
+  owner never gets ack-evidence for that node. Acks are OWNER-DERIVED, not
+  self-written: a non-write-leader DEFERS the whole publication-reconcile
+  ("Membership reconcile deferred: not the control_plane_publications
+  write-leader" — 8be8d30f logged it 219x in the epoch-20 window), and the ack
+  set is `resolveMembershipPublicationAcknowledgedNodeIds` =
+  carried-acks + planningAcknowledgedNodeIds, filtered by
+  MEMBERSHIP_PUBLICATION_ACK_CARRY_RULES. When `publicationChanged===true` (a
+  new epoch adding a node), the RECOVERY_ELIGIBLE_ACK carry rule does NOT match
+  (it requires publicationChanged!==true), so the rule falls to OBSERVED_ACK =
+  carried + planning only; a freshly-rejoined node is in NEITHER unless its
+  per-node ack-readiness evidence has reached the owner. That evidence never
+  arrives for 8be8d30f → it never enters acknowledged_node_ids → epoch 20 stays
+  OPEN. (Candidate root: CL-014-class — owner's readiness/ack evidence for the
+  rejoined node is stale or un-refreshed.)
+- VARIANT B — STALE LOCAL PROJECTION (run4, pendingAckCount=0): the owner's
+  publications DO close (leader 11601fe0 reached epoch 85 PUBLISHED/CLOSED, all
+  acked; published set oscillated 4<->5 as the restarted node cycled), but the
+  RESTARTED node 35a891b8's own local projection never advances past the epoch
+  that EXCLUDED it (its disagreement set is the 4-set missing ITSELF) while the
+  seed's projection holds the 5-set. So even with a clean owner row, a restarted
+  node's published-membership projection is stale and the cross-node oracle
+  fires. 35a891b8 is a raft replica (r4) of control_plane_publications-p1 and
+  restarted ~22:58:25->22:58:56.
+
+CONTRAST that nails it as restart-coupled: every epoch CLOSED cleanly until the
+restart-rejoin round; the disagreement only appears for the node involved in a
+remove+re-add cycle.
+
+COUPLING: this is the same phenomenon the ledger's "leadership-churn / settle"
+frontier class observes through a different oracle — control_plane_publications-p1
+write-leadership bounced once early during a restart (seed lost 22:42:48,
+regained 22:43:54, then held), and the epoch keeps incrementing through the
+restart churn. CL-001 is the PUBLICATION-QUIESCENCE face of that class.
+
+ARTIFACTS: test-output/reports/.playback/stat-gate-20260612T223302Z-run{2,4}/
+(.full-logs/rolling-restart/<nodeId>/node.ndjson are the ground truth;
+failure-bundle.json holds the recorded mismatch message + probeWitnesses).
+
+VARIANT A FIX LOCUS PINNED (2026-06-13, from the convergence decision trace +
+source read): the owner-driven membership driver
+(membership-publication-coordinator-class-stage-2.js:910-924,
+driveOwnerMembershipReconcile) gates its drive/skip ENTIRELY on
+`missingPublishedCount` (published-set deficit):
+```
+const missingCount = handoffContract?.missingPublishedCount ?? 0;
+if (missingCount <= 0) { emit SKIP/no-deficit; return false; }  // <-- blind to OPEN/pending-ack
+```
+Run2 decision trace proves it: 22:46:15 decision=drive missing=1 outcome=
+reconcile-committed (publishes epoch 20, all 5); 22:46:19 decision=skip
+reason=no-deficit missing=0 — and the driver then runs ZERO more times for ~4
+min (the "owner-membership driver ran as leader" diag fires only twice in the
+WHOLE run: 22:42:25 and 22:46:15). Because epoch 20 published all 5 nodes,
+missing=0, so the driver SKIPS every subsequent tick and never re-runs
+`reconcileActiveGateMembershipPublication` — the very call that, on a
+non-changing tick, evaluates `shouldRefreshAcknowledgements`/`shouldRefreshStatus`
+and would CLOSE the OPEN publication. PROPOSED FIX (drive condition): also drive
+when the latest publication is not CLOSED with required acks outstanding
+(status OPEN && requiredAck not all acknowledged), not only when missing>0.
+LIKELY SUFFICIENT because 8be8d30f is recoveryEligibleIncluded: a re-drive with
+`publicationChanged!==true` matches the RECOVERY_ELIGIBLE_ACK carry rule
+(membership-publication-target-selection.js:68) which carries
+publishableRecoveryActiveNodeIds into acknowledged -> closes epoch 20. OPEN
+QUESTIONS before landing (rubber-duck): (1) confirm re-driving while OPEN
+actually carries the recovery-eligible ack and CLOSEs (not just re-OPENs);
+(2) ensure the new drive condition cannot livelock or thrash (bounded by
+status transition to CLOSED); (3) does the always-on interval (Workstream A0-A2)
+need to also fire on this condition, or is the existing interval tick where the
+skip happens enough; (4) never-break: a publication that legitimately cannot be
+acked (genuinely dead required-ack node) must still be able to supersede/trim,
+not spin OPEN forever. This is the CL-014 lineage ("owner reaches no-deficit and
+never writes again") applied to ACK-completion rather than the published set.
+
+RUBBER-DUCK CORRECTION (2026-06-13, subagent code-trace — design materially
+revised; do NOT just broaden the driver gate):
+- The driver's missingCount gate is necessary-but-INSUFFICIENT. Even if the
+  driver re-drives, `reconcileActiveGateMembershipPublication` HARD early-returns
+  at membership-publication-active-gate-reconcile.js:674 unless
+  `target.reconcileRequired === true`, which needs the handoff contract to emit
+  `nextAction = RECONCILE_OWNER_MEMBERSHIP_PUBLICATION`. The contract's nextAction
+  rules (publication-active-gate-handoff-contract-decision.js:35-115 +
+  -evidence.js:36-42) ONLY emit that for published-SET deficits (active
+  pending-reconcile nodes) — there is NO rule for "published complete, status
+  OPEN, required ack outstanding". THAT is the real gap.
+- PRIMARY FIX = the CONTRACT, not the driver: add a decision rule emitting
+  RECONCILE_OWNER_MEMBERSHIP_PUBLICATION when missingPublished==0 AND latest
+  publication OPEN AND (requiredAck \ acknowledged) non-empty AND every pending
+  node is ACK-ELIGIBLE. The driver's buildPublicationActiveGateHandoffContract
+  call (coordinator-class-stage-2.js:905-909) currently passes only
+  {publicationEpoch, publishedActiveNodeIds} + nodeRows/readiness — it must also
+  carry the OPEN-row pending-ack fields, or the contract must derive them.
+- MANDATORY THRASH GUARD (never-break): gate on ack-ELIGIBILITY, not bare
+  "OPEN+pending". If a pending required-ack node is NOT ack-eligible (dead / not
+  recovery-eligible / excluded), route to the EXISTING dead-node disposition
+  (PROJECTED_STEADY_TRIM, target-selection.js:109-119,335-339) or
+  WAIT_OWNER_RECOVERY — do NOT re-drive every tick on a node that can never ack.
+  i.e. drive iff pendingRequiredAck subset of publishableRecoveryActiveNodeIds
+  (or otherwise provably-acks-soon); else defer/trim.
+- KEY UNVERIFIED SUFFICIENCY RISK: 8be8d30f was RE-INCLUDED in epoch-20's
+  published set, so it IS in publishedBaselineNodeIds, and the guard at
+  target-selection.js:202 (`!publishedBaselineNodeIdSet.has(nodeId)`) would
+  EXCLUDE it from publishableRecoveryActiveNodeIds -> the RECOVERY_ELIGIBLE_ACK
+  carry rule would NOT carry it. If so, the close must come from
+  observedAcknowledgedNodeIds (carried or planningAcknowledgedNodeIds), i.e. from
+  per-node ack-readiness evidence (buildPublicationAcknowledgementReadinessDecision).
+  MUST verify against the stall snapshot whether 8be8d30f is ack-eligible / where
+  its ack-evidence would come from BEFORE relying on the fix to close it. Note
+  closed status here == status `PUBLISHED` with ackCompletion.complete; there is
+  no literal CLOSED enum (candidate-derivation.js:179-188). (Subagent
+  a595dec1a10cb7e8a holds the full trace.)
+
+SUFFICIENCY CONFIRMED (2026-06-13, by code trace — the rubber-duck's exclusion
+risk is REFUTED): the target-selection.js:200-214 loop, for a node that IS in
+publishedBaselineNodeIds, sets needsAcknowledgementReadiness=false (the :202
+`!publishedBaselineNodeIdSet.has` term is false) and therefore takes the DEFAULT
+{eligible:true} branch (:208-212) and PUSHES it into
+publishableRecoveryActiveNodeIds — published-baseline membership does NOT exclude
+it. And recoveryActiveNodeIds === activeNodeCohort.activeNodeIds
+(active-node-publication-snapshots.js:475-477), into which recovery-eligible
+nodes are added (active-node-projection.js:449,501), so the
+recoveryEligibleIncluded 8be8d30f IS in recoveryActiveNodeIds -> IS publishable.
+Therefore on a STABLE re-driven tick (publicationChanged===false, epoch 20 still
+the latest OPEN row, set unchanged) the RECOVERY_ELIGIBLE_ACK carry rule
+(target-selection.js:68-78) carries 8be8d30f into acknowledged ->
+ackCompletion.complete -> status PUBLISHED -> CLOSED. The ONLY reason it never
+happened in run2: the driver ran solely on CHANGED ticks (the epoch 20->21->22
+increments during shutdown drain were publicationChanged===true -> OBSERVED_ACK
+path, no recovery carry) and SKIPPED every stable tick (no-deficit). So a stable
+re-drive at epoch 20 was never attempted. FIX is therefore: make the contract
+re-route the reconcile on a stable OPEN+pending-ack tick (the thrash guard =
+only when the pending nodes are ack-eligible/publishable; a genuinely-dead
+required-ack node falls to PROJECTED_STEADY_TRIM and must not spin). Cannot be
+empirically confirmed from this run's logs (recoveryActiveNodeIds /
+publishableRecoveryActiveNodeIds are not logged; seed planning diag logs only
+hasSnapshot+publishedCount) — confirmation is by code trace + will be validated
+by the gate after the fix.
+
+### CL-001 VARIANT A FIX LANDED (2026-06-13) — owner re-drives an OPEN publication awaiting recovery-eligible acks
+
+THREE source changes (subagent-verified TRUSTED-WITH-NOTES, no corrections):
+1. membership-publication-coordinator-class-stage-2.js — new module fn
+   `resolveOwnerAckCompletionPendingNodeIds(planningSnapshot)`: pending acks
+   (requiredAck \ acknowledged) of the latest OPEN publication, returned ONLY
+   when EVERY pending node is recovery-eligible (readiness dimension
+   controlPlaneRecoveryEligible) = thrash guard. The driver passes this into
+   the handoff contract and no longer SKIPs (no-deficit) when it is non-empty
+   (the `missingCount <= 0` gate became `missingCount <= 0 &&
+   ownerAckCompletionPendingNodeIds.length === 0`). DRIVE trace carries
+   ownerAckCompletionPendingCount.
+2. publication-active-gate-handoff-contract.js — threads a new
+   `ownerAckCompletionPendingNodeIds` option into the decision evidence
+   (defaults to the frozen empty list when omitted).
+3. publication-active-gate-handoff-contract-decision.js — new FIRST decision
+   rule emitting nextAction=RECONCILE_OWNER_MEMBERSHIP_PUBLICATION (state
+   PENDING, runtimePromotionAllowed false) when that list is non-empty ->
+   target.reconcileRequired true -> reconcileActiveGateMembershipPublication
+   proceeds past the :674 gate -> close lane runs -> RECOVERY_ELIGIBLE_ACK
+   carries the node -> status PUBLISHED.
+SCOPING (verified): the new evidence field defaults empty; only the
+owner-driver (leadership-gated) populates it. ALL 6 callers of
+buildPublicationActiveGateHandoffContract checked — only the driver passes it,
+so the served/active-gate PROMOTION path is unchanged (no new promotion denial;
+the runtimePromotionAllowed:false rule never fires there). The new rule's
+nextAction survives the promotionDenied override (that override requires
+decision.runtimePromotionAllowed===true; ours is false).
+GUARDS (red-on-revert verified by neutralizing each change):
+- owner-membership-driver.test.js: drives on OPEN+recovery-eligible-pending-ack
+  with zero set deficit; does NOT drive when the pending node is not
+  recovery-eligible (thrash guard). ALSO fixed the 3 pre-existing
+  `_emitConvergenceDecisionTrace`-missing stub failures (now 21/21).
+- publication-active-gate-handoff-contract.test.js: the rule fires (RECONCILE,
+  promotion false) with the signal; served path (no signal) does NOT request a
+  reconcile.
+No new regressions: the 34 control-plane-readiness-service-part-4 failures are
+PRE-EXISTING on the clean tree (identical count), unrelated to this change.
+KNOWN BOUNDED-THRASH NOTE (verifier item 4, accepted): the driver's eligibility
+guard (readiness dimension) is slightly BROADER than the close lane's carry
+condition (publishableRecoveryActiveNodeIds requires the node be in the active
+cohort = recoveryActiveNodeIds, which also needs canonical service/endpoint
+checks). A node passing the readiness dimension but transiently absent from the
+active cohort would make the driver re-drive each interval tick without closing
+= mild, timeout-protected (OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS), interval-paced
+thrash that resolves when the node fully rejoins or steady-trim supersedes. Not
+a safety issue, liveness-neutral. For the reproduced CL-001 case the rejoined
+node IS in the active cohort, so the close fires. Tighten the guard to exact
+publishableRecoveryActiveNodeIds membership only if the gate shows real thrash.
+
+GATE EXPECTATION (pre-registered, closure grammar): rerun
+`LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true LAGRANGE_CAPTURE_LOGS=true bash
+scripts/rolling-restart-stat-gate.sh 4`. Predict: (1) the
+published_active_nodes_disagree variant-A signature (an OPEN publication with
+pendingAckCount>=1 that never closes for minutes) disappears or sharply drops —
+the convergence DRIVE trace should now show decision=drive with
+ownerAckCompletionPendingCount>0 followed by the publication reaching
+status=PUBLISHED (closed_at set) instead of sitting OPEN to budget; (2) no new
+OOM/blind/exit regressions; (3) WATCH for the bounded-thrash note — if a driver
+spins decision=drive ownerAckCompletionPendingCount>0 every tick without the
+publication closing, that is the guard/carry predicate gap (tighten the guard).
+Variant B (run4 stale local projection, owner row already CLOSED) is NOT
+addressed by this change and may still surface — it is a separate
+projection-advance gap (next record).
+
+### CL-001 VARIANT A GATE VERDICT (stat-gate-20260613T075853Z, srcFingerprint 0f75bc90, 4 runs flag ON) — FIX CORRECT + GUARDED but NOT YET LOAD-BEARING (zero engagements); round inconclusive + reveals a BROADER gap
+
+TOPLINE: 1 CONVERGED / 3 SLOW, healthyRate 1.0, stallRate 0, 0 corrupt, 0
+stale, 0 ORACLE_BLIND, 0 NODE_EXIT, walls 398-487s. convergeRate 0.25 (was 1.0
+last round).
+- published_active_nodes_disagree: 0/4 (was 2/4) — BUT do NOT attribute this to
+  the fix. The fix engaged ZERO times (drive-with-ownerAckCompletionPendingCount>0
+  == 0 in ALL FOUR runs). The disagreement signature most likely vanished
+  because only 1/4 runs CONVERGED far enough to reach the harness's final
+  cross-node consistency probe (the 3 SLOW runs time out earlier at
+  publication-convergence, before that probe), not because the fix resolved it.
+- convergeRate drop 1.0->0.25 is NOISE, not a regression: the fix was inert
+  (0 engagements) so it cannot have caused it; N=4 is binomial noise and last
+  round's 4/4 was flagged "best round ever"; all 4 runs here are healthy/
+  progressing (none frozen). Runs are churning epochs continuously under restart
+  load and the classifier judges whether the LAST epoch is closed at the wall
+  boundary — inherently noisy (e.g. run1 CLOSED epoch 14 at 08:05:36 then opened
+  epoch 15 at 08:06:16, 15s before 35a891b8's drain at 08:06:31 = a
+  teardown-window republication, not a real stall).
+WHY THE FIX DID NOT ENGAGE: the recurring wedge this round was an OPEN
+publication whose pending-ack node was NOT recovery-eligible at the owner's
+eval ticks (run1 epoch15 notAck=[35a891b8]; run3 epoch12 notAck=[35a891b8];
+run4 epoch4 notAck=[11601fe0,35a891b8]); run2 converged under a DIFFERENT owner
+(seed 7493b0ab was 274x not-write-leader). The narrow recovery-eligible guard
+(chosen for thrash-safety) correctly returned [] for these -> no thrash
+observed, but also no help.
+BROADER GAP IDENTIFIED (next iteration): the owner skips no-deficit on an OPEN
+publication with ANY pending required ack, not just recovery-eligible ones. A
+HEALTHY (cluster-member-healthy, e.g. rejoined-then-graduated 35a891b8) pending
+node would ack via the NORMAL path (planningAcknowledgedNodeIds / OBSERVED_ACK
+carry), and re-driving would close it — but the driver never re-drives. Candidate
+broadening: drive when OPEN + pending acks AND every pending node is HEALTHY
+(recovery-eligible OR cluster-member-healthy), still excluding genuinely-dead
+nodes (steady-trim). MUST FIRST trace where planningAcknowledgedNodeIds /
+the normal ack evidence is sourced (readiness-service-segment-4) and confirm the
+close lane carries a steady-state-healthy pending node on a re-drive, BEFORE
+broadening — else the driver drives without closing (real thrash). Also decide
+whether teardown-window late epochs should count as stalls at all (harness
+classifies the instantaneous final state).
+STATUS: keep the landed fix (correct, guarded, safe, inert-when-not-needed, no
+regression; addresses the PROVEN recovery-eligible mechanism from last round's
+223302Z run2/run4). It is NOT yet validated as load-bearing. Next: trace the
+normal-ack source -> broaden the guard to healthy pending acks (rubber-duck +
+verify) -> re-gate with MORE samples (N>=8) so the condition recurs.
 
 ### Exit Criteria
 

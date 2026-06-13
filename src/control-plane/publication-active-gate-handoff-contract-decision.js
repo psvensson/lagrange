@@ -33,6 +33,24 @@ function collectPublicationActiveGateActivePendingReconcileNodeIds(evidence) {
 }
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
+  // CL-001 variant A: an OPEN publication with pending recovery-eligible acks
+  // must re-drive the owner reconcile to CLOSE, even when the published set has
+  // no deficit. This signal is only populated by the owner-driven reconcile
+  // path (it filters to ack-eligible pending nodes as a thrash guard), so the
+  // served/active-gate snapshot path — which leaves it empty — is unaffected and
+  // its promotion semantics are unchanged.
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+    reasonCode:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+    nextAction:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    runtimePromotionAllowed: false,
+    matches: (evidence) =>
+      Array.isArray(evidence.ownerAckCompletionPendingNodeIds) &&
+      evidence.ownerAckCompletionPendingNodeIds.length > NUM.ZERO,
+  }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
     reasonCode:

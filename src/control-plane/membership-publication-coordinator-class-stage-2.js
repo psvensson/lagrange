@@ -4,6 +4,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} from './control-plane-readiness-service.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
@@ -17,6 +18,7 @@ import {
   PUBLICATION_WORKFLOW_REASON,
   PUBLICATION_WRITE_MAX_ATTEMPTS,
   listEquals,
+  normalizeNodeIdList,
   normalizePositiveInteger,
 } from './membership-publication-coordinator-stage-1.js';
 import {
@@ -154,6 +156,56 @@ function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
       MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
   return candidateStatus.length > NUM.ZERO &&
     candidateStatus !== normalizedLatestPublication.status;
+}
+
+// CL-001 variant A: the owner-driver's drive/skip gate keys only on
+// missingPublishedCount, so once a published epoch covers every active node the
+// driver SKIPS forever (decision=skip reason=no-deficit) and never re-runs the
+// reconcile that would CLOSE a still-OPEN publication awaiting acks. After a
+// rolling-restart rejoin the owner re-includes the rejoined node into an OPEN
+// publication that then never closes because no stable (publicationChanged===
+// false) reconcile tick ever runs to carry its recovery-eligible ack. This
+// surfaces the pending acks the owner SHOULD still re-drive on.
+//
+// Never-break / thrash guard: only return pending acks when EVERY pending-ack
+// node is recovery-eligible (readiness dimension controlPlaneRecoveryEligible),
+// i.e. the close lane's RECOVERY_ELIGIBLE_ACK carry will actually carry them and
+// transition the publication to PUBLISHED on a stable re-drive. A genuinely
+// dead/ineligible required-ack node yields [] here so the driver does NOT spin
+// every tick; it is left to the steady-trim disposition instead.
+function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
+  const latestRow = normalizeControlPlanePublicationRow(
+    planningSnapshot?.latestPublicationRow,
+  );
+  if (!latestRow || latestRow.status !== MEMBERSHIP_PUBLICATION_STATUS.OPEN) {
+    return [];
+  }
+  const requiredAckNodeIds = normalizeNodeIdList(latestRow.requiredAckNodeIds);
+  if (requiredAckNodeIds.length === NUM.ZERO) {
+    return [];
+  }
+  const acknowledgedNodeIds = new Set(
+    normalizeNodeIdList(latestRow.acknowledgedNodeIds),
+  );
+  const pendingAckNodeIds = requiredAckNodeIds.filter(
+    (nodeId) => !acknowledgedNodeIds.has(nodeId),
+  );
+  if (pendingAckNodeIds.length === NUM.ZERO) {
+    return [];
+  }
+  const readinessByNodeId =
+    planningSnapshot?.readinessByNodeId &&
+    typeof planningSnapshot.readinessByNodeId === TYPEOF.OBJECT ?
+      planningSnapshot.readinessByNodeId :
+      {};
+  const isRecoveryEligible = (nodeId) =>
+    readinessByNodeId[nodeId]?.dimensions?.[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ] === true;
+  if (!pendingAckNodeIds.every(isRecoveryEligible)) {
+    return [];
+  }
+  return pendingAckNodeIds;
 }
 
 class MembershipPublicationCoordinatorClassStage2 extends
@@ -902,13 +954,23 @@ class MembershipPublicationCoordinatorClassStage2 extends
         latestPublishedRow?.publishedActiveNodeIds ??
         latestRow?.publishedActiveNodeIds ??
         [];
+      // CL-001 variant A: surface still-pending recovery-eligible acks on an
+      // OPEN publication so the contract requests a reconcile even when the
+      // published set has no deficit; without this the owner skips forever and
+      // the OPEN publication never closes (see resolveOwnerAckCompletionPendingNodeIds).
+      const ownerAckCompletionPendingNodeIds =
+        resolveOwnerAckCompletionPendingNodeIds(planningSnapshot);
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
         publicationConvergence: {publicationEpoch, publishedActiveNodeIds},
+        ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
-      if (missingCount <= 0) {
+      if (
+        missingCount <= 0 &&
+        ownerAckCompletionPendingNodeIds.length === NUM.ZERO
+      ) {
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,
@@ -954,6 +1016,8 @@ class MembershipPublicationCoordinatorClassStage2 extends
         reason: CONVERGENCE_REASON.DRIVEN,
         leadershipTier: leadership.tier,
         missingPublishedCount: missingCount,
+        ownerAckCompletionPendingCount:
+          ownerAckCompletionPendingNodeIds.length,
         publicationEpoch,
         outcome: timedOut ?
           CONVERGENCE_OUTCOME.RECONCILE_TIMED_OUT :

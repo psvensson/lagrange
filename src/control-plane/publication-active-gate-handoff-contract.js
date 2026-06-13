@@ -235,12 +235,23 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     resolvePublicationActiveGateHandoffReconcileRequirement(
       options.publicationConvergence,
     );
+  // CL-001 variant A: pending recovery-eligible acks on an OPEN publication that
+  // the owner driver must still re-drive to close. Only the owner-driven
+  // reconcile path supplies this; the served/active-gate snapshot path leaves it
+  // empty, so promotion semantics there are unchanged.
+  const ownerAckCompletionPendingNodeIds =
+    Array.isArray(options.ownerAckCompletionPendingNodeIds) ?
+      normalizePublicationActiveGateHandoffNodeIdList(
+        options.ownerAckCompletionPendingNodeIds,
+      ) :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   const evidence = Object.freeze({
     expectedNodeIds,
     publishedActiveNodeIds,
     missingPublishedNodeIds,
     pendingRecoveryNodeIds,
     pendingReconcileNodeIds,
+    ownerAckCompletionPendingNodeIds,
     reconcileRequirement,
   });
   const activeGateCatchupFence = buildPublicationActiveGateCatchupFence({

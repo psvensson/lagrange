@@ -1442,3 +1442,48 @@ test('publication active-gate catch-up fence never promotes stale snapshot cover
       },
     });
   });
+
+test('publication active-gate handoff re-drives an OPEN publication awaiting recovery-eligible acks (CL-001)',
+  async (t) => {
+    // No published-set deficit (every expected node is published), but the
+    // owner-driven path reports a still-pending recovery-eligible ack. The
+    // contract must route a reconcile so the OPEN publication can CLOSE, rather
+    // than falling through to COMPLETE/ADMIT.
+    const contract = buildPublicationActiveGateHandoffContract({
+      nodeRows: [{node_id: TEST_NODE_1}, {node_id: TEST_NODE_2}],
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+      },
+      ownerAckCompletionPendingNodeIds: [TEST_NODE_2],
+    });
+    t.match(contract, {
+      missingPublishedNodeIds: [],
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+    });
+  });
+
+test('publication active-gate handoff leaves the served path unchanged when no ack-completion signal is supplied (CL-001 scoping)',
+  async (t) => {
+    // The served/active-gate snapshot path does not populate
+    // ownerAckCompletionPendingNodeIds, so the new rule must NOT fire there.
+    const contract = buildPublicationActiveGateHandoffContract({
+      nodeRows: [{node_id: TEST_NODE_1}, {node_id: TEST_NODE_2}],
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+      },
+    });
+    t.not(
+      contract.nextAction,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      'no ack-completion signal -> no owner reconcile requested',
+    );
+  });
