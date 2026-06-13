@@ -136,6 +136,11 @@ class ControlPlaneReadinessServiceSegment1 {
     this.membershipPublicationDiagnosticsMemo = null;
     this.lastActivePriorityRecoveryPlanningSnapshotByNodeId = new Map();
     this.lastActivePriorityRecoveryPlanningSnapshotAtMsByNodeId = new Map();
+    // CL-033: per-publisher-node memo of the priority-recovery planning
+    // projection (deep cluster read + parse/clone-heavy projection), validated
+    // by the existing readiness invalidation markers — see
+    // resolveMemoizedPriorityRecoveryPlanningProjectionSync.
+    this.priorityRecoveryPlanningProjectionMemoByNodeId = new Map();
     this.recoveryEpochHistoryLimit =
       Number.isInteger(options.recoveryEpochHistoryLimit) &&
       options.recoveryEpochHistoryLimit > NUM.ZERO ?
@@ -316,6 +321,8 @@ class ControlPlaneReadinessServiceSegment1 {
         (options.membershipPublicationService || null)
       ) {
         this.membershipPublicationDiagnosticsMemo = null;
+        // CL-033: the planning projection derives from this service's reads.
+        this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       }
       this.membershipPublicationService =
         options.membershipPublicationService || null;
@@ -350,6 +357,7 @@ class ControlPlaneReadinessServiceSegment1 {
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.clear();
       this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
       this.membershipPublicationDiagnosticsMemo = null;
+      this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.subscribeToCacheChanges();
     }
   }

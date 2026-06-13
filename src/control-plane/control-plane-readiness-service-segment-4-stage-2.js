@@ -172,13 +172,50 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
     return this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
   }
 
+  // CL-033: getNodeReadinessSync is the query-routing hot path (evaluated per
+  // service row, per query, per ingress/mutation-readiness check). During
+  // recovery the CL-012/CL-019 stored-snapshot fast path misses on every call
+  // (publication/membership rows churn faster than its watermark-equality
+  // reuse), so this priority-recovery planning projection — the deep cluster
+  // read (getMembershipPublicationPlanningSnapshotSync over nodes/services/
+  // partitions/publications) plus the parse/clone-heavy
+  // buildPriorityRecoveryPlanningProjection — was rebuilt on every routing
+  // call, amplifying into the seed event-loop freeze↔leadership-churn spiral.
+  // The projection is a pure function of publication + node/service/partition
+  // state for a given publisher node, so memoize it per publisher node and
+  // reuse until the EXISTING readiness invalidation supersedes it: the same
+  // isReadinessSnapshotInvalidated predicate the stored-snapshot fast path uses
+  // (publication cluster marker OR this node's node/service change). The
+  // per-node retain/active layers in getPriorityRecoveryPlanningAnswerSync stay
+  // OUTSIDE this memo and run every call on the (shared, frozen) projection.
+  resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
+    const memoKey = nodeId || this.nodeId;
+    const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
+    if (memo && memoKey) {
+      const cached = memo.get(memoKey);
+      if (
+        cached &&
+        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs)
+      ) {
+        return cached.projection;
+      }
+    }
+    const capturedAtMs = this.now();
+    const projection = this.buildPriorityRecoveryPlanningProjection(
+      this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
+    );
+    if (memo && memoKey) {
+      memo.set(memoKey, {projection, capturedAtMs});
+    }
+    return projection;
+  }
+
   getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) {
-    const planningSnapshot = this.buildPriorityRecoveryPlanningProjection(
-      this.getMembershipPublicationPlanningSnapshotSync(
+    const planningSnapshot =
+      this.resolveMemoizedPriorityRecoveryPlanningProjectionSync(
         nodeId,
         observedAt,
-      ),
-    );
+      );
     if (this.isPriorityControlPlaneRecoveryActive(planningSnapshot)) {
       this.storeActivePriorityRecoveryPlanningSnapshot(
         nodeId,
