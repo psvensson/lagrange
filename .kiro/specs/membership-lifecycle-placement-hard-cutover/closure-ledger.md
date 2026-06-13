@@ -5035,3 +5035,62 @@ grind, and/or debounce the per-leadership-transition scheduler re-init).
 2. Same surface as the carried "surplus-drain / leadership-churn settle class"
    frontier item — CL-033 is its event-loop-freeze face. Resolving the freeze may
    dissolve that settle class too.
+
+### CL-033 FRAME PINNED (profiled gate stat-gate-20260613T104916Z, LAGRANGE_LOOP_GAP_PROFILE=1, N=4) — it is the CL-012 readiness↔routing amplification cycle, resurfaced in the RECOVERY phase
+
+The profiled re-run reproduced the freeze family (run2 SLOW 774s seed: 112 gaps,
+max 12s — smaller than the unprofiled 55s because the sampling profiler perturbs
+timing, but the SAME shape, and the frames are stable across all 4 gap-bearing
+profile windows). The watchdog profiler ("Event loop gap profile window")
+topInclusiveFrames, consistent across windows:
+- runMicrotasks 71-76% (microtask starvation — the CL-012 signature).
+- getNodeReadinessSync (control-plane-readiness-service-node-methods.js:333)
+  22-54% inclusive.
+- the routing caller chain: evaluatePartitionServiceRoutability
+  (query-executor-segment-3-part-2.js:115) 35-40% -> getPartitionRoutingSnapshot
+  (query-executor-partition-routing-snapshot.js:26,40) 40% -> getNodeReadinessSync.
+- the heavy build chain BELOW the fast-path: buildEvaluatedNodeReadinessSnapshot
+  (segment-3.js:301) 37-39% -> resolveMembershipPublicationPlanningSnapshot
+  (segment-4-stage-3.js:19) 33-38% / getPriorityRecoveryPlanningAnswerSync
+  (segment-4-stage-2.js:175) / getMembershipPublicationPlanningSnapshotSync
+  (segment-3.js:766).
+topFrames (self): garbage collector ~9%, fastJsonClone (fast-json-clone.js:35)
+6.7-8.2% [CL-011's clone, BACK], parseStepsHistory (replica-operation-liveness.js:95)
+5.7-7.6% [CL-008/CL-020 storm, BACK], + priority-recovery snapshot builders
+(buildPriorityRecoverySyntheticSerialWaitWorkflowOwnedOperationContext,
+normalizePriorityRecoveryStringList, normalizeDistinctStringArray x2,
+buildPublicationRecoveryGateSnapshot, buildPriorityRecoveryPlanningProjection
+segment-4-stage-1.js:466).
+
+ROOT (code-confirmed): getNodeReadinessSync consults the CL-012/CL-019 stored-snapshot
+fast path FIRST (getFresherStoredReadinessSnapshot, node-methods.js:352, returns early
+on a fresher stored snapshot). During ACTIVE RECOVERY the publication/membership rows
+churn continuously (epoch bumps, ack updates, leadership flaps), so the stored snapshot
+is never "fresher than the row" -> the fast path MISSES on every call -> the heavy
+branch runs every time: resolveNodeMembershipPublicationPlanningAnswerSync
+(node-methods.js:375) builds the full priority-recovery planning projection. Because
+getNodeReadinessSync is the query-routing hot path (evaluatePartitionServiceRoutability
+calls it per service row, per query, per ingress admission, per mutation-readiness
+check), the cost amplifies O(queries x partitions x recovery-planning-cost) ->
+microtask saturation -> the freeze. CL-012/CL-019 broke this for STEADY STATE (cache
+stable); recovery churn defeats the watermark-equality reuse, so the recovery-planning
+branch is uncached and on the hot path. This is the SAME cycle, RECOVERY-PHASE head.
+
+FIX DIRECTIONS (rubber-duck before landing; hot-path change on a corruption-terminal
+system):
+(a) BREAK THE CYCLE (preferred, CL-012-aligned): routing only needs
+    routingReady/serveEligible — it should NOT pull the priority-recovery planning
+    projection at all. Give the routing readiness query a lighter projection that
+    skips resolveNodeMembershipPublicationPlanningAnswerSync (CL-012 PHASE-1 already
+    cut diagnostics-only routing snapshots; extend that). Verify routing's actual
+    field dependency.
+(b) MEMOIZE THE SHARED SUB-RESULT: the priority-recovery planning answer depends on
+    publication/membership state, NOT on the nodeId being routed — compute it ONCE
+    per evaluation tick (or per publication-epoch + membership-watermark) and reuse
+    across the many routing calls in that tick, even when the per-node readiness
+    snapshot is invalidated. Pairs with parseStepsHistory/fastJsonClone memoization
+    inside the planning build.
+NEXT: rubber-duck (a) vs (b) against the code (does routing consume any
+planning-derived field? can the planning answer be safely shared per-tick under
+churn?), implement, guard red-on-revert, re-gate (watch: max seed gap collapses,
+runMicrotasks share drops, SLOW walls compress toward the ~180s floor).
