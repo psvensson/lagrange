@@ -76,8 +76,12 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
 // CL-001 variant A guard: an OPEN publication whose published set has NO deficit
 // (missingPublishedCount === 0) but is still awaiting a recovery-eligible ack must
 // re-drive the owner reconcile to CLOSE it, instead of skipping with no-deficit.
-function ackCompletionCtx({recoveryEligible}) {
+function ackCompletionCtx({recoveryEligible, dimensions}) {
   let reconcileCalls = 0;
+  // recoveryEligible is the legacy single-dimension shorthand; dimensions lets a
+  // case set the full readiness shape (clusterMemberHealthy/processAlive) directly.
+  const peerDimensions =
+    dimensions || {controlPlaneRecoveryEligible: recoveryEligible};
   const ctx = {
     nodeId: 'seed',
     systemTableCache: leaderCache('seed'),
@@ -89,7 +93,7 @@ function ackCompletionCtx({recoveryEligible}) {
       // isolating the ack-completion path.
       nodeRows: [],
       readinessByNodeId: {
-        peer: {dimensions: {controlPlaneRecoveryEligible: recoveryEligible}},
+        peer: {dimensions: peerDimensions},
       },
       latestPublicationRow: {
         publicationEpoch: 20,
@@ -113,11 +117,45 @@ t.test('drive: re-drives an OPEN publication awaiting a recovery-eligible ack (C
   t.equal(reconcileCalls(), 1, 'reconcile invoked to close the OPEN publication');
 });
 
-t.test('drive: does NOT re-drive when the pending-ack node is not recovery-eligible (thrash guard)', async (t) => {
+// CL-001 broadening (gate 20260613T075853Z): the recurring wedge is an OPEN
+// publication whose pending-ack node is cluster-member-healthy (rejoined-then-
+// graduated) but NOT recovery-eligible. The close lane defaults such a node to
+// ELIGIBLE and carries it, so the owner must re-drive to close — the narrow
+// recovery-eligible-only guard left this inert.
+t.test('drive: re-drives when the pending-ack node is cluster-member-healthy and alive (CL-001 broadening)', async (t) => {
+  const {ctx, reconcileCalls} = ackCompletionCtx({
+    dimensions: {
+      controlPlaneRecoveryEligible: false,
+      clusterMemberHealthy: true,
+      processAlive: true,
+    },
+  });
+  const drove = await drive.call(ctx);
+  t.equal(drove, true, 'drives: a healthy pending ack is carried by the close lane');
+  t.equal(reconcileCalls(), 1, 'reconcile invoked to close the OPEN publication');
+});
+
+t.test('drive: does NOT re-drive when the pending-ack node is neither recovery-eligible nor cluster-member-healthy (thrash guard)', async (t) => {
   const {ctx, reconcileCalls} = ackCompletionCtx({recoveryEligible: false});
   const drove = await drive.call(ctx);
   t.equal(drove, false, 'skips: a non-eligible pending ack must not spin the driver');
   t.equal(reconcileCalls(), 0, 'no reconcile when the ack cannot complete');
+});
+
+// process-not-alive must NOT drive even if marked cluster-member-healthy: the
+// close lane DEFERS a process-not-alive node, so re-driving would spin without
+// closing. This node belongs to steady-trim, not owner re-drive.
+t.test('drive: does NOT re-drive a process-not-alive pending node even if cluster-member-healthy (thrash guard)', async (t) => {
+  const {ctx, reconcileCalls} = ackCompletionCtx({
+    dimensions: {
+      controlPlaneRecoveryEligible: false,
+      clusterMemberHealthy: true,
+      processAlive: false,
+    },
+  });
+  const drove = await drive.call(ctx);
+  t.equal(drove, false, 'skips: a dead required-ack node falls to steady-trim');
+  t.equal(reconcileCalls(), 0, 'no reconcile for a process-not-alive pending node');
 });
 
 t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {

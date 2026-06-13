@@ -430,6 +430,77 @@ regression; addresses the PROVEN recovery-eligible mechanism from last round's
 normal-ack source -> broaden the guard to healthy pending acks (rubber-duck +
 verify) -> re-gate with MORE samples (N>=8) so the condition recurs.
 
+### CL-001 VARIANT A BROADENED (2026-06-13) — owner re-drives an OPEN publication whose pending acks are recovery-eligible OR cluster-member-healthy
+
+TRACE FIRST (closure grammar; Explore + adversarial verify subagent, both
+read-only). Confirmed the close-lane carry path end-to-end and the linchpin
+assumption the gate verdict flagged:
+- `resolveMembershipPublicationAcknowledgedNodeIds`
+  (membership-publication-target-selection.js:303-325) carries
+  `publishableRecoveryActiveNodeIds` via the RECOVERY_ELIGIBLE_ACK rule (:68-78)
+  whenever `publicationChanged !== true` (a stable re-drive).
+- `buildPublicationAckTargetSnapshot` (:180-219): a pending node that is in the
+  OPEN row's published set is a `publishedBaselineNodeId`, so
+  `needsAcknowledgementReadiness === false` -> it DEFAULTS to ELIGIBLE and is added
+  to `publishableRecoveryActiveNodeIds` regardless of recovery-eligibility. A
+  non-baseline cluster-member-healthy node falls through the readiness rules
+  (:37-67) to the catch-all ELIGIBLE. Either way it is CARRIED.
+- LINCHPIN VERIFIED directly (active-node-publication-snapshots.js:353-380):
+  `buildProjectionCohortNodeIds` always unions in `admittedPublishedActiveNodeIds`,
+  and the fallback (:378-380) uses them directly -> the OPEN row's published node
+  IS in `recoveryActiveNodeIds`. The ONLY exclusion is `admissionBlockedNodeIdSet`
+  (the pre-existing, bounded residual below).
+=> The set the broadened guard drives on is a STRICT SUBSET of what the close lane
+carries, so a re-drive on this path always CLOSES (no drive-without-close spin),
+modulo the admission-block residual.
+
+FIX (2 files): broaden `resolveOwnerAckCompletionPendingNodeIds`
+(membership-publication-coordinator-class-stage-2.js) — a pending-ack node now
+qualifies when `controlPlaneRecoveryEligible === true` OR (`clusterMemberHealthy
+=== true` AND `processAlive !== false`); ANY pending node failing both still yields
+[] (left to steady-trim). `processAlive !== false` is the exact complement of the
+close lane's PROCESS_NOT_ALIVE defer rule (=== false); `clusterMemberHealthy ===
+true` excludes draining/unhealthy/removed required-ack nodes. The driver field is
+a drive/skip SIGNAL only; the close lane independently recomputes the acknowledged
+set, so broadening can NEVER ack a node that should not be active (no safety
+exposure — verifier Q2). No NON-driver caller affected (the contract field defaults
+empty; only the leadership-gated driver populates it — verifier Q5).
+GUARDS (owner-membership-driver.test.js, red-on-revert verified by the subagent):
++ "re-drives when the pending-ack node is cluster-member-healthy and alive"
+(fails if the predicate is reverted to recovery-eligible-only); + "does NOT
+re-drive a process-not-alive pending node even if cluster-member-healthy"; the
+existing recovery-eligible drive + non-eligible thrash-guard tests retained.
+25/25 owner-driver, 56/56 handoff-contract.
+VERIFIER VERDICT: TRUSTED-WITH-NOTES. The one note = the admission-block thrash
+residual (clusterMemberHealthy [readiness source] vs admissionState
+[membership-lifecycle source] are different sources, so a healthy node can be
+admission-blocked -> driver re-drives without closing). UNCHANGED in nature from
+the recovery-eligible-only predicate (same excludeAdmissionBlockedNodeIds applies);
+bounded + timeout-paced (ownerMembershipReconcileInFlight guard +
+OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS 15s on a 5s interval = slow re-poll, never a
+hot spin), liveness-neutral, never corrupting. Broadening only makes the residual
+reachable more OFTEN (larger trigger population), not worse per-occurrence. A
+belt-and-suspenders admission-block check would need plumbing the blocked set onto
+the readiness `dimensions` shape — out of scope, not required for safety; revisit
+at Task-28 (rooted in the multi-source mixing antipattern).
+
+GATE EXPECTATION (pre-registered): rerun
+`LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true LAGRANGE_CAPTURE_LOGS=true bash
+scripts/rolling-restart-stat-gate.sh 8` (N=8 so the OPEN+healthy-pending-ack
+condition recurs — it was the recurring wedge at N=4). Predict: (1) the driver now
+ENGAGES (DRIVE trace with ownerAckCompletionPendingCount>0) on runs whose wedge was
+a cluster-member-healthy pending ack (075853Z had run1 ep15 notAck=[35a891b8],
+run3 ep12 [35a891b8], run4 ep4 [11601fe0,35a891b8]) and those OPEN publications
+reach status=PUBLISHED (closed_at set) instead of sitting OPEN to budget; (2) the
+published_active_nodes_disagree signature drops further / runs go DEEPER (reach the
+final consistency probe more often, so 0/N disagreement becomes meaningful rather
+than an artifact of early time-out); (3) WATCH the bounded-thrash residual — a
+driver spinning decision=drive ownerAckCompletionPendingCount>0 every tick without
+the publication closing means the admission-block residual fired; if frequent,
+plumb the admission-block check; (4) no new OOM/blind/exit regressions. Variant B
+(stale local projection, owner row already CLOSED) is still NOT addressed by this
+change and remains the next record.
+
 ### Exit Criteria
 
 1. Rolling restart reaches one published epoch and one published active-node

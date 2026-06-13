@@ -168,11 +168,24 @@ function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
 // surfaces the pending acks the owner SHOULD still re-drive on.
 //
 // Never-break / thrash guard: only return pending acks when EVERY pending-ack
-// node is recovery-eligible (readiness dimension controlPlaneRecoveryEligible),
-// i.e. the close lane's RECOVERY_ELIGIBLE_ACK carry will actually carry them and
-// transition the publication to PUBLISHED on a stable re-drive. A genuinely
-// dead/ineligible required-ack node yields [] here so the driver does NOT spin
-// every tick; it is left to the steady-trim disposition instead.
+// node is one the close lane will actually CARRY into the acknowledged set on a
+// stable (publicationChanged===false) re-drive, so the publication transitions to
+// PUBLISHED rather than the driver spinning every tick. Two classes qualify, both
+// carried by the close lane's RECOVERY_ELIGIBLE_ACK rule (publishableRecoveryActive):
+//   1. recovery-eligible nodes — carried via the close lane's RECOVERY_ELIGIBLE
+//      readiness rule (controlPlaneRecoveryEligible);
+//   2. cluster-member-healthy, process-alive nodes that are NOT recovery-eligible
+//      (e.g. a rejoined-then-graduated node still pending its ack on an OPEN row) —
+//      these skip the recovery-eligibility readiness gate in the close lane and
+//      default to ELIGIBLE, so they too are carried (verified: a published-baseline
+//      node is in recoveryActiveNodeIds and defaults publishable). CL-001 GATE
+//      20260613T075853Z showed the recovering wedge is THIS class, not recovery-
+//      eligible, so the narrow guard was inert; this broadening makes it engage.
+// A pending node that is neither (e.g. process-not-alive / draining / genuinely
+// dead) yields [] here so the driver does NOT spin every tick; it is left to the
+// steady-trim disposition instead. The qualifying set is a strict SUBSET of what
+// the close lane carries, so a re-drive on this path always closes (modulo the
+// pre-existing, bounded, timeout-paced admission-blocked-cohort residual).
 function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
   const latestRow = normalizeControlPlanePublicationRow(
     planningSnapshot?.latestPublicationRow,
@@ -198,11 +211,29 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
     typeof planningSnapshot.readinessByNodeId === TYPEOF.OBJECT ?
       planningSnapshot.readinessByNodeId :
       {};
-  const isRecoveryEligible = (nodeId) =>
-    readinessByNodeId[nodeId]?.dimensions?.[
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-    ] === true;
-  if (!pendingAckNodeIds.every(isRecoveryEligible)) {
+  const isOwnerAckCompletionEligible = (nodeId) => {
+    const dimensions = readinessByNodeId[nodeId]?.dimensions ?? {};
+    if (
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true
+    ) {
+      return true;
+    }
+    // Cluster-member-healthy + (not explicitly) process-not-alive: the close lane
+    // defaults such a node to ELIGIBLE (it skips the recovery-eligibility readiness
+    // gate) and carries it, so re-driving closes the OPEN publication. processAlive
+    // is checked with !== false to match the close lane's PROCESS_NOT_ALIVE defer
+    // rule (only an explicit false defers); clusterMemberHealthy must be truthy so
+    // draining/unhealthy required-ack nodes fall to steady-trim, not a spin.
+    return (
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+      ] === true &&
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false
+    );
+  };
+  if (!pendingAckNodeIds.every(isOwnerAckCompletionEligible)) {
     return [];
   }
   return pendingAckNodeIds;
