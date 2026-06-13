@@ -172,15 +172,18 @@ exist alongside old runtime paths.
   - Node join under load
   - Seed restart under load
   - Transaction recovery under restart churn
-  - Maintain `closure-ledger.md` using `closure-grammar.md`; every red scenario
-    must map to one first violated invariant before runtime code changes.
+  - Maintain the closure ledger (`closure-ledger.md` index + per-record
+    `closure-ledger/CL-###.md` files) using `closure-grammar.md`; every red
+    scenario must map to one first violated invariant before runtime code
+    changes.
   - Confirm one published membership epoch and one published active-node set.
   - _Requirements: 12.4_
 
 - [ ] 28. Final hard-cutover audit
   - Verify no dual path remains active for any concern covered by this spec.
   - Verify every open distributed blocker is either closed or explicitly parked
-    in `closure-ledger.md` with witness, repro, and guard evidence.
+    in the closure ledger (`closure-ledger/CL-###.md`) with witness, repro, and
+    guard evidence.
   - Verify documentation, tests, and deletion inventory all match runtime.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 12.5, 13.1_
 

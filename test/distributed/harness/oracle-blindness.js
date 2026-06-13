@@ -1,7 +1,7 @@
 /**
  * CL-031 step (c): oracle-blindness classification.
  *
- * Invariant (closure-ledger CL-031, first violated invariant): a readiness/
+ * Invariant (closure-ledger/CL-031.md, first violated invariant): a readiness/
  * settle/quiesce oracle that CANNOT READ its control-snapshot evidence must
  * fail the scenario as oracle-blind — naming the snapshot transport error —
  * never as a cluster stall/timeout. Blind verdicts are NOT adjudicable

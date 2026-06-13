@@ -302,7 +302,8 @@ It complements them:
 1. `requirements.md` defines what the hard cutover must satisfy
 2. `design.md` defines the target owner model
 3. `deletion-inventory.md` records what old runtime paths were removed
-4. `closure-ledger.md` records the remaining distributed invariant failures
+4. `closure-ledger.md` indexes the remaining distributed invariant failures;
+   each record lives in its own file under `closure-ledger/CL-###.md`
 
 The ledger is the working artifact for Task 27 and the evidence artifact for
 Task 28.

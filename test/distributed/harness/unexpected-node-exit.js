@@ -1,7 +1,7 @@
 /**
  * CL-030 step (a): unexpected-node-exit sweep.
  *
- * Invariant (closure-ledger CL-030, first violated invariant): any cluster
+ * Invariant (closure-ledger/CL-030.md, first violated invariant): any cluster
  * node exiting unexpectedly mid-scenario must fail the scenario AT THAT NODE
  * with its exit evidence (the docker stdout carries the crash dump), not as
  * a downstream readiness timeout on a different node — the 145024Z-run2

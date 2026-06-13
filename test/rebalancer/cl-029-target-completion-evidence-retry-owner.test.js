@@ -1,6 +1,6 @@
 /**
  * CL-029 GUARD — executor-outcome completion evidence must keep a retry
- * owner for a priority control-plane REPLACE (closure-ledger CL-029).
+ * owner for a priority control-plane REPLACE (closure-ledger/CL-029.md).
  * This test is RED IF THE FIX IS REVERTED.
  *
  * The bug (run 145024Z-run3): a REPLACE for control_plane_publications-p1
