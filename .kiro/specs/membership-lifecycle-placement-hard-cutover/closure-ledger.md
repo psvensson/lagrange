@@ -501,6 +501,73 @@ plumb the admission-block check; (4) no new OOM/blind/exit regressions. Variant 
 (stale local projection, owner row already CLOSED) is still NOT addressed by this
 change and remains the next record.
 
+### CL-001 VARIANT A BROADENED — GATE VERDICT (stat-gate-20260613T085729Z, srcFingerprint 965d141d, N=8) — STILL INERT (2nd consecutive round); the OPEN-stuck precondition did NOT recur; CL-001's live face is now PUBLISHED-row ack-lag, NOT an OPEN-stuck row
+
+TOPLINE: 6 CONVERGED / 1 SLOW (run1) / 1 NODE_EXIT (run8). 0 corrupt, 0 stale, 0
+ORACLE_BLIND. healthyRate 0.875, convergeRate 0.875, walls p50/p95 464/595s
+(run5 happy-path 182s; run6 605s, run7 595s). Healthiest full-depth round to date.
+
+FIX ENGAGEMENT (the load-bearing question): ZERO. Across ALL 8 runs, 76 drive
+traces total, EVERY one had ownerAckCompletionPendingCount=0 — the new ack-pending
+path never fired; all drives were the pre-existing missingPublishedCount>0 path. The
+reason: NO run had a publication stuck in status=OPEN. Every run's publication
+reached PUBLISHED (run2 e45, run3 e4, run4 e77, run5 e2, run6 e11, run7 e16, run8
+e204). resolveOwnerAckCompletionPendingNodeIds early-returns [] unless status===OPEN,
+so the (now broadened) guard had nothing to act on. This is the SAME inert result as
+075853Z (N=4). Mined by subagent a332f908 via the convergence decision traces in the
+.full-logs (per-run drive counts: 4/4/10/20/1/13/18/6, ackPending>0 = 0 everywhere).
+
+KEY REFRAME — the variant-A OPEN-stuck mechanism is NON-RECURRING / rare; CL-001's
+recurring face this round is DIFFERENT: the 2 published_active_nodes_disagree runs
+(run4, run7) are BOTH **CONVERGED** runs (missing=0) with a TRANSIENT, self-healing
+disagreement on a PUBLISHED row — owner row PUBLISHED with the full 5-node set, but
+pendingAckCount=1 (run4 ep77, node 11601fe0) / =2 (run7 ep16, nodes 11601fe0 +
+ebc4aa0b), publicationOwnerAckState=waiting_for_ack, freshness fence ack_lag. NOT the
+OPEN-never-closes signature (variant A) and NOT a hard failure — the per-node view
+disagrees only during the transient ack-lag window, then converges. (The reason
+tally counts dominant per-window reasons including transient ones in PASSING runs;
+"published_active_nodes_disagree: 2" does NOT mean 2 failed runs.) So at 075853Z the
+OPEN-stuck-with-pending-ack state occurred; at 085729Z it did not — the precondition
+itself is non-deterministic, which is why a fix gated on it can't be validated by a
+clean round.
+
+DISPOSITION: KEEP the broadened fix (correct, guarded, safe, strict superset of the
+recovery-eligible-only guard, covers a real OPEN-stuck-with-healthy-pending-ack state,
+zero regression, red-on-revert guards). Mark it UNVALIDATED-AS-LOAD-BEARING: two
+rounds inert because the OPEN-stuck precondition did not recur. LESSON (recorded):
+the 075853Z verdict's "broader gap" was acted on without first confirming the
+OPEN-stuck signature recurs at all — the more economical move would have been to first
+re-gate the narrow fix at N>=8 to measure precondition recurrence before iterating.
+Do NOT iterate the OPEN-row driver further until a gate actually reproduces a
+publication stuck OPEN with a healthy pending ack to budget.
+
+NODE_EXIT (run8) — independent, pre-existing class (CL-024/CL-030-adjacent), NOT
+ack-related: joiner 35a891b8 hit "Join canonical readiness timed out" (120s, 109
+attempts, reasons=[routing_not_ready]) → resume attempt 2/4 re-bound the router and
+hit "listen EADDRINUSE 0.0.0.0:8082" (prior attempt's socket not yet released) →
+MessageRouter init failed → non-retryable (preserveForResume:false) → "Failed to join
+cluster" → exit 1 (oomKilled=false, no fatal stack). A join-resume port-reclaim race.
+Candidate next record (CL-032): join-resume must release/await the prior router socket
+before re-listen, OR treat EADDRINUSE-on-resume as retryable (preserve-for-resume).
+
+SLOW-CLASS ROOT (answers the wall-time variance): owner/seed EVENT-LOOP FREEZES, not
+retry budgets. Gap-watchdog totals: run5 ~14.4s (9 gaps, max 1.9s) vs run6 312s (76
+gaps, max single freeze 55s) and run7 192s (84 gaps, max 13s). The long synchronous
+stalls starve the reconcile/ack pipeline → downstream cascade seen ONLY in slow runs
+("peer demonstrably alive (slow not dead)" 26→1490→5035; "stale snapshot retry"
+~0→316→1237). NOTE vs CL-020 ("freeze retired as binding constraint"): a 55s single
+freeze in run6 is a strong signal the freeze hydra has a surviving / regressed head at
+full depth — HIGHEST-VALUE next candidate (it explains the 3x wall variance and a 55s
+freeze blows multiple budgets). Re-rank the run6 profiler/gap-watchdog artifacts to
+pin the frame before any fix.
+
+FRONTIER AFTER THIS ROUND (ordered): (1) owner event-loop freeze at full depth
+(run6 55s gap — re-rank profiler; likely highest value); (2) run8 join-resume
+EADDRINUSE port-reclaim (the only hard failure; deterministic-ish); (3) CL-001
+variant B (stale local projection, owner row CLOSED) + the transient PUBLISHED-row
+ack-lag disagreement (decide harness-oracle-window vs genuine ack-completion gap);
+(4) the surplus-drain/leadership-churn settle class (carried).
+
 ### Exit Criteria
 
 1. Rolling restart reaches one published epoch and one published active-node
