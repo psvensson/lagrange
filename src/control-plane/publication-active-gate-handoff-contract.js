@@ -607,9 +607,16 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
   );
   if (
     !handoffContract ||
-    handoffContract.nextAction !==
+    (handoffContract.nextAction !==
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
+     handoffContract.nextAction !==
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .OBSERVE_OWNER_HANDOFF) ||
+    (handoffContract.missingPublishedCount === 0 &&
+     handoffContract.nextAction !==
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION)
   ) {
     return buildPublicationActiveGateHandoffEmptyReconcileTarget(
       handoffContract,

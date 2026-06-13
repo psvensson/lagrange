@@ -207,7 +207,17 @@ function hasOpenPublicationOwnerCountOnlyPendingAckList(options = {}) {
 }
 
 function resolvePublicationOwnerAckEvidenceState(options = {}) {
-  if (hasPublishedPublicationOwnerClosedPendingAckList(options)) {
+  const explicitPendingAckNodeIds = normalizePublicationOwnerNodeIds(
+    options.pendingAckNodeIds,
+  );
+  const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
+    Number(options.pendingAckCount) :
+    NUM.ZERO;
+  const hasCountOnlyDebt =
+    explicitPendingAckNodeIds.length === NUM.ZERO &&
+    pendingAckCount > NUM.ZERO;
+
+  if (hasPublishedPublicationOwnerClosedPendingAckList(options) && !hasCountOnlyDebt) {
     return PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST;
   }
   if (
@@ -225,14 +235,12 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   const requiredAckNodeIds = normalizePublicationOwnerNodeIds(
     options.requiredAckNodeIds,
   );
-  const explicitPendingAckNodeIds = normalizePublicationOwnerNodeIds(
-    options.pendingAckNodeIds,
-  );
   return Array.isArray(options.requiredAckNodeIds) &&
     (
       requiredAckNodeIds.length > NUM.ZERO ||
       explicitPendingAckNodeIds.length === NUM.ZERO
-    ) ?
+    ) &&
+    !hasCountOnlyDebt ?
     PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
     PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY;
 }

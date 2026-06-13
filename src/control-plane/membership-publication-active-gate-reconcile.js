@@ -6,6 +6,7 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
+import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
@@ -668,9 +669,26 @@ async function reconcileActiveGateMembershipPublication(
   publicationActiveGateHandoff,
   options = {},
 ) {
-  const target = resolvePublicationActiveGateMembershipPublicationTarget(
+  let target = resolvePublicationActiveGateMembershipPublicationTarget(
     publicationActiveGateHandoff,
   );
+  if (
+    target.reconcileRequired === true &&
+    target.handoffContract?.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF
+  ) {
+    const isLeader = isControlPlanePublicationsWriteLeader(
+      coordinator.systemTableCache,
+      coordinator.nodeId,
+      coordinator.cdcIntegrationService,
+    );
+    if (!isLeader) {
+      target = Object.freeze({
+        ...target,
+        reconcileRequired: false,
+      });
+    }
+  }
   if (target.reconcileRequired !== true) {
     const ownerRecoveryWait =
       isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target);

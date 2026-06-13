@@ -554,6 +554,11 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
           .missingPublishedRecoveryActiveNodeIds ??
         providedPublicationRecoveryGate?.missingPublishedNodeIds ??
         [],
+      publicationExcludesTargetNode:
+        typeof membershipPublicationPlanningSnapshot
+          .publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+          membershipPublicationPlanningSnapshot.publicationExcludesTargetNode :
+          providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
     });
     return publicationRecoveryGate.active === true;
   }

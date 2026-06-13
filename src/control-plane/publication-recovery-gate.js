@@ -126,6 +126,9 @@ function resolvePublicationPending(options = {}) {
   if (
     recoveryProtocolState === RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING
   ) {
+    if (options.publicationExcludesTargetNode === true) {
+      return true;
+    }
     return ackClosureSatisfied !== true;
   }
   const reasonCodes = Array.isArray(options.reasonCodes) ?
@@ -133,7 +136,7 @@ function resolvePublicationPending(options = {}) {
     [];
   return reasonCodes.includes(
     CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-  ) && ackClosureSatisfied !== true;
+  ) && (options.publicationExcludesTargetNode === true || ackClosureSatisfied !== true);
 }
 
 function resolvePublicationRecoveryGateState(context = {}) {
@@ -205,6 +208,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
       reasonCodes: providedReasonCodes,
       missingPublishedCount,
       ackClosureSatisfied,
+      publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
     });
   const prioritySpreadEvidenceUnavailableReasonActive =
     prioritySpreadEvidenceUnavailable === true &&
@@ -227,6 +231,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
       reasonCodes: retainedProvidedReasonCodes,
       missingPublishedCount,
       ackClosureSatisfied,
+      publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
     });
   const publicationStatusNormalized = normalizePublicationStatus(
     options.publicationStatus,
@@ -280,7 +285,9 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
           publicationOwnerStream,
           prioritySpreadPending,
           prioritySpreadEvidenceUnavailable,
+          publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
         }),
+        publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
         prioritySpreadDecisionSource: prioritySpreadDecision.decisionSource,
@@ -302,6 +309,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
           publicationOwnerStream,
           prioritySpreadPending,
           prioritySpreadEvidenceUnavailable,
+          publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
         }),
         requiredAckNodeIds,
         acknowledgedNodeIds,
@@ -311,6 +319,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         missingPublishedNodeIds,
         missingPublishedCount,
         publicationPending:
+          options.publicationExcludesTargetNode === true ||
           isPublicationOwnerStreamPendingForRecoveryGate(
             publicationOwnerStream,
             pendingAckCount,
@@ -429,6 +438,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     publicationPending: streamCompatibilityEvidence.publicationPending,
     ackPending: streamCompatibilityEvidence.ackPending,
     prioritySpreadPending: streamCompatibilityEvidence.prioritySpreadPending,
+    publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
   });
 }
 

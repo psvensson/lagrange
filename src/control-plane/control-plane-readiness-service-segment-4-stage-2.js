@@ -165,6 +165,13 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
                   retainedSnapshot.missingPublishedRecoveryActiveNodeIds :
                   planningGate?.missingPublishedNodeIds ||
                     retainedGate?.missingPublishedNodeIds,
+      publicationExcludesTargetNode:
+        typeof planningSnapshot?.publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+          planningSnapshot.publicationExcludesTargetNode :
+          typeof planningGate?.publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+            planningGate.publicationExcludesTargetNode :
+            retainedSnapshot?.publicationExcludesTargetNode === true ||
+            retainedGate?.publicationExcludesTargetNode === true,
     });
   }
 
@@ -195,9 +202,35 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
       const cached = memo.get(memoKey);
       if (
         cached &&
-        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs)
+        cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
+        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs) &&
+        (Number(observedAt) - Number(cached.capturedAtMs)) <=
+          this.membershipPublicationPlanningActiveStaleGraceMs
       ) {
-        return cached.projection;
+        let isStale = false;
+        const service = this.membershipPublicationService;
+        if (
+          service &&
+          typeof service.getLatestPublicationForNodeSync === 'function'
+        ) {
+          const latestPub = service.getLatestPublicationForNodeSync(memoKey);
+          const latestEpoch = latestPub ?
+            (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
+            null;
+          const cachedEpoch = cached.projection ?
+            (cached.projection.publicationEpoch ?? cached.projection.publication_epoch) :
+            null;
+          const latestStatus = latestPub ? latestPub.status : null;
+          const cachedStatus = cached.projection ?
+            (cached.projection.publicationStatus ?? cached.projection.status) :
+            null;
+          if (latestEpoch !== cachedEpoch || latestStatus !== cachedStatus) {
+            isStale = true;
+          }
+        }
+        if (!isStale) {
+          return cached.projection;
+        }
       }
     }
     const capturedAtMs = this.now();
@@ -205,7 +238,11 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
     );
     if (memo && memoKey) {
-      memo.set(memoKey, {projection, capturedAtMs});
+      memo.set(memoKey, {
+        projection,
+        capturedAtMs,
+        fn: this.getMembershipPublicationPlanningSnapshotSync,
+      });
     }
     return projection;
   }

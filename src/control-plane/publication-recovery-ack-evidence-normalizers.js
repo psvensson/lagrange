@@ -146,13 +146,22 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
     publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN &&
     Array.isArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === NUM.ZERO;
+  const hasCountOnlyDebt =
+    explicitPendingAckNodeIds.length === NUM.ZERO &&
+    Math.max(
+      normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
+      Number.isFinite(Number(options.pendingAckCount)) ? Number(options.pendingAckCount) : NUM.ZERO,
+    ) > NUM.ZERO;
   const evidenceState =
-    hasClosedPublishedPendingAckList ||
-    isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
-      (
-        requiredAckNodeIds.length > NUM.ZERO ||
-        explicitPendingAckNodeIds.length === NUM.ZERO
-      ) ?
+    (
+      hasClosedPublishedPendingAckList ||
+      isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
+        (
+          requiredAckNodeIds.length > NUM.ZERO ||
+          explicitPendingAckNodeIds.length === NUM.ZERO
+        )
+    ) &&
+    !hasCountOnlyDebt ?
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
         .REQUIRED_ACK_NODE_LIST :
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
@@ -174,6 +183,7 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
       Math.max(
         pendingAckNodeIds.length,
         normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
+        Number.isFinite(Number(options.pendingAckCount)) ? Number(options.pendingAckCount) : NUM.ZERO,
       );
   const pendingAckCountByState = Object.freeze({
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:

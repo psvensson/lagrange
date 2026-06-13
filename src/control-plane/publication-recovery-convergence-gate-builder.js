@@ -498,6 +498,11 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       rawPublicationConvergenceGate?.pressureReasonCodes ??
       publicationConvergence?.pressureReasonCodes ??
       priorityRecoveryObservation?.pressureReasonCodes,
+    publicationExcludesTargetNode:
+      typeof publicationConvergence?.publicationExcludesTargetNode === 'boolean' ?
+        publicationConvergence.publicationExcludesTargetNode :
+        rawPublicationConvergenceGate?.publicationExcludesTargetNode === true ||
+        priorityRecoveryObservation?.publicationExcludesTargetNode === true,
   });
   const alignedPublicationConvergenceGate =
     publicationOwnerStreamNeedsOpenDebtRefresh ?

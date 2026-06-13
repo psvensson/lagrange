@@ -303,7 +303,17 @@ function hasOpenCountOnlyPendingAckEvidence(options = {}) {
 }
 
 function resolvePendingAckEvidenceState(options = {}) {
-  if (hasClosedPublishedPendingAckEvidence(options)) {
+  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
+    options.pendingAckNodeIds,
+  );
+  const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
+    Number(options.pendingAckCount) :
+    NUM.ZERO;
+  const hasCountOnlyDebt =
+    explicitPendingAckNodeIds.length === NUM.ZERO &&
+    pendingAckCount > NUM.ZERO;
+
+  if (hasClosedPublishedPendingAckEvidence(options) && !hasCountOnlyDebt) {
     return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
       .REQUIRED_ACK_NODE_LIST;
   }
@@ -323,17 +333,15 @@ function resolvePendingAckEvidenceState(options = {}) {
   const requiredAckNodeIds = normalizeDistinctStringArray(
     options.requiredAckNodeIds,
   );
-  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
-    options.pendingAckNodeIds,
-  );
   const hasRequiredAckNodeListEvidence =
     Array.isArray(options.requiredAckNodeIds) &&
     (
       requiredAckNodeIds.length > NUM.ZERO ||
       explicitPendingAckNodeIds.length === NUM.ZERO
-    );
+    ) &&
+    !hasCountOnlyDebt;
   const hasClosedPendingAckNodeListEvidence =
-    hasClosedUnpublishedPendingAckEvidence(options);
+    hasClosedUnpublishedPendingAckEvidence(options) && !hasCountOnlyDebt;
   return hasRequiredAckNodeListEvidence ||
     hasClosedPendingAckNodeListEvidence ?
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
@@ -464,6 +472,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
         options.prioritySpreadEvidenceUnavailable;
   const publicationPending = pressureDeferred ?
     false :
+    options.publicationExcludesTargetNode === true ||
     isPublicationOwnerStreamPendingForRecoveryGate(
       publicationOwnerStream,
       pendingAckCount,
@@ -474,6 +483,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
     publicationOwnerStream,
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,
+    publicationExcludesTargetNode: options.publicationExcludesTargetNode === true,
   });
   return Object.freeze({
     publicationEpoch:
@@ -513,6 +523,9 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
 }
 
 function resolvePublicationRecoveryProtocolState(context = {}) {
+  if (context.publicationExcludesTargetNode === true) {
+    return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
+  }
   return PUBLICATION_RECOVERY_PROTOCOL_STREAM_RULES.find((rule) =>
     rule.matches(context),
   ).recoveryProtocolState;

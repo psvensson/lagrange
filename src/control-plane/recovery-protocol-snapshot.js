@@ -586,9 +586,9 @@ function buildRecoveryProtocolSnapshot(options = {}) {
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST ?
       options.pendingAckEvidenceState :
       Array.isArray(options.requiredAckNodeIds) ?
-      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
-        .REQUIRED_ACK_NODE_LIST :
-      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST :
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
   const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
     publicationEpoch: context.publicationEpoch,
     publicationStatus: context.publicationStatus,
@@ -603,6 +603,7 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     pendingAckCount: context.pendingAckCount,
     missingPublishedRecoveryActiveNodeIds:
       effectiveMissingPublishedRecoveryActiveNodeIds,
+    publicationExcludesTargetNode,
   });
   const publicationBoundaryOutcome = buildPublicationProjectionBoundaryOutcome(
     {

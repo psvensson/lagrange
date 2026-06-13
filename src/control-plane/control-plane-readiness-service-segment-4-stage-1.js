@@ -222,8 +222,6 @@ class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessSe
       this.buildPriorityRecoveryPlanningProjection(directPlanningSnapshot);
     const providedPriorityRecoveryProjection =
       this.buildPriorityRecoveryPlanningProjection(providedPlanningSnapshot);
-    const directPublicationRecoveryGate =
-      directPriorityRecoveryProjection?.publicationRecoveryGate || null;
     const providedPublicationRecoveryGate =
       providedPriorityRecoveryProjection?.publicationRecoveryGate || null;
     if (providedPublicationRecoveryGate?.ready !== true) {
@@ -548,6 +546,10 @@ class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessSe
             planningSnapshot.missingPublishedRecoveryActiveNodeIds :
             providedPublicationRecoveryGate?.missingPublishedNodeIds ??
             [],
+      publicationExcludesTargetNode:
+        typeof planningSnapshot.publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+          planningSnapshot.publicationExcludesTargetNode :
+          providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
     });
     const priorityRecoveryReasonCodes =
       this.filterPriorityRecoveryReasonCodesForPublicationGate(

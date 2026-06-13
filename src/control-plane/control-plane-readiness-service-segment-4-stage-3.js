@@ -149,26 +149,42 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
           pendingAckEvidenceState:
             PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
               .REQUIRED_ACK_NODE_LIST,
-          publicationRecoveryGate: {
-            ...(providedPlanningSnapshot.publicationRecoveryGate ||
+          publicationRecoveryGate: (() => {
+            const gate = providedPlanningSnapshot.publicationRecoveryGate ||
               directPlanningSnapshot.publicationRecoveryGate ||
-              {}),
-            requiredAckNodeIds: providedPlanningSnapshot.requiredAckNodeIds,
-            acknowledgedNodeIds: Array.isArray(
+              {};
+            const requiredAckIds = providedPlanningSnapshot.requiredAckNodeIds;
+            const acknowledgedIds = Array.isArray(
               providedPlanningSnapshot.acknowledgedNodeIds,
             ) ?
               providedPlanningSnapshot.acknowledgedNodeIds :
-              directPlanningSnapshot.acknowledgedNodeIds,
-            pendingAckNodeIds: Array.isArray(
+              directPlanningSnapshot.acknowledgedNodeIds;
+            const pendingAckIds = Array.isArray(
               providedPlanningSnapshot.pendingAckNodeIds,
             ) ?
               providedPlanningSnapshot.pendingAckNodeIds :
-              directPlanningSnapshot.pendingAckNodeIds,
-            pendingAckCount: providedPendingAckCount,
-            pendingAckEvidenceState:
-              PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
-                .REQUIRED_ACK_NODE_LIST,
-          },
+              directPlanningSnapshot.pendingAckNodeIds;
+            return {
+              ...gate,
+              requiredAckNodeIds: requiredAckIds,
+              acknowledgedNodeIds: acknowledgedIds,
+              pendingAckNodeIds: pendingAckIds,
+              pendingAckCount: providedPendingAckCount,
+              pendingAckEvidenceState:
+                PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+                  .REQUIRED_ACK_NODE_LIST,
+              publicationOwnerStream: gate.publicationOwnerStream ? {
+                ...gate.publicationOwnerStream,
+                requiredAckNodeIds: requiredAckIds,
+                acknowledgedNodeIds: acknowledgedIds,
+                pendingAckNodeIds: pendingAckIds,
+                pendingAckCount: providedPendingAckCount,
+                pendingAckEvidenceState:
+                  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+                    .REQUIRED_ACK_NODE_LIST,
+              } : null,
+            };
+          })(),
         } :
         shouldUseProvidedCountOnlyAckDebt ?
           {
@@ -181,17 +197,28 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
             ) ?
               providedPlanningSnapshot.pendingAckNodeIds :
               directPlanningSnapshot.pendingAckNodeIds,
-            publicationRecoveryGate: {
-              ...(directPlanningSnapshot.publicationRecoveryGate || {}),
-              pendingAckCount: providedPendingAckCount,
-              pendingAckEvidenceState:
-                PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
-              pendingAckNodeIds: Array.isArray(
+            publicationRecoveryGate: (() => {
+              const gate = directPlanningSnapshot.publicationRecoveryGate || {};
+              const pendingAckIds = Array.isArray(
                 providedPlanningSnapshot.pendingAckNodeIds,
               ) ?
                 providedPlanningSnapshot.pendingAckNodeIds :
-                directPlanningSnapshot.pendingAckNodeIds,
-            },
+                directPlanningSnapshot.pendingAckNodeIds;
+              return {
+                ...gate,
+                pendingAckCount: providedPendingAckCount,
+                pendingAckEvidenceState:
+                  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+                pendingAckNodeIds: pendingAckIds,
+                publicationOwnerStream: gate.publicationOwnerStream ? {
+                  ...gate.publicationOwnerStream,
+                  pendingAckCount: providedPendingAckCount,
+                  pendingAckEvidenceState:
+                    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+                  pendingAckNodeIds: pendingAckIds,
+                } : null,
+              };
+            })(),
           } :
           directPlanningSnapshot;
     const publicationConvergenceGateForMerge =
@@ -306,6 +333,7 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
         preferDirectReadyGate ?
           null :
           providedPriorityRecoveryDecisionSnapshots,
+      publicationRecoveryGate: publicationConvergenceGate,
       publicationEpoch:
         publicationConvergenceGate?.publicationEpoch ??
         directPlanningSnapshot.publicationEpoch ??
