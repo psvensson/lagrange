@@ -53,4 +53,4 @@ record, create `closure-ledger/CL-###.md` and add one linked row here. See
 | [CL-029](closure-ledger/CL-029.md) | narrowed | placement-priority-spread (operation workflow liveness) | Target-Completion Evidence Must Retain A Retry Owner Until Applied To The Durable Workflow Row. |
 | [CL-030](closure-ledger/CL-030.md) | open | harness-oracle (primary) + node-resource-safety (secondary) | A Non-Restarted Node's Death Must Fail The Scenario At That Node (And The Seed Must Not OOM). |
 | [CL-031](closure-ledger/CL-031.md) | open | harness-oracle (blindness) + node-resource-safety (root) | The Control Snapshot Must Stay Bounded (And Oracles Must Not Go Blind When It Does Not). |
-| [CL-033](closure-ledger/CL-033.md) | open | control-plane-seed event-loop liveness | The Control-Plane Seed Must Not Enter A Freeze↔Leadership-Churn Spiral During Post-Restart Recovery. |
+| [CL-033](closure-ledger/CL-033.md) | fix-landed | control-plane-seed event-loop liveness | The Control-Plane Seed Must Not Enter A Freeze↔Leadership-Churn Spiral During Post-Restart Recovery. |
