@@ -4960,3 +4960,78 @@ ack-lag disagreement (decide harness-oracle-window vs genuine ack-completion gap
   report details). The at-rest/accumulation variant of the
   unbounded-diagnostics family is now closed alongside the
   hot-path variants (CL-010/011/020/026).
+
+## CL-033 The Control-Plane Seed Must Not Enter A Freeze↔Leadership-Churn Spiral During Post-Restart Recovery
+
+- Status: OPENED (witness captured; frame UNTAGGED — needs a profiled re-run before fix)
+- Concern: control-plane-seed event-loop liveness under post-restart recovery
+- Failure Class: liveness (event-loop starvation -> heartbeat loss -> leadership churn)
+- First Violated Invariant: the seed's event loop must not block long enough to
+  miss raft heartbeats and lose leadership of its partition replicas; restated:
+  the seed must not enter a self-reinforcing freeze<->leadership-churn spiral during
+  the post-restart recovery window.
+- Authoritative Owner: whatever untagged synchronous code runs on the seed during
+  post-leadership-loss reconciliation (UNPINNED — see falsification step).
+- Stable Witness: EventLoopGapWatchdog "Event loop gap detected" series on the seed
+  with taggedExclusiveMs≈0 / unexplainedMs≈gapMs / openSections=[] / elu=1, interleaved
+  with cluster-wide ("28 partitions at once") "Lost/Became leader ... rebalancing
+  scheduler" transitions.
+- Current Symptom: drives the SLOW class + the 2-3x wall-time variance (run5 happy-path
+  182s vs run6 605s).
+
+### Evidence (run6 of stat-gate-20260613T085729Z; seed 7493b0ab)
+
+The CL-001-broadened gate verdict's SLOW-class mining surfaced this. Run6 seed gap
+totals: 312s over 76 gaps, MAX SINGLE FREEZE 55s (run5 by contrast: ~14s/9 gaps,
+max 1.9s). The big freezes:
+- 09:36:26 gapMs=53444, taggedExclusiveMs=0, unexplainedMs=53444, openSections=[],
+  elu=1, heap 179MB (NOT OOM).
+- 09:37:22 gapMs=54971, taggedExclusiveMs=0, unexplainedMs=54971, openSections=[],
+  elu=1, heap 169MB.
+- + 21s/19s/9.7s/9.6s siblings, all same shape. siteDeltas show only trivial
+  cdc_update_row_fetch (count 8-80, totalMs 0-3) — NOT the blocker, just the only
+  tagged activity nearby.
+INTERPRETATION of the shape: ELU=1 (loop fully busy, not idle), taggedExclusiveMs=0
+over 55s (NONE of the instrumented sync-sections ran), openSections=[] (no tagged
+section open at unblock) => the blocking work is in code carrying NO watchdog tag.
+The gap-watchdog cannot name it; only the V8 sampling profiler can (as it did for
+CL-010/012/018/019/020).
+
+THE SPIRAL (timeline, 09:35-09:39): seed loses leadership of all ~28 partitions at
+09:35:05 -> two giant freezes (53s+55s) occur while it is a FOLLOWER (09:35:33->
+09:37:22) -> regains leadership 09:37:39 -> immediately freezes 9.7s -> loses it
+09:37:49 -> 19s/21s freezes interleaved with became/lost cycles through 09:38:55.
+Window activity (4 min): 838 "Storage admission allowed", 420/396 CDC updated-row
+fetch, 144 "Repaired readiness cache from authoritative", 172 "Starting rebalancing"
+/ 152 "Critical rebalancing state detected", 127+127 query-execution failures, 249x
+admin client connect/disconnect, 58 became / 58 lost leadership (=2 cluster events x
+~28 partitions). DIRECTION (answers the carried leadership-churn open question for
+THIS surface): the FREEZE drives the CHURN (a frozen seed misses heartbeats so all
+its partition replicas lose leadership), and the post-loss reconciliation backlog
+(CDC catch-up + readiness-cache repair) feeds back into more freeze. Worst freezes
+happen while the seed is a fresh ex-leader follower grinding the backlog synchronously.
+
+### Next Falsification Step (REQUIRED before any fix — block is untagged)
+
+Re-run a profiled gate: `LAGRANGE_LOOP_GAP_PROFILE=1 LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true
+LAGRANGE_CAPTURE_LOGS=true bash scripts/rolling-restart-stat-gate.sh <N>` (LAGRANGE_*
+auto-forwards to node containers, cluster-segment-7-class-1.js:359). The watchdog's
+profiler emits "Event loop gap profile window" with topFrames (self) + topInclusiveFrames
+(inclusive) for any 30s window containing a gap. Mine those frames on a run that
+reproduces the freeze (non-deterministic — needs N>=4 and a run that reaches the
+restart/recovery phase). The profiler is the designed tool and is NOT the --debug-logs
+observer-effect hazard (sampling, low overhead). Candidate frames from prior freeze
+work to expect/rule-in: readiness evidence pipeline (getNodeReadinessSync),
+buildPublicationRecoveryProtocolSnapshot, cache deepClone/repair, rebalancing planning
+recompute on each re-leadership. Pin the frame, THEN design the fix (likely: make the
+post-leadership-loss reconciliation incremental/yielding instead of one synchronous
+grind, and/or debounce the per-leadership-transition scheduler re-init).
+
+### Notes
+
+1. CL-020 retired the freeze as the binding constraint for the formation/load window;
+   this is a SURVIVING/REGRESSED head at FULL DEPTH (post-restart recovery), a
+   different phase. The freeze family is a hydra (CL-018 note).
+2. Same surface as the carried "surplus-drain / leadership-churn settle class"
+   frontier item — CL-033 is its event-loop-freeze face. Resolving the freeze may
+   dissolve that settle class too.
