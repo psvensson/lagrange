@@ -1,4 +1,4 @@
-export function registerPriorityRecoverySnapshotCore06Tests(context) {
+export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTests(context) {
   const {
     buildPriorityRecoveryDecisionSnapshots,
     PRIORITY_RECOVERY_ACTIVE_SOURCE_REMOVAL_AGE_MS,

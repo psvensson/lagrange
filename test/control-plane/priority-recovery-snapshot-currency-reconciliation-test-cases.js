@@ -1,4 +1,4 @@
-export function registerPriorityRecoverySnapshotCore04Tests(context) {
+export function registerPriorityRecoverySnapshotCurrencyReconciliationTests(context) {
   const {
     buildPriorityRecoveryObservationSnapshot,
     buildTrackedPriorityRecoveryDecisionSnapshots,

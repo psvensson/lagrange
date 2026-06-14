@@ -38,29 +38,29 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-constants.js';
 
 import {
-  registerPriorityRecoverySnapshotCore01Tests,
-} from './priority-recovery-snapshot-core-01-test-cases.js';
+  registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests,
+} from './priority-recovery-snapshot-emergency-lane-admission-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore02Tests,
-} from './priority-recovery-snapshot-core-02-test-cases.js';
+  registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests,
+} from './priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore03Tests,
-} from './priority-recovery-snapshot-core-03-test-cases.js';
+  registerPriorityRecoverySnapshotProgressContractOwnershipTests,
+} from './priority-recovery-snapshot-progress-contract-ownership-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore04Tests,
-} from './priority-recovery-snapshot-core-04-test-cases.js';
+  registerPriorityRecoverySnapshotCurrencyReconciliationTests,
+} from './priority-recovery-snapshot-currency-reconciliation-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore05Tests,
-} from './priority-recovery-snapshot-core-05-test-cases.js';
+  registerPriorityRecoverySnapshotObservationCurrencyActuationPressureTests,
+} from './priority-recovery-snapshot-observation-currency-actuation-pressure-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore06Tests,
-} from './priority-recovery-snapshot-core-06-test-cases.js';
+  registerPriorityRecoverySnapshotInFlightReplaceClassificationTests,
+} from './priority-recovery-snapshot-in-flight-replace-classification-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore07Tests,
-} from './priority-recovery-snapshot-core-07-test-cases.js';
+  registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests,
+} from './priority-recovery-snapshot-terminal-placement-spread-closure-test-cases.js';
 import {
-  registerPriorityRecoverySnapshotCore08Tests,
-} from './priority-recovery-snapshot-core-08-test-cases.js';
+  registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests,
+} from './priority-recovery-snapshot-stale-row-supersession-cohort-test-cases.js';
 import {
   registerPriorityRecoverySnapshotSupplementalTests,
 } from './priority-recovery-snapshot-supplemental-test-cases.js';
@@ -620,14 +620,14 @@ const priorityRecoverySnapshotTestContext = {
   test,
 };
 
-registerPriorityRecoverySnapshotCore01Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore02Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore03Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore04Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore05Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore06Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore07Tests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCore08Tests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotProgressContractOwnershipTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotCurrencyReconciliationTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotObservationCurrencyActuationPressureTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotInFlightReplaceClassificationTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests(priorityRecoverySnapshotTestContext);
 registerPriorityRecoverySnapshotSupplementalTests(
   priorityRecoverySnapshotTestContext,
 );

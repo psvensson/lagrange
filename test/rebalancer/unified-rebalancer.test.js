@@ -57,23 +57,23 @@ import {
 } from '../../src/constants/index.js';
 
 import {
-  registerUnifiedRebalancerCore01Tests,
-} from './unified-rebalancer-core-01-test-cases.js';
+  registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests,
+} from './unified-rebalancer-lifecycle-and-recovery-progress-events-test-cases.js';
 import {
-  registerUnifiedRebalancerCore02Tests,
-} from './unified-rebalancer-core-02-test-cases.js';
+  registerUnifiedRebalancerPlanningGateDecisionsTests,
+} from './unified-rebalancer-planning-gate-decisions-test-cases.js';
 import {
-  registerUnifiedRebalancerCore03Tests,
-} from './unified-rebalancer-core-03-test-cases.js';
+  registerUnifiedRebalancerPriorityFollowupCreationTests,
+} from './unified-rebalancer-priority-followup-creation-test-cases.js';
 import {
-  registerUnifiedRebalancerCore04Tests,
-} from './unified-rebalancer-core-04-test-cases.js';
+  registerUnifiedRebalancerSurrogateFollowupSynthesisTests,
+} from './unified-rebalancer-surrogate-followup-synthesis-test-cases.js';
 import {
-  registerUnifiedRebalancerCore05Tests,
-} from './unified-rebalancer-core-05-test-cases.js';
+  registerUnifiedRebalancerClosureWitnessFollowupTests,
+} from './unified-rebalancer-closure-witness-followup-test-cases.js';
 import {
-  registerUnifiedRebalancerCore06Tests,
-} from './unified-rebalancer-core-06-test-cases.js';
+  registerUnifiedRebalancerBudgetArbitrationCleanupTests,
+} from './unified-rebalancer-budget-arbitration-cleanup-test-cases.js';
 const BACKPRESSURE_PENDING_COUNT = 2;
 const BACKPRESSURE_MAX_PENDING = 2;
 const PRIORITY_RECOVERY_PUBLICATION_EPOCH = 7;
@@ -643,9 +643,9 @@ const unifiedRebalancerTestContext = {
   WORKFLOW_STEP,
 };
 
-registerUnifiedRebalancerCore01Tests(unifiedRebalancerTestContext);
-registerUnifiedRebalancerCore02Tests(unifiedRebalancerTestContext);
-registerUnifiedRebalancerCore03Tests(unifiedRebalancerTestContext);
-registerUnifiedRebalancerCore04Tests(unifiedRebalancerTestContext);
-registerUnifiedRebalancerCore05Tests(unifiedRebalancerTestContext);
-registerUnifiedRebalancerCore06Tests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerPlanningGateDecisionsTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerPriorityFollowupCreationTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerSurrogateFollowupSynthesisTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerClosureWitnessFollowupTests(unifiedRebalancerTestContext);
+registerUnifiedRebalancerBudgetArbitrationCleanupTests(unifiedRebalancerTestContext);

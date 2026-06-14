@@ -1,4 +1,4 @@
-export function registerFailureBundleCore13Tests(context) {
+export function registerFailureBundleMissingActiveDebtOverSerialWaitTests(context) {
   const {
     it,
     assert,

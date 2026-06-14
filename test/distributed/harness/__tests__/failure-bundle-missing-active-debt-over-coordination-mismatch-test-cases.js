@@ -1,4 +1,4 @@
-export function registerFailureBundleCore15Tests(context) {
+export function registerFailureBundleMissingActiveDebtOverCoordinationMismatchTests(context) {
   const {
     it,
     assert,

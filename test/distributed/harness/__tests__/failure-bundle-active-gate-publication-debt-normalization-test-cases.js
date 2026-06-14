@@ -1,4 +1,4 @@
-export function registerFailureBundleCore10Tests(context) {
+export function registerFailureBundleActiveGatePublicationDebtNormalizationTests(context) {
   const {
     it,
     ACTIVE_GATE_ACK_IDS_CLEAR_STALE_COUNT_TEST_NAME,

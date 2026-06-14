@@ -1,4 +1,4 @@
-export function registerFailureBundleCore11Tests(context) {
+export function registerFailureBundleActiveGateSnapshotCoverageTests(context) {
   const {
     it,
     assert,

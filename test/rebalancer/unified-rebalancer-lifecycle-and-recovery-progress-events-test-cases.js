@@ -1,4 +1,4 @@
-export function registerUnifiedRebalancerCore01Tests(context) {
+export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
     createEventedMockCoordinator,

@@ -1,4 +1,4 @@
-export function registerFailureBundleCore07Tests(context) {
+export function registerFailureBundleRestartRecoveryClassificationTests(context) {
   const {
     it,
     assert,

@@ -20,53 +20,53 @@ import {
   registerFailureBundleActiveGateTailTests,
 } from './failure-bundle-active-gate-tail-test-cases.js';
 import {
-  registerFailureBundleCore01Tests,
-} from './failure-bundle-core-01-test-cases.js';
+  registerFailureBundlePriorityRecoverySummaryTests,
+} from './failure-bundle-priority-recovery-summary-test-cases.js';
 import {
-  registerFailureBundleCore02Tests,
-} from './failure-bundle-core-02-test-cases.js';
+  registerFailureBundleStartupDecisionAndConvergenceMappingTests,
+} from './failure-bundle-startup-decision-and-convergence-mapping-test-cases.js';
 import {
-  registerFailureBundleCore03Tests,
-} from './failure-bundle-core-03-test-cases.js';
+  registerFailureBundleFailureClassClassificationTests,
+} from './failure-bundle-failure-class-classification-test-cases.js';
 import {
-  registerFailureBundleCore04Tests,
-} from './failure-bundle-core-04-test-cases.js';
+  registerFailureBundlePriorityRecoveryObservationReconciliationTests,
+} from './failure-bundle-priority-recovery-observation-reconciliation-test-cases.js';
 import {
-  registerFailureBundleCore05Tests,
-} from './failure-bundle-core-05-test-cases.js';
+  registerFailureBundlePriorityRecoveryPlaybackEvidenceTests,
+} from './failure-bundle-priority-recovery-playback-evidence-test-cases.js';
 import {
-  registerFailureBundleCore06Tests,
-} from './failure-bundle-core-06-test-cases.js';
+  registerFailureBundlePriorityRecoveryWitnessDominanceTests,
+} from './failure-bundle-priority-recovery-witness-dominance-test-cases.js';
 import {
-  registerFailureBundleCore07Tests,
-} from './failure-bundle-core-07-test-cases.js';
+  registerFailureBundleRestartRecoveryClassificationTests,
+} from './failure-bundle-restart-recovery-classification-test-cases.js';
 import {
-  registerFailureBundleCore08Tests,
-} from './failure-bundle-core-08-test-cases.js';
+  registerFailureBundlePublicationGateAndLoadPressureTests,
+} from './failure-bundle-publication-gate-and-load-pressure-test-cases.js';
 import {
-  registerFailureBundleCore09Tests,
-} from './failure-bundle-core-09-test-cases.js';
+  registerFailureBundlePriorityRecoveryClosureWitnessTests,
+} from './failure-bundle-priority-recovery-closure-witness-test-cases.js';
 import {
-  registerFailureBundleCore10Tests,
-} from './failure-bundle-core-10-test-cases.js';
+  registerFailureBundleActiveGatePublicationDebtNormalizationTests,
+} from './failure-bundle-active-gate-publication-debt-normalization-test-cases.js';
 import {
-  registerFailureBundleCore11Tests,
-} from './failure-bundle-core-11-test-cases.js';
+  registerFailureBundleActiveGateSnapshotCoverageTests,
+} from './failure-bundle-active-gate-snapshot-coverage-test-cases.js';
 import {
-  registerFailureBundleCore12Tests,
-} from './failure-bundle-core-12-test-cases.js';
+  registerFailureBundleStartupReachabilityWorkflowProgressTests,
+} from './failure-bundle-startup-reachability-workflow-progress-test-cases.js';
 import {
-  registerFailureBundleCore13Tests,
-} from './failure-bundle-core-13-test-cases.js';
+  registerFailureBundleMissingActiveDebtOverSerialWaitTests,
+} from './failure-bundle-missing-active-debt-over-serial-wait-test-cases.js';
 import {
-  registerFailureBundleCore14Tests,
-} from './failure-bundle-core-14-test-cases.js';
+  registerFailureBundleMissingActiveDebtOverPendingDispatchTests,
+} from './failure-bundle-missing-active-debt-over-pending-dispatch-test-cases.js';
 import {
-  registerFailureBundleCore15Tests,
-} from './failure-bundle-core-15-test-cases.js';
+  registerFailureBundleMissingActiveDebtOverCoordinationMismatchTests,
+} from './failure-bundle-missing-active-debt-over-coordination-mismatch-test-cases.js';
 import {
-  registerFailureBundleCore16Tests,
-} from './failure-bundle-core-16-test-cases.js';
+  registerFailureBundleAckClosureOrderingTests,
+} from './failure-bundle-ack-closure-ordering-test-cases.js';
 import {selectDominantPriorityRecoveryPartitionWitness} from
   '../priority-recovery-summary-normalization.js';
 import {
@@ -1070,22 +1070,22 @@ describe('failure-bundle', () => {
     },
   };
 
-  registerFailureBundleCore01Tests(failureBundleTestContext);
-  registerFailureBundleCore02Tests(failureBundleTestContext);
-  registerFailureBundleCore03Tests(failureBundleTestContext);
-  registerFailureBundleCore04Tests(failureBundleTestContext);
-  registerFailureBundleCore05Tests(failureBundleTestContext);
-  registerFailureBundleCore06Tests(failureBundleTestContext);
-  registerFailureBundleCore07Tests(failureBundleTestContext);
-  registerFailureBundleCore08Tests(failureBundleTestContext);
-  registerFailureBundleCore09Tests(failureBundleTestContext);
-  registerFailureBundleCore10Tests(failureBundleTestContext);
-  registerFailureBundleCore11Tests(failureBundleTestContext);
-  registerFailureBundleCore12Tests(failureBundleTestContext);
-  registerFailureBundleCore13Tests(failureBundleTestContext);
-  registerFailureBundleCore14Tests(failureBundleTestContext);
-  registerFailureBundleCore15Tests(failureBundleTestContext);
-  registerFailureBundleCore16Tests(failureBundleTestContext);
+  registerFailureBundlePriorityRecoverySummaryTests(failureBundleTestContext);
+  registerFailureBundleStartupDecisionAndConvergenceMappingTests(failureBundleTestContext);
+  registerFailureBundleFailureClassClassificationTests(failureBundleTestContext);
+  registerFailureBundlePriorityRecoveryObservationReconciliationTests(failureBundleTestContext);
+  registerFailureBundlePriorityRecoveryPlaybackEvidenceTests(failureBundleTestContext);
+  registerFailureBundlePriorityRecoveryWitnessDominanceTests(failureBundleTestContext);
+  registerFailureBundleRestartRecoveryClassificationTests(failureBundleTestContext);
+  registerFailureBundlePublicationGateAndLoadPressureTests(failureBundleTestContext);
+  registerFailureBundlePriorityRecoveryClosureWitnessTests(failureBundleTestContext);
+  registerFailureBundleActiveGatePublicationDebtNormalizationTests(failureBundleTestContext);
+  registerFailureBundleActiveGateSnapshotCoverageTests(failureBundleTestContext);
+  registerFailureBundleStartupReachabilityWorkflowProgressTests(failureBundleTestContext);
+  registerFailureBundleMissingActiveDebtOverSerialWaitTests(failureBundleTestContext);
+  registerFailureBundleMissingActiveDebtOverPendingDispatchTests(failureBundleTestContext);
+  registerFailureBundleMissingActiveDebtOverCoordinationMismatchTests(failureBundleTestContext);
+  registerFailureBundleAckClosureOrderingTests(failureBundleTestContext);
 
   registerFailureBundleActiveGateTailTests({
     it,

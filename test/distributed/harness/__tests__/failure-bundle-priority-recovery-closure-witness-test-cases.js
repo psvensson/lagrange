@@ -1,4 +1,4 @@
-export function registerFailureBundleCore09Tests(context) {
+export function registerFailureBundlePriorityRecoveryClosureWitnessTests(context) {
   const {
     it,
     ACTIVE_GATE_CANONICAL_MISSING_DURING_COVERAGE_TEST_NAME,

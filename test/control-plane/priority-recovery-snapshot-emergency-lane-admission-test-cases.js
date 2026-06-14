@@ -1,4 +1,4 @@
-export function registerPriorityRecoverySnapshotCore01Tests(context) {
+export function registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(context) {
   const {
     buildPriorityRecoveryAdmissionPlan,
     buildPriorityRecoveryDecisionSnapshot,

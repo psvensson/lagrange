@@ -1,6 +1,6 @@
-import {registerFailureBundleCore16PriorityRecoveryCarrierTests} from './failure-bundle-core-16-priority-recovery-carrier-test-cases.js';
+import {registerFailureBundleWorkflowBlockerCarrierDominanceTests} from './failure-bundle-workflow-blocker-carrier-dominance-test-cases.js';
 
-export function registerFailureBundleCore16Tests(context) {
+export function registerFailureBundleAckClosureOrderingTests(context) {
   const {
     it,
     assert,
@@ -914,5 +914,5 @@ export function registerFailureBundleCore16Tests(context) {
     },
   );
 
-  registerFailureBundleCore16PriorityRecoveryCarrierTests(context);
+  registerFailureBundleWorkflowBlockerCarrierDominanceTests(context);
 }

@@ -1,4 +1,4 @@
-export function registerUnifiedRebalancerCore02Tests(context) {
+export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
     CONTROL_PLANE_WORKLOAD_CLASS,

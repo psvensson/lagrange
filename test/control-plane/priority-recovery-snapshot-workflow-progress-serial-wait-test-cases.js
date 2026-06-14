@@ -1,4 +1,4 @@
-export function registerPriorityRecoverySnapshotCore02Tests(context) {
+export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(context) {
   const {
     buildPriorityRecoveryActuationDecisionInput,
     buildPriorityRecoveryDecisionSnapshot,

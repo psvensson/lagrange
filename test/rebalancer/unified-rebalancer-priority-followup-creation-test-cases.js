@@ -1,4 +1,4 @@
-export function registerUnifiedRebalancerCore03Tests(context) {
+export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     CONTROL_PLANE_READINESS_DIMENSION,

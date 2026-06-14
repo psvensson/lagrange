@@ -52,7 +52,7 @@ const PRIORITY_RECOVERY_CORE_08_TEXT = Object.freeze({
     'follow-up planning should still remain on the rebalancer scheduling boundary',
 });
 
-export function registerPriorityRecoverySnapshotCore08Tests(context) {
+export function registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests(context) {
   const {
     buildPriorityRecoveryDecisionSnapshots,
     buildPriorityRecoveryPublicationContext,

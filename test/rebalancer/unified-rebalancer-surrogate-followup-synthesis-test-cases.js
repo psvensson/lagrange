@@ -1,4 +1,4 @@
-export function registerUnifiedRebalancerCore04Tests(context) {
+export function registerUnifiedRebalancerSurrogateFollowupSynthesisTests(context) {
   const {
     createMockCache,
     createMockCoordinator,

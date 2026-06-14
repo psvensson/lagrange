@@ -1,4 +1,4 @@
-export function registerUnifiedRebalancerCore06Tests(context) {
+export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
     createMockMembershipPublicationService,

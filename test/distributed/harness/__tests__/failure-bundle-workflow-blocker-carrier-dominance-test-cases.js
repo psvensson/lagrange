@@ -1,4 +1,4 @@
-export function registerFailureBundleCore16PriorityRecoveryCarrierTests(context) {
+export function registerFailureBundleWorkflowBlockerCarrierDominanceTests(context) {
   const {
     it,
     assert,
