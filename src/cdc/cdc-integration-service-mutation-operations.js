@@ -1,5 +1,4 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {CDCIntegrationServiceSegment2} from './cdc-integration-service-segment-2.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
 import {hydrateCdcPropagatedTablesFromAuthority} from
   './cdc-integration-service-authoritative-catchup.js';
@@ -46,64 +45,37 @@ import {
   runCoalescedMutation,
 } from './cdc-integration-service-coalesced-mutation.js';
 
-// Import node join mesh helper
-import {
-  handleNodeJoinedCDC,
-  deriveWsAddressFromNodeAddress,
-} from './cdc-integration-service-node-join.js';
-
-
 const {
-  ADDRESS,
-  AUTHORITATIVE_FALLBACK_OUTCOME,
-  AUTHORITATIVE_FALLBACK_PHASE,
-  AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
   CDCOperationType,
   CDC_ERROR_MSG,
   CDC_EVENT,
-  CDC_INTEGRATION_SERVICE_ERROR,
-  CDC_INTEGRATION_SERVICE_LITERAL,
   CDC_LOG_MSG,
   CDC_OPERATION,
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
-  CDC_SKIP_REASON,
-  CDC_SOURCE,
   CDC_STATS_DEFAULT,
-  COLUMN,
-  ENTRYPOINT_DEFAULT,
-  EPOCH_CONFIG_KEY,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   METRICS_LOG_TAG,
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   NUM,
-  PROTOCOL,
-  SERVICE_STATUS,
   SQL,
-  SQL_RECONCILIATION_REASON,
-  STATE,
-  SYSTEM_TABLE_NAME,
   TYPEOF,
-  VALID_SYSTEM_TABLES,
-  buildCDCNodeJoinedResult,
-  buildDivergenceEvent,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,
-  canonicalizeSystemTableRow,
-  getSchemaByTableName,
   getSystemCachePrimaryKeyFieldOrFallback,
   logSystemTableWriteFailure,
-  materializeNormalizedDefaultValue,
-  normalizeAuthoritativeFallbackOutcome,
   normalizeSystemTableVisibilityResult,
-  resolveNodeWebSocketAddress,
   shouldEmitTableWriteMetric,
   shouldLogTableWriteFailure,
-  stableSerializeMutationKey,
-  uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
+const CDC_INTEGRATION_SERVICE_MUTATION_OPERATIONS_CONSTRUCTOR = 'constructor';
+
+/**
+ * System-table mutation write methods (insert/update/delete/upsert) plus the
+ * thin delegators over the normalization, cache-divergence, coalesced-mutation,
+ * fallback-diagnostics, and authoritative-catchup helpers, and basic
+ * statistics/primary-key accessors.
+ */
+class CDCIntegrationServiceMutationOperations {
   /**
    * Catch-up hydration of all CDC-propagated tables from the authoritative
    * owner path (CL-014: closes the bootstrap-snapshot ->
@@ -636,126 +608,25 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
   isInitialized() {
     return this.initialized;
   }
-
-  /**
-   * Set the epoch manager reference for CDC epoch change handling.
-   * @param {AssignmentEpochManager} epochManager - The epoch manager instance.
-   */
-  setEpochManager(epochManager) {
-    if (!epochManager) {
-      throw new Error(CDC_ERROR_MSG.EPOCH_MANAGER_REQUIRED);
-    }
-    this.epochManager = epochManager;
-    this.logger.debug(CDC_LOG_MSG.EPOCH_MANAGER_SET, {
-      nodeId: this.nodeId,
-    });
-  }
-
-  /**
-   * Handle epoch change CDC event.
-   * Listens for epoch changes in the config table and updates the local
-   * AssignmentEpochManager.
-   *
-   * @param {Object} cdcEvent - The CDC event object.
-   * @param {string} cdcEvent.tableName - The table name (should be config).
-   * @param {string} cdcEvent.operation - The operation type (INSERT, UPDATE).
-   * @param {Object} cdcEvent.data - The event data.
-   * @param {string} cdcEvent.data.config_key - The config key.
-   * @param {string} cdcEvent.data.config_value - The config value (epoch JSON).
-   * @return {{applied: boolean, epoch?: number, error?: string}}
-   *   Result object indicating if epoch was applied.
-   */
-  handleEpochChangeCDC(cdcEvent) {
-    return this.ensureEventHandler().handleEpochChangeCDC(cdcEvent);
-  }
-
-  /**
-   * Set the rebalancer reference for node state change handling.
-   * @param {Object} rebalancer - The rebalancer instance (must have onNodeStateChange method).
-   */
-  setRebalancer(rebalancer) {
-    if (!rebalancer) {
-      throw new Error(CDC_ERROR_MSG.REBALANCER_REQUIRED);
-    }
-    this.rebalancer = rebalancer;
-    this.logger.debug(CDC_LOG_MSG.REBALANCER_SET, {
-      nodeId: this.nodeId,
-    });
-  }
-
-  /**
-   * Handle node state change CDC event.
-   * Listens for node state changes in the nodes table and triggers
-   * the rebalancer when appropriate.
-   *
-   * @param {Object} cdcEvent - The CDC event object.
-   * @param {string} cdcEvent.tableName - The table name (should be nodes).
-   * @param {string} cdcEvent.operation - The operation type (INSERT, UPDATE).
-   * @param {Object} cdcEvent.data - The event data.
-   * @param {string} cdcEvent.data.node_id - The node ID.
-   * @param {string} cdcEvent.data.status - The node status/state.
-   * @return {{processed: boolean, nodeId?: string, oldState?: string,
-   *   newState?: string, error?: string}}
-   *   Result object indicating if the event was processed.
-   */
-  handleNodeStateCDC(cdcEvent) {
-    return this.ensureEventHandler().handleNodeStateCDC(cdcEvent);
-  }
-
-  /**
-   * Set the message router reference for mesh connectivity.
-   * When set, the CDC service will establish connections to new nodes
-   * when they are added to the nodes table via CDC events.
-   * @param {Object} messageRouter - The message router instance.
-   */
-  setMessageRouter(messageRouter) {
-    if (!messageRouter) {
-      throw new Error(CDC_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
-    }
-    this.messageRouter = messageRouter;
-    this.logger.debug(CDC_LOG_MSG.MESSAGE_ROUTER_SET, {
-      nodeId: this.nodeId,
-    });
-  }
-
-  /**
-   * Handle node joined CDC event for mesh connectivity.
-   * When a new node is added to the nodes table, this method establishes
-   * an outbound WebSocket connection to that node, ensuring full mesh
-   * connectivity across the cluster.
-   *
-   * All nodes are equal peers - no special treatment for any node.
-   *
-   * @param {Object} cdcEvent - The CDC event object.
-   * @param {string} cdcEvent.tableName - The table name (should be nodes).
-   * @param {string} cdcEvent.operation - The operation type (INSERT).
-   * @param {Object} cdcEvent.data - The event data.
-   * @param {string} cdcEvent.data.node_id - The node ID.
-   * @param {string} cdcEvent.data.node_address - The node address.
-   * @return {Promise<{processed: boolean, nodeId?: string, connected?: boolean,
-   *   error?: string}>} Result object indicating if connection was established.
-   */
-  async handleNodeJoinedCDC(cdcEvent) {
-    return handleNodeJoinedCDC(this, cdcEvent);
-  }
-
-  /**
-   * Derive WebSocket address from node REST address.
-   * @param {string} nodeAddress - Node address in format "hostname:port".
-   * @return {string|null} WebSocket address or null if cannot derive.
-   * @private
-   */
-  deriveWsAddressFromNodeAddress(nodeAddress) {
-    return deriveWsAddressFromNodeAddress(nodeAddress);
-  }
-
 }
 
-export {
-  CDCIntegrationServiceSegment3,
-  CDCIntegrationServiceSegment3 as CDCIntegrationService,
-  CDCOperationType,
-  EPOCH_CONFIG_KEY,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  VALID_SYSTEM_TABLES,
-};
+/**
+ * Mix the mutation-operation and helper-delegator methods onto the target
+ * class prototype.
+ * @param {Function} targetClass
+ */
+function applyCDCIntegrationServiceMutationOperations(targetClass) {
+  const sourcePrototype = CDCIntegrationServiceMutationOperations.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === CDC_INTEGRATION_SERVICE_MUTATION_OPERATIONS_CONSTRUCTOR) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
+
+export {applyCDCIntegrationServiceMutationOperations};

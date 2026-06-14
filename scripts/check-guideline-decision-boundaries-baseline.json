@@ -2033,69 +2033,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/cdc/cdc-integration-service-segment-1.js",
-      "line": 97,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 97) and SQL/DB (line 77) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-2.js",
-      "line": 265,
-      "column": 1,
-      "functionName": "waitForCacheUpdate",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 265) and SQL/DB (line 112) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-2.js",
-      "line": 142,
-      "column": 21,
-      "functionName": "waitForCacheUpdate",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-2.js",
-      "line": 280,
-      "column": 5,
-      "functionName": "confirmCacheVisibilityHoleWithinBudget",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-2.js",
-      "line": 544,
-      "column": 1,
-      "functionName": "repairCacheVisibilityHole",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 544) and SQL/DB (line 430) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-3.js",
-      "line": 320,
-      "column": 1,
-      "functionName": "insertSystemTableRow",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 320) and SQL/DB (line 320) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-segment-3.js",
-      "line": 503,
-      "column": 1,
-      "functionName": "updateSystemTableRow",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 503) and SQL/DB (line 503) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/cdc/cdc-integration-service-shared.js",
       "line": 209,
       "column": 3,
@@ -7054,6 +6991,60 @@
       "functionName": "syncOwnerDependencies",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 418) and SQL/DB (line 340) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 272,
+      "column": 1,
+      "functionName": "waitForCacheUpdate",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 272) and SQL/DB (line 119) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 149,
+      "column": 21,
+      "functionName": "waitForCacheUpdate",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 287,
+      "column": 5,
+      "functionName": "confirmCacheVisibilityHoleWithinBudget",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 551,
+      "column": 1,
+      "functionName": "repairCacheVisibilityHole",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 551) and SQL/DB (line 437) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "line": 292,
+      "column": 1,
+      "functionName": "insertSystemTableRow",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 292) and SQL/DB (line 292) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "line": 475,
+      "column": 1,
+      "functionName": "updateSystemTableRow",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 475) and SQL/DB (line 475) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]

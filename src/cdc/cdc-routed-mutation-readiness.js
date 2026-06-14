@@ -10,7 +10,6 @@ import {
 import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
-import {CDCIntegrationServiceSegment1} from './cdc-integration-service-segment-1.js';
 
 const {
   CDC_DEFAULTS,
@@ -53,8 +52,9 @@ const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = 'control-plane:write';
 const CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS = 1000;
 const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
+const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 
-class CDCRoutedMutationReadiness extends CDCIntegrationServiceSegment1 {
+class CDCRoutedMutationReadiness {
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
     if (!sql || typeof sql !== TYPEOF.STRING) {
       return {
@@ -686,4 +686,24 @@ class CDCRoutedMutationReadiness extends CDCIntegrationServiceSegment1 {
   }
 }
 
-export {CDCRoutedMutationReadiness};
+/**
+ * Mix the routed-mutation readiness methods (SQL execution, retry/pressure
+ * budgeting, local-write bypass, and SQL parsing/validation) onto the target
+ * class prototype.
+ * @param {Function} targetClass
+ */
+function applyCDCRoutedMutationReadiness(targetClass) {
+  const sourcePrototype = CDCRoutedMutationReadiness.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
+
+export {CDCRoutedMutationReadiness, applyCDCRoutedMutationReadiness};

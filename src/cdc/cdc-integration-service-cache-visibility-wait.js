@@ -1,5 +1,4 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {CDCRoutedMutationReadiness} from './cdc-routed-mutation-readiness.js';
 
 const {
   AUTHORITATIVE_FALLBACK_OUTCOME,
@@ -27,7 +26,15 @@ const {
   resolveAuthoritativeFallbackOutcome,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-class CDCIntegrationServiceSegment2 extends CDCRoutedMutationReadiness {
+const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
+
+/**
+ * Post-write cache visibility methods for the CDC integration service. Owns
+ * the deterministic cache-wait protocol, authoritative cache-visibility-hole
+ * confirmation/repair, and the read-model divergence repair write into the
+ * writable cache target.
+ */
+class CDCIntegrationServiceCacheVisibilityWait {
   /**
    * Determine whether a table write should wait for cache visibility.
    * Only CDC-propagated tables are guaranteed to appear in SystemTableCache.
@@ -592,12 +599,25 @@ class CDCIntegrationServiceSegment2 extends CDCRoutedMutationReadiness {
     }
     return AUTHORITATIVE_FALLBACK_PHASE.STEADY_STATE;
   }
-
-  /**
-   * Remove authoritative fallback samples that are older than the active window.
-   * @param {number} nowMs
-   * @private
-   */
 }
 
-export {CDCIntegrationServiceSegment2};
+/**
+ * Mix the post-write cache-visibility-wait methods onto the target class
+ * prototype.
+ * @param {Function} targetClass
+ */
+function applyCDCIntegrationServiceCacheVisibilityWait(targetClass) {
+  const sourcePrototype = CDCIntegrationServiceCacheVisibilityWait.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
+
+export {applyCDCIntegrationServiceCacheVisibilityWait};

@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `120`
-- Semantic clusters: `23`
-- Primary kind counts: `{"segment":91,"stage":22,"part":7}`
+- Ordinal files: `117`
+- Semantic clusters: `22`
+- Primary kind counts: `{"segment":88,"stage":22,"part":7}`
 
 ## Migration Plan
 
@@ -14,7 +14,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 
 - `admin-control-snapshot-class` (7 files): `admin_control_snapshot_owner / admin_control_snapshot_projection`; proposed module `admin-control-snapshot-projection.js`; successor `runtime-modularization-admin-control-snapshot-projection`; samples `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`.
 - `admin-websocket-api` (3 files): `admin_websocket_api_owner / admin_websocket_routing`; proposed module `admin-websocket-routing.js`; successor `runtime-modularization-admin-websocket-routing`; samples `src/admin/admin-websocket-api-segment-1.js`, `src/admin/admin-websocket-api-segment-2.js`, `src/admin/admin-websocket-api-segment-3.js`.
-- `cdc-integration-service` (3 files): `cdc_integration_owner / cdc_integration_workflow`; proposed module `cdc-integration-workflow.js`; successor `runtime-modularization-cdc-integration-workflow`; samples `src/cdc/cdc-integration-service-segment-1.js`, `src/cdc/cdc-integration-service-segment-2.js`, `src/cdc/cdc-integration-service-segment-3.js`.
 - `control-plane-readiness-service` (10 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-1.js`, `src/control-plane/control-plane-readiness-service-segment-2.js`, `src/control-plane/control-plane-readiness-service-segment-3.js`.
 - `control-plane-readiness-service-runtime-authority-methods` (1 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js`.
 - `control-plane-system-table-gateway` (3 files): `system_table_gateway_owner / control_plane_system_table_gateway`; proposed module `control-plane-system-table-gateway.js`; successor `runtime-modularization-control-plane-system-table-gateway`; samples `src/control-plane/control-plane-system-table-gateway-segment-1.js`, `src/control-plane/control-plane-system-table-gateway-segment-2.js`, `src/control-plane/control-plane-system-table-gateway-segment-3.js`.
