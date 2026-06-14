@@ -31,7 +31,7 @@ const HOT_PATH_MODULE = Object.freeze([
   // CL-015/CL-018: catch-up and heartbeat protocol layer
   'src/raft/liferaft.js',
   // CL-009: outbound-queue saturation warn storm (67-69% of seed log)
-  'src/transport/message-router-shared-stage-1.js',
+  'src/transport/message-router-shared-vocabulary.js',
   // CL-014: per-event CDC fan-out resolution
   'src/topology/cdc-group-propagation-routing.js',
   // CL-014: per-event CDC fan-out delivery

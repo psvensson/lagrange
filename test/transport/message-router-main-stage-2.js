@@ -15,7 +15,7 @@ import {
 } from '../../src/transport/message-router-delivery-source-admission.js';
 import {
   selectCriticalPendingSourcePreemptionCandidateIndex,
-} from '../../src/transport/message-router-shared-stage-2.js';
+} from '../../src/transport/message-router-outbound-queue-admission.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 /**

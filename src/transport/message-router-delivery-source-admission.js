@@ -10,7 +10,7 @@ import {
   OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR,
   OutboundDeliveryPriority,
   normalizeIdentifier,
-} from './message-router-shared-stage-1.js';
+} from './message-router-shared-vocabulary.js';
 
 const TARGET_SOURCE_PARTITION_PATTERN =
   /^target:[^/]+\/partition\/(.+)-p\d+(?:-r\d+)?$/u;

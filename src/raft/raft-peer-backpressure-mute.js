@@ -35,7 +35,7 @@ import {
 } from '../constants/transport.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-} from '../transport/message-router-shared-stage-1.js';
+} from '../transport/message-router-shared-vocabulary.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
 
 const RAFT_PEER_MUTED_ERROR_MSG =

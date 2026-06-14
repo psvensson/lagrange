@@ -6,4 +6,4 @@
  * Prohibited fallbacks: no duplicate queue, source, ACK, or pressure classifiers.
  * Primary tests: test/transport/message-router.test.js.
  */
-export {MESSAGE_ROUTER_SHARED} from './message-router-shared-stage-4.js';
+export {MESSAGE_ROUTER_SHARED} from './message-router-connection-authority.js';

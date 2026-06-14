@@ -6391,24 +6391,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/transport/message-router-shared-stage-4.js",
-      "line": 178,
-      "column": 7,
-      "functionName": "refreshReconnectAuthority",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/transport/message-router-shared-stage-4.js",
-      "line": 189,
-      "column": 7,
-      "functionName": "refreshReconnectAuthority",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/transport/transport-semantic-outcome.js",
       "line": 83,
       "column": 3,
@@ -7034,6 +7016,24 @@
       "line": 164,
       "column": 7,
       "functionName": "buildJoinActualStateRows",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/transport/message-router-connection-authority.js",
+      "line": 178,
+      "column": 7,
+      "functionName": "refreshReconnectAuthority",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/transport/message-router-connection-authority.js",
+      "line": 189,
+      "column": 7,
+      "functionName": "refreshReconnectAuthority",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"

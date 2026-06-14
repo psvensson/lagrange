@@ -4,7 +4,7 @@ import {
   resolveBoundedReadinessReserve,
   resolveCriticalPendingCeiling,
   normalizeOutboundDeliveryPriority,
-} from '../../src/transport/message-router-shared-stage-2.js';
+} from '../../src/transport/message-router-outbound-queue-admission.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

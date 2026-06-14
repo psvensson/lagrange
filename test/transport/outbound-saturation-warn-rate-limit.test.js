@@ -16,7 +16,7 @@ import {
   OUTBOUND_SATURATION_WARN_INTERVAL_MS,
   OutboundDeliveryRegistryOwner,
   takeOutboundSaturationWarnSample,
-} from '../../src/transport/message-router-shared-stage-3.js';
+} from '../../src/transport/message-router-outbound-delivery-registry.js';
 
 const TARGET_NODE_ID = 'node-b';
 const SOURCE_ADDRESS = `${TARGET_NODE_ID}/partition/sql_transactions-p1-r5`;

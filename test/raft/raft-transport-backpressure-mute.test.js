@@ -26,7 +26,7 @@ import {
 } from '../../src/raft/raft-peer-backpressure-mute.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-} from '../../src/transport/message-router-shared-stage-1.js';
+} from '../../src/transport/message-router-shared-vocabulary.js';
 
 const PEER_ADDRESS = 'node-b/partition/sql_transactions-p1-r4';
 
