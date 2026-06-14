@@ -4369,123 +4369,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/query/sql-query-engine-segment-1.js",
-      "line": 77,
-      "column": 1,
-      "functionName": "setSystemCache",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 77) and SQL/DB (line 76) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-2.js",
-      "line": 124,
-      "column": 1,
-      "functionName": "ensureWasmCallbackModuleLoaded",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 124) and SQL/DB (line 93) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-2.js",
-      "line": 372,
-      "column": 1,
-      "functionName": "executeQuery",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 372) and SQL/DB (line 509) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-3.js",
-      "line": 110,
-      "column": 9,
-      "functionName": "provisionInitialTablePartition",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"provisioningReasonCodes\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-3.js",
-      "line": 242,
-      "column": 11,
-      "functionName": "provisionInitialTablePartition",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"admittedTargetNodeIds\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-3.js",
-      "line": 273,
-      "column": 11,
-      "functionName": "provisionInitialTablePartition",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"admissionDecision\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-4.js",
-      "line": 312,
-      "column": 1,
-      "functionName": "waitForTablePartitionMetadata",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 312) and SQL/DB (line 309) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-4.js",
-      "line": 390,
-      "column": 1,
-      "functionName": "waitForPartitionServiceMetadata",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 390) and SQL/DB (line 386) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-5.js",
-      "line": 68,
-      "column": 1,
-      "functionName": "resolveBootstrapRoutingCanonicalLeaderNodeId",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 68) and SQL/DB (line 32) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-5.js",
-      "line": 404,
-      "column": 1,
-      "functionName": "resolveBootstrapRoutingOverlayInstallDecision",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 404) and SQL/DB (line 402) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-5.js",
-      "line": 544,
-      "column": 1,
-      "functionName": "installRecoveryRoutingOverlayEntry",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 544) and SQL/DB (line 564) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-5.js",
-      "line": 618,
-      "column": 1,
-      "functionName": "getBootstrapRoutingOverlayEntryState",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 618) and SQL/DB (line 638) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-segment-6.js",
-      "line": 494,
-      "column": 1,
-      "functionName": "executeFromlessSelect",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 494) and SQL/DB (line 527) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/query/sql-query-engine-table-routing-methods.js",
       "line": 131,
       "column": 1,
@@ -7036,6 +6919,123 @@
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 245) and SQL/DB (line 274) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+      "line": 68,
+      "column": 1,
+      "functionName": "resolveBootstrapRoutingCanonicalLeaderNodeId",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 68) and SQL/DB (line 32) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+      "line": 404,
+      "column": 1,
+      "functionName": "resolveBootstrapRoutingOverlayInstallDecision",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 404) and SQL/DB (line 402) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+      "line": 544,
+      "column": 1,
+      "functionName": "installRecoveryRoutingOverlayEntry",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 544) and SQL/DB (line 564) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+      "line": 618,
+      "column": 1,
+      "functionName": "getBootstrapRoutingOverlayEntryState",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 618) and SQL/DB (line 638) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+      "line": 110,
+      "column": 9,
+      "functionName": "provisionInitialTablePartition",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"provisioningReasonCodes\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+      "line": 242,
+      "column": 11,
+      "functionName": "provisionInitialTablePartition",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"admittedTargetNodeIds\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+      "line": 273,
+      "column": 11,
+      "functionName": "provisionInitialTablePartition",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"admissionDecision\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+      "line": 77,
+      "column": 1,
+      "functionName": "setSystemCache",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 77) and SQL/DB (line 76) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
+      "line": 312,
+      "column": 1,
+      "functionName": "waitForTablePartitionMetadata",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 312) and SQL/DB (line 309) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
+      "line": 390,
+      "column": 1,
+      "functionName": "waitForPartitionServiceMetadata",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 390) and SQL/DB (line 386) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-select-execution.js",
+      "line": 494,
+      "column": 1,
+      "functionName": "executeFromlessSelect",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 494) and SQL/DB (line 527) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-statement-execution.js",
+      "line": 124,
+      "column": 1,
+      "functionName": "ensureWasmCallbackModuleLoaded",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 124) and SQL/DB (line 93) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-statement-execution.js",
+      "line": 372,
+      "column": 1,
+      "functionName": "executeQuery",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 372) and SQL/DB (line 509) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]

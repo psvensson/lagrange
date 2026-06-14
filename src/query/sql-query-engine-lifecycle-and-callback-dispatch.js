@@ -38,7 +38,7 @@ const {
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment1 {
+class SQLQueryEngineLifecycleAndCallbackDispatch {
   constructor(options = {}) {
     initializeSqlQueryEngineInstance(this, options);
   }
@@ -737,4 +737,4 @@ class SQLQueryEngineSegment1 {
    */
 }
 
-export {SQLQueryEngineSegment1};
+export {SQLQueryEngineLifecycleAndCallbackDispatch};

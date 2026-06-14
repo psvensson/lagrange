@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment1} from './sql-query-engine-segment-1.js';
+import {SQLQueryEngineLifecycleAndCallbackDispatch} from './sql-query-engine-lifecycle-and-callback-dispatch.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -44,7 +44,7 @@ const {
   reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
+class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbackDispatch {
   async ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor) {
     const callbackModuleRef = sqlRequest.callbackModuleRef;
     const moduleMirror = wasmExecutor.moduleMirror || null;
@@ -686,4 +686,4 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    */
 }
 
-export {SQLQueryEngineSegment2};
+export {SQLQueryEngineStatementExecution};

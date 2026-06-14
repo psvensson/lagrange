@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment2} from './sql-query-engine-segment-2.js';
+import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
 import {
   createSQLQueryEngineProvisioningAdmissionMethods,
 } from './sql-query-engine-provisioning-admission-methods.js';
@@ -31,7 +31,7 @@ const {
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
+class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
     const partitionId = context?.partitionId;
     const requestedReplicaCount =
@@ -720,8 +720,8 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
 }
 
 Object.defineProperties(
-  SQLQueryEngineSegment3.prototype,
+  SQLQueryEngineInitialPartitionProvisioning.prototype,
   createSQLQueryEngineProvisioningAdmissionMethods(),
 );
 
-export {SQLQueryEngineSegment3};
+export {SQLQueryEngineInitialPartitionProvisioning};

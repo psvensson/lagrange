@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment3} from './sql-query-engine-segment-3.js';
+import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';

@@ -12,7 +12,7 @@ const {
   WRITE_TRACKING_EXCLUDED_TABLES,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment7 extends SQLQueryEngineTransactionRecoveryMethods {
+class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
   /**
    * Execute an INSERT statement.
    * @param {Object} ast - Parsed INSERT AST.
@@ -566,4 +566,4 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineTransactionRecoveryMethods {
   }
 }
 
-export {SQLQueryEngineSegment7};
+export {SQLQueryEngineWriteExecution};

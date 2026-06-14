@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment3} from './sql-query-engine-segment-3.js';
+import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-routing-metadata-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
@@ -56,7 +56,7 @@ const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD = Object.freeze({
   REPLICA_COUNT_CAMEL: 'replicaCount',
 });
 
-class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
+class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialPartitionProvisioning {
   listManagedSplitPartitions() {
     if (!this.systemCache || typeof this.systemCache.getAll !== LOCAL_STR_FUNCTION) {
       return [];
@@ -698,6 +698,6 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   }
 }
 
-Object.defineProperties(SQLQueryEngineSegment4.prototype, createSQLQueryEngineRoutingMetadataMethods());
+Object.defineProperties(SQLQueryEnginePartitionRoutingReadiness.prototype, createSQLQueryEngineRoutingMetadataMethods());
 
-export {SQLQueryEngineSegment4};
+export {SQLQueryEnginePartitionRoutingReadiness};

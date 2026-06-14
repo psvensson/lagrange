@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `74`
-- Semantic clusters: `10`
-- Primary kind counts: `{"segment":63,"stage":11,"part":0}`
+- Ordinal files: `67`
+- Semantic clusters: `9`
+- Primary kind counts: `{"segment":56,"stage":11,"part":0}`
 
 ## Migration Plan
 
@@ -17,7 +17,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 - `operation-workflow-owner` (18 files): `operation_workflow_owner / operation_workflow_progression`; proposed module `operation-workflow-progression.js`; successor `runtime-modularization-operation-workflow-progression`; samples `src/rebalancer/operation-workflow-owner-segment-1.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`.
 - `partition-service` (13 files): `partition_service_owner / partition_service_workflow`; proposed module `partition-service-workflow.js`; successor `runtime-modularization-partition-service-workflow`; samples `src/partition/partition-service-segment-1-part-1.js`, `src/partition/partition-service-segment-1-part-2.js`, `src/partition/partition-service-segment-1-part-3.js`.
 - `priority-recovery-snapshot` (11 files): `priority_recovery_owner / priority_recovery_snapshot_projection`; proposed module `priority-recovery-snapshot-projection.js`; successor `runtime-modularization-priority-recovery-snapshot-projection`; samples `src/control-plane/priority-recovery-snapshot-stage-1.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/priority-recovery-snapshot-stage-11.js`.
-- `sql-query-engine` (7 files): `sql_query_engine_owner / sql_query_planning_execution`; proposed module `sql-query-planning-execution.js`; successor `runtime-modularization-sql-query-planning-execution`; samples `src/query/sql-query-engine-segment-1.js`, `src/query/sql-query-engine-segment-2.js`, `src/query/sql-query-engine-segment-3.js`.
 - `unified-rebalancer` (11 files): `rebalancer_planning_owner / placement_rebalance_planning`; proposed module `placement-rebalance-planning.js`; successor `runtime-modularization-placement-rebalance-planning`; samples `src/rebalancer/unified-rebalancer-segment-1.js`, `src/rebalancer/unified-rebalancer-segment-2.js`, `src/rebalancer/unified-rebalancer-segment-3.js`.
 - `unified-rebalancer-control-plane-methods` (1 files): `rebalancer_planning_owner / placement_rebalance_planning`; proposed module `placement-rebalance-planning.js`; successor `runtime-modularization-placement-rebalance-planning`; samples `src/rebalancer/unified-rebalancer-segment-1-control-plane-methods.js`.
 - `unified-rebalancer-critical-topology-methods` (1 files): `rebalancer_planning_owner / placement_rebalance_planning`; proposed module `placement-rebalance-planning.js`; successor `runtime-modularization-placement-rebalance-planning`; samples `src/rebalancer/unified-rebalancer-segment-2-critical-topology-methods.js`.

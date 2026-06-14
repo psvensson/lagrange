@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment5} from './sql-query-engine-segment-5.js';
+import {SQLQueryEngineBootstrapRoutingOverlay} from './sql-query-engine-bootstrap-routing-overlay.js';
 import {
   createSQLQueryEngineProvisioningMethods,
 } from './sql-query-engine-provisioning-methods.js';
@@ -33,7 +33,7 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
+class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
   /**
    * Create one control-plane timeout budget.
    * @param {number} configuredBudgetMs
@@ -579,8 +579,8 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
 }
 
 Object.defineProperties(
-  SQLQueryEngineSegment6.prototype,
+  SQLQueryEngineSelectExecution.prototype,
   createSQLQueryEngineProvisioningMethods(),
 );
 
-export {SQLQueryEngineSegment6};
+export {SQLQueryEngineSelectExecution};

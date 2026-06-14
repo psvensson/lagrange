@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment7} from './sql-query-engine-segment-7.js';
+import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
 
 const LOCAL_NUM_ZERO = 0;
@@ -103,7 +103,7 @@ function buildPriorityControlPlaneTransactionDeliveryIdentity({
   });
 }
 
-class SQLQueryEngine extends SQLQueryEngineSegment7 {
+class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   async persistDistributedTransactionRow(record) {
     if (!this.canPersistDistributedTransactionState()) {
       return;

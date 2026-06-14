@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment4} from './sql-query-engine-segment-4.js';
+import {SQLQueryEnginePartitionRoutingReadiness} from './sql-query-engine-partition-routing-readiness.js';
 import {
   createSQLQueryEngineProvisionTargetMethods,
 } from './sql-query-engine-provision-target-methods.js';
@@ -26,7 +26,7 @@ const {
   resolveBootstrapLeaderSelection,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
+class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRoutingReadiness {
   resolveBootstrapRoutingCanonicalLeaderNodeId(partitionId, serviceRows = []) {
     const bootstrapTopologySnapshotOwner =
       this.queryExecutor?.bootstrapTopologySnapshotOwner || null;
@@ -706,8 +706,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
 }
 
 Object.defineProperties(
-  SQLQueryEngineSegment5.prototype,
+  SQLQueryEngineBootstrapRoutingOverlay.prototype,
   createSQLQueryEngineProvisionTargetMethods(),
 );
 
-export {SQLQueryEngineSegment5};
+export {SQLQueryEngineBootstrapRoutingOverlay};

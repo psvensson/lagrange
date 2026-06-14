@@ -1,5 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineSegment6} from './sql-query-engine-segment-6.js';
+import {SQLQueryEngineSelectExecution} from './sql-query-engine-select-execution.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
@@ -25,7 +25,7 @@ const {
   resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
-class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSegment6 {
+class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
   applyWriteExecutionDeliverySource(writeExecutionOptions, queryOptions = {}) {
     if (
       typeof queryOptions?.deliverySource !== LOCAL_STR_STRING ||

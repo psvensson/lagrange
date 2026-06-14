@@ -27,10 +27,6 @@ budget enforcement.
   routing behavior.
 - `canonical-leader-routing.js` for canonical leader-gap decisions.
 - `runtime-runner.js` and `execution-context.js` for runtime API changes.
-- Existing `sql-query-engine-segment-*` and
-  `table-creation-service-class-part-*` files are legacy compatibility
-  surfaces. Use `_legacy_work/inventory/ordinal-segments.md` when opening semantic
-  migration packages for these files.
 
 ## Do Not
 
