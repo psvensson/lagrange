@@ -3541,24 +3541,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/partition/partition-service-segment-1-part-1.js",
-      "line": 218,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 218) and SQL/DB (line 223) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/partition/partition-service-segment-1-part-2.js",
-      "line": 467,
-      "column": 1,
-      "functionName": "initialize",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 467) and SQL/DB (line 331) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/partition/partition-service-split-replication-state.js",
       "line": 118,
       "column": 5,
@@ -7036,6 +7018,24 @@
       "functionName": "getCurrentReplicas",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 255) and SQL/DB (line 254) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/partition/partition-service-core-base.js",
+      "line": 218,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 218) and SQL/DB (line 223) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-init-base.js",
+      "line": 467,
+      "column": 1,
+      "functionName": "initialize",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 467) and SQL/DB (line 331) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]

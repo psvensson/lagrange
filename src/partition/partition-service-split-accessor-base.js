@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment3} from './partition-service-segment-3.js';
+import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
   isSameSplitReplicationMetadata,
@@ -40,7 +40,7 @@ const {
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
+class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   getSize() {
     return this.sizeBytes;
   }
@@ -783,4 +783,4 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     this.maybeInitializeRebalancer();
   }
 }
-export {PartitionServiceSegment4Part1};
+export {PartitionServiceSplitAccessorBase};

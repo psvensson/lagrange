@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment1} from './partition-service-segment-1.js';
+import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
 import {
   createPartitionServiceTransactionSessionMethods,
 } from './partition-service-transaction-session-methods.js';
@@ -27,7 +27,7 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
+class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
   ensureSqlTransactionsTableColumns() {
     if (this.tableName !== SYSTEM_TABLE_NAME.SQL_TRANSACTIONS) {
       return;
@@ -674,7 +674,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
   }
 }
 Object.assign(
-  PartitionServiceSegment2Part1.prototype,
+  PartitionServiceEntryApplyBase.prototype,
   createPartitionServiceTransactionSessionMethods(),
 );
-export {PartitionServiceSegment2Part1};
+export {PartitionServiceEntryApplyBase};

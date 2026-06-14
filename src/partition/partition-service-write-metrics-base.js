@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment2} from './partition-service-segment-2.js';
+import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
 
 const LOCAL_NUM_ZERO = 0;
 
@@ -33,7 +33,7 @@ const {
   resolvePartitionWriteCommitMode,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
+class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
   async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
@@ -771,4 +771,4 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     }
   }
 }
-export {PartitionServiceSegment3Part1};
+export {PartitionServiceWriteMetricsBase};

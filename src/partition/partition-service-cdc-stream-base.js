@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment3Part1} from './partition-service-segment-3-part-1.js';
+import {PartitionServiceWriteMetricsBase} from './partition-service-write-metrics-base.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -24,7 +24,7 @@ const {
   fs,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
+class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Generate a CDC event for a write operation.
    * @param {Object} entry - Write entry.
@@ -757,4 +757,4 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
   }
 }
 
-export {PartitionServiceSegment3};
+export {PartitionServiceCdcStreamBase};

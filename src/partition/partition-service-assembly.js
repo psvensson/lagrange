@@ -2,16 +2,16 @@ import {createPartitionServiceRebalancerMethods} from "./partition-service-rebal
 import {createPartitionServiceMetadataDeliveryMethods} from "./partition-service-metadata-delivery-methods.js";
 import {createPartitionServiceLearnerPromotionMethods} from "./partition-service-learner-promotion-methods.js";
 import {createPartitionServiceLifecycleMethods} from "./partition-service-lifecycle-methods.js";
-import {PartitionServiceSegment4Part1} from "./partition-service-segment-4-part-1.js";
+import {PartitionServiceSplitAccessorBase} from "./partition-service-split-accessor-base.js";
 
-class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {}
+class PartitionService extends PartitionServiceSplitAccessorBase {}
 
 Object.assign(
-  PartitionServiceSegment4.prototype,
+  PartitionService.prototype,
   createPartitionServiceRebalancerMethods(),
   createPartitionServiceMetadataDeliveryMethods(),
   createPartitionServiceLearnerPromotionMethods(),
   createPartitionServiceLifecycleMethods(),
 );
 
-export {PartitionServiceSegment4};
+export {PartitionService};

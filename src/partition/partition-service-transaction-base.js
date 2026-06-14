@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment2Part1} from './partition-service-segment-2-part-1.js';
+import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
 
 const LOCAL_NUM_ZERO = 0;
 
@@ -13,7 +13,7 @@ const {
   PARTITION_SERVICE_SQL,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
+class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   /**
    * Reconstruct prepared transaction state from the persisted Raft log.
    * @return {{preparedTransactionCount: number, prepareLostCount: number}}
@@ -764,4 +764,4 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
   }
 }
 
-export {PartitionServiceSegment2};
+export {PartitionServiceTransactionBase};

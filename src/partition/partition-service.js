@@ -3,7 +3,7 @@ import {RAFT_ROLE} from '../raft/constants.js';
 
 import {PARTITION_STATE} from './partition-constants.js';
 
-export {PartitionServiceSegment4 as PartitionService} from './partition-service-segment-4.js';
+export {PartitionService} from './partition-service-assembly.js';
 export {PartitionRaftLogEntry, PartitionRaftStorage} from './partition-raft-storage.js';
 
 const CDCOperation = CDC_OPERATION;

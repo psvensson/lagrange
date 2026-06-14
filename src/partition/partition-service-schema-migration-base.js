@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceSegment1Part2} from './partition-service-segment-1-part-2.js';
+import {PartitionServiceRaftInitBase} from './partition-service-raft-init-base.js';
 
 const {
   COLUMN,
@@ -9,7 +9,7 @@ const {
   SYSTEM_TABLE_NAME,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment1 extends PartitionServiceSegment1Part2 {
+class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
   /**
    * Ensure message_groups table includes leader_node_id column.
    * @private
@@ -140,4 +140,4 @@ class PartitionServiceSegment1 extends PartitionServiceSegment1Part2 {
   }
 }
 
-export {PartitionServiceSegment1};
+export {PartitionServiceSchemaMigrationBase};

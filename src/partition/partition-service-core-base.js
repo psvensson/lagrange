@@ -45,7 +45,7 @@ const {
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment1Part1 extends EventEmitter {
+class PartitionServiceCoreBase extends EventEmitter {
   constructor(options = {}) {
     super();
     if (!options.partitionId) {
@@ -780,4 +780,4 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     });
   }
 }
-export {PartitionServiceSegment1Part1};
+export {PartitionServiceCoreBase};

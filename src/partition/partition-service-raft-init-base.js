@@ -2,7 +2,7 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {PartitionServiceSegment1Part1} from './partition-service-segment-1-part-1.js';
+import {PartitionServiceCoreBase} from './partition-service-core-base.js';
 
 const {
   AddressManager,
@@ -49,7 +49,7 @@ const {
   wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
+class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
    * Join newly visible peers and replace moved peer addresses using the
    * authoritative services cache. Missing rows are ignored conservatively.
@@ -742,4 +742,4 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
     }
   }
 }
-export {PartitionServiceSegment1Part2};
+export {PartitionServiceRaftInitBase};
