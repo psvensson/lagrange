@@ -1021,4 +1021,4 @@ test('Unit: remote config distributes nodes across hosts', async () => {
   );
 });
 
-await import('./cluster-part-2-node-reachability-test-cases.js');
+await import('./cluster-node-reachability-test-cases.js');
