@@ -3,7 +3,12 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
-import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  createTestTransport,
+  registerMessageGroupServiceLifecycleHooks,
+  setTestPortBase,
+} from './message-group-service-test-support.js';
 import {
   MessageGroupService,
   RaftRole,
@@ -13,10 +18,6 @@ import {
 import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {MessageRouter} from '../../src/transport/message-router.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -44,43 +45,8 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
-// Port counter for unique ports per test
-let testPortCounter = 24000;
-
-
-/**
- * Create a real WebSocket transport for testing.
- * @return {Promise<{router: MessageRouter, nodeId: string, cleanup: Function}>}
- */
-async function createTestTransport() {
-  const port = testPortCounter++;
-  const nodeId = `test-node-${port}`;
-  const router = new MessageRouter({nodeId, wsPort: port});
-  await router.initialize({startServer: true});
-  return {
-    router,
-    nodeId,
-    cleanup: async () => {
-      await router.shutdown();
-    },
-  };
-}
-
-beforeEach(() => {
-  NodeService.resetInstance();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({node: {id: 'test-node'}});
-  const logger = LoggingService.getInstance();
-  logger.initialize({level: 'error'});
-});
-
-afterEach(() => {
-  NodeService.resetInstance();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-});
+setTestPortBase(24000);
+registerMessageGroupServiceLifecycleHooks();
 
 test('MessageGroupService - constructor requires groupId', async (t) => {
   const {router, cleanup} = await createTestTransport();

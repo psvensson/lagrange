@@ -17,7 +17,7 @@ import {
 import {
   TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
   createCache,
-} from './control-plane-readiness-service-part-4-stage-1.js';
+} from './control-plane-readiness-service-planning-snapshot-support.js';
 
 const TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_NAME_ASYNC =
   'ControlPlaneReadinessService owner-read planning answer upgrades direct count-only ACK debt to provided required-ACK evidence';

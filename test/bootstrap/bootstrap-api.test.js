@@ -9,6 +9,10 @@ import {
   registerBootstrapApiReadinessTests,
 } from './bootstrap-api-readiness-test-cases.js';
 import {
+  createEmptySystemTableCache,
+  initializeTestEnvironment,
+} from './bootstrap-api-test-fixtures.js';
+import {
   BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_READINESS_FIELD,
@@ -30,8 +34,6 @@ import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   HTTP_STATUS,
   SERVICE_STATUS,
@@ -129,43 +131,6 @@ const TEST_BOOTSTRAP_INIT_RUNTIME_WIRING_RECOVERY_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
-
-// Initialize configuration and logging for tests
-function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({
-      node: {id: 'test-seed-node', restApiPort: 9999},
-      logging: {level: 'error'},
-    });
-  }
-
-  const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
-}
-
-function createEmptySystemTableCache() {
-  return {
-    get() {
-      return null;
-    },
-    getAll() {
-      return [];
-    },
-    filter() {
-      return [];
-    },
-    find() {
-      return null;
-    },
-    getReadyNodes() {
-      return [];
-    },
-  };
-}
 
 function createSatisfiedControlPlaneReadinessService() {
   const diagnostics = Object.freeze({

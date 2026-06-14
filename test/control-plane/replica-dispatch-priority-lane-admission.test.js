@@ -2,7 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   createService,
   initEnv,
-} from './replica-dispatch-node-state-update.test-part-4-fixtures.js';
+} from './replica-dispatch-node-state-update-test-support.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';

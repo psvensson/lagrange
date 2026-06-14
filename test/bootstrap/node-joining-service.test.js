@@ -12,10 +12,11 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  initializeTestEnvironment,
+} from './node-joining-service-test-support.js';
 import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
@@ -99,25 +100,6 @@ const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
 const TEST_CONTACT_SEED_ATTEMPT_NOW_MS = 1000;
 const TEST_CONTACT_SEED_HTTP_TIMEOUT_MS = 50;
 const TEST_CONTACT_SEED_RETRY_TIMEOUT_MS = 100;
-
-// Initialize configuration and logging for tests
-function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({
-      node: {id: 'test-node'},
-      logging: {level: 'error'},
-    });
-  }
-
-  const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
-
-  NodeService.resetInstance();
-}
 
 test('NodeJoiningService - initialization', async (t) => {
   initializeTestEnvironment();

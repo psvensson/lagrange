@@ -4,16 +4,20 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  connectAndReceive,
+  createMockQueryEngine,
+  createPopulatedCache,
+  waitForMessage,
+} from './admin-websocket-api-test-support.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {
   ADMIN_CONTROL_SNAPSHOT,
 } from '../../src/admin/admin-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
-import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {
   READINESS_SNAPSHOT_KEY,
   RUNTIME_AUTHORITY_STATE,
@@ -27,69 +31,6 @@ ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
 
 const TEST_CONTROL_SNAPSHOT_QUERY_TIMEOUT_MS = 3349;
-
-/**
- * Create a mock SQL query engine.
- * @return {Object} Mock query engine.
- */
-function createMockQueryEngine() {
-  return {
-    executeRequest: async (request) => {
-      const sqlLower = request.statement.toLowerCase().trim();
-
-      // Check for error conditions first (before checking statement type)
-      if (sqlLower.includes('invalid_table')) {
-        return {
-          success: false,
-          error: 'Table not found: invalid_table',
-          errorCode: 'TABLE_NOT_FOUND',
-        };
-      } else if (sqlLower.includes('syntax_error')) {
-        throw new Error('Parse error: syntax error near syntax_error');
-      } else if (sqlLower.startsWith('select')) {
-        return {
-          success: true,
-          rows: [{id: '1', name: 'test'}],
-          count: 1,
-          partitions: ['partition-1'],
-          tableName: 'test_table',
-        };
-      } else if (sqlLower.startsWith('insert')) {
-        return {
-          success: true,
-          operation: 'INSERT',
-          affectedRows: 1,
-          partitions: ['partition-1'],
-          tableName: 'test_table',
-        };
-      } else if (sqlLower.startsWith('update')) {
-        return {
-          success: true,
-          operation: 'UPDATE',
-          affectedRows: 2,
-          partitions: ['partition-1'],
-          tableName: 'test_table',
-        };
-      } else if (sqlLower.startsWith('delete')) {
-        return {
-          success: true,
-          operation: 'DELETE',
-          affectedRows: 1,
-          partitions: ['partition-1'],
-          tableName: 'test_table',
-        };
-      }
-
-      return {success: true, rows: [], count: 0};
-    },
-  };
-}
-
-/**
- * Create a mock query engine that returns authoritative rows per system table.
- * @param {Object<string, Array<Object>|Function>} rowsByTable
- * @return {Object}
- */
 
 test('AdminWebSocketAPI - sendError preserves structured deferred query ' +
   'metadata', async (t) => {
@@ -186,201 +127,6 @@ test('AdminWebSocketAPI - executeSqlRequestWithTimeout forwards an inner ' +
     'inner SQL timeout budget should leave completion margin before the outer admin timeout',
   );
 });
-
-/**
- * Extract authoritative repair table names from executed SQL statements.
- * @param {string[]} statements
- * @return {string[]}
- */
-
-/**
- * Create a deterministic authoritative-cache reconcile gateway for tests.
- * @param {SystemTableCache} writableCache
- * @param {Object} [options={}]
- * @param {Object|null} [options.queryEngine]
- * @param {Object<string, Array<Object>|Function>} [options.readRowsByTable]
- * @return {Object}
- */
-
-/**
- * Create a realistic system-table cache for authoritative discovery repair.
- * @param {string} [nodeId='test-node']
- * @return {SystemTableCache}
- */
-
-/**
- * Create local partition-service replicas that answer direct table reads.
- * @param {SystemTableCache} cache
- * @param {Object<string, Array<Object>>} [overrides={}]
- * @return {Map<string, Object>}
- */
-
-/**
- * Create a populated system table cache.
- * @return {SystemTableCache} Populated cache.
- */
-function createPopulatedCache() {
-  const cache = new SystemTableCache();
-
-  cache.applySystemTableChange('nodes', 'INSERT', {
-    id: 'node-1',
-    address: 'localhost:8080',
-    status: 'active',
-  });
-
-  cache.applySystemTableChange('services', 'INSERT', {
-    id: 'service-1',
-    nodeId: 'node-1',
-    type: 'partition',
-  });
-
-  cache.applySystemTableChange('partitions', 'INSERT', {
-    id: 'partition-1',
-    tableId: 'table-1',
-    keyStart: null,
-    keyEnd: null,
-  });
-
-  cache.applySystemTableChange('tables', 'INSERT', {
-    id: 'table-1',
-    name: 'test_table',
-  });
-
-  cache.applySystemTableChange('message_groups', 'INSERT', {
-    id: 'mg-1',
-    replicaCount: 3,
-  });
-
-  cache.applySystemTableChange('indices', 'INSERT', {
-    id: 'index-1',
-    tableId: 'table-1',
-    column: 'name',
-  });
-
-  return cache;
-}
-
-/**
- * Add runtime service-definition and service-endpoint rows for discovery tests.
- * @param {SystemTableCache} cache
- */
-
-/**
- * Seed table-scoped discovery rows where only one node hosts partition replicas.
- * This models routed queryability: all active postgres-wire nodes should remain
- * schema-ready when table metadata is available cluster-wide.
- *
- * @param {SystemTableCache} cache
- */
-
-/**
- * Seed table-scoped discovery rows where a second node hosts a local learner
- * replica for the benchmark partition. The node remains routable for service
- * discovery, but benchmark admission must fail closed until the local replica
- * becomes voter-ready.
- *
- * @param {SystemTableCache} cache
- */
-
-/**
- * Seed table-scoped discovery rows where a second node hosts a local candidate
- * replica for the benchmark partition. The node remains routable for service
- * discovery, but benchmark admission must fail closed until the local replica
- * converges to a stable voter role.
- *
- * @param {SystemTableCache} cache
- */
-
-/**
- * Seed table-scoped discovery rows where a second node hosts a stable local
- * follower replica for the benchmark partition.
- *
- * @param {SystemTableCache} cache
- */
-
-/**
- * Stage split-child partition metadata for benchmark_events without
- * advancing the table's active serving partition version.
- *
- * @param {SystemTableCache} cache
- * @param {Object} [options={}]
- * @param {number} [options.activePartitionVersion=1]
- * @param {number} [options.partitionCount=1]
- * @return {Object}
- */
-
-/**
- * Seed table-scoped discovery rows without a local TABLES row.
- * This verifies applied schema watermark fallback from partition metadata.
- *
- * @param {SystemTableCache} cache
- * @param {number} updatedAt
- */
-
-/**
- * Seed table-scoped discovery rows without local TABLES row and without
- * partition table_name metadata. Partition matching must rely on table_id.
- *
- * @param {SystemTableCache} cache
- * @param {number} updatedAt
- */
-
-/**
- * Connect to AdminWebSocketAPI in-process and wait for first message.
- * Avoids binding TCP ports (not permitted in some test sandboxes).
- * @param {AdminWebSocketAPI} api - Admin API instance.
- * @param {number} timeout - Timeout in ms.
- * @param {Object|null} [request] - Optional synthetic request.
- * @return {Promise<{ws: Object, message: Object}>}
- */
-async function connectAndReceive(api, timeout = 2000, request = null) {
-  const {clientSocket, serverSocket} = createInProcWebSocketPair();
-  api.handleConnection(serverSocket, request);
-  const message = await waitForMessage(clientSocket, timeout);
-  return {ws: clientSocket, message};
-}
-
-/**
- * Wait for next message from WebSocket.
- * @param {WebSocket} ws - WebSocket instance.
- * @param {number} timeout - Timeout in ms.
- * @return {Promise<Object>} Parsed message.
- */
-function waitForMessage(ws, timeout = 2000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error('Timeout waiting for message'));
-    }, timeout);
-
-    ws.once('message', (data) => {
-      clearTimeout(timer);
-      try {
-        resolve(JSON.parse(data.toString()));
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
-
-/**
- * Assert no additional message arrives within timeout.
- * @param {Object} ws
- * @param {number} timeout
- * @return {Promise<void>}
- */
-
-/**
- * Create a mock test-run service for HTTP route tests.
- * @param {Object} [overrides]
- * @return {Object}
- */
-
-/**
- * Create a mock debug metadata store for debug ingress route tests.
- * @param {Object} [overrides]
- * @return {Object}
- */
 
 test('AdminWebSocketAPI - initialization', async (t) => {
   const api = new AdminWebSocketAPI({nodeId: 'test-node'});

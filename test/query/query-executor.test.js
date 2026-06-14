@@ -7,7 +7,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
-import {SQLParser} from '../../src/query/sql-parser.js';
+import {
+  mockPartitionData,
+  createMockMessageRouter,
+  createMockSystemCache,
+  parseSQL,
+} from './query-executor-test-support.js';
 import {
   COLUMN,
   STATE,
@@ -34,74 +39,6 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
-
-// Mock partition data storage
-const mockPartitionData = new Map();
-
-// Mock message router that routes queries to mock partition data
-function createMockMessageRouter() {
-  return {
-    deliver: async function(address, message) {
-      // Extract partition ID from address (format: nodeId/partition/partitionId)
-      const parts = address.split('/');
-      const partitionId = parts[2];
-
-      if (message.type === 'QUERY') {
-        const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
-          success: true,
-          rows: data,
-          changes: data.length || 1,
-        };
-      }
-      return {acknowledged: true, success: true, changes: 1};
-    },
-  };
-}
-
-// Mock system cache with services for routing
-function createMockSystemCache(partitionIds) {
-  const services = partitionIds.map((pid) => ({
-    service_id: pid,
-    service_type: 'partition',
-    partition_id: pid,
-    node_id: 'test-node',
-    raft_role: 'leader',
-    address: `test-node/partition/${pid}`,
-    status: 'active',
-  }));
-  const partitions = partitionIds.map((partitionId) => ({
-    partition_id: partitionId,
-    leader_node_id: 'test-node',
-  }));
-
-  return {
-    services,
-    partitions,
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
-}
-
-// Helper to parse SQL
-function parseSQL(sql) {
-  const parser = new SQLParser(sql);
-  return parser.parse();
-}
 
 
 test('QueryExecutor - executes SELECT on single partition', async (t) => {
