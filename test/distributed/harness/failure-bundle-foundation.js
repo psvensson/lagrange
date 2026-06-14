@@ -3,7 +3,7 @@ import * as publicationReasonCounts from './failure-bundle-publication-reason-co
 import * as priorityRecoveryDecisionSnapshots from
   './failure-bundle-priority-recovery-decision-snapshots.js';
 
-export const FAILURE_BUNDLE_SEGMENT_1 = {
+export const FAILURE_BUNDLE_FOUNDATION = {
   FAILURE_BUNDLE_SCHEMA_VERSION: artifactFoundation.FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME: artifactFoundation.FAILURE_BUNDLE_RUN_DIRNAME,
   FAILURE_BUNDLE_JSON_FILENAME: artifactFoundation.FAILURE_BUNDLE_JSON_FILENAME,

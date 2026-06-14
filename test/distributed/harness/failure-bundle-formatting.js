@@ -6,7 +6,7 @@ import {
   formatPriorityRecoveryPartitionSemanticStateHistory,
   formatPriorityRecoveryPartitionWitnesses,
 } from './failure-bundle-priority-recovery-formatters.js';
-import {FAILURE_BUNDLE_SEGMENT_5} from './failure-bundle-segment-5.js';
+import {FAILURE_BUNDLE_SCENARIO_ASSEMBLY} from './failure-bundle-scenario-assembly.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -191,7 +191,7 @@ const {
   formatReasonPartitionEntries,
   formatProjectionDiagnostics,
   formatPriorityRecoveryInvariantFailures,
-} = FAILURE_BUNDLE_SEGMENT_5;
+} = FAILURE_BUNDLE_SCENARIO_ASSEMBLY;
 
 const NODE_DIAGNOSTICS_LINE_LATEST_STARTUP_FAILURE =
   '- Latest Startup Failure: ';
@@ -1197,7 +1197,7 @@ function renderRunFailureBundleMarkdown(bundle) {
   );
 }
 
-export const FAILURE_BUNDLE_SEGMENT_6 = {
+export const FAILURE_BUNDLE_FORMATTING = {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
   FAILURE_BUNDLE_JSON_FILENAME,

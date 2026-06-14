@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_5} from './cluster-segment-5.js';
+import {CLUSTER_NODE_HANDLE_LAYER} from './cluster-node-handle-layer.js';
 const {
   CLUSTER_READINESS_MODE_STARTUP,
   CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE,
@@ -6,7 +6,7 @@ const {
   CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_READY,
   CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
   STARTUP_GATE_STATE,
-} = CLUSTER_SEGMENT_5;
+} = CLUSTER_NODE_HANDLE_LAYER;
 
 /**
  * Distribute node indices across Docker hosts in round-robin
@@ -117,8 +117,8 @@ class StartupGate {
   }
 }
 
-export const CLUSTER_SEGMENT_6 = {
-  ...CLUSTER_SEGMENT_5,
+export const CLUSTER_STARTUP_GATE_LAYER = {
+  ...CLUSTER_NODE_HANDLE_LAYER,
   distributeNodes,
   StartupGate,
 };

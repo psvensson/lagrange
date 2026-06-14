@@ -21,7 +21,7 @@ import {
   resolveControlPlaneDiagnostics,
   toIsoTimestamp,
 } from './failure-bundle-control-plane-diagnostics.js';
-import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
+import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
 const {
   PLAYBACK_EVENTS_FILENAME,
   PLAYBACK_SNAPSHOTS_FILENAME,
@@ -44,7 +44,7 @@ const {
   buildPlaybackEventSummary,
   buildFirstFaultTimelineFromPlaybackEvents,
   buildReadinessFromPlaybackEvents,
-} = FAILURE_BUNDLE_SEGMENT_2;
+} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
 const PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD = Object.freeze({
   REPLICA_OPERATIONS: 'replicaOperations',

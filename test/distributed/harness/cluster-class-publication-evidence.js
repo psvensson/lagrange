@@ -1,21 +1,21 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {buildCanonicalPublicationEvidenceFromControlPlane} from
   './publication-evidence-contract.js';
-import {Cluster3} from './cluster-segment-7-class-3.js';
+import {ClusterQuiescence} from './cluster-class-quiescence.js';
 import {
   buildLoadPublicationGateProjectionContext,
   buildStartupSnapshotProjectionContext,
   projectLoadPublicationGateDiagnostic,
   projectStartupAdminAvailabilityDiagnostic,
   projectStartupSnapshotDiagnostic,
-} from './cluster-segment-7-class-4-active-probe-projections.js';
+} from './cluster-class-active-probe-projections.js';
 import {
   buildReadinessTimeoutReason,
   decidePartialCoverageConvergence,
   extractPublicationProjectionNodeIds,
   normalizePartialCoverageConvergenceEvidence,
   normalizeReadinessTimeoutEvidence,
-} from './cluster-segment-7-class-4-publication-coverage.js';
+} from './cluster-class-publication-coverage.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -58,7 +58,7 @@ const {
   parseJsonArrayField,
   parseJsonObjectField,
   withTimeout,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
+} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
@@ -98,7 +98,7 @@ function resolveActiveProbeOperationTimeoutMs(deadline) {
   );
 }
 
-class Cluster4 extends Cluster3 {
+class ClusterPublicationEvidence extends ClusterQuiescence {
   async _probeClusterActiveState(deadline, options = {}) {
     const readinessMode =
       options.mode === CLUSTER_READINESS_MODE_LOAD ?
@@ -1199,4 +1199,4 @@ class Cluster4 extends Cluster3 {
   }
 }
 
-export {Cluster4};
+export {ClusterPublicationEvidence};

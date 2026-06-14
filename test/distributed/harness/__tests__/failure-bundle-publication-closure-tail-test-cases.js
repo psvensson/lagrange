@@ -1,14 +1,14 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {writeFailureBundlesForReport} from '../failure-bundle.js';
-import {FAILURE_BUNDLE_SEGMENT_1} from '../failure-bundle-segment-1.js';
+import {FAILURE_BUNDLE_FOUNDATION} from '../failure-bundle-foundation.js';
 
 const {
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_TOPOLOGY,
-} = FAILURE_BUNDLE_SEGMENT_1;
+} = FAILURE_BUNDLE_FOUNDATION;
 
 export function registerFailureBundlePublicationClosureTailTests({
   it,

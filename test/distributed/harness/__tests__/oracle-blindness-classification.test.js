@@ -16,9 +16,9 @@ import {
   resolveActiveWaitOracleBlindness,
   resolveSnapshotCoverageBlindness,
 } from '../oracle-blindness.js';
-import {ASSERTIONS_SEGMENT_2} from '../assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from '../assertions-convergence-wait.js';
 
-const {waitForConvergence} = ASSERTIONS_SEGMENT_2;
+const {waitForConvergence} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const TRANSPORT_ERROR =
   'Admin API query failed for node seed on lane snapshot: ' +

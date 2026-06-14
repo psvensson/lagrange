@@ -6,7 +6,7 @@ import {
   collectPlaybackSnapshotInsights,
   mergePlaybackPriorityRecoveryObservation,
 } from './failure-bundle-playback-insights.js';
-import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
+import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
 const {
   TIMELINE_FILENAME,
   ANALYSIS_FILENAME,
@@ -19,7 +19,7 @@ const {
   extractDecisionArtifactsFromLogContent,
   isRecord,
   mergePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_SEGMENT_2;
+} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
 async function collectScenarioLogArtifacts(
   scenarioDir,

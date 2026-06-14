@@ -1,13 +1,13 @@
-import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
-import {Cluster5} from './cluster-segment-7-class-5.js';
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
+import {ClusterControlSnapshotRecovery} from './cluster-class-control-snapshot-recovery.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   buildPriorityRecoveryActiveGateSnapshot,
   derivePriorityRecoveryActiveGateReportFields,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
 
-const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
+const {runFinalAdjudication} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -47,7 +47,7 @@ const {
   summarizeInvariantBreaches,
   upsertActiveWaitBlockerHistory,
   withTimeout,
-} = CLUSTER_SEGMENT_6;
+} = CLUSTER_STARTUP_GATE_LAYER;
 
 import {
   buildActiveWaitReadinessFailure,
@@ -56,10 +56,10 @@ import {
   selectStartupActiveGateSnapshotRepairContinuation,
   selectStartupActiveGateOwnerProgressContinuation,
   selectTerminalActiveWaitProgressSnapshot,
-} from './cluster-segment-7-alpha-active-wait.js';
+} from './cluster-active-wait-loop.js';
 import {
   waitForLoadReadinessStability,
-} from './cluster-segment-7-alpha-load-readiness.js';
+} from './cluster-load-readiness-stability.js';
 import {
   buildOracleBlindFailureMessage,
   createOracleBlindnessTracker,
@@ -67,7 +67,7 @@ import {
   resolveActiveWaitOracleBlindness,
 } from './oracle-blindness.js';
 
-class Cluster extends Cluster5 {
+class Cluster extends ClusterControlSnapshotRecovery {
   async _waitForAllActive(options = {}) {
     const readinessMode =
       options.mode === CLUSTER_READINESS_MODE_LOAD ?
@@ -1041,7 +1041,7 @@ class Cluster extends Cluster5 {
   }
 }
 
-export const CLUSTER_SEGMENT_7 = {
-  ...CLUSTER_SEGMENT_6,
+export const CLUSTER_CLASS_LAYER = {
+  ...CLUSTER_STARTUP_GATE_LAYER,
   Cluster,
 };

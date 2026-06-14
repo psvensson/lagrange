@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_4} from './cluster-segment-4.js';
+import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -65,7 +65,7 @@ const {
   resolvePositiveTimeoutMs,
   shouldFallbackToForcedControlSnapshot,
   withTimeout,
-} = CLUSTER_SEGMENT_4;
+} = CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER;
 
 const REACHABILITY_HTTP_STAGE_TIMEOUT_CAP_MS = 1000;
 const REACHABILITY_HTTP_PROBE_TIMEOUT_MS = Math.max(
@@ -1328,7 +1328,7 @@ class NodeHandle {
   }
 }
 
-export const CLUSTER_SEGMENT_5 = {
-  ...CLUSTER_SEGMENT_4,
+export const CLUSTER_NODE_HANDLE_LAYER = {
+  ...CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER,
   NodeHandle,
 };

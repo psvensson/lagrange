@@ -5,7 +5,7 @@ import {
 } from '../../../../src/diagnostics/topology-convergence-graph.js';
 import {
   buildActiveWaitReadinessFailure,
-} from '../cluster-segment-7-alpha-active-wait.js';
+} from '../cluster-active-wait-loop.js';
 
 const LOAD_MODE = 'load';
 const STARTUP_MODE = 'startup';

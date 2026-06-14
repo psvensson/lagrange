@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_STRING,
   normalizeDistinctStringArray,
@@ -52,7 +52,7 @@ const {
   classifyActiveGateReadinessDelay,
   UNKNOWN_STATE,
   ZERO,
-} = CLUSTER_SEGMENT_1;
+} = CLUSTER_BASE_LAYER;
 
 const ACTIVE_WAIT_BLOCKER_SIGNATURE_SEPARATOR = '|';
 const ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_MODE = 'repair_deferred';
@@ -1120,8 +1120,8 @@ function buildActiveWaitProgressSnapshot(
   };
 }
 
-export const CLUSTER_SEGMENT_2 = {
-  ...CLUSTER_SEGMENT_1,
+export const CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER = {
+  ...CLUSTER_BASE_LAYER,
   resolveMeaningfulProbeTimeoutMs,
   withTimeout,
   formatCountSummary,

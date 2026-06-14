@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_OBJECT,
   TYPEOF_STRING,
@@ -31,7 +31,7 @@ const {
   INVARIANT_SEVERITY,
   UNKNOWN_STATE,
   ZERO,
-} = CLUSTER_SEGMENT_1;
+} = CLUSTER_BASE_LAYER;
 
 const PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD = Object.freeze({});
 const PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT = Object.freeze({

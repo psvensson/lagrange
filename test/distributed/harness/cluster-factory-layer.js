@@ -1,5 +1,5 @@
 import {DockerProvider} from './docker-provider.js';
-import {CLUSTER_SEGMENT_7} from './cluster-segment-7.js';
+import {CLUSTER_CLASS_LAYER} from './cluster-class-layer.js';
 import {
   acquireReusableClusterLease,
   bestEffortCleanup,
@@ -20,7 +20,7 @@ const {
   CLUSTER_CONFIG_DOCKER_OPERATION_SINK,
   Cluster,
   distributeNodes,
-} = CLUSTER_SEGMENT_7;
+} = CLUSTER_CLASS_LAYER;
 
 function createCluster(config) {
   let providers;
@@ -55,8 +55,8 @@ function createCluster(config) {
   return cluster;
 }
 
-export const CLUSTER_SEGMENT_8 = {
-  ...CLUSTER_SEGMENT_7,
+export const CLUSTER_FACTORY_LAYER = {
+  ...CLUSTER_CLASS_LAYER,
   acquireReusableClusterLease,
   bestEffortCleanup,
   cleanupEntries,

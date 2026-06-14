@@ -5,7 +5,7 @@ import {
 } from '../../scripts/check-runtime-grammar-contracts.js';
 
 const STRICT_CONSISTENCY_FILE_PATH =
-  'test/distributed/harness/assertions-segment-1.js';
+  'test/distributed/harness/assertions-control-snapshot-extraction.js';
 const UNIFIED_REBALANCER_FILE_PATH =
   'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js';
 const MOVE_PLANNER_FILE_PATH =
@@ -25,8 +25,8 @@ const READINESS_SERVICE_SEGMENT_4_FILE_PATH =
 const ADMIN_WEBSOCKET_API_SEGMENT_2_FILE_PATH =
   'src/admin/admin-websocket-load-lane-admission.js';
 const NON_HOTSPOT_FILE_PATH = 'src/runtime/plain-helper.js';
-const CLUSTER_SEGMENT_2_FILE_PATH =
-  'test/distributed/harness/cluster-segment-2.js';
+const CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER_FILE_PATH =
+  'test/distributed/harness/cluster-active-wait-progress-layer.js';
 const PUBLICATION_EVIDENCE_REPLAY_FILE_PATH =
   'test/distributed/harness/publication-evidence-replay.js';
 const STATE_MACHINE_PRESSURE_PREFLIGHT_FILE_PATH =
@@ -357,7 +357,7 @@ test('detects load convergence code that drops decision closure witness evidence
         '  };',
         '}',
       ].join('\n'),
-      CLUSTER_SEGMENT_2_FILE_PATH,
+      CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER_FILE_PATH,
     );
 
     t.ok(
@@ -473,8 +473,8 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'src/rebalancer/unified-rebalancer-lifecycle-base.js',
       'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js',
       'test/distributed/harness/assertions-consistency-comparison.js',
-      'test/distributed/harness/assertions-segment-1.js',
-      'test/distributed/harness/cluster-segment-2.js',
+      'test/distributed/harness/assertions-control-snapshot-extraction.js',
+      'test/distributed/harness/cluster-active-wait-progress-layer.js',
       'test/distributed/harness/publication-evidence-replay.js',
       'test/distributed/harness/state-machine-pressure-preflight.js',
       'test/distributed/run-runtime-helpers.js',

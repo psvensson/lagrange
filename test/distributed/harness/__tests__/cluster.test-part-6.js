@@ -13,7 +13,7 @@ import {validate as uuidValidate} from 'uuid';
 import {
   RUNTIME_AUTHORITY_REPAIR_STATE,
 } from '../../../../src/control-plane/control-plane-readiness-constants.js';
-import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
+import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from '../cluster-active-wait-progress-layer.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   CONTROL_PLANE_QUIESCENCE_REASON,
@@ -31,7 +31,7 @@ import {
 } from './cluster-test-helpers.js';
 import {
   selectStartupActiveGateOwnerProgressContinuation,
-} from '../cluster-segment-7-alpha-active-wait.js';
+} from '../cluster-active-wait-loop.js';
 
 import {
   registerClusterActiveWaitStartupProgressWitnessTests,
@@ -55,7 +55,7 @@ const {
   formatPublicationConvergenceGate,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   summarizePriorityRecoveryProgressClasses,
-} = CLUSTER_SEGMENT_2;
+} = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER;
 
 const DISCOVERY_REPAIR_TIMEOUT_ERROR =
   'Authoritative discovery repair timed out after 1500ms';
@@ -367,7 +367,7 @@ const clusterPart6TestContext = {
   ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED,
   assert,
   buildCriticalSystemDiscoverySnapshot,
-  CLUSTER_SEGMENT_2,
+  CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER,
   CONTAINER_ENV_KEYS,
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   CONTROL_PLANE_QUIESCENCE_REASON,

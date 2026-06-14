@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
 } from '../../../src/admin/admin-constants.js';
@@ -27,7 +27,7 @@ const {
   normalizeDistinctStringArray,
   normalizeProbeError,
   parseFiniteNumberField,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
+} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';

@@ -8,7 +8,7 @@ import {
   normalizePriorityRecoveryInvariants,
   summarizePriorityRecoveryDecisionSnapshots,
 } from './failure-bundle-priority-recovery-diagnostics-summary.js';
-import {FAILURE_BUNDLE_SEGMENT_1} from './failure-bundle-segment-1.js';
+import {FAILURE_BUNDLE_FOUNDATION} from './failure-bundle-foundation.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -127,7 +127,7 @@ const {
   normalizePriorityRecoverySemanticStateId,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_SEGMENT_1;
+} = FAILURE_BUNDLE_FOUNDATION;
 
 function deriveReasonCountsFromLoadMetrics(loadMetrics) {
   if (!isRecord(loadMetrics)) {
@@ -796,7 +796,7 @@ function scorePlaybackActiveGateDetails(details) {
   );
 }
 
-export const FAILURE_BUNDLE_SEGMENT_2 = {
+export const FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION = {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
   FAILURE_BUNDLE_JSON_FILENAME,

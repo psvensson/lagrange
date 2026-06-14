@@ -1,4 +1,4 @@
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   buildPriorityRecoveryActiveGateSnapshot,
   derivePriorityRecoveryActiveGateReportFields,
@@ -11,7 +11,7 @@ import {
   markOracleBlindError,
   resolveActiveWaitOracleBlindness,
 } from './oracle-blindness.js';
-import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
+import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
 import {
   LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
   LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE,
@@ -24,9 +24,9 @@ import {
   normalizeStableWindowTimestamp,
   selectLoadActiveGateSnapshotRepairContinuation,
   selectTerminalActiveWaitProgressSnapshot,
-} from './cluster-segment-7-alpha-active-wait.js';
+} from './cluster-active-wait-loop.js';
 
-const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
+const {runFinalAdjudication} = ASSERTIONS_CONVERGENCE_WAIT;
 const {
   ACTIVE_POLL_INTERVAL_MS,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
@@ -51,7 +51,7 @@ const {
   scoreActiveWaitProgress,
   summarizeActiveWaitBlockerHistory,
   upsertActiveWaitBlockerHistory,
-} = CLUSTER_SEGMENT_6;
+} = CLUSTER_STARTUP_GATE_LAYER;
 
 const LOAD_READINESS_ADMISSION_GATE_STATE_READY = 'ready';
 const LOAD_READINESS_ADMISSION_GATE_STATE_BLOCKED = 'blocked';

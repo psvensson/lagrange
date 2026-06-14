@@ -3,7 +3,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
     it,
     assert,
     buildPublicationConvergenceSummary,
-    FAILURE_BUNDLE_SEGMENT_1,
+    FAILURE_BUNDLE_FOUNDATION,
     FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
     join,
     mergeControlPlaneDiagnostics,
@@ -794,7 +794,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
       const publicationConvergence =
         buildPublicationConvergenceSummary(mergedControlPlane);
       const reasonCounts =
-        FAILURE_BUNDLE_SEGMENT_1.deriveReasonCountsFromPublicationConvergence(
+        FAILURE_BUNDLE_FOUNDATION.deriveReasonCountsFromPublicationConvergence(
           mergedControlPlane,
         );
 

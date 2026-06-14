@@ -1068,7 +1068,7 @@ async function queryControlSnapshot(node, options = {}) {
   }
 }
 
-export const ASSERTIONS_SEGMENT_1 = {
+export const ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION = {
   SERVICES_QUERY,
   NODES_QUERY,
   PARTITIONS_QUERY,

@@ -1029,7 +1029,7 @@ function resolveSequentialProbeTimeoutMs(
   );
 }
 
-export const CLUSTER_SEGMENT_1 = {
+export const CLUSTER_BASE_LAYER = {
   uuidv4,
   uuidv5,
   createHash,

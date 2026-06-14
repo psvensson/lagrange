@@ -25,7 +25,7 @@ import {
   collectScenarioLogArtifacts,
   mergeByNodeIdMaps,
 } from './failure-bundle-scenario-log-artifacts.js';
-import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
+import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -161,9 +161,9 @@ const {
   resolvePlaybackPublicationConvergence,
   resolvePlaybackPublishedMembershipObservation,
   scorePlaybackActiveGateDetails,
-} = FAILURE_BUNDLE_SEGMENT_2;
+} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
-export const FAILURE_BUNDLE_SEGMENT_3 = {
+export const FAILURE_BUNDLE_DIAGNOSTICS_ASSEMBLY = {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
   FAILURE_BUNDLE_JSON_FILENAME,

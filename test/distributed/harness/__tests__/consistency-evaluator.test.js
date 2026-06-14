@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from '../../../../src/test-helpers/tap.js';
 import {ConsistencyEvaluatorV2} from '../consistency-evaluator.js';
-import {ASSERTIONS_SEGMENT_2} from '../assertions-segment-2.js';
-const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
+import {ASSERTIONS_CONVERGENCE_WAIT} from '../assertions-convergence-wait.js';
+const {runFinalAdjudication} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const SNAPSHOT_TEMPLATE = Object.freeze({
   schemaVersion: 1,

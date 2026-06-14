@@ -51,7 +51,7 @@ const CONTRACT_FIELD = Object.freeze({
 });
 
 const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
-  'test/distributed/harness/assertions-segment-1.js': Object.freeze({
+  'test/distributed/harness/assertions-control-snapshot-extraction.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'extractControlSnapshotLeaders',
@@ -326,7 +326,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'test/distributed/harness/cluster-segment-2.js': Object.freeze({
+  'test/distributed/harness/cluster-active-wait-progress-layer.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'evaluateLoadPublishedConvergence',

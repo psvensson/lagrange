@@ -1,8 +1,8 @@
-import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 
 const {
   ZERO,
-} = CLUSTER_SEGMENT_1;
+} = CLUSTER_BASE_LAYER;
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';

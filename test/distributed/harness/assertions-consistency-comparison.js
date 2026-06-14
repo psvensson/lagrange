@@ -4,7 +4,7 @@ import {
 import {
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
 } from '../../../src/admin/admin-constants.js';
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   extractPublicationRecoveryGateContract,
 } from './assertions-publication-recovery-gate.js';
@@ -62,7 +62,7 @@ const {
   isTolerableActiveNodeSkew,
   isTolerablePartitionSkew,
   normalizeLeaders,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 
 export function buildConsistencyComparisonRecordFromState(state) {
   const controlPlaneDiagnostics = cloneDiagnostics(state?.controlPlaneDiagnostics);

@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_OBJECT,
   normalizeDistinctStringArray,
@@ -10,7 +10,7 @@ const {
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   UNKNOWN_STATE,
   ZERO,
-} = CLUSTER_SEGMENT_1;
+} = CLUSTER_BASE_LAYER;
 
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD = Object.freeze({
   COMPLETED_AT_MS: 'completedAtMs',

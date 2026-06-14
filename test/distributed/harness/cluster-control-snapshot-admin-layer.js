@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_3} from './cluster-segment-3.js';
+import {CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER} from './cluster-active-wait-formatting-layer.js';
 import {AUTHORITATIVE_REPAIR_TRIGGER} from
   '../../../src/admin/admin-authoritative-repair-policy.js';
 import {
@@ -14,7 +14,7 @@ const {
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD,
   ERROR_MESSAGE_TIMEOUT_FRAGMENT,
   ZERO,
-} = CLUSTER_SEGMENT_3;
+} = CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER;
 const CONTROL_PLANE_DIAGNOSTICS_FIELD = 'controlPlaneDiagnostics';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD = 'adminObservation';
 const CONTROL_SNAPSHOT_ADMIN_REPAIR_FIELD = 'repair';
@@ -304,8 +304,8 @@ function shouldFallbackToForcedControlSnapshot(result = null) {
   ).fallback;
 }
 
-export const CLUSTER_SEGMENT_4 = {
-  ...CLUSTER_SEGMENT_3,
+export const CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER = {
+  ...CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER,
   resolveAdminRequestStatement,
   normalizeAdminQueryError,
   isTimeoutErrorMessage,

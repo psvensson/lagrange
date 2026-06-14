@@ -1,5 +1,5 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
@@ -40,7 +40,7 @@ import {
 } from './cluster-control-snapshot-recovery.js';
 const {
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -79,8 +79,8 @@ const {
   resolveMeaningfulProbeTimeoutMs,
   resolveSequentialProbeTimeoutMs,
   withTimeout,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import {Cluster4} from './cluster-segment-7-class-4.js';
+} = CLUSTER_CLASS_SHARED_CONTEXT;
+import {ClusterPublicationEvidence} from './cluster-class-publication-evidence.js';
 
 const LOAD_REACHABILITY_PREFLIGHT_RANK_UNKNOWN = 2;
 const LOAD_REACHABILITY_PREFLIGHT_RANK_NOT_READY = 3;
@@ -129,7 +129,7 @@ function resolveQuiescenceSequentialProbeTimeoutMs(
   return Math.max(fairShareTimeoutMs, lateProbeTimeoutFloorMs);
 }
 
-class Cluster5 extends Cluster4 {
+class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
   async _probeControlSnapshotCoverage(
     deadline,
     expectedNodeIds = [],
@@ -1501,4 +1501,4 @@ class Cluster5 extends Cluster4 {
   }
 }
 
-export {Cluster5};
+export {ClusterControlSnapshotRecovery};

@@ -1,4 +1,4 @@
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   buildConsistencyComparisonRecordFromSnapshot,
   buildConsistencyComparisonRecordFromState,
@@ -130,7 +130,7 @@ const {
   formatOperationHistoryEntry,
   cloneDiagnostics,
   buildPublicationConvergenceFromState,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 /**
  * Assert all reachable nodes agree on cluster state: active
  * nodes, partition assignments, and leader identities.
@@ -412,7 +412,7 @@ async function assertDataIntegrity(nodes, table, expectedRows) {
   }
 }
 
-export const ASSERTIONS_SEGMENT_3 = {
+export const ASSERTIONS_CONSISTENCY_CHECKS = {
   SERVICES_QUERY,
   NODES_QUERY,
   PARTITIONS_QUERY,

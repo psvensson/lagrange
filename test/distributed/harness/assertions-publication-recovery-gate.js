@@ -5,7 +5,7 @@ import {
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   BOOLEAN_FALSE,
   BOOLEAN_TRUE,
@@ -25,7 +25,7 @@ import {
 } from './assertions-consistency-shared.js';
 const {
   VALUE_NONE,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 
 function hasCanonicalPublicationRecoveryGateEvidence(publicationConvergence) {
   if (!isConsistencyRecord(publicationConvergence)) {

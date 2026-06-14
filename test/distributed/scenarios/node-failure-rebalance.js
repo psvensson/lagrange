@@ -17,8 +17,8 @@ import {
   countCacheVisibleSatisfiedPriorityRecoveryOperations as
   countVisibleSatisfiedPriorityRecoveryOperations,
 } from '../harness/post-rebalance-closure-contract.js';
-import {ASSERTIONS_SEGMENT_2} from '../harness/assertions-segment-2.js';
-const {queryReachableClusterSnapshot} = ASSERTIONS_SEGMENT_2;
+import {ASSERTIONS_CONVERGENCE_WAIT} from '../harness/assertions-convergence-wait.js';
+const {queryReachableClusterSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = '60s';

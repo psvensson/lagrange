@@ -1,4 +1,4 @@
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   buildConsistencyMismatch,
 } from './assertions-consistency-comparison.js';
@@ -15,7 +15,7 @@ import {
 } from './assertions-consistency-shared.js';
 const {
   isControlSnapshotObservation,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 
 function buildObservationCohortSummary(nodeStates) {
   return {

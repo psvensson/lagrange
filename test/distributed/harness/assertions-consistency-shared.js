@@ -1,8 +1,8 @@
-import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 const {
   VALUE_UNKNOWN: ASSERTIONS_VALUE_UNKNOWN,
   normalizeLeaderAddress,
-} = ASSERTIONS_SEGMENT_2;
+} = ASSERTIONS_CONVERGENCE_WAIT;
 export const VALUE_UNKNOWN = ASSERTIONS_VALUE_UNKNOWN;
 
 export const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = 'control_snapshot';

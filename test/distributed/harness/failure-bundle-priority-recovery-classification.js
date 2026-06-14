@@ -14,7 +14,7 @@ import {
 import {
   hasMeaningfulPriorityRecoveryProgressWitness,
 } from './priority-recovery-summary-normalization.js';
-import {FAILURE_BUNDLE_SEGMENT_4} from './failure-bundle-segment-4.js';
+import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -185,7 +185,7 @@ const {
   countRestartBoundaries,
   buildConvergenceStabilityGate,
   buildFailoverStabilityGate,
-} = FAILURE_BUNDLE_SEGMENT_4;
+} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
 
 import {
   ACTIVE_GATE_PUBLICATION_GATE_PREFIX,

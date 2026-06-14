@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
@@ -96,7 +96,7 @@ const {
   uuidv5,
   waitForConsistencyConvergence,
   waitForConvergence,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
+} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const TEARDOWN_WARNING_PLAYBACK_BEGIN =
   'Failed to begin playback shutdown';
@@ -110,7 +110,7 @@ const TEARDOWN_WARNING_RECORD_STOPPED_PREFIX =
   'Failed to record stopped container for ';
 const TEARDOWN_WARNING_SEPARATOR = ': ';
 
-class Cluster1 {
+class ClusterLifecycleBase {
   constructor(config, providers, hostAssignment) {
     this._config = config;
     this._providers = providers;
@@ -1460,4 +1460,4 @@ class Cluster1 {
   }
 }
 
-export {Cluster1};
+export {ClusterLifecycleBase};

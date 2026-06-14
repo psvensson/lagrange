@@ -1,8 +1,8 @@
-import {FAILURE_BUNDLE_SEGMENT_7} from './failure-bundle-segment-7.js';
+import {FAILURE_BUNDLE_ARTIFACT_WRITERS} from './failure-bundle-artifact-writers.js';
 
 const {
   writeFailureBundlesForReport,
-} = FAILURE_BUNDLE_SEGMENT_7;
+} = FAILURE_BUNDLE_ARTIFACT_WRITERS;
 
 export {
   writeFailureBundlesForReport,

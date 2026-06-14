@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 
 const {
   ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX,
@@ -12,7 +12,7 @@ const {
   parseFiniteNumberField,
   parseJsonArrayField,
   parseJsonObjectField,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
+} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';

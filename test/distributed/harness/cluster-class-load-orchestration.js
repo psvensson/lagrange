@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -34,8 +34,8 @@ const {
   pollUntilCondition,
   resolvePositiveTimeoutMs,
   verifyBenchmarkLoadLaneAdmission,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import {Cluster1} from './cluster-segment-7-class-1.js';
+} = CLUSTER_CLASS_SHARED_CONTEXT;
+import {ClusterLifecycleBase} from './cluster-class-lifecycle-base.js';
 
 const RESTART_RECOVERY_FIELD_NONE = 'none';
 const RESTART_RECOVERY_REASON_SEPARATOR = '|';
@@ -51,7 +51,7 @@ const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE =
 const RESTART_RECOVERY_CONSECUTIVE_READY_PROBES = 2;
 const RESTART_RECOVERY_HOLD_RECHECK_TIMEOUT_MS = 15000;
 
-class Cluster2 extends Cluster1 {
+class ClusterLoadOrchestration extends ClusterLifecycleBase {
   _formatRestartShutdownBoundary(observation) {
     if (!observation) {
       return 'none';
@@ -970,4 +970,4 @@ class Cluster2 extends Cluster1 {
   }
 }
 
-export {Cluster2};
+export {ClusterLoadOrchestration};

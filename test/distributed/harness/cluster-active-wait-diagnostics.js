@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_FUNCTION,
   TYPEOF_OBJECT,
@@ -15,7 +15,7 @@ const {
   UNKNOWN_STATE,
   ZERO,
   resolvePositiveTimeoutMs,
-} = CLUSTER_SEGMENT_1;
+} = CLUSTER_BASE_LAYER;
 
 const ACTIVE_WAIT_DIAGNOSTIC_TEXT = Object.freeze({
   ADMIN_READY_PREFIX: '#adminReady=',

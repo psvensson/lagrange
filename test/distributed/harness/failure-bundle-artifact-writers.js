@@ -1,6 +1,6 @@
 import {mkdir, rm, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
-import {FAILURE_BUNDLE_SEGMENT_6} from './failure-bundle-segment-6.js';
+import {FAILURE_BUNDLE_FORMATTING} from './failure-bundle-formatting.js';
 import {classifyScenarioVerdict} from './validation-matrix.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -206,7 +206,7 @@ const {
   renderScenarioFailureBundleMarkdown,
   buildRunFailureBundle,
   renderRunFailureBundleMarkdown,
-} = FAILURE_BUNDLE_SEGMENT_6;
+} = FAILURE_BUNDLE_FORMATTING;
 
 function ensureScenarioDiagnostics(entry) {
   if (!isRecord(entry)) {
@@ -600,7 +600,7 @@ async function writeFailureBundlesForReport({
   }
 }
 
-export const FAILURE_BUNDLE_SEGMENT_7 = {
+export const FAILURE_BUNDLE_ARTIFACT_WRITERS = {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
   FAILURE_BUNDLE_JSON_FILENAME,

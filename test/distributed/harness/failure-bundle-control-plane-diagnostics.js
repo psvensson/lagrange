@@ -1,7 +1,7 @@
 import {
   normalizePriorityRecoveryActiveGateSnapshot,
 } from './active-gate-contract.js';
-import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
+import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
 const {
   ZERO,
   UNKNOWN_VALUE,
@@ -14,7 +14,7 @@ const {
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,
   mergePriorityRecoveryInvariants,
-} = FAILURE_BUNDLE_SEGMENT_2;
+} = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
 const DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD = Object.freeze({
   ACTIVE_GATE: 'activeGate',

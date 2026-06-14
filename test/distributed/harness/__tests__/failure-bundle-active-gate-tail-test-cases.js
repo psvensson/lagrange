@@ -4,7 +4,7 @@ import {writeFailureBundlesForReport} from '../failure-bundle.js';
 import {
   registerFailureBundlePublicationClosureTailTests,
 } from './failure-bundle-publication-closure-tail-test-cases.js';
-import {FAILURE_BUNDLE_SEGMENT_1} from '../failure-bundle-segment-1.js';
+import {FAILURE_BUNDLE_FOUNDATION} from '../failure-bundle-foundation.js';
 import {
   buildCanonicalPublicationEvidenceFromControlPlane,
 } from '../publication-evidence-contract.js';
@@ -29,7 +29,7 @@ const {
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   ROOT_CAUSE_CLASS_TOPOLOGY,
   STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
-} = FAILURE_BUNDLE_SEGMENT_1;
+} = FAILURE_BUNDLE_FOUNDATION;
 
 export function registerFailureBundleActiveGateTailTests({
   it,

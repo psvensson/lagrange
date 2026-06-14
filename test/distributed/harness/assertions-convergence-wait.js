@@ -1,7 +1,7 @@
 import {CONVERGENCE_DEFAULTS, TIMEOUTS} from './constants.js';
 import {ConsistencyEvaluatorV2} from './consistency-evaluator.js';
 import {normalizeReplicaOperationRecord} from '../../../src/rebalancer/replica-operation-liveness.js';
-import {ASSERTIONS_SEGMENT_1} from './assertions-segment-1.js';
+import {ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION} from './assertions-control-snapshot-extraction.js';
 import {
   buildPostRebalanceClosureSnapshot,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
@@ -112,7 +112,7 @@ const {
   extractControlSnapshotControlPlaneDiagnostics,
   extractControlSnapshotRevisionMetadata,
   queryControlSnapshot,
-} = ASSERTIONS_SEGMENT_1;
+} = ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION;
 const OBSERVATION_SOURCE_SQL_FALLBACK = 'sql_fallback';
 const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = 'control_snapshot';
 const OBSERVATION_MODE_SQL_FALLBACK = 'sql_fallback';
@@ -1349,7 +1349,7 @@ async function runFinalAdjudication(nodes) {
   });
 }
 
-export const ASSERTIONS_SEGMENT_2 = {
+export const ASSERTIONS_CONVERGENCE_WAIT = {
   TIMEOUTS,
   SERVICES_QUERY,
   NODES_QUERY,

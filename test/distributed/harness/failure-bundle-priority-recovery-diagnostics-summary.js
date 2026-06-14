@@ -4,7 +4,7 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {FAILURE_BUNDLE_SEGMENT_1} from './failure-bundle-segment-1.js';
+import {FAILURE_BUNDLE_FOUNDATION} from './failure-bundle-foundation.js';
 
 const {
   ZERO,
@@ -13,7 +13,7 @@ const {
   normalizeNonNegativeCount,
   normalizePriorityRecoverySemanticStateId,
   normalizePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_SEGMENT_1;
+} = FAILURE_BUNDLE_FOUNDATION;
 
 const PRIORITY_RECOVERY_OPERATION_ID_FIELD = Object.freeze({
   CAMEL: 'operationId',

@@ -15,7 +15,7 @@ import {
   LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE,
   decideLoadReadinessStableWindow,
   normalizeStableWindowTimestamp,
-} from '../cluster-segment-7-alpha-active-wait.js';
+} from '../cluster-active-wait-loop.js';
 
 const WAIT_START_MS = 1_000_000;
 const STABLE_WINDOW_MS = 1000;
@@ -33,7 +33,7 @@ function buildGreenProbe(nowMs) {
 }
 
 // Mirrors the waitForLoadReadinessStability poll loop's window-state
-// threading (cluster-segment-7-alpha-load-readiness.js:634-651).
+// threading (cluster-load-readiness-stability.js:634-651).
 function pollOnce(state, {activeProbe, nowMs}) {
   if (activeProbe.allActive !== true) {
     state.startedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;

@@ -11,10 +11,10 @@ import {
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
 } from '../control-plane-quiescence-snapshot.js';
-import {FAILURE_BUNDLE_SEGMENT_1} from
-  '../failure-bundle-segment-1.js';
-import {FAILURE_BUNDLE_SEGMENT_4} from
-  '../failure-bundle-segment-4.js';
+import {FAILURE_BUNDLE_FOUNDATION} from
+  '../failure-bundle-foundation.js';
+import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from
+  '../failure-bundle-diagnostics-contract-reexport.js';
 import {registerFailureBundlePlaybackTests} from './failure-bundle-playback-test-cases.js';
 import {
   registerFailureBundleActiveGateTailTests,
@@ -212,13 +212,13 @@ const {
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   mergePriorityRecoveryDecisionSnapshots,
-} = FAILURE_BUNDLE_SEGMENT_1;
+} = FAILURE_BUNDLE_FOUNDATION;
 const {
   buildPublicationConvergenceSummary,
   hasPublicationMissingActiveNodeBlocker,
   isStartupReadinessBlocked,
   mergeControlPlaneDiagnostics,
-} = FAILURE_BUNDLE_SEGMENT_4;
+} = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
 
 function buildRuntimeFailureScenario() {
   const workflowId = 'split-tbl-users-users-p1-v2';
@@ -959,8 +959,8 @@ describe('failure-bundle', () => {
     CONTROL_PLANE_QUIESCENCE_STATE,
     CONTROL_PLANE_READINESS_REASON,
     ENTRYPOINT_LOG_MSG,
-    FAILURE_BUNDLE_SEGMENT_1,
-    FAILURE_BUNDLE_SEGMENT_4,
+    FAILURE_BUNDLE_FOUNDATION,
+    FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT,
     FAILURE_CLASS_CACHE_STALE,
     FAILURE_CLASS_CDC_DEGRADED,
     FAILURE_CLASS_DISCOVERY_UNAVAILABLE,

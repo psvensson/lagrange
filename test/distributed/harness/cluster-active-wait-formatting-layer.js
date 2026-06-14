@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_2} from './cluster-segment-2.js';
+import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from './cluster-active-wait-progress-layer.js';
 const {
   ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES,
   ACTIVE_WAIT_BLOCKER_NONE,
@@ -25,7 +25,7 @@ const {
   UNKNOWN_PHASE,
   UNKNOWN_REASON,
   ZERO,
-} = CLUSTER_SEGMENT_2;
+} = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER;
 
 const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
   'bootstrapJoinProjection';
@@ -1195,8 +1195,8 @@ function buildAdminStatementFingerprint(statement) {
     .slice(ZERO, ADMIN_QUERY_TRACE_SQL_FINGERPRINT_LENGTH);
 }
 
-export const CLUSTER_SEGMENT_3 = {
-  ...CLUSTER_SEGMENT_2,
+export const CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER = {
+  ...CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER,
   scoreActiveWaitProgress,
   formatActiveWaitProgressSnapshot,
   upsertActiveWaitBlockerHistory,

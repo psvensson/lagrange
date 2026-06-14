@@ -1,11 +1,11 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {isStartupAdminReachabilityTransientError} from
   './startup-readiness-evidence.js';
 import {
   decideSelectedSnapshotTimeoutOwnerRecoveryProjection,
   normalizeOptionalString,
   normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence,
-} from './cluster-segment-7-class-4-publication-coverage.js';
+} from './cluster-class-publication-coverage.js';
 
 const {
   ACTIVE_PROBE_ACTIVITY_SOURCE_LOAD_PUBLICATION_GATE_PROJECTION,
@@ -28,7 +28,7 @@ const {
   ZERO,
   isTimeoutShapedProbeError,
   normalizeDistinctStringArray,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
+} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';

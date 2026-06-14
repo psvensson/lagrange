@@ -1,4 +1,4 @@
-import {ASSERTIONS_SEGMENT_3} from './assertions-segment-3.js';
+import {ASSERTIONS_CONSISTENCY_CHECKS} from './assertions-consistency-checks.js';
 
 const {
   waitForConvergence,
@@ -12,7 +12,7 @@ const {
   extractLeaders,
   updateOverTargetState,
   finalizeOverTargetState,
-} = ASSERTIONS_SEGMENT_3;
+} = ASSERTIONS_CONSISTENCY_CHECKS;
 
 export {
   waitForConvergence,

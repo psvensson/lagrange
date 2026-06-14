@@ -23,7 +23,7 @@ import {
   PRIORITY_RECOVERY_DECISION_SET_EXPECTED,
   buildPriorityRecoveryPublicationConvergenceFixture,
 } from '../__fixtures__/priority-recovery-actuation-contract-fixture.js';
-import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
+import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from '../cluster-active-wait-progress-layer.js';
 
 const ACTIVE_GATE_READINESS_MODE_LOAD = 'load';
 const ACTIVE_GATE_READINESS_MODE_STARTUP = 'startup';
@@ -321,7 +321,7 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME,
 
 test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
   () => {
-    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+    const progressSnapshot = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
       {
         allActive: true,
         nodeDiagnostics: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS.map(
@@ -438,7 +438,7 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
 
 test(ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_SELECTED_COVERAGE_TEST_NAME,
   () => {
-    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+    const progressSnapshot = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
       {
         allActive: true,
         nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
@@ -550,11 +550,11 @@ test(ACTIVE_GATE_PUBLICATION_BLOCKER_PROJECTION_TEST_NAME,
       },
     };
     const publicationConvergenceGate =
-      CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
+      CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.evaluateLoadPublishedConvergence(
         snapshotCoverage,
         ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
       );
-    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+    const progressSnapshot = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
       {
         allActive: true,
         nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
@@ -652,11 +652,11 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
       },
     };
     const publicationConvergenceGate =
-      CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
+      CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.evaluateLoadPublishedConvergence(
         snapshotCoverage,
         ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
       );
-    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+    const progressSnapshot = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
       {
         allActive: false,
         nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
@@ -700,7 +700,7 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
       },
     };
     const countOnlyProgressSnapshot =
-      CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+      CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
         {
           allActive: false,
           nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
@@ -710,7 +710,7 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
             }),
           ),
           publicationConvergenceGate:
-            CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
+            CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.evaluateLoadPublishedConvergence(
               countOnlySnapshotCoverage,
               ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
             ),
@@ -825,11 +825,11 @@ test(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PARTIAL_COVERAGE_TEST_NAME,
       },
     };
     const publicationConvergenceGate =
-      CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
+      CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.evaluateLoadPublishedConvergence(
         snapshotCoverage,
         ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
       );
-    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+    const progressSnapshot = CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot(
       {
         allActive: false,
         nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(

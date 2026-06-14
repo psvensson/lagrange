@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
@@ -54,8 +54,8 @@ const {
   resolveBootstrapProbeSleepMs,
   resolveChaosFaultStatus,
   summarizeBootstrapProgress,
-} = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import {Cluster2} from './cluster-segment-7-class-2.js';
+} = CLUSTER_CLASS_SHARED_CONTEXT;
+import {ClusterLoadOrchestration} from './cluster-class-load-orchestration.js';
 
 const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
@@ -82,7 +82,7 @@ function hasControlPlaneQuiescenceStableWindowClosed(
   );
 }
 
-class Cluster3 extends Cluster2 {
+class ClusterQuiescence extends ClusterLoadOrchestration {
   async waitForControlPlaneQuiescence(options = {}) {
     const stableWindowMs =
       this._resolveControlPlaneQuiescenceStableWindowMs(options);
@@ -1212,4 +1212,4 @@ class Cluster3 extends Cluster2 {
   }
 }
 
-export {Cluster3};
+export {ClusterQuiescence};

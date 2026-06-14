@@ -1,6 +1,6 @@
 import {promises as fs} from 'node:fs';
 import {dirname} from 'node:path';
-import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
+import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
 
 const {
   LABELS,
@@ -13,7 +13,7 @@ const {
   REUSE_LEASE_MIN_TIMEOUT_MS,
   REUSE_LEASE_POLL_INTERVAL_MS,
   ZERO,
-} = CLUSTER_SEGMENT_6;
+} = CLUSTER_STARTUP_GATE_LAYER;
 
 const FILE_ENCODING_UTF8 = 'utf8';
 const FILE_OPEN_FLAG_EXCLUSIVE_WRITE = 'wx';

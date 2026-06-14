@@ -1,4 +1,4 @@
-import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
+import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
 import {
   LIFECYCLE_REASON,
 } from '../../../src/bootstrap/lifecycle-controller-constants.js';
@@ -17,7 +17,7 @@ const {
   ONE,
   ZERO,
   normalizeDistinctStringArray,
-} = CLUSTER_SEGMENT_6;
+} = CLUSTER_STARTUP_GATE_LAYER;
 
 const LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE = Object.freeze({
   AVAILABLE: 'available',

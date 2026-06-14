@@ -2,13 +2,13 @@ import {
   PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {FAILURE_BUNDLE_SEGMENT_5} from './failure-bundle-segment-5.js';
+import {FAILURE_BUNDLE_SCENARIO_ASSEMBLY} from './failure-bundle-scenario-assembly.js';
 
 const {
   ZERO,
   UNKNOWN_VALUE,
   normalizeDistinctStringArray,
-} = FAILURE_BUNDLE_SEGMENT_5;
+} = FAILURE_BUNDLE_SCENARIO_ASSEMBLY;
 
 export function formatPriorityRecoveryPartitionBlockerHistory(history) {
   const entries = Array.isArray(history) ? history : [];
