@@ -41,6 +41,9 @@ function memoCtx({nodeId = 'seed', invalidated = () => false} = {}) {
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessServiceSegment4Stage2.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+      ControlPlaneReadinessServiceSegment4Stage2.prototype
+        .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
     // The deep cluster read — counted, returns a per-node sentinel payload.
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     // The parse/clone-heavy projection — counted; returns a fresh frozen object

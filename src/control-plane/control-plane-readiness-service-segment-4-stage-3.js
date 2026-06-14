@@ -451,29 +451,12 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
           cached.capturedAtMs,
         )
       ) {
-        let isStale = false;
-        const service = this.membershipPublicationService;
         if (
-          service &&
-          typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION
+          !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+            memoKey,
+            cached.projection,
+          )
         ) {
-          const latestPub = service.getLatestPublicationForNodeSync(memoKey);
-          const latestEpoch = latestPub ?
-            (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
-            null;
-          const cachedEpoch = cached.projection ?
-            (cached.projection.publicationEpoch ??
-              cached.projection.publication_epoch) :
-            null;
-          const latestStatus = latestPub ? latestPub.status : null;
-          const cachedStatus = cached.projection ?
-            (cached.projection.publicationStatus ?? cached.projection.status) :
-            null;
-          if (latestEpoch !== cachedEpoch || latestStatus !== cachedStatus) {
-            isStale = true;
-          }
-        }
-        if (!isStale) {
           return cached.projection;
         }
       }
@@ -492,6 +475,53 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
         fn: this.resolveMembershipPublicationPlanningSnapshot,
       });
     }
+    return projection;
+  }
+
+  // CL-034 follow-up: the readiness-build sub-builders re-run the SAME merge ~6 times
+  // per getNodeReadinessSync — getPriorityControlPlaneRecoveryState (twice:
+  // buildEvaluatedNodeReadinessSnapshot + buildDimensions), its segment-2 wrapper,
+  // buildRuntimeAuthoritySnapshot, isControlPlaneRecoveryEligible, and
+  // buildPriorityControlPlaneRecoveryProjection — all calling
+  // resolveMembershipPublicationPlanningSnapshot(context) with the SAME already-RESOLVED
+  // planning snapshot threaded through context (a different provided snapshot than the
+  // main path, so the main-path nodeId memo does not cover it). That left the dominant
+  // residual readiness-build cost on the hot path. Memoize WITHIN the build, keyed by
+  // the providedPlanningSnapshot OBJECT REFERENCE: every sub-builder of one readiness
+  // build shares the same snapshot object so they collapse to one merge, while a caller
+  // passing a DIFFERENT snapshot (different epoch/status, e.g. a later build or a direct
+  // getPriorityControlPlaneRecoveryState call) gets a different key — so the memo can
+  // never return a result computed for a different logical input. The merge output is
+  // already Object.frozen; reuse is mutation-safe. Falls through to a direct merge when
+  // no snapshot object is present.
+  //
+  // STALENESS GUARD: the provided snapshot is USUALLY a fresh per-build object, but
+  // resolvePriorityRecoveryPlanningAnswer can RETAIN an active snapshot object across
+  // builds (lastActivePriorityRecoveryPlanningSnapshotByNodeId) — that object stays
+  // GC-reachable, so the WeakMap entry would survive into later builds whose live
+  // publication has advanced, serving a stale merge. The merge also depends on
+  // context.membershipPublication (it builds the direct planning snapshot from it), and
+  // that value is re-read fresh each getNodeReadinessSync — reference-stable only while
+  // the publication is unchanged (its diagnostics memo is nulled on any
+  // CONTROL_PLANE_PUBLICATIONS change AND on a service/cache swap). So gate the hit on
+  // membershipPublication reference identity: a retained provided snapshot re-presented
+  // after the publication advances (or after a swap) misses and recomputes.
+  resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(context = {}) {
+    const provided = context?.membershipPublicationPlanningSnapshot;
+    const memo = this.membershipPublicationPlanningSnapshotContextMemo;
+    if (!memo || !provided || typeof provided !== TYPEOF.OBJECT) {
+      return this.resolveMembershipPublicationPlanningSnapshot(context);
+    }
+    const membershipPublication = context?.membershipPublication ?? null;
+    const cached = memo.get(provided);
+    if (
+      cached !== undefined &&
+      cached.membershipPublication === membershipPublication
+    ) {
+      return cached.projection;
+    }
+    const projection = this.resolveMembershipPublicationPlanningSnapshot(context);
+    memo.set(provided, {projection, membershipPublication});
     return projection;
   }
 

@@ -43,6 +43,9 @@ function memoCtx({
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessServiceSegment4Stage3.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+      ControlPlaneReadinessServiceSegment4Stage3.prototype
+        .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
     membershipPublicationService: {
       getLatestPublicationForNodeSync: () => pub,
     },

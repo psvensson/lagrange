@@ -216,6 +216,36 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
     );
   }
 
+  // CL-033/CL-034: belt-and-suspenders freshness recheck shared by the readiness
+  // planning memos — even within the marker-stable + grace window, reject a cached
+  // projection whose publication epoch/status no longer matches the live publication
+  // row (an ack/epoch/status advance normally also fires the cluster marker, but this
+  // catches it directly). Returns true when the cached projection is stale.
+  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+    nodeId,
+    cachedProjection,
+  ) {
+    const service = this.membershipPublicationService;
+    if (
+      !service ||
+      typeof service.getLatestPublicationForNodeSync !== TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const latestPub = service.getLatestPublicationForNodeSync(nodeId);
+    const latestEpoch = latestPub ?
+      (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
+      null;
+    const cachedEpoch = cachedProjection ?
+      (cachedProjection.publicationEpoch ?? cachedProjection.publication_epoch) :
+      null;
+    const latestStatus = latestPub ? latestPub.status : null;
+    const cachedStatus = cachedProjection ?
+      (cachedProjection.publicationStatus ?? cachedProjection.status) :
+      null;
+    return latestEpoch !== cachedEpoch || latestStatus !== cachedStatus;
+  }
+
   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
@@ -230,28 +260,12 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
           cached.capturedAtMs,
         )
       ) {
-        let isStale = false;
-        const service = this.membershipPublicationService;
         if (
-          service &&
-          typeof service.getLatestPublicationForNodeSync === 'function'
+          !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+            memoKey,
+            cached.projection,
+          )
         ) {
-          const latestPub = service.getLatestPublicationForNodeSync(memoKey);
-          const latestEpoch = latestPub ?
-            (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
-            null;
-          const cachedEpoch = cached.projection ?
-            (cached.projection.publicationEpoch ?? cached.projection.publication_epoch) :
-            null;
-          const latestStatus = latestPub ? latestPub.status : null;
-          const cachedStatus = cached.projection ?
-            (cached.projection.publicationStatus ?? cached.projection.status) :
-            null;
-          if (latestEpoch !== cachedEpoch || latestStatus !== cachedStatus) {
-            isStale = true;
-          }
-        }
-        if (!isStale) {
           return cached.projection;
         }
       }

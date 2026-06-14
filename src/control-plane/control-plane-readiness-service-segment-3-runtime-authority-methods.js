@@ -254,7 +254,9 @@ function buildRuntimeAuthoritySnapshot(context = {}) {
     context.membershipPublication,
   );
   const membershipPublicationPlanningSnapshot =
-    this.resolveMembershipPublicationPlanningSnapshot(context);
+    this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+      context,
+    );
   const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
     membershipPublicationPlanningSnapshot,
   );

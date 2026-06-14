@@ -315,7 +315,9 @@ class ControlPlaneReadinessServiceSegment4Stage4 extends
         null;
     const planningSnapshot =
       this.buildPriorityRecoveryPlanningProjection(
-        this.resolveMembershipPublicationPlanningSnapshot(context),
+        this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+          context,
+        ),
       );
     const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
       publicationConvergence: planningSnapshot,

@@ -147,6 +147,20 @@ class ControlPlaneReadinessServiceSegment1 {
     // SAME invalidation markers — see
     // resolveMemoizedMembershipPublicationPlanningSnapshotSync.
     this.membershipPublicationPlanningSnapshotMemoByNodeId = new Map();
+    // CL-034 follow-up: WITHIN-BUILD memo of the SAME merge for the readiness-build
+    // sub-builders (getPriorityControlPlaneRecoveryState ×2, buildRuntimeAuthority
+    // Snapshot, isControlPlaneRecoveryEligible, buildPriorityControlPlaneRecovery
+    // Projection), which all re-run resolveMembershipPublicationPlanningSnapshot(context)
+    // with the SAME already-resolved planning snapshot threaded through context. Keyed
+    // by that providedPlanningSnapshot OBJECT REFERENCE (a fresh per-build object), so it
+    // collapses the ~6 redundant within-build merges into one yet can NEVER serve a
+    // different logical input (a different context carries a different snapshot object =
+    // a different key). Cross-build freshness is enforced inside the wrapper by gating
+    // the hit on membershipPublication reference identity (a RETAINED snapshot object
+    // re-presented after the publication advances misses and recomputes), so the WeakMap
+    // needs no explicit clear. See
+    // resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync.
+    this.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
     this.recoveryEpochHistoryLimit =
       Number.isInteger(options.recoveryEpochHistoryLimit) &&
       options.recoveryEpochHistoryLimit > NUM.ZERO ?
@@ -331,6 +345,9 @@ class ControlPlaneReadinessServiceSegment1 {
         // this service's reads.
         this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
         this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
+        // membershipPublicationPlanningSnapshotContextMemo is a WeakMap keyed by
+        // per-build snapshot objects — it needs no explicit clear (entries GC with
+        // their build).
       }
       this.membershipPublicationService =
         options.membershipPublicationService || null;

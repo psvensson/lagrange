@@ -38,7 +38,10 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       this.getPriorityControlPlaneRecoveryState = function(context = {}) {
         const state = originalGetState.call(this, context);
         if (state && typeof state === TYPEOF.OBJECT) {
-          const snapshot = this.resolveMembershipPublicationPlanningSnapshot(context);
+          const snapshot =
+            this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+              context,
+            );
           const active = snapshot ?
             this.isPriorityControlPlaneRecoveryActive(snapshot) :
             false;
@@ -439,7 +442,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   isControlPlaneRecoveryEligible(context = {}) {
     const membershipPublicationPlanningSnapshot =
-      this.resolveMembershipPublicationPlanningSnapshot(context);
+      this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+        context,
+      );
     const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
       membershipPublicationPlanningSnapshot,
     );
