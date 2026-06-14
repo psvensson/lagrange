@@ -1,5 +1,5 @@
-import {ControlPlaneReadinessServiceSegment4Stage3} from './control-plane-readiness-service-segment-4-stage-3.js';
-import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from './control-plane-readiness-service-segment-4-stage-shared.js';
+import {ControlPlaneReadinessPublicationPlanningResolution} from './control-plane-readiness-publication-planning-resolution.js';
+import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 
 const {
   COLUMN,
@@ -29,8 +29,8 @@ const {
   unwrapRowReadResult,
 } = SHARED;
 
-class ControlPlaneReadinessServiceSegment4Stage4 extends
-  ControlPlaneReadinessServiceSegment4Stage3 {
+class ControlPlaneReadinessStartupAuthorityHealth extends
+  ControlPlaneReadinessPublicationPlanningResolution {
   async getLatestPublishedMembershipPublicationRow(readOptions = {}) {
     const service = this.membershipPublicationService;
     if (
@@ -551,4 +551,4 @@ class ControlPlaneReadinessServiceSegment4Stage4 extends
   }
 }
 
-export {ControlPlaneReadinessServiceSegment4Stage4};
+export {ControlPlaneReadinessStartupAuthorityHealth};

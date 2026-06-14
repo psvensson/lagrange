@@ -103,7 +103,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/control-plane/control-plane-readiness-service-segment-4.js': Object.freeze({
+  'src/control-plane/control-plane-readiness-publication-aware.js': Object.freeze({
     requiredFragments: Object.freeze([
       'filterPriorityRecoveryReasonCodesForPublicationGate',
     ]),

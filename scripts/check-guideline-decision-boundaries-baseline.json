@@ -2185,312 +2185,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-1.js",
-      "line": 252,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 252) and SQL/DB (line 248) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-1.js",
-      "line": 554,
-      "column": 1,
-      "functionName": "buildControlPlaneParticipation",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 554) and SQL/DB (line 562) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-2.js",
-      "line": 145,
-      "column": 7,
-      "functionName": "getHeartbeatPublicationDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-2.js",
-      "line": 154,
-      "column": 7,
-      "functionName": "getHeartbeatPublicationDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js",
-      "line": 175,
-      "column": 5,
-      "functionName": "resolveRuntimeAuthorityFailureReason",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js",
-      "line": 198,
-      "column": 3,
-      "functionName": "resolveRuntimeAuthorityFailureReason",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js",
-      "line": 330,
-      "column": 9,
-      "functionName": "buildRuntimeAuthoritySnapshot",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"reasonCodes\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3.js",
-      "line": 218,
-      "column": 1,
-      "functionName": "buildReasons",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 218) and SQL/DB (line 174) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3.js",
-      "line": 125,
-      "column": 11,
-      "functionName": "buildReasons",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"reasons\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-3.js",
-      "line": 636,
-      "column": 7,
-      "functionName": "getMembershipPublicationDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-1.js",
-      "line": 33,
-      "column": 7,
-      "functionName": "resolveLocalPlanningAdmissionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-1.js",
-      "line": 44,
-      "column": 7,
-      "functionName": "resolveLocalPlanningAdmissionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-1.js",
-      "line": 48,
-      "column": 7,
-      "functionName": "resolveLocalPlanningAdmissionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-1.js",
-      "line": 392,
-      "column": 7,
-      "functionName": "getMembershipPublicationRecoveryGate",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-1.js",
-      "line": 442,
-      "column": 11,
-      "functionName": "filterPriorityRecoveryReasonCodesForPublicationGate",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"retainedReasonCodes\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 266,
-      "column": 9,
-      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 273,
-      "column": 7,
-      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 283,
-      "column": 9,
-      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 290,
-      "column": 7,
-      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 319,
-      "column": 7,
-      "functionName": "buildMembershipPublicationDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
-      "line": 377,
-      "column": 7,
-      "functionName": "buildMembershipPublicationPlanningSnapshot",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-3.js",
-      "line": 498,
-      "column": 7,
-      "functionName": "getLatestMembershipPublicationRowSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-3.js",
-      "line": 520,
-      "column": 5,
-      "functionName": "getLatestMembershipPublicationRowSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-3.js",
-      "line": 526,
-      "column": 7,
-      "functionName": "getLatestMembershipPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-3.js",
-      "line": 545,
-      "column": 5,
-      "functionName": "getLatestMembershipPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-3.js",
-      "line": 556,
-      "column": 7,
-      "functionName": "getLatestPublishedMembershipPublicationRowSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 41,
-      "column": 7,
-      "functionName": "getLatestPublishedMembershipPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 217,
-      "column": 11,
-      "functionName": "getPriorityControlPlaneRecoveryHealthSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 224,
-      "column": 9,
-      "functionName": "getPriorityControlPlaneRecoveryHealthSync",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 263,
-      "column": 11,
-      "functionName": "getPriorityControlPlaneRecoveryHealth",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 268,
-      "column": 9,
-      "functionName": "getPriorityControlPlaneRecoveryHealth",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-4.js",
-      "line": 430,
-      "column": 11,
-      "functionName": "buildPriorityControlPlaneRecoveryProjection",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"runtimeBlockerReasonCodes\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-5.js",
-      "line": 343,
-      "column": 5,
-      "functionName": "getCapacityReasonCode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-segment-4-stage-5.js",
-      "line": 409,
-      "column": 9,
-      "functionName": "getNodeTransportState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"routerState\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/control-plane/control-plane-readiness-snapshot-store.js",
       "line": 701,
       "column": 1,
@@ -7037,6 +6731,312 @@
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 372) and SQL/DB (line 509) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
+      "line": 148,
+      "column": 7,
+      "functionName": "getHeartbeatPublicationDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
+      "line": 157,
+      "column": 7,
+      "functionName": "getHeartbeatPublicationDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "line": 213,
+      "column": 1,
+      "functionName": "buildReasons",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 213) and SQL/DB (line 169) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "line": 120,
+      "column": 11,
+      "functionName": "buildReasons",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"reasons\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "line": 343,
+      "column": 5,
+      "functionName": "getCapacityReasonCode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "line": 409,
+      "column": 9,
+      "functionName": "getNodeTransportState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"routerState\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
+      "line": 277,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 277) and SQL/DB (line 273) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
+      "line": 588,
+      "column": 1,
+      "functionName": "buildControlPlaneParticipation",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 588) and SQL/DB (line 596) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 33,
+      "column": 7,
+      "functionName": "resolveLocalPlanningAdmissionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 44,
+      "column": 7,
+      "functionName": "resolveLocalPlanningAdmissionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 48,
+      "column": 7,
+      "functionName": "resolveLocalPlanningAdmissionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 390,
+      "column": 7,
+      "functionName": "getMembershipPublicationRecoveryGate",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 440,
+      "column": 11,
+      "functionName": "filterPriorityRecoveryReasonCodesForPublicationGate",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"retainedReasonCodes\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
+      "line": 32,
+      "column": 7,
+      "functionName": "getMembershipPublicationDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 635,
+      "column": 7,
+      "functionName": "getLatestMembershipPublicationRowSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 657,
+      "column": 5,
+      "functionName": "getLatestMembershipPublicationRowSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 663,
+      "column": 7,
+      "functionName": "getLatestMembershipPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 682,
+      "column": 5,
+      "functionName": "getLatestMembershipPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 693,
+      "column": 7,
+      "functionName": "getLatestPublishedMembershipPublicationRowSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 377,
+      "column": 9,
+      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 384,
+      "column": 7,
+      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 394,
+      "column": 9,
+      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 401,
+      "column": 7,
+      "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 430,
+      "column": 7,
+      "functionName": "buildMembershipPublicationDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 488,
+      "column": 7,
+      "functionName": "buildMembershipPublicationPlanningSnapshot",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-runtime-authority-methods.js",
+      "line": 175,
+      "column": 5,
+      "functionName": "resolveRuntimeAuthorityFailureReason",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-runtime-authority-methods.js",
+      "line": 198,
+      "column": 3,
+      "functionName": "resolveRuntimeAuthorityFailureReason",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-runtime-authority-methods.js",
+      "line": 332,
+      "column": 9,
+      "functionName": "buildRuntimeAuthoritySnapshot",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"reasonCodes\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 41,
+      "column": 7,
+      "functionName": "getLatestPublishedMembershipPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 217,
+      "column": 11,
+      "functionName": "getPriorityControlPlaneRecoveryHealthSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 224,
+      "column": 9,
+      "functionName": "getPriorityControlPlaneRecoveryHealthSync",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 263,
+      "column": 11,
+      "functionName": "getPriorityControlPlaneRecoveryHealth",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 268,
+      "column": 9,
+      "functionName": "getPriorityControlPlaneRecoveryHealth",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"membershipPublication\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 432,
+      "column": 11,
+      "functionName": "buildPriorityControlPlaneRecoveryProjection",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"runtimeBlockerReasonCodes\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     }
   ]
 }

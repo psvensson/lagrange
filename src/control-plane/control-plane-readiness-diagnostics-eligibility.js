@@ -1,5 +1,5 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
-import {ControlPlaneReadinessServiceSegment1} from './control-plane-readiness-service-segment-1.js';
+import {ControlPlaneReadinessParticipationBase} from './control-plane-readiness-participation-base.js';
 import {installControlPlaneReadinessSnapshotStoreMethods} from './control-plane-readiness-snapshot-store.js';
 
 const LOCAL_STR_EMPTY = '';
@@ -30,7 +30,7 @@ const SERVE_ADMISSION_STATE = Object.freeze({
   BLOCKED_RUNTIME: 'blocked_runtime',
 });
 
-class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceSegment1 {
+class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
     super(options);
     const originalGetState = this.getPriorityControlPlaneRecoveryState;
@@ -660,7 +660,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
 }
 
 installControlPlaneReadinessSnapshotStoreMethods(
-  ControlPlaneReadinessServiceSegment2.prototype,
+  ControlPlaneReadinessDiagnosticsEligibility.prototype,
 );
 
-export {ControlPlaneReadinessServiceSegment2};
+export {ControlPlaneReadinessDiagnosticsEligibility};

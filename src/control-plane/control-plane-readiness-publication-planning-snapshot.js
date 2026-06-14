@@ -1,5 +1,5 @@
-import {ControlPlaneReadinessServiceSegment4Stage1} from './control-plane-readiness-service-segment-4-stage-1.js';
-import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from './control-plane-readiness-service-segment-4-stage-shared.js';
+import {ControlPlaneReadinessPriorityRecoveryPlanning} from './control-plane-readiness-priority-recovery-planning.js';
+import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -10,8 +10,8 @@ const {
   normalizeDiagnosticTimestampMs,
 } = SHARED;
 
-class ControlPlaneReadinessServiceSegment4Stage2 extends
-  ControlPlaneReadinessServiceSegment4Stage1 {
+class ControlPlaneReadinessPublicationPlanningSnapshot extends
+  ControlPlaneReadinessPriorityRecoveryPlanning {
   hasMembershipPublicationRecoveryGateEvidence(planningSnapshot = null) {
     const priorityRecoveryProjection =
       this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
@@ -493,4 +493,4 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
   }
 }
 
-export {ControlPlaneReadinessServiceSegment4Stage2};
+export {ControlPlaneReadinessPublicationPlanningSnapshot};

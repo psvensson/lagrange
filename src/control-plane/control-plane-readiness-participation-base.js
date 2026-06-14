@@ -38,7 +38,7 @@ const {
   shouldAllowLocalExecutionForParticipation,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
-class ControlPlaneReadinessServiceSegment1 {
+class ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.systemTableCache = options.systemTableCache || null;
@@ -634,7 +634,7 @@ class ControlPlaneReadinessServiceSegment1 {
 }
 
 installControlPlaneReadinessNodeMethods(
-  ControlPlaneReadinessServiceSegment1.prototype,
+  ControlPlaneReadinessParticipationBase.prototype,
 );
 
-export {ControlPlaneReadinessServiceSegment1};
+export {ControlPlaneReadinessParticipationBase};

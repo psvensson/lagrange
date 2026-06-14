@@ -7,6 +7,6 @@
  * Primary tests: test/control-plane/control-plane-readiness-service.test.js.
  */
 export {
-  ControlPlaneReadinessServiceSegment4 as ControlPlaneReadinessService,
+  ControlPlaneReadinessPublicationAware as ControlPlaneReadinessService,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
-} from './control-plane-readiness-service-segment-4.js';
+} from './control-plane-readiness-publication-aware.js';

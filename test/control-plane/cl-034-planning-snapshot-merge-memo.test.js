@@ -1,7 +1,7 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessServiceSegment4Stage3,
-} from '../../src/control-plane/control-plane-readiness-service-segment-4-stage-3.js';
+  ControlPlaneReadinessPublicationPlanningResolution,
+} from '../../src/control-plane/control-plane-readiness-publication-planning-resolution.js';
 
 // CL-034: the residual readiness-build cost CL-033's projection memo did not cover.
 // getNodeReadinessSync -> resolveNodeMembershipPublicationPlanningAnswerSync calls
@@ -15,7 +15,7 @@ import {
 // publisher node under the SAME invalidation discipline as CL-033. These tests
 // exercise the memo directly via the prototype method with a mock `this`.
 const resolveMemo =
-  ControlPlaneReadinessServiceSegment4Stage3.prototype
+  ControlPlaneReadinessPublicationPlanningResolution.prototype
     .resolveMemoizedMembershipPublicationPlanningSnapshotSync;
 
 const T0 = Date.parse('2026-06-14T06:00:00.000Z');
@@ -41,10 +41,10 @@ function memoCtx({
     isReadinessSnapshotInvalidated: (key, capturedAtMs) =>
       invalidated(key, capturedAtMs),
     isReadinessPlanningMemoWithinStaleGrace:
-      ControlPlaneReadinessServiceSegment4Stage3.prototype
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
-      ControlPlaneReadinessServiceSegment4Stage3.prototype
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
     membershipPublicationService: {
       getLatestPublicationForNodeSync: () => pub,

@@ -1,5 +1,5 @@
-import {ControlPlaneReadinessServiceSegment4Stage2} from './control-plane-readiness-service-segment-4-stage-2.js';
-import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from './control-plane-readiness-service-segment-4-stage-shared.js';
+import {ControlPlaneReadinessPublicationPlanningSnapshot} from './control-plane-readiness-publication-planning-snapshot.js';
+import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 
 const {
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -14,8 +14,8 @@ const {
   resolveMembershipPublicationReadScope,
 } = SHARED;
 
-class ControlPlaneReadinessServiceSegment4Stage3 extends
-  ControlPlaneReadinessServiceSegment4Stage2 {
+class ControlPlaneReadinessPublicationPlanningResolution extends
+  ControlPlaneReadinessPublicationPlanningSnapshot {
   resolveMembershipPublicationPlanningSnapshot(context = {}) {
     const directPlanningSnapshot = this.buildMembershipPublicationPlanningSnapshot({
       nodeId: context?.nodeId,
@@ -698,4 +698,4 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
   }
 }
 
-export {ControlPlaneReadinessServiceSegment4Stage3};
+export {ControlPlaneReadinessPublicationPlanningResolution};

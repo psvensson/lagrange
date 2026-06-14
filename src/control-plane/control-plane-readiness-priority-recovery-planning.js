@@ -1,5 +1,5 @@
-import {ControlPlaneReadinessServiceSegment3} from './control-plane-readiness-service-segment-3.js';
-import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from './control-plane-readiness-service-segment-4-stage-shared.js';
+import {ControlPlaneReadinessEvidenceReasons} from './control-plane-readiness-evidence-reasons.js';
+import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -14,7 +14,7 @@ const {
   resolvePendingAckEvidenceStateFromSources,
 } = SHARED;
 
-class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessServiceSegment3 {
+class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadinessEvidenceReasons {
   getLocalClusterIncarnationFence() {
     if (
       typeof this.localClusterIncarnationFenceProvider !== TYPEOF.FUNCTION
@@ -645,4 +645,4 @@ class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessSe
   }
 }
 
-export {ControlPlaneReadinessServiceSegment4Stage1};
+export {ControlPlaneReadinessPriorityRecoveryPlanning};

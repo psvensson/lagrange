@@ -16,7 +16,7 @@ const PUBLICATION_COORDINATOR_FILE_PATH =
 const PUBLICATION_RECOVERY_GATE_FILE_PATH =
   'src/control-plane/publication-recovery-gate.js';
 const READINESS_SERVICE_SEGMENT_4_FILE_PATH =
-  'src/control-plane/control-plane-readiness-service-segment-4.js';
+  'src/control-plane/control-plane-readiness-publication-aware.js';
 const ADMIN_WEBSOCKET_API_SEGMENT_2_FILE_PATH =
   'src/admin/admin-websocket-load-lane-admission.js';
 const NON_HOTSPOT_FILE_PATH = 'src/runtime/plain-helper.js';
@@ -447,7 +447,7 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
     Object.keys(RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS).sort(),
     [
       'src/admin/admin-websocket-load-lane-admission.js',
-      'src/control-plane/control-plane-readiness-service-segment-4.js',
+      'src/control-plane/control-plane-readiness-publication-aware.js',
       'src/control-plane/membership-publication-coordinator.js',
       'src/control-plane/publication-recovery-gate.js',
       'src/node/replica-handler-remove-execution-methods.js',

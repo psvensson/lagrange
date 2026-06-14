@@ -1,5 +1,5 @@
-import {ControlPlaneReadinessServiceSegment4Stage4} from './control-plane-readiness-service-segment-4-stage-4.js';
-import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from './control-plane-readiness-service-segment-4-stage-shared.js';
+import {ControlPlaneReadinessStartupAuthorityHealth} from './control-plane-readiness-startup-authority-health.js';
+import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 
 const {
   COLUMN,
@@ -25,8 +25,8 @@ const {
   wasNodeRecordReadyWhenWritten,
 } = SHARED;
 
-class ControlPlaneReadinessServiceSegment4Stage5 extends
-  ControlPlaneReadinessServiceSegment4Stage4 {
+class ControlPlaneReadinessNodeServiceRows extends
+  ControlPlaneReadinessStartupAuthorityHealth {
   async readNodeRows(options = {}) {
     if (
       options.allowAuthoritativeRefresh === true &&
@@ -521,4 +521,4 @@ class ControlPlaneReadinessServiceSegment4Stage5 extends
   }
 }
 
-export {ControlPlaneReadinessServiceSegment4Stage5};
+export {ControlPlaneReadinessNodeServiceRows};

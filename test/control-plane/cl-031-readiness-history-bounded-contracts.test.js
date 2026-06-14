@@ -18,8 +18,8 @@ import {
   summarizeProjectionReadinessContractForHistory,
 } from '../../src/control-plane/projection-readiness-state.js';
 import {
-  ControlPlaneReadinessServiceSegment3,
-} from '../../src/control-plane/control-plane-readiness-service-segment-3.js';
+  ControlPlaneReadinessEvidenceReasons,
+} from '../../src/control-plane/control-plane-readiness-evidence-reasons.js';
 
 const ONE_MB = 1024 * 1024;
 const SUMMARY_SIZE_BOUND_BYTES = 8 * 1024;
@@ -72,7 +72,7 @@ test('history summary drops the evidence chain, keeps decision state, and ' +
 
 test('recorded readiness transition entries embed summaries, not full ' +
   'contracts', async (t) => {
-  const proto = ControlPlaneReadinessServiceSegment3.prototype;
+  const proto = ControlPlaneReadinessEvidenceReasons.prototype;
   const fatContract = buildFatContract();
   const buildState = (serveEligible, observedAtMs) => ({
     serveEligible,

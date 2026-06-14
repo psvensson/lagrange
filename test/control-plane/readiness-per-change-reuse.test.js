@@ -36,8 +36,8 @@ import {
   installControlPlaneReadinessSnapshotStoreMethods,
 } from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
 import {
-  ControlPlaneReadinessServiceSegment3,
-} from '../../src/control-plane/control-plane-readiness-service-segment-3.js';
+  ControlPlaneReadinessEvidenceReasons,
+} from '../../src/control-plane/control-plane-readiness-evidence-reasons.js';
 
 const NODE_ID = 'node-1';
 const STALE_HEARTBEAT_MAX_AGE_MS = 30_000;
@@ -342,7 +342,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         },
       };
       const method =
-        ControlPlaneReadinessServiceSegment3.prototype
+        ControlPlaneReadinessEvidenceReasons.prototype
           .getMembershipPublicationDiagnosticsSync;
 
       const first = method.call(stub, NODE_ID, BASE_NOW_MS);
@@ -395,7 +395,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         },
       };
       const method =
-        ControlPlaneReadinessServiceSegment3.prototype
+        ControlPlaneReadinessEvidenceReasons.prototype
           .getMembershipPublicationDiagnosticsSync;
 
       const first = method.call(stub, NODE_ID, BASE_NOW_MS);
@@ -432,7 +432,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         readinessTransitionHistoryViewByNodeId: new Map(),
       };
       const method =
-        ControlPlaneReadinessServiceSegment3.prototype
+        ControlPlaneReadinessEvidenceReasons.prototype
           .getReadinessTransitionHistory;
 
       const first = method.call(stub, NODE_ID);
