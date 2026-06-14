@@ -54,4 +54,4 @@ record, create `closure-ledger/CL-###.md` and add one linked row here. See
 | [CL-030](closure-ledger/CL-030.md) | open | harness-oracle (primary) + node-resource-safety (secondary) | A Non-Restarted Node's Death Must Fail The Scenario At That Node (And The Seed Must Not OOM). |
 | [CL-031](closure-ledger/CL-031.md) | open | harness-oracle (blindness) + node-resource-safety (root) | The Control Snapshot Must Stay Bounded (And Oracles Must Not Go Blind When It Does Not). |
 | [CL-033](closure-ledger/CL-033.md) | guarded | control-plane-seed event-loop liveness | The Control-Plane Seed Must Not Enter A Freeze↔Leadership-Churn Spiral During Post-Restart Recovery. |
-| [CL-034](closure-ledger/CL-034.md) | open | control-plane-seed event-loop liveness (CL-033 residual / CL-001 variant-B root) | The Residual Readiness-Build Merge Must Not Run Per-Routing-Call Long Enough To Lose Raft Leadership During Recovery. |
+| [CL-034](closure-ledger/CL-034.md) | guarded | control-plane-seed event-loop liveness (CL-033 residual / CL-001 variant-B root) | The Residual Readiness-Build Merge Must Not Run Per-Routing-Call Long Enough To Lose Raft Leadership During Recovery. |
