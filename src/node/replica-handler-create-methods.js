@@ -13,6 +13,8 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_EVENT,
@@ -452,6 +454,70 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
       // it).
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      return true;
+    }
+    /**
+     * CL-035: the learner->voter promotion updates only the in-memory raft
+     * role + a DEFERRED durable raft_role write that flushes through the
+     * control plane being recovered (and therefore does not land within
+     * budget during post-restart recovery). The REPLACE remove-safety gate
+     * (priority-publication-safety-topology.isVoterReadyReplicaTopology)
+     * reads the SERVICES row's raft_role and defers removing the superseded
+     * source forever while the row still reads learner/null, so priority
+     * control-plane spread never recovers. Mirror the CL-016 local-commit
+     * seed for the one field that helper omits: write the locally-decided
+     * voting role into the LOCAL cache row so the gate (which merges cache
+     * over a null-raft_role authoritative row, preferring defined fields)
+     * observes local truth without a control-plane round-trip. Scoped to
+     * priority control-plane partitions; only seeds when the in-memory role
+     * is a non-learner voter (the promotion is a committed local decision in
+     * this single-phase raft model, so it cannot mark a still-catching-up
+     * learner as a voter). Superseded later by the durable write's CDC
+     * round-trip (newer updated_at wins in the cache merge).
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @return {boolean} Whether the local raft_role seed was applied.
+     * @private
+     */
+    seedLocalPriorityReplicaRaftRole(replicaId, partitionId) {
+      if (!isPriorityControlPlanePartition({partitionId})) {
+        return false;
+      }
+      if (
+        !this.systemTableCache ||
+        typeof this.systemTableCache.applySystemTableChange !==
+          REPLICA_HANDLER_TYPEOF.FUNCTION ||
+        typeof this.systemTableCache.get !== REPLICA_HANDLER_TYPEOF.FUNCTION
+      ) {
+        return false;
+      }
+      // Do not synthesize an incomplete row: only seed the field onto an
+      // existing SERVICES row (the create-path seed already established it).
+      const existingRow = this.systemTableCache.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+        replicaId,
+      );
+      if (!existingRow) {
+        return false;
+      }
+      const trackedRole = this.getTrackedReplicaRole(replicaId);
+      if (!trackedRole || trackedRole === RAFT_ROLE.LEARNER) {
+        return false;
+      }
+      const normalizedRole = normalizePublishedRaftRole(trackedRole, {
+        collapseLeaderToFollower: true,
+      });
+      this.systemTableCache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        REPLICA_HANDLER_LITERAL.UPSERT,
+        {
+          service_id: replicaId,
+          raft_role: normalizedRole,
+          updated_at: Date.now(),
+        },
+        {causeId: `priority-local-voter-ready:${replicaId}`},
+      );
       this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
       return true;
     }

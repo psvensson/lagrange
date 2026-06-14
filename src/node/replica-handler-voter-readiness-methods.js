@@ -153,6 +153,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
       while (Date.now() <= deadline) {
         this.throwIfShuttingDown();
         if (this.isReplicaVoterReady(replicaId)) {
+          // CL-035: seed the locally-decided voting role into the local
+          // SERVICES row so the REPLACE remove-safety gate observes the
+          // promotion (the durable raft_role write defers through the
+          // recovering control plane). No-op for non-priority partitions.
+          this.seedLocalPriorityReplicaRaftRole(replicaId, partitionId);
           this.logger.info(REPLICA_HANDLER_LOG_MSG.VOTER_READY_ACTIVATED, {
             replicaId,
             partitionId,
