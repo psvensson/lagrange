@@ -141,6 +141,12 @@ class ControlPlaneReadinessServiceSegment1 {
     // by the existing readiness invalidation markers — see
     // resolveMemoizedPriorityRecoveryPlanningProjectionSync.
     this.priorityRecoveryPlanningProjectionMemoByNodeId = new Map();
+    // CL-034: per-publisher-node memo of the membership-publication planning
+    // SNAPSHOT MERGE (resolveMembershipPublicationPlanningSnapshot) — the residual
+    // readiness-build cost CL-033's projection memo did not cover, validated by the
+    // SAME invalidation markers — see
+    // resolveMemoizedMembershipPublicationPlanningSnapshotSync.
+    this.membershipPublicationPlanningSnapshotMemoByNodeId = new Map();
     this.recoveryEpochHistoryLimit =
       Number.isInteger(options.recoveryEpochHistoryLimit) &&
       options.recoveryEpochHistoryLimit > NUM.ZERO ?
@@ -321,8 +327,10 @@ class ControlPlaneReadinessServiceSegment1 {
         (options.membershipPublicationService || null)
       ) {
         this.membershipPublicationDiagnosticsMemo = null;
-        // CL-033: the planning projection derives from this service's reads.
+        // CL-033/CL-034: the planning projection and snapshot merge derive from
+        // this service's reads.
         this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
+        this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
       }
       this.membershipPublicationService =
         options.membershipPublicationService || null;
@@ -358,6 +366,7 @@ class ControlPlaneReadinessServiceSegment1 {
       this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
       this.membershipPublicationDiagnosticsMemo = null;
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
+      this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
       this.subscribeToCacheChanges();
     }
   }

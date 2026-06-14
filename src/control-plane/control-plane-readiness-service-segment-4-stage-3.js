@@ -416,6 +416,85 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
     });
   }
 
+  // CL-034: resolveMembershipPublicationPlanningSnapshot is the residual
+  // readiness-build cost CL-033's projection memo did not cover. CL-033 memoized
+  // the DIRECT planning projection (getPriorityRecoveryPlanningAnswerSync); this
+  // MERGE re-reads the cluster (buildMembershipPublicationPlanningSnapshot
+  // directPlanningSnapshot) and runs the full pending-ack merge + a second
+  // buildPriorityRecoveryPlanningProjection on EVERY routing call. During recovery
+  // the stored-snapshot fast path misses every call, so this merge dominated the
+  // ~14s residual seed event-loop gap that still exceeds the raft election timeout
+  // and loses control_plane_publications-p1 leadership (CL-001 variant B). The
+  // merge is a pure function of publication + node/service/partition state for the
+  // publisher node, so memoize its (already Object.frozen) output per publisher
+  // node and reuse it until the SAME readiness invalidation CL-033 uses supersedes
+  // it — publication cluster marker (ack/epoch/status writes) OR this node's
+  // node/service change — plus the identical epoch/status freshness recheck. The
+  // side-effectful per-node layer (resolvePriorityRecoveryPlanningAnswer) and the
+  // input planning answer stay OUTSIDE this memo and run every call.
+  resolveMemoizedMembershipPublicationPlanningSnapshotSync(
+    nodeId,
+    observedAt,
+    membershipPublication,
+    membershipPublicationPlanningSnapshot,
+  ) {
+    const memoKey = nodeId || this.nodeId;
+    const memo = this.membershipPublicationPlanningSnapshotMemoByNodeId;
+    if (memo && memoKey) {
+      const cached = memo.get(memoKey);
+      if (
+        cached &&
+        cached.fn === this.resolveMembershipPublicationPlanningSnapshot &&
+        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs) &&
+        this.isReadinessPlanningMemoWithinStaleGrace(
+          observedAt,
+          cached.capturedAtMs,
+        )
+      ) {
+        let isStale = false;
+        const service = this.membershipPublicationService;
+        if (
+          service &&
+          typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION
+        ) {
+          const latestPub = service.getLatestPublicationForNodeSync(memoKey);
+          const latestEpoch = latestPub ?
+            (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
+            null;
+          const cachedEpoch = cached.projection ?
+            (cached.projection.publicationEpoch ??
+              cached.projection.publication_epoch) :
+            null;
+          const latestStatus = latestPub ? latestPub.status : null;
+          const cachedStatus = cached.projection ?
+            (cached.projection.publicationStatus ?? cached.projection.status) :
+            null;
+          if (latestEpoch !== cachedEpoch || latestStatus !== cachedStatus) {
+            isStale = true;
+          }
+        }
+        if (!isStale) {
+          return cached.projection;
+        }
+      }
+    }
+    const capturedAtMs = this.now();
+    const projection = this.resolveMembershipPublicationPlanningSnapshot({
+      nodeId,
+      observedAt,
+      membershipPublication,
+      membershipPublicationPlanningSnapshot,
+    });
+    if (memo && memoKey) {
+      memo.set(memoKey, {
+        projection,
+        capturedAtMs,
+        fn: this.resolveMembershipPublicationPlanningSnapshot,
+      });
+    }
+    return projection;
+  }
+
   resolveMembershipPublicationPlanningSource(options = {}) {
     return resolveMembershipPublicationPlanningSource(
       options?.membershipPublicationPlanningSource,
@@ -500,12 +579,12 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
     return this.resolvePriorityRecoveryPlanningAnswer(
       nodeId,
       observedAt,
-      this.resolveMembershipPublicationPlanningSnapshot({
+      this.resolveMemoizedMembershipPublicationPlanningSnapshotSync(
         nodeId,
         observedAt,
         membershipPublication,
-        membershipPublicationPlanningSnapshot: planningSnapshot,
-      }),
+        planningSnapshot,
+      ),
     );
   }
 
