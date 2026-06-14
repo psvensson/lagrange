@@ -1,5 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {NodeJoiningServiceSegment3} from './node-joining-service-segment-3.js';
+import {NodeJoiningMessageGroupRuntimeDelegation} from './node-joining-message-group-runtime-delegation.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -25,7 +25,7 @@ const {
   buildControlPlaneWorkloadProfile,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
+class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRuntimeDelegation {
   /**
    * Phase 2: Connect to seed node via WebSocket for cross-node communication.
    * Requirements: 8.1, 8.2, 8.3, 8.4 - Bootstrap sequence: server → self-connect → services.
@@ -670,4 +670,4 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
    */
 }
 
-export {NodeJoiningServiceSegment4};
+export {NodeJoiningCdcSubscriptionAndBackfill};

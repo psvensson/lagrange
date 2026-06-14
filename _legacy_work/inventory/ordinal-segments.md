@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `108`
-- Semantic clusters: `18`
-- Primary kind counts: `{"segment":79,"stage":22,"part":7}`
+- Ordinal files: `102`
+- Semantic clusters: `16`
+- Primary kind counts: `{"segment":73,"stage":22,"part":7}`
 
 ## Migration Plan
 
@@ -19,8 +19,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 - `membership-publication-coordinator` (4 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-stage-1.js`, `src/control-plane/membership-publication-coordinator-stage-2.js`, `src/control-plane/membership-publication-coordinator-stage-3.js`.
 - `membership-publication-coordinator-class` (3 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-class-stage-1.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`.
 - `message-router-shared` (4 files): `message_router_owner / message_router_shared_transport`; proposed module `message-router-shared-transport.js`; successor `runtime-modularization-message-router-shared-transport`; samples `src/transport/message-router-shared-stage-1.js`, `src/transport/message-router-shared-stage-2.js`, `src/transport/message-router-shared-stage-3.js`.
-- `node-joining-service` (5 files): `node_joining_service_owner / node_joining_workflow`; proposed module `node-joining-workflow.js`; successor `runtime-modularization-node-joining-workflow`; samples `src/bootstrap/node-joining-service-segment-1.js`, `src/bootstrap/node-joining-service-segment-2.js`, `src/bootstrap/node-joining-service-segment-3.js`.
-- `node-joining-service-delegates` (1 files): `node_joining_service_owner / node_joining_workflow`; proposed module `node-joining-workflow.js`; successor `runtime-modularization-node-joining-workflow`; samples `src/bootstrap/node-joining-service-segment-1-delegates.js`.
 - `operation-workflow-owner` (18 files): `operation_workflow_owner / operation_workflow_progression`; proposed module `operation-workflow-progression.js`; successor `runtime-modularization-operation-workflow-progression`; samples `src/rebalancer/operation-workflow-owner-segment-1.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`.
 - `partition-service` (13 files): `partition_service_owner / partition_service_workflow`; proposed module `partition-service-workflow.js`; successor `runtime-modularization-partition-service-workflow`; samples `src/partition/partition-service-segment-1-part-1.js`, `src/partition/partition-service-segment-1-part-2.js`, `src/partition/partition-service-segment-1-part-3.js`.
 - `priority-recovery-snapshot` (11 files): `priority_recovery_owner / priority_recovery_snapshot_projection`; proposed module `priority-recovery-snapshot-projection.js`; successor `runtime-modularization-priority-recovery-snapshot-projection`; samples `src/control-plane/priority-recovery-snapshot-stage-1.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/priority-recovery-snapshot-stage-11.js`.

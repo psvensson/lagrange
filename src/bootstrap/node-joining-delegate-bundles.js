@@ -455,7 +455,7 @@ function buildJoinCleanupDelegates() {
   };
 }
 
-function installNodeJoiningServiceSegment1DelegateMethods(ServiceClass) {
+function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
   Object.assign(ServiceClass.prototype, {
     _buildJoinDelegateBundles: buildJoinDelegateBundles,
     _composeJoinDelegates: composeJoinDelegates,
@@ -469,6 +469,6 @@ function installNodeJoiningServiceSegment1DelegateMethods(ServiceClass) {
 export {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
-  installNodeJoiningServiceSegment1DelegateMethods,
+  assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
 };

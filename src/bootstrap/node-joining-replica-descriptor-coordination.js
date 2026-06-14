@@ -14,7 +14,7 @@ const {
   assertCritical,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningServiceSegment2 extends NodeJoiningAdmissionReadiness {
+class NodeJoiningReplicaDescriptorCoordination extends NodeJoiningAdmissionReadiness {
   /**
    * Phase 1: Contact seed node via HTTP.
    * @return {Promise<void>}
@@ -230,4 +230,4 @@ class NodeJoiningServiceSegment2 extends NodeJoiningAdmissionReadiness {
    */
 }
 
-export {NodeJoiningServiceSegment2};
+export {NodeJoiningReplicaDescriptorCoordination};

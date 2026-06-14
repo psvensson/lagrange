@@ -2,9 +2,9 @@ import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
-  installNodeJoiningServiceSegment1DelegateMethods,
+  assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
-} from './node-joining-service-segment-1-delegates.js';
+} from './node-joining-delegate-bundles.js';
 
 const {
   BOOTSTRAP_SUBSYSTEM,
@@ -59,7 +59,7 @@ const {
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningServiceSegment1 extends EventEmitter {
+class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
     super();
     const explicitDataDirProvided = Object.prototype.hasOwnProperty.call(
@@ -695,6 +695,6 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
   }
 }
 
-installNodeJoiningServiceSegment1DelegateMethods(NodeJoiningServiceSegment1);
+assignNodeJoiningDelegateBundleMethods(NodeJoiningOwnerConstruction);
 
-export {NodeJoiningServiceSegment1};
+export {NodeJoiningOwnerConstruction};

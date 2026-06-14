@@ -1,5 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {NodeJoiningServiceSegment4} from './node-joining-service-segment-4.js';
+import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -35,7 +35,7 @@ const {
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningPublicationActivation extends NodeJoiningServiceSegment4 {
+class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBackfill {
   /**
    * Restore durable local partition runtimes from hydrated system metadata
    * before join admission writes depend on canonical partition leadership.

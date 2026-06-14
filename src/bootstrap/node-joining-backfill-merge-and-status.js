@@ -31,7 +31,7 @@ const {
   resolveCanonicalLeaderIdentitySnapshot,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningServiceSegment5 extends NodeJoiningPublicationActivation {
+class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation {
   async resolveAuthoritativeBackfillRows(
     sqlQueryEngine,
     tableName,
@@ -709,4 +709,4 @@ class NodeJoiningServiceSegment5 extends NodeJoiningPublicationActivation {
   }
 }
 
-export {NodeJoiningServiceSegment5};
+export {NodeJoiningBackfillMergeAndStatus};

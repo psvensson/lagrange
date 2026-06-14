@@ -1,5 +1,5 @@
 export {
-  NodeJoiningServiceSegment5 as NodeJoiningService,
-} from './node-joining-service-segment-5.js';
+  NodeJoiningBackfillMergeAndStatus as NodeJoiningService,
+} from './node-joining-backfill-merge-and-status.js';
 export {JOINING_PHASE as JoiningPhase} from './bootstrap-constants.js';
 export {NodeState} from '../node/node-lifecycle-state-machine.js';

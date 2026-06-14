@@ -10,7 +10,7 @@ const srcRoot = path.join(__dirname, '..', '..', 'src');
 
 const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/bootstrap-cache-hydration-applier.js': 1,
-  'bootstrap/node-joining-service-segment-4.js': 1,
+  'bootstrap/node-joining-cdc-subscription-and-backfill.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
   'cdc/cdc-integration-service-cache-visibility-wait.js': 1,

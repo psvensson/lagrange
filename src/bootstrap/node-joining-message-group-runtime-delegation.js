@@ -1,5 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {NodeJoiningServiceSegment2} from './node-joining-service-segment-2.js';
+import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
 
 const {
   COLUMN,
@@ -26,7 +26,7 @@ const JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION = Object.freeze({
   PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
 });
 
-class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
+class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescriptorCoordination {
   async createJoinPartitionReplica(context) {
     const definition = context?.definition || {};
     const directOptions = context?.replicaOptions || null;
@@ -460,4 +460,4 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
    */
 }
 
-export {NodeJoiningServiceSegment3};
+export {NodeJoiningMessageGroupRuntimeDelegation};

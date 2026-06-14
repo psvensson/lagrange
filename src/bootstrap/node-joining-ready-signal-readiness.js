@@ -1,5 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {NodeJoiningServiceSegment1} from './node-joining-service-segment-1.js';
+import {NodeJoiningOwnerConstruction} from './node-joining-owner-construction.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
 } from './bootstrap-api-constants.js';
@@ -31,7 +31,7 @@ const {
   waitForMetadataPublicationReadiness,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
+class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
   isLocalRouterBackpressured() {
     const messageRouter = this.messageRouter || null;
     if (!messageRouter || !this.nodeId) {
