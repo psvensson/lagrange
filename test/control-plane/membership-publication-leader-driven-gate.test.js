@@ -1,7 +1,7 @@
 import t from 'tap';
 import {
   shouldDeferMembershipReconcileToWriteLeader,
-} from '../../src/control-plane/membership-publication-coordinator-class-stage-2.js';
+} from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 
 // Phase 4 leader-driven gate: defer the membership reconcile only when enabled
 // AND a working predicate says this node is NOT the write-leader. Fail OPEN

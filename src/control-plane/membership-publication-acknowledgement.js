@@ -8,8 +8,18 @@ import {
 } from './membership-lifecycle-constants.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {PUBLICATION_RECOVERY_MACHINE_ACTION} from './publication-recovery-state-machine.js';
-import {abandonMembershipPublication, buildTransitionHistoryEntry, hasPublicationTimedOut, normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-coordinator-stage-1.js';
-import {buildMembershipPublicationAcknowledgementDecision, buildPublicationMetadataRefreshDecision, buildServingMemberStatesByNodeId} from './membership-publication-coordinator-stage-2.js';
+import {
+  abandonMembershipPublication,
+  buildTransitionHistoryEntry,
+  hasPublicationTimedOut,
+  normalizeNodeIdList,
+  normalizePositiveInteger,
+} from './membership-publication-row-helpers.js';
+import {
+  buildMembershipPublicationAcknowledgementDecision,
+  buildPublicationMetadataRefreshDecision,
+  buildServingMemberStatesByNodeId,
+} from './membership-publication-planning-evidence.js';
 
 function closeAcknowledgedMetadataRefreshRow(options = {}) {
   const publicationRow = options.publicationRow;

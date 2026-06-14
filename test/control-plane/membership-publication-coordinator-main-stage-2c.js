@@ -5,14 +5,14 @@ import {
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
-} from '../../src/control-plane/membership-publication-coordinator-class-stage-3.js';
+} from '../../src/control-plane/membership-publication-coordinator-queue.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   shouldPreferAuthoritativeMembershipState,
-} from '../../src/control-plane/membership-publication-coordinator-stage-2.js';
+} from '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_LIFECYCLE_STATE} from '../../src/control-plane/membership-lifecycle-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,

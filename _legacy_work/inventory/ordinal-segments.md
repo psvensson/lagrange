@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `98`
-- Semantic clusters: `15`
-- Primary kind counts: `{"segment":73,"stage":18,"part":7}`
+- Ordinal files: `91`
+- Semantic clusters: `13`
+- Primary kind counts: `{"segment":73,"stage":11,"part":7}`
 
 ## Migration Plan
 
@@ -16,8 +16,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 - `admin-websocket-api` (3 files): `admin_websocket_api_owner / admin_websocket_routing`; proposed module `admin-websocket-routing.js`; successor `runtime-modularization-admin-websocket-routing`; samples `src/admin/admin-websocket-api-segment-1.js`, `src/admin/admin-websocket-api-segment-2.js`, `src/admin/admin-websocket-api-segment-3.js`.
 - `control-plane-readiness-service` (10 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-1.js`, `src/control-plane/control-plane-readiness-service-segment-2.js`, `src/control-plane/control-plane-readiness-service-segment-3.js`.
 - `control-plane-readiness-service-runtime-authority-methods` (1 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js`.
-- `membership-publication-coordinator` (4 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-stage-1.js`, `src/control-plane/membership-publication-coordinator-stage-2.js`, `src/control-plane/membership-publication-coordinator-stage-3.js`.
-- `membership-publication-coordinator-class` (3 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-class-stage-1.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`.
 - `operation-workflow-owner` (18 files): `operation_workflow_owner / operation_workflow_progression`; proposed module `operation-workflow-progression.js`; successor `runtime-modularization-operation-workflow-progression`; samples `src/rebalancer/operation-workflow-owner-segment-1.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`.
 - `partition-service` (13 files): `partition_service_owner / partition_service_workflow`; proposed module `partition-service-workflow.js`; successor `runtime-modularization-partition-service-workflow`; samples `src/partition/partition-service-segment-1-part-1.js`, `src/partition/partition-service-segment-1-part-2.js`, `src/partition/partition-service-segment-1-part-3.js`.
 - `priority-recovery-snapshot` (11 files): `priority_recovery_owner / priority_recovery_snapshot_projection`; proposed module `priority-recovery-snapshot-projection.js`; successor `runtime-modularization-priority-recovery-snapshot-projection`; samples `src/control-plane/priority-recovery-snapshot-stage-1.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/priority-recovery-snapshot-stage-11.js`.

@@ -1,16 +1,16 @@
 import t from 'tap';
 import {
-  MembershipPublicationCoordinatorClassStage2,
-} from '../../src/control-plane/membership-publication-coordinator-class-stage-2.js';
+  MembershipPublicationCoordinatorReconcile,
+} from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 
 // Workstream A: the always-on owner-membership driver. Test gating + lifecycle
 // directly via the prototype methods with a mock `this`.
 const drive =
-  MembershipPublicationCoordinatorClassStage2.prototype.driveOwnerMembershipReconcile;
+  MembershipPublicationCoordinatorReconcile.prototype.driveOwnerMembershipReconcile;
 const start =
-  MembershipPublicationCoordinatorClassStage2.prototype.startOwnerMembershipDriver;
+  MembershipPublicationCoordinatorReconcile.prototype.startOwnerMembershipDriver;
 const stop =
-  MembershipPublicationCoordinatorClassStage2.prototype.stopOwnerMembershipDriver;
+  MembershipPublicationCoordinatorReconcile.prototype.stopOwnerMembershipDriver;
 
 function leaderCache(leaderNodeId) {
   return {
@@ -160,7 +160,7 @@ t.test('drive: does NOT re-drive a process-not-alive pending node even if cluste
 
 t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   const assertFn =
-    MembershipPublicationCoordinatorClassStage2.prototype.assertSingleMembershipPartition;
+    MembershipPublicationCoordinatorReconcile.prototype.assertSingleMembershipPartition;
   // single partition -> no error, asserted latches true
   let errors = 0;
   const single = {

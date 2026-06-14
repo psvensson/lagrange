@@ -11,7 +11,7 @@ import {
 import {
   buildMembershipPublicationEvidenceSnapshot,
   deriveMembershipPublicationCandidate,
-} from '../../src/control-plane/membership-publication-coordinator-stage-2.js';
+} from '../../src/control-plane/membership-publication-planning-evidence.js';
 
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_NODE_STATUS_ACTIVE = 'active';

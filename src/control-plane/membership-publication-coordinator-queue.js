@@ -4,11 +4,13 @@ import {
 } from '../constants/index.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
+} from './membership-publication-row-contract.js';
+import {
   normalizeNodeIdList,
-} from './membership-publication-coordinator-stage-1.js';
+} from './membership-publication-row-helpers.js';
 import {
   hasExplicitMembershipPublicationTarget,
-} from './membership-publication-coordinator-stage-2.js';
+} from './membership-publication-planning-evidence.js';
 import {
   hasPublicationActiveGateOwnerReconcileSignal,
 } from './publication-active-gate-handoff-contract.js';
@@ -24,8 +26,8 @@ import {
 } from './control-plane-error-classification.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
-  MembershipPublicationCoordinatorClassStage2,
-} from './membership-publication-coordinator-class-stage-2.js';
+  MembershipPublicationCoordinatorReconcile,
+} from './membership-publication-coordinator-reconcile.js';
 
 const CONTROL_PLANE_CONVERGENCE_OUTCOME_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
@@ -628,8 +630,8 @@ function resolveQueuedMembershipPublicationReconcileContext(
   return MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
 }
 
-class MembershipPublicationCoordinatorClassStage3 extends
-  MembershipPublicationCoordinatorClassStage2 {
+class MembershipPublicationCoordinatorQueue extends
+  MembershipPublicationCoordinatorReconcile {
   constructor(options = {}) {
     super(options);
     if (
@@ -690,5 +692,5 @@ class MembershipPublicationCoordinatorClassStage3 extends
 
 export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
-  MembershipPublicationCoordinatorClassStage3 as MembershipPublicationCoordinator,
+  MembershipPublicationCoordinatorQueue as MembershipPublicationCoordinator,
 };

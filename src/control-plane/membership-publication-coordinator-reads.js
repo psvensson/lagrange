@@ -21,6 +21,8 @@ import {
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_OWNER_KEY,
   MEMBERSHIP_PUBLICATION_STATUS,
+} from './membership-publication-row-contract.js';
+import {
   buildMembershipPublicationAckRefreshDecision,
   isDispatchRetryOperation,
   listEquals,
@@ -30,7 +32,7 @@ import {
   publicationRowIncludesNode,
   readMembershipPublicationConvergence,
   safelyGetLatestMembershipPublicationRow,
-} from './membership-publication-coordinator-stage-1.js';
+} from './membership-publication-row-helpers.js';
 import {
   buildLocalAuthoritativeMembershipReadOptions,
   buildPublicationAcknowledgementReadOptions,
@@ -42,9 +44,9 @@ import {
   resolveControlPlanePublicationsOwner,
   serializeMembershipPublicationRow,
   shouldMergePlanningEvidenceRows,
-} from './membership-publication-coordinator-stage-2.js';
+} from './membership-publication-planning-evidence.js';
 
-class MembershipPublicationCoordinatorClassStage1 {
+class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.systemTableCache = options.systemTableCache || null;
@@ -504,4 +506,4 @@ class MembershipPublicationCoordinatorClassStage1 {
   }
 }
 
-export {MembershipPublicationCoordinatorClassStage1};
+export {MembershipPublicationCoordinatorReads};

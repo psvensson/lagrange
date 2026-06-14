@@ -2725,141 +2725,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 382,
-      "column": 1,
-      "functionName": "getDispatchRetryRowsForNode",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 382) and SQL/DB (line 393) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 350,
-      "column": 7,
-      "functionName": "getDispatchRetryRowsForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 370,
-      "column": 9,
-      "functionName": "getDispatchRetryRowsForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"publicationConvergence\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 378,
-      "column": 7,
-      "functionName": "getDispatchRetryRowsForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"publicationConvergence\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 426,
-      "column": 7,
-      "functionName": "buildDispatchRetryRowFromOperation",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 460,
-      "column": 7,
-      "functionName": "acknowledgeMembershipPublicationForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 467,
-      "column": 7,
-      "functionName": "acknowledgeMembershipPublicationForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-1.js",
-      "line": 471,
-      "column": 7,
-      "functionName": "acknowledgeMembershipPublicationForNode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-class-stage-2.js",
-      "line": 476,
-      "column": 11,
-      "functionName": "acknowledgePublication",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-1.js",
-      "line": 457,
-      "column": 5,
-      "functionName": "normalizeLatestPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-1.js",
-      "line": 533,
-      "column": 5,
-      "functionName": "safelyGetLatestMembershipPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-1.js",
-      "line": 538,
-      "column": 5,
-      "functionName": "safelyGetLatestMembershipPublicationRow",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-1.js",
-      "line": 544,
-      "column": 5,
-      "functionName": "readMembershipPublicationConvergence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-1.js",
-      "line": 552,
-      "column": 3,
-      "functionName": "readMembershipPublicationConvergence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-stage-2.js",
-      "line": 143,
-      "column": 3,
-      "functionName": "resolveControlPlanePublicationsOwner",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/control-plane/membership-publication-priority-partition-summary.js",
       "line": 25,
       "column": 5,
@@ -7034,6 +6899,141 @@
       "line": 189,
       "column": 7,
       "functionName": "refreshReconnectAuthority",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-persist.js",
+      "line": 167,
+      "column": 11,
+      "functionName": "acknowledgePublication",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 384,
+      "column": 1,
+      "functionName": "getDispatchRetryRowsForNode",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 384) and SQL/DB (line 395) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 352,
+      "column": 7,
+      "functionName": "getDispatchRetryRowsForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 372,
+      "column": 9,
+      "functionName": "getDispatchRetryRowsForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"publicationConvergence\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 380,
+      "column": 7,
+      "functionName": "getDispatchRetryRowsForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"publicationConvergence\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 428,
+      "column": 7,
+      "functionName": "buildDispatchRetryRowFromOperation",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 462,
+      "column": 7,
+      "functionName": "acknowledgeMembershipPublicationForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 469,
+      "column": 7,
+      "functionName": "acknowledgeMembershipPublicationForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
+      "line": 473,
+      "column": 7,
+      "functionName": "acknowledgeMembershipPublicationForNode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-planning-evidence.js",
+      "line": 161,
+      "column": 3,
+      "functionName": "resolveControlPlanePublicationsOwner",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-row-helpers.js",
+      "line": 335,
+      "column": 5,
+      "functionName": "normalizeLatestPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-row-helpers.js",
+      "line": 411,
+      "column": 5,
+      "functionName": "safelyGetLatestMembershipPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-row-helpers.js",
+      "line": 416,
+      "column": 5,
+      "functionName": "safelyGetLatestMembershipPublicationRow",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-row-helpers.js",
+      "line": 422,
+      "column": 5,
+      "functionName": "readMembershipPublicationConvergence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-row-helpers.js",
+      "line": 430,
+      "column": 3,
+      "functionName": "readMembershipPublicationConvergence",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"

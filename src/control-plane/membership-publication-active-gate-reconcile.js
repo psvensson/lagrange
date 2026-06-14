@@ -13,12 +13,13 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
-import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS, normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-coordinator-stage-1.js';
+import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
+import {normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-row-helpers.js';
 import {
   buildMembershipPublicationRow,
   buildPublicationReadOptions,
   hasExplicitMembershipPublicationTarget,
-} from './membership-publication-coordinator-stage-2.js';
+} from './membership-publication-planning-evidence.js';
 import {
   CONTROL_PLANE_CONVERGENCE_FIELD,
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
