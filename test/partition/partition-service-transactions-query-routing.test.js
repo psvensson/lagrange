@@ -7,6 +7,10 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
+  createLoopbackTransport,
+  waitForCondition,
+} from './partition-service-test-support.js';
+import {
   PartitionService,
   RaftRole,
   CDCOperation,
@@ -52,40 +56,6 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
-
-function createLoopbackTransport() {
-  const handlers = new Map();
-  return {
-    register(address, handler) {
-      handlers.set(address, handler);
-    },
-    unregister(address) {
-      handlers.delete(address);
-    },
-    async deliver(address, payload) {
-      const handler = handlers.get(address);
-      if (!handler) {
-        throw new Error(`No handler registered for ${address}`);
-      }
-      return handler({payload});
-    },
-  };
-}
-
-async function waitForCondition(
-  predicate,
-  timeoutMs = 1000,
-  intervalMs = 10,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await Promise.resolve(predicate())) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return false;
-}
 
 
 test(

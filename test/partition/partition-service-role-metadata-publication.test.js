@@ -4,8 +4,12 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
-import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {
+  createLoopbackTransport,
+  waitForCondition,
+  createTrafficReadinessState,
+} from './partition-service-test-support.js';
 import {
   PartitionService,
   RaftRole,
@@ -58,70 +62,6 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
-
-function createLoopbackTransport() {
-  const handlers = new Map();
-  return {
-    register(address, handler) {
-      handlers.set(address, handler);
-    },
-    unregister(address) {
-      handlers.delete(address);
-    },
-    async deliver(address, payload) {
-      const handler = handlers.get(address);
-      if (!handler) {
-        throw new Error(`No handler registered for ${address}`);
-      }
-      return handler({payload});
-    },
-  };
-}
-
-async function waitForCondition(
-  predicate,
-  timeoutMs = 1000,
-  intervalMs = 10,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await Promise.resolve(predicate())) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return false;
-}
-
-function createTrafficReadinessState() {
-  const emitter = new EventEmitter();
-  let snapshot = {
-    phase: LIFECYCLE_PHASE.INIT,
-    ready: false,
-    reasons: [],
-  };
-
-  return {
-    getSnapshot() {
-      return {...snapshot};
-    },
-    on(eventName, listener) {
-      emitter.on(eventName, listener);
-    },
-    off(eventName, listener) {
-      emitter.off(eventName, listener);
-    },
-    transitionTo(phase, options = {}) {
-      snapshot = {
-        phase,
-        ready: options.ready === true,
-        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
-      };
-      emitter.emit('transition', {...snapshot});
-      return {...snapshot};
-    },
-  };
-}
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
   const partition = new PartitionService({
