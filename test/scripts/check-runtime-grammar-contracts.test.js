@@ -7,16 +7,19 @@ import {
 const STRICT_CONSISTENCY_FILE_PATH =
   'test/distributed/harness/assertions-segment-1.js';
 const UNIFIED_REBALANCER_FILE_PATH =
-  'src/rebalancer/unified-rebalancer-lifecycle-base.js';
-const MOVE_PLANNER_FILE_PATH = 'src/rebalancer/move-planner.js';
+  'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js';
+const MOVE_PLANNER_FILE_PATH =
+  'src/rebalancer/move-planner-move-calculation-methods.js';
 const PRIORITY_PUBLICATION_SAFETY_TOPOLOGY_FILE_PATH =
   'src/rebalancer/priority-publication-safety-topology.js';
 const PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH =
   'src/rebalancer/priority-publication-leader-safety.js';
 const PUBLICATION_COORDINATOR_FILE_PATH =
-  'src/control-plane/membership-publication-coordinator.js';
+  'src/control-plane/membership-publication-coordinator-reads.js';
 const PUBLICATION_RECOVERY_GATE_FILE_PATH =
   'src/control-plane/publication-recovery-gate.js';
+const PUBLICATION_PRIORITY_SPREAD_FILE_PATH =
+  'src/control-plane/publication-recovery-priority-spread.js';
 const READINESS_SERVICE_SEGMENT_4_FILE_PATH =
   'src/control-plane/control-plane-readiness-publication-aware.js';
 const ADMIN_WEBSOCKET_API_SEGMENT_2_FILE_PATH =
@@ -241,7 +244,7 @@ test('detects publication recovery gate code that skips summary authority',
         '  return {priorityPartitionSummary: prioritySpreadDecision.priorityPartitionSummary};',
         '}',
       ].join('\n'),
-      PUBLICATION_RECOVERY_GATE_FILE_PATH,
+      PUBLICATION_PRIORITY_SPREAD_FILE_PATH,
     );
 
     t.ok(
@@ -456,18 +459,21 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
     [
       'src/admin/admin-websocket-load-lane-admission.js',
       'src/control-plane/control-plane-readiness-publication-aware.js',
-      'src/control-plane/membership-publication-coordinator.js',
+      'src/control-plane/membership-publication-coordinator-planning.js',
+      'src/control-plane/membership-publication-coordinator-reads.js',
       'src/control-plane/publication-recovery-gate.js',
+      'src/control-plane/publication-recovery-priority-spread.js',
       'src/node/replica-handler-remove-execution-methods.js',
       'src/node/replica-handler-remove-request-methods.js',
-      'src/rebalancer/move-planner.js',
+      'src/rebalancer/move-planner-move-calculation-methods.js',
       'src/rebalancer/operation-workflow-owner-execution-lane.js',
       'src/rebalancer/priority-publication-handoff.js',
       'src/rebalancer/priority-publication-leader-safety.js',
       'src/rebalancer/priority-publication-safety-topology.js',
       'src/rebalancer/unified-rebalancer-lifecycle-base.js',
+      'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js',
+      'test/distributed/harness/assertions-consistency-comparison.js',
       'test/distributed/harness/assertions-segment-1.js',
-      'test/distributed/harness/assertions-segment-3.js',
       'test/distributed/harness/cluster-segment-2.js',
       'test/distributed/harness/publication-evidence-replay.js',
       'test/distributed/harness/state-machine-pressure-preflight.js',

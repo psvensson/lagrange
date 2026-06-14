@@ -67,7 +67,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'test/distributed/harness/assertions-segment-3.js': Object.freeze({
+  'test/distributed/harness/assertions-consistency-comparison.js': Object.freeze({
     requiredFragments: Object.freeze([
       'extractPublicationRecoveryGateContract',
       'CONSISTENCY_REASON_CODE_PUBLICATION_RECOVERY_GATE_NOT_READY',
@@ -75,11 +75,10 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       'publicationRecoveryGate',
     ]),
   }),
-  'src/control-plane/publication-recovery-gate.js': Object.freeze({
+  'src/control-plane/publication-recovery-priority-spread.js': Object.freeze({
     requiredFragments: Object.freeze([
       'hasPriorityRecoverySpreadGap',
       'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE',
-      'filterProvidedPriorityRecoveryReasonCodes',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
@@ -92,6 +91,13 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'prioritySpreadPending',
         ]),
       }),
+    ]),
+  }),
+  'src/control-plane/publication-recovery-gate.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'filterProvidedPriorityRecoveryReasonCodes',
+    ]),
+    functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'buildPublicationRecoveryGateSnapshot',
         requiredFragments: Object.freeze([
@@ -138,11 +144,6 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
     ]),
   }),
   'src/rebalancer/unified-rebalancer-lifecycle-base.js': Object.freeze({
-    requiredFragments: Object.freeze([
-      'bindPriorityRecoveryVisibilityCacheListener',
-      'unbindPriorityRecoveryVisibilityCacheListener',
-      'RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS',
-    ]),
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'constructor',
@@ -150,6 +151,15 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'bindPriorityRecoveryVisibilityCacheListener',
         ]),
       }),
+    ]),
+  }),
+  'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'bindPriorityRecoveryVisibilityCacheListener',
+      'unbindPriorityRecoveryVisibilityCacheListener',
+      'RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS',
+    ]),
+    functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'bindPriorityRecoveryVisibilityCacheListener',
         requiredFragments: Object.freeze([
@@ -186,7 +196,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/rebalancer/move-planner.js': Object.freeze({
+  'src/rebalancer/move-planner-move-calculation-methods.js': Object.freeze({
     requiredFragments: Object.freeze([
       'buildPriorityStandaloneRemoveSafety',
       'prioritySpreadStandaloneSafe',
@@ -267,11 +277,10 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/control-plane/membership-publication-coordinator.js': Object.freeze({
+  'src/control-plane/membership-publication-coordinator-reads.js': Object.freeze({
     requiredFragments: Object.freeze([
       'mergePlanningEvidenceRows',
       'shouldMergePlanningEvidenceRows',
-      'MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
@@ -281,6 +290,13 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'systemTableCache.getAll',
         ]),
       }),
+    ]),
+  }),
+  'src/control-plane/membership-publication-coordinator-planning.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING',
+    ]),
+    functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'readPublicationPlanningSnapshot',
         requiredFragments: Object.freeze([
