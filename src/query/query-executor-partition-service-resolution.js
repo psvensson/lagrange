@@ -1,5 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {QueryExecutorSegment3Part1} from './query-executor-segment-3-part-1.js';
+import {QueryExecutorCancellationRouting} from './query-executor-cancellation-routing-install.js';
 import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
 import {
@@ -32,7 +32,7 @@ const {
 
 const PRIORITY_CONTROL_PLANE_CONNECTED_STATE = 'connected';
 
-class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
+class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationRouting {
   /**
    * Find partition leader address from system cache.
    * Queries the services table in the cache for the partition leader.
@@ -724,7 +724,11 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
   }
 }
 
-installQueryExecutorSelectAggregationHelpers(QueryExecutorSegment3);
-installQueryExecutorSqlCommandHelpers(QueryExecutorSegment3);
+installQueryExecutorSelectAggregationHelpers(
+  QueryExecutorPartitionServiceResolution,
+);
+installQueryExecutorSqlCommandHelpers(
+  QueryExecutorPartitionServiceResolution,
+);
 
-export {QueryExecutorSegment3};
+export {QueryExecutorPartitionServiceResolution};

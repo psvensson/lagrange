@@ -1,5 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {QueryExecutorSegment2} from './query-executor-segment-2.js';
+import {QueryExecutorWriteRetryRouting} from './query-executor-write-retry-routing.js';
 import {
   installQueryExecutorPartitionRoutingCandidateMethods,
 } from './query-executor-partition-routing-candidates.js';
@@ -14,7 +14,7 @@ const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
-class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
+class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
   async delay(delayMs) {
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, delayMs);
@@ -42,11 +42,13 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
 
 }
 installQueryExecutorTemporaryUnroutableAddressMethods(
-  QueryExecutorSegment3Part1,
+  QueryExecutorCancellationRouting,
 );
 installQueryExecutorPartitionRoutingCandidateMethods(
-  QueryExecutorSegment3Part1,
+  QueryExecutorCancellationRouting,
 );
-installQueryExecutorPartitionRoutingSnapshotMethods(QueryExecutorSegment3Part1);
+installQueryExecutorPartitionRoutingSnapshotMethods(
+  QueryExecutorCancellationRouting,
+);
 
-export {QueryExecutorSegment3Part1};
+export {QueryExecutorCancellationRouting};

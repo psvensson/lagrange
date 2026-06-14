@@ -4225,87 +4225,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/query/query-executor-segment-1.js",
-      "line": 43,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 43) and SQL/DB (line 83) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-1.js",
-      "line": 128,
-      "column": 1,
-      "functionName": "setSystemCache",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 128) and SQL/DB (line 128) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-2-part-1.js",
-      "line": 88,
-      "column": 1,
-      "functionName": "executeOnPartition",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 88) and SQL/DB (line 750) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-2-part-1.js",
-      "line": 119,
-      "column": 5,
-      "functionName": "executeOnPartition",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-2-part-1.js",
-      "line": 263,
-      "column": 7,
-      "functionName": "executeOnPartition",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-2-part-1.js",
-      "line": 95,
-      "column": 9,
-      "functionName": "executeOnPartition",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"lastFailureDetails\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-2-part-2.js",
-      "line": 245,
-      "column": 1,
-      "functionName": "maybeAwaitRuntimeRoutingRepair",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 245) and SQL/DB (line 274) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-3-part-2.js",
-      "line": 445,
-      "column": 1,
-      "functionName": "getPartitionRecord",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 445) and SQL/DB (line 443) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/query-executor-segment-3-part-2.js",
-      "line": 723,
-      "column": 1,
-      "functionName": "shouldOverlayMaskCacheServices",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 723) and SQL/DB (line 719) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/query/query-router.js",
       "line": 67,
       "column": 1,
@@ -7037,6 +6956,87 @@
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome assigned/declared for semantic target \"readyLeaseNodeIds\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/query-executor-base.js",
+      "line": 43,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 43) and SQL/DB (line 83) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-base.js",
+      "line": 128,
+      "column": 1,
+      "functionName": "setSystemCache",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 128) and SQL/DB (line 128) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-delivery.js",
+      "line": 88,
+      "column": 1,
+      "functionName": "executeOnPartition",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 88) and SQL/DB (line 750) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-delivery.js",
+      "line": 119,
+      "column": 5,
+      "functionName": "executeOnPartition",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-delivery.js",
+      "line": 263,
+      "column": 7,
+      "functionName": "executeOnPartition",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-delivery.js",
+      "line": 95,
+      "column": 9,
+      "functionName": "executeOnPartition",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"lastFailureDetails\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-service-resolution.js",
+      "line": 445,
+      "column": 1,
+      "functionName": "getPartitionRecord",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 445) and SQL/DB (line 443) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-service-resolution.js",
+      "line": 723,
+      "column": 1,
+      "functionName": "shouldOverlayMaskCacheServices",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 723) and SQL/DB (line 719) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-write-retry-routing.js",
+      "line": 245,
+      "column": 1,
+      "functionName": "maybeAwaitRuntimeRoutingRepair",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 245) and SQL/DB (line 274) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]
 }

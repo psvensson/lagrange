@@ -18,7 +18,7 @@ const {
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
 
-class QueryExecutorSegment2 extends QueryExecutorCanonicalLeaderRoutingMethods {
+class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRoutingMethods {
   /**
    * Queue alternative live replica targets after the canonical leader path has
    * been disproven at runtime.
@@ -593,4 +593,4 @@ class QueryExecutorSegment2 extends QueryExecutorCanonicalLeaderRoutingMethods {
    */
 }
 
-export {QueryExecutorSegment2};
+export {QueryExecutorWriteRetryRouting};

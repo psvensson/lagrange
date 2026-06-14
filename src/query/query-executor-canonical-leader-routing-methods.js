@@ -1,5 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {QueryExecutorSegment2Part1} from './query-executor-segment-2-part-1.js';
+import {QueryExecutorPartitionDelivery} from './query-executor-partition-delivery.js';
 
 const {
   CANONICAL_LEADER_IDENTITY_STATE,
@@ -16,7 +16,7 @@ const {
 } = QUERY_EXECUTOR_SHARED;
 
 class QueryExecutorCanonicalLeaderRoutingMethods
-  extends QueryExecutorSegment2Part1 {
+  extends QueryExecutorPartitionDelivery {
   resolveCanonicalPartitionLeaderIdentity(
     partitionId,
     serviceRows = null,

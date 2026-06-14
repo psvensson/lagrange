@@ -22,7 +22,7 @@ const {
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
-class QueryExecutorSegment1 {
+class QueryExecutorBase {
   constructor(options = {}) {
     this.messageRouter = options.messageRouter || null;
     this.systemCache = options.systemCache || null;
@@ -532,6 +532,6 @@ class QueryExecutorSegment1 {
    */
 }
 
-installQueryExecutorJoinExecutionHelpers(QueryExecutorSegment1);
+installQueryExecutorJoinExecutionHelpers(QueryExecutorBase);
 
-export {QueryExecutorSegment1};
+export {QueryExecutorBase};

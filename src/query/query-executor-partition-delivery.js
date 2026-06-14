@@ -1,5 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {QueryExecutorSegment1} from './query-executor-segment-1.js';
+import {QueryExecutorBase} from './query-executor-base.js';
 import {
   buildPartitionExecutionFailureResult,
   resolvePartitionRetryDelayMs,
@@ -30,7 +30,7 @@ const {
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
 
-class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
+class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
     partitionId,
     sql,
@@ -753,4 +753,4 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     };
   }
 }
-export {QueryExecutorSegment2Part1};
+export {QueryExecutorPartitionDelivery};

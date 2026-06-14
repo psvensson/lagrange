@@ -1,1 +1,1 @@
-export {QueryExecutorSegment3 as QueryExecutor} from './query-executor-segment-3.js';
+export {QueryExecutorPartitionServiceResolution as QueryExecutor} from './query-executor-partition-service-resolution.js';
