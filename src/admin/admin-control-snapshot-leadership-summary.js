@@ -22,7 +22,7 @@ import {
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
-import {AdminControlSnapshotPart6} from './admin-control-snapshot-class-part-6.js';
+import {AdminControlSnapshotMembershipPublicationReconcile} from './admin-control-snapshot-membership-publication-reconcile.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -180,7 +180,7 @@ function resolveControlSnapshotLeaderDecision({
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshot extends AdminControlSnapshotPart6 {
+class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReconcile {
   buildControlSnapshotLeaderSummary(
     partitionRows = [],
     serviceRows = [],

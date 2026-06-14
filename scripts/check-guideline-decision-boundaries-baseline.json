@@ -368,42 +368,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-control-snapshot-class-part-1.js",
-      "line": 405,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 405) and SQL/DB (line 383) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-class-part-3.js",
-      "line": 124,
-      "column": 9,
-      "functionName": "resolveControlSnapshotReadyLeaseNodeIds",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"readyLeaseNodeIds\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-class-part-5.js",
-      "line": 112,
-      "column": 5,
-      "functionName": "buildMembershipPublicationOwnerQueueDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-class-part-6.js",
-      "line": 324,
-      "column": 3,
-      "functionName": "resolveMembershipPublicationHandoffRetryAfterMs",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
       "line": 55,
       "column": 1,
@@ -7036,6 +7000,42 @@
       "functionName": "resolveLoadLaneTableAdmissionState",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
+      "line": 112,
+      "column": 5,
+      "functionName": "buildMembershipPublicationOwnerQueueDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-local-build-base.js",
+      "line": 405,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 405) and SQL/DB (line 383) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+      "line": 324,
+      "column": 3,
+      "functionName": "resolveMembershipPublicationHandoffRetryAfterMs",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
+      "line": 124,
+      "column": 9,
+      "functionName": "resolveControlSnapshotReadyLeaseNodeIds",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"readyLeaseNodeIds\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     }
   ]

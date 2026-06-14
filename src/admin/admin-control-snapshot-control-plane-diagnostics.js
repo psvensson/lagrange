@@ -20,7 +20,7 @@ import {
 import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/publication-recovery-evidence.js';
 import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../control-plane/priority-recovery-snapshot.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
-import {AdminControlSnapshotPart4} from './admin-control-snapshot-class-part-4.js';
+import {AdminControlSnapshotCoverageGapEvaluation} from './admin-control-snapshot-coverage-gap-evaluation.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -243,7 +243,7 @@ function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
+class AdminControlSnapshotControlPlaneDiagnostics extends AdminControlSnapshotCoverageGapEvaluation {
   /**
    * Compute local cache staleness for active node heartbeat rows.
    * Stale live-node rows indicate the control snapshot should rebuild from
@@ -563,4 +563,4 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
     return scheduledCount;
   }
 }
-export {AdminControlSnapshotPart5};
+export {AdminControlSnapshotControlPlaneDiagnostics};

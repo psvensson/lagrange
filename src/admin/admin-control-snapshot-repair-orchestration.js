@@ -21,7 +21,7 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
-import {AdminControlSnapshotPart1} from './admin-control-snapshot-class-part-1.js';
+import {AdminControlSnapshotLocalBuildBase} from './admin-control-snapshot-local-build-base.js';
 import {
   ADMIN_CONTROL_SNAPSHOT_LITERAL,
   CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT,
@@ -65,7 +65,7 @@ import {
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
+class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalBuildBase {
   async buildForcedRepairFailureLocalFallbackSnapshot(options = {}) {
     try {
       return await this.buildLocalControlSnapshot(
@@ -616,4 +616,4 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     ).authoritativeActiveNodeIds;
   }
 }
-export {AdminControlSnapshotPart2};
+export {AdminControlSnapshotRepairOrchestration};

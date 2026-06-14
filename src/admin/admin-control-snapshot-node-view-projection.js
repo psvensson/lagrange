@@ -35,7 +35,7 @@ import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consis
 import {
   shouldAttemptAuthoritativeRepair,
 } from './admin-authoritative-repair-evaluation.js';
-import {AdminControlSnapshotPart2} from './admin-control-snapshot-class-part-2.js';
+import {AdminControlSnapshotRepairOrchestration} from './admin-control-snapshot-repair-orchestration.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -470,7 +470,7 @@ function filterControlSnapshotAvailableCandidateNodeIds(
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
+class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairOrchestration {
   resolveControlSnapshotNodeViews(
     nodeRows = [],
     serviceRows = [],
@@ -712,4 +712,4 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
     });
   }
 }
-export {AdminControlSnapshotPart3};
+export {AdminControlSnapshotNodeViewProjection};

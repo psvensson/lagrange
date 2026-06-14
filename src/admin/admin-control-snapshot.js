@@ -53,7 +53,7 @@ import {
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
-import {AdminControlSnapshot} from './admin-control-snapshot-class-part-7.js';
+import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',

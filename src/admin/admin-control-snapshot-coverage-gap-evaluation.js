@@ -23,7 +23,7 @@ import {
 import {
   buildReadinessByNodeId,
 } from '../control-plane/active-node-projection.js';
-import {AdminControlSnapshotPart3} from './admin-control-snapshot-class-part-3.js';
+import {AdminControlSnapshotNodeViewProjection} from './admin-control-snapshot-node-view-projection.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const PARTITION_STATE_NORMAL = 'NORMAL';
 /**
@@ -38,7 +38,7 @@ const PARTITION_STATE_NORMAL = 'NORMAL';
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart4 extends AdminControlSnapshotPart3 {
+class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNodeViewProjection {
   evaluateConnectedNodeCoverageGap(nodeRows = []) {
     if (
       !this.messageRouter ||
@@ -254,4 +254,4 @@ class AdminControlSnapshotPart4 extends AdminControlSnapshotPart3 {
     return false;
   }
 }
-export {AdminControlSnapshotPart4};
+export {AdminControlSnapshotCoverageGapEvaluation};

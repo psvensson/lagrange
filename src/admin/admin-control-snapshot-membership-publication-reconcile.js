@@ -29,7 +29,7 @@ import {
   isMembershipPublicationHandoffControlPlaneConvergence,
   resolveOwnerRecoveryWaitHandoffReasonCode,
 } from './admin-control-membership-publication-handoff-outcomes.js';
-import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
+import {AdminControlSnapshotControlPlaneDiagnostics} from './admin-control-snapshot-control-plane-diagnostics.js';
 import {isRecoverableControlSnapshotPublicationReadError} from './admin-control-snapshot-repair-diagnostics.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -602,7 +602,7 @@ function resolveLatestMembershipPublicationRow(
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
+class AdminControlSnapshotMembershipPublicationReconcile extends AdminControlSnapshotControlPlaneDiagnostics {
   resolveMembershipPublicationService() {
     const readinessServices = [
       this.controlPlaneReadinessService || null,
@@ -834,4 +834,4 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
     );
   }
 }
-export {AdminControlSnapshotPart6};
+export {AdminControlSnapshotMembershipPublicationReconcile};

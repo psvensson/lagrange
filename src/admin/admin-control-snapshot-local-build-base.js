@@ -369,7 +369,7 @@ function attachControlSnapshotObservationMode(snapshot, options = {}) {
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotPart1 {
+class AdminControlSnapshotLocalBuildBase {
   /**
    * @param {Object} deps
    * @param {Object} deps.systemTableCache
@@ -888,4 +888,4 @@ function attachControlSnapshotObservationActiveGateHandoff(
     },
   };
 }
-export {AdminControlSnapshotPart1};
+export {AdminControlSnapshotLocalBuildBase};
