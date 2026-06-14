@@ -124,7 +124,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/admin/admin-websocket-api-segment-2.js': Object.freeze({
+  'src/admin/admin-websocket-load-lane-admission.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'resolveLoadLaneReadinessSnapshot',

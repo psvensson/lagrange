@@ -1,5 +1,5 @@
 export {
-  AdminWebSocketAPISegment3 as AdminWebSocketAPI,
+  AdminWebSocketAPI,
   MessageType,
   ErrorCode,
-} from './admin-websocket-api-segment-3.js';
+} from './admin-websocket-api-composition.js';

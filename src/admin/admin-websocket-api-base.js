@@ -86,7 +86,7 @@ const ADMIN_SERVICE_ENVELOPE_HANDLER = Object.freeze({
   }),
 });
 
-class AdminWebSocketAPISegment1 {
+class AdminWebSocketAPIBase {
   constructor(options = {}) {
     this[ADMIN_FIELD.STORAGE_VIEW] =
       options[ADMIN_FIELD.STORAGE_VIEW] || null;
@@ -644,8 +644,8 @@ class AdminWebSocketAPISegment1 {
 }
 
 Object.assign(
-  AdminWebSocketAPISegment1.prototype,
+  AdminWebSocketAPIBase.prototype,
   ADMIN_WEBSOCKET_TEST_RUN_ROUTE_METHODS,
 );
 
-export {AdminWebSocketAPISegment1};
+export {AdminWebSocketAPIBase};

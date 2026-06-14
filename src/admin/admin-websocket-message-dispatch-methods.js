@@ -1,6 +1,6 @@
 import {createAdminQueryResultMessageEnvelope} from './admin-query-result-message-envelope.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
-import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
+import {AdminWebSocketAPISegment2} from './admin-websocket-load-lane-admission.js';
 
 const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
 

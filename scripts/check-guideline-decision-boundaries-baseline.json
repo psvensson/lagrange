@@ -584,42 +584,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-2.js",
-      "line": 190,
-      "column": 5,
-      "functionName": "normalizeLoadLaneAdmissionReasonCodes",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/admin/admin-websocket-api-segment-2.js",
-      "line": 226,
-      "column": 1,
-      "functionName": "shouldAdmitLoadLaneSoftBenchmarkBlockers",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 226) and SQL/DB (line 231) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/admin/admin-websocket-api-segment-2.js",
-      "line": 458,
-      "column": 1,
-      "functionName": "resolveLoadLaneTableAdmissionState",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 458) and SQL/DB (line 416) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/admin/admin-websocket-api-segment-2.js",
-      "line": 398,
-      "column": 7,
-      "functionName": "resolveLoadLaneTableAdmissionState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/admin/admin-websocket-api-shared.js",
       "line": 188,
       "column": 5,
@@ -7034,6 +6998,42 @@
       "line": 430,
       "column": 3,
       "functionName": "readMembershipPublicationConvergence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/admin/admin-websocket-load-lane-admission.js",
+      "line": 190,
+      "column": 5,
+      "functionName": "normalizeLoadLaneAdmissionReasonCodes",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/admin/admin-websocket-load-lane-admission.js",
+      "line": 226,
+      "column": 1,
+      "functionName": "shouldAdmitLoadLaneSoftBenchmarkBlockers",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 226) and SQL/DB (line 231) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/admin/admin-websocket-load-lane-admission.js",
+      "line": 458,
+      "column": 1,
+      "functionName": "resolveLoadLaneTableAdmissionState",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 458) and SQL/DB (line 416) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/admin/admin-websocket-load-lane-admission.js",
+      "line": 398,
+      "column": 7,
+      "functionName": "resolveLoadLaneTableAdmissionState",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"

@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `91`
-- Semantic clusters: `13`
-- Primary kind counts: `{"segment":73,"stage":11,"part":7}`
+- Ordinal files: `88`
+- Semantic clusters: `12`
+- Primary kind counts: `{"segment":70,"stage":11,"part":7}`
 
 ## Migration Plan
 
@@ -13,7 +13,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 ## Clusters
 
 - `admin-control-snapshot-class` (7 files): `admin_control_snapshot_owner / admin_control_snapshot_projection`; proposed module `admin-control-snapshot-projection.js`; successor `runtime-modularization-admin-control-snapshot-projection`; samples `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`.
-- `admin-websocket-api` (3 files): `admin_websocket_api_owner / admin_websocket_routing`; proposed module `admin-websocket-routing.js`; successor `runtime-modularization-admin-websocket-routing`; samples `src/admin/admin-websocket-api-segment-1.js`, `src/admin/admin-websocket-api-segment-2.js`, `src/admin/admin-websocket-api-segment-3.js`.
 - `control-plane-readiness-service` (10 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-1.js`, `src/control-plane/control-plane-readiness-service-segment-2.js`, `src/control-plane/control-plane-readiness-service-segment-3.js`.
 - `control-plane-readiness-service-runtime-authority-methods` (1 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js`.
 - `operation-workflow-owner` (18 files): `operation_workflow_owner / operation_workflow_progression`; proposed module `operation-workflow-progression.js`; successor `runtime-modularization-operation-workflow-progression`; samples `src/rebalancer/operation-workflow-owner-segment-1.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`.

@@ -1,5 +1,5 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
-import {AdminWebSocketAPISegment1} from './admin-websocket-api-segment-1.js';
+import {AdminWebSocketAPIBase} from './admin-websocket-api-base.js';
 import {
   ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS,
 } from './admin-websocket-local-observation-methods.js';
@@ -62,7 +62,7 @@ const {
   resolveRequestedQueryTimeoutMs,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
-class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
+class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
   async resolveLoadLaneReadinessSnapshot() {
     if (
       !this.controlPlaneReadinessService ||
@@ -615,8 +615,11 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
 }
 
 Object.assign(
-  AdminWebSocketAPISegment2.prototype,
+  AdminWebSocketLoadLaneAdmission.prototype,
   ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS,
 );
 
-export {AdminWebSocketAPISegment2};
+export {
+  AdminWebSocketLoadLaneAdmission,
+  AdminWebSocketLoadLaneAdmission as AdminWebSocketAPISegment2,
+};
