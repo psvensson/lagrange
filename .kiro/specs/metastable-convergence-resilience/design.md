@@ -48,7 +48,7 @@ budget substrate.
 
 Reuse: the existing Raft-learner machinery —
 `buildPriorityRecoveryLearnerPromotion`, `PRIORITY_RECOVERY_RAFT_ROLE_LEARNER`,
-learner-hold reasons (`priority-recovery-snapshot-stage-9.js`); readiness
+learner-hold reasons (`priority-recovery-snapshot-burndown.js`); readiness
 `PLACEMENT_ELIGIBLE`/`PROVISIONING_ELIGIBLE`; `STARTUP_ADMISSION_*`
 (`rejoin-reconciliation-contract.js`).
 

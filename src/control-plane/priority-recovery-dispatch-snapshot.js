@@ -21,13 +21,13 @@ import {
   buildPriorityRecoveryDispatchPendingDiagnosticOwnerOutcome,
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from './priority-recovery-dispatch-pending-diagnostic-owner.js';
-import {PRIORITY_RECOVERY_SNAPSHOT_LITERAL} from './priority-recovery-snapshot-stage-shared.js';
+import {PRIORITY_RECOVERY_SNAPSHOT_LITERAL} from './priority-recovery-snapshot-contract.js';
 import {buildTopologyOperatorWitnessFromWorkflowProgress} from './topology-operator-witness.js';
-import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-stage-7.js';
-import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
-import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-stage-9.js';
-import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-stage-11.js';
+import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-observation.js';
+import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-actuation.js';
+import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-burndown.js';
+import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-closure.js';
 
 function resolvePriorityRecoveryDecisionOperationOwnerOutcome(
   options,

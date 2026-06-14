@@ -145,24 +145,26 @@ listed above.
 
 ## Control-Plane Snapshot Stage Removal Ledger
 
-The following priority-recovery snapshot stage files are allowlisted temporary
-compatibility modules. New control-plane snapshot work must land in semantic
-owner files rather than ordinal stage files.
+The priority-recovery snapshot ordinal stage files have been decomposed into
+responsibility-named owner modules (rename/extract only; behavior unchanged and
+the `priority-recovery-snapshot.js` seam export surface is stable). New
+control-plane snapshot work must land in these semantic owner files rather than
+ordinal stage files.
 
-| Legacy file | Classification | Replacement owner file | Deletion condition |
+| Retired ordinal file | Classification | Successor owner file | Status |
 | --- | --- | --- | --- |
-| `src/control-plane/priority-recovery-snapshot-stage-1.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-ingress.js` | Delete after snapshot ingress normalization is routed through the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-2.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-eligibility.js` | Delete after eligibility projection moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-3.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-publication.js` | Delete after publication evidence shaping moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-4.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-active-gate.js` | Delete after active-gate evidence shaping moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-5.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-workflow.js` | Delete after workflow-progress evidence shaping moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-6.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-rebalancer.js` | Delete after rebalancer-handoff evidence shaping moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-7.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-observation.js` | Delete after observation selection moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-8.js` | extract into responsibility-named module | `src/control-plane/priority-recovery-snapshot.js` | Delete after current invariant proof no longer imports the ordinal stage. |
-| `src/control-plane/priority-recovery-snapshot-stage-9.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-burndown.js` | Delete after residual burn-down projection moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-10.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-dispatch-snapshot.js` | Delete after dispatch_pending/planned workflow evidence moves to the named dispatch snapshot module. |
-| `src/control-plane/priority-recovery-snapshot-stage-11.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-closure.js` | Delete after closure classification moves to the named module. |
-| `src/control-plane/priority-recovery-snapshot-stage-shared.js` | temporary compatibility wrapper | future `src/control-plane/priority-recovery-snapshot-contract.js` | Delete after shared snapshot constants move to the named contract module. |
+| `src/control-plane/priority-recovery-snapshot-stage-1.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-ingress.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-2.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-eligibility.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-3.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-publication.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-4.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-active-gate.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-5.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-workflow.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-6.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-rebalancer.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-7.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-observation.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-8.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-actuation.js` | Removed; renamed to successor (re-exported through `priority-recovery-snapshot.js`). |
+| `src/control-plane/priority-recovery-snapshot-stage-9.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-burndown.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-10.js` | barrel folded into named dispatch module | `src/control-plane/priority-recovery-dispatch-snapshot.js` | Removed; consumers import the dispatch snapshot module directly. |
+| `src/control-plane/priority-recovery-snapshot-stage-11.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-closure.js` | Removed; renamed to successor. |
+| `src/control-plane/priority-recovery-snapshot-stage-shared.js` | shared snapshot constants | `src/control-plane/priority-recovery-snapshot-contract.js` | Removed; renamed to successor. |
 
 ## Shared Control-Plane Building Blocks
 

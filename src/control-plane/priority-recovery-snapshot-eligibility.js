@@ -20,9 +20,9 @@ import {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_SYNTHETIC_NO_OPERATION_BLOCKER_REASONS,
   PRIORITY_RECOVERY_RELEASED_SERIAL_WAIT_COMPLETION_STATES,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {normalizePriorityRecoveryDecisionSnapshotSemanticState, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-contract.js';
+import {normalizePriorityRecoveryDecisionSnapshotSemanticState, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-ingress.js';
+import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
 function normalizePriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
   return normalizePriorityRecoveryStringList([

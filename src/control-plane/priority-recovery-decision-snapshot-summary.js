@@ -6,14 +6,14 @@ import {normalizePriorityRecoveryInteger} from './priority-recovery-helpers.js';
 import {
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
-} from './priority-recovery-snapshot-stage-shared.js';
+} from './priority-recovery-snapshot-contract.js';
 import {
   hasPriorityRecoveryDecisionSnapshotOperationEvidence,
   isPriorityRecoverySpreadProgressDecisionSnapshot,
   resolvePriorityRecoveryDecisionSnapshotFreshnessMs,
   resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs,
-} from './priority-recovery-snapshot-stage-2.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-eligibility.js';
+import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
 function resolvePriorityRecoveryDecisionSnapshotSummarySortTimestamp(snapshot) {
   const progressFreshnessMs =

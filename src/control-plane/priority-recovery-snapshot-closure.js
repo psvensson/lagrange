@@ -17,12 +17,12 @@ import {
   normalizePriorityRecoveryInteger,
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
-import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry, buildPriorityRecoverySemanticPartitionSetMap, buildPriorityRecoverySpreadCompletion, buildPriorityRecoverySpreadRelevantOperationContexts, hasPriorityRecoverySpreadGap, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoverySerialWaitOperationContexts, buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts} from './priority-recovery-snapshot-stage-3.js';
-import {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-stage-4.js';
-import {buildPriorityRecoveryOperationContextFromRecord, buildPriorityRecoveryReplicaOperationContexts, isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
-import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions} from './priority-recovery-snapshot-stage-7.js';
-import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryAdmissionByPartitionId, buildPriorityRecoveryLearnerPromotionByPartitionId, buildPriorityRecoveryPublicationNodeDecisions} from './priority-recovery-snapshot-stage-9.js';
+import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry, buildPriorityRecoverySemanticPartitionSetMap, buildPriorityRecoverySpreadCompletion, buildPriorityRecoverySpreadRelevantOperationContexts, hasPriorityRecoverySpreadGap, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoverySerialWaitOperationContexts, buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts} from './priority-recovery-snapshot-publication.js';
+import {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-active-gate.js';
+import {buildPriorityRecoveryOperationContextFromRecord, buildPriorityRecoveryReplicaOperationContexts, isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
+import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions} from './priority-recovery-snapshot-observation.js';
+import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryAdmissionByPartitionId, buildPriorityRecoveryLearnerPromotionByPartitionId, buildPriorityRecoveryPublicationNodeDecisions} from './priority-recovery-snapshot-burndown.js';
 import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, buildPriorityRecoveryDecisionSnapshot, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap, recordPriorityRecoveryDecisionSnapshotSummary} from './priority-recovery-dispatch-snapshot.js';
 
 function buildPriorityRecoveryDecisionSnapshots(options = {}) {

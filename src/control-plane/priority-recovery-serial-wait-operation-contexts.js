@@ -10,12 +10,12 @@ import {
 } from '../rebalancer/replica-status.js';
 import {
   LOCAL_STR_EMPTY,
-} from './priority-recovery-snapshot-stage-shared.js';
+} from './priority-recovery-snapshot-contract.js';
 import {
   isPriorityRecoverySpreadSatisfyingOperationContext,
   isPriorityRecoveryTrackedPartitionId,
-} from './priority-recovery-snapshot-stage-1.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-ingress.js';
+import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
 function isPriorityRecoveryOrdinarySerialLanePartitionId(partitionId) {
   return (

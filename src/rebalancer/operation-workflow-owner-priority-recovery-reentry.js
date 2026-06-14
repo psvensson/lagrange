@@ -19,7 +19,7 @@ import {
   PRIORITY_RECOVERY_PROVENANCE_SOURCE,
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
-} from '../control-plane/priority-recovery-snapshot-stage-shared.js';
+} from '../control-plane/priority-recovery-snapshot-contract.js';
 
 const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME =

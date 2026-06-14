@@ -25,8 +25,8 @@ import {
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
   PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-contract.js';
+import {isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
 function readFirstStringField(row, ...keys) {
   for (const key of keys) {

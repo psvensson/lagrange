@@ -26,8 +26,8 @@ import {
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
   PRIORITY_RECOVERY_VISIBILITY_STATE,
   PRIORITY_RECOVERY_WORKFLOW_STATE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-contract.js';
+import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
 function resolvePriorityRecoveryWorkflowState(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?

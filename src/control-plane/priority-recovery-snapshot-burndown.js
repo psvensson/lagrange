@@ -37,10 +37,10 @@ import {
   PRIORITY_RECOVERY_SERVICE_FIELD_STATUS,
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
   PRIORITY_RECOVERY_STATUS_ACTIVE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {readFirstStringField, resolvePriorityRecoveryReasonCodesFromReadiness} from './priority-recovery-snapshot-stage-1.js';
-import {resolvePriorityRecoveryConvergenceState, resolvePriorityRecoveryVisibilityState, resolvePriorityRecoveryWorkflowState} from './priority-recovery-snapshot-stage-7.js';
-import {buildPriorityRecoveryBlockedDescriptor, buildPriorityRecoveryPendingDescriptor, buildPriorityRecoveryProgressContext, buildPriorityRecoveryProgressDecisionDescriptor, buildPriorityRecoveryProgressDecisionEvidence, buildPriorityRecoveryProgressOutcome, buildPriorityRecoveryReadyDescriptor, buildPriorityRecoveryRetryScheduledDescriptor} from './priority-recovery-snapshot-stage-8.js';
+} from './priority-recovery-snapshot-contract.js';
+import {readFirstStringField, resolvePriorityRecoveryReasonCodesFromReadiness} from './priority-recovery-snapshot-ingress.js';
+import {resolvePriorityRecoveryConvergenceState, resolvePriorityRecoveryVisibilityState, resolvePriorityRecoveryWorkflowState} from './priority-recovery-snapshot-observation.js';
+import {buildPriorityRecoveryBlockedDescriptor, buildPriorityRecoveryPendingDescriptor, buildPriorityRecoveryProgressContext, buildPriorityRecoveryProgressDecisionDescriptor, buildPriorityRecoveryProgressDecisionEvidence, buildPriorityRecoveryProgressOutcome, buildPriorityRecoveryReadyDescriptor, buildPriorityRecoveryRetryScheduledDescriptor} from './priority-recovery-snapshot-actuation.js';
 
 const PRIORITY_RECOVERY_PROGRESS_DECISION_TABLE = Object.freeze([
   Object.freeze({

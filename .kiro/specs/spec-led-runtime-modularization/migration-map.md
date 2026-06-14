@@ -37,7 +37,7 @@ Operation owner:
 1. `src/rebalancer/operation-workflow-owner*.js`
 2. `src/rebalancer/rebalance-coordinator*.js`
 3. `src/rebalancer/replica-operation-repository*.js`
-4. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+4. `src/control-plane/priority-recovery-dispatch-snapshot.js`
 
 Priority recovery observation:
 

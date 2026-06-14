@@ -21,8 +21,8 @@ import {
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {isPriorityRecoverySnapshotObject} from './priority-recovery-snapshot-stage-9.js';
+} from './priority-recovery-snapshot-contract.js';
+import {isPriorityRecoverySnapshotObject} from './priority-recovery-snapshot-burndown.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,

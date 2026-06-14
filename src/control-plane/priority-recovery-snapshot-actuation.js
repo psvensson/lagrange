@@ -26,12 +26,12 @@ import {
   PRIORITY_RECOVERY_ACTUATION_DECISION,
   PRIORITY_RECOVERY_VISIBILITY_STATE,
   PRIORITY_RECOVERY_WORKFLOW_STATE,
-} from './priority-recovery-snapshot-stage-shared.js';
+} from './priority-recovery-snapshot-contract.js';
 import {
   OPERATION_PROGRESS_COMPATIBILITY_VARIANT,
   buildOperationProgressCompatibilityProjection,
 } from '../rebalancer/operation-progress-observer.js';
-import {buildPriorityRecoveryActuationDecisionEvidence, buildPriorityRecoveryActuationShape, buildPriorityRecoveryActuationSnapshot, buildPriorityRecoveryConditionsContract, buildPriorityRecoveryProgressEvidenceSourceIds, buildPriorityRecoveryWorkflowProgressMetrics, hasPriorityRecoveryScheduledRetry, isPriorityRecoveryObservationDeferred, resolvePriorityRecoveryOperationProgressTimestampMs, resolvePriorityRecoveryTerminalActuationState, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-stage-7.js';
+import {buildPriorityRecoveryActuationDecisionEvidence, buildPriorityRecoveryActuationShape, buildPriorityRecoveryActuationSnapshot, buildPriorityRecoveryConditionsContract, buildPriorityRecoveryProgressEvidenceSourceIds, buildPriorityRecoveryWorkflowProgressMetrics, hasPriorityRecoveryScheduledRetry, isPriorityRecoveryObservationDeferred, resolvePriorityRecoveryOperationProgressTimestampMs, resolvePriorityRecoveryTerminalActuationState, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-observation.js';
 
 const PRIORITY_RECOVERY_ACTUATION_DECISION_TABLE = Object.freeze([
   Object.freeze({

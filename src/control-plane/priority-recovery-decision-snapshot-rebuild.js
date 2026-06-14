@@ -11,12 +11,12 @@ import {
   LOCAL_EMPTY_LIST,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {buildReleasedPriorityRecoverySerialWaitAssessment, resolvePriorityRecoveryDecisionSnapshotAdmission, resolvePriorityRecoveryDecisionSnapshotCapturedAt, resolvePriorityRecoveryDecisionSnapshotOperationContexts} from './priority-recovery-snapshot-stage-2.js';
-import {buildPriorityRecoveryConditionsContract} from './priority-recovery-snapshot-stage-7.js';
-import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
-import {buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract} from './priority-recovery-snapshot-stage-9.js';
+} from './priority-recovery-snapshot-contract.js';
+import {resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-ingress.js';
+import {buildReleasedPriorityRecoverySerialWaitAssessment, resolvePriorityRecoveryDecisionSnapshotAdmission, resolvePriorityRecoveryDecisionSnapshotCapturedAt, resolvePriorityRecoveryDecisionSnapshotOperationContexts} from './priority-recovery-snapshot-eligibility.js';
+import {buildPriorityRecoveryConditionsContract} from './priority-recovery-snapshot-observation.js';
+import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-actuation.js';
+import {buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract} from './priority-recovery-snapshot-burndown.js';
 
 function resolvePriorityRecoveryDecisionSnapshotCoordinator(
   snapshot,

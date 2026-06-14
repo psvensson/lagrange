@@ -73,20 +73,13 @@ const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
   'src/rebalancer/unified-rebalancer-segment-4.js',
   'src/rebalancer/unified-rebalancer-segment-5.js',
 ]);
-const LEGACY_CONTROL_PLANE_ORDINAL_FILES = Object.freeze([
-  'src/control-plane/priority-recovery-snapshot-stage-1.js',
-  'src/control-plane/priority-recovery-snapshot-stage-2.js',
-  'src/control-plane/priority-recovery-snapshot-stage-3.js',
-  'src/control-plane/priority-recovery-snapshot-stage-4.js',
-  'src/control-plane/priority-recovery-snapshot-stage-5.js',
-  'src/control-plane/priority-recovery-snapshot-stage-6.js',
-  'src/control-plane/priority-recovery-snapshot-stage-7.js',
-  'src/control-plane/priority-recovery-snapshot-stage-8.js',
-  'src/control-plane/priority-recovery-snapshot-stage-9.js',
-  'src/control-plane/priority-recovery-snapshot-stage-10.js',
-  'src/control-plane/priority-recovery-snapshot-stage-11.js',
-  'src/control-plane/priority-recovery-snapshot-stage-shared.js',
-]);
+// The priority-recovery-snapshot ordinal stages were decomposed into
+// responsibility-named modules (ingress/eligibility/publication/active-gate/
+// workflow/rebalancer/observation/actuation/burndown/closure/contract, dispatch
+// snapshot evidence folded into priority-recovery-dispatch-snapshot.js). No
+// legacy control-plane ordinal files remain; the tracked-ordinal pattern below
+// still rejects any re-introduced numbered stage file.
+const LEGACY_CONTROL_PLANE_ORDINAL_FILES = Object.freeze([]);
 const LEGACY_ORDINAL_FILES = Object.freeze([
   ...LEGACY_REBALANCER_ORDINAL_FILES,
   ...LEGACY_CONTROL_PLANE_ORDINAL_FILES,

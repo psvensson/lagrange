@@ -17,7 +17,7 @@ import {
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_CONFLICT_STAGE,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
-} from './priority-recovery-snapshot-stage-shared.js';
+} from './priority-recovery-snapshot-contract.js';
 import {
   buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId,
   filterPriorityRecoveryStaleOperationProgressConflicts,
@@ -26,7 +26,7 @@ import {
   isPriorityRecoverySpreadProgressDecisionSnapshot,
   isPriorityRecoverySyntheticNoOperationDecisionSnapshot,
   shouldReleasePriorityRecoverySerialWaitSnapshot,
-} from './priority-recovery-snapshot-stage-2.js';
+} from './priority-recovery-snapshot-eligibility.js';
 import {
   buildPriorityRecoverySyntheticSerialWaitSnapshot,
   releasePriorityRecoverySerialWaitSnapshot,

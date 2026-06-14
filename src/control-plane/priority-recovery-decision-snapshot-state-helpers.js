@@ -9,8 +9,8 @@ import {normalizePriorityRecoveryStringList} from './priority-recovery-helpers.j
 import {
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {filterPriorityRecoveryTrackedPartitionIds} from './priority-recovery-snapshot-stage-1.js';
+} from './priority-recovery-snapshot-contract.js';
+import {filterPriorityRecoveryTrackedPartitionIds} from './priority-recovery-snapshot-ingress.js';
 
 function buildTrackedPriorityRecoveryDecisionSemanticStateMap(
   partitionIdsBySemanticState = null,

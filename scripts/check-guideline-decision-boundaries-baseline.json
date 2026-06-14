@@ -2527,123 +2527,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 433,
-      "column": 5,
-      "functionName": "buildUnknownPriorityRecoveryPlanner",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"readyDistinctNodeCount\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 435,
-      "column": 5,
-      "functionName": "buildUnknownPriorityRecoveryPlanner",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"ready\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 436,
-      "column": 5,
-      "functionName": "buildUnknownPriorityRecoveryPlanner",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 477,
-      "column": 5,
-      "functionName": "buildPriorityRecoveryPlannerEntry",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"readyDistinctNodeCount\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
-      "line": 480,
-      "column": 5,
-      "functionName": "buildPriorityRecoveryPlannerEntry",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-11.js",
-      "line": 310,
-      "column": 9,
-      "functionName": "buildPriorityRecoveryPartitionAssessment",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"blockerReasons\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-4.js",
-      "line": 97,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryFilteredSnapshotCompletionStates",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-4.js",
-      "line": 219,
-      "column": 5,
-      "functionName": "buildTrackedPriorityRecoveryDecisionSnapshots",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-4.js",
-      "line": 342,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryClosureReadyEligibleNodeCount",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-4.js",
-      "line": 495,
-      "column": 5,
-      "functionName": "resolvePriorityPartitionSummaryFromPublication",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-6.js",
-      "line": 469,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryOperationStepTerminalState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-7.js",
-      "line": 483,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryInFlightActuationState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-stage-7.js",
-      "line": 503,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryFollowupActuationState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/control-plane/projection-readiness-evidence.js",
       "line": 142,
       "column": 5,
@@ -7036,6 +6919,123 @@
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome assigned/declared for semantic target \"runtimeBlockerReasonCodes\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+      "line": 97,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryFilteredSnapshotCompletionStates",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+      "line": 219,
+      "column": 5,
+      "functionName": "buildTrackedPriorityRecoveryDecisionSnapshots",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+      "line": 342,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryClosureReadyEligibleNodeCount",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+      "line": 495,
+      "column": 5,
+      "functionName": "resolvePriorityPartitionSummaryFromPublication",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-closure.js",
+      "line": 310,
+      "column": 9,
+      "functionName": "buildPriorityRecoveryPartitionAssessment",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"blockerReasons\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "line": 433,
+      "column": 5,
+      "functionName": "buildUnknownPriorityRecoveryPlanner",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"readyDistinctNodeCount\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "line": 435,
+      "column": 5,
+      "functionName": "buildUnknownPriorityRecoveryPlanner",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"ready\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "line": 436,
+      "column": 5,
+      "functionName": "buildUnknownPriorityRecoveryPlanner",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "line": 477,
+      "column": 5,
+      "functionName": "buildPriorityRecoveryPlannerEntry",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"readyDistinctNodeCount\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "line": 480,
+      "column": 5,
+      "functionName": "buildPriorityRecoveryPlannerEntry",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-observation.js",
+      "line": 483,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryInFlightActuationState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-observation.js",
+      "line": 503,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryFollowupActuationState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+      "line": 469,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryOperationStepTerminalState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     }
   ]

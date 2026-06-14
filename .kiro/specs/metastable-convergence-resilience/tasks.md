@@ -53,7 +53,7 @@ default-off and accepted only against the Phase-0 statistical gate.
 - [ ] 2.1 Mark a rejoiner as a non-counted learner (exclude from
   `missingPublished`) until caught up; gate owner-load upserts behind catch-up.
 - [ ] 2.2 Bound catch-up; replan a too-slow joiner via the learner-never-
-  promotable decision instead of looping (`priority-recovery-snapshot-stage-9.js`).
+  promotable decision instead of looping (`priority-recovery-snapshot-burndown.js`).
 - [ ] 2.3 Unify learner / not-caught-up with publication `WAIT_OWNER_RECOVERY`.
 - [ ] 2.4 Gate via config flag; validate against Phase-0 distribution.
 

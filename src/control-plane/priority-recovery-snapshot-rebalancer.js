@@ -48,9 +48,9 @@ import {
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
   PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET,
   STATUS_ACTIVE,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {readFirstIntegerField, readFirstStringField} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoveryReplicaOperationContext, buildPriorityRecoveryReplicaOperationSourceRows, normalizePriorityRecoveryReplicaOperationContextBuildOptions} from './priority-recovery-snapshot-stage-5.js';
+} from './priority-recovery-snapshot-contract.js';
+import {readFirstIntegerField, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryReplicaOperationContext, buildPriorityRecoveryReplicaOperationSourceRows, normalizePriorityRecoveryReplicaOperationContextBuildOptions} from './priority-recovery-snapshot-workflow.js';
 
 function buildPriorityRecoveryReplicaOperationContexts(
   replicaOperationRows = [],

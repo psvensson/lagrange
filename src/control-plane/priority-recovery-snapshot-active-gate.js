@@ -21,10 +21,10 @@ import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {buildPriorityRecoveryDecisionPartitionIdSet, buildPriorityRecoverySemanticPartitionSetMap, filterPriorityRecoveryTrackedPartitionIds, hasPriorityRecoverySpreadGap, isPriorityRecoveryTrackedPartitionId, normalizePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {resolvePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-stage-2.js';
-import {buildTrackedPriorityRecoveryDecisionSemanticStateMap, filterPriorityRecoveryDecisionSnapshotConflicts, isPriorityRecoverySourcePartitionStateMap, resolvePriorityRecoveryFilteredSnapshotBlockerReasons, resolvePriorityRecoverySourcePartitionStateIds, selectPriorityRecoveryDecisionSnapshotSummarySnapshots} from './priority-recovery-snapshot-stage-3.js';
+} from './priority-recovery-snapshot-contract.js';
+import {buildPriorityRecoveryDecisionPartitionIdSet, buildPriorityRecoverySemanticPartitionSetMap, filterPriorityRecoveryTrackedPartitionIds, hasPriorityRecoverySpreadGap, isPriorityRecoveryTrackedPartitionId, normalizePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-ingress.js';
+import {resolvePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-eligibility.js';
+import {buildTrackedPriorityRecoveryDecisionSemanticStateMap, filterPriorityRecoveryDecisionSnapshotConflicts, isPriorityRecoverySourcePartitionStateMap, resolvePriorityRecoveryFilteredSnapshotBlockerReasons, resolvePriorityRecoverySourcePartitionStateIds, selectPriorityRecoveryDecisionSnapshotSummarySnapshots} from './priority-recovery-snapshot-publication.js';
 import {buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap} from './priority-recovery-dispatch-snapshot.js';
 
 const PRIORITY_RECOVERY_OPERATION_SPREAD_PROGRESS_SELECTION_OPTIONS =

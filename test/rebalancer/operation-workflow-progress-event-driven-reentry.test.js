@@ -19,9 +19,9 @@ import {
 import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
-} from '../../src/control-plane/priority-recovery-snapshot-stage-shared.js';
+} from '../../src/control-plane/priority-recovery-snapshot-contract.js';
 import {buildPriorityRecoveryDecisionSnapshot} from
-  '../../src/control-plane/priority-recovery-snapshot-stage-10.js';
+  '../../src/control-plane/priority-recovery-dispatch-snapshot.js';
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,

@@ -24,10 +24,10 @@ import {
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS,
-} from './priority-recovery-snapshot-stage-shared.js';
-import {buildPriorityRecoveryBlockedPartitions, hasPriorityRecoverySpreadGap, readFirstStringField} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoveryEmergencyBudgetOwnerIds, resolvePriorityPartitionSummaryFromPublication} from './priority-recovery-snapshot-stage-4.js';
-import {buildPriorityRecoveryTargetServiceEvidence} from './priority-recovery-snapshot-stage-6.js';
+} from './priority-recovery-snapshot-contract.js';
+import {buildPriorityRecoveryBlockedPartitions, hasPriorityRecoverySpreadGap, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryEmergencyBudgetOwnerIds, resolvePriorityPartitionSummaryFromPublication} from './priority-recovery-snapshot-active-gate.js';
+import {buildPriorityRecoveryTargetServiceEvidence} from './priority-recovery-snapshot-rebalancer.js';
 
 function buildPriorityRecoveryAdmissionPlan(options = {}) {
   const maxConcurrentAdds = Math.max(
