@@ -1,10 +1,10 @@
-import {createMessageGroupServiceRuntimeMethodsClassPart2} from './message-group-service-runtime-methods-class-part-2.js';
+import {createMessageGroupServiceRuntimeMethodsClass} from './message-group-service-runtime-methods-class.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function createMessageGroupServiceRuntimeMethods(deps = {}) {
   const MessageGroupServiceRuntimeMethods =
-    createMessageGroupServiceRuntimeMethodsClassPart2(deps);
+    createMessageGroupServiceRuntimeMethodsClass(deps);
 
   const methodNames = [];
   const seenMethodNames = new Set();

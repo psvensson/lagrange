@@ -1115,69 +1115,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-      "line": 84,
-      "column": 5,
-      "functionName": "normalizeReasonCode",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-      "line": 91,
-      "column": 5,
-      "functionName": "normalizeReasonCodeArray",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-      "line": 124,
-      "column": 5,
-      "functionName": "normalizeLifecyclePhaseFromSnapshot",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-      "line": 365,
-      "column": 7,
-      "functionName": "resolveReadinessSnapshotForScope",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-      "line": 453,
-      "column": 7,
-      "functionName": "resolveLocalStartupAuthoritySnapshot",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
-      "line": 351,
-      "column": 7,
-      "functionName": "getStartupProbeReasons",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
-      "line": 507,
-      "column": 9,
-      "functionName": "getReadinessSnapshotForDiagnostics",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
       "line": 391,
       "column": 7,
@@ -4119,39 +4056,12 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/message-group/message-group-service-class-part-1.js",
-      "line": 218,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 218) and SQL/DB (line 197) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/message-group/message-group-service-rebalancer-runtime-methods.js",
       "line": 101,
       "column": 1,
       "functionName": "createMessageGroupServiceRebalancerRuntimeMethods",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 101) and SQL/DB (line 106) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/message-group/message-group-service-runtime-methods-class-part-1.js",
-      "line": 190,
-      "column": 7,
-      "functionName": "createMessageGroupServiceRuntimeMethodsClassPart1",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/message-group/message-group-service-runtime-methods-class-part-2.js",
-      "line": 681,
-      "column": 1,
-      "functionName": "createMessageGroupServiceRuntimeMethodsClassPart2",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 681) and SQL/DB (line 433) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -5321,24 +5231,6 @@
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/query/table-creation-service-class-part-1.js",
-      "line": 681,
-      "column": 1,
-      "functionName": "findExistingTableRecord",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 681) and SQL/DB (line 694) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/query/table-creation-service-class-part-2.js",
-      "line": 240,
-      "column": 1,
-      "functionName": "findExistingPartitionRecord",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 240) and SQL/DB (line 253) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
@@ -7055,6 +6947,114 @@
       "kind": "local_retry_loop",
       "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
       "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-join-projection-policy.js",
+      "line": 42,
+      "column": 5,
+      "functionName": "normalizeReasonCode",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-join-projection-policy.js",
+      "line": 50,
+      "column": 5,
+      "functionName": "normalizeReasonCodeArray",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-join-projection-policy.js",
+      "line": 84,
+      "column": 5,
+      "functionName": "normalizeLifecyclePhaseFromSnapshot",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-join-projection-policy.js",
+      "line": 192,
+      "column": 7,
+      "functionName": "resolveReadinessSnapshotForScope",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-readiness-dependency-probes.js",
+      "line": 19,
+      "column": 7,
+      "functionName": "getStartupProbeReasons",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-readiness-dependency-probes.js",
+      "line": 175,
+      "column": 9,
+      "functionName": "getReadinessSnapshotForDiagnostics",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"reasons\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-startup-authority-evidence.js",
+      "line": 45,
+      "column": 7,
+      "functionName": "resolveLocalStartupAuthoritySnapshot",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+      "line": 193,
+      "column": 1,
+      "functionName": "createMessageGroupServiceCacheAndLifecycleRuntimeMethods",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 193) and SQL/DB (line 37) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
+      "line": 160,
+      "column": 7,
+      "functionName": "createMessageGroupServiceOutboundDispatchRuntimeMethods",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/message-group/message-group-service-state.js",
+      "line": 207,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 207) and SQL/DB (line 186) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/table-creation-service-metadata-lookup.js",
+      "line": 35,
+      "column": 1,
+      "functionName": "findExistingTableRecord",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 35) and SQL/DB (line 48) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/table-creation-service-metadata-lookup.js",
+      "line": 72,
+      "column": 1,
+      "functionName": "findExistingPartitionRecord",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 72) and SQL/DB (line 85) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]
 }

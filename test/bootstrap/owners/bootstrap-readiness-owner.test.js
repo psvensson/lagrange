@@ -1,5 +1,5 @@
 import {test} from '../../../src/test-helpers/tap.js';
-import {BootstrapReadinessOwner} from '../../../src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js';
+import {BootstrapReadinessOwner} from '../../../src/bootstrap/owners/bootstrap-readiness-owner.js';
 
 test('BootstrapReadinessOwner buildPriorityControlPlaneRecoveryUnavailableHealth maps diagnostic failure to unavailable reason code', async (t) => {
   const owner = new BootstrapReadinessOwner({

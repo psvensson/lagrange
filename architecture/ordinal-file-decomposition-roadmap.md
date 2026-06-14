@@ -34,12 +34,23 @@ This roadmap is planning-only. It does not rename or move any runtime module.
   `rebalance-coordinator`, `priority-recovery-snapshot`.
 - The remaining **20 clusters** have inventory entries + a single proposed module
   name, but no per-file ladder yet.
-- Nothing has been decomposed yet. The file-size ratchet *ceiling* is
-  **144 source / 60 test** oversized files, but only **23 source / 14 test** files
-  currently exceed the thresholds (`scripts/check-file-size-thresholds.js`) — most
-  ordinal chunks are *already under* 800 lines (they were over-split). The size gate
-  is therefore the historical **cause**, not the **progress meter** for this work
-  (see Definition of Done).
+- **Progress: Wave A is 4/5 done** (decomposed + tested + adversarially verified +
+  landed): `table-creation-service-class`, `message-group-service-class`,
+  `message-group-service-runtime-methods-class`, `bootstrap-readiness-owner-class`.
+  `replica-handler-class` is built but **deferred** — it is a runtime-grammar hotspot
+  whose two ordinal paths are keys in `RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS`, so it needs
+  the registry repoint before it can land.
+- Live inventory (regenerated) now reports **134 ordinal source files** (the earlier
+  `136/24` figure was stale; actual pre-Wave-A was ~142). The ordinal-file count is
+  the progress meter.
+- The file-size ratchet *ceiling* is **144 source / 60 test** oversized files, but
+  only **23 source / 14 test** files currently exceed the thresholds — most ordinal
+  chunks are *already under* 800 lines (over-split). The size gate is the historical
+  **cause**, not the progress meter (see Definition of Done).
+- ⚠️ Pre-existing, not introduced by this work: the decision-boundaries audit is
+  already red on `main` with **34 unbaselined violations + line-drift** from prior
+  merges. Wave A introduced **zero** new violations (verified); its baseline edit is
+  scoped to relocating only the moved entries. The 34 want their own re-baseline chore.
 
 ## Scope
 

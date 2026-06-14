@@ -1,28 +1,24 @@
 /**
- * Message Group Service - Reliable inter-service communication.
+ * Message Group Service - construction and persisted-state accessors.
+ * Holds the public class declaration: constructor wiring plus the role and
+ * leader-node mutation-helper backed property accessors.
  * Implements 3-replica Raft groups using liferaft library for consensus.
  * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 import {EventEmitter} from 'events';
 import {
-  ADDRESS,
-  COLUMN,
   ENTITY_TYPE,
   NUM,
-  SERVICE_TYPE,
   STRING,
-  TABLES,
   TIME_MS,
   TYPEOF,
 } from '../constants/index.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   attachTrafficReadinessListener,
   isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
@@ -33,7 +29,6 @@ import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
 import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
-import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
@@ -47,24 +42,18 @@ import {CDCHandler} from './cdc-handler.js';
 import {MessageGroupForwardingOwner} from './message-group-forwarding-owner.js';
 import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
 import {
-  FLUSH_SKIP_DISABLED,
-  FLUSH_SKIP_NOT_OWNER,
-  FLUSH_SKIP_READY,
   FORWARD_TOPOLOGY_REPAIR_DEFAULT,
-  LEADER_NODE_PERSIST_ERROR_MSG,
   MESSAGE_GROUP_SERVICE_LITERAL,
-  ROLE_PERSIST_ERROR_MSG,
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
   isWebSocketBasedMessageRouterTransport,
 } from './message-group-service-runtime-support.js';
-// Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
-// src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
+
 /**
  * MessageGroupService provides reliable inter-service communication.
  * Implements a 3-replica Raft group using liferaft library.
  */
-class MessageGroupServicePart1 extends EventEmitter {
+class MessageGroupService extends EventEmitter {
   /**
    * Create a new MessageGroupService.
    * @param {Object} options - Configuration options.
@@ -387,407 +376,6 @@ class MessageGroupServicePart1 extends EventEmitter {
       this.leaderNodeMutationHelper.retryTimer = timer;
     }
   }
-  isMetadataPublicationReady() {
-    if (!this.metadataPublicationReadinessState) {
-      return true;
-    }
-    return isMetadataPublicationLifecycleReady(
-      this.metadataPublicationReadinessState,
-    );
-  }
-  isMetadataPublicationConvergenceWindowOpen() {
-    return this.isMetadataPublicationReady() && !this.isBackgroundWorkReady();
-  }
-  isBackgroundWorkReady() {
-    return isBackgroundWorkLifecycleReady(
-      this.metadataPublicationReadinessState,
-    );
-  }
-  handleMetadataPublicationReadinessTransition() {
-    this.maybeInitializeRebalancer();
-    if (!this.isMetadataPublicationReady()) {
-      return;
-    }
-    this.flushRoleUpdate().catch((error) => {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_LITERAL.FAILED_TO_FLUSH_DEFERRED_MESSAGE_GROUP_ROLE_UPDATE,
-        {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          error: error.message,
-        },
-      );
-    });
-    this.flushLeaderNodeUpdate().catch((error) => {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_LITERAL.FAILED_TO_FLUSH_DEFERRED_MESSAGE_GROUP_LEADER_UPDATE,
-        {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          error: error.message,
-        },
-      );
-    });
-  }
-  createRoleMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.SERVICES,
-      buildWhereClause: (_role, context = {}) => {
-        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
-        const cachedRow = context.cachedRow;
-        if (
-          typeof cachedRow?.raft_role === TYPEOF.STRING &&
-          cachedRow.raft_role.length > NUM.ZERO
-        ) {
-          whereClause.raft_role = cachedRow.raft_role;
-        }
-        if (Number.isFinite(cachedRow?.updated_at)) {
-          whereClause.updated_at = cachedRow.updated_at;
-        }
-        return whereClause;
-      },
-      buildUpdateData: (role, updatedAt) => ({
-        raft_role: role,
-        updated_at: updatedAt,
-      }),
-      buildUpdateOptions: () => ({
-        deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND,
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDefer: true,
-        routingReadinessDimension:
-          this.getMetadataPublicationReadinessDimension(),
-      }),
-      buildExpectedCacheFields: (role) => ({raft_role: role}),
-      prepareFlush: () => ({
-        skip: !this.publishRoleMetadata,
-        clearPending: !this.publishRoleMetadata,
-        reason: !this.publishRoleMetadata ?
-          FLUSH_SKIP_DISABLED :
-          FLUSH_SKIP_READY,
-      }),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
-      readValueFromCache: (systemTableCache) => {
-        const cached = systemTableCache?.get?.(TABLES.SERVICES, this.replicaId);
-        return cached?.raft_role || null;
-      },
-      isWriteReady: () => this.isServicesLeaderAvailable(),
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(ROLE_PERSIST_ERROR_MSG, {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          role: context.value ?? this.pendingRoleUpdate,
-          error: error.message,
-        });
-      },
-    });
-  }
-  createLeaderNodeMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
-      buildWhereClause: (_leaderNodeId, context = {}) => {
-        const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
-        const cachedRow = context.cachedRow;
-        if (
-          typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === TYPEOF.STRING &&
-          cachedRow[COLUMN.LEADER_NODE_ID].length > NUM.ZERO
-        ) {
-          whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
-        }
-        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
-        }
-        return whereClause;
-      },
-      buildUpdateData: (leaderNodeId, updatedAt) => ({
-        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-        [COLUMN.UPDATED_AT]: updatedAt,
-      }),
-      buildUpdateOptions: () => ({
-        deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
-        routingReadinessDimension:
-          this.getMetadataPublicationReadinessDimension(),
-      }),
-      buildExpectedCacheFields: (leaderNodeId) => ({
-        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-      }),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.MESSAGE_GROUPS, this.groupId) || null,
-      readValueFromCache: (systemTableCache) => {
-        const cached = systemTableCache?.get?.(
-          TABLES.MESSAGE_GROUPS,
-          this.groupId,
-        );
-        return cached?.[COLUMN.LEADER_NODE_ID] || null;
-      },
-      prepareFlush: () => ({
-        skip: !this.publishLeaderNodeMetadata || !this.isLeader,
-        clearPending: !this.publishLeaderNodeMetadata || !this.isLeader,
-        reason: !this.publishLeaderNodeMetadata ?
-          FLUSH_SKIP_DISABLED :
-          !this.isLeader ?
-            FLUSH_SKIP_NOT_OWNER :
-            FLUSH_SKIP_READY,
-      }),
-      isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(LEADER_NODE_PERSIST_ERROR_MSG, {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
-          error: error.message,
-        });
-      },
-    });
-  }
-  isWebSocketBasedTransport(transport) {
-    return isWebSocketBasedMessageRouterTransport(transport);
-  }
-  /**
-   * Get the unified address for this service.
-   * Format: ${nodeId}/message-group/${replicaId}
-   * Requirements: 1.1, 5.1
-   * @return {string} Unified address.
-   */
-  getUnifiedAddress() {
-    return this.unifiedAddress;
-  }
-  /**
-   * Build a unified address for a peer replica.
-   * Looks up the address from the authoritative cache first, then live raft
-   * peers, and only uses bootstrap hints when a caller explicitly opts in.
-   * Uses AddressManager for consistent address formatting and validation.
-   * Requirements: 1.1, 1.4, 9.1
-   * @param {string} peerId - Peer replica ID.
-   * @param {Object} [options]
-   * @param {boolean} [options.allowBootstrapHints=false] - Permit
-   * bootstrap-time peer hints when authoritative runtime location has not
-   * converged yet.
-   * @return {string} Unified address for the peer.
-   */
-  buildPeerAddress(peerId, options = {}) {
-    // If peerId is already in unified format, validate and return as-is.
-    // Fail fast (and log) when a provided address is not unified.
-    // Requirements: 1.4
-    if (peerId.includes(ADDRESS.SEPARATOR)) {
-      const validation = this.addressManager.validate(peerId);
-      if (validation.valid) {
-        return peerId;
-      }
-      this.logger.error(
-        MESSAGE_GROUP_SERVICE_LITERAL.PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT,
-        {
-          peerId,
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          error: validation.error,
-        },
-      );
-      throw new Error(`Peer address must be unified: ${peerId}`);
-    }
-    // Prefer cache-backed topology first so handoff/move metadata wins over
-    // bootstrap-time peer hints.
-    const cachedAddress = this.resolvePeerAddressFromCache(peerId);
-    if (cachedAddress) {
-      this.bootstrapHintFallbackLogged.delete(peerId);
-      return cachedAddress;
-    }
-    const livePeerAddress = this.resolveLivePeerAddressFromRaftNodes(peerId);
-    if (livePeerAddress) {
-      return livePeerAddress;
-    }
-    if (options.allowBootstrapHints !== true) {
-      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-    }
-    const hintedAddress = this.resolvePeerAddressFromHints(peerId);
-    if (hintedAddress) {
-      this.logBootstrapHintFallback(peerId, hintedAddress);
-      return hintedAddress;
-    }
-    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-  }
-  resolvePeerAddressFromHints(peerId) {
-    if (!this.peerAddresses || this.peerAddresses.length === NUM.ZERO) {
-      return null;
-    }
-    for (const addr of this.peerAddresses) {
-      const validation = this.addressManager.validate(addr);
-      if (!validation.valid) {
-        this.logger.error(
-          MESSAGE_GROUP_SERVICE_LITERAL.PEER_ADDRESS_MUST_BE_IN_UNIFIED_FORMAT,
-          {
-            peerId: addr,
-            groupId: this.groupId,
-            replicaId: this.replicaId,
-            error: validation.error,
-          },
-        );
-        throw new Error(`Peer address must be unified: ${addr}`);
-      }
-      try {
-        const parsed = this.addressManager.parse(addr);
-        if (parsed.serviceId === peerId) {
-          return addr;
-        }
-      } catch (_e) {
-        void _e;
-      }
-    }
-    return null;
-  }
-  /**
-   * Resolve an authoritative join candidate without failing closed when the
-   * local replica has no remote same-id peer yet.
-   * @param {string} peerId
-   * @return {string|null}
-   * @private
-   */
-  resolveOptionalRaftJoinPeerAddress(peerId) {
-    const cachedAddress = this.resolvePeerAddressFromCache(peerId);
-    if (cachedAddress) {
-      this.bootstrapHintFallbackLogged.delete(peerId);
-      return cachedAddress;
-    }
-    const livePeerAddress = this.resolveLivePeerAddressFromRaftNodes(peerId);
-    if (livePeerAddress) {
-      return livePeerAddress;
-    }
-    const hintedAddress = this.resolvePeerAddressFromHints(peerId);
-    if (hintedAddress) {
-      this.logBootstrapHintFallback(peerId, hintedAddress);
-      return hintedAddress;
-    }
-    return null;
-  }
-  /**
-   * Resolve one canonical join decision for the shared raft runtime owner.
-   * @param {string} peerId
-   * @return {{address: string|null, shouldJoin: boolean}}
-   * @private
-   */
-  resolveRaftJoinTarget(peerId) {
-    const optionalPeerAddress = this.resolveOptionalRaftJoinPeerAddress(peerId);
-    if (peerId === this.replicaId && !optionalPeerAddress) {
-      return {
-        address: null,
-        shouldJoin: false,
-      };
-    }
-    const peerAddress =
-      optionalPeerAddress ||
-      this.buildPeerAddress(peerId, {allowBootstrapHints: true});
-    return {
-      address: peerAddress,
-      shouldJoin: this.shouldJoinRaftPeer(peerId, peerAddress),
-    };
-  }
-  /**
-   * Build one shared peer-address resolver surface for the canonical raft owner.
-   * @return {{resolve: Function}}
-   * @private
-   */
-  createRaftPeerAddressResolver() {
-    return {
-      resolve: (peerId) => {
-        return this.buildPeerAddress(peerId, {allowBootstrapHints: true});
-      },
-      resolveJoinTarget: (peerId) => {
-        return this.resolveRaftJoinTarget(peerId);
-      },
-    };
-  }
-  shouldJoinRaftPeer(peerId, peerAddress) {
-    return !this.isLocalForwardTarget(peerId, peerAddress);
-  }
-  /**
-   * Resolve peer address from the services cache.
-   * @param {string} peerId - Peer replica ID.
-   * @return {string|null} Unified address from cache, otherwise null.
-   * @private
-   */
-  resolvePeerAddressFromCache(peerId) {
-    if (!this.systemTableCache) {
-      return null;
-    }
-    const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (!service) {
-      return null;
-    }
-    if (service.address) {
-      const validation = this.addressManager.validate(service.address);
-      if (validation.valid) {
-        return service.address;
-      }
-    }
-    if (service.node_id) {
-      return this.addressManager.format(
-        service.node_id,
-        ENTITY_TYPE.MESSAGE_GROUP,
-        peerId,
-      );
-    }
-    return null;
-  }
-  /**
-   * Emit a structured warning when bootstrap peer hints are used as fallback.
-   * @param {string} peerId - Peer replica ID.
-   * @param {string} address - Resolved bootstrap hint address.
-   * @private
-   */
-  logBootstrapHintFallback(peerId, address) {
-    if (this.bootstrapHintFallbackLogged.has(peerId)) {
-      return;
-    }
-    this.bootstrapHintFallbackLogged.add(peerId);
-    this.logger.warn(
-      MESSAGE_GROUP_SERVICE_LITERAL.USING_BOOTSTRAP_PEER_HINT_BECAUSE_SERVICES_CACHE_HAS_NO_PEER_LOCATION,
-      {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        peerId,
-        address,
-        resolutionSource: MESSAGE_GROUP_SERVICE_LITERAL.BOOTSTRAP_HINT,
-      },
-    );
-  }
-  /**
-   * React to authoritative services cache changes for this message group.
-   * Existing replicas need this to discover newly added or moved peers.
-   * @param {string} tableName
-   * @param {string} _operation
-   * @param {Object} record
-   * @private
-   */
-  handleSystemTableCacheChange(tableName, _operation, record) {
-    if (tableName !== TABLES.SERVICES || !record) {
-      return;
-    }
-    if (
-      (record?.[COLUMN.GROUP_ID] || record?.group_id) !== this.groupId ||
-      (record?.[COLUMN.SERVICE_TYPE] || record?.service_type) !==
-        SERVICE_TYPE.MESSAGE_GROUP
-    ) {
-      return;
-    }
-    this.scheduleRaftPeerReconciliation();
-  }
-  /**
-   * Coalesce peer reconciliation work triggered by cache updates.
-   * @private
-   */
-  scheduleRaftPeerReconciliation() {
-    if (this.peerReconciliationScheduled) {
-      return;
-    }
-    this.peerReconciliationScheduled = true;
-    setImmediate(() => {
-      this.peerReconciliationScheduled = false;
-      this.reconcileRaftPeersFromCache();
-    });
-  }
 }
-export {MessageGroupServicePart1};
+
+export {MessageGroupService};

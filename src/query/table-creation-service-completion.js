@@ -314,4 +314,5 @@ export {
   normalizeProvisioningSummary,
   resolveTableCreationCompletion,
   resolveTableCreationMutationContractOutcome,
+  resolveTableCreationVisibilityContractOutcome,
 };

@@ -449,7 +449,7 @@ test('buildLifecycleReadinessNotReadyError attaches progressContract with 10 str
 
 test('BootstrapReadinessOwner buildBootstrapNotReadyResponse attaches progressContract',
   async (t) => {
-    const { BootstrapReadinessOwner } = await import('../../src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js');
+    const { BootstrapReadinessOwner } = await import('../../src/bootstrap/owners/bootstrap-readiness-owner.js');
     const owner = new BootstrapReadinessOwner({
       delegates: {
         getReadinessState: () => ({
@@ -479,4 +479,3 @@ test('BootstrapReadinessOwner buildBootstrapNotReadyResponse attaches progressCo
     t.equal(response.progressContract.evidencePath, 'startup_support_evidence');
     t.equal(response.progressContract.blockingDependency, 'sql_engine');
   });
-

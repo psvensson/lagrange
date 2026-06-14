@@ -1,35 +1,107 @@
-import {defineMessageGroupServiceForwardingRuntimeMethods} from './message-group-service-forwarding-runtime-methods.js';
-import {defineMessageGroupServiceRebalancerRuntimeMethods} from './message-group-service-rebalancer-runtime-methods.js';
-import {createMessageGroupServiceRuntimeMethodsClassPart1} from './message-group-service-runtime-methods-class-part-1.js';
+import {
+  applyCDCEvent as runApplyCDCEvent,
+  emitCDCAppliedEvents as runEmitCDCAppliedEvents,
+  normalizeCDCBatchEvents as runNormalizeCDCBatchEvents,
+} from './message-group-service-cdc-propagation-runtime-methods.js';
 
-function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
+const MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL = {
+  CONSTRUCTOR: 'constructor',
+};
+
+function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
   const {
     CDC_BATCH_COMMAND_TYPE,
-    CONTROL_PLANE_READINESS_DIMENSION,
-    INITIAL_MESSAGE_GROUP_ID,
-    LifeRaft,
+    CDC_FORWARD_MAX_RELAY_DEPTH,
+    MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+    MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
+    MESSAGE_GROUP_CDC_INGRESS_ACTION,
     MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
     MESSAGE_GROUP_SERVICE_LITERAL,
-    MESSAGE_GROUP_SERVICE_LOG_MSG,
     METRICS_LOG_TAG,
     NUM,
-    SYSTEM_TABLE_NAME,
     TIME_MS,
     TYPEOF,
     boundCdcForwardErrorDetail,
     buildDeferredCdcForwardError,
+    buildLatencyCdcPropagationResult,
     getOrCreateCauseId,
-    isSystemTableWriteReady,
     normalizeCauseId,
-    normalizePublishedRaftRole,
     wrapCdcProposeError,
-    RaftRole,
   } = deps;
+  const cdcPropagationRuntimeDeps = {
+    CDC_FORWARD_MAX_RELAY_DEPTH,
+    MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+    MESSAGE_GROUP_APPLICATION_STATUS,
+    MESSAGE_GROUP_CDC_ERROR_MSG,
+    MESSAGE_GROUP_CDC_INGRESS_ACTION,
+    MESSAGE_GROUP_SERVICE_LITERAL,
+    NUM,
+    buildLatencyCdcPropagationResult,
+    normalizeCauseId,
+  };
 
-  const MessageGroupServiceRuntimeMethodsPart1 =
-    createMessageGroupServiceRuntimeMethodsClassPart1(deps);
-  class MessageGroupServiceRuntimeMethods extends MessageGroupServiceRuntimeMethodsPart1 {
+  class MessageGroupServiceCdcReplicationRuntimeMethods {
+    /**
+     * Subscribe to CDC events from a system table.
+     * @param {string} tableName - System table name.
+     * @return {Promise<void>}
+     */
+    async subscribeToCDC(tableName) {
+      this.cdcHandler.subscribe(tableName);
+      this.logger.debug(MESSAGE_GROUP_SERVICE_LITERAL.SUBSCRIBED_TO_CDC, {
+        tableName,
+        groupId: this.groupId,
+      });
+    }
+    /**
+     * Apply a CDC event to the system table cache.
+     * @param {string} tableName - System table name.
+     * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE).
+     * @param {Object} data - Record data.
+     * @param {Object} [options]
+     * @param {boolean} [options.skipReplication]
+     * @param {boolean} [options.skipSubscriptionCheck]
+     * @return {Promise<void>}
+     */
+    async applyCDCEvent(tableName, operation, data, options = {}) {
+      return runApplyCDCEvent(
+        this,
+        tableName,
+        operation,
+        data,
+        options,
+      );
+    }
+    /**
+     * Normalize CDC batch events into one canonical replicated command payload.
+     * @param {Array<Object>} events
+     * @param {Object} [options]
+     * @return {Array<Object>}
+     * @private
+     */
+    normalizeCDCBatchEvents(events, options = {}) {
+      return runNormalizeCDCBatchEvents(
+        this,
+        cdcPropagationRuntimeDeps,
+        events,
+        options,
+      );
+    }
+    /**
+     * Emit canonical cdcApplied notifications for one or more events.
+     * @param {Array<Object>} events
+     * @param {?number} logIndex
+     * @private
+     */
+    emitCDCAppliedEvents(events, logIndex = null) {
+      return runEmitCDCAppliedEvents(
+        this,
+        cdcPropagationRuntimeDeps,
+        events,
+        logIndex,
+      );
+    }
     /**
      * Record CDC propagation metrics for one or more events.
      * @param {Array<Object>} events
@@ -330,18 +402,6 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       }
     }
     /**
-     * Determine whether this replica is currently the active Raft leader.
-     * @return {boolean}
-     * @private
-     */
-    isCurrentRaftLeader() {
-      return Boolean(
-        this.raft &&
-        this.raft.state === LifeRaft.LEADER &&
-        this.isLeaderReplica(),
-      );
-    }
-    /**
      * Compute retry delay for CDC forward attempts.
      * @param {number} attempt
      * @return {number}
@@ -409,315 +469,24 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       );
       return Math.max(NUM.TWO * NUM.HUNDRED, cappedBudgetMs);
     }
-    /**
-     * Query the system table cache.
-     * Returns a read-only view of the cache.
-     * @param {string} tableName - System table name.
-     * @param {Object} query - Query parameters.
-     * @return {Promise<*>} Query result.
-     */
-    async querySystemCache(tableName, query = {}) {
-      if (!this.initialized) {
-        throw new Error(
-          MESSAGE_GROUP_SERVICE_LITERAL.MESSAGEGROUPSERVICE_NOT_INITIALIZED,
-        );
-      }
-      // Use read-only cache wrapper
-      if (query.key) {
-        return this.readOnlyCache.get(tableName, query.key);
-      }
-      if (query.predicate) {
-        if (query.findOne) {
-          return this.readOnlyCache.find(tableName, query.predicate);
-        }
-        return this.readOnlyCache.filter(tableName, query.predicate);
-      }
-      return this.readOnlyCache.getAll(tableName);
-    }
-    /**
-     * Get the read-only system table cache.
-     * @return {ReadOnlySystemTableCache} Read-only cache wrapper.
-     */
-    getReadOnlyCache() {
-      return this.readOnlyCache;
-    }
-    /**
-     * Get the underlying writable cache (for CDC handlers only).
-     * @return {SystemTableCache} Writable cache.
-     */
-    getWritableCache() {
-      return this.systemTableCache;
-    }
-    cancelLeaderOwnedActivation() {
-      this.leaderActivationGate.cancel({clearActivatedTerm: true});
-    }
-    scheduleLeaderOwnedActivation(term) {
-      this.leaderActivationGate.schedule(
-        term,
-        () => {
-          if (!this.raft || !this.isLeaderReplica()) {
-            return;
-          }
-          this.updateRebalancerLeadership();
-          const existingSubscriptions = this.cdcHandler.getSubscriptions();
-          if (
-            existingSubscriptions.length > NUM.ZERO &&
-            this.lastLeaderCdcResubscribeTerm !== term
-          ) {
-            this.lastLeaderCdcResubscribeTerm = term;
-            this.logger.info(
-              MESSAGE_GROUP_SERVICE_LOG_MSG.CDC_RESUBSCRIBE_ON_LEADER,
-              {
-                term,
-                replicaId: this.replicaId,
-                groupId: this.groupId,
-                tableCount: existingSubscriptions.length,
-              },
-            );
-            for (const tableName of existingSubscriptions) {
-              this.subscribeToCDC(tableName);
-            }
-            this.logger.info(
-              MESSAGE_GROUP_SERVICE_LOG_MSG.CDC_RESUBSCRIBE_ON_LEADER_COMPLETE,
-              {
-                term,
-                replicaId: this.replicaId,
-                groupId: this.groupId,
-                tableCount: existingSubscriptions.length,
-              },
-            );
-          }
-          this.logger.info(MESSAGE_GROUP_SERVICE_LITERAL.BECAME_LEADER, {
-            term,
-            replicaId: this.replicaId,
-            groupId: this.groupId,
-          });
-          this.emit(MESSAGE_GROUP_SERVICE_LITERAL.LEADERELECTED, {
-            leaderId: this.replicaId,
-            term,
-            groupId: this.groupId,
-          });
-        },
-        {
-          immediate: this.replicaIds.length === NUM.ONE,
-          shouldActivate: () => this.raft !== null && this.isLeaderReplica(),
-        },
-      );
-    }
-    /**
-     * Queue a raft role update for persistence.
-     * @param {string} role - New raft role.
-     * @private
-     */
-    queueRoleUpdate(role) {
-      this.roleMutationHelper.queue(
-        normalizePublishedRaftRole(role, {collapseLeaderToFollower: true}),
-      );
-    }
-    /**
-     * Queue a message group leader update for persistence.
-     * @param {string} leaderNodeId - Leader node ID.
-     * @private
-     */
-    queueLeaderNodeUpdate(leaderNodeId) {
-      this.leaderNodeMutationHelper.queue(leaderNodeId);
-    }
-    /**
-     * Persist the latest pending raft role update.
-     * @return {Promise<void>}
-     * @private
-     */
-    async flushRoleUpdate() {
-      return this.roleMutationHelper.flush();
-    }
-    /**
-     * Persist the latest pending message group leader update.
-     * @return {Promise<void>}
-     * @private
-     */
-    async flushLeaderNodeUpdate() {
-      return this.leaderNodeMutationHelper.flush();
-    }
-    /**
-     * Check if the message_groups partition leader is available for writes.
-     * @return {boolean} True if a leader with an address is known.
-     * @private
-     */
-    isMessageGroupsLeaderAvailable() {
-      if (
-        isSystemTableWriteReady(
-          this.systemTableCache,
-          SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
-        )
-      ) {
-        return true;
-      }
-      return (
-        this.cdcIntegrationService?.canWriteSystemTableLocally?.(
-          SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
-        ) === true
-      );
-    }
-    /**
-     * Check if the services table is writable through either cache-visible
-     * routing metadata or the local services-p1 leader owner.
-     * @return {boolean} True if writes can be issued safely.
-     * @private
-     */
-    isServicesLeaderAvailable() {
-      if (
-        isSystemTableWriteReady(
-          this.systemTableCache,
-          SYSTEM_TABLE_NAME.SERVICES,
-        )
-      ) {
-        return true;
-      }
-      return (
-        this.cdcIntegrationService?.canWriteSystemTableLocally?.(
-          SYSTEM_TABLE_NAME.SERVICES,
-        ) === true
-      );
-    }
-    getMetadataPublicationDeliveryPriority() {
-      return this.groupId === INITIAL_MESSAGE_GROUP_ID ?
-        MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL :
-        MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND;
-    }
-    getMetadataPublicationReadinessDimension() {
-      return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    }
-    /**
-     * Check if this replica is the leader.
-     * Requirements: 5.5
-     * @return {boolean} True if leader.
-     */
-    isLeaderReplica() {
-      return this.role === RaftRole.LEADER;
-    }
-    /**
-     * Get the current leader ID.
-     * Requirements: 5.4
-     * @return {string|null} Leader replica ID.
-     */
-    getLeaderId() {
-      return this.leaderId;
-    }
-    /**
-     * Get the current Raft role.
-     * Requirements: 5.5
-     * @return {string} Current role.
-     */
-    getRole() {
-      return this.role;
-    }
-    /**
-     * Get the current term.
-     * @return {number} Current term.
-     */
-    getCurrentTerm() {
-      return this.raft ?
-        this.raftProvider.getCurrentTerm(this.raft) :
-        this.operationLedger.currentTerm;
-    }
-    /**
-     * Get pending message count.
-     * @return {number} Number of pending messages.
-     */
-    getPendingMessageCount() {
-      return this.pendingMessages.size;
-    }
-    /**
-     * Get service status.
-     * @return {Object} Service status.
-     */
-    getStatus() {
-      return {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        nodeId: this.nodeId,
-        role: this.role,
-        isLeader: this.isLeader,
-        leaderId: this.leaderId,
-        term: this.raft ?
-          this.raftProvider.getCurrentTerm(this.raft) :
-          this.operationLedger.currentTerm,
-        logLength: this.operationLedger.getLogLength(),
-        pendingMessages: this.pendingMessages.size,
-        acknowledgedMessages: this.acknowledgedMessages.size,
-        cdcSubscriptions: this.cdcHandler.getSubscriptions(),
-        initialized: this.initialized,
-      };
-    }
-    /**
-     * Sleep for a specified duration.
-     * @param {number} ms - Milliseconds to sleep.
-     * @return {Promise<void>}
-     * @private
-     */
-    sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-    /**
-     * Shutdown the message group service.
-     * @return {Promise<void>}
-     */
-    async shutdown() {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_LITERAL.SHUTTING_DOWN_MESSAGE_GROUP_SERVICE,
-        {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-        },
-      );
-      this.leaderActivationGate.shutdown();
-      this.peerReconciliationScheduled = false;
-      if (
-        this.systemTableCache &&
-        typeof this.systemTableCache.offCacheChange === TYPEOF.FUNCTION &&
-        this.systemTableCacheChangeListener
-      ) {
-        this.systemTableCache.offCacheChange(
-          this.systemTableCacheChangeListener,
-        );
-      }
-      if (this.raftRuntime) {
-        await this.raftRuntime.shutdown();
-        this.raftRuntime = null;
-      }
-      this.raft = null;
-      this.joinSuppressedHeartbeat = null;
-      if (
-        typeof this.releaseMetadataPublicationReadinessListener ===
-        TYPEOF.FUNCTION
-      ) {
-        this.releaseMetadataPublicationReadinessListener();
-      }
-      this.releaseMetadataPublicationReadinessListener = null;
-      this._metadataPublicationReadinessState = null;
-      this.roleMutationHelper.shutdown();
-      this.leaderNodeMutationHelper.shutdown();
-      await this.quiesceRebalancing();
-      this.cdcHandler.shutdown();
-      this.initialized = false;
-      this.pendingMessages.clear();
-      this.messageCallbacks.clear();
-      this.emit(MESSAGE_GROUP_SERVICE_LITERAL.SHUTDOWN, {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-      });
-    }
   }
 
-  defineMessageGroupServiceForwardingRuntimeMethods(
-    MessageGroupServiceRuntimeMethods.prototype,
-  );
-  defineMessageGroupServiceRebalancerRuntimeMethods(
-    MessageGroupServiceRuntimeMethods.prototype,
-    deps,
-  );
-
-  return MessageGroupServiceRuntimeMethods;
+  return MessageGroupServiceCdcReplicationRuntimeMethods;
 }
 
-export {createMessageGroupServiceRuntimeMethodsClassPart2};
+function defineMessageGroupServiceCdcReplicationRuntimeMethods(
+  prototype,
+  deps = {},
+) {
+  const MessageGroupServiceCdcReplicationRuntimeMethods =
+    createMessageGroupServiceCdcReplicationRuntimeMethods(deps);
+  const descriptors = Object.getOwnPropertyDescriptors(
+    MessageGroupServiceCdcReplicationRuntimeMethods.prototype,
+  );
+  delete descriptors[
+    MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL.CONSTRUCTOR
+  ];
+  Object.defineProperties(prototype, descriptors);
+}
+
+export {defineMessageGroupServiceCdcReplicationRuntimeMethods};
