@@ -1,5 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
-import {ReplicaDispatchServiceSegment2} from './replica-dispatch-service-segment-2.js';
+import {ReplicaDispatchOperationExecution} from './replica-dispatch-operation-execution.js';
 
 const {
   COLUMN,
@@ -62,7 +62,7 @@ function normalizeReadyNodePublicationReconcileNodeIds(values = []) {
   ].sort((left, right) => left.localeCompare(right));
 }
 
-class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchServiceSegment2 {
+class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecution {
   enqueueReplicaOperationRow(row, reasons) {
     if (!row || !row.operation_id) {
       return false;

@@ -3490,60 +3490,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-1.js",
-      "line": 115,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 115) and SQL/DB (line 130) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-3.js",
-      "line": 569,
-      "column": 5,
-      "functionName": "computeNodeStateUpdateRetryDelayMs",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-4.js",
-      "line": 557,
-      "column": 7,
-      "functionName": "buildReadyRetryDispatchReadiness",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-4.js",
-      "line": 569,
-      "column": 7,
-      "functionName": "buildReadyRetryDispatchReadiness",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-4.js",
-      "line": 575,
-      "column": 7,
-      "functionName": "buildReadyRetryDispatchReadiness",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-segment-4.js",
-      "line": 582,
-      "column": 7,
-      "functionName": "buildReadyRetryDispatchReadiness",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/debug-runtime/debug-metadata-service-constants.js",
       "line": 57,
       "column": 27,
@@ -7036,6 +6982,60 @@
       "functionName": "executeRead",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 106) and SQL/DB (line 168) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+      "line": 557,
+      "column": 7,
+      "functionName": "buildReadyRetryDispatchReadiness",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+      "line": 569,
+      "column": 7,
+      "functionName": "buildReadyRetryDispatchReadiness",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+      "line": 575,
+      "column": 7,
+      "functionName": "buildReadyRetryDispatchReadiness",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+      "line": 582,
+      "column": 7,
+      "functionName": "buildReadyRetryDispatchReadiness",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-retry-scheduling.js",
+      "line": 569,
+      "column": 5,
+      "functionName": "computeNodeStateUpdateRetryDelayMs",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
+      "line": 102,
+      "column": 1,
+      "functionName": "constructor",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 102) and SQL/DB (line 117) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]

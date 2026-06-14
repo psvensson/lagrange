@@ -25,7 +25,7 @@ const {
   isRetryableControlPlaneError,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
-class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadiness {
+class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadiness {
   /**
    * Normalize operation-dispatch queue shard count to a safe positive integer.
    * One blocked operation reconcile must not head-of-line block unrelated
@@ -711,4 +711,4 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
    */
 }
 
-export {ReplicaDispatchServiceSegment3};
+export {ReplicaDispatchRetryScheduling};

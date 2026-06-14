@@ -1,5 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
-import {ReplicaDispatchServiceSegment4} from './replica-dispatch-service-segment-4.js';
+import {ReplicaDispatchReadinessCapture} from './replica-dispatch-readiness-capture.js';
 
 const {
   CONTROL_PLANE_EVENT,
@@ -11,7 +11,7 @@ const {
   TYPEOF,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
-class ReplicaDispatchService extends ReplicaDispatchServiceSegment4 {
+class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
   isControlMessage(payload) {
     return Object.values(ControlPlaneMessageType).includes(payload?.type);
   }

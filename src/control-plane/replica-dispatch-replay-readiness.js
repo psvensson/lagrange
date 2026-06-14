@@ -1,5 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
-import {ReplicaDispatchServiceSegment1} from './replica-dispatch-service-segment-1.js';
+import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
 import {
   getDispatchRetryRowOperationIds,
   getDispatchRetryRowPartitionIds,
@@ -30,7 +30,7 @@ const DISPATCH_REPLAY_READY_NODE_PHASE = Object.freeze({
   NOT_REPLAYABLE: 'not_replayable',
 });
 
-class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceSegment1 {
+class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   /**
    * Retry dispatches for operations targeting a ready node.
    * Re-enters the canonical per-operation queue so ready-node retries cannot

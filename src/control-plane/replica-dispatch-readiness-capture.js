@@ -1,5 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
-import {ReplicaDispatchServiceSegment3} from './replica-dispatch-service-segment-3.js';
+import {ReplicaDispatchRetryScheduling} from './replica-dispatch-retry-scheduling.js';
 import {createReplicaDispatchServiceDispatchObservationMethods} from './replica-dispatch-service-dispatch-observation-methods.js';
 import {
   shouldAllowPriorityRecoveryDispatchBootstrap,
@@ -34,7 +34,7 @@ const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 ]);
 
-class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
+class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
     const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
     if (!deferredRetry) {
@@ -767,8 +767,8 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
 }
 
 Object.defineProperties(
-  ReplicaDispatchServiceSegment4.prototype,
+  ReplicaDispatchReadinessCapture.prototype,
   createReplicaDispatchServiceDispatchObservationMethods(),
 );
 
-export {ReplicaDispatchServiceSegment4};
+export {ReplicaDispatchReadinessCapture};
