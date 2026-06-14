@@ -278,7 +278,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/node/replica-handler-class-part-1.js': Object.freeze({
+  'src/node/replica-handler-remove-request-methods.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'handleRemoveReplica',
@@ -288,7 +288,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/node/replica-handler-class-part-2.js': Object.freeze({
+  'src/node/replica-handler-remove-execution-methods.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'reconcileRemovedReplicaCleanup',

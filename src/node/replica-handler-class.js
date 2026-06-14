@@ -4,38 +4,77 @@
  * Simplified from ReplicaLifecycleManager - only handles execution,
  * not tracking (that's the coordinator's job).
  *
+ * This file owns the public ReplicaHandler class: construction and the
+ * composition of the responsibility-scoped method mixins (lifecycle,
+ * create/remove request handling, progress, leader handoff, status
+ * persistence, voter-readiness gating, remove execution, and runtime
+ * metadata).
+ *
  * Requirements: 10.2, 3.1
  */
 import {EventEmitter} from 'events';
+import fs from 'fs';
+import path from 'path';
+import {AddressManager} from '../address/address-manager.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+import {NUM} from '../constants/index.js';
+import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
+import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-metadata-access-error.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
-} from '../rebalancer/replica-operation-constants.js';
-import {
+  REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_ERRNO,
+  REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_NUM,
+  REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_SUBSYSTEM,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 import {ReplicaCreationProgressReporter} from '../utils/replica-creation-progress-reporter.js';
+import {ReplicaStateMachine} from './replica-state-machine.js';
+import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
 import {assignReplicaHandlerCreateMethods} from './replica-handler-create-methods.js';
 import {assignReplicaHandlerProgressMethods} from './replica-handler-progress-methods.js';
 import {
   assignReplicaHandlerRemoveRequestMethods,
 } from './replica-handler-remove-request-methods.js';
-import {ReplicaStateMachine} from './replica-state-machine.js';
+import {assignReplicaHandlerLeaderHandoffMethods} from './replica-handler-leader-handoff-methods.js';
+import {assignReplicaHandlerStatusMethods} from './replica-handler-status-methods.js';
+import {assignReplicaHandlerVoterReadinessMethods} from './replica-handler-voter-readiness-methods.js';
+import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-methods.js';
+import {
+  assignReplicaHandlerRemoveExecutionMethods,
+} from './replica-handler-remove-execution-methods.js';
+import {
+  ESTABLISHED_VOTER_ROLES,
+  METADATA_RESOLUTION_POLL_INTERVAL_MS,
+  PARTITION_METADATA_MISSING_PREFIX,
+  REPLICA_HANDLER_LITERAL,
+  SYSTEM_TABLE_HYDRATION_SQL,
+  TABLE_METADATA_MISSING_PREFIX,
+  isFreshPartitionBootstrapWindow,
+  isReplicaJoinNodeViable,
+  partitionMetadataMissingError,
+} from './replica-handler-transition-policy.js';
 
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
  */
-class ReplicaHandlerPart1 extends EventEmitter {
+class ReplicaHandler extends EventEmitter {
   /**
    * Create a new ReplicaHandler.
    * @param {Object} options - Configuration options.
@@ -117,56 +156,46 @@ class ReplicaHandlerPart1 extends EventEmitter {
     this.creationProgressByReplica = new Map();
     this.initialized = false;
   }
-  /**
-   * Initialize the replica handler.
-   */
-  initialize() {
-    if (this.initialized) {
-      return;
-    }
-    this.logger.info(REPLICA_HANDLER_LOG_MSG.INITIALIZING, {
-      nodeId: this.nodeId,
-      dataDir: this.dataDir,
-    });
-    this.initialized = true;
-  }
-  /**
-   * Handle incoming message (called by message router).
-   * @param {Object} envelope - Message envelope.
-   * @return {Promise<Object>} Response.
-   */
-  async handleMessage(envelope) {
-    const {payload, correlationId} = envelope;
-    const type = payload?.[ReplicaOperationField.TYPE];
-    this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
-      type,
-      correlationId,
-      operationId: payload?.operationId,
-    });
-    let response;
-    if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
-      response = await this.handleCreateReplica(payload);
-    } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-      response = await this.handleRemoveReplica(payload);
-    } else if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
-      response = await this.handleStepDownReplica(payload);
-    } else {
-      const unknownMessageType = REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
-      response = this.buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {error: unknownMessageType(type)},
-      );
-    }
-    // Include correlationId in response for RPC matching
-    return {
-      ...response,
-      correlationId,
-    };
-  }
 }
 
-assignReplicaHandlerProgressMethods(ReplicaHandlerPart1);
-assignReplicaHandlerCreateMethods(ReplicaHandlerPart1);
-assignReplicaHandlerRemoveRequestMethods(ReplicaHandlerPart1);
+assignReplicaHandlerLifecycleMethods(ReplicaHandler);
+assignReplicaHandlerProgressMethods(ReplicaHandler);
+assignReplicaHandlerCreateMethods(ReplicaHandler);
+assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
+assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
+assignReplicaHandlerStatusMethods(ReplicaHandler);
+assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
+assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
+assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
+  AddressManager,
+  ESTABLISHED_VOTER_ROLES,
+  METADATA_RESOLUTION_POLL_INTERVAL_MS,
+  NUM,
+  PRESSURE_WORK_CLASS,
+  PARTITION_METADATA_MISSING_PREFIX,
+  PartitionServiceRowOwner,
+  REPLICA_HANDLER_ADDRESS,
+  REPLICA_HANDLER_ERRNO,
+  REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_EVENT,
+  REPLICA_HANDLER_LITERAL,
+  REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_NUM,
+  REPLICA_HANDLER_SERVICE,
+  REPLICA_HANDLER_TYPEOF,
+  ReplicaStatus,
+  STORAGE_DEFAULT,
+  SYSTEM_TABLE_HYDRATION_SQL,
+  SYSTEM_TABLE_NAME,
+  TABLE_METADATA_MISSING_PREFIX,
+  createControlPlaneRuntimeBundle,
+  createSystemMetadataGatewayRequiredError,
+  fs,
+  isFreshPartitionBootstrapWindow,
+  isPriorityControlPlanePartition,
+  isReplicaJoinNodeViable,
+  path,
+  partitionMetadataMissingError,
+});
 
-export {ReplicaHandlerPart1};
+export {ReplicaHandler};

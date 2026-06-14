@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `134`
-- Semantic clusters: `27`
-- Primary kind counts: `{"segment":99,"stage":26,"part":9}`
+- Ordinal files: `132`
+- Semantic clusters: `26`
+- Primary kind counts: `{"segment":99,"stage":26,"part":7}`
 
 ## Migration Plan
 
@@ -33,7 +33,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 - `query-executor` (7 files): `query_executor_owner / query_execution_workflow`; proposed module `query-execution-workflow.js`; successor `runtime-modularization-query-execution-workflow`; samples `src/query/query-executor-segment-1.js`, `src/query/query-executor-segment-2-part-1.js`, `src/query/query-executor-segment-2-part-2.js`.
 - `rebalance-coordinator` (5 files): `rebalancer_coordinator_owner / replica_operation_coordination`; proposed module `replica-operation-coordination.js`; successor `runtime-modularization-replica-operation-coordination`; samples `src/rebalancer/rebalance-coordinator-segment-1.js`, `src/rebalancer/rebalance-coordinator-segment-2.js`, `src/rebalancer/rebalance-coordinator-segment-3.js`.
 - `replica-dispatch-service` (4 files): `replica_dispatch_owner / replica_dispatch_workflow`; proposed module `replica-dispatch-workflow.js`; successor `runtime-modularization-replica-dispatch-workflow`; samples `src/control-plane/replica-dispatch-service-segment-1.js`, `src/control-plane/replica-dispatch-service-segment-2.js`, `src/control-plane/replica-dispatch-service-segment-3.js`.
-- `replica-handler-class` (2 files): `replica_handler_owner / replica_handler_workflow`; proposed module `replica-handler-workflow.js`; successor `runtime-modularization-replica-handler-workflow`; samples `src/node/replica-handler-class-part-1.js`, `src/node/replica-handler-class-part-2.js`.
 - `sql-query-engine` (7 files): `sql_query_engine_owner / sql_query_planning_execution`; proposed module `sql-query-planning-execution.js`; successor `runtime-modularization-sql-query-planning-execution`; samples `src/query/sql-query-engine-segment-1.js`, `src/query/sql-query-engine-segment-2.js`, `src/query/sql-query-engine-segment-3.js`.
 - `unified-rebalancer` (11 files): `rebalancer_planning_owner / placement_rebalance_planning`; proposed module `placement-rebalance-planning.js`; successor `runtime-modularization-placement-rebalance-planning`; samples `src/rebalancer/unified-rebalancer-segment-1.js`, `src/rebalancer/unified-rebalancer-segment-2.js`, `src/rebalancer/unified-rebalancer-segment-3.js`.
 - `unified-rebalancer-control-plane-methods` (1 files): `rebalancer_planning_owner / placement_rebalance_planning`; proposed module `placement-rebalance-planning.js`; successor `runtime-modularization-placement-rebalance-planning`; samples `src/rebalancer/unified-rebalancer-segment-1-control-plane-methods.js`.
