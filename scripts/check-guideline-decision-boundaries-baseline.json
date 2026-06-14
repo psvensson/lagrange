@@ -5779,24 +5779,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/rebalancer/rebalance-coordinator-segment-1.js",
-      "line": 257,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 257) and SQL/DB (line 296) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-segment-1.js",
-      "line": 420,
-      "column": 1,
-      "functionName": "syncOwnerDependencies",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 420) and SQL/DB (line 342) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
       "line": 178,
       "column": 1,
@@ -7055,6 +7037,24 @@
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
+      "line": 255,
+      "column": 1,
+      "functionName": "initializeCoordinatorState",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 255) and SQL/DB (line 294) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
+      "line": 418,
+      "column": 1,
+      "functionName": "syncOwnerDependencies",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 418) and SQL/DB (line 340) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]
 }

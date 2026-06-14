@@ -1,4 +1,3 @@
-import {RebalanceCoordinatorSegment4} from './rebalance-coordinator-segment-4.js';
 import {
   checkTimeouts,
   getTimeoutForStep,
@@ -54,7 +53,7 @@ import {
   shouldPausePriorityAddAdmissionReadForLocalRouterPressure,
 } from './rebalance-coordinator-pressure-helper.js';
 
-class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
+class RebalanceCoordinatorRecoveryBudgetBindings {
   async checkTimeouts() {
     return checkTimeouts(this);
   }
@@ -307,4 +306,18 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   }
 }
 
-export {RebalanceCoordinatorSegment5};
+function applyRebalanceCoordinatorRecoveryBudgetBindingMethods(targetClass) {
+  const sourcePrototype = RebalanceCoordinatorRecoveryBudgetBindings.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === 'constructor') {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
+
+export {applyRebalanceCoordinatorRecoveryBudgetBindingMethods};

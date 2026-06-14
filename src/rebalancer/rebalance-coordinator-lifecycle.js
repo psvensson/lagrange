@@ -1,5 +1,4 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {applyRebalanceCoordinatorOperationReadMethods} from './rebalance-coordinator-operation-read-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -20,7 +19,6 @@ const {
   ControlPlaneReadinessService,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   DurableWorkflowCoordinator,
-  EventEmitter,
   ExecutorOutcomeEmitter,
   INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
   LoggingService,
@@ -43,7 +41,7 @@ const {
   createControlPlaneRuntimeBundle,
 } = REBALANCE_COORDINATOR_SHARED;
 
-class RebalanceCoordinatorSegment1 extends EventEmitter {
+class RebalanceCoordinatorLifecycle {
   get logger() {
     return this._logger;
   }
@@ -69,7 +67,9 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   }
 
   /**
-   * Create a new RebalanceCoordinator instance.
+   * Initialize coordinator construction-time state and owners. Invoked from the
+   * public RebalanceCoordinator constructor after EventEmitter initialization so
+   * the EventEmitter base is available for binding owners onto the emitter.
    * @param {Object} options - Configuration options.
    * @param {string} options.nodeId - Current node ID.
    * @param {Object} options.systemTableCache - Read-only system table cache.
@@ -83,9 +83,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    *   service for reservation management.
    * @param {Object} [options.cdcGroupPropagationService] - CDC publication owner.
    */
-  constructor(options = {}) {
-    super();
-
+  initializeCoordinatorState(options = {}) {
     this.nodeId = assertCritical(
       options.nodeId,
       REBALANCE_COORDINATOR_ERROR_MSG.NODE_ID_REQUIRED,
@@ -566,9 +564,20 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     }
     this.timeoutCheckInFlight = false;
   }
-
 }
 
-applyRebalanceCoordinatorOperationReadMethods(RebalanceCoordinatorSegment1);
+function applyRebalanceCoordinatorLifecycleMethods(targetClass) {
+  const sourcePrototype = RebalanceCoordinatorLifecycle.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === 'constructor') {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
 
-export {RebalanceCoordinatorSegment1};
+export {applyRebalanceCoordinatorLifecycleMethods};

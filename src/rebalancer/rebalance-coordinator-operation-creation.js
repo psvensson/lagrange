@@ -1,8 +1,4 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {
-  applyRebalanceCoordinatorPriorityBudgetAdmissionMethods,
-} from './rebalance-coordinator-priority-budget-admission.js';
-import {RebalanceCoordinatorSegment2} from './rebalance-coordinator-segment-2.js';
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_1CXMR = 'RebalanceCoordinator is shutting down';
@@ -25,7 +21,7 @@ const {
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
-class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
+class RebalanceCoordinatorOperationCreation {
   assertMembershipPublicationEpoch(move) {
     const requestedEpoch = Number(move?.membershipPublicationEpoch);
     if (!Number.isInteger(requestedEpoch) || requestedEpoch < LOCAL_NUM_ZERO) {
@@ -594,8 +590,18 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   }
 }
 
-applyRebalanceCoordinatorPriorityBudgetAdmissionMethods(
-  RebalanceCoordinatorSegment3,
-);
+function applyRebalanceCoordinatorOperationCreationMethods(targetClass) {
+  const sourcePrototype = RebalanceCoordinatorOperationCreation.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === 'constructor') {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
 
-export {RebalanceCoordinatorSegment3};
+export {applyRebalanceCoordinatorOperationCreationMethods};

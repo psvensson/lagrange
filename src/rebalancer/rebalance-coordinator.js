@@ -1,11 +1,22 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {RebalanceCoordinatorSegment5} from './rebalance-coordinator-segment-5.js';
+import {applyRebalanceCoordinatorLifecycleMethods} from './rebalance-coordinator-lifecycle.js';
+import {applyRebalanceCoordinatorOperationReadMethods} from './rebalance-coordinator-operation-read-methods.js';
+import {applyRebalanceCoordinatorTopologyGuardMethods} from './rebalance-coordinator-topology-guard-methods.js';
+import {applyRebalanceCoordinatorOperationIntentMethods} from './rebalance-coordinator-operation-intent-methods.js';
+import {applyRebalanceCoordinatorOwnerDelegationMethods} from './rebalance-coordinator-owner-delegation-methods.js';
+import {applyRebalanceCoordinatorOperationCreationMethods} from './rebalance-coordinator-operation-creation.js';
+import {applyRebalanceCoordinatorPriorityBudgetAdmissionMethods} from './rebalance-coordinator-priority-budget-admission.js';
+import {applyRebalanceCoordinatorConcurrentBudgetGateMethods} from './rebalance-coordinator-concurrent-budget-gate.js';
+import {applyRebalanceCoordinatorOwnerFacadeMethods} from './rebalance-coordinator-owner-facade.js';
+import {applyRebalanceCoordinatorReservationLifecycleMethods} from './rebalance-coordinator-reservation-lifecycle-methods.js';
+import {applyRebalanceCoordinatorRecoveryBudgetBindingMethods} from './rebalance-coordinator-recovery-budget-bindings.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_1I9PK = 'Skipping in-flight operation count during coordinator shutdown';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
+  EventEmitter,
   NUM,
   OUTCOME_EVENT_NAME,
   PRESSURE_WORK_CLASS,
@@ -18,7 +29,17 @@ const {
   isRetryableControlPlaneError,
 } = REBALANCE_COORDINATOR_SHARED;
 
-class RebalanceCoordinator extends RebalanceCoordinatorSegment5 {
+class RebalanceCoordinator extends EventEmitter {
+  /**
+   * Create a new RebalanceCoordinator instance.
+   * @param {Object} options - Configuration options. See
+   *   {@link RebalanceCoordinatorLifecycle#initializeCoordinatorState}.
+   */
+  constructor(options = {}) {
+    super();
+    this.initializeCoordinatorState(options);
+  }
+
   getLocalRouterPressureDecision(options = {}) {
     const partitionId = String(options.partitionId || '').trim();
     const criticalPressureBypass =
@@ -183,5 +204,21 @@ class RebalanceCoordinator extends RebalanceCoordinatorSegment5 {
     this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
   }
 }
-export {RebalanceCoordinator};
 
+// Compose coordinator behavior from semantic method-group modules. Each module
+// attaches its methods onto the shared RebalanceCoordinator prototype, so cross
+// calls via `this.x()` resolve against one object (replacing the former
+// segment-N inheritance chain). Application order mirrors the original chain.
+applyRebalanceCoordinatorLifecycleMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOperationReadMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorTopologyGuardMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOperationIntentMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOwnerDelegationMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOperationCreationMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorPriorityBudgetAdmissionMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorConcurrentBudgetGateMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOwnerFacadeMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorReservationLifecycleMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorRecoveryBudgetBindingMethods(RebalanceCoordinator);
+
+export {RebalanceCoordinator};
