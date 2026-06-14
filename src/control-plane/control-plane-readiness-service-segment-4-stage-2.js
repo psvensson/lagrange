@@ -195,6 +195,27 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
   // (publication cluster marker OR this node's node/service change). The
   // per-node retain/active layers in getPriorityRecoveryPlanningAnswerSync stay
   // OUTSIDE this memo and run every call on the (shared, frozen) projection.
+  // CL-033/CL-034 (regression repair): the wall-time stale-grace bound for the
+  // readiness planning memos. observedAt on the sync readiness hot path is an ISO
+  // STRING (getNodeReadinessSync: normalizeIsoTimestamp(now)), so the prior
+  // `Number(observedAt)` form produced NaN and `NaN <= grace` is ALWAYS false —
+  // silently disabling both memos in production (and turning their guard tests
+  // red). Parse via normalizeDiagnosticTimestampMs (handles ISO strings, numeric
+  // strings, and numbers); when either side is unparseable fall back to reuse and
+  // rely on the strong guards (isReadinessSnapshotInvalidated + the epoch/status
+  // freshness recheck) rather than a NaN comparison.
+  isReadinessPlanningMemoWithinStaleGrace(observedAt, capturedAtMs) {
+    const observedAtMs = normalizeDiagnosticTimestampMs(observedAt);
+    const capturedMs = normalizeDiagnosticTimestampMs(capturedAtMs);
+    if (observedAtMs === null || capturedMs === null) {
+      return true;
+    }
+    return (
+      (observedAtMs - capturedMs) <=
+      this.membershipPublicationPlanningActiveStaleGraceMs
+    );
+  }
+
   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
@@ -204,8 +225,10 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
         cached &&
         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
         !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs) &&
-        (Number(observedAt) - Number(cached.capturedAtMs)) <=
-          this.membershipPublicationPlanningActiveStaleGraceMs
+        this.isReadinessPlanningMemoWithinStaleGrace(
+          observedAt,
+          cached.capturedAtMs,
+        )
       ) {
         let isStale = false;
         const service = this.membershipPublicationService;
