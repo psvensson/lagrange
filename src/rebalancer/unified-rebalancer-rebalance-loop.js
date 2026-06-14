@@ -1,5 +1,5 @@
-import {UnifiedRebalancerSegment4Stage4} from './unified-rebalancer-segment-4-stage-4.js';
-import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UnifiedRebalancerMoveExecution} from './unified-rebalancer-move-execution.js';
+import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {
   NUM,
@@ -13,7 +13,7 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
-class UnifiedRebalancerSegment4Stage5 extends UnifiedRebalancerSegment4Stage4 {
+class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
   async executeRebalancingMoves(moves, context = {}) {
     const normalizedMoves = Array.isArray(moves) ? moves : [];
     const batchSize =
@@ -315,4 +315,4 @@ class UnifiedRebalancerSegment4Stage5 extends UnifiedRebalancerSegment4Stage4 {
   }
 }
 
-export {UnifiedRebalancerSegment4Stage5};
+export {UnifiedRebalancerRebalanceLoop};

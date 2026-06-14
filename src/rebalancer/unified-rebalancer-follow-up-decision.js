@@ -1,5 +1,5 @@
-import {UnifiedRebalancerSegment4Stage1} from './unified-rebalancer-segment-4-stage-1.js';
-import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UnifiedRebalancerBudgetPlanning} from './unified-rebalancer-budget-planning.js';
+import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 
 const {
@@ -29,7 +29,7 @@ const {buildPriorityRecoveryOperationContextFromRecord} =
 const {isReplicaOperationStale, normalizeReplicaOperationRecord} =
   UNIFIED_REBALANCER_SHARED;
 
-class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
+class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning {
   buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId) {
     const normalizedPartitionId = String(
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
@@ -738,4 +738,4 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
   }
 }
 
-export {UnifiedRebalancerSegment4Stage2};
+export {UnifiedRebalancerFollowUpDecision};

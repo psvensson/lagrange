@@ -5,7 +5,7 @@ import {
 import {
   applyUnifiedRebalancerPriorityReadinessMethods,
 } from './unified-rebalancer-priority-readiness.js';
-import {UnifiedRebalancerSegment2} from './unified-rebalancer-segment-2.js';
+import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-nodes.js';
 
 const {
   COLUMN,
@@ -42,7 +42,7 @@ const REBALANCE_OPERATION_FIELD = Object.freeze({
   STEPS_HISTORY_SNAKE: 'steps_history',
 });
 
-class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
+class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   /**
    * Check if a node is ready to receive replica operations.
    * @param {string} nodeId - Node ID.
@@ -629,11 +629,11 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    */
 }
 
-applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerSegment3);
+applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerReplicaState);
 
 Object.assign(
-  UnifiedRebalancerSegment3.prototype,
+  UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
 );
 
-export {UnifiedRebalancerSegment3};
+export {UnifiedRebalancerReplicaState};

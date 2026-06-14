@@ -16,9 +16,9 @@ const {
 } = UNIFIED_REBALANCER_SHARED;
 
 const CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER = 'learner';
-const SEGMENT_1_CONTROL_PLANE_CONSTRUCTOR = 'constructor';
+const CONTROL_PLANE_READINESS_CONSTRUCTOR = 'constructor';
 
-class UnifiedRebalancerSegment1ControlPlaneMethods {
+class UnifiedRebalancerControlPlaneReadinessMethods {
   /**
    * Whether this rebalancer manages a system table partition.
    * @return {boolean}
@@ -432,11 +432,11 @@ class UnifiedRebalancerSegment1ControlPlaneMethods {
   }
 }
 
-function applyUnifiedRebalancerSegment1ControlPlaneMethods(targetClass) {
+function applyUnifiedRebalancerControlPlaneReadinessMethods(targetClass) {
   const sourcePrototype =
-    UnifiedRebalancerSegment1ControlPlaneMethods.prototype;
+    UnifiedRebalancerControlPlaneReadinessMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
-    if (methodName === SEGMENT_1_CONTROL_PLANE_CONSTRUCTOR) {
+    if (methodName === CONTROL_PLANE_READINESS_CONSTRUCTOR) {
       continue;
     }
     const descriptor = Object.getOwnPropertyDescriptor(
@@ -447,4 +447,4 @@ function applyUnifiedRebalancerSegment1ControlPlaneMethods(targetClass) {
   }
 }
 
-export {applyUnifiedRebalancerSegment1ControlPlaneMethods};
+export {applyUnifiedRebalancerControlPlaneReadinessMethods};

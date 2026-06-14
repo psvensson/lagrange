@@ -41,8 +41,8 @@ coordination, storage admission, and execution handoff for topology changes.
   execution.
 - `operation-workflow-owner-decision.js` only as the compatibility facade for
   existing workflow decision callers.
-- Existing `operation-workflow-owner-segment-*`, `rebalance-coordinator-segment-*`,
-  and `unified-rebalancer-segment-*` files are legacy compatibility surfaces.
+- Existing `operation-workflow-owner-segment-*` and
+  `rebalance-coordinator-segment-*` files are legacy compatibility surfaces.
   Use `_legacy_work/inventory/ordinal-segments.md` when opening semantic migration
   packages for these files. New code should not add more stage/segment files.
 

@@ -1,5 +1,5 @@
-import {UnifiedRebalancerSegment4Stage3} from './unified-rebalancer-segment-4-stage-3.js';
-import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UnifiedRebalancerFollowUpMove} from './unified-rebalancer-follow-up-move.js';
+import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {
   MOVE_REASON,
@@ -21,7 +21,7 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
-class UnifiedRebalancerSegment4Stage4 extends UnifiedRebalancerSegment4Stage3 {
+class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
   async executeMoveViaCoordinator(move) {
     if (this.isShuttingDown) {
       return this.buildSkippedMoveResult(
@@ -475,4 +475,4 @@ class UnifiedRebalancerSegment4Stage4 extends UnifiedRebalancerSegment4Stage3 {
   }
 }
 
-export {UnifiedRebalancerSegment4Stage4};
+export {UnifiedRebalancerMoveExecution};

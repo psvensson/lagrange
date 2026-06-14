@@ -58,20 +58,6 @@ const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
   'src/rebalancer/operation-workflow-owner-segment-7-stage-4.js',
   'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
   'src/rebalancer/operation-workflow-owner-segment-7.js',
-  'src/rebalancer/unified-rebalancer-segment-1.js',
-  'src/rebalancer/unified-rebalancer-segment-1-control-plane-methods.js',
-  'src/rebalancer/unified-rebalancer-segment-1-policy-scheduler-methods.js',
-  'src/rebalancer/unified-rebalancer-segment-2.js',
-  'src/rebalancer/unified-rebalancer-segment-2-critical-topology-methods.js',
-  'src/rebalancer/unified-rebalancer-segment-3.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-1.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-2.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-3.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-4.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-5.js',
-  'src/rebalancer/unified-rebalancer-segment-4-stage-shared.js',
-  'src/rebalancer/unified-rebalancer-segment-4.js',
-  'src/rebalancer/unified-rebalancer-segment-5.js',
 ]);
 // The priority-recovery-snapshot ordinal stages were decomposed into
 // responsibility-named modules (ingress/eligibility/publication/active-gate/

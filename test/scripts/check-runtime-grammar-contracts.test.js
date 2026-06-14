@@ -7,7 +7,7 @@ import {
 const STRICT_CONSISTENCY_FILE_PATH =
   'test/distributed/harness/assertions-segment-1.js';
 const UNIFIED_REBALANCER_FILE_PATH =
-  'src/rebalancer/unified-rebalancer-segment-1.js';
+  'src/rebalancer/unified-rebalancer-lifecycle-base.js';
 const MOVE_PLANNER_FILE_PATH = 'src/rebalancer/move-planner.js';
 const OPERATION_WORKFLOW_OWNER_SEGMENT_5_FILE_PATH =
   'src/rebalancer/operation-workflow-owner-segment-5.js';
@@ -455,7 +455,7 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'src/rebalancer/move-planner.js',
       'src/rebalancer/operation-workflow-owner-segment-2.js',
       'src/rebalancer/operation-workflow-owner-segment-5.js',
-      'src/rebalancer/unified-rebalancer-segment-1.js',
+      'src/rebalancer/unified-rebalancer-lifecycle-base.js',
       'test/distributed/harness/assertions-segment-1.js',
       'test/distributed/harness/assertions-segment-3.js',
       'test/distributed/harness/cluster-segment-2.js',

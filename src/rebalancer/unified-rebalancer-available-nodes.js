@@ -1,8 +1,8 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {UnifiedRebalancerSegment1} from './unified-rebalancer-segment-1.js';
+import {UnifiedRebalancerLifecycleBase} from './unified-rebalancer-lifecycle-base.js';
 import {
-  applyUnifiedRebalancerSegment2CriticalTopologyMethods,
-} from './unified-rebalancer-segment-2-critical-topology-methods.js';
+  applyUnifiedRebalancerCriticalTopologyMethods,
+} from './unified-rebalancer-critical-topology-methods.js';
 import {TYPEOF} from '../constants/index.js';
 
 const {
@@ -71,7 +71,7 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
   }),
 ]);
 
-class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
+class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   getReservedPriorityRecoveryMoveSlots() {
     if (
       !this.isSystemPartitionEntity() ||
@@ -565,8 +565,8 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
    */
 }
 
-applyUnifiedRebalancerSegment2CriticalTopologyMethods(
-  UnifiedRebalancerSegment2,
+applyUnifiedRebalancerCriticalTopologyMethods(
+  UnifiedRebalancerAvailableNodes,
 );
 
-export {UnifiedRebalancerSegment2};
+export {UnifiedRebalancerAvailableNodes};

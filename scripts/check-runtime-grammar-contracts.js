@@ -137,7 +137,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/rebalancer/unified-rebalancer-segment-1.js': Object.freeze({
+  'src/rebalancer/unified-rebalancer-lifecycle-base.js': Object.freeze({
     requiredFragments: Object.freeze([
       'bindPriorityRecoveryVisibilityCacheListener',
       'unbindPriorityRecoveryVisibilityCacheListener',

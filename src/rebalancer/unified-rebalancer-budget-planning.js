@@ -1,8 +1,8 @@
-import {UnifiedRebalancerSegment3} from './unified-rebalancer-segment-3.js';
+import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
 import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
-import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -46,7 +46,7 @@ const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE_TABLE = Object.freeze([
   }),
 ]);
 
-class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
+class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   isAddLikeInFlightOperation(operation) {
     const operationType = this.getNormalizedOperationType(operation);
     if (operationType === OperationType.ADD) {
@@ -425,7 +425,7 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
 }
 
 applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods(
-  UnifiedRebalancerSegment4Stage1,
+  UnifiedRebalancerBudgetPlanning,
 );
 
-export {UnifiedRebalancerSegment4Stage1};
+export {UnifiedRebalancerBudgetPlanning};

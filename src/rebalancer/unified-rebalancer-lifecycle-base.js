@@ -1,10 +1,10 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
-  applyUnifiedRebalancerSegment1ControlPlaneMethods,
-} from './unified-rebalancer-segment-1-control-plane-methods.js';
+  applyUnifiedRebalancerControlPlaneReadinessMethods,
+} from './unified-rebalancer-control-plane-readiness-methods.js';
 import {
-  applyUnifiedRebalancerSegment1PolicySchedulerMethods,
-} from './unified-rebalancer-segment-1-policy-scheduler-methods.js';
+  applyUnifiedRebalancerPolicySchedulerMethods,
+} from './unified-rebalancer-policy-scheduler-methods.js';
 import {
   applyUnifiedRebalancerPriorityRecoveryCoordination,
 } from './unified-rebalancer-priority-recovery-coordination.js';
@@ -34,7 +34,7 @@ const {
   createControlPlaneRuntimeBundle,
 } = UNIFIED_REBALANCER_SHARED;
 
-class UnifiedRebalancerSegment1 extends EventEmitter {
+class UnifiedRebalancerLifecycleBase extends EventEmitter {
   constructor(options = {}) {
     super();
 
@@ -488,10 +488,14 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   }
 }
 
-applyUnifiedRebalancerSegment1ControlPlaneMethods(UnifiedRebalancerSegment1);
-applyUnifiedRebalancerSegment1PolicySchedulerMethods(
-  UnifiedRebalancerSegment1,
+applyUnifiedRebalancerControlPlaneReadinessMethods(
+  UnifiedRebalancerLifecycleBase,
 );
-applyUnifiedRebalancerPriorityRecoveryCoordination(UnifiedRebalancerSegment1);
+applyUnifiedRebalancerPolicySchedulerMethods(
+  UnifiedRebalancerLifecycleBase,
+);
+applyUnifiedRebalancerPriorityRecoveryCoordination(
+  UnifiedRebalancerLifecycleBase,
+);
 
-export {UnifiedRebalancerSegment1};
+export {UnifiedRebalancerLifecycleBase};

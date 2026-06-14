@@ -10,9 +10,9 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
-const SEGMENT_1_POLICY_SCHEDULER_CONSTRUCTOR = 'constructor';
+const POLICY_SCHEDULER_CONSTRUCTOR = 'constructor';
 
-class UnifiedRebalancerSegment1PolicySchedulerMethods {
+class UnifiedRebalancerPolicySchedulerMethods {
   /**
    * Get the policy for this entity.
    * @return {Promise<Object>} The applicable policy.
@@ -279,11 +279,11 @@ class UnifiedRebalancerSegment1PolicySchedulerMethods {
   }
 }
 
-function applyUnifiedRebalancerSegment1PolicySchedulerMethods(targetClass) {
+function applyUnifiedRebalancerPolicySchedulerMethods(targetClass) {
   const sourcePrototype =
-    UnifiedRebalancerSegment1PolicySchedulerMethods.prototype;
+    UnifiedRebalancerPolicySchedulerMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
-    if (methodName === SEGMENT_1_POLICY_SCHEDULER_CONSTRUCTOR) {
+    if (methodName === POLICY_SCHEDULER_CONSTRUCTOR) {
       continue;
     }
     const descriptor = Object.getOwnPropertyDescriptor(
@@ -294,4 +294,4 @@ function applyUnifiedRebalancerSegment1PolicySchedulerMethods(targetClass) {
   }
 }
 
-export {applyUnifiedRebalancerSegment1PolicySchedulerMethods};
+export {applyUnifiedRebalancerPolicySchedulerMethods};

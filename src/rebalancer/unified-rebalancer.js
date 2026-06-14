@@ -9,8 +9,8 @@
 import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
 
 export {
-  UnifiedRebalancerSegment5 as UnifiedRebalancer,
-} from './unified-rebalancer-segment-5.js';
+  UnifiedRebalancerCore as UnifiedRebalancer,
+} from './unified-rebalancer-core.js';
 export {
   REBALANCER_ENTITY_TYPE as EntityType,
   REBALANCER_MOVE_TYPE as MoveType,

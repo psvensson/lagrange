@@ -24,9 +24,9 @@ const {
   normalizeServiceEndpointRow,
 } = UNIFIED_REBALANCER_SHARED;
 
-const SEGMENT_2_CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
+const CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
 
-class UnifiedRebalancerSegment2CriticalTopologyMethods {
+class UnifiedRebalancerCriticalTopologyMethods {
   /**
    * Return one blocker summary when critical system-partition rebalancing
    * should wait for cluster topology convergence.
@@ -685,11 +685,11 @@ class UnifiedRebalancerSegment2CriticalTopologyMethods {
   }
 }
 
-function applyUnifiedRebalancerSegment2CriticalTopologyMethods(targetClass) {
+function applyUnifiedRebalancerCriticalTopologyMethods(targetClass) {
   const sourcePrototype =
-    UnifiedRebalancerSegment2CriticalTopologyMethods.prototype;
+    UnifiedRebalancerCriticalTopologyMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
-    if (methodName === SEGMENT_2_CRITICAL_TOPOLOGY_CONSTRUCTOR) {
+    if (methodName === CRITICAL_TOPOLOGY_CONSTRUCTOR) {
       continue;
     }
     const descriptor = Object.getOwnPropertyDescriptor(
@@ -700,4 +700,4 @@ function applyUnifiedRebalancerSegment2CriticalTopologyMethods(targetClass) {
   }
 }
 
-export {applyUnifiedRebalancerSegment2CriticalTopologyMethods};
+export {applyUnifiedRebalancerCriticalTopologyMethods};

@@ -1,18 +1,18 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {UnifiedRebalancerSegment4} from './unified-rebalancer-segment-4.js';
+import {UnifiedRebalancerRebalanceLoop} from './unified-rebalancer-rebalance-loop.js';
 import {REBALANCER_EVALUATION_METHODS} from './rebalancer-evaluation-methods.js';
 import {REBALANCER_NODE_EVENT_METHODS} from './rebalancer-node-event-methods.js';
 import {REBALANCER_PLANNING_GATE_METHODS} from './rebalancer-planning-gate-methods.js';
 import {REBALANCER_TRANSPORT_PRESSURE_METHODS} from './rebalancer-transport-pressure-methods.js';
-import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as STAGE_SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as FOLLOW_UP_SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {REBALANCER_LOG_MSG} = UNIFIED_REBALANCER_SHARED;
 const {
   NUM,
   UNIFIED_REBALANCER_LITERAL,
-} = STAGE_SHARED;
+} = FOLLOW_UP_SHARED;
 
-class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
+class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
   buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
     const baseDecision =
       super.buildPriorityRecoveryVisibilityRebalanceDecision(event, options);
@@ -116,11 +116,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
 }
 
 Object.assign(
-  UnifiedRebalancerSegment5.prototype,
+  UnifiedRebalancerCore.prototype,
   REBALANCER_PLANNING_GATE_METHODS,
   REBALANCER_TRANSPORT_PRESSURE_METHODS,
   REBALANCER_EVALUATION_METHODS,
   REBALANCER_NODE_EVENT_METHODS,
 );
 
-export {UnifiedRebalancerSegment5};
+export {UnifiedRebalancerCore};
