@@ -132,9 +132,21 @@ class UnifiedRebalancerCriticalTopologyMethods {
         );
       const hasRequiredHealthyNodes =
         activeNodeIds.length >= requiredHealthyNodeCount;
+      // CL-036: control_plane_publications was UNCONDITIONALLY excluded from the
+      // quorum escape, so its spread required EVERY active node ready — but a
+      // node's readiness dimension is itself gated on priority-control-plane
+      // recovery completing, which needs this spread (circular). Gate the
+      // exclusion on the SAME condition the endpoint-visibility relaxation
+      // already uses: keep the strict all-node requirement only while a
+      // publication is open OR priority recovery is active (membership authority
+      // genuinely in flux); once the latest publication is PUBLISHED and recovery
+      // is inactive, publications may spread on a healthy quorum like the other
+      // priority partitions. For non-publication partitions
+      // shouldRequireFullControlPlanePublicationEndpointVisibility() is false, so
+      // !... stays true and their behavior is unchanged.
       const priorityRecoveryMayProceedOnQuorum =
         this.isControlPlanePriorityPartition() &&
-        !this.isControlPlanePublicationPriorityPartition() &&
+        !this.shouldRequireFullControlPlanePublicationEndpointVisibility() &&
         hasRequiredHealthyNodes;
       if (priorityRecoveryMayProceedOnQuorum) {
         // Priority spread may proceed once quorum is ready; additional ACTIVE
