@@ -2743,69 +2743,6 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-1.js",
-      "line": 51,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 51) and SQL/DB (line 109) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-1.js",
-      "line": 273,
-      "column": 7,
-      "functionName": "resolveLocalDeferredMutationReadinessFailure",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-1.js",
-      "line": 278,
-      "column": 7,
-      "functionName": "resolveLocalDeferredMutationReadinessFailure",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-1.js",
-      "line": 286,
-      "column": 7,
-      "functionName": "resolveLocalDeferredMutationReadinessFailure",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-1.js",
-      "line": 494,
-      "column": 1,
-      "functionName": "supportsReadRows",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 494) and SQL/DB (line 497) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-2-query-methods.js",
-      "line": 215,
-      "column": 1,
-      "functionName": "shouldUseSqlMutationFallback",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 215) and SQL/DB (line 235) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-segment-3.js",
-      "line": 185,
-      "column": 1,
-      "functionName": "executeRead",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 185) and SQL/DB (line 247) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/control-plane/eligibility-snapshot.js",
       "line": 52,
       "column": 9,
@@ -7045,6 +6982,60 @@
       "functionName": "updateSystemTableRow",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 475) and SQL/DB (line 475) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-capability-diagnostics.js",
+      "line": 65,
+      "column": 1,
+      "functionName": "supportsReadRows",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 65) and SQL/DB (line 68) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
+      "line": 158,
+      "column": 7,
+      "functionName": "resolveLocalDeferredMutationReadinessFailure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
+      "line": 163,
+      "column": 7,
+      "functionName": "resolveLocalDeferredMutationReadinessFailure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
+      "line": 171,
+      "column": 7,
+      "functionName": "resolveLocalDeferredMutationReadinessFailure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
+      "line": 215,
+      "column": 1,
+      "functionName": "shouldUseSqlMutationFallback",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 215) and SQL/DB (line 235) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
+      "line": 106,
+      "column": 1,
+      "functionName": "executeRead",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 106) and SQL/DB (line 168) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     }
   ]

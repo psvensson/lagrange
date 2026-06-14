@@ -10,7 +10,7 @@ import {
   normalizePhaseScope,
 } from './control-plane-system-table-gateway-shared.js';
 
-class ControlPlaneSystemTableGatewaySegment3ReadMethods {
+const controlPlaneSystemTableGatewayReadStrategyMethods = {
   /**
    * @param {string} tableName
    * @param {Object} readIntent
@@ -65,7 +65,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       outcome: CONTROL_PLANE_READ_OUTCOME.CACHE_HIT,
       strategyUsed: CONTROL_PLANE_READ_STRATEGY.CACHE,
     };
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -91,7 +91,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       strategyUsed,
       ...extra,
     };
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -110,7 +110,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       strategyUsed,
       error,
     };
-  }
+  },
 
   /**
    * @param {string} strategy
@@ -121,7 +121,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
     return strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
       CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED :
       CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -138,7 +138,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       outcome: CONTROL_PLANE_READ_OUTCOME.BOOTSTRAP_SNAPSHOT,
       strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
     };
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -153,7 +153,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
       error,
     );
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -232,7 +232,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
         CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
         this.resolveAuthoritativeReadFailureOutcome(strategy),
     );
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -301,7 +301,7 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
         CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY :
         CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
     );
-  }
+  },
 
   /**
    * @param {string} tableName
@@ -335,15 +335,14 @@ class ControlPlaneSystemTableGatewaySegment3ReadMethods {
       tableName,
       readIntent.bootstrapSnapshotRows,
     );
-  }
-}
+  },
+};
 
-function installControlPlaneSystemTableGatewaySegment3ReadMethods(prototype) {
-  const methodDescriptors = Object.getOwnPropertyDescriptors(
-    ControlPlaneSystemTableGatewaySegment3ReadMethods.prototype,
+function assignControlPlaneSystemTableGatewayReadStrategies(targetClass) {
+  Object.assign(
+    targetClass.prototype,
+    controlPlaneSystemTableGatewayReadStrategyMethods,
   );
-  delete methodDescriptors.constructor;
-  Object.defineProperties(prototype, methodDescriptors);
 }
 
-export {installControlPlaneSystemTableGatewaySegment3ReadMethods};
+export {assignControlPlaneSystemTableGatewayReadStrategies};

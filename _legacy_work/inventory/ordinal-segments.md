@@ -2,9 +2,9 @@
 
 - Schema: `ordinal-segment-inventory-v1`
 - Source root: `src`
-- Ordinal files: `117`
-- Semantic clusters: `22`
-- Primary kind counts: `{"segment":88,"stage":22,"part":7}`
+- Ordinal files: `112`
+- Semantic clusters: `19`
+- Primary kind counts: `{"segment":83,"stage":22,"part":7}`
 
 ## Migration Plan
 
@@ -16,9 +16,6 @@ Replace numbered `segment`, `stage`, and `part` modules with semantic owner-boun
 - `admin-websocket-api` (3 files): `admin_websocket_api_owner / admin_websocket_routing`; proposed module `admin-websocket-routing.js`; successor `runtime-modularization-admin-websocket-routing`; samples `src/admin/admin-websocket-api-segment-1.js`, `src/admin/admin-websocket-api-segment-2.js`, `src/admin/admin-websocket-api-segment-3.js`.
 - `control-plane-readiness-service` (10 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-1.js`, `src/control-plane/control-plane-readiness-service-segment-2.js`, `src/control-plane/control-plane-readiness-service-segment-3.js`.
 - `control-plane-readiness-service-runtime-authority-methods` (1 files): `control_plane_readiness_owner / control_plane_readiness_workflow`; proposed module `control-plane-readiness-workflow.js`; successor `runtime-modularization-control-plane-readiness-workflow`; samples `src/control-plane/control-plane-readiness-service-segment-3-runtime-authority-methods.js`.
-- `control-plane-system-table-gateway` (3 files): `system_table_gateway_owner / control_plane_system_table_gateway`; proposed module `control-plane-system-table-gateway.js`; successor `runtime-modularization-control-plane-system-table-gateway`; samples `src/control-plane/control-plane-system-table-gateway-segment-1.js`, `src/control-plane/control-plane-system-table-gateway-segment-2.js`, `src/control-plane/control-plane-system-table-gateway-segment-3.js`.
-- `control-plane-system-table-gateway-query-methods` (1 files): `system_table_gateway_owner / control_plane_system_table_gateway`; proposed module `control-plane-system-table-gateway.js`; successor `runtime-modularization-control-plane-system-table-gateway`; samples `src/control-plane/control-plane-system-table-gateway-segment-2-query-methods.js`.
-- `control-plane-system-table-gateway-read-methods` (1 files): `system_table_gateway_owner / control_plane_system_table_gateway`; proposed module `control-plane-system-table-gateway.js`; successor `runtime-modularization-control-plane-system-table-gateway`; samples `src/control-plane/control-plane-system-table-gateway-segment-3-read-methods.js`.
 - `membership-publication-coordinator` (4 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-stage-1.js`, `src/control-plane/membership-publication-coordinator-stage-2.js`, `src/control-plane/membership-publication-coordinator-stage-3.js`.
 - `membership-publication-coordinator-class` (3 files): `membership_publication_owner / membership_publication_coordination`; proposed module `membership-publication-coordination.js`; successor `runtime-modularization-membership-publication-coordination`; samples `src/control-plane/membership-publication-coordinator-class-stage-1.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`.
 - `message-router-shared` (4 files): `message_router_owner / message_router_shared_transport`; proposed module `message-router-shared-transport.js`; successor `runtime-modularization-message-router-shared-transport`; samples `src/transport/message-router-shared-stage-1.js`, `src/transport/message-router-shared-stage-2.js`, `src/transport/message-router-shared-stage-3.js`.

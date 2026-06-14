@@ -47,7 +47,7 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   );
 }
 
-const controlPlaneSystemTableGatewaySegment2QueryMethods = {
+const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   evaluateReadPressure(tableName, options = {}) {
     return this.getPressureGovernor().evaluate({
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
@@ -412,6 +412,11 @@ const controlPlaneSystemTableGatewaySegment2QueryMethods = {
   },
 };
 
-export {
-  controlPlaneSystemTableGatewaySegment2QueryMethods,
-};
+function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
+  Object.assign(
+    targetClass.prototype,
+    controlPlaneSystemTableGatewayQueryExecutionMethods,
+  );
+}
+
+export {assignControlPlaneSystemTableGatewayQueryExecution};
