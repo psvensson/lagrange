@@ -3265,51 +3265,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-1.js",
-      "line": 108,
-      "column": 5,
-      "functionName": "normalizePriorityRecoverySemanticStateId",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-1.js",
-      "line": 165,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryExplicitSemanticState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-1.js",
-      "line": 171,
-      "column": 9,
-      "functionName": "normalizePriorityRecoveryBlockedPartitions",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"normalizedBlockedPartitions\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-1.js",
-      "line": 464,
-      "column": 3,
-      "functionName": "resolvePriorityRecoverySnapshotSemanticState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-observation-snapshot-stage-3.js",
-      "line": 109,
-      "column": 5,
-      "functionName": "resolveObservationPublicationConvergenceGate",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/control-plane/priority-recovery-snapshot-stage-1.js",
       "line": 433,
       "column": 5,
@@ -6733,15 +6688,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/transport/message-router-segment-2.js",
-      "line": 644,
-      "column": 7,
-      "functionName": "resolveReconnectDisposition",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/transport/message-router-shared-stage-4.js",
       "line": 178,
       "column": 7,
@@ -7055,6 +7001,60 @@
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 72) and SQL/DB (line 85) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
+      "line": 109,
+      "column": 5,
+      "functionName": "resolveObservationPublicationConvergenceGate",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
+      "line": 108,
+      "column": 5,
+      "functionName": "normalizePriorityRecoverySemanticStateId",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
+      "line": 165,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryExplicitSemanticState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
+      "line": 171,
+      "column": 9,
+      "functionName": "normalizePriorityRecoveryBlockedPartitions",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"normalizedBlockedPartitions\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
+      "line": 464,
+      "column": 3,
+      "functionName": "resolvePriorityRecoverySnapshotSemanticState",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/transport/message-router-connection-close-reconnect.js",
+      "line": 222,
+      "column": 7,
+      "functionName": "resolveReconnectDisposition",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     }
   ]
 }

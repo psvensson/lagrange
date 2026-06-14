@@ -1,6 +1,6 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
-import {LOCAL_EMPTY_LIST, LOCAL_STR_EMPTY, PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD, PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityPartitionSummary} from './priority-recovery-observation-snapshot-stage-1.js';
+import {LOCAL_EMPTY_LIST, LOCAL_STR_EMPTY, PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD, PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityPartitionSummary} from './priority-recovery-observation-normalization.js';
 
 function resolveProjectionDiagnostics(publicationConvergence = null) {
   const projectionDiagnostics =

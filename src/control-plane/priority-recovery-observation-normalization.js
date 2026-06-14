@@ -11,7 +11,7 @@ import {
   normalizePriorityRecoveryInteger,
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
-import {selectLatestPriorityRecoveryPartitionSnapshot} from './priority-recovery-observation-snapshot-stage-2.js';
+import {selectLatestPriorityRecoveryPartitionSnapshot} from './priority-recovery-observation-partition-witness.js';
 
 const LOCAL_STR_EMPTY = '';
 

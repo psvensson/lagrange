@@ -7,216 +7,293 @@
  * Primary tests: test/transport/message-router.test.js.
  */
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {MessageRouterSegment3} from './message-router-segment-3.js';
+import {createMessageRouterConnectionLifecycleMethods} from './message-router-connection-lifecycle-methods.js';
+import {MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS} from './message-router-delivery-pressure-routing.js';
+import {OwnerRetryBudget} from './owner-retry-budget.js';
+import {defineMessageRouterAdmissionControls} from './message-router-admission-controls.js';
+import {defineMessageRouterServerLifecycle} from './message-router-server-lifecycle.js';
+import {defineMessageRouterInboundDispatch} from './message-router-inbound-dispatch.js';
+import {defineMessageRouterPendingResponseLedger} from './message-router-pending-response-ledger.js';
+import {defineMessageRouterConnectionCloseReconnect} from './message-router-connection-close-reconnect.js';
+import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
+import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
+import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
 
 const {
+  ConfigurationManager,
   ConnectionState,
-  OutboundDeliveryPriority,
+  EventEmitter,
+  LoggingService,
   MESSAGE_ROUTER_LITERAL,
-  ROUTER_ERROR_MSG,
-  ROUTER_LOG_MSG,
+  OutboundDeliveryRegistryOwner,
+  RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS,
+  RouterConnectionAuthorityOwner,
   RouterMessageType,
+  TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
-  TRANSPORT_EVENT,
+  TRANSPORT_FORMAT,
   TRANSPORT_NUM,
+  TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  WebSocket,
-  buildQueueWaitSummary,
-  countInFlightByPriority,
-  countInFlightReadinessReserve,
-  countPendingByPriority,
-  resolveBackgroundInFlightLimit,
-  resolveBackgroundPendingLimit,
-  resolveReadinessReserveInFlightLimit,
+  UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS,
+  WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
+  normalizeToWebSocketAddress,
+  uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
-function countPendingCriticalReserveEligible(queue) {
-  if (!queue || !Array.isArray(queue.pending)) {
-    return TRANSPORT_NUM.ZERO;
+class MessageRouter extends EventEmitter {
+  constructor(options = {}) {
+    super();
+    const nodeWsPort = options.wsPort || TRANSPORT_DEFAULT.WS_PORT;
+    this.nodeId = options.nodeId || uuidv4();
+    this.nodeAddress =
+      options.nodeAddress ||
+      TRANSPORT_FORMAT.buildDefaultNodeAddress(nodeWsPort);
+    this.advertisedAddress =
+      options.advertisedAddress ||
+      normalizeToWebSocketAddress(this.nodeAddress) ||
+      this.nodeAddress;
+    this.wsPort = options.wsPort || null;
+    this.routerId = uuidv4();
+    this.identifyPayload = options.identifyPayload || null;
+    this.handlers = /* @__PURE__ */ new Map();
+    this.inProcess = options.inProcess === true;
+    this.nodeConnections = /* @__PURE__ */ new Map();
+    this.pendingMessages = /* @__PURE__ */ new Map();
+    this.pendingResponses = /* @__PURE__ */ new Map();
+    this.retiredPendingResponses = /* @__PURE__ */ new Map();
+    this.pendingPings = /* @__PURE__ */ new Map();
+    const config = ConfigurationManager.getInstance();
+    const configuredWsHost = config.get(TRANSPORT_CONFIG_KEY.WS_HOST);
+    this.wsHost =
+      options.wsHost ||
+      (typeof configuredWsHost === TRANSPORT_TYPEOF.STRING &&
+      configuredWsHost.length > TRANSPORT_NUM.ZERO ?
+        configuredWsHost :
+        TRANSPORT_DEFAULT.WS_HOST);
+    this.messageTimeoutMs =
+      config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
+      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    this.ackTimeoutQuarantineThreshold =
+      Number.isFinite(options.ackTimeoutQuarantineThreshold) &&
+      options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE ?
+        Math.floor(options.ackTimeoutQuarantineThreshold) :
+        Number.isFinite(
+          config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+        ) &&
+            config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD) >=
+              TRANSPORT_NUM.ONE ?
+          Math.floor(
+            config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+          ) :
+          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
+    this.ackTimeoutQuarantineLivenessWindowMs =
+      Number.isFinite(options.ackTimeoutQuarantineLivenessWindowMs) &&
+      options.ackTimeoutQuarantineLivenessWindowMs >= TRANSPORT_NUM.ZERO ?
+        Math.floor(options.ackTimeoutQuarantineLivenessWindowMs) :
+        Number.isFinite(
+          config.get(
+            TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+          ),
+        ) &&
+            config.get(
+              TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+            ) >= TRANSPORT_NUM.ZERO ?
+          Math.floor(
+            config.get(
+              TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+            ),
+          ) :
+          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS;
+    // Per-node timestamp of the most recent inbound traffic (any parsed
+    // message on any socket from that node). Liveness evidence for the
+    // quarantine guard: a peer we are actively receiving from is slow, not
+    // dead, and its connection must not be severed on ACK timeouts.
+    this.nodeInboundActivityAt = new Map();
+    const configuredConnectTimeoutMs = config.get(
+      WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
+    );
+    this.connectTimeoutMs =
+      Number.isFinite(options.connectTimeoutMs) &&
+      options.connectTimeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.connectTimeoutMs) :
+        Number.isFinite(configuredConnectTimeoutMs) &&
+            configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO ?
+          Math.floor(configuredConnectTimeoutMs) :
+          this.messageTimeoutMs;
+    this.pingTimeoutMs =
+      config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS) ||
+      TRANSPORT_DEFAULT.PING_TIMEOUT_MS;
+    this.reconnectIntervalMs =
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS) ||
+      TRANSPORT_DEFAULT.RECONNECT_INTERVAL_MS;
+    this.reconnectMaxAttempts =
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_MAX_ATTEMPTS) ||
+      TRANSPORT_DEFAULT.RECONNECT_MAX_ATTEMPTS;
+    this.pingIntervalMs =
+      config.get(TRANSPORT_CONFIG_KEY.PING_INTERVAL_MS) ||
+      TRANSPORT_DEFAULT.PING_INTERVAL_MS;
+    this.reconnectBackoffMultiplier =
+      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_BACKOFF_MULTIPLIER) ||
+      TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
+    const configuredMaxConcurrent =
+      Number.isFinite(options.outboundQueueMaxConcurrent) &&
+      options.outboundQueueMaxConcurrent > TRANSPORT_NUM.ZERO ?
+        options.outboundQueueMaxConcurrent :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_CONCURRENT);
+    this.outboundQueueMaxConcurrent =
+      Number.isFinite(configuredMaxConcurrent) &&
+      configuredMaxConcurrent > TRANSPORT_NUM.ZERO ?
+        Math.floor(configuredMaxConcurrent) :
+        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CONCURRENCY;
+    const configuredMaxPending =
+      Number.isFinite(options.outboundQueueMaxPending) &&
+      options.outboundQueueMaxPending >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueMaxPending :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_PENDING);
+    this.outboundQueueMaxPending =
+      Number.isFinite(configuredMaxPending) &&
+      configuredMaxPending >= TRANSPORT_NUM.ZERO ?
+        Math.floor(configuredMaxPending) :
+        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_MAX_PENDING;
+    const configuredCriticalReserve =
+      Number.isFinite(options.outboundQueueCriticalReserve) &&
+      options.outboundQueueCriticalReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueCriticalReserve :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_CRITICAL_RESERVE);
+    const maxCriticalReserve = Math.max(
+      TRANSPORT_NUM.ZERO,
+      this.outboundQueueMaxPending - TRANSPORT_NUM.ONE,
+    );
+    this.outboundQueueCriticalReserve =
+      Number.isFinite(configuredCriticalReserve) &&
+      configuredCriticalReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(Math.floor(configuredCriticalReserve), maxCriticalReserve) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE,
+          maxCriticalReserve,
+        );
+    const configuredReadinessReserve =
+      Number.isFinite(options.outboundQueueReadinessReserve) &&
+      options.outboundQueueReadinessReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueReadinessReserve :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_READINESS_RESERVE);
+    const maxReadinessReserve = Math.max(
+      TRANSPORT_NUM.ZERO,
+      this.outboundQueueMaxPending - TRANSPORT_NUM.ONE,
+    );
+    this.outboundQueueReadinessReserve =
+      Number.isFinite(configuredReadinessReserve) &&
+      configuredReadinessReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(Math.floor(configuredReadinessReserve), maxReadinessReserve) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_READINESS_RESERVE,
+          maxReadinessReserve,
+        );
+    const configuredReadinessInflightReserve =
+      Number.isFinite(options.outboundQueueReadinessInflightReserve) &&
+      options.outboundQueueReadinessInflightReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueReadinessInflightReserve :
+        config.get(
+          TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
+        );
+    const maxReadinessInflightReserve = Math.max(
+      TRANSPORT_NUM.ZERO,
+      this.outboundQueueMaxConcurrent,
+    );
+    this.outboundQueueReadinessInflightReserve =
+      Number.isFinite(configuredReadinessInflightReserve) &&
+      configuredReadinessInflightReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(
+          Math.floor(configuredReadinessInflightReserve),
+          maxReadinessInflightReserve,
+        ) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
+          maxReadinessInflightReserve,
+        );
+    const loggingService = LoggingService.getInstance();
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) :
+      console;
+    this.nowFn =
+      typeof options.nowFn === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION ?
+        options.nowFn :
+        Date.now;
+    this.unmatchedServiceResponseWarnIntervalMs =
+      Number.isFinite(options.unmatchedServiceResponseWarnIntervalMs) &&
+      options.unmatchedServiceResponseWarnIntervalMs >= TRANSPORT_NUM.ZERO ?
+        Math.floor(options.unmatchedServiceResponseWarnIntervalMs) :
+        UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS;
+    this.lastUnmatchedServiceResponseWarnAtMs = null;
+    this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
+    this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
+    this.initialized = false;
+    this.server = null;
+    this.messageCount = TRANSPORT_NUM.ZERO;
+    this.isShuttingDown = false;
+    this.inProcessTransport = false;
+    this.externalAdmissionEnabled = options.externalAdmissionEnabled !== false;
+    this.outboundQueues = /* @__PURE__ */ new Map();
+    this.deliverMetricSampleByTarget = /* @__PURE__ */ new Map();
+    this.deliverMetricFaultSampleByTarget = /* @__PURE__ */ new Map();
+    this.deliverMetricQueueDepthByTarget = /* @__PURE__ */ new Map();
+    this.resolveServiceNode = options.resolveServiceNode || null;
+    this.resolveNodeAddress = options.resolveNodeAddress || null;
+    this.resolveQueryMessageGroupService =
+      options.resolveQueryMessageGroupService || null;
+    this.pendingNodeConnections = /* @__PURE__ */ new Map();
+    // Bounds the rate of delivery-triggered reconnect attempts toward a single
+    // owner so a saturated seed is not hammered (opt-in, default off).
+    this.ownerRetryBudget =
+      options.ownerRetryBudget || new OwnerRetryBudget();
+    this.transportPressureMetrics = {
+      reconnectBeforeDeliveryFailureCount: TRANSPORT_NUM.ZERO,
+      maxObservedPendingNodeConnectionCount: TRANSPORT_NUM.ZERO,
+    };
+    this.reconnectAddressSuppressionMs =
+      Number.isFinite(options.reconnectAddressSuppressionMs) &&
+      options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.reconnectAddressSuppressionMs) :
+        RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
+    this.suppressedReconnectAddresses = /* @__PURE__ */ new Map();
+    this.connectionAuthorityOwner = new RouterConnectionAuthorityOwner(this);
+    this.outboundDeliveryRegistryOwner = new OutboundDeliveryRegistryOwner(
+      this,
+    );
   }
-  return queue.pending.reduce((count, item) => {
-    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
-      return count;
-    }
-    const admissionKey =
-      typeof item?.deliverySourceAdmissionKey === TRANSPORT_TYPEOF.STRING ?
-        item.deliverySourceAdmissionKey :
-        MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
-    if (admissionKey.startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX)) {
-      return count;
-    }
-    return count + TRANSPORT_NUM.ONE;
-  }, TRANSPORT_NUM.ZERO);
 }
 
-class MessageRouter extends MessageRouterSegment3 {
-  getStats() {
-    const connectionStats = {};
-    for (const [nodeId, connection] of this.nodeConnections) {
-      connectionStats[nodeId] = {
-        state: connection.state,
-        isIncoming: connection.isIncoming,
-        reconnectAttempts: connection.reconnectAttempts,
-        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO,
-      };
-    }
-    const outboundQueueStats = {};
-    for (const [nodeId, queue] of this.outboundQueues) {
-      outboundQueueStats[nodeId] = {
-        inFlight: queue.inFlight,
-        inFlightCritical: countInFlightByPriority(
-          queue,
-          OutboundDeliveryPriority.CRITICAL,
-        ),
-        inFlightBackground: countInFlightByPriority(
-          queue,
-          OutboundDeliveryPriority.BACKGROUND,
-        ),
-        inFlightReadinessReserve: countInFlightReadinessReserve(queue),
-        pending: queue.pending.length,
-        pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
-        pendingCriticalReserveEligible:
-          countPendingCriticalReserveEligible(queue),
-        pendingReadiness: countPendingByPriority(queue, OutboundDeliveryPriority.READINESS),
-        pendingBackground: countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND),
-        criticalReserve: queue.criticalReserve,
-        readinessReserve: queue.readinessReserve,
-        readinessInflightReserve: queue.readinessInflightReserve,
-        readinessInflightReserveLimit:
-          resolveReadinessReserveInFlightLimit(queue),
-        backgroundPendingLimit: resolveBackgroundPendingLimit(queue),
-        backgroundMaxConcurrent: resolveBackgroundInFlightLimit(queue),
-        maxConcurrent: queue.maxConcurrent,
-        maxPending: queue.maxPending,
-        queueWait: buildQueueWaitSummary(queue),
-      };
-    }
-    return {
-      routerId: this.routerId,
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      advertisedAddress: this.advertisedAddress,
-      initialized: this.initialized,
-      messageCount: this.messageCount,
-      pendingMessages: this.pendingMessages.size,
-      pendingResponses: this.pendingResponses.size,
-      serviceResponseDispositions: this.getServiceResponseDispositionCounts(),
-      handlers: this.handlers.size,
-      connections: connectionStats,
-      connectedNodes: this.getConnectedNodes().length,
-      outboundQueues: outboundQueueStats,
-    };
-  }
-  /**
-   * Summarize current outbound queue pressure across all peer queues.
-   * @return {Object} Pressure summary.
-   */
-  getOutboundPressureSummary() {
-    return this.outboundDeliveryRegistryOwner.buildPressureSummary();
-  }
-  /**
-   * Shutdown the message router.
-   * @return {Promise<void>}
-   */
-  async shutdown() {
-    this.logger.debug(ROUTER_LOG_MSG.SHUTTING_DOWN, {
-      routerId: this.routerId,
-    });
-    this.isShuttingDown = true;
-    for (const [, pending] of this.pendingMessages) {
-      clearTimeout(pending.timeout);
-      pending.resolve({
-        messageId: pending.messageId,
-        acknowledged: false,
-        error: ROUTER_ERROR_MSG.SHUTDOWN,
-        shutdown: true,
-      });
-    }
-    this.pendingMessages.clear();
-    const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
-    for (const [, pending] of this.pendingResponses) {
-      clearTimeout(pending.timeoutId);
-      pending.reject(shutdownError);
-    }
-    this.pendingResponses.clear();
-    this.retiredPendingResponses.clear();
-    this.serviceResponseDispositionCounts.clear();
-    for (const [, pending] of this.pendingPings) {
-      clearTimeout(pending.timeout);
-      pending.resolve(false);
-    }
-    this.pendingPings.clear();
-    for (const [nodeId] of this.outboundQueues) {
-      this.failOutboundQueueGracefully(nodeId, shutdownError);
-    }
-    this.outboundQueues.clear();
-    const closePromises = [];
-    for (const [, connection] of this.nodeConnections) {
-      if (connection.pingInterval) {
-        clearInterval(connection.pingInterval);
-        connection.pingInterval = null;
-      }
-      if (connection.reconnectTimeout) {
-        clearTimeout(connection.reconnectTimeout);
-        connection.reconnectTimeout = null;
-      }
-      if (connection.ws) {
-        const ws = connection.ws;
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          closePromises.push(new Promise((resolve) => {
-            ws.once(TRANSPORT_EVENT.CLOSE, resolve);
-            ws.terminate();
-          }));
-        }
-      }
-    }
-    if (closePromises.length > TRANSPORT_NUM.ZERO) {
-      let timeoutId;
-      await Promise.race([Promise.all(closePromises), new Promise((resolve) => {
-        timeoutId = setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
-      })]).finally(() => {
-        clearTimeout(timeoutId);
-      });
-    }
-    if (this.server) {
-      if (this.inProcessTransport) {
-        for (const client of this.server.clients || []) {
-          client.terminate();
-        }
-        await new Promise((resolve) => this.server.close(resolve));
-        this.server = null;
-        this.inProcessTransport = false;
-      } else {
-        const wsServer = this.server;
-        const httpServer = wsServer._server || null;
-        for (const client of wsServer.clients) {
-          client.terminate();
-        }
-        await new Promise((resolve) => {
-          wsServer.close(() => resolve());
-        });
-        if (httpServer) {
-          if (typeof httpServer.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
-            httpServer.closeAllConnections();
-          }
-          await new Promise((resolve) => {
-            httpServer.close(() => resolve());
-          });
-          if (typeof httpServer.unref === TRANSPORT_TYPEOF.FUNCTION) {
-            httpServer.unref();
-          }
-        }
-        this.server = null;
-      }
-    }
-    this.nodeConnections.clear();
-    this.handlers.clear();
-    this.initialized = false;
-    this.emit(TRANSPORT_EVENT.SHUTDOWN, {
-      routerId: this.routerId,
-    });
-  }
-}
+// Compose the router behavior from semantic method-group modules. Each group
+// attaches to the same prototype so cross-group `this.x()` calls resolve.
+Object.defineProperties(
+  MessageRouter.prototype,
+  createMessageRouterConnectionLifecycleMethods(),
+);
+Object.defineProperties(
+  MessageRouter.prototype,
+  Object.fromEntries(
+    Object.entries(MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS).map(
+      ([name, value]) => [
+        name,
+        {
+          value,
+          configurable: true,
+          writable: true,
+        },
+      ],
+    ),
+  ),
+);
+defineMessageRouterAdmissionControls(MessageRouter);
+defineMessageRouterServerLifecycle(MessageRouter);
+defineMessageRouterInboundDispatch(MessageRouter);
+defineMessageRouterPendingResponseLedger(MessageRouter);
+defineMessageRouterConnectionCloseReconnect(MessageRouter);
+defineMessageRouterHandlerRegistry(MessageRouter);
+defineMessageRouterDeliveryDelegation(MessageRouter);
+defineMessageRouterStatsShutdown(MessageRouter);
+
 export {
   ConnectionState,
   MessageRouter,

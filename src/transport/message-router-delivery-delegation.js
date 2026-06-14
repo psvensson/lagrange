@@ -1,4 +1,3 @@
-import {MessageRouterSegment2} from './message-router-segment-2.js';
 import {
   deliver,
   deliverLocal,
@@ -42,7 +41,12 @@ import {
   tryDeliverAfterReconnect,
 } from './message-router-reconnect-behaviors.js';
 
-class MessageRouterSegment3 extends MessageRouterSegment2 {
+/**
+ * Delivery and reconnect delegation surface for the message router: thin
+ * instance-method wrappers that forward to the free-function delivery and
+ * reconnect behavior modules, binding `this` as the router instance.
+ */
+class MessageRouterDeliveryDelegation {
   async deliverLocal(targetAddress, messageId, payload, correlationId) {
     return deliverLocal(
       this,
@@ -323,4 +327,17 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
   }
 }
 
-export {MessageRouterSegment3};
+function defineMessageRouterDeliveryDelegation(serviceClass) {
+  Object.defineProperties(
+    serviceClass.prototype,
+    Object.fromEntries(
+      Object.entries(
+        Object.getOwnPropertyDescriptors(
+          MessageRouterDeliveryDelegation.prototype,
+        ),
+      ).filter(([name]) => name !== 'constructor'),
+    ),
+  );
+}
+
+export {defineMessageRouterDeliveryDelegation};

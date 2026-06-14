@@ -1,36 +1,35 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {
-  MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS,
-} from './message-router-delivery-pressure-routing.js';
-import {MessageRouterSegment1} from './message-router-segment-1.js';
-import {applyBoundedJitter} from '../utils/retry-jitter.js';
 
 const LOCAL_NUM_ZERO = 0;
 
 const {
-  CONNECTION_CLOSE_DISPOSITION,
-  ConnectionState,
   INLINE_ACK_PASSTHROUGH_KEYS,
   MESSAGE_ROUTER_LITERAL,
-  RECONNECT_DISPOSITION,
   RETIRED_PENDING_RESPONSE_REASON,
-  ROUTER_ADDRESS,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_VALID_ENTITY_TYPES,
-  RouterMessageType,
   SERVICE_RESPONSE_DISPOSITION_KIND,
   TRANSPORT_ERROR_MSG,
-  TRANSPORT_EVENT,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
-  WebSocket,
   buildRetiredPendingClassification,
   buildServiceResponseDisposition,
   normalizeIdentifier,
 } = MESSAGE_ROUTER_SHARED;
 
-class MessageRouterSegment2 extends MessageRouterSegment1 {
+/**
+ * Pending-response ledger for the message router: classify and warn about
+ * unmatched SERVICE_RESPONSE frames, track the retired-waiter grace model,
+ * register/arm/settle/cancel pending response waiters, and settle inbound ACKs.
+ */
+class MessageRouterPendingResponseLedger {
+  /**
+   * Rate-limit unmatched service-response warnings so response storms do not
+   * bury the underlying transport/control-plane failure that caused them.
+   * @param {Object} unmatchedResponseClassification
+   * @return {void}
+   * @private
+   */
   logUnmatchedServiceResponse(unmatchedResponseClassification) {
     const messageId = unmatchedResponseClassification?.messageId || null;
     const nowMs = Number(this.nowFn());
@@ -444,369 +443,19 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
       }
     }
   }
-  /**
-   * Handle connection close.
-   * Self-disconnection is treated as a fatal error (no reconnection).
-   * Requirements: 2.1
-   * @param {string} nodeId - Node ID.
-   * @param {string|null} expectedConnectionId - Optional stale-close fence.
-   * @private
-   */
-  handleConnectionClose(nodeId, expectedConnectionId = null) {
-    const connection = this.nodeConnections.get(nodeId);
-    if (
-      expectedConnectionId &&
-      connection &&
-      connection.connectionId !== expectedConnectionId
-    ) {
-      this.logger.debug(
-        MESSAGE_ROUTER_LITERAL.STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT,
-        {
-          nodeId,
-          expectedConnectionId,
-          actualConnectionId: connection.connectionId,
-        },
-      );
-      return;
-    }
-    if (connection) {
-      this.logger.info(ROUTER_LOG_MSG.CONNECTION_CLOSED, {
-        nodeId,
-        connectionId: connection.connectionId,
-        isSelfConnection: connection.isSelfConnection,
-      });
-      connection.ws = null;
-      this.clearPingInterval(connection);
-      const disconnectError = new Error(
-        ROUTER_ERROR_MSG.connectionClosed(nodeId),
-      );
-      this.failOutboundQueue(nodeId, disconnectError);
-      this.failPendingMessagesForNode(nodeId, disconnectError);
-      this.failPendingResponsesForNode(nodeId, disconnectError);
-      this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {
-        nodeId,
-      });
-      const closeDisposition =
-        this.resolveConnectionCloseDisposition(connection);
-      connection.state = closeDisposition.state;
-      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.SHUTDOWN) {
-        return;
-      }
-      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.RETIRED) {
-        return;
-      }
-      if (
-        closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.SELF_DISCONNECT
-      ) {
-        this.logger.error(ROUTER_LOG_MSG.SELF_CONNECTION_LOST, {
-          nodeId,
-          connectionId: connection.connectionId,
-        });
-        this.emit(TRANSPORT_EVENT.SELF_DISCONNECT, {
-          nodeId,
-        });
-        return;
-      }
-      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.RECONNECT) {
-        if (connection.isIncoming === true) {
-          // A re-established connection is an outbound dial to the peer's
-          // remembered address, so this record is now an outbound reconnect
-          // owner rather than an inbound connection.
-          connection.isIncoming = false;
-        }
-        this.scheduleReconnect(connection);
-      }
-    }
-  }
-  resolveConnectionCloseDisposition(connection) {
-    let kind = CONNECTION_CLOSE_DISPOSITION.NO_ACTION;
-    let state = ConnectionState.DISCONNECTED;
-    if (this.isShuttingDown) {
-      kind = CONNECTION_CLOSE_DISPOSITION.SHUTDOWN;
-    } else if (connection.retired) {
-      kind = CONNECTION_CLOSE_DISPOSITION.RETIRED;
-      state = ConnectionState.CLOSED;
-    } else if (connection.isSelfConnection) {
-      kind = CONNECTION_CLOSE_DISPOSITION.SELF_DISCONNECT;
-    } else if (connection.address) {
-      // Schedule a reconnect on close for any non-self peer with a remembered
-      // dial address — including a closed INBOUND connection. Otherwise an
-      // inbound-only record (e.g. after a rolling restart) closes into a
-      // lingering DISCONNECTED state with no reconnect, control-plane handoffs
-      // to that node time out forever, and publication never drains. The
-      // deterministic resolveIncomingConnectionAdoption tie-break dedups if the
-      // peer also dials in.
-      kind = CONNECTION_CLOSE_DISPOSITION.RECONNECT;
-    }
-    return {
-      kind,
-      state,
-    };
-  }
-  /**
-   * Schedule reconnection attempt.
-   * @param {Object} connectionInfo - Connection information.
-   * @private
-   */
-  scheduleReconnect(connectionInfo) {
-    if (this.isShuttingDown) {
-      return;
-    }
-    const reconnectDisposition =
-      this.resolveReconnectDisposition(connectionInfo);
-    if (reconnectDisposition.state) {
-      connectionInfo.state = reconnectDisposition.state;
-    }
-    if (reconnectDisposition.kind === RECONNECT_DISPOSITION.RETIRE) {
-      this.retireConnection(connectionInfo);
-      return;
-    }
-    if (reconnectDisposition.kind === RECONNECT_DISPOSITION.PENDING) {
-      return;
-    }
-    if (
-      reconnectDisposition.kind === RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED
-    ) {
-      this.logger.error(ROUTER_LOG_MSG.MAX_RECONNECTS_REACHED, {
-        nodeId: connectionInfo.nodeId,
-        attempts: connectionInfo.reconnectAttempts,
-      });
-      return;
-    }
-    connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
-    const delay = applyBoundedJitter(
-      this.reconnectIntervalMs *
-        Math.pow(
-          this.reconnectBackoffMultiplier,
-          connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
-        ),
-    );
-    connectionInfo.reconnectDueAt = Date.now() + delay;
-    this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
-      nodeId: connectionInfo.nodeId,
-      attempt: connectionInfo.reconnectAttempts,
-      delayMs: delay,
-    });
-    connectionInfo.reconnectTimeout = setTimeout(() => {
-      connectionInfo.reconnectTimeout = null;
-      connectionInfo.reconnectDueAt = null;
-      if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
-        this.retireConnection(connectionInfo);
-        connectionInfo.state = ConnectionState.CLOSED;
-        return;
-      }
-      const connectionPromise = (async () => {
-        try {
-          this.refreshReconnectAuthority(
-            connectionInfo,
-            connectionInfo.address || connectionInfo.configuredAddress,
-          );
-          if ((!connectionInfo.address || connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
-              typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
-              connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO) {
-            connectionInfo.address = connectionInfo.configuredAddress;
-          }
-          await this.establishConnection(connectionInfo);
-          return connectionInfo.state === ConnectionState.CONNECTED ? connectionInfo : null;
-        } catch (error) {
-          this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
-            nodeId: connectionInfo.nodeId,
-            error: error.message,
-          });
-          if (this.isShuttingDown) {
-            return null;
-          }
-          this.scheduleReconnect(connectionInfo);
-          return null;
-        } finally {
-          this.pendingNodeConnections.delete(connectionInfo.nodeId);
-          this.recordPendingNodeConnectionSnapshot();
-        }
-      })();
-      this.pendingNodeConnections.set(connectionInfo.nodeId, connectionPromise);
-      this.recordPendingNodeConnectionSnapshot();
-    }, delay);
-    if (
-      typeof connectionInfo.reconnectTimeout?.unref ===
-      MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
-    ) {
-      connectionInfo.reconnectTimeout.unref();
-    }
-  }
-  resolveReconnectDisposition(connectionInfo) {
-    let kind = RECONNECT_DISPOSITION.SCHEDULE;
-    let state = ConnectionState.RECONNECTING;
-    if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
-      kind = RECONNECT_DISPOSITION.RETIRE;
-      state = ConnectionState.CLOSED;
-    } else if (connectionInfo.reconnectTimeout) {
-      kind = RECONNECT_DISPOSITION.PENDING;
-      state = null;
-    } else if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
-      kind = RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED;
-      state = ConnectionState.CLOSED;
-    }
-    return {
-      kind,
-      state,
-    };
-  }
-  /**
-   * Start ping interval for connection.
-   * @param {Object} connectionInfo - Connection information.
-   * @private
-   */
-  startPingInterval(connectionInfo) {
-    connectionInfo.pingInterval = setInterval(() => {
-      if (
-        connectionInfo.ws &&
-        connectionInfo.ws.readyState === WebSocket.OPEN
-      ) {
-        this.sendRaw(connectionInfo.ws, {
-          type: RouterMessageType.PING,
-          timestamp: Date.now(),
-        });
-      }
-    }, this.pingIntervalMs);
-    connectionInfo.pingInterval.unref();
-  }
-  /**
-   * Register a service handler.
-   * The handler will be invoked when messages arrive for this address.
-   * Requirements: 5.1
-   * @param {string} address - Service address in unified format (nodeId/entityType/entityId).
-   * @param {Function} handler - Message handler function.
-   */
-  register(address, handler, _options = {}) {
-    if (typeof handler !== TRANSPORT_TYPEOF.FUNCTION) {
-      throw new Error(TRANSPORT_ERROR_MSG.HANDLER_MUST_BE_FUNCTION);
-    }
-    if (!this.isValidAddress(address)) {
-      throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(address));
-    }
-    this.handlers.set(address, handler);
-    this.logger.debug(ROUTER_LOG_MSG.HANDLER_REGISTERED, {
-      address,
-      routerId: this.routerId,
-      totalHandlers: this.handlers.size,
-    });
-  }
-  /**
-   * Register a worker delivery handler.
-   * Alias for register() used by ReplicaWorkerManager.
-   * @param {string} address - Worker unified address.
-   * @param {Function} deliverFn - Worker delivery function.
-   */
-  registerWorkerHandler(address, deliverFn) {
-    this.register(address, deliverFn);
-  }
-  /**
-   * Parse a unified address into its components.
-   * Address format: ${nodeId}/${entityType}/${entityId}
-   * Requirements: 1.2, 9.1
-   * @param {string} address - Address to parse.
-   * @return {Object} Parsed address with nodeId, entityType, entityId.
-   *                  Returns null values for malformed addresses.
-   */
-  parseAddress(address) {
-    if (!address || typeof address !== TRANSPORT_TYPEOF.STRING) {
-      return {
-        nodeId: null,
-        entityType: null,
-        entityId: null,
-      };
-    }
-    const parts = address.split(ROUTER_ADDRESS.SEPARATOR);
-    if (parts.length !== TRANSPORT_NUM.THREE) {
-      return {
-        nodeId: null,
-        entityType: null,
-        entityId: null,
-      };
-    }
-    return {
-      nodeId: parts[TRANSPORT_NUM.ZERO] || null,
-      entityType: parts[TRANSPORT_NUM.ONE] || null,
-      entityId: parts[TRANSPORT_NUM.TWO] || null,
-    };
-  }
-  /**
-   * Validate that an address follows the unified format.
-   * Format: ${nodeId}/${entityType}/${entityId}
-   * Valid entityTypes: message-group, partition, lifecycle, service
-   * Requirements: 1.1, 1.3
-   * @param {string} address - Address to validate.
-   * @return {boolean} True if address is valid.
-   */
-  isValidAddress(address) {
-    if (!address || typeof address !== TRANSPORT_TYPEOF.STRING) {
-      return false;
-    }
-    const parts = address.split(ROUTER_ADDRESS.SEPARATOR);
-    if (parts.length !== TRANSPORT_NUM.THREE) {
-      return false;
-    }
-    const [nodeId, entityType, entityId] = parts;
-    if (!nodeId || !entityType || !entityId) {
-      return false;
-    }
-    return ROUTER_VALID_ENTITY_TYPES.includes(entityType);
-  }
-  /**
-   * Unregister a service handler.
-   * @param {string} address - Service address.
-   */
-  unregister(address) {
-    this.handlers.delete(address);
-    this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
-      address,
-      routerId: this.routerId,
-      totalHandlers: this.handlers.size,
-    });
-  }
-  /**
-   * Unregister a worker delivery handler.
-   * Alias for unregister() used by ReplicaWorkerManager.
-   * @param {string} address - Worker unified address.
-   */
-  unregisterWorkerHandler(address) {
-    this.unregister(address);
-  }
-  /**
-   * Check whether a worker handler is registered.
-   * @param {string} address - Worker unified address.
-   * @return {boolean} True if registered.
-   */
-  hasWorkerHandler(address) {
-    return this.handlers.has(address);
-  }
-  /**
-   * Deliver message locally by invoking the registered handler directly,
-   * bypassing WebSocket serialization. Falls back to deliverRemote when
-   * no handler is registered (e.g. join request/complete special handlers).
-   * @param {string} targetAddress - Target address.
-   * @param {string} messageId - Message ID.
-   * @param {Object} payload - Message payload.
-   * @param {string} correlationId - Correlation ID.
-   * @return {Promise<Object>} Delivery outcome with result and queueWaitMs.
-   * @private
-  */
 }
 
-Object.defineProperties(
-  MessageRouterSegment2.prototype,
-  Object.fromEntries(
-    Object.entries(MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS).map(
-      ([name, value]) => [
-        name,
-        {
-          value,
-          configurable: true,
-          writable: true,
-        },
-      ],
+function defineMessageRouterPendingResponseLedger(serviceClass) {
+  Object.defineProperties(
+    serviceClass.prototype,
+    Object.fromEntries(
+      Object.entries(
+        Object.getOwnPropertyDescriptors(
+          MessageRouterPendingResponseLedger.prototype,
+        ),
+      ).filter(([name]) => name !== 'constructor'),
     ),
-  ),
-);
+  );
+}
 
-export {MessageRouterSegment2};
+export {defineMessageRouterPendingResponseLedger};
