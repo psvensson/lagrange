@@ -8,9 +8,10 @@ import {
 
 const ENCODING_UTF8 = 'utf8';
 const OWNER_MAP_PATH = 'architecture/current-owner-maps.md';
-const NAMED_LEGACY_FILES = Object.freeze([
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
-]);
+// The ordinal-file decomposition initiative is complete: no legacy ordinal
+// compatibility wrappers remain. The guard still rejects re-introduced ordinal
+// files (see the rejection test below); this allowlist is now empty.
+const NAMED_LEGACY_FILES = Object.freeze([]);
 
 test('operation progress authority guard requires semantic successor targets', (t) => {
   const ownerMap = fs.readFileSync(OWNER_MAP_PATH, ENCODING_UTF8);

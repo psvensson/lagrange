@@ -1,4 +1,4 @@
-import {OperationWorkflowOwnerSegment6} from './operation-workflow-owner-segment-6.js';
+import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 
 const {
@@ -80,7 +80,7 @@ const COORDINATOR_CREATED_CACHE_REENTRY_STATE_TABLE = Object.freeze([
   }),
 ]);
 
-class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment6 {
+class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTarget {
   getObservedProgressTableState(tableName) {
     return (
       OBSERVED_PROGRESS_TABLE_STATE_BY_NAME.get(tableName) ||
@@ -706,4 +706,4 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment7Stage1};
+export {OperationWorkflowRecoveryObservation};

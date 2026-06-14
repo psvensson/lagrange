@@ -4,7 +4,7 @@ import {
 } from '../../scripts/check-file-size-thresholds.js';
 
 const SEGMENT_FILE_PATH =
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-5.js';
+  'src/rebalancer/unified-rebalancer-segment-1.js';
 const NON_SEGMENT_FILE_PATH = 'src/rebalancer/operation-workflow-owner.js';
 const SOURCE_SCOPE = 'source';
 const SEGMENT_LINES = 901;

@@ -23,7 +23,7 @@ import {
   OPERATION_WORKFLOW_REASON_CODE_VALUES,
 } from '../../src/rebalancer/operation-workflow-owner-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as STAGE_SHARED} from
-  '../../src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js';
+  '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases} from './priority-recovery-topology-timeout-owner-reentry-test-cases.js';
 import {registerPriorityRecoverySqlDispatchTimeoutReentryTestCases} from './priority-recovery-sql-dispatch-timeout-reentry-test-cases.js';

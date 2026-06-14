@@ -16,7 +16,7 @@ const {
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-class OperationWorkflowOwnerSegment1 {
+class OperationWorkflowOwnerRetryRegistry {
   /**
    * @param {Function} options.allocateCanonicalReplicaId -
    *   Replica ID allocation callback.
@@ -720,4 +720,4 @@ class OperationWorkflowOwnerSegment1 {
   }
 }
 
-export {OperationWorkflowOwnerSegment1};
+export {OperationWorkflowOwnerRetryRegistry};

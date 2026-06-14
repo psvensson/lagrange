@@ -9,8 +9,10 @@ const STRICT_CONSISTENCY_FILE_PATH =
 const UNIFIED_REBALANCER_FILE_PATH =
   'src/rebalancer/unified-rebalancer-lifecycle-base.js';
 const MOVE_PLANNER_FILE_PATH = 'src/rebalancer/move-planner.js';
-const OPERATION_WORKFLOW_OWNER_SEGMENT_5_FILE_PATH =
-  'src/rebalancer/operation-workflow-owner-segment-5.js';
+const PRIORITY_PUBLICATION_SAFETY_TOPOLOGY_FILE_PATH =
+  'src/rebalancer/priority-publication-safety-topology.js';
+const PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH =
+  'src/rebalancer/priority-publication-leader-safety.js';
 const PUBLICATION_COORDINATOR_FILE_PATH =
   'src/control-plane/membership-publication-coordinator.js';
 const PUBLICATION_RECOVERY_GATE_FILE_PATH =
@@ -390,8 +392,7 @@ test('detects replay tooling that omits closure witness classification',
 
 test('detects priority source removal code that collapses handoff evidence into leader closure',
   async (t) => {
-    const violations = collectRuntimeGrammarContractViolationsFromSource(
-      [
+    const sourceLines = [
         'class OperationWorkflowOwner {',
         '  resolvePriorityPublicationSourceRoleState() {',
         '    const completedLeaderHandoffEvidence = true;',
@@ -409,19 +410,26 @@ test('detects priority source removal code that collapses handoff evidence into 
         '    return this.buildDeferredRemoveSafetyEvaluationForOperation();',
         '  }',
         '}',
-      ].join('\n'),
-      OPERATION_WORKFLOW_OWNER_SEGMENT_5_FILE_PATH,
+      ].join('\n');
+    const topologyViolations = collectRuntimeGrammarContractViolationsFromSource(
+      sourceLines,
+      PRIORITY_PUBLICATION_SAFETY_TOPOLOGY_FILE_PATH,
     );
 
     t.ok(
-      violations.some((violation) =>
+      topologyViolations.some((violation) =>
         violation.functionName ===
           RESOLVE_PRIORITY_PUBLICATION_SOURCE_ROLE_STATE_FUNCTION &&
         violation.target === COMPLETED_LEADER_HANDOFF_EVIDENCE_FRAGMENT,
       ),
     );
+    const leaderSafetyViolations =
+      collectRuntimeGrammarContractViolationsFromSource(
+        sourceLines,
+        PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH,
+      );
     t.ok(
-      violations.some((violation) =>
+      leaderSafetyViolations.some((violation) =>
         violation.functionName ===
           BUILD_PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_SNAPSHOT_FUNCTION &&
         violation.target === WAIT_REPLACEMENT_LEADER_OWNERSHIP_FRAGMENT,
@@ -453,8 +461,10 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'src/node/replica-handler-remove-execution-methods.js',
       'src/node/replica-handler-remove-request-methods.js',
       'src/rebalancer/move-planner.js',
-      'src/rebalancer/operation-workflow-owner-segment-2.js',
-      'src/rebalancer/operation-workflow-owner-segment-5.js',
+      'src/rebalancer/operation-workflow-owner-execution-lane.js',
+      'src/rebalancer/priority-publication-handoff.js',
+      'src/rebalancer/priority-publication-leader-safety.js',
+      'src/rebalancer/priority-publication-safety-topology.js',
       'src/rebalancer/unified-rebalancer-lifecycle-base.js',
       'test/distributed/harness/assertions-segment-1.js',
       'test/distributed/harness/assertions-segment-3.js',

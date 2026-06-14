@@ -1,5 +1,5 @@
-import {OperationWorkflowOwnerSegment5Stage3} from './operation-workflow-owner-segment-5-stage-3.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
   NUM,
@@ -30,7 +30,7 @@ const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
   WORKFLOW_PROGRESS: 'workflow_progress',
 });
 
-class OperationWorkflowOwnerSegment5Stage4 extends OperationWorkflowOwnerSegment5Stage3 {
+class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
   async evaluatePriorityPublicationLeaderRemoveSafety(
     operation,
     sourceReplicaRow,
@@ -606,4 +606,4 @@ class OperationWorkflowOwnerSegment5Stage4 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment5Stage4};
+export {PriorityPublicationHandoff};

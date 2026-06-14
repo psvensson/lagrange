@@ -1,5 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {OperationWorkflowOwnerSegment1} from './operation-workflow-owner-segment-1.js';
+import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
 import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
 
 const {
@@ -34,7 +34,7 @@ const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
     allowCacheFallback: false,
   });
 
-class OperationWorkflowOwnerSegment2 extends withOwnerHandoffState(OperationWorkflowOwnerSegment1) {
+class OperationWorkflowOwnerExecutionLane extends withOwnerHandoffState(OperationWorkflowOwnerRetryRegistry) {
   buildTopologyOperatorWitnessFromWorkflowProgress(
     snapshot = {},
     options = {},
@@ -796,4 +796,4 @@ class OperationWorkflowOwnerSegment2 extends withOwnerHandoffState(OperationWork
 
 }
 
-export {OperationWorkflowOwnerSegment2};
+export {OperationWorkflowOwnerExecutionLane};

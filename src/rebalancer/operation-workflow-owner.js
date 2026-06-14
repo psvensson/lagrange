@@ -6,8 +6,8 @@
  * Prohibited fallbacks: callers must not import segment classes to bypass this surface.
  * Primary tests: test/rebalancer/replace-replica-workflow.test.js.
  */
-import {OperationWorkflowOwnerSegment7} from
-  './operation-workflow-owner-segment-7.js';
+import {OperationWorkflowRecoveryReconcile} from
+  './operation-workflow-recovery-reconcile.js';
 import {createOperationWorkflowOwnerAdapter} from
   './operation-workflow-owner-adapter.js';
 import {createOperationProgressStore} from './operation-progress-store.js';
@@ -417,7 +417,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   return normalizedSnapshot;
 }
 
-class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
+class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
     super(options);
     this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =

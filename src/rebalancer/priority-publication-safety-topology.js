@@ -1,5 +1,5 @@
-import {OperationWorkflowOwnerSegment4} from './operation-workflow-owner-segment-4.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -23,7 +23,7 @@ const {
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment5Stage1 extends OperationWorkflowOwnerSegment4 {
+class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecution {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
     const timeoutMap = {};
     for (const workflowStep of PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS) {
@@ -510,4 +510,4 @@ class OperationWorkflowOwnerSegment5Stage1 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment5Stage1};
+export {PriorityPublicationSafetyTopology};

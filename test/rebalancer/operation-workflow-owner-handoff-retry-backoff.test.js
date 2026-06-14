@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {OperationWorkflowOwnerSegment1} from '../../src/rebalancer/operation-workflow-owner-segment-1.js';
+import {OperationWorkflowOwnerRetryRegistry} from '../../src/rebalancer/operation-workflow-owner-retry-registry.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 
 const {
@@ -14,7 +14,7 @@ const TEST_TARGET_NODE_ID = 'target-node-a';
 const TEST_OTHER_TARGET_NODE_ID = 'target-node-b';
 
 function buildOwnerSegment(overrides = {}) {
-  return new OperationWorkflowOwnerSegment1({
+  return new OperationWorkflowOwnerRetryRegistry({
     operationLane: {run: (fn) => fn()},
     getActualReplicaStatus: () => null,
     // Deterministic: zero jitter so delays are exactly the capped exponential.

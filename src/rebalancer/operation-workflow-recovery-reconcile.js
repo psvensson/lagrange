@@ -1,4 +1,4 @@
-import {OperationWorkflowOwnerSegment7Stage4} from './operation-workflow-owner-segment-7-stage-4.js';
+import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   applyPriorityRecoveryDispatchPendingOwnerProgress,
@@ -29,7 +29,7 @@ const {
   WORKFLOW_STEP,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment7Stage4 {
+class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
     partitionId,
     operations = [],
@@ -470,4 +470,4 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment7Stage5};
+export {OperationWorkflowRecoveryReconcile};

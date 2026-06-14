@@ -1,4 +1,4 @@
-import {OperationWorkflowOwnerSegment7Stage3} from './operation-workflow-owner-segment-7-stage-3.js';
+import {OperationWorkflowRecoveryTimeout} from './operation-workflow-recovery-timeout.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 
 const {
@@ -37,7 +37,7 @@ const {
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment7Stage3 {
+class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   resolvePriorityRecoveryOperationDrainSourceObservationKey(observation) {
     const observationState = observation?.state || null;
     if (observationState === STOPPING_REPLICA_OBSERVATION_STATE.ABSENT) {
@@ -662,4 +662,4 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment7Stage4};
+export {OperationWorkflowRecoveryDrain};

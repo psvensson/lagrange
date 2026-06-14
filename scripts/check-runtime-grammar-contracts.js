@@ -203,7 +203,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/rebalancer/operation-workflow-owner-segment-2.js': Object.freeze({
+  'src/rebalancer/operation-workflow-owner-execution-lane.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'resolveTransitionOperationPartitionId',
@@ -223,11 +223,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/rebalancer/operation-workflow-owner-segment-5.js': Object.freeze({
-    requiredFragments: Object.freeze([
-      'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
-      'REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL',
-    ]),
+  'src/rebalancer/priority-publication-safety-topology.js': Object.freeze({
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'resolvePriorityPublicationSourceRoleState',
@@ -239,6 +235,13 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'completedLeaderHandoffEvidence',
         ]),
       }),
+    ]),
+  }),
+  'src/rebalancer/priority-publication-leader-safety.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
+    ]),
+    functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'buildPriorityPublicationLeaderRemoveSafetySnapshot',
         requiredFragments: Object.freeze([
@@ -247,6 +250,14 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
         ]),
       }),
+    ]),
+  }),
+  'src/rebalancer/priority-publication-handoff.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
+      'REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL',
+    ]),
+    functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'evaluatePriorityPublicationLeaderRemoveSafety',
         requiredFragments: Object.freeze([

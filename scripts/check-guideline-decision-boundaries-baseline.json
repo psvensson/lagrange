@@ -4276,231 +4276,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-1.js",
-      "line": 437,
-      "column": 7,
-      "functionName": "getTransitionRetryOperationSnapshot",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 238,
-      "column": 7,
-      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 244,
-      "column": 7,
-      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 256,
-      "column": 7,
-      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 283,
-      "column": 7,
-      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 290,
-      "column": 7,
-      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 319,
-      "column": 7,
-      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 322,
-      "column": 7,
-      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 333,
-      "column": 7,
-      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 340,
-      "column": 7,
-      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-1.js",
-      "line": 350,
-      "column": 7,
-      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-2.js",
-      "line": 84,
-      "column": 1,
-      "functionName": "getCriticalReplicaRowsForSafety",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 84) and SQL/DB (line 73) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-2.js",
-      "line": 135,
-      "column": 1,
-      "functionName": "getCriticalPartitionRowForSafety",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 135) and SQL/DB (line 124) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-2.js",
-      "line": 291,
-      "column": 7,
-      "functionName": "normalizePriorityPublicationStatus",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-4.js",
-      "line": 59,
-      "column": 7,
-      "functionName": "evaluatePriorityPublicationLeaderRemoveSafety",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-4.js",
-      "line": 544,
-      "column": 7,
-      "functionName": "normalizePriorityRecoveryDecisionSnapshotPartitionIds",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 177,
-      "column": 5,
-      "functionName": "resolvePriorityRecoveryDecisionIncompleteObservation",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 309,
-      "column": 7,
-      "functionName": "resolvePriorityRecoveryDecisionSnapshotFromPlanning",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 347,
-      "column": 7,
-      "functionName": "buildPriorityRecoveryDecisionSnapshotForOperations",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 445,
-      "column": 7,
-      "functionName": "getPriorityRecoveryDecisionSnapshotForOperation",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 464,
-      "column": 7,
-      "functionName": "getPriorityRecoveryDecisionSnapshotForPartitionOperations",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
-      "line": 496,
-      "column": 7,
-      "functionName": "getPriorityRecoveryDecisionSnapshotForPartitionOperations",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-6.js",
-      "line": 335,
-      "column": 7,
-      "functionName": "resolveRemoveSafetyDeferredReason",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-6.js",
-      "line": 344,
-      "column": 7,
-      "functionName": "resolveRemoveSafetyDeferredReason",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-      "line": 156,
-      "column": 1,
-      "functionName": "checkTimeouts",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 156) and SQL/DB (line 263) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",
       "line": 63,
       "column": 9,
@@ -7037,6 +6812,231 @@
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 467) and SQL/DB (line 331) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-owner-retry-registry.js",
+      "line": 443,
+      "column": 7,
+      "functionName": "getTransitionRetryOperationSnapshot",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
+      "line": 157,
+      "column": 1,
+      "functionName": "checkTimeouts",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 157) and SQL/DB (line 264) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-handoff.js",
+      "line": 59,
+      "column": 7,
+      "functionName": "evaluatePriorityPublicationLeaderRemoveSafety",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-handoff.js",
+      "line": 544,
+      "column": 7,
+      "functionName": "normalizePriorityRecoveryDecisionSnapshotPartitionIds",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-rows.js",
+      "line": 84,
+      "column": 1,
+      "functionName": "getCriticalReplicaRowsForSafety",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 84) and SQL/DB (line 73) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-rows.js",
+      "line": 135,
+      "column": 1,
+      "functionName": "getCriticalPartitionRowForSafety",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 135) and SQL/DB (line 124) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-rows.js",
+      "line": 291,
+      "column": 7,
+      "functionName": "normalizePriorityPublicationStatus",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 238,
+      "column": 7,
+      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 244,
+      "column": 7,
+      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 256,
+      "column": 7,
+      "functionName": "getPriorityPublicationLeaderHandoffEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 283,
+      "column": 7,
+      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 290,
+      "column": 7,
+      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 319,
+      "column": 7,
+      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 322,
+      "column": 7,
+      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 333,
+      "column": 7,
+      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 340,
+      "column": 7,
+      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 350,
+      "column": 7,
+      "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 177,
+      "column": 5,
+      "functionName": "resolvePriorityRecoveryDecisionIncompleteObservation",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 309,
+      "column": 7,
+      "functionName": "resolvePriorityRecoveryDecisionSnapshotFromPlanning",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 347,
+      "column": 7,
+      "functionName": "buildPriorityRecoveryDecisionSnapshotForOperations",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 445,
+      "column": 7,
+      "functionName": "getPriorityRecoveryDecisionSnapshotForOperation",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 464,
+      "column": 7,
+      "functionName": "getPriorityRecoveryDecisionSnapshotForPartitionOperations",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 496,
+      "column": 7,
+      "functionName": "getPriorityRecoveryDecisionSnapshotForPartitionOperations",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
+      "line": 335,
+      "column": 7,
+      "functionName": "resolveRemoveSafetyDeferredReason",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
+      "line": 344,
+      "column": 7,
+      "functionName": "resolveRemoveSafetyDeferredReason",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     }
   ]
 }

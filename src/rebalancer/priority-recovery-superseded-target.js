@@ -1,5 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {OperationWorkflowOwnerSegment5} from './operation-workflow-owner-segment-5.js';
+import {PriorityRecoveryObservation} from './priority-recovery-observation.js';
 import {
   buildPriorityRemoveSafetyRecoveryProjectionNodeIds,
   resolvePriorityRemoveSafetyMembershipSnapshot,
@@ -56,7 +56,7 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
+class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   buildPriorityRecoveryAssessmentContextForOperation(
     operation,
     planningSnapshot,
@@ -646,4 +646,4 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   }
 }
 
-export {OperationWorkflowOwnerSegment6};
+export {PriorityRecoverySupersededTarget};

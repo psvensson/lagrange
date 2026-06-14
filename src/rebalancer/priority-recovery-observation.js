@@ -1,6 +1,6 @@
-import {OperationWorkflowOwnerSegment5Stage4} from './operation-workflow-owner-segment-5-stage-4.js';
+import {PriorityPublicationHandoff} from './priority-publication-handoff.js';
 import {normalizePriorityRecoveryDispatchPendingDecisionSnapshot} from '../control-plane/priority-recovery-snapshot.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -71,7 +71,7 @@ const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE =
     }),
   ]);
 
-class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment5Stage4 {
+class PriorityRecoveryObservation extends PriorityPublicationHandoff {
   decidePriorityRecoveryPartitionObservationSelection(evidence = {}) {
     return (
       PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_TABLE.find((entry) =>
@@ -506,4 +506,4 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment5Stage5};
+export {PriorityRecoveryObservation};

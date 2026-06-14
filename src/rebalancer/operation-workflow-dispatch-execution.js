@@ -1,5 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {OperationWorkflowOwnerSegment3} from './operation-workflow-owner-segment-3.js';
+import {OperationWorkflowTransitionPersistence} from './operation-workflow-transition-persistence.js';
 import * as DISPATCH_WAKE_PREEMPTION
   from './operation-workflow-dispatch-wake-preemption.js';
 import * as DISPATCH_RESPONSE_RECONCILE
@@ -20,7 +20,7 @@ const {
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
+class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPersistence {
   shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
     return (
       removeSafetyEvaluation?.handoffFailurePolicy ===
@@ -565,4 +565,4 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   }
 }
 
-export {OperationWorkflowOwnerSegment4};
+export {OperationWorkflowDispatchExecution};

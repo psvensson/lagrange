@@ -1,5 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {OperationWorkflowOwnerSegment2} from './operation-workflow-owner-segment-2.js';
+import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 
 const {
   AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
@@ -42,7 +42,7 @@ const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 
 class OperationWorkflowTransitionOrchestration
-  extends OperationWorkflowOwnerSegment2 {
+  extends OperationWorkflowOwnerExecutionLane {
   async loadAuthoritativeTransitionExecutionSession(sessionId) {
     const txCoordinator = this.transactionCoordinator;
     const gateway = this.repository?.controlPlaneSystemTableGateway;

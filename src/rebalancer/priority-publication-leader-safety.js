@@ -1,5 +1,5 @@
-import {OperationWorkflowOwnerSegment5Stage2} from './operation-workflow-owner-segment-5-stage-2.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+import {PriorityPublicationSafetyRows} from './priority-publication-safety-rows.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -14,7 +14,7 @@ const {
   decidePriorityPublicationFollowerSourceRemovalSafety,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment5Stage3 extends OperationWorkflowOwnerSegment5Stage2 {
+class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
     operation,
     sourceReplicaRow,
@@ -417,4 +417,4 @@ class OperationWorkflowOwnerSegment5Stage3 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment5Stage3};
+export {PriorityPublicationLeaderSafety};

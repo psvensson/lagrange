@@ -1,4 +1,4 @@
-import {OperationWorkflowOwnerSegment7Stage1} from './operation-workflow-owner-segment-7-stage-1.js';
+import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 
 const {
@@ -35,7 +35,7 @@ const {
   isPriorityControlPlanePartition,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment7Stage1 {
+class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
   isActiveReplaceSourceRetirementObserved(
     operation,
     sourceReplicaId,
@@ -590,4 +590,4 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment7Stage2};
+export {OperationWorkflowRecoveryStatusReconcile};

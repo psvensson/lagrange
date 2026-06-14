@@ -38,7 +38,7 @@
  *     BEFORE the action; each action branch clears on successful
  *     application (clearExecutorOutcomeRetryIfNotAhead preserves a
  *     retained payload that outranks the applied one).
- *  3. reconcileReplaceActualActive (operation-workflow-owner-segment-6.js)
+ *  3. reconcileReplaceActualActive (priority-recovery-superseded-target.js)
  *     returns applied:boolean — false when the ACTIVE CAS lost AND the
  *     authoritative replay found nothing actionable; on false the
  *     reconcile calls scheduleExecutorOutcomeRetry so the evidence keeps

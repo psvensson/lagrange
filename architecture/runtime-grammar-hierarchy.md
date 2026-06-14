@@ -210,7 +210,7 @@ The remaining work is to make that chain explicit and first-class.
   `src/rebalancer/rebalance-coordinator-operation-creation.js`
   create-lane checks plus
   `armCoordinatorCreatedOperationProgress(...)`,
-  `src/rebalancer/operation-workflow-owner-segment-7.js`
+  `src/rebalancer/operation-workflow-recovery-reconcile.js`
   progress reconciliation and timeout reconcile,
   and timing/classification evidence in
   `src/rebalancer/replica-operation-liveness.js`.

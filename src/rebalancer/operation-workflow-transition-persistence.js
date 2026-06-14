@@ -24,7 +24,7 @@ const {
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 
-class OperationWorkflowOwnerSegment3
+class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
   /**
    * Claim one priority control-plane operation for dispatch without relying on
@@ -518,4 +518,4 @@ class OperationWorkflowOwnerSegment3
   }
 }
 
-export {OperationWorkflowOwnerSegment3};
+export {OperationWorkflowTransitionPersistence};

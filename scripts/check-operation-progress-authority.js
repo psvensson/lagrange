@@ -39,26 +39,14 @@ const LEGACY_OPERATION_PROGRESS_TOKEN_PARTS = Object.freeze([
 const REBALANCER_ORDINAL_FILE_PATTERN =
   /(?:^|\/)[^/]+(?:segment|stage|part)[^/]*\.js$/u;
 
-const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
-  'src/rebalancer/operation-workflow-owner-segment-1.js',
-  'src/rebalancer/operation-workflow-owner-segment-2.js',
-  'src/rebalancer/operation-workflow-owner-segment-3.js',
-  'src/rebalancer/operation-workflow-owner-segment-4.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-1.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-2.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-3.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-4.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-5.js',
-  'src/rebalancer/operation-workflow-owner-segment-5-stage-shared.js',
-  'src/rebalancer/operation-workflow-owner-segment-5.js',
-  'src/rebalancer/operation-workflow-owner-segment-6.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-1.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-2.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-3.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-4.js',
-  'src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js',
-  'src/rebalancer/operation-workflow-owner-segment-7.js',
-]);
+// The operation-workflow-owner ordinal chain was decomposed into responsibility-
+// named modules (retry-registry, execution-lane, transition-persistence, dispatch-
+// execution, priority-publication-* safety, priority-recovery-* observation,
+// operation-workflow-recovery-* reconcile/timeout/drain). With unified-rebalancer
+// and rebalance-coordinator also decomposed, no legacy rebalancer ordinal files
+// remain; the tracked-ordinal pattern below still rejects any re-introduced
+// numbered segment/stage/part file.
+const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([]);
 // The priority-recovery-snapshot ordinal stages were decomposed into
 // responsibility-named modules (ingress/eligibility/publication/active-gate/
 // workflow/rebalancer/observation/actuation/burndown/closure/contract, dispatch

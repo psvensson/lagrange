@@ -1,5 +1,5 @@
-import {OperationWorkflowOwnerSegment5Stage1} from './operation-workflow-owner-segment-5-stage-1.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
   DEFAULT_MIN_REPLICA_COUNT,
@@ -16,7 +16,7 @@ const {
   readAuthoritativeControlPlaneRows,
 } = SHARED;
 
-class OperationWorkflowOwnerSegment5Stage2 extends OperationWorkflowOwnerSegment5Stage1 {
+class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   mergeReplicaRowsForSafety(authoritativeRows, cachedRows) {
     const mergedRowsById = new Map();
     const mergeDefinedReplicaRowFields = (baseRow, incomingRow) => {
@@ -302,4 +302,4 @@ class OperationWorkflowOwnerSegment5Stage2 extends OperationWorkflowOwnerSegment
   }
 }
 
-export {OperationWorkflowOwnerSegment5Stage2};
+export {PriorityPublicationSafetyRows};

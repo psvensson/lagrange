@@ -1,4 +1,4 @@
-import {OperationWorkflowOwnerSegment7Stage2} from './operation-workflow-owner-segment-7-stage-2.js';
+import {OperationWorkflowRecoveryStatusReconcile} from './operation-workflow-recovery-status-reconcile.js';
 import {
   applyOperationWorkflowExecutorOutcomeReconcileMethods,
 } from './operation-workflow-executor-outcome-reconcile-methods.js';
@@ -74,7 +74,7 @@ const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE = Object.freeze([
   }),
 ]);
 
-class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment7Stage2 {
+class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusReconcile {
   isPriorityRecoveryTimeoutVisibilityOperation(operation) {
     const partitionId = operation?.partitionId || null;
     return (
@@ -548,7 +548,7 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
 }
 
 applyOperationWorkflowExecutorOutcomeReconcileMethods(
-  OperationWorkflowOwnerSegment7Stage3,
+  OperationWorkflowRecoveryTimeout,
 );
 
-export {OperationWorkflowOwnerSegment7Stage3};
+export {OperationWorkflowRecoveryTimeout};
