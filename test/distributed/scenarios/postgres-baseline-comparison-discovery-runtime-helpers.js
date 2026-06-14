@@ -1,6 +1,6 @@
 import {
-  POSTGRES_BASELINE_COMPARISON_SEGMENT_1,
-} from './postgres-baseline-comparison-segment-1.js';
+  POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE,
+} from './postgres-baseline-comparison-constants-and-imports.js';
 
 const {
   DISCOVERY_ERROR_CAUSE_CHAIN_MAX_DEPTH,
@@ -8,7 +8,7 @@ const {
   DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN,
   ONE,
   ZERO,
-} = POSTGRES_BASELINE_COMPARISON_SEGMENT_1;
+} = POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE;
 
 function extractDiscoveryErrorMessageChain(error) {
   const messages = [];

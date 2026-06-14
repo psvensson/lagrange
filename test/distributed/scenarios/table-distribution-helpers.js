@@ -1,4 +1,4 @@
-import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_4} from './table-distribution-helpers-segment-4.js';
+import {TABLE_DISTRIBUTION_QUERY_HELPERS} from './table-distribution-helpers-distribution-query.js';
 
 const {
   admitBenchmarkLoadNodes,
@@ -20,7 +20,7 @@ const {
   queryTableDistribution,
   waitForPartitionGrowthAndSpread,
   waitForPostSplitConsistencyConvergence,
-} = TABLE_DISTRIBUTION_HELPERS_SEGMENT_4;
+} = TABLE_DISTRIBUTION_QUERY_HELPERS;
 
 export {
   admitBenchmarkLoadNodes,

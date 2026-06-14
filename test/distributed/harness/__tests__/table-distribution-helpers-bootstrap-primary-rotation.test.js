@@ -1,7 +1,7 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_3} from
-  '../../scenarios/table-distribution-helpers-segment-3.js';
+import {TABLE_DISTRIBUTION_TABLE_BOOTSTRAP_HELPERS} from
+  '../../scenarios/table-distribution-helpers-table-bootstrap.js';
 
 const {
   ensureBenchmarkPartitioningTable,
@@ -10,7 +10,7 @@ const {
   TABLE_BOOTSTRAP_VISIBILITY_STATE,
   buildTableBootstrapVisibilitySnapshot,
   shouldExtendTableBootstrapForUnavailableCreate,
-} = TABLE_DISTRIBUTION_HELPERS_SEGMENT_3;
+} = TABLE_DISTRIBUTION_TABLE_BOOTSTRAP_HELPERS;
 
 const PARTITIONS_SQL_FRAGMENT = 'FROM partitions';
 const SERVICES_SQL_FRAGMENT = 'FROM services';

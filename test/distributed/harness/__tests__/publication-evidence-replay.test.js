@@ -43,29 +43,29 @@ import {
 } from '../publication-evidence-replay.js';
 
 import {
-  buildPublicationEvidenceReplayFixture01,
-} from './publication-evidence-replay-fixture-01.js';
+  buildPublicationEvidenceReplayScenarioConstants,
+} from './publication-evidence-replay-scenario-constants.js';
 import {
-  buildPublicationEvidenceReplayFixture02,
-} from './publication-evidence-replay-fixture-02.js';
+  buildPublicationEvidenceReplaySharedFixtureBuilders,
+} from './publication-evidence-replay-shared-fixture-builders.js';
 import {
-  buildPublicationEvidenceReplayFixture03,
-} from './publication-evidence-replay-fixture-03.js';
+  buildPublicationEvidenceReplayOwnerRepairScenarioBuilders,
+} from './publication-evidence-replay-owner-repair-scenario-builders.js';
 import {
-  buildPublicationEvidenceReplayFixture04,
-} from './publication-evidence-replay-fixture-04.js';
+  buildPublicationEvidenceReplayPublicationPendingScenarioBuilders,
+} from './publication-evidence-replay-publication-pending-scenario-builders.js';
 import {
-  buildPublicationEvidenceReplayFixture05,
-} from './publication-evidence-replay-fixture-05.js';
+  buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders,
+} from './publication-evidence-replay-rebalancer-handoff-scenario-builders.js';
 import {
-  registerPublicationEvidenceReplayCore01Tests,
-} from './publication-evidence-replay-core-01-test-cases.js';
+  registerPublicationEvidenceReplayRuntimeAndOwnerTests,
+} from './publication-evidence-replay-runtime-and-owner-replay-test-cases.js';
 import {
-  registerPublicationEvidenceReplayCore02Tests,
-} from './publication-evidence-replay-core-02-test-cases.js';
+  registerPublicationEvidenceReplayPostAckPublicationPendingTests,
+} from './publication-evidence-replay-post-ack-publication-pending-replay-test-cases.js';
 import {
-  registerPublicationEvidenceReplayCore03Tests,
-} from './publication-evidence-replay-core-03-test-cases.js';
+  registerPublicationEvidenceReplayReachabilityRebalancerTests,
+} from './publication-evidence-replay-reachability-rebalancer-replay-test-cases.js';
 const publicationEvidenceReplayTestContext = {
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
   afterEach,
@@ -107,23 +107,23 @@ const publicationEvidenceReplayTestContext = {
 
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayFixture01(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayScenarioConstants(publicationEvidenceReplayTestContext),
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayFixture02(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplaySharedFixtureBuilders(publicationEvidenceReplayTestContext),
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayFixture03(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(publicationEvidenceReplayTestContext),
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayFixture04(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayPublicationPendingScenarioBuilders(publicationEvidenceReplayTestContext),
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayFixture05(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders(publicationEvidenceReplayTestContext),
 );
 describe(publicationEvidenceReplayTestContext.REPLAY_TEST_SUITE_NAME, () => {
   let tempDir;
@@ -145,7 +145,7 @@ describe(publicationEvidenceReplayTestContext.REPLAY_TEST_SUITE_NAME, () => {
     },
   };
 
-  registerPublicationEvidenceReplayCore01Tests(publicationEvidenceReplayTestContext);
-  registerPublicationEvidenceReplayCore02Tests(publicationEvidenceReplayTestContext);
-  registerPublicationEvidenceReplayCore03Tests(publicationEvidenceReplayTestContext);
+  registerPublicationEvidenceReplayRuntimeAndOwnerTests(publicationEvidenceReplayTestContext);
+  registerPublicationEvidenceReplayPostAckPublicationPendingTests(publicationEvidenceReplayTestContext);
+  registerPublicationEvidenceReplayReachabilityRebalancerTests(publicationEvidenceReplayTestContext);
 });

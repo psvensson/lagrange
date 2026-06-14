@@ -426,8 +426,8 @@ npm test -- \
 
 ```bash
 npm test -- \
-  test/distributed/harness/__tests__/postgres-baseline-comparison-core.test.js \
-  test/distributed/harness/__tests__/postgres-baseline-comparison-discovery.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js \
   test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js \
   test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js \
   test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js

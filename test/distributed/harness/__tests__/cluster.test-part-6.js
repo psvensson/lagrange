@@ -34,20 +34,20 @@ import {
 } from '../cluster-segment-7-alpha-active-wait.js';
 
 import {
-  registerClusterPart6Core01Tests,
-} from './cluster-part-6-core-01-test-cases.js';
+  registerClusterActiveWaitStartupProgressWitnessTests,
+} from './cluster-active-wait-startup-progress-witness-test-cases.js';
 import {
-  registerClusterPart6Core02Tests,
-} from './cluster-part-6-core-02-test-cases.js';
+  registerClusterActiveWaitTerminalStartupBlockerTests,
+} from './cluster-active-wait-terminal-startup-blocker-test-cases.js';
 import {
-  registerClusterPart6Core03Tests,
-} from './cluster-part-6-core-03-test-cases.js';
+  registerClusterActiveWaitSnapshotCoverageDiagnosticsTests,
+} from './cluster-active-wait-snapshot-coverage-diagnostics-test-cases.js';
 import {
-  registerClusterPart6Core04Tests,
-} from './cluster-part-6-core-04-test-cases.js';
+  registerClusterLoadReadinessStabilityQuiescenceTests,
+} from './cluster-load-readiness-stability-quiescence-test-cases.js';
 import {
-  registerClusterPart6Core05Tests,
-} from './cluster-part-6-core-05-test-cases.js';
+  registerClusterControlPlaneQuiescenceLifecycleTests,
+} from './cluster-control-plane-quiescence-lifecycle-test-cases.js';
 const {
   ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
   ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
@@ -595,8 +595,8 @@ const clusterPart6TestContext = {
   uuidValidate,
 };
 
-registerClusterPart6Core01Tests(clusterPart6TestContext);
-registerClusterPart6Core02Tests(clusterPart6TestContext);
-registerClusterPart6Core03Tests(clusterPart6TestContext);
-registerClusterPart6Core04Tests(clusterPart6TestContext);
-registerClusterPart6Core05Tests(clusterPart6TestContext);
+registerClusterActiveWaitStartupProgressWitnessTests(clusterPart6TestContext);
+registerClusterActiveWaitTerminalStartupBlockerTests(clusterPart6TestContext);
+registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(clusterPart6TestContext);
+registerClusterLoadReadinessStabilityQuiescenceTests(clusterPart6TestContext);
+registerClusterControlPlaneQuiescenceLifecycleTests(clusterPart6TestContext);

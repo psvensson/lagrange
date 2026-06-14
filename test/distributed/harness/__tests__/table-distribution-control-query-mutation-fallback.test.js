@@ -1,12 +1,12 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_3} from
-  '../../scenarios/table-distribution-helpers-segment-3.js';
+import {TABLE_DISTRIBUTION_TABLE_BOOTSTRAP_HELPERS} from
+  '../../scenarios/table-distribution-helpers-table-bootstrap.js';
 
 const {
   CONTROL_QUERY_EXECUTION_MODE,
   queryControl,
-} = TABLE_DISTRIBUTION_HELPERS_SEGMENT_3;
+} = TABLE_DISTRIBUTION_TABLE_BOOTSTRAP_HELPERS;
 
 const CONTROL_LANE = 'control';
 const TEST_MUTATION_TIMEOUT_MS = 5000;

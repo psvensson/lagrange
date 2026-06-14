@@ -1,5 +1,5 @@
-import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_2} from
-  './table-distribution-helpers-segment-2.js';
+import {TABLE_DISTRIBUTION_LOAD_NODE_PLANNING_HELPERS} from
+  './table-distribution-helpers-load-node-planning.js';
 
 const {
   ZERO,
@@ -21,7 +21,7 @@ const {
   resolveRemainingControlQueryTimeoutMs,
   resolveControlQueryCandidateTimeoutMs,
   summarizeMutationVisibility,
-} = TABLE_DISTRIBUTION_HELPERS_SEGMENT_2;
+} = TABLE_DISTRIBUTION_LOAD_NODE_PLANNING_HELPERS;
 
 const TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT =
   'SQL query engine not available';

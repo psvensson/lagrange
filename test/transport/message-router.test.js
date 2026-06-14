@@ -1,3 +1,3 @@
-import './message-router-main-stage-1.js';
-import './message-router-main-stage-2.js';
-import './message-router-main-stage-3.js';
+import './message-router-routing-and-recovery.js';
+import './message-router-critical-capacity-reservation.js';
+import './message-router-critical-source-rotation-and-classification.js';
