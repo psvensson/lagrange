@@ -98,6 +98,37 @@ if [[ ! -f "$report_path" ]]; then
   exit 1
 fi
 
+# Report-shape normalization. Two report shapes reach this analyzer:
+#   (1) a full multi-scenario report (*.report.json) with a top-level .scenarios[] array;
+#   (2) a single-scenario failure bundle (failure-bundle.json) whose scenario fields live
+#       at top level (.scenario, .diagnostics, .playback) with no .scenarios[] wrapper.
+# Shape (2) is what gets written under .playback/<run>/<scenario>/failure-bundle.json and
+# is a natural thing to point this script at. Without normalization every .scenarios[$i]...
+# extract below resolves to null and the whole report prints "n/a" silently — a trap.
+# Detect shape (2) and wrap it into the canonical multi-scenario shape so the existing jq
+# extracts work unchanged. The original path is still shown in the Report section.
+display_path="$report_path"
+if ! jq -e '(.scenarios | type) == "array"' "$report_path" >/dev/null 2>&1; then
+  if jq -e '(.scenario | type) == "string" and has("diagnostics")' "$report_path" >/dev/null 2>&1; then
+    normalized_report="$(mktemp)"
+    trap 'rm -f "$normalized_report"' EXIT
+    jq '{
+      summary: (.reportSummary // .summary // {}),
+      scenarios: [
+        {
+          scenario: .scenario,
+          passed: (.summary.passed // .passed),
+          duration: (.playback.durationMs // .duration),
+          error: (.summary.error // .error),
+          details: { diagnostics: (.diagnostics // {}) },
+          playback: (.playback // {})
+        }
+      ]
+    }' "$report_path" > "$normalized_report"
+    report_path="$normalized_report"
+  fi
+fi
+
 scenario_index="$DEFAULT_SCENARIO_INDEX"
 if [[ -n "$scenario_name" ]]; then
   scenario_index="$(jq -er --arg name "$scenario_name" '
@@ -111,8 +142,8 @@ if [[ -n "$scenario_name" ]]; then
 fi
 
 print_section "Report"
-jq -r --argjson i "$scenario_index" '
-  "path=\(input_filename)",
+jq -r --argjson i "$scenario_index" --arg dpath "$display_path" '
+  "path=\($dpath)",
   "summary.total=\(.summary.total // "n/a")",
   "summary.passed=\(.summary.passed // "n/a")",
   "summary.failed=\(.summary.failed // "n/a")",
