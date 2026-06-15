@@ -130,10 +130,11 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     t.end();
   });
 
-  t.test('refuses to hand off when the audit fails', (t) => {
+  t.test('refuses to commit until the quest has finished (commit gate)', (t) => {
     const root = tmp();
     const {quest, oracle} = makeQuest(root);
-    // An attempt referencing a non-existent diff makes the audit fail.
+    // An in-progress quest (no SOLVED terminal) must not commit, regardless of any
+    // informational audit findings.
     appendEvent(root, quest.id, {
       type: 'attempt',
       frontier: 'demo-main',
@@ -146,10 +147,11 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
       changeRef: 'diff:src/demo.js',
     });
     const handoff = buildHandoff(root, quest, {dirtyFiles: ['solve/quests/demo.json']});
-    t.notOk(handoff.ok, 'handoff refused because audit failed');
-    t.equal(handoff.audit.status, 'fail');
+    t.notOk(handoff.ok, 'commit refused because the quest has not finished');
+    t.notOk(handoff.gate.ready, 'the commit gate is not ready');
     const md = renderHandoff(handoff);
     t.match(md, /REFUSED/, 'render makes the refusal explicit');
+    t.match(md, /finish without errors/, 'render names the commit gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -235,29 +237,31 @@ tap.test('auto commit+push (R1)', async (t) => {
       t.end();
     });
 
-  t.test('a push failure is non-fatal and keeps the commit', (t) => {
+  t.test('auto-commit commits, nothing else — it never pushes', (t) => {
     const root = tmp();
     initGit(root);
     const {quest, oracle} = makeQuest(root);
     runStep(root, quest);
     fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
-    // push:true (default) but there is no remote, so push must fail without throwing.
+    // Default options, no remote configured: the commit happens and NO push is
+    // attempted (so there is no push error to surface).
     const r = runStep(root, quest, {
       changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
       summary: 'scoped doc fix',
     });
-    t.ok(r.commit.committed, 'commit is made despite the push target missing');
-    t.equal(r.commit.pushed, false, 'push did not succeed');
-    t.ok(r.commit.pushError, 'a non-fatal push error is surfaced');
+    t.ok(r.commit.committed, 'the finished quest auto-committed');
+    t.equal(r.commit.pushed, false, 'never pushes');
+    t.notOk(r.commit.pushError, 'no push attempted means no push error');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 
-  t.test('a failing audit suppresses the auto-commit', (t) => {
+  t.test('an unverified source change suppresses the commit', (t) => {
     const root = tmp();
     initGit(root);
     const {quest} = makeQuest(root);
-    // A source-file change with no subagent verification finding fails the audit.
+    // The quest finishes (metric 0) but the source change has no subagent
+    // verification finding, so the commit gate is not met.
     runStep(root, quest);
     fs.writeFileSync(path.join(root, 'oracle.json'),
       JSON.stringify({metric: 0, target: 0}));
@@ -265,8 +269,33 @@ tap.test('auto commit+push (R1)', async (t) => {
       changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
       summary: 'unverified source change',
     });
-    t.notOk(r.commit.committed, 'no commit when the audit fails');
-    t.equal(r.commit.skipped, 'audit-failed', 'reports the audit gate');
+    t.notOk(r.commit.committed, 'no commit when the source change is unverified');
+    t.equal(r.commit.skipped, 'commit-gate', 'reports the commit gate');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a finished + verified source change commits', (t) => {
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    const r = runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
+      summary: 'verified source change',
+    });
+    // Without a verification finding the commit is gated...
+    t.notOk(r.commit.committed, 'gated before verification');
+    // ...recording one and re-committing via the handoff path now passes the gate.
+    appendFinding(root, quest.id, {
+      frontier: `${quest.id}-main`,
+      claim: 'subagent verified the source change against quest intent',
+      evidence: 'subagent:verify-1',
+    });
+    const after = autoCommitQuest(root, quest.id);
+    t.ok(after.committed, 'commits once finished without errors and verified');
+    t.equal(after.pushed, false, 'commit, nothing else');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

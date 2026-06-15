@@ -29,7 +29,7 @@ import {
   stateFilePath,
 } from './store.js';
 import {reportFilePath} from './report.js';
-import {auditQuest} from './audit.js';
+import {auditQuest, commitGate} from './audit.js';
 import {
   expectedChangeDir,
   changedPathsFromDiffContent,
@@ -107,18 +107,23 @@ function gitDirtyFiles(root) {
 }
 
 export function buildHandoff(root, quest, options = {}) {
+  // The commit decision is gated ONLY by the minimal commit gate (quest finished
+  // without errors + source-change verification). The full audit is still computed
+  // for informational reporting, but it no longer blocks the commit.
   const audit = auditQuest(root, quest);
+  const gate = commitGate(root, quest);
   const scope = {
     ...questArtifactPaths(root, quest.id),
     diffReferenced: diffReferencedPaths(root, quest.id),
   };
   const dirtyFiles = options.dirtyFiles || gitDirtyFiles(root);
   const {inScope, outOfScope} = classifyDirtyPaths(dirtyFiles, scope);
-  const ok = audit.status === 'pass';
+  const ok = gate.ready;
   return {
     ok,
     questId: quest.id,
     audit,
+    gate,
     inScope,
     outOfScope,
     summary: quest.statement || quest.id,
@@ -134,11 +139,11 @@ function commitMessage(handoff) {
 
 function gitCommands(handoff) {
   if (handoff.inScope.length === 0) return [];
+  // Commit only — nothing else (no push).
   return [
     ['git', 'add', '--', ...handoff.inScope],
     ['git', 'commit', '--only', '-m', commitMessage(handoff), '--',
       ...handoff.inScope],
-    ['git', 'push'],
   ];
 }
 
@@ -146,8 +151,10 @@ export function renderHandoff(handoff) {
   const lines = ['# Quest handoff', '', `- quest: ${handoff.questId}`,
     `- audit: ${handoff.audit.status}`];
   if (!handoff.ok) {
-    lines.push('', 'REFUSED: audit must pass before handoff. Resolve audit problems:');
-    for (const item of handoff.audit.problems) {
+    lines.push('',
+      'REFUSED: commit gate not met — the quest must finish without errors ' +
+      'after verification:');
+    for (const item of (handoff.gate?.problems || [])) {
       lines.push(`- ${item.message}${item.frontier ? ` [${item.frontier}]` : ''}`);
     }
     lines.push('');
@@ -200,27 +207,23 @@ function insideWorkTree(root) {
   }
 }
 
-// Auto commit (and optionally push) a Quest's in-scope work as it progresses, so the
-// Solver routinely persists its own scope-clean changes instead of accumulating an
-// unrecoverable dirty tree. This is the programmatic counterpart of `handoff --commit`
-// and obeys the same scope and honesty rules:
+// Auto commit a Quest's in-scope work once it finishes, so the Solver persists its
+// own scope-clean changes instead of accumulating an unrecoverable dirty tree. The
+// commit gate is minimal — the quest must have FINISHED without errors (a SOLVED
+// terminal) and any source change must be VERIFIED — and nothing else. It:
 //   - never runs outside a git work tree (returns {skipped:'not-a-git-work-tree'});
-//   - refuses when the Quest's audit does not pass (a scope-clean commit of dishonest
-//     evidence is still dishonest);
+//   - refuses until the commit gate is met (returns {skipped:'commit-gate'});
 //   - commits only the Quest's in-scope pathspec, never the dirty-tree shape;
 //   - skips cleanly when there is nothing in scope to commit;
-//   - pushes by default but treats a push failure as non-fatal — the commit is never
-//     lost — and can be suppressed with {push:false} (the --no-push / SOLVER_NO_PUSH
-//     escape hatch for offline or CI use).
-export function autoCommitQuest(root, questId, options = {}) {
+//   - commits, nothing else — it never pushes.
+export function autoCommitQuest(root, questId) {
   if (!insideWorkTree(root)) {
     return {committed: false, skipped: 'not-a-git-work-tree'};
   }
-  const push = options.push !== false && process.env.SOLVER_NO_PUSH !== '1';
   const quest = loadQuest(root, questId);
   const handoff = buildHandoff(root, quest);
   if (!handoff.ok) {
-    return {committed: false, skipped: 'audit-failed', audit: handoff.audit};
+    return {committed: false, skipped: 'commit-gate', gate: handoff.gate};
   }
   if (handoff.inScope.length === 0) {
     return {committed: false, skipped: 'nothing-in-scope'};
@@ -228,21 +231,12 @@ export function autoCommitQuest(root, questId, options = {}) {
   execFileSync('git', ['add', '--', ...handoff.inScope], {cwd: root, stdio: 'ignore'});
   execFileSync('git', ['commit', '--only', '-m', commitMessage(handoff), '--',
     ...handoff.inScope], {cwd: root, stdio: 'ignore'});
-  const result = {
+  return {
     committed: true,
     paths: handoff.inScope,
     pushed: false,
     questId,
   };
-  if (push) {
-    try {
-      execFileSync('git', ['push'], {cwd: root, stdio: 'ignore'});
-      result.pushed = true;
-    } catch (err) {
-      result.pushError = err.message;
-    }
-  }
-  return result;
 }
 
 export function runHandoffCommand(root, args) {
@@ -258,7 +252,7 @@ export function runHandoffCommand(root, args) {
     return `${rendered}\n(committed ${handoff.inScope.length} path(s))\n`;
   }
   if (args.commit && !handoff.ok) {
-    return `${rendered}\n(not committed: audit failed)\n`;
+    return `${rendered}\n(not committed: commit gate not met)\n`;
   }
   return `${rendered}\n(dry run — pass --commit to execute)\n`;
 }

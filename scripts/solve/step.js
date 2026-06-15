@@ -216,12 +216,13 @@ function stepCommit(root, quest, options = {}) {
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
   clearPending(root, quest.id);
   writeReport(root, quest.id);
-  // Persist the Quest's own scope-clean work as it progresses (R1). Auto-commit is a
-  // no-op outside a git work tree and refuses on a failing audit, so it is safe to call
-  // unconditionally; it can be suppressed per-invocation with options.push === false.
+  // Persist the Quest's own scope-clean work once it finishes (R1). Auto-commit is a
+  // no-op outside a git work tree and refuses until the commit gate is met (quest
+  // finished without errors + verified), so it is safe to call unconditionally. It
+  // commits only — it never pushes.
   const commit = outcome.violations.length > 0 ?
     {committed: false, skipped: 'attempt-violations'} :
-    autoCommitQuest(root, quest.id, {push: options.push});
+    autoCommitQuest(root, quest.id);
   return {
     frontier: def.id,
     before: pending.before.metric,

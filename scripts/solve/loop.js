@@ -494,19 +494,16 @@ export function makeRunContext(options = {}) {
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
     autoCommit: options.autoCommit !== false,
-    push: options.push,
     commitEvery: Number.isInteger(options.commitEvery) && options.commitEvery > 0 ?
       options.commitEvery : 1,
-    pushEvery: Number.isInteger(options.pushEvery) && options.pushEvery > 0 ?
-      options.pushEvery : 1,
   };
 }
 
-// R1: persist each measured attempt as its own scope-clean commit (and, on the push
-// throttle, push it) so the autonomous loop produces regular feedback and per-patch
-// rollback points instead of stacking dozens of attempts in one dirty tree. A no-op
-// outside a git work tree, on non-measuring samples, and when the change artifact does
-// not resolve, so throwaway tmpdir tests and skipped attempts never create commits.
+// Attempt the scope-clean auto-commit after a measured attempt. The commit gate
+// itself (quest finished without errors + verified) decides whether anything is
+// committed, so this is a no-op until the quest finishes; it never pushes. Also a
+// no-op outside a git work tree, on non-measuring samples, and when the change
+// artifact does not resolve, so throwaway tmpdir tests never create commits.
 function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
   if (!ctx.autoCommit) return;
   const event = outcome?.event;
@@ -520,9 +517,8 @@ function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
     e.frontier === pick.def.id &&
     e.invalidSample !== true).length;
   if (measuredCount % ctx.commitEvery !== 0) return;
-  const push = ctx.push !== false && measuredCount % ctx.pushEvery === 0;
   writeReportForQuest(root, quest);
-  return autoCommitQuest(root, quest.id, {push});
+  return autoCommitQuest(root, quest.id);
 }
 
 // Seal the goalposts on first declaration and reject any later goalpost drift. Shared
@@ -706,13 +702,13 @@ export function runLoop(root, quest, options = {}) {
         evidenceFingerprint,
       );
       writeReportForQuest(root, quest);
-      result.commit = autoCommitQuest(root, quest.id, {push: options.push});
+      result.commit = autoCommitQuest(root, quest.id);
       return result;
     }
     if (terminal === OUTCOME_EXHAUSTED) {
       const result = finish(root, quest, STATUS_EXHAUSTED, evidence);
       writeReportForQuest(root, quest);
-      result.commit = autoCommitQuest(root, quest.id, {push: options.push});
+      result.commit = autoCommitQuest(root, quest.id);
       return result;
     }
     if (terminal === OUTCOME_THEORY_REQUIRED || terminal === OUTCOME_BLOCKED) {

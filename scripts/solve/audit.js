@@ -13,6 +13,7 @@ import {
   EVENT_THEORY_SELECTED,
   EVENT_THEORY_SUPERSEDED,
   EVENT_THEORY_SYSTEM_DECLARED,
+  STATUS_EXHAUSTED,
   STATUS_SOLVED,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_AVOIDED,
@@ -312,6 +313,38 @@ function auditContinuation(root, quest) {
   return health.continuation.problems.map((message) => problem(
     `continuation blocked: ${message}`,
   ));
+}
+
+// Minimal commit gate: the ONLY preconditions for committing a quest's work are
+// that the quest finished without errors (a SOLVED or EXHAUSTED terminal is
+// recorded) and that any source-code change was verified by a later subagent
+// verification finding. Nothing else (report freshness, theory bookkeeping,
+// changeRef integrity, scope continuation, etc.) blocks the commit — those remain
+// informational via auditQuest.
+const COMMIT_GATE_TERMINAL_STATUSES = Object.freeze([
+  STATUS_SOLVED,
+  STATUS_EXHAUSTED,
+]);
+
+export function commitGate(root, quest) {
+  const log = readLog(root, quest.id);
+  const startIndex = strictAuditStartIndex(log);
+  const finished = log.some((event) =>
+    event.type === EVENT_QUEST &&
+    COMMIT_GATE_TERMINAL_STATUSES.includes(event.status));
+  const problems = [];
+  if (!finished) {
+    problems.push(problem(
+      'quest has not finished (no SOLVED or EXHAUSTED terminal recorded)',
+    ));
+  }
+  problems.push(...auditSourceChangeVerification(root, quest, log, startIndex));
+  return {
+    questId: quest.id,
+    ready: problems.length === 0,
+    status: problems.length === 0 ? 'pass' : 'fail',
+    problems,
+  };
 }
 
 export function auditQuest(root, quest) {

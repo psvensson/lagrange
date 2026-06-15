@@ -294,9 +294,10 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
   });
 });
 
-// R1: the autonomous loop persists each measured attempt as its own scope-clean
-// commit instead of stacking attempts in one dirty tree.
-tap.test('R1 per-attempt auto-commit on the loop path', async (t) => {
+// The loop auto-commits the quest's scope-clean work once the quest FINISHES
+// without errors (and any source change is verified) — the commit gate. It never
+// commits mid-run and never pushes.
+tap.test('auto-commit on quest finish (loop path)', async (t) => {
   function initGit(root) {
     const run = (...args) => execFileSync('git', args, {cwd: root, stdio: 'ignore'});
     run('init');
@@ -308,8 +309,8 @@ tap.test('R1 per-attempt auto-commit on the loop path', async (t) => {
     run('commit', '-m', 'init');
   }
 
-  // A doc-path change artifact so the honesty source-change-verification gate does not
-  // demand a subagent finding; the loop can then auto-commit each measured attempt.
+  // A doc-path change artifact so the source-change-verification gate does not
+  // demand a subagent finding; the loop can then auto-commit once the quest finishes.
   function docExecutor(changeDir) {
     return {
       name: 'doc',
@@ -338,22 +339,23 @@ tap.test('R1 per-attempt auto-commit on the loop path', async (t) => {
       {cwd: root, encoding: 'utf8'}).trim();
   }
 
-  t.test('each measured attempt produces a commit, push suppressed', (t) => {
+  t.test('commits once when the quest finishes, never pushes', (t) => {
     const {root, quest, changeDir} = setup({metric: 2, target: 0});
     saveQuest(root, quest);
     initGit(root);
     const before = Number(commitCount(root));
     const res = runLoop(root, quest, {
       executor: docExecutor(changeDir),
-      push: false,
       maxCycles: 50,
     });
     t.equal(res.outcome, STATUS_SOLVED, 'quest solved');
     const after = Number(commitCount(root));
-    t.ok(after - before >= 2, 'at least one commit per measured attempt');
+    // Mid-run attempts do not commit (the quest has not finished); the finish
+    // produces a single scope-clean commit.
+    t.equal(after - before, 1, 'exactly one commit, made when the quest finished');
     const msg = execFileSync('git', ['log', '-1', '--format=%B'],
       {cwd: root, encoding: 'utf8'});
-    t.match(msg, /Co-authored-by: Copilot/, 'commits carry the co-author trailer');
+    t.match(msg, /Co-authored-by: Copilot/, 'the commit carries the co-author trailer');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
