@@ -231,6 +231,18 @@ snapshots and CDC subscriptions by default.
 | `latency_groups` | Latency group assignments | `group_id` | TOPOLOGY |
 | `inter_group_latencies` | Inter-group RTT measurements | `source_group_id` | TOPOLOGY |
 
+#### Convergence guarantee
+
+Every propagated table converges to authoritative state independent of CDC
+delivery order, drop, or duplication. The apply path is a convergent state CRDT:
+an origin write HLC carried on CDC `data` drives an HLC-LWW compare (deterministic
+under equal-`updated_at` ties and cross-leader clock skew), DELETE tombstones fence
+a reordered DELETE-before-INSERT from resurrecting a row, and an authoritative
+catch-up anti-entropy sweep removes any row a genuinely-lost DELETE left behind.
+After a missed or late DELETE all replica caches converge to authoritative absence
+within a bounded interval. See
+[CDC apply convergence semantics](runtime-components.md#cdc-apply-convergence-semantics-order-insensitive).
+
 #### `services` Row Ownership Matrix
 
 `services` is a shared control-plane table. Ownership is split by field subset

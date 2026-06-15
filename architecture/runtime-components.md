@@ -140,6 +140,30 @@ AdminWebSocketAPI debug route adapter
 - Provides read-only wrapper for safe access
 - Supports cache change listeners for reactive updates
 
+#### CDC apply convergence semantics (order-insensitive)
+
+CDC fan-out is point-in-time delivery with no global ordering, so the apply path
+is a convergent state CRDT — the same set of events converges to the same cache
+regardless of delivery order, drop, or duplication
+(`src/cache/system-table-cache-row-merge.js`, `src/cache/system-table-cache.js`):
+
+- **HLC-LWW compare.** `isStaleForExistingRecord` prefers each row's origin write
+  HLC (`updated_at_hlc`, carried end-to-end on CDC `data` — see CDCIntegrationService /
+  PartitionService) over wall-clock `updated_at`. The HLC is a total causal order
+  (physical, logical, nodeId), so equal-millisecond UPDATE ties and cross-leader
+  wall-clock skew resolve deterministically and identically on every replica. When a
+  row carries no HLC the path falls back to the prior wall-clock comparison.
+- **DELETE tombstones.** A DELETE records a per-table tombstone keyed by row key +
+  delete HLC. A later-delivered but causally-older write (a reordered DELETE-before-
+  INSERT) is fenced and cannot resurrect the row; a genuinely-newer write supersedes
+  and clears the tombstone (legitimate re-create). Tombstones are GC'd by a TTL plus a
+  per-table size cap.
+- **Anti-entropy sweep.** `reconcileAgainstAuthoritativeTruth(snapshot, {evictOlderThanMs})`
+  evicts cache-only rows absent from a COMPLETE authoritative row set — the backstop for
+  a genuinely-lost DELETE (no tombstone could form). It is wired into the authoritative
+  catch-up (see CDCIntegrationService) and runs only against owner-authoritative reads,
+  with a race guard that preserves rows newer than the read snapshot.
+
 #### Sanctioned direct applySystemTableChange call sites
 
 Direct `applySystemTableChange` usage is constrained to the following paths:
@@ -168,11 +192,26 @@ No other source file may call `applySystemTableChange` directly.
 - Runtime CDC event processing is instantiated once via `CDCEventHandler`
 - `handleEpochChangeCDC` and `handleNodeStateCDC` delegate to that single runtime handler path
 - Epoch propagation is cluster-scoped via `config.current_epoch` and `setEpochManager(...)`
+- **Authoritative catch-up + anti-entropy sweep.**
+  `hydrateCdcPropagatedTablesFromAuthority` re-reads every CDC-propagated table from
+  the authoritative owner path at join/recovery readiness (closing the
+  bootstrap-snapshot → fan-out-targetability window). The UPSERT-only catch-up cannot
+  remove a row a lost DELETE resurrected, so on an **owner-authoritative** read
+  (`source === OWNER_RPC_LANE`) it follows the upsert with
+  `applyAuthoritativeCacheSweep`, which deletes cache-only rows absent from that
+  complete authoritative set. Local-replica reads (a possibly-lagging follower) never
+  drive eviction. A periodic owner-rate-limited sweep for stable nodes is a tracked
+  follow-up.
 
 ### PartitionService
 - SQLite-backed Raft group for data storage
 - Uses liferaft library for Raft consensus
-- Generates CDC events on writes
+- Generates CDC events on writes; the leader stamps each event's `data` with the
+  origin write HLC (`updated_at_hlc`) at generation
+  (`src/partition/partition-cdc-generator.js`). The stamp rides `data` unchanged to
+  every replica's cache (the envelope-level timestamp is re-minted per receiver and is
+  not origin-stable), making the cache LWW compare and tombstone fence skew-immune. It
+  is cache-only — the durable-write path filters unknown columns, so it is not persisted.
 - Owns participant-side distributed transaction behavior (`BEGIN`, `PREPARE`,
   `COMMIT`, `ROLLBACK`) for partition-local state
 - `prepareTransaction()` validates write conflicts and durably appends a

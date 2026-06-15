@@ -174,10 +174,11 @@ Write Operation (INSERT/UPDATE/DELETE)
 └───────────┬─────────────┘
             │
             ▼
-┌─────────────────────────┐
-│   CDC Event Generated   │
-│   (table, op, data)     │
-└───────────┬─────────────┘
+┌─────────────────────────────┐
+│   CDC Event Generated       │
+│   (table, op, data +        │
+│    origin HLC on data)      │
+└───────────┬─────────────────┘
             │
             ▼
 ┌─────────────────────────┐
@@ -191,6 +192,12 @@ Write Operation (INSERT/UPDATE/DELETE)
 │   (Update local cache)  │
 └─────────────────────────┘
 ```
+
+Delivery is point-in-time with no global ordering, so the cache apply path is
+order-insensitive: an origin write HLC stamped onto `data` drives an HLC-LWW
+compare, DELETE tombstones fence reordered resurrections, and an authoritative
+catch-up sweep removes rows left by a genuinely-lost DELETE. See
+[CDC apply convergence semantics](runtime-components.md#cdc-apply-convergence-semantics-order-insensitive).
 
 ### CDC Continuity During Topology Transitions
 
