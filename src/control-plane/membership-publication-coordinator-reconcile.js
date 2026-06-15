@@ -225,6 +225,37 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
   return pendingAckNodeIds;
 }
 
+// WS5 (idempotent close-on-tick): the variant-A ack path above returns [] when an
+// OPEN publication has NO outstanding required acks (every required ack already in,
+// or none required) — yet the row is still status=OPEN because no stable
+// (publicationChanged===false) reconcile tick ever ran to refresh it to PUBLISHED.
+// The no-deficit early return then skips it forever: the same "owner reaches
+// no-deficit and never writes again" family (CL-014 lineage), here on the status
+// face rather than the ack face. This predicate surfaces exactly that closeable
+// state so the driver can re-drive a verify/close.
+//
+// Thrash-safety: a re-drive runs the close lane, whose shouldRefreshStatus flips
+// OPEN->PUBLISHED; the next tick sees PUBLISHED (terminal) and skips, so this does
+// not spin. If the close lane legitimately keeps the row OPEN (candidate still
+// computes OPEN), re-evaluation is interval-paced (5s) + in-flight-guarded, never a
+// hot spin, and is gated behind ownerIdempotentCloseEnabled (default off) so a gate
+// can disable it if real thrash appears. Pure + deterministic (the repro surface).
+function isOwnerOpenPublicationCloseable(planningSnapshot) {
+  const latestRow = normalizeControlPlanePublicationRow(
+    planningSnapshot?.latestPublicationRow,
+  );
+  if (!latestRow || latestRow.status !== MEMBERSHIP_PUBLICATION_STATUS.OPEN) {
+    return false;
+  }
+  const requiredAckNodeIds = normalizeNodeIdList(latestRow.requiredAckNodeIds);
+  const acknowledgedNodeIds = new Set(
+    normalizeNodeIdList(latestRow.acknowledgedNodeIds),
+  );
+  // Closeable iff there are NO outstanding required acks (every() is true on an
+  // empty required-ack list too: an OPEN row with no required acks is closeable).
+  return requiredAckNodeIds.every((nodeId) => acknowledgedNodeIds.has(nodeId));
+}
+
 class MembershipPublicationCoordinatorReconcile extends
   MembershipPublicationCoordinatorPersist {
   async reconcileClusterMembership(options = {}) {
@@ -526,6 +557,11 @@ class MembershipPublicationCoordinatorReconcile extends
       // the OPEN publication never closes (see resolveOwnerAckCompletionPendingNodeIds).
       const ownerAckCompletionPendingNodeIds =
         resolveOwnerAckCompletionPendingNodeIds(planningSnapshot);
+      // WS5: an OPEN-but-fully-acked publication that just needs a status close.
+      const ownerOpenCloseable =
+        this.ownerIdempotentCloseEnabled === true &&
+        ownerAckCompletionPendingNodeIds.length === NUM.ZERO &&
+        isOwnerOpenPublicationCloseable(planningSnapshot);
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
@@ -535,7 +571,8 @@ class MembershipPublicationCoordinatorReconcile extends
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
       if (
         missingCount <= 0 &&
-        ownerAckCompletionPendingNodeIds.length === NUM.ZERO
+        ownerAckCompletionPendingNodeIds.length === NUM.ZERO &&
+        !ownerOpenCloseable
       ) {
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
@@ -584,6 +621,7 @@ class MembershipPublicationCoordinatorReconcile extends
         missingPublishedCount: missingCount,
         ownerAckCompletionPendingCount:
           ownerAckCompletionPendingNodeIds.length,
+        ownerOpenCloseableDrive: ownerOpenCloseable ? 1 : 0,
         publicationEpoch,
         outcome: timedOut ?
           CONVERGENCE_OUTCOME.RECONCILE_TIMED_OUT :
@@ -691,5 +729,6 @@ export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorReconcile,
   shouldDeferMembershipReconcileToWriteLeader,
+  isOwnerOpenPublicationCloseable,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
 };

@@ -63,6 +63,14 @@ class MembershipPublicationCoordinatorReads {
     this.membershipLeaderDrivenEnabled =
       options.membershipLeaderDrivenEnabled ??
       process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    // WS5 (idempotent close-on-tick): on a no-deficit tick the owner also drives a
+    // verify/close when the latest publication is OPEN but already fully acked, so a
+    // status-only close is not skipped forever (the CL-014 "no-deficit and never
+    // writes again" family, ack-completion's status face). Default OFF (kill switch)
+    // until validated against the gate; injectable for tests.
+    this.ownerIdempotentCloseEnabled =
+      options.ownerIdempotentCloseEnabled ??
+      process.env.LAGRANGE_OWNER_IDEMPOTENT_CLOSE === 'true';
     this.resolveIsControlPlanePublicationsWriteLeader =
       typeof options.resolveIsControlPlanePublicationsWriteLeader ===
       TYPEOF.FUNCTION ?

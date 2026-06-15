@@ -1,6 +1,7 @@
 import t from 'tap';
 import {
   MembershipPublicationCoordinatorReconcile,
+  isOwnerOpenPublicationCloseable,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 
 // Workstream A: the always-on owner-membership driver. Test gating + lifecycle
@@ -34,7 +35,9 @@ t.test('drive: no-op when this node is NOT the publications leader', async (t) =
   const ctx = {
     nodeId: 'seed',
     systemTableCache: leaderCache('other'), // leader is someone else
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     reconcileActiveGateMembershipPublication: async () => {},
     logger: {},
     ...traceStubs(),
@@ -49,7 +52,9 @@ t.test('drive: no-op while a prior drive is in flight', async (t) => {
     nodeId: 'seed',
     ownerMembershipReconcileInFlight: true,
     systemTableCache: leaderCache('seed'),
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     logger: {},
     ...traceStubs(),
   };
@@ -62,7 +67,9 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
   const ctx = {
     nodeId: 'seed',
     systemTableCache: leaderCache('seed'),
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     reconcileActiveGateMembershipPublication: async () => {},
     assertSingleMembershipPartition: () => {},
     logger: {},
@@ -87,7 +94,9 @@ function ackCompletionCtx({recoveryEligible, dimensions}) {
     systemTableCache: leaderCache('seed'),
     assertSingleMembershipPartition: () => {},
     now: () => 1,
-    reconcileActiveGateMembershipPublication: async () => {reconcileCalls += 1;},
+    reconcileActiveGateMembershipPublication: async () => {
+      reconcileCalls += 1;
+    },
     readPublicationPlanningSnapshot: async () => ({
       // empty nodeRows -> expectedNodeIds empty -> missingPublishedCount === 0,
       // isolating the ack-completion path.
@@ -158,6 +167,71 @@ t.test('drive: does NOT re-drive a process-not-alive pending node even if cluste
   t.equal(reconcileCalls(), 0, 'no reconcile for a process-not-alive pending node');
 });
 
+// WS5 (idempotent close-on-tick): an OPEN publication that is ALREADY FULLY ACKED
+// (every required ack received) but whose status was never refreshed to PUBLISHED.
+// The variant-A ack path returns [] (no pending acks), so without WS5 the no-deficit
+// early return skips it forever and the OPEN row never terminalizes.
+function openFullyAckedCtx({enabled}) {
+  let reconcileCalls = 0;
+  const ctx = {
+    nodeId: 'seed',
+    systemTableCache: leaderCache('seed'),
+    assertSingleMembershipPartition: () => {},
+    now: () => 1,
+    ownerIdempotentCloseEnabled: enabled,
+    reconcileActiveGateMembershipPublication: async () => {
+      reconcileCalls += 1;
+    },
+    readPublicationPlanningSnapshot: async () => ({
+      nodeRows: [],
+      readinessByNodeId: {},
+      latestPublicationRow: {
+        publicationEpoch: 20,
+        status: 'OPEN',
+        publishedActiveNodeIds: ['seed', 'peer'],
+        requiredAckNodeIds: ['seed', 'peer'],
+        acknowledgedNodeIds: ['seed', 'peer'], // fully acked, but row still OPEN
+      },
+      latestPublishedPublicationRow: null,
+    }),
+    logger: {warn: () => {}},
+    ...traceStubs(),
+  };
+  return {ctx, reconcileCalls: () => reconcileCalls};
+}
+
+// REPRODUCED rung (baseline / flag OFF): deterministically reproduces the first
+// violated invariant — the owner SKIPS an OPEN-but-fully-acked publication, so it
+// never closes. This is the repro the WS5 fix is authored against.
+t.test('drive: WS5 OFF — SKIPS an OPEN-but-fully-acked publication (repro of the never-closes invariant)', async (t) => {
+  const {ctx, reconcileCalls} = openFullyAckedCtx({enabled: false});
+  t.equal(await drive.call(ctx), false, 'no-deficit early return skips the closeable OPEN row');
+  t.equal(reconcileCalls(), 0, 'reconcile never runs — the OPEN row never terminalizes');
+});
+
+// FIX engaged (flag ON): the owner re-drives a verify/close so the OPEN row reaches PUBLISHED.
+t.test('drive: WS5 ON — re-drives a fully-acked OPEN publication to close it', async (t) => {
+  const {ctx, reconcileCalls} = openFullyAckedCtx({enabled: true});
+  t.equal(await drive.call(ctx), true, 'drives the status-only close despite zero deficit and zero pending acks');
+  t.equal(reconcileCalls(), 1, 'reconcile invoked to close the OPEN publication');
+});
+
+t.test('isOwnerOpenPublicationCloseable: pure predicate partitions correctly', (t) => {
+  const open = (ack, req) => ({
+    latestPublicationRow: {status: 'OPEN', requiredAckNodeIds: req, acknowledgedNodeIds: ack},
+  });
+  t.equal(isOwnerOpenPublicationCloseable(open(['a', 'b'], ['a', 'b'])), true, 'OPEN + fully acked -> closeable');
+  t.equal(isOwnerOpenPublicationCloseable(open([], [])), true, 'OPEN + no required acks -> closeable');
+  t.equal(isOwnerOpenPublicationCloseable(open(['a'], ['a', 'b'])), false, 'OPEN + pending ack -> NOT closeable (variant-A path owns it)');
+  t.equal(
+    isOwnerOpenPublicationCloseable({latestPublicationRow: {status: 'PUBLISHED', requiredAckNodeIds: [], acknowledgedNodeIds: []}}),
+    false,
+    'PUBLISHED (terminal) -> never closeable',
+  );
+  t.equal(isOwnerOpenPublicationCloseable(null), false, 'no snapshot -> false');
+  t.end();
+});
+
 t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   const assertFn =
     MembershipPublicationCoordinatorReconcile.prototype.assertSingleMembershipPartition;
@@ -165,7 +239,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   let errors = 0;
   const single = {
     nodeId: 'seed',
-    logger: {error: () => {errors += 1;}},
+    logger: {error: () => {
+      errors += 1;
+    }},
     systemTableCache: {getAll: () => [{table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'}]},
   };
   assertFn.call(single);
@@ -175,7 +251,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   let multiErrors = 0;
   const multi = {
     nodeId: 'seed',
-    logger: {error: () => {multiErrors += 1;}},
+    logger: {error: () => {
+      multiErrors += 1;
+    }},
     systemTableCache: {getAll: () => [
       {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'},
       {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p2'},
@@ -189,7 +267,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
 t.test('start: no-op when leader-driven mode is disabled', async (t) => {
   let intervals = 0;
   const ctx = {};
-  start.call(ctx, {enabled: false, setIntervalFn: () => {intervals += 1;}});
+  start.call(ctx, {enabled: false, setIntervalFn: () => {
+    intervals += 1;
+  }});
   t.equal(intervals, 0);
   t.equal(ctx.ownerMembershipDriverTimer, undefined);
 });
@@ -198,11 +278,15 @@ t.test('start/stop: enabled starts an interval; stop clears it', async (t) => {
   let intervals = 0;
   const fakeTimer = {unref() {}};
   const ctx = {};
-  start.call(ctx, {enabled: true, setIntervalFn: () => {intervals += 1; return fakeTimer;}});
+  start.call(ctx, {enabled: true, setIntervalFn: () => {
+    intervals += 1; return fakeTimer;
+  }});
   t.equal(intervals, 1, 'interval started');
   t.equal(ctx.ownerMembershipDriverTimer, fakeTimer);
   // second start is idempotent
-  start.call(ctx, {enabled: true, setIntervalFn: () => {intervals += 1;}});
+  start.call(ctx, {enabled: true, setIntervalFn: () => {
+    intervals += 1;
+  }});
   t.equal(intervals, 1, 'start is idempotent');
   stop.call(ctx);
   t.equal(ctx.ownerMembershipDriverTimer, null, 'stopped');
