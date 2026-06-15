@@ -134,4 +134,42 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     t.equal(summary.rowsApplied, 1, 'keyless row skipped');
     t.equal(summary.tablesHydrated, 1, 'table still counts as hydrated');
   });
+
+  await t.test(
+    'anti-entropy sweep runs ONLY for an owner-authoritative read, never for ' +
+      'a local-replica or failed read',
+    async (t) => {
+      const sweeps = [];
+      const service = createServiceStub({
+        readResults: {
+          // Owner-authoritative read -> safe to sweep.
+          services: [
+            {success: true, rows: [{id: 'svc-1'}], source: 'owner_rpc_lane'},
+          ],
+          // Local-replica read (a possibly-lagging follower) -> must NOT sweep.
+          tables: [
+            {success: true, rows: [], source: 'local_partition_replica'},
+          ],
+          // Failed read -> must NOT sweep.
+          nodes: [{success: false, error: 'unavailable'}],
+        },
+      });
+      service.applyAuthoritativeCacheSweep = (tableName, rows, readStartedAtMs) => {
+        sweeps.push({tableName, rows, readStartedAtMs});
+        return 2;
+      };
+
+      const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+        tables: ['services', 'tables', 'nodes'],
+        maxAttemptsPerTable: 1,
+        sleep: async () => {},
+        now: () => 5000,
+      });
+
+      t.same(sweeps.map((s) => s.tableName), ['services'],
+        'sweep runs only for the owner-authoritative read');
+      t.same(sweeps[0].rows, [{id: 'svc-1'}], 'sweep gets the authoritative rows');
+      t.equal(sweeps[0].readStartedAtMs, 5000, 'sweep gets the read-start time');
+      t.equal(summary.rowsSwept, 2, 'evicted count is accumulated');
+    });
 });

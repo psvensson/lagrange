@@ -28,6 +28,7 @@
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
+import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
 
 const CATCHUP_DEFAULT = Object.freeze({
   MAX_ATTEMPTS_PER_TABLE: 3,
@@ -72,10 +73,12 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     options.sleep :
     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
 
+  const now = typeof options.now === 'function' ? options.now : Date.now;
   const summary = {
     tablesAttempted: 0,
     tablesHydrated: 0,
     rowsApplied: 0,
+    rowsSwept: 0,
     tablesFailed: [],
   };
 
@@ -86,6 +89,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
 
     for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
       let readResult = null;
+      const readStartedAtMs = now();
       try {
         readResult = await service.executeAuthoritativeSystemTableRead(
           tableName,
@@ -114,6 +118,22 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
           if (applied) {
             summary.rowsApplied += 1;
           }
+        }
+        // Anti-entropy backstop: the UPSERT loop above cannot remove a row that a
+        // lost DELETE resurrected. Sweep cache-only rows absent from `rows` — but
+        // ONLY when the read came from the authoritative OWNER. A local-replica
+        // read can be a lagging follower returning a stale/empty set, which would
+        // wrongly evict live rows; the owner read is the authoritative complete
+        // set. (Race-guarded against writes newer than the read.)
+        const readFromOwner =
+          readResult.source === AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE;
+        if (readFromOwner &&
+            typeof service.applyAuthoritativeCacheSweep === 'function') {
+          summary.rowsSwept += service.applyAuthoritativeCacheSweep(
+            tableName,
+            rows,
+            readStartedAtMs,
+          );
         }
         summary.tablesHydrated += 1;
         hydrated = true;
@@ -151,6 +171,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     tablesAttempted: summary.tablesAttempted,
     tablesHydrated: summary.tablesHydrated,
     rowsApplied: summary.rowsApplied,
+    rowsSwept: summary.rowsSwept,
     tablesFailed: summary.tablesFailed,
   });
 

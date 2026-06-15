@@ -585,6 +585,39 @@ class CDCIntegrationServiceCacheVisibilityWait {
   }
 
   /**
+   * Anti-entropy backstop for a genuinely-lost DELETE: after a complete
+   * authoritative read of `tableName`, evict cache-only rows that are absent from
+   * that authoritative set (the UPSERT-only catch-up cannot remove a resurrected
+   * row). Rows are canonicalized so their keys align with how the cache stores
+   * them. `readStartedAtMs` guards against evicting a row written after the read
+   * snapshot was taken.
+   *
+   * @param {string} tableName
+   * @param {Array<Object>} authoritativeRows - Complete authoritative row set.
+   * @param {number} [readStartedAtMs] - When the authoritative read began.
+   * @return {number} Count of cache-only rows evicted.
+   * @private
+   */
+  applyAuthoritativeCacheSweep(tableName, authoritativeRows, readStartedAtMs) {
+    if (
+      !this.cacheMutationTarget ||
+      typeof this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth !==
+        TYPEOF.FUNCTION ||
+      !Array.isArray(authoritativeRows)
+    ) {
+      return NUM.ZERO;
+    }
+    const canonicalRows = authoritativeRows
+      .filter((row) => row && typeof row === TYPEOF.OBJECT)
+      .map((row) => canonicalizeSystemTableRow(tableName, row));
+    const result = this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth(
+      {[tableName]: canonicalRows},
+      Number.isFinite(readStartedAtMs) ? {evictOlderThanMs: readStartedAtMs} : {},
+    );
+    return Array.isArray(result?.removed) ? result.removed.length : NUM.ZERO;
+  }
+
+  /**
    * Resolve authoritative fallback phase from optional runtime context.
    * @param {string|undefined|null} phase
    * @return {string}

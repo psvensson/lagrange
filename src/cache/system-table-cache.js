@@ -555,11 +555,21 @@ class SystemTableCache {
    * and evicted. Omit a table entirely to leave its cache untouched. Passing a
    * partial/stale snapshot will evict live rows.
    *
+   * RACE GUARD: when `options.evictOlderThanMs` is given (e.g. the authoritative
+   * read's start time), a cache-only row whose `updated_at` is at/after that time
+   * is NOT evicted — it may be a write committed after the snapshot was taken and
+   * not yet reflected in it. A genuinely-resurrected row (from a lost DELETE) is
+   * older than the read and is still swept.
+   *
    * @param {Object<string, Array<Object>>} truthSnapshot - tableName -> complete
    *   authoritative rows.
+   * @param {Object} [options]
+   * @param {number} [options.evictOlderThanMs] - Only evict rows older than this.
    * @return {{removed: Array<{tableName: string, key: string}>}}
    */
-  reconcileAgainstAuthoritativeTruth(truthSnapshot = {}) {
+  reconcileAgainstAuthoritativeTruth(truthSnapshot = {}, options = {}) {
+    const evictOlderThanMs = Number.isFinite(options.evictOlderThanMs) ?
+      options.evictOlderThanMs : null;
     const removed = [];
     for (const [tableName, authoritativeRows] of Object.entries(truthSnapshot)) {
       if (!this.tables.has(tableName)) {
@@ -574,7 +584,9 @@ class SystemTableCache {
       const pkField = getSystemCachePrimaryKeyField(tableName);
       const authoritativeKeys = new Set(
         authoritativeRows
-          .map((row) => row?.[pkField] ?? row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
+          // Derive keys exactly as applySystemTableChange does (`||` fallback) so
+          // they align with how rows are stored; a mismatch would evict live rows.
+          .map((row) => row?.[pkField] || row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
           .filter((key) => typeof key !== TYPEOF.UNDEFINED),
       );
       for (const key of [...table.keys()]) {
@@ -582,6 +594,12 @@ class SystemTableCache {
           continue;
         }
         const evicted = table.get(key);
+        if (evictOlderThanMs !== null) {
+          const rowTimestamp = getRecordTimestamp(evicted);
+          if (Number.isFinite(rowTimestamp) && rowTimestamp >= evictOlderThanMs) {
+            continue;
+          }
+        }
         table.delete(key);
         removed.push({tableName, key});
         this.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {
