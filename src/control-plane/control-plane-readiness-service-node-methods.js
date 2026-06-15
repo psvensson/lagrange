@@ -504,7 +504,9 @@ const controlPlaneReadinessNodeMethods = {
     });
     // WS4: record how long this full synchronous build took so a subsequent
     // hot-path call can serve bounded-stale instead of rebuilding (see
-    // getBoundedStaleReadinessSnapshot). Always recorded (cheap, flag-independent).
+    // getBoundedStaleReadinessSnapshot). Recorded on this main full-build path
+    // (the dominant one under churn); the missing-node / self-grace early returns
+    // do not update it. Cheap (one numeric Map.set) and flag-independent.
     this.recordReadinessBuildDurationMs(nodeId, this.now() - buildStartedAtMs);
     this.maybeStartBackgroundSyncReadinessRefresh(
       {
