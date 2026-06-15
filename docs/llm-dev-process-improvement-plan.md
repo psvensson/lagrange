@@ -376,6 +376,33 @@ Very large; multi-PR. Risk: HIGH; this is the hard-cutover the whole spec target
 Steps 1–2 are independently shippable and low-risk; step 3 is the gated finale.
 Do NOT build a parallel mechanism (recurring warning across memories).
 
+### WS6 EXECUTION FINDING (2026-06-15) — verified before any code change
+- **Down-payment B is a NO-OP and attempting it would be a CORRECTNESS BUG.**
+  Inspected all three named straggler sites: `control-plane-kernel-ingress.js:353`
+  (per-service routing eligibility), `replica-dispatch-service-lifecycle.js:426`
+  (a specific message-group's dispatch), `lease-service.js:179` (any message-group
+  leader, to run the lease sweep). `isLeaderReplica()` is a GENERAL per-message-
+  group / per-partition / raft-replica leadership predicate (defined on
+  message-group/partition/raft services), NOT a `control_plane_publications`
+  write-leader check. Routing these through `resolveControlPlanePublicationsLeadership`
+  would conflate distinct raft groups. The publications write-leader resolution is
+  ALREADY consolidated in `resolveControlPlanePublicationsLeadership` /
+  `isControlPlanePublicationsWriteLeader`; there are no genuine stragglers. B is
+  done by construction.
+- **The transport-alive trim-grace asymmetry (active-node-projection.js:303-304) is
+  ALREADY FIXED** by CL-001 variant C (commit 3d7dc3cf, retention-only grace),
+  gate-validated 085708Z. Nothing to do here.
+- **Remaining WS6 = down-payment A (single active-set read accessor + caller
+  migration) and step 3 (the designed `Membership_Lifecycle_Controller` single-writer
+  cutover).** Both are large, touch leadership/active-set resolution that the LIVE
+  CL-039 work is actively editing, and step 3 is gated on (i) WS4+WS5 gate-validation
+  producing a stable convergence baseline and (ii) completing the partial
+  `membership-lifecycle-controller.js` (295 lines). Per the project's record-before-
+  code discipline these are NOT landed speculatively; they proceed as the spec's
+  Task-27/28 cutover when the convergence frontier reaches them. No code shipped for
+  WS6 in this pass — the safe pieces were already done, and the rest is correctly
+  gated.
+
 ---
 
 ## WS7 — Lock in de-ordinalization with a prevention gate
