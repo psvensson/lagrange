@@ -10,6 +10,37 @@ of work 2026-06-13 .. 2026-06-15.
 > `node.ndjson` (which exists only under the perturbing debug-logs mode) — every
 > WS1/WS2 artifact reference is corrected accordingly.
 
+## FLAG VALIDATION CAMPAIGN VERDICT (2026-06-15, 11 gate runs from clean containers)
+
+The two flag-gated behavioral changes (WS5, WS4) were tested against a same-tree
+baseline. **Neither target precondition fired in 11 runs — the tree is healthy and
+prior CL work drove both bug-classes rare** — so the campaign proved *no-regression*
+but could not prove *load-bearing*.
+
+| Round | Result | target precondition |
+| --- | --- | --- |
+| Baseline (flags off) | 4/4 CONVERGED, walls p50 414s | 0/4 |
+| WS5 on | 3 CONVERGED / 1 SLOW (0 corrupt), p50 407s | OPEN-stuck **0/4 — inert**; the SLOW was unrelated `published_member_missing` |
+| WS4 on (3 runs) | 3/3 CONVERGED, walls 384–411s (tightest) | freeze never bound, **0/3** |
+
+**Decisions (neither de-flagged — no engagement evidence to justify defaulting
+unvalidated hot-path behavior):**
+- **WS5 (`LAGRANGE_OWNER_IDEMPOTENT_CLOSE`) — REMOVED** (reverted, commit 60c429c8).
+  Its OPEN-stuck target is now inert across four cumulative gate rounds (the ledger's
+  075853Z + 085729Z, plus baseline + WS5 here) and the ledger already carries a
+  standing note not to iterate the OPEN-row driver until a gate reproduces the state.
+  Prior fixes (variant-A close lane, CL-037) eliminated the precondition; carrying a
+  never-triggered re-drive on the owner hot path is unjustified surface. The
+  deterministic finding + repro design remain recorded here.
+- **WS4 (`LAGRANGE_READINESS_BUILD_BOUND`) — KEPT flagged-off**, registered as a
+  candidate lever on **CL-039** (the LIVE frontier: a residual seed event-loop gap
+  > the raft election timeout shedding publications-p1 leadership — exactly what WS4
+  bounds). It didn't fire in 7 healthy runs because the freeze is intermittent, but
+  CL-039 documents it occurs there. Validate it when a CL-039 gate reproduces the
+  freeze (`reproduced` rung); do not default until then.
+
+---
+
 This plan implements eight recommendations to make distributed convergence
 debugging cheaper and less error-prone for an LLM operator. Each workstream is
 grounded in concrete current-state file:line references gathered before writing,

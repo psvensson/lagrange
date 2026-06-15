@@ -34,7 +34,9 @@ t.test('drive: no-op when this node is NOT the publications leader', async (t) =
   const ctx = {
     nodeId: 'seed',
     systemTableCache: leaderCache('other'), // leader is someone else
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     reconcileActiveGateMembershipPublication: async () => {},
     logger: {},
     ...traceStubs(),
@@ -49,7 +51,9 @@ t.test('drive: no-op while a prior drive is in flight', async (t) => {
     nodeId: 'seed',
     ownerMembershipReconcileInFlight: true,
     systemTableCache: leaderCache('seed'),
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     logger: {},
     ...traceStubs(),
   };
@@ -62,7 +66,9 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
   const ctx = {
     nodeId: 'seed',
     systemTableCache: leaderCache('seed'),
-    readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1; return null;
+    },
     reconcileActiveGateMembershipPublication: async () => {},
     assertSingleMembershipPartition: () => {},
     logger: {},
@@ -87,7 +93,9 @@ function ackCompletionCtx({recoveryEligible, dimensions}) {
     systemTableCache: leaderCache('seed'),
     assertSingleMembershipPartition: () => {},
     now: () => 1,
-    reconcileActiveGateMembershipPublication: async () => {reconcileCalls += 1;},
+    reconcileActiveGateMembershipPublication: async () => {
+      reconcileCalls += 1;
+    },
     readPublicationPlanningSnapshot: async () => ({
       // empty nodeRows -> expectedNodeIds empty -> missingPublishedCount === 0,
       // isolating the ack-completion path.
@@ -165,7 +173,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   let errors = 0;
   const single = {
     nodeId: 'seed',
-    logger: {error: () => {errors += 1;}},
+    logger: {error: () => {
+      errors += 1;
+    }},
     systemTableCache: {getAll: () => [{table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'}]},
   };
   assertFn.call(single);
@@ -175,7 +185,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   let multiErrors = 0;
   const multi = {
     nodeId: 'seed',
-    logger: {error: () => {multiErrors += 1;}},
+    logger: {error: () => {
+      multiErrors += 1;
+    }},
     systemTableCache: {getAll: () => [
       {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'},
       {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p2'},
@@ -189,7 +201,9 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
 t.test('start: no-op when leader-driven mode is disabled', async (t) => {
   let intervals = 0;
   const ctx = {};
-  start.call(ctx, {enabled: false, setIntervalFn: () => {intervals += 1;}});
+  start.call(ctx, {enabled: false, setIntervalFn: () => {
+    intervals += 1;
+  }});
   t.equal(intervals, 0);
   t.equal(ctx.ownerMembershipDriverTimer, undefined);
 });
@@ -198,11 +212,15 @@ t.test('start/stop: enabled starts an interval; stop clears it', async (t) => {
   let intervals = 0;
   const fakeTimer = {unref() {}};
   const ctx = {};
-  start.call(ctx, {enabled: true, setIntervalFn: () => {intervals += 1; return fakeTimer;}});
+  start.call(ctx, {enabled: true, setIntervalFn: () => {
+    intervals += 1; return fakeTimer;
+  }});
   t.equal(intervals, 1, 'interval started');
   t.equal(ctx.ownerMembershipDriverTimer, fakeTimer);
   // second start is idempotent
-  start.call(ctx, {enabled: true, setIntervalFn: () => {intervals += 1;}});
+  start.call(ctx, {enabled: true, setIntervalFn: () => {
+    intervals += 1;
+  }});
   t.equal(intervals, 1, 'start is idempotent');
   stop.call(ctx);
   t.equal(ctx.ownerMembershipDriverTimer, null, 'stopped');
