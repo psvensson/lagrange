@@ -24,6 +24,7 @@ import {
 } from './system-cache-key-descriptor.js';
 import {
   applyStaleRowBackfill,
+  getRecordHlc,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordTimestamp,
@@ -38,6 +39,21 @@ import {
  * System table names that are cached.
  */
 const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
+
+/**
+ * How long a DELETE tombstone is retained before it is GC'd. The bound must
+ * outlast any in-flight reorder/catch-up window so a late causally-older write is
+ * still fenced, while keeping tombstone memory bounded. The anti-entropy sweep is
+ * the durable backstop once a tombstone expires.
+ */
+const TOMBSTONE_TTL_MS = 30000;
+
+/**
+ * Hard cap on retained tombstones per table. Bounds memory for tables whose keys
+ * are deleted and never re-written (so the TTL, which is only enforced on access,
+ * cannot leak unboundedly): when exceeded, the oldest tombstones are evicted.
+ */
+const TOMBSTONE_MAX_PER_TABLE = 1024;
 
 /**
  * Primary key field names for each system table.
@@ -60,6 +76,10 @@ class SystemTableCache {
    */
   constructor() {
     this.tables = new Map();
+    // DELETE tombstones: tableName -> Map(key -> {hlc, updatedAt, deletedAtMs}).
+    // A tombstone fences a later-delivered, causally-older write from resurrecting
+    // a deleted row (the reorder case), and is GC'd after a durable-aware bound.
+    this.tombstones = new Map();
     this.appliedSchemaVersions = new Map();
     this.lastAppliedAtMsByTableName = new Map();
     this.lastAppliedCauseIdByTableName = new Map();
@@ -74,6 +94,7 @@ class SystemTableCache {
     // Initialize empty maps for each system table
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
+      this.tombstones.set(tableName, new Map());
     }
   }
 
@@ -407,6 +428,179 @@ class SystemTableCache {
   }
 
   /**
+   * Read the version stamps used for tombstone fencing from a record/tombstone.
+   * @param {Object} source - Record or tombstone carrying version stamps.
+   * @return {{hlc: Object|null, updatedAt: number}}
+   */
+  versionStampsOf(source) {
+    return {
+      hlc: getRecordHlc(source),
+      updatedAt: getRecordTimestamp(source),
+    };
+  }
+
+  /**
+   * Whether an incoming write is causally NEWER than a tombstone (a genuine
+   * re-create after delete) rather than a late, causally-older resurrecting write.
+   * Prefers the origin HLC; falls back to wall-clock `updated_at`; when neither is
+   * comparable it does NOT fence (avoids blocking writes that carry no version).
+   * @param {Object} data - Incoming write record.
+   * @param {Object} tombstone - Stored tombstone.
+   * @return {boolean} True when the write supersedes the tombstone.
+   */
+  writeSupersedesTombstone(data, tombstone) {
+    const incoming = this.versionStampsOf(data);
+    if (incoming.hlc && tombstone.hlc) {
+      return incoming.hlc.compare(tombstone.hlc) > NUM.ZERO;
+    }
+    if (Number.isFinite(incoming.updatedAt) &&
+        Number.isFinite(tombstone.updatedAt)) {
+      // Without an HLC, wall-clock cannot distinguish an equal-millisecond
+      // re-create from the deleted state, so fence ONLY a strictly-older write.
+      // Equal-or-newer supersedes — avoids wrongly fencing a legitimate recreate.
+      return incoming.updatedAt >= tombstone.updatedAt;
+    }
+    return true;
+  }
+
+  /**
+   * Drop a tombstone once it has outlived the retention bound.
+   * @param {Map} tombstoneTable - Per-table tombstone map.
+   * @param {string} key - Row key.
+   * @param {Object} tombstone - Stored tombstone.
+   * @param {number} nowMs - Current epoch ms.
+   * @return {boolean} True when the tombstone was expired and removed.
+   */
+  evictExpiredTombstone(tombstoneTable, key, tombstone, nowMs) {
+    if (nowMs - tombstone.deletedAtMs > TOMBSTONE_TTL_MS) {
+      tombstoneTable.delete(key);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Record a DELETE tombstone for a key, keeping the causally-latest delete.
+   * @param {string} tableName - System table name.
+   * @param {string} key - Row key.
+   * @param {Object} data - DELETE record carrying the delete's version stamps.
+   */
+  recordTombstone(tableName, key, data) {
+    const tombstoneTable = this.tombstones.get(tableName);
+    if (!tombstoneTable) {
+      return;
+    }
+    const incoming = this.versionStampsOf(data);
+    const existing = tombstoneTable.get(key);
+    if (existing && !this.writeSupersedesTombstone(data, existing)) {
+      return;
+    }
+    tombstoneTable.set(key, {
+      hlc: incoming.hlc,
+      updatedAt: incoming.updatedAt,
+      deletedAtMs: Date.now(),
+    });
+    this.pruneTombstones(tombstoneTable);
+  }
+
+  /**
+   * Bound a per-table tombstone map: drop expired entries, then evict the oldest
+   * (by delete time) until the map is within the hard cap. Insertion order in a
+   * Map is chronological, so the first keys are the oldest.
+   * @param {Map} tombstoneTable - Per-table tombstone map.
+   */
+  pruneTombstones(tombstoneTable) {
+    const nowMs = Date.now();
+    for (const [key, tombstone] of tombstoneTable) {
+      this.evictExpiredTombstone(tombstoneTable, key, tombstone, nowMs);
+    }
+    while (tombstoneTable.size > TOMBSTONE_MAX_PER_TABLE) {
+      const oldestKey = tombstoneTable.keys().next().value;
+      tombstoneTable.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Decide whether a write to `key` is fenced by an active DELETE tombstone. A
+   * superseding (causally-newer) write clears the tombstone and proceeds; an
+   * older/concurrent write is rejected so a reordered DELETE cannot be undone.
+   * @param {string} tableName - System table name.
+   * @param {string} key - Row key.
+   * @param {Object} data - Incoming write record.
+   * @return {boolean} True when the write must be rejected.
+   */
+  writeIsFencedByTombstone(tableName, key, data) {
+    const tombstoneTable = this.tombstones.get(tableName);
+    const tombstone = tombstoneTable?.get(key);
+    if (!tombstone) {
+      return false;
+    }
+    if (this.evictExpiredTombstone(tombstoneTable, key, tombstone, Date.now())) {
+      return false;
+    }
+    if (this.writeSupersedesTombstone(data, tombstone)) {
+      tombstoneTable.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Anti-entropy backstop: delete cache-only rows that are absent from
+   * authoritative truth. This is the durable healer for a genuinely-lost DELETE
+   * (no tombstone could be formed because the DELETE never arrived).
+   *
+   * SAFETY: the caller MUST pass a COMPLETE authoritative row set for every table
+   * it lists — a row absent from `truthSnapshot[tableName]` is treated as deleted
+   * and evicted. Omit a table entirely to leave its cache untouched. Passing a
+   * partial/stale snapshot will evict live rows.
+   *
+   * @param {Object<string, Array<Object>>} truthSnapshot - tableName -> complete
+   *   authoritative rows.
+   * @return {{removed: Array<{tableName: string, key: string}>}}
+   */
+  reconcileAgainstAuthoritativeTruth(truthSnapshot = {}) {
+    const removed = [];
+    for (const [tableName, authoritativeRows] of Object.entries(truthSnapshot)) {
+      if (!this.tables.has(tableName)) {
+        continue;
+      }
+      // A non-array value is NOT a valid "complete authoritative set" — treating it
+      // as empty would wipe the whole table. Skip it (leave the cache untouched).
+      if (!Array.isArray(authoritativeRows)) {
+        continue;
+      }
+      const table = this.tables.get(tableName);
+      const pkField = getSystemCachePrimaryKeyField(tableName);
+      const authoritativeKeys = new Set(
+        authoritativeRows
+          .map((row) => row?.[pkField] ?? row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
+          .filter((key) => typeof key !== TYPEOF.UNDEFINED),
+      );
+      for (const key of [...table.keys()]) {
+        if (authoritativeKeys.has(key)) {
+          continue;
+        }
+        const evicted = table.get(key);
+        table.delete(key);
+        removed.push({tableName, key});
+        this.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {
+          tableName,
+          key,
+        });
+        this.lastAppliedAtMsByTableName.set(tableName, Date.now());
+        this.notifyListeners(
+          tableName,
+          CDC_OPERATIONS.DELETE,
+          this.deepClone(evicted),
+          {causeId: normalizeCauseId(null)},
+        );
+      }
+    }
+    return {removed};
+  }
+
+  /**
    * Apply a CDC change to the cache.
    * This method should ONLY be called by CDC event handlers or bootstrap hydration.
    * @param {string} tableName - Name of the system table.
@@ -430,6 +624,19 @@ class SystemTableCache {
 
     const table = this.tables.get(tableName);
     let recordForNotification = null;
+
+    // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
+    // a reordered, causally-older resurrection — reject it. A causally-newer write
+    // clears the tombstone inside the check and proceeds (legitimate re-create).
+    if (operation !== CDC_OPERATIONS.DELETE &&
+        this.writeIsFencedByTombstone(tableName, key, data)) {
+      this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {
+        tableName,
+        key,
+        operation,
+      });
+      return;
+    }
 
     switch (operation) {
     case CDC_OPERATIONS.INSERT:
@@ -530,6 +737,9 @@ class SystemTableCache {
 
     case CDC_OPERATIONS.DELETE:
       if (!table.has(key)) {
+        // Reorder case: the DELETE arrived before its INSERT. Leave a tombstone so
+        // the late INSERT cannot resurrect the row.
+        this.recordTombstone(tableName, key, data);
         this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
           tableName,
           key,
@@ -537,6 +747,8 @@ class SystemTableCache {
       } else {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(tableName, existing, data)) {
+          // The row is causally newer than this DELETE: the delete is superseded,
+          // so it must NOT leave a tombstone that would fence the live row.
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
             tableName,
             key,
@@ -548,6 +760,7 @@ class SystemTableCache {
         }
         recordForNotification = existing;
         table.delete(key);
+        this.recordTombstone(tableName, key, data);
       }
       break;
     }
@@ -579,6 +792,7 @@ class SystemTableCache {
   clear() {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.get(tableName).clear();
+      this.tombstones.get(tableName).clear();
     }
     this.appliedSchemaVersions.clear();
     this.lastAppliedAtMsByTableName.clear();

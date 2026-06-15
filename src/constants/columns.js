@@ -29,6 +29,7 @@ const COLUMN = Object.freeze({
   DEFAULT_VALUE: 'default_value',
   UPDATED_BY: 'updated_by',
   UPDATED_AT: 'updated_at',
+  UPDATED_AT_HLC: 'updated_at_hlc',
   CREATED_AT: 'created_at',
   QUERY_ID: 'query_id',
   CONTEXT_ID: 'context_id',

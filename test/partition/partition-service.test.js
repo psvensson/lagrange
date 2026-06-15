@@ -1164,11 +1164,15 @@ test('PartitionService - raw SQL nested parenthesized DELETE preserves composite
 
     t.equal(cdcEvents.length, 1);
     t.equal(cdcEvents[0].operation, CDCOperation.DELETE);
-    t.same(cdcEvents[0].data, {
+    t.match(cdcEvents[0].data, {
       service_id: 'svc-1',
       service_type: 'partition',
       node_id: 'node-1',
     });
+    // The DELETE CDC data also carries the origin write HLC so the downstream
+    // tombstone fence is keyed on a globally-comparable, origin-stable version.
+    t.type(cdcEvents[0].data.updated_at_hlc, 'string');
+    t.ok(cdcEvents[0].data.updated_at_hlc.length > 0);
 
     await partition.shutdown();
   });

@@ -511,6 +511,9 @@ describe('PartitionCDCGenerator', () => {
           service_id: 'svc-1',
           service_type: 'partition',
           node_id: 'node-1',
+          // The origin write HLC is stamped onto CDC data so it reaches every
+          // replica's cache identically (carried unchanged through propagation).
+          updated_at_hlc: String(entry.timestamp),
         });
       });
   });

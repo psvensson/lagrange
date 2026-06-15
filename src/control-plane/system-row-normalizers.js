@@ -252,7 +252,12 @@ function normalizeControlPlanePublicationRow(row) {
 
 function serializeControlPlanePublicationRow(row) {
   const normalizedRow = normalizeControlPlanePublicationRow(row);
+  // Preserve the origin write HLC through canonicalization so the cache LWW
+  // compare and DELETE-tombstone fence reach publications too — but ONLY when one
+  // is present, so rows without an HLC keep their existing shape (wall-clock).
+  const originHlc = readText(row?.updated_at_hlc, row?.updatedAtHlc);
   return {
+    ...(originHlc ? {updated_at_hlc: originHlc} : {}),
     publication_id: readText(
       normalizedRow.publicationId,
       row?.publication_id,

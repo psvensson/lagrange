@@ -22,7 +22,31 @@ function getRecordTimestamp(record) {
   return null;
 }
 
+// Parse the per-row origin HLC stamp (`updated_at_hlc`) when present. The HLC is a
+// globally comparable causal version (physical, logical, nodeId tie-break); when both
+// records carry one it is the authoritative ordering, immune to equal-millisecond
+// `updated_at` ties and to cross-leader wall-clock skew.
+function getRecordHlc(record) {
+  return tryParseHLCTimestamp(record?.[COLUMN.UPDATED_AT_HLC]);
+}
+
 function isStaleForExistingRecord(tableName, existing, incoming) {
+  // Prefer the origin HLC when both rows carry one: it is a total causal order, so
+  // equal-`updated_at` ties resolve deterministically and identically on every replica.
+  const existingHlc = getRecordHlc(existing);
+  const incomingHlc = getRecordHlc(incoming);
+  if (existingHlc && incomingHlc) {
+    const order = incomingHlc.compare(existingHlc);
+    if (order < NUM.ZERO) {
+      return true;
+    }
+    if (order > NUM.ZERO) {
+      return false;
+    }
+    return tableName === TABLES.NODES &&
+      isNodeHeartbeatWatermarkRegression(existing, incoming);
+  }
+
   const existingTimestamp = getRecordTimestamp(existing);
   const incomingTimestamp = getRecordTimestamp(incoming);
 
@@ -150,6 +174,7 @@ export {
   applyStaleRowBackfill,
   cloneFieldValue,
   compareSchemaVersions,
+  getRecordHlc,
   getRecordTimestamp,
   isStaleForExistingRecord,
   mergeRecords,

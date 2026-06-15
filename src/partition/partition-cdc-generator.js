@@ -4,7 +4,7 @@
  * Requirements: 6.2, 6.4, 6.6
  */
 
-import {CDC_OPERATION, NUM, SQL, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION, COLUMN, NUM, SQL, TYPEOF} from '../constants/index.js';
 import {
   extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
   extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
@@ -215,16 +215,44 @@ class PartitionCDCGenerator {
   hydrateEventEnvelope(entry, envelopeResult, options = {}) {
     const cdcEvent = {
       ...envelopeResult.cdcEventEnvelope,
-      data: this.extractCDCData(
-        entry,
-        envelopeResult.entryType,
-        envelopeResult.cdcEventEnvelope.tableName,
+      data: this.stampOriginHlc(
+        this.extractCDCData(
+          entry,
+          envelopeResult.entryType,
+          envelopeResult.cdcEventEnvelope.tableName,
+        ),
+        envelopeResult.cdcEventEnvelope.timestamp,
       ),
     };
     if (Number.isFinite(options.sequenceNumber)) {
       cdcEvent.sequenceNumber = options.sequenceNumber;
     }
     return cdcEvent;
+  }
+
+  /**
+   * Stamp the origin write HLC onto the CDC row data as `updated_at_hlc`.
+   *
+   * The envelope-level `timestamp` is re-minted from each receiver's local clock
+   * during delivery, so it is NOT origin-stable across replicas. `data`, by
+   * contrast, is carried unchanged through every propagation hop, so the origin
+   * HLC stamped here reaches every replica's cache identically — making the cache
+   * LWW compare and DELETE-tombstone fence order-insensitive and skew-immune.
+   *
+   * Cache-only: the durable-write path filters unknown columns
+   * (`filterDataForTable`), so this stamp is never persisted to storage.
+   *
+   * @param {Object} data - Extracted CDC row data.
+   * @param {string} originHlc - Origin write HLC (the entry's timestamp).
+   * @return {Object} Data carrying the origin HLC stamp.
+   * @private
+   */
+  stampOriginHlc(data, originHlc) {
+    if (!data || typeof data !== TYPEOF.OBJECT ||
+        originHlc === null || typeof originHlc === TYPEOF.UNDEFINED) {
+      return data;
+    }
+    return {...data, [COLUMN.UPDATED_AT_HLC]: String(originHlc)};
   }
 
   /**

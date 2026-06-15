@@ -17,6 +17,8 @@ const CACHE_LOG_MSG = Object.freeze({
   UPDATE_ON_MISSING_KEY_TREAT_INSERT: 'UPDATE on non-existing key, treating as INSERT',
   DELETE_ON_MISSING_KEY_IGNORED: 'DELETE on non-existing key, ignoring',
   STALE_EVENT_IGNORED: 'Ignoring stale CDC event for existing key',
+  WRITE_FENCED_BY_TOMBSTONE: 'Rejecting write fenced by DELETE tombstone',
+  ANTI_ENTROPY_SWEEP_DELETE: 'Anti-entropy sweep deleted cache-only row',
   REJECTED_STALE_EPOCH: 'Rejected stale epoch update',
   UPDATED_EPOCH: 'Updated cache epoch',
   CACHE_LISTENER_ERROR: 'Cache listener error',

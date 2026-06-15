@@ -1,10 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  canonicalizeSystemTableRow,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   normalizeServiceEndpointRow,
   normalizeServiceRow,
 } from '../../src/control-plane/system-row-normalizers.js';
+import {TABLES} from '../../src/constants/index.js';
 
 test('normalizeNodeRow canonicalizes snake_case and camelCase node metadata',
   (t) => {
@@ -76,3 +78,28 @@ test('normalizeServiceEndpointRow canonicalizes endpoint health fields', (t) => 
   });
   t.end();
 });
+
+// Regression: canonicalization must preserve the origin write HLC so the cache
+// LWW compare and DELETE-tombstone fence reach control_plane_publications — the
+// publication serializer's field whitelist previously dropped it silently,
+// degrading the most convergence-critical table to wall-clock ordering.
+test('canonicalizeSystemTableRow preserves updated_at_hlc for publications', (t) => {
+  const canonical = canonicalizeSystemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
+    publication_id: 'pub-1',
+    publication_epoch: 1,
+    status: 'published',
+    updated_at: 1000,
+    updated_at_hlc: '1000.0.node-a',
+  });
+  t.equal(canonical.updated_at_hlc, '1000.0.node-a',
+    'origin HLC survives the publication serializer whitelist');
+  t.end();
+});
+
+test('canonicalizeSystemTableRow leaves non-publication rows (and their HLC) intact',
+  (t) => {
+    const row = {service_id: 'svc-1', updated_at_hlc: '2000.1.node-b'};
+    t.same(canonicalizeSystemTableRow(TABLES.SERVICES, row), row,
+      'non-publication rows pass through unchanged, carrying their HLC');
+    t.end();
+  });
