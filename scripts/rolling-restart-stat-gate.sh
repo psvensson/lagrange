@@ -26,6 +26,15 @@
 set -uo pipefail
 
 N="${1:-${N:-10}}"
+# N is the FIRST positional arg; a non-numeric value (e.g. someone passing only
+# --allow-perturbing-logs) would make `seq 1 $N` error and — with set -e off —
+# silently aggregate an empty distribution. Fail loud instead.
+case "${N}" in
+  ''|*[!0-9]*)
+    echo "GATE ABORTED: N must be a positive integer (got '${N}'). Pass run count as the FIRST arg, e.g. 'bash $0 4 --allow-perturbing-logs'." >&2
+    exit 2
+    ;;
+esac
 CONFIG="${CONFIG:-test/distributed/config/local.json}"
 SCENARIO="${SCENARIO:-rolling-restart}"
 DEBUG_LOGS="${DEBUG_LOGS:-}"
@@ -42,6 +51,14 @@ clean_containers() {
   docker network ls --format '{{.Name}}' 2>/dev/null | grep '^ddb-test-net-reuse-local-' | xargs -r docker network rm >/dev/null 2>&1 || true
 }
 
+# WS10: abort the gate fail-closed, but never leave docker resources stranded —
+# the next run's leftover-container preflight would otherwise trip on our mess.
+abort_gate() {
+  echo "GATE ABORTED: $1" >&2
+  clean_containers
+  exit 1
+}
+
 # Working-tree source fingerprint — the exact code these N runs measure.
 SRC_FP="$(node --input-type=module -e \
   'import {computeSourceFingerprint} from "./src/diagnostics/source-fingerprint.js"; process.stdout.write(await computeSourceFingerprint("src"));' \
@@ -52,6 +69,27 @@ DEBUG_LOGS_JSON="false"
 if [ -n "${DEBUG_LOGS}" ]; then
   DEBUG_LOGS_ARGS=(--debug-logs)
   DEBUG_LOGS_JSON="true"
+fi
+
+# WS10 debug-logs guard: --debug-logs floods the busy seed's stdout (~10k lines/s)
+# and perturbs the very convergence this gate measures (observer effect on the
+# seed). Refuse to fold a perturbed run into a measurement distribution unless the
+# operator explicitly opts in (e.g. when they WANT the decision trace, not a verdict).
+ALLOW_PERTURBING_LOGS=""
+for arg in "$@"; do
+  [ "${arg}" = "--allow-perturbing-logs" ] && ALLOW_PERTURBING_LOGS="1"
+done
+if [ -n "${DEBUG_LOGS}" ] && [ -z "${ALLOW_PERTURBING_LOGS}" ]; then
+  abort_gate "DEBUG_LOGS is set — debug logging perturbs seed convergence and invalidates the measurement. Re-run without DEBUG_LOGS, or pass --allow-perturbing-logs to capture a decision trace knowingly (not a verdict)."
+fi
+
+# WS10 leftover-container preflight: a measurement on top of a previous run's
+# warm containers is a stale-state confound. clean_containers ran above; assert it
+# actually cleared, fail-closed if docker left anything behind.
+clean_containers
+LEFTOVER="$(docker ps -aq --filter "name=ddb-test-reuse-" 2>/dev/null | wc -l | tr -d ' ')"
+if [ "${LEFTOVER}" != "0" ]; then
+  abort_gate "container cleanup failed — ${LEFTOVER} ddb-test-reuse-* container(s) still present; refusing to measure on warm state."
 fi
 
 # TIME-based no-progress early exit for the active waits (frozen-run cut).
@@ -91,11 +129,18 @@ for i in $(seq 1 "${N}"); do
   end_s=$(date +%s)
   wall_s=$(( end_s - start_s ))
 
-  # Surface the harness stale-code warning loudly — a measurement against stale
-  # code is worthless and must never be silently folded into the distribution.
+  # WS10 stale-source HARD FAIL: a measurement against stale code is worthless.
+  # The harness emits "Stale source detected" (from the per-node boot
+  # srcFingerprintMatches===false check) into the run log; previously this gate
+  # merely counted staleSourceRuns and folded the run into the distribution.
+  # Now it aborts fail-closed (with docker cleanup) so a stale verdict can never
+  # be reported. Set ALLOW_STALE_SOURCE=1 only to deliberately study stale behavior.
   if grep -q "Stale source detected" "${RUN_LOG}" 2>/dev/null; then
     stale_runs=$(( stale_runs + 1 ))
-    echo "run ${i}: !!! STALE SOURCE DETECTED — this run executed old code, result is untrustworthy (see ${RUN_LOG})"
+    if [ -z "${ALLOW_STALE_SOURCE:-}" ]; then
+      abort_gate "run ${i} executed STALE code (src fingerprint mismatch — see ${RUN_LOG}). Force-fresh containers and confirm SRC_FINGERPRINT before measuring."
+    fi
+    echo "run ${i}: !!! STALE SOURCE DETECTED — untrustworthy, but ALLOW_STALE_SOURCE set (see ${RUN_LOG})"
   fi
 
   if [ -f "${RUN_REPORT}" ]; then
@@ -197,3 +242,10 @@ jq -s '
 rm -f "${TMP_NDJSON}"
 echo "=== summary -> ${OUT_MD} ==="
 cat "${OUT_MD}"
+
+# WS10 read recipe: per-node full logs are GZIPPED under the default (non-debug)
+# path. Plain grep finds nothing and looks "missing" — use zcat/zgrep.
+echo
+echo "=== full per-node logs (gzipped — use zcat/zgrep) ==="
+echo "  ls ${REPORT_DIR}/.playback/*/.full-logs/${SCENARIO}/ 2>/dev/null || ls test-output/reports/.playback"
+echo "  zcat ${REPORT_DIR}/.playback/<run>/.full-logs/${SCENARIO}/<nodeId>.log.gz | less"

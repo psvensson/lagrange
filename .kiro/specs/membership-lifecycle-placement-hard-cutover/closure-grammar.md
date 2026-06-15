@@ -135,6 +135,14 @@ across a gate's runs; `npm run analyze:fix-engagement -- <capture-logs-run>`
 confirms a landed fix actually fired (drive trace with the fix's signal field
 non-zero) rather than re-mining it by hand each round.
 
+For branch (a), build the deterministic repro on the EXISTING in-process
+harnesses — do not write a new simulator. See
+[`docs/deterministic-repro-tier.md`](../../../docs/deterministic-repro-tier.md):
+land it at `test/closure/CL-###.repro.test.js` (or map an existing test in
+`test/closure/registry.json`) and run it sub-second with `npm run repro -- CL-###`
+before paying for the docker gate. `npm run repro -- --check` lists records that
+should have a repro but do not.
+
 Record the satisfied branch in the `reproducedBy` field (see Record Fields).
 
 ## Concern Taxonomy

@@ -7,6 +7,7 @@
 //   status  print the projected state (frontiers, rungs, metrics)
 //   report  (re)generate and print the markdown result projection
 //   portfolio cross-quest governance view (class/closure/outcome + meta ratio)
+//   frontier one-screen board: active closure-ledger records + open quests
 //   probe   ad-hoc: ask a probe for {metric, done, evidence} without recording
 //   theory  record two-layer Quest theories and their outcomes
 //   health  print Quest loop-health and next-action signals
@@ -44,6 +45,7 @@ import {runAuditCommand} from './solve/audit.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runPortfolioCommand} from './solve/portfolio.js';
+import {runFrontierCommand} from './solve/frontier.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {
@@ -509,6 +511,12 @@ function cmdPortfolio(root) {
   process.stdout.write(runPortfolioCommand(root));
 }
 
+// Frontier fuses the closure-ledger active records with the open quests into one
+// boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
+function cmdFrontier(root) {
+  process.stdout.write(runFrontierCommand(root));
+}
+
 function cmdHandoff(root, args) {
   process.stdout.write(runHandoffCommand(root, args));
 }
@@ -519,6 +527,7 @@ const COMMANDS = {
   'status': cmdStatus,
   'report': cmdReport,
   'portfolio': cmdPortfolio,
+  'frontier': cmdFrontier,
   'handoff': cmdHandoff,
   'probe': cmdProbe,
   'finding': cmdFinding,

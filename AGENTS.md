@@ -39,7 +39,7 @@ active steering path for new work.
 | Test policy / regression / harness rules | [`.kiro/steering/llm/testing.md`](.kiro/steering/llm/testing.md) |
 | Lint, style, naming policy | [`.kiro/steering/llm/style.md`](.kiro/steering/llm/style.md) |
 | Roadmap, scope, governance | [`.kiro/steering/llm/governance.md`](.kiro/steering/llm/governance.md) |
-| Rule IDs and source citations | [`.kiro/steering/llm/rules.json`](.kiro/steering/llm/rules.json) |
+| Rule IDs and source citations | `npm run rule -- --id <ID>` (also `--tag`/`--domain`/free-text); browse [`.kiro/steering/llm/rules-index.md`](.kiro/steering/llm/rules-index.md). `rules.json` is generator output, too large to Read whole. |
 | Architecture document tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
 
 ## Operational Ground Truth (distributed work — don't get fooled)
