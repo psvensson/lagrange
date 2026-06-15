@@ -33,6 +33,23 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       this.getReplicaRowIdentity(sourceReplicaRow) ||
       this.repository.getReplaceSourceReplicaId(operation) ||
       null;
+    // CL-038: sourceReplicaRow comes from the authoritative-merged critical replica
+    // rows (getCriticalReplicaRowsForSafety: authoritative gateway read merged with
+    // cache, fail-closed on an empty partition upstream). When a REPLACE declares a
+    // source replica to remove but that source row is ABSENT from this authoritative
+    // view, the source has already been removed. A removed replica cannot be a raft
+    // leader, so its leadership is necessarily released and there is no live source
+    // leader left to hand off from. Without this, resolvePriorityPublicationSourceRoleState
+    // infers LEADER from the now-stale partitionRow.leader_node_id (which still names
+    // the removed source's node until a successor is elected/published), poisoning every
+    // sourceRemovalLeadershipSafe disjunct, so the gate never reaches SAFE and the
+    // workflow re-dispatches a STEP_DOWN handoff to a replica that no longer exists —
+    // wedging the surplus-drain REPLACE indefinitely (topology never quiesces though
+    // publication has converged). This is scoped strictly to source-row absence; a
+    // source that is still present and leader is never released without a real handoff.
+    const sourceReplicaRemoved =
+      Boolean(this.repository.getReplaceSourceReplicaId(operation)) &&
+      !this.getReplicaRowIdentity(sourceReplicaRow);
     const observedSourceRoleState =
       this.getPriorityPublicationSourceRoleState(sourceReplicaRow);
     const sourceRoleState = this.resolvePriorityPublicationSourceRoleState(
@@ -142,6 +159,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       followerSourceRemovalSafety.state ===
       PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE.SAFE;
     const sourceRemovalLeadershipSafe =
+      sourceReplicaRemoved ||
       sourceLeadershipReleaseHasCanonicalSuccessor ||
       replacementLeaderOwnershipObserved ||
       priorityRecoveryFollowerElectionSafe ||
@@ -235,6 +253,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         sourceRoleState,
         observedSourceRoleState,
         sourceReplicaId,
+        sourceReplicaRemoved,
         sourceNodeId,
         partitionLeaderNodeId,
         replacementReplicaId,
