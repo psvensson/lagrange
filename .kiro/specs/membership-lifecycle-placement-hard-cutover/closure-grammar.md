@@ -65,6 +65,31 @@ Every closure record in the ledger SHALL contain the fields below.
 | `exitCriteria` | What must be true to close the record | flat list of conditions |
 | `notes` | Temporary analysis notes | short factual notes only |
 
+## Record Layout — STATE header + append-only LOG (MANDATORY)
+
+A record accretes hypothesis history over its life. To act on it you only need
+its CURRENT truth, but that gets buried under refuted theories and old gate
+verdicts. Two records have grown past the point where the current state can be
+read in one pass (CL-001 was 889 lines / ~27k tokens — it truncated on a single
+read), which is a direct cost to any agent picking up the work.
+
+Therefore every record SHALL be laid out as:
+
+1. A `### STATE` block at the very top, kept to roughly one screen, containing
+   ONLY the current truth: `status`, the current `firstViolatedInvariant`,
+   `authoritativeOwner`, the current `stableWitness`, `reproducedBy`,
+   `nextFalsificationStep`, and `lastGate` (gate id + verdict). If the record
+   tracks more than one live variant/face, the STATE block lists each with its
+   own one-line current status and a pointer to the live head.
+2. A `## LOG (append-only)` header below it. Everything beneath is history:
+   evidence, refuted theories, fix-landed notes, gate verdicts. Append only;
+   do not rewrite or delete prior entries (correct them with a new dated entry).
+
+Acting on a record must require reading only its STATE block. When a genuinely
+distinct first-violated-invariant emerges, open a NEW `CL-###` record (as the
+ledger already does — e.g. CL-039) rather than growing a record past one concern;
+do not retroactively renumber a record with many inbound references.
+
 ## Status Taxonomy
 
 Every record SHALL use exactly one status:
