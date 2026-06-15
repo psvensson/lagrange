@@ -372,6 +372,38 @@ const controlPlaneReadinessNodeMethods = {
       return fresherStoredSnapshot;
     }
 
+    // WS4 (bound the readiness build): the strict reuse above missed, so a fresh
+    // build is due. Under recovery churn that miss recurs every routing call and the
+    // heavy build below can monopolize the event loop long enough to lose raft
+    // leadership. When this node's last full build was expensive and a stored
+    // snapshot is still within the bounded-stale window, serve it synchronously and
+    // refresh in the background instead of rebuilding now. Default-off kill switch.
+    if (this.readinessBuildBoundEnabled === true) {
+      const boundedStaleSnapshot = this.getBoundedStaleReadinessSnapshot(
+        nodeId,
+        buildStartedAtMs,
+        {
+          sliceMs: this.readinessBuildSliceMs,
+          maxStaleMs: this.readinessBuildMaxStaleMs,
+        },
+      );
+      if (boundedStaleSnapshot) {
+        const readinessService = this;
+        this.maybeStartBackgroundSyncReadinessRefresh(
+          {
+            nodeId,
+            nodeRow,
+            get serviceRows() {
+              return readinessService.getNodeServiceRows(nodeId);
+            },
+            snapshot: boundedStaleSnapshot,
+          },
+          options,
+        );
+        return boundedStaleSnapshot;
+      }
+    }
+
     const membershipPublicationPlanningSnapshot =
       this.resolveNodeMembershipPublicationPlanningAnswerSync(
         nodeId,
@@ -470,6 +502,10 @@ const controlPlaneReadinessNodeMethods = {
       observedAt,
       buildStartedAtMs,
     });
+    // WS4: record how long this full synchronous build took so a subsequent
+    // hot-path call can serve bounded-stale instead of rebuilding (see
+    // getBoundedStaleReadinessSnapshot). Always recorded (cheap, flag-independent).
+    this.recordReadinessBuildDurationMs(nodeId, this.now() - buildStartedAtMs);
     this.maybeStartBackgroundSyncReadinessRefresh(
       {
         nodeId,
