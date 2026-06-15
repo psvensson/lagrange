@@ -61,6 +61,24 @@ class HLCTimestamp {
   }
 
   /**
+   * Parse a timestamp from string, returning null instead of throwing on any
+   * malformed/absent input. Used on hot paths (e.g. witnessing committed-entry
+   * HLCs) where an unparseable timestamp must be skipped, not fatal.
+   * @param {*} str - Candidate string representation of a timestamp.
+   * @return {HLCTimestamp|null} Parsed timestamp, or null if not parseable.
+   */
+  static tryFromString(str) {
+    if (typeof str !== TYPEOF.STRING || str.length === LOCAL_NUM_ZERO) {
+      return null;
+    }
+    try {
+      return HLCTimestamp.fromString(str);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  /**
    * Compare this timestamp with another.
    * @param {HLCTimestamp} other - The other timestamp.
    * @return {number} Negative if this < other, positive if this > other, 0 if equal.

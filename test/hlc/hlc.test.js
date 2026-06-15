@@ -130,6 +130,24 @@ test('HLCClockService current() returns current state', async (t) => {
   t.ok(current.isBefore(next), 'current should be before next now()');
 });
 
+test('HLCTimestamp.tryFromString parses a valid timestamp', async (t) => {
+  const ts = HLCTimestamp.tryFromString('1000-5-node-1');
+  t.ok(ts, 'should return a timestamp for valid input');
+  t.equal(ts.physical, 1000, 'should parse physical time');
+  t.equal(ts.logical, 5, 'should parse logical counter');
+  t.equal(ts.nodeId, 'node-1', 'should parse node ID');
+});
+
+test('HLCTimestamp.tryFromString returns null for malformed/absent input',
+  async (t) => {
+    t.equal(HLCTimestamp.tryFromString(''), null, 'empty string -> null');
+    t.equal(HLCTimestamp.tryFromString('not-an-hlc'), null,
+      'unparseable -> null (NaN physical/logical)');
+    t.equal(HLCTimestamp.tryFromString(undefined), null, 'undefined -> null');
+    t.equal(HLCTimestamp.tryFromString(null), null, 'null -> null');
+    t.equal(HLCTimestamp.tryFromString(12345), null, 'non-string -> null');
+  });
+
 test('cleanup', async (t) => {
   ConfigurationManager.resetInstance();
   t.pass('cleanup complete');

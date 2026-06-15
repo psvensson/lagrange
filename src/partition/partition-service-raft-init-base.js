@@ -3,6 +3,7 @@ import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 const {
   AddressManager,
@@ -202,6 +203,45 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
   }
   /**
+   * Warm the partition HLC from the maximum HLC over the committed Raft log, so
+   * a restarted node never emits an HLC below one it previously committed.
+   * One-time full scan of the committed prefix at init. NOTE: `_raft_log` is not
+   * compacted, so this is O(committed-log-size); it is acceptable because init is
+   * not re-entered, but a future optimization could tail-bound the scan once HLCs
+   * are guaranteed monotonic along the log (they are, post merge-on-apply, for
+   * entries written after this fix ships). Best-effort and never fatal to init.
+   */
+  warmHlcFromCommittedLog() {
+    try {
+      if (!this.logAdapter ||
+        typeof this.logAdapter.getCommittedIndex !== TYPEOF.FUNCTION ||
+        typeof this.logAdapter.getRange !== TYPEOF.FUNCTION) {
+        return;
+      }
+      const committedIndex = this.logAdapter.getCommittedIndex();
+      if (!Number.isFinite(committedIndex) || committedIndex <= NUM.ZERO) {
+        return;
+      }
+      const entries = this.logAdapter.getRange(NUM.ONE, committedIndex);
+      let maxHlc = null;
+      for (const entry of entries) {
+        const witnessed = HLCTimestamp.tryFromString(entry?.command?.timestamp);
+        if (witnessed && (maxHlc === null || witnessed.compare(maxHlc) > NUM.ZERO)) {
+          maxHlc = witnessed;
+        }
+      }
+      if (maxHlc) {
+        this.hlcClock.update(maxHlc);
+      }
+    } catch (error) {
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
+        partitionId: this.partitionId,
+        hlcWarmFailed: true,
+        error: error.message,
+      });
+    }
+  }
+  /**
    * Initialize the partition service.
    * Uses liferaft library for Raft consensus with simplified transport.
    * Requirements: 8.1, 10.1, 10.2, 10.3, 10.4, 10.5
@@ -329,6 +369,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       }
     }
     this.logAdapter = new SQLiteLogAdapter(this.db);
+    // Restart recovery reloads committed state from the durable DB without
+    // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
+    // not witness already-committed HLCs and could regress below a value this node
+    // previously committed. Warm the clock from the max committed HLC on the log.
+    this.warmHlcFromCommittedLog();
     const logAdapter = this.logAdapter;
     this.raft = new RaftNode(this.unifiedAddress, {
       [PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,

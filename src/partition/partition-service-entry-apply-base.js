@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
 import {
   createPartitionServiceTransactionSessionMethods,
@@ -545,6 +546,24 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     );
   }
   /**
+   * Advance the partition HLC to witness a committed entry's timestamp.
+   * Idempotent (the clock takes the max), guarded against a missing/unparseable
+   * timestamp (some committed command types legitimately carry none), and never
+   * allowed to throw out of the apply path.
+   * @param {Object} command - The committed command (may carry a `timestamp` HLC).
+   */
+  witnessCommandHlc(command) {
+    try {
+      const witnessed = HLCTimestamp.tryFromString(command?.timestamp);
+      if (witnessed) {
+        this.hlcClock.update(witnessed);
+      }
+    } catch (_error) {
+      // Witnessing the clock must never break entry application.
+    }
+  }
+
+  /**
    * Apply a committed entry to the state machine.
    * This is called by liferaft when an entry is committed.
    * Requirements: 10.5
@@ -554,6 +573,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (!command) {
       return;
     }
+    // Witness the committed entry's HLC on EVERY replica (leader and follower),
+    // before any branch/early-return, so this clock advances past every entry it
+    // applies. Without this, a new leader whose wall clock lags the old leader
+    // could stamp a later write (e.g. a DELETE) with a LOWER HLC than an earlier
+    // committed write, breaking cross-leader monotonicity used as an LWW fence.
+    this.witnessCommandHlc(command);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
       partitionId: this.partitionId,
       commandType: command.type,
