@@ -60,6 +60,7 @@ Every closure record in the ledger SHALL contain the fields below.
 | `scope` | Smallest known repro scope | scenario or targeted test shape |
 | `nextFalsificationStep` | Next experiment that can disprove the leading theory | one concrete step |
 | `requiredGuard` | Test, assertion, or diagnostic needed before closure | specific artifact |
+| `reproducedBy` | How the record reached `reproduced` before any fix | a repro test path, OR a measured precondition-recurrence rate + gate id |
 | `evidence` | Current supporting facts | flat list of facts or file references |
 | `exitCriteria` | What must be true to close the record | flat list of conditions |
 | `notes` | Temporary analysis notes | short factual notes only |
@@ -86,6 +87,30 @@ Every record SHALL use exactly one status:
    evidence is green.
 7. `parked`
    The record is intentionally deferred with a written reason and boundary.
+
+### Status Transition Rule — reproduced-before-fix (MANDATORY)
+
+A record SHALL NOT enter `fix_in_progress` until it is at least `reproduced`,
+where `reproduced` means ONE of:
+
+- (a) a deterministic or semi-deterministic targeted repro exists (a test or a
+  fault-injected scenario that surfaces the first violated invariant on demand);
+  OR
+- (b) the precondition's recurrence rate has been MEASURED on a statistical gate
+  (so a fix gated on a rare precondition is known-rare BEFORE it is authored).
+
+Rationale: non-deterministic convergence fixes have repeatedly landed correct
+but INERT — the precondition did not recur for multiple gate rounds, costing
+hours of gate wall to discover the fix never engaged (see CL-001 variant A,
+gates 075853Z + 085729Z). Measuring recurrence first, or building a repro first,
+is cheaper than fix-then-discover-it's-rare.
+
+Tools: `npm run analyze:precondition-recurrence -- <gate-run-glob>` measures (b)
+across a gate's runs; `npm run analyze:fix-engagement -- <capture-logs-run>`
+confirms a landed fix actually fired (drive trace with the fix's signal field
+non-zero) rather than re-mining it by hand each round.
+
+Record the satisfied branch in the `reproducedBy` field (see Record Fields).
 
 ## Concern Taxonomy
 
