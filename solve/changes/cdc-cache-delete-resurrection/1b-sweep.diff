@@ -1,0 +1,345 @@
+commit 8af2ae3b88fd68bf3145d74159df307ab8b67c91
+Author: Peter Svensson <psvensson@gmail.com>
+Date:   Mon Jun 15 18:49:04 2026 +0200
+
+    fix(cdc): wire anti-entropy sweep into owner-authoritative catch-up (part 1b)
+    
+    Heals a genuinely-lost CDC DELETE in production: hydrateCdcPropagatedTablesFromAuthority
+    now, after the UPSERT-only catch-up read, evicts cache-only rows absent from the
+    complete authoritative set (reconcileAgainstAuthoritativeTruth).
+    
+    Safety: the sweep runs ONLY when the read came from the authoritative OWNER
+    (readResult.source === OWNER_RPC_LANE), structurally excluding local-replica reads
+    — a lagging follower returning a stale/empty success read must never drive
+    eviction. A new evictOlderThanMs race-guard preserves rows written after the read
+    snapshot. Sweep keys are derived exactly as the cache stores them.
+    
+    Distributed rolling-restart stat-gate: 5/5 CONVERGED, missing=0, hardBreaches=0,
+    0 corrupt, 0 stale-source — no convergence regression. In-process delete-resurrection
+    gate green (0/114). Verified by an adversarial subagent that caught and drove the
+    owner-source safety gate.
+    
+    Coverage boundary (follow-up): catch-up is one-shot at join/recovery, so a stable
+    long-lived node won't re-sweep; a periodic owner-rate-limited sweep is deferred to
+    avoid added owner load during formation backpressure.
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/src/cache/system-table-cache.js b/src/cache/system-table-cache.js
+index 576aca15..cd7003b8 100644
+--- a/src/cache/system-table-cache.js
++++ b/src/cache/system-table-cache.js
+@@ -555,11 +555,21 @@ class SystemTableCache {
+    * and evicted. Omit a table entirely to leave its cache untouched. Passing a
+    * partial/stale snapshot will evict live rows.
+    *
++   * RACE GUARD: when `options.evictOlderThanMs` is given (e.g. the authoritative
++   * read's start time), a cache-only row whose `updated_at` is at/after that time
++   * is NOT evicted — it may be a write committed after the snapshot was taken and
++   * not yet reflected in it. A genuinely-resurrected row (from a lost DELETE) is
++   * older than the read and is still swept.
++   *
+    * @param {Object<string, Array<Object>>} truthSnapshot - tableName -> complete
+    *   authoritative rows.
++   * @param {Object} [options]
++   * @param {number} [options.evictOlderThanMs] - Only evict rows older than this.
+    * @return {{removed: Array<{tableName: string, key: string}>}}
+    */
+-  reconcileAgainstAuthoritativeTruth(truthSnapshot = {}) {
++  reconcileAgainstAuthoritativeTruth(truthSnapshot = {}, options = {}) {
++    const evictOlderThanMs = Number.isFinite(options.evictOlderThanMs) ?
++      options.evictOlderThanMs : null;
+     const removed = [];
+     for (const [tableName, authoritativeRows] of Object.entries(truthSnapshot)) {
+       if (!this.tables.has(tableName)) {
+@@ -574,7 +584,9 @@ class SystemTableCache {
+       const pkField = getSystemCachePrimaryKeyField(tableName);
+       const authoritativeKeys = new Set(
+         authoritativeRows
+-          .map((row) => row?.[pkField] ?? row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
++          // Derive keys exactly as applySystemTableChange does (`||` fallback) so
++          // they align with how rows are stored; a mismatch would evict live rows.
++          .map((row) => row?.[pkField] || row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
+           .filter((key) => typeof key !== TYPEOF.UNDEFINED),
+       );
+       for (const key of [...table.keys()]) {
+@@ -582,6 +594,12 @@ class SystemTableCache {
+           continue;
+         }
+         const evicted = table.get(key);
++        if (evictOlderThanMs !== null) {
++          const rowTimestamp = getRecordTimestamp(evicted);
++          if (Number.isFinite(rowTimestamp) && rowTimestamp >= evictOlderThanMs) {
++            continue;
++          }
++        }
+         table.delete(key);
+         removed.push({tableName, key});
+         this.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {
+diff --git a/src/cdc/cdc-integration-service-authoritative-catchup.js b/src/cdc/cdc-integration-service-authoritative-catchup.js
+index 8d3c76f8..dafd4dcb 100644
+--- a/src/cdc/cdc-integration-service-authoritative-catchup.js
++++ b/src/cdc/cdc-integration-service-authoritative-catchup.js
+@@ -28,6 +28,7 @@
+ import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
+ import {getControlPlaneRetryAfterMs} from
+   '../control-plane/control-plane-error-classification.js';
++import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
+ 
+ const CATCHUP_DEFAULT = Object.freeze({
+   MAX_ATTEMPTS_PER_TABLE: 3,
+@@ -72,10 +73,12 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
+     options.sleep :
+     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+ 
++  const now = typeof options.now === 'function' ? options.now : Date.now;
+   const summary = {
+     tablesAttempted: 0,
+     tablesHydrated: 0,
+     rowsApplied: 0,
++    rowsSwept: 0,
+     tablesFailed: [],
+   };
+ 
+@@ -86,6 +89,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
+ 
+     for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
+       let readResult = null;
++      const readStartedAtMs = now();
+       try {
+         readResult = await service.executeAuthoritativeSystemTableRead(
+           tableName,
+@@ -115,6 +119,22 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
+             summary.rowsApplied += 1;
+           }
+         }
++        // Anti-entropy backstop: the UPSERT loop above cannot remove a row that a
++        // lost DELETE resurrected. Sweep cache-only rows absent from `rows` — but
++        // ONLY when the read came from the authoritative OWNER. A local-replica
++        // read can be a lagging follower returning a stale/empty set, which would
++        // wrongly evict live rows; the owner read is the authoritative complete
++        // set. (Race-guarded against writes newer than the read.)
++        const readFromOwner =
++          readResult.source === AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE;
++        if (readFromOwner &&
++            typeof service.applyAuthoritativeCacheSweep === 'function') {
++          summary.rowsSwept += service.applyAuthoritativeCacheSweep(
++            tableName,
++            rows,
++            readStartedAtMs,
++          );
++        }
+         summary.tablesHydrated += 1;
+         hydrated = true;
+         break;
+@@ -151,6 +171,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
+     tablesAttempted: summary.tablesAttempted,
+     tablesHydrated: summary.tablesHydrated,
+     rowsApplied: summary.rowsApplied,
++    rowsSwept: summary.rowsSwept,
+     tablesFailed: summary.tablesFailed,
+   });
+ 
+diff --git a/src/cdc/cdc-integration-service-cache-visibility-wait.js b/src/cdc/cdc-integration-service-cache-visibility-wait.js
+index ad850b44..01646a5e 100644
+--- a/src/cdc/cdc-integration-service-cache-visibility-wait.js
++++ b/src/cdc/cdc-integration-service-cache-visibility-wait.js
+@@ -584,6 +584,39 @@ class CDCIntegrationServiceCacheVisibilityWait {
+     return true;
+   }
+ 
++  /**
++   * Anti-entropy backstop for a genuinely-lost DELETE: after a complete
++   * authoritative read of `tableName`, evict cache-only rows that are absent from
++   * that authoritative set (the UPSERT-only catch-up cannot remove a resurrected
++   * row). Rows are canonicalized so their keys align with how the cache stores
++   * them. `readStartedAtMs` guards against evicting a row written after the read
++   * snapshot was taken.
++   *
++   * @param {string} tableName
++   * @param {Array<Object>} authoritativeRows - Complete authoritative row set.
++   * @param {number} [readStartedAtMs] - When the authoritative read began.
++   * @return {number} Count of cache-only rows evicted.
++   * @private
++   */
++  applyAuthoritativeCacheSweep(tableName, authoritativeRows, readStartedAtMs) {
++    if (
++      !this.cacheMutationTarget ||
++      typeof this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth !==
++        TYPEOF.FUNCTION ||
++      !Array.isArray(authoritativeRows)
++    ) {
++      return NUM.ZERO;
++    }
++    const canonicalRows = authoritativeRows
++      .filter((row) => row && typeof row === TYPEOF.OBJECT)
++      .map((row) => canonicalizeSystemTableRow(tableName, row));
++    const result = this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth(
++      {[tableName]: canonicalRows},
++      Number.isFinite(readStartedAtMs) ? {evictOlderThanMs: readStartedAtMs} : {},
++    );
++    return Array.isArray(result?.removed) ? result.removed.length : NUM.ZERO;
++  }
++
+   /**
+    * Resolve authoritative fallback phase from optional runtime context.
+    * @param {string|undefined|null} phase
+diff --git a/test/cache/system-table-cache-anti-entropy-sweep.test.js b/test/cache/system-table-cache-anti-entropy-sweep.test.js
+new file mode 100644
+index 00000000..aa65ed18
+--- /dev/null
++++ b/test/cache/system-table-cache-anti-entropy-sweep.test.js
+@@ -0,0 +1,106 @@
++/**
++ * Unit coverage for SystemTableCache.reconcileAgainstAuthoritativeTruth — the
++ * anti-entropy backstop that heals a genuinely-lost CDC DELETE by evicting
++ * cache-only rows absent from authoritative truth (Quest
++ * cdc-cache-delete-resurrection, part 1b).
++ */
++
++import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
++import {SystemTableCache, CDC_OPERATIONS}
++  from '../../src/cache/system-table-cache.js';
++import {TABLES} from '../../src/constants/index.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++beforeEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({node: {id: 'test-node'}});
++  LoggingService.getInstance().initialize({level: 'error'});
++});
++
++afterEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++});
++
++function insert(cache, table, row) {
++  cache.applySystemTableChange(table, CDC_OPERATIONS.INSERT, row);
++}
++
++test('sweep evicts a cache-only row absent from authoritative truth', (t) => {
++  const cache = new SystemTableCache();
++  insert(cache, TABLES.SERVICES, {service_id: 'resurrected', updated_at: 1000});
++  insert(cache, TABLES.SERVICES, {service_id: 'real', updated_at: 1000});
++
++  const result = cache.reconcileAgainstAuthoritativeTruth({
++    [TABLES.SERVICES]: [{service_id: 'real', updated_at: 1000}],
++  });
++
++  t.equal(cache.get(TABLES.SERVICES, 'resurrected'), undefined,
++    'the cache-only row is evicted');
++  t.ok(cache.get(TABLES.SERVICES, 'real'), 'the authoritative row is kept');
++  t.same(result.removed, [{tableName: TABLES.SERVICES, key: 'resurrected'}]);
++  t.end();
++});
++
++test('sweep leaves a table absent from the snapshot untouched', (t) => {
++  const cache = new SystemTableCache();
++  insert(cache, TABLES.NODES, {id: 'node-1', updated_at: 1000});
++
++  cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: []});
++
++  t.ok(cache.get(TABLES.NODES, 'node-1'),
++    'a table not named in the snapshot is never swept');
++  t.end();
++});
++
++test('sweep does NOT wipe a table given a non-array (malformed) value', (t) => {
++  const cache = new SystemTableCache();
++  insert(cache, TABLES.SERVICES, {service_id: 'svc-1', updated_at: 1000});
++
++  cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: undefined});
++
++  t.ok(cache.get(TABLES.SERVICES, 'svc-1'),
++    'a malformed (non-array) authoritative set is not treated as empty');
++  t.end();
++});
++
++test('age guard: a row newer than the read is not evicted; older is', (t) => {
++  const cache = new SystemTableCache();
++  insert(cache, TABLES.SERVICES, {service_id: 'stale', updated_at: 1000});
++  insert(cache, TABLES.SERVICES, {service_id: 'fresh', updated_at: 9000});
++
++  // Authoritative read taken at t=5000 holds neither row; only the row older
++  // than the read should be evicted (the fresh one may post-date the snapshot).
++  const result = cache.reconcileAgainstAuthoritativeTruth(
++    {[TABLES.SERVICES]: []},
++    {evictOlderThanMs: 5000},
++  );
++
++  t.equal(cache.get(TABLES.SERVICES, 'stale'), undefined,
++    'the row older than the read is swept');
++  t.ok(cache.get(TABLES.SERVICES, 'fresh'),
++    'the row newer than the read is preserved (race guard)');
++  t.same(result.removed, [{tableName: TABLES.SERVICES, key: 'stale'}]);
++  t.end();
++});
++
++test('sweep notifies listeners with a DELETE for each evicted row', async (t) => {
++  const cache = new SystemTableCache();
++  insert(cache, TABLES.SERVICES, {service_id: 'gone', updated_at: 1000});
++
++  const events = [];
++  cache.onCacheChange((tableName, operation, record) => {
++    events.push({tableName, operation, record});
++  });
++
++  cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: []});
++  // Notifications are dispatched via setImmediate; let them flush.
++  await new Promise((resolve) => setImmediate(resolve));
++
++  const deletes = events.filter((e) => e.operation === CDC_OPERATIONS.DELETE);
++  t.equal(deletes.length, 1, 'one DELETE notification emitted');
++  t.equal(deletes[0].record.service_id, 'gone', 'the evicted row is reported');
++  t.end();
++});
+diff --git a/test/cdc/cdc-authoritative-catchup-hydration.test.js b/test/cdc/cdc-authoritative-catchup-hydration.test.js
+index 7563d4ff..a4aa2b2d 100644
+--- a/test/cdc/cdc-authoritative-catchup-hydration.test.js
++++ b/test/cdc/cdc-authoritative-catchup-hydration.test.js
+@@ -134,4 +134,42 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
+     t.equal(summary.rowsApplied, 1, 'keyless row skipped');
+     t.equal(summary.tablesHydrated, 1, 'table still counts as hydrated');
+   });
++
++  await t.test(
++    'anti-entropy sweep runs ONLY for an owner-authoritative read, never for ' +
++      'a local-replica or failed read',
++    async (t) => {
++      const sweeps = [];
++      const service = createServiceStub({
++        readResults: {
++          // Owner-authoritative read -> safe to sweep.
++          services: [
++            {success: true, rows: [{id: 'svc-1'}], source: 'owner_rpc_lane'},
++          ],
++          // Local-replica read (a possibly-lagging follower) -> must NOT sweep.
++          tables: [
++            {success: true, rows: [], source: 'local_partition_replica'},
++          ],
++          // Failed read -> must NOT sweep.
++          nodes: [{success: false, error: 'unavailable'}],
++        },
++      });
++      service.applyAuthoritativeCacheSweep = (tableName, rows, readStartedAtMs) => {
++        sweeps.push({tableName, rows, readStartedAtMs});
++        return 2;
++      };
++
++      const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
++        tables: ['services', 'tables', 'nodes'],
++        maxAttemptsPerTable: 1,
++        sleep: async () => {},
++        now: () => 5000,
++      });
++
++      t.same(sweeps.map((s) => s.tableName), ['services'],
++        'sweep runs only for the owner-authoritative read');
++      t.same(sweeps[0].rows, [{id: 'svc-1'}], 'sweep gets the authoritative rows');
++      t.equal(sweeps[0].readStartedAtMs, 5000, 'sweep gets the read-start time');
++      t.equal(summary.rowsSwept, 2, 'evicted count is accumulated');
++    });
+ });
