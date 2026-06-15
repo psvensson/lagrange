@@ -286,15 +286,45 @@ function resolveProjectionReadinessDecisionDimensions(options = {}) {
   ]);
 }
 
+function isPublishedBaselineMember(nodeId, options = {}) {
+  const publishedBaselineNodeIds = normalizeNodeIdList(
+    resolvePublishedActiveNodeIds({
+      ...options,
+      requirePublishedMembership: false,
+    }),
+  );
+  return publishedBaselineNodeIds.includes(String(nodeId || '').trim());
+}
+
+// CL-001 variant C: an already-published node that is still transport-connected
+// and within the heartbeat grace must not be trimmed from the published active
+// set on a transient post-restart heartbeat-stall trough (heartbeat momentarily
+// older than the cluster-member stale window + lease lapsed). The owner already
+// grants this exact transport-alive grace on the lease-DISCONNECT path
+// ("Skipped lease disconnect for transport-connected node"); the publication
+// projection must not contradict it. Scoped to RETENTION (the node must already
+// be in the published baseline) so the strict-mode promotion guard is preserved
+// — a NEW node is never admitted on this path — and gated on LIVE transport
+// evidence (not the stored connection_state column) plus the 60s heartbeat grace,
+// so a node stalled past the grace with no live transport still trims.
+function shouldRetainTransportAlivePublishedNode(nodeId, nodeRow, options = {}) {
+  if (!isPublishedBaselineMember(nodeId, options)) {
+    return false;
+  }
+  if (!hasRuntimeTransportEvidence(nodeId, {
+    ...options,
+    readinessByNodeId: buildReadinessByNodeId(options),
+  })) {
+    return false;
+  }
+  return hasFreshReadyLeaseOrHeartbeat(nodeRow, options);
+}
+
 function shouldAllowLivenessFallbackProjection(
   nodeRow,
   readinessProjection,
   options = {},
 ) {
-  if (options.allowControlPlaneRecoveryEligibleProjection !== true ||
-      options.allowLivenessFallbackProjection !== true) {
-    return false;
-  }
   if (!readinessProjection ||
       readinessProjection.projectionEligible === true) {
     return false;
@@ -306,7 +336,16 @@ function shouldAllowLivenessFallbackProjection(
   if (normalizedNode.status !== String(SERVICE_STATUS.ACTIVE).toLowerCase()) {
     return false;
   }
-  return hasFreshProjectionLiveness(nodeRow, options);
+  if (options.allowControlPlaneRecoveryEligibleProjection === true &&
+      options.allowLivenessFallbackProjection === true &&
+      hasFreshProjectionLiveness(nodeRow, options)) {
+    return true;
+  }
+  return shouldRetainTransportAlivePublishedNode(
+    normalizedNode.nodeId,
+    nodeRow,
+    options,
+  );
 }
 
 function isCanonicallyActiveNode(nodeRow, options = {}) {

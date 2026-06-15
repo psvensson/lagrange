@@ -127,6 +127,111 @@ test('active-node projection falls back to ready-lease evidence when readiness o
       'ready-lease fallback should exclude non-ready and expired nodes',
     );
   });
+test('CL-001 variant C: strict-mode projection retains an already-published transport-alive node in a transient heartbeat-stall trough but never promotes a new node or masks genuine staleness',
+  async (t) => {
+    const projectionOptions = {
+      // cluster_member_healthy_only (strict) mode: no recovery-eligible projection.
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 200000,
+          last_heartbeat: 99000,
+        },
+        {
+          // trough: clusterMemberHealthy false, but transport-alive + heartbeat
+          // within the 60s grace + already published => RETAIN.
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 90000,
+          last_heartbeat: 70000,
+        },
+        {
+          // same trough evidence but NOT in the published baseline (new node)
+          // => strict-mode promotion guard must keep it OUT.
+          node_id: 'node-3',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 90000,
+          last_heartbeat: 70000,
+        },
+        {
+          // published + transport-connected but heartbeat > 60s stale and lease
+          // expired => genuinely stale, must still trim (no masking).
+          node_id: 'node-4',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 30000,
+          last_heartbeat: 30000,
+        },
+      ],
+      connectedNodeIds: ['node-1', 'node-2', 'node-3', 'node-4'],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+          },
+        },
+        {
+          nodeId: 'node-3',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+          },
+        },
+        {
+          nodeId: 'node-4',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+          },
+        },
+      ],
+      publicationRows: [
+        {
+          publication_id: 'publication-26',
+          publication_epoch: 26,
+          status: 'PUBLISHED',
+          published_active_node_ids: ['node-1', 'node-2', 'node-4'],
+          updated_at: 100,
+        },
+      ],
+      nowMs: 100000,
+    };
+
+    const projection = resolveActiveNodeViews(projectionOptions);
+
+    t.same(
+      projection.projectedServingNodeIds,
+      ['node-1', 'node-2'],
+      'strict-mode projection should retain the already-published transport-alive node-2 in its heartbeat-stall trough, while trimming new node-3 and genuinely-stale node-4',
+    );
+    t.match(
+      projection.projectionDiagnostics,
+      {
+        readinessDecisionMode: 'cluster_member_healthy_only',
+        livenessFallbackIncludedNodeIds: ['node-2'],
+        readinessExcludedNodeIds: ['node-3', 'node-4'],
+        clusterMemberUnhealthyExcludedNodeIds: ['node-3', 'node-4'],
+      },
+      'diagnostics should record node-2 as a retention inclusion and node-3/node-4 as excluded',
+    );
+    t.notOk(
+      projection.projectedServingNodeIds.includes('node-3'),
+      'a NEW (non-published-baseline) node must not be promoted by the retention grace',
+    );
+    t.notOk(
+      projection.projectedServingNodeIds.includes('node-4'),
+      'a published node stalled past the heartbeat grace must still be trimmed (no masking)',
+    );
+  });
 test('active-node projection can include recovery-eligible nodes during publication convergence windows',
   async (t) => {
     const commonProjectionOptions = {
