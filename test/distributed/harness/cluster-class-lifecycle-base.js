@@ -7,11 +7,14 @@ import {
   finalizeFileBasedCapture,
   fullLogDestPath,
   nodeLogHostDir,
+  nodeLogHostFile,
   nodeLogContainerFilePath,
+  INCARNATION_BOUNDARY_EVENT,
   NODE_LOG_FILE_ENV_VAR,
   NODE_LOG_DIR_CONTAINER,
 } from './full-node-log-capture.js';
 import {createReadStream, mkdirSync} from 'node:fs';
+import {appendFile} from 'node:fs/promises';
 import {createGunzip} from 'node:zlib';
 import {createInterface} from 'node:readline';
 import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
@@ -121,6 +124,10 @@ class ClusterLifecycleBase {
     this._networkName = null;
     this._nodes = new Map();
     this._nodeLogStreamers = new Map();
+    // Per-node boot generation, 1 at first start, incremented on each observed
+    // restart. Stamps the synthetic incarnation-boundary marker so a restarted
+    // node's post-restart log lines are filterable (see _markNodeIncarnationBoundary).
+    this._nodeIncarnations = new Map();
     this._started = false;
     this._chaos = null;
     this._logCollector = new LogCollector(config.outputDir);
@@ -950,6 +957,39 @@ class ClusterLifecycleBase {
     }
   }
 
+  // Record that a node just re-booted so its post-restart output is filterable in
+  // the capture. In streaming mode we inject a synthetic boundary line into the
+  // node's gzip stream; in file-logging mode we append the same marker to the
+  // bind-mounted host NDJSON file. Best-effort: a failed marker must never break
+  // the restart path. No-op without an outputDir (unit-test clusters).
+  async _markNodeIncarnationBoundary(nodeId) {
+    const outputDir = this._config?.outputDir;
+    if (!outputDir) {
+      return;
+    }
+    const incarnation = (this._nodeIncarnations.get(nodeId) || 1) + 1;
+    this._nodeIncarnations.set(nodeId, incarnation);
+    try {
+      if (this._isFileLoggingEnabled()) {
+        const line = JSON.stringify({
+          nodeId,
+          harnessEvent: INCARNATION_BOUNDARY_EVENT,
+          incarnation,
+          wallMs: Date.now(),
+        });
+        await appendFile(
+          nodeLogHostFile(outputDir, this._scenarioName, nodeId),
+          line + '\n',
+        );
+        return;
+      }
+      const streamer = this._nodeLogStreamers.get(nodeId);
+      streamer?.markIncarnationBoundary?.(incarnation, {nodeId});
+    } catch (_err) {
+      // Best-effort: capture instrumentation must never break the run.
+    }
+  }
+
   // Stop all per-node log streamers and assess whether each capture is complete.
   // Replaces the old one-shot `docker logs` at teardown (which could only return
   // what the stalled daemon retained). Surfaces TWO loud warnings: stale source
@@ -1441,6 +1481,9 @@ class ClusterLifecycleBase {
     }
     await this._waitForRestartShutdownBoundary(id);
     await this._chaos.startNode(id);
+    // Mark the boot boundary now (before readiness wait) so the marker lands
+    // ahead of the new incarnation's app logs in the capture.
+    await this._markNodeIncarnationBoundary(id);
     if (typeof node?.closeQueryConnection === 'function') {
       node.closeQueryConnection();
     }

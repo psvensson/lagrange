@@ -8,6 +8,7 @@ import {writeFile} from 'node:fs/promises';
 import {
   captureFullNodeLog,
   createNodeLogStreamer,
+  splitLinesByIncarnation,
   assessCaptureCompleteness,
   finalizeFileBasedCapture,
   findBootSourceProvenance,
@@ -333,5 +334,76 @@ describe('createNodeLogStreamer', () => {
     assert.equal(status.lineCount, 2, 'boundary duplicate dropped, new line kept');
     const text = gunzipSync(await readFile(destPath)).toString('utf8');
     assert.equal(text, '{"n":1}\n{"n":2}\n');
+  });
+
+  it('injects an incarnation-boundary marker so post-restart lines are filterable', async () => {
+    const provider = makeFakeProvider();
+    const destPath = path.join(workspace, 'stream-incarnation.log.gz');
+    const streamer = createNodeLogStreamer({
+      provider,
+      containerId: 'c4',
+      destPath,
+      nowMs: () => 1234,
+    });
+    const opts = await provider.nextAttach();
+    // Incarnation 1 output, then a restart boundary, then incarnation 2 output.
+    opts.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+    streamer.markIncarnationBoundary(2, {nodeId: 'node-a'});
+    opts.onLine('2026-06-09T13:00:05.000Z', '{"n":2}');
+    const status = await streamer.stop();
+    // The synthetic marker counts as a captured line.
+    assert.equal(status.lineCount, 3);
+    // A synthetic marker carries no Docker timestamp, so it must not move the
+    // re-attach cursor.
+    assert.equal(status.lastDockerTs, '2026-06-09T13:00:05.000Z');
+    const lines = gunzipSync(await readFile(destPath))
+      .toString('utf8')
+      .trimEnd()
+      .split('\n');
+    const groups = splitLinesByIncarnation(lines);
+    assert.equal(groups.length, 2, 'two incarnations separated by the marker');
+    assert.deepEqual(groups[0], ['{"n":1}']);
+    assert.deepEqual(groups[1], ['{"n":2}']);
+    const marker = JSON.parse(lines[1]);
+    assert.equal(marker.harnessEvent, 'incarnation-boundary');
+    assert.equal(marker.incarnation, 2);
+    assert.equal(marker.nodeId, 'node-a');
+  });
+
+  it('markIncarnationBoundary is a no-op after stop (never throws)', async () => {
+    const provider = makeFakeProvider();
+    const destPath = path.join(workspace, 'stream-incarnation-poststop.log.gz');
+    const streamer = createNodeLogStreamer({provider, containerId: 'c5', destPath});
+    await provider.nextAttach();
+    await streamer.stop();
+    assert.equal(streamer.markIncarnationBoundary(2, {nodeId: 'node-b'}), false);
+  });
+});
+
+describe('splitLinesByIncarnation', () => {
+  it('groups lines before the first boundary as incarnation 1', () => {
+    const groups = splitLinesByIncarnation(['{"a":1}', '{"a":2}']);
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0], ['{"a":1}', '{"a":2}']);
+  });
+
+  it('opens a new group at each boundary and excludes the marker line', () => {
+    const groups = splitLinesByIncarnation([
+      '{"a":1}',
+      JSON.stringify({harnessEvent: 'incarnation-boundary', incarnation: 2}),
+      '{"a":2}',
+      JSON.stringify({harnessEvent: 'incarnation-boundary', incarnation: 3}),
+      '{"a":3}',
+    ]);
+    assert.equal(groups.length, 3);
+    assert.deepEqual(groups[0], ['{"a":1}']);
+    assert.deepEqual(groups[1], ['{"a":2}']);
+    assert.deepEqual(groups[2], ['{"a":3}']);
+  });
+
+  it('keeps non-JSON lines in the current incarnation', () => {
+    const groups = splitLinesByIncarnation(['plain text', '{"a":1}']);
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0], ['plain text', '{"a":1}']);
   });
 });

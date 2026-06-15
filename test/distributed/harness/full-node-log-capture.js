@@ -26,6 +26,13 @@ const NEWLINE = '\n';
 const UTF8 = 'utf8';
 const GZIP_SUFFIX = '.log.gz';
 const DEFAULT_REATTACH_DELAY_MS = 1000;
+// Synthetic line injected into a node's capture at each restart so post-restart
+// ("second incarnation") output is filterable. The streamer/file capture keys the
+// destination by nodeId only, so without this marker both incarnations accumulate
+// into one file indistinguishably — which blocks every rejoin-side investigation
+// (the harness gap CL-001 variant C named). Readers split a capture on these
+// markers: lines after the Nth boundary belong to incarnation N+1.
+const INCARNATION_BOUNDARY_EVENT = 'incarnation-boundary';
 // If a node's last captured line predates teardown by more than this, the
 // capture is treated as suspect (the streaming reader was not draining — e.g. the
 // daemon json-file stall that silently truncated a busy node). Nodes log far more
@@ -222,7 +229,34 @@ function createNodeLogStreamer({
     }
   });
 
+  // Inject a synthetic incarnation-boundary line into the gzip stream. Called by
+  // the cluster on each observed restart so the capture records where one boot's
+  // output ends and the next begins. Synthetic lines carry no Docker timestamp, so
+  // they never perturb the `since`/dedup cursor used for re-attachment. Best-effort:
+  // a boundary that cannot be written (stream already ended) must never break the
+  // run or the restart path.
+  const markIncarnationBoundary = (incarnation, extra = {}) => {
+    if (gzipEnded || stopped) {
+      return false;
+    }
+    let payload = null;
+    try {
+      payload = JSON.stringify({
+        ...extra,
+        harnessEvent: INCARNATION_BOUNDARY_EVENT,
+        incarnation,
+        wallMs: nowMs(),
+      });
+    } catch {
+      return false;
+    }
+    lineCount += 1;
+    gzipStream.write(payload + NEWLINE);
+    return true;
+  };
+
   return {
+    markIncarnationBoundary,
     async stop() {
       stopped = true;
       if (reattachTimer) {
@@ -332,9 +366,33 @@ async function finalizeFileBasedCapture({
   return {lineCount, completeness, bootSourceProvenance: provenance};
 }
 
+// Split a node's captured lines into per-incarnation groups using the synthetic
+// boundary markers. Lines before the first boundary are incarnation 1; each
+// boundary opens the next incarnation. The boundary lines themselves are not
+// included in any group. Pure function for testability and analyzer reuse.
+function splitLinesByIncarnation(lines) {
+  const incarnations = [[]];
+  for (const line of lines) {
+    let parsed = null;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      // Non-JSON line belongs to the current incarnation as-is.
+    }
+    if (parsed && parsed.harnessEvent === INCARNATION_BOUNDARY_EVENT) {
+      incarnations.push([]);
+      continue;
+    }
+    incarnations[incarnations.length - 1].push(line);
+  }
+  return incarnations;
+}
+
 export {
   captureFullNodeLog,
   createNodeLogStreamer,
+  splitLinesByIncarnation,
+  INCARNATION_BOUNDARY_EVENT,
   assessCaptureCompleteness,
   finalizeFileBasedCapture,
   findBootSourceProvenance,
