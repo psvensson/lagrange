@@ -1,0 +1,51 @@
+# SAMPLE — copy to .github/workflows/gate.yml and adjust. Mirrors the local git-hook gate.
+#
+# The local hooks (tooling/hooks/githooks/{pre-commit,pre-push}) run:
+#   pre-commit: npm run audit:file-size
+#               npm run audit:guideline:hot-path-diagnostics
+#               node <validators>/check-staged-constant-names.js   (staged-diff only)
+#   pre-push:   npm run test:unused
+#
+# This workflow runs the same full-tree checks on every push/PR. The
+# check-staged-constant-names guard is intentionally omitted: it scans the
+# *staged* diff (git diff --cached) and is a no-op outside a commit, so the
+# pre-commit hook remains its enforcement point. The steering-pack drift check
+# (steering:check) is added because it is the project's canonical pre-merge gate.
+
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --- pre-commit hook checks (full tree) ---
+      - name: File-size thresholds
+        run: npm run audit:file-size
+
+      - name: Hot-path diagnostics guideline
+        run: npm run audit:guideline:hot-path-diagnostics
+
+      # --- pre-push hook check ---
+      - name: Unused code (knip)
+        run: npm run test:unused
+
+      # --- canonical pre-merge gate: steering pack must be regenerated, not drifted ---
+      - name: Steering pack drift
+        run: npm run steering:check

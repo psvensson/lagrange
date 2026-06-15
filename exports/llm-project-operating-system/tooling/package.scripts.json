@@ -1,0 +1,42 @@
+{
+  "_comment": "npm-script fragment for the LLM Project Operating System. apply.js merges `scripts` and `devDependencies` into the target package.json. Paths are bundle-relative (tooling/, steering/) and assume the bundle was applied at the repo root.",
+  "scripts": {
+    "solve": "node tooling/solve.js",
+    "solve:new": "node tooling/solve.js new",
+    "solve:status": "node tooling/solve.js status",
+    "solve:step": "node tooling/solve.js step",
+    "solve:run": "node tooling/solve.js run",
+    "solve:report": "node tooling/solve.js report",
+    "solve:probe": "node tooling/solve.js probe",
+    "steering:llm:pack": "node tooling/steering-pack/generate.js steering/pack.config.json",
+    "steering:check": "npm run steering:llm:pack && git diff --quiet -- steering/packs",
+    "hooks:install": "node tooling/hooks/install.js",
+    "audit:file-size": "node tooling/validators/check-file-size-thresholds.js",
+    "audit:guideline:hot-path-diagnostics": "node tooling/validators/check-guideline-hot-path-diagnostics.js",
+    "audit:guideline:literals": "node tooling/validators/check-guideline-literals.js",
+    "audit:guideline:decision-boundaries": "node tooling/validators/check-guideline-decision-boundaries.js",
+    "audit:constant-names": "node tooling/validators/check-guideline-constant-names.js src",
+    "audit:decision-tables": "node tooling/validators/check-decision-tables.js",
+    "audit:statecharts": "node tooling/validators/check-statecharts.js",
+    "check:staged-constant-names": "node tooling/validators/check-staged-constant-names.js",
+    "test:complexity": "node tooling/validators/check-complexity.js",
+    "test:complexity:cognitive": "node tooling/validators/check-cognitive-complexity.js",
+    "test:cycles": "node tooling/validators/check-circular-dependencies.js",
+    "test:duplication": "node tooling/validators/check-duplication.js",
+    "test:unused": "knip",
+    "test:deps": "depcruise --config dependency-cruiser.config.cjs src test",
+    "lint": "eslint .",
+    "gate": "npm run steering:check && npm run audit:file-size && npm run test:complexity && npm run test:cycles && npm run test:duplication"
+  },
+  "devDependencies": {
+    "_comment": "Per-validator dependency map (verified). NODE-ONLY (no devDep): audit:file-size, check:staged-constant-names, audit:decision-tables, audit:statecharts. NEEDS: test:cycles->madge; test:complexity->eslint; test:complexity:cognitive->eslint+eslint-plugin-sonarjs; test:duplication->jscpd; audit:guideline:* and audit:constant-names->espree+eslint-visitor-keys; test:unused->knip; test:deps->dependency-cruiser; lint->eslint. The Solver engine, the steering-pack generator, and the hooks installer need NONE of these.",
+    "eslint": "^9.18.0",
+    "eslint-plugin-sonarjs": "^4.0.2",
+    "eslint-visitor-keys": "^4.2.1",
+    "espree": "^10.4.0",
+    "jscpd": "^4.0.9",
+    "knip": "^5.83.1",
+    "madge": "^8.0.0",
+    "dependency-cruiser": "^17.3.8"
+  }
+}

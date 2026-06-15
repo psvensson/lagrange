@@ -1,0 +1,105 @@
+---
+scope: core
+status: manual-pack
+always_load: true
+source_of_truth: self
+canonical_rules: steering/workflow/solver-quests.md
+last_reviewed: 2026-06-01
+---
+
+> **Manual pack - edit here directly.** This file is the always-load operating
+> contract for LLM work in this repository. The active workflow canon is the
+> Quest system described in
+> [solver-quests.md](../workflow/solver-quests.md).
+
+# Core Steering Pack
+
+## North Star
+
+Preserve the highest-level owner boundary, choose the lightest Quest shape that
+proves the boundary was not weakened, and do not locally patch symptoms when
+the owner contract is porous.
+
+## Source Authority Precedence
+
+Compact packs under [`steering/packs/`](.) are the runtime surface. Source
+steering under [`steering/`](../) is consulted only to chase cited detail
+behind a compact-pack rule or to repair pack drift. If source detail shows the
+pack is wrong, fix the source and regenerate with `npm run steering:llm:pack`.
+
+## 30-Second Must-Not Checklist
+
+Use this list before non-trivial work:
+
+1. **Do not move Quest goalposts** after the first declaration.
+2. **Do not claim SOLVED** without live `doneWhen` evidence.
+3. **Do not trust agent self-report** for done or metric movement; probes decide.
+4. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
+   `diff:<path>`.
+5. **Do not bypass frozen architecture decisions** without explicit user
+   override/confirmation.
+6. **Do not widen, model, or change approach** on a stalled frontier without
+   selected Quest theory evidence.
+7. **Do not exceed file-size caps** when modifying or creating files; refactor
+   first if exceeded.
+8. **Do not write runtime/domain scalars inline**; use named constants or
+   ingress normalization.
+9. **Do not encode runtime state with `null` or `undefined`**; use explicit
+   variants.
+10. **Do not implement semantic decisions as independent branch piles**; collect
+   evidence and emit one canonical outcome.
+11. **Do not let callers reproduce owner logic locally**; owners decide and
+    caches observe.
+12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
+    proof pass.
+13. **Do not keep patching a parked frontier**; record findings and redirect to
+    another frontier or end EXHAUSTED.
+14. **Do not hand off solved Quest work without git durability**; after Solver
+    audit passes, commit and push all Quest-scoped changes, excluding unrelated
+    dirty worktree entries.
+15. **Do not hand off Quest source changes without subagent verification**;
+    spawn a subagent verifier and record a Solver finding with evidence
+    `subagent:<id>` before audit/git handoff.
+
+## Canonical Guardrail Command Map
+
+| Abstract Rule / Constraint | Canonical CLI Guardrail Command | Enforced By File/Script |
+| --- | --- | --- |
+| Quest status | `node tooling/solve.js status --id <id>` | `tooling/solve.js` |
+| Quest report | `node tooling/solve.js report --id <id>` | `tooling/solve/report.js` |
+| Quest probe | `node tooling/solve.js probe ...` | `tooling/solve/probe.js` |
+| Quest theory | `node tooling/solve.js theory ...` | `tooling/solve/theory.js` |
+| Quest health | `node tooling/solve.js health --id <id>` | `tooling/solve/health.js` |
+| Touched/created file-size limits | `npm run audit:file-size` | `tooling/validators/check-file-size-thresholds.js` |
+| Runtime syntax and grammar | `npm run check-runtime-grammar` | `scripts/check-runtime-grammar.js` |
+
+## Quest Shape Picker
+
+| Shape | Use when |
+| --- | --- |
+| `read/review` | Answering, review, or explanatory docs with no implementation truth change. |
+| `maintenance` | Bounded docs, templates, generated steering, or tooling cleanup. |
+| `proof` | Tests, validation evidence, or diagnostic classification without runtime behavior change. |
+| `experiment` | A bounded hypothesis or probe decides the next owner/action. |
+| `runtime` | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
+| `scenario` | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
+
+## Core Principles
+
+1. **Workflow and context** - Start from a selected or newly authored Quest.
+2. **Proof integrity** - Prefer compact proof ladders of 3-5 executable
+   commands. Never weaken guardrails to make proof pass.
+3. **Coding constraints**:
+   - *No inline scalars* - Import or declare canonical constants.
+   - *No state-nulls* - Explicit variants must encode domain/runtime state.
+   - *Single path* - Use decision tables or state models instead of nested
+     independent `if` statements.
+   - *Owner decides* - Cache observes; owners decide.
+   - *File-size cap* - Touched/created files must stay within the scope
+     thresholds enforced by `tooling/validators/check-file-size-thresholds.js`.
+4. **Owner boundaries** - Identify semantic owner boundaries, reduce duplicate
+   paths, and do not locally patch symptoms.
+5. **Delegation** - Sub-agents and external workers produce findings or
+   changes; the Solver decides terminal state through probes.
+6. **Closure** - SOLVED and EXHAUSTED are Solver report states. MAX_CYCLES is a
+   runner bound, not closure.

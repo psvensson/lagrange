@@ -1,7 +1,0 @@
-{
-  "scripts": {
-    "commands": "node scripts/list-commands.js",
-    "audit:file-size": "node scripts/check-file-size-thresholds.js",
-    "audit:owner-boundary-segments": "node scripts/check-file-size-thresholds.js --owner-boundary-guidance"
-  }
-}
