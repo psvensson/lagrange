@@ -6,7 +6,7 @@ come from the authored `closure-ledger.md` index (the current rollup);
 The DRIFT list is the WS8.1 worklist: records whose own top `- Status:` line
 lags the index and need a normalized `### STATE` block.
 
-Records: 38 · active frontier: 15 · drifted: 10
+Records: 38 · active frontier: 15 · drifted: 0
 
 ## Active frontier (needs attention)
 
@@ -28,20 +28,9 @@ Records: 38 · active frontier: 15 · drifted: 10
 | CL-031 | open | 20260612T223302Z | harness-oracle (blindness) + node-resource-safety (root) |
 | CL-039 | open | 20260615T172427Z | membership-publication write-substrate / control-plane raft leadership placement |
 
-## Status drift — WS8.1 normalization worklist
+## Status drift — record STATE vs index
 
-| Id | Index status | Record status (stale) |
-| --- | --- | --- |
-| CL-006 | guarded | open |
-| CL-010 | guarded | fix-landed |
-| CL-011 | guarded | fix-landed |
-| CL-012 | guarded | open |
-| CL-013 | guarded | open |
-| CL-016 | guarded | open |
-| CL-017 | fix-landed | open |
-| CL-018 | guarded | open |
-| CL-019 | guarded | open |
-| CL-033 | guarded | open |
+_(none — every record STATE agrees with the index)_
 
 ## Status tally (all records)
 

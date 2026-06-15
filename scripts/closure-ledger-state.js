@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 // closure-ledger-state — parse the per-record closure ledger into a machine
-// surface, tolerant of the in-flight WS3 format migration.
+// surface. Post-WS8.1 every record carries a `### STATE` header (status, concern,
+// firstViolatedInvariant, lastGate) and the STATE status is the source of truth;
+// the index Status Summary table is the cross-check. The parser still tolerates
+// the older inline `- Status:` / `## GATE VERDICT — <STATUS>` forms as a fallback.
 //
 // Records live under
 // .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-###.md
-// in two shapes today: the WS3 `### STATE` header (CL-001) and the older inline
-// `- Status:` / `## GATE VERDICT — <STATUS>` form (most records). This parser
-// reads whichever is present so the frontier board works DURING the migration,
-// not only after it.
 //
 // Usage:
-//   node scripts/closure-ledger-state.js              # table to stdout
+//   node scripts/closure-ledger-state.js              # board table to stdout
 //   node scripts/closure-ledger-state.js --json
-//   node scripts/closure-ledger-state.js --write      # write the sibling board
-//   node scripts/closure-ledger-state.js --check      # drift guard (exit 2)
+//   node scripts/closure-ledger-state.js --write          # write the sibling board
+//   node scripts/closure-ledger-state.js --check          # sibling-freshness guard
+//   node scripts/closure-ledger-state.js --migrate-state  # WS8.1 one-shot seeding
+//   node scripts/closure-ledger-state.js --check-state     # CI guard: STATE + 0 drift
 //
 // --write emits a GENERATED SIBLING (closure-ledger.generated.md), never the
-// human-edited index — the index keeps a `concern` column the records do not yet
-// carry uniformly (that is WS8.1). --check is therefore safe to wire into CI.
+// authored index. --check-state (wired into CI via `npm run audit:closure-ledger`)
+// fails if any record lacks a STATE block or its STATE status drifts from the index.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -86,6 +87,14 @@ function extractLastGate(text) {
   return all.length > 0 ? all.sort().at(-1) : null;
 }
 
+// Read a `- **field**: value` line from a STATE block (the bold label may carry a
+// parenthetical qualifier, e.g. `**firstViolatedInvariant (umbrella)**`).
+function extractStateField(text, field) {
+  const re = new RegExp(`-\\s*\\*\\*${field}[^*]*\\*\\*:\\s*(.+)`, 'i');
+  const m = text.match(re);
+  return m ? m[1].trim() : null;
+}
+
 function parseRecords(dir = LEDGER_DIR) {
   if (!fs.existsSync(dir)) return new Map();
   const records = new Map();
@@ -93,10 +102,12 @@ function parseRecords(dir = LEDGER_DIR) {
     const id = name.replace(/\.md$/, '');
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
     const {status, source} = extractStatus(text);
+    const concern = extractStateField(text, 'concern');
     records.set(id, {
       recordStatus: status,
       statusSource: source,
       title: extractTitle(text, id),
+      concern: concern || '',
       lastGate: extractLastGate(text),
       file: path.relative(ROOT, path.join(dir, name)),
     });
@@ -104,50 +115,98 @@ function parseRecords(dir = LEDGER_DIR) {
   return records;
 }
 
-// The hand-maintained index Status Summary table carries the CURRENT rollup
-// status + concern. Today it is fresher than several records' top `- Status:`
-// lines (written at open-time and never updated), so it is the authoritative
-// status surface until WS8.1 normalizes a STATE block onto every record.
+// The index Status Summary table carries one row per record: status, concern,
+// and the first violated invariant. It is the seed for WS8.1 normalization and
+// the cross-check the drift guard enforces a record's STATE against.
 function parseIndex(indexPath = INDEX_PATH) {
   const index = new Map();
   if (!fs.existsSync(indexPath)) return index;
   const text = fs.readFileSync(indexPath, 'utf8');
-  // The status cell may carry a qualifier ("open (not-reproduced-at-N=4)"), so
-  // consume the rest of the cell after the status word; normalizeStatus takes the
-  // leading token. Without the trailing `[^|]*` a qualified cell silently drops
-  // the whole row (CL-039), disabling its drift detection.
-  const rowRe = /\|\s*\[(CL-\d+)\][^|]*\|\s*([a-z-]+)[^|]*\|\s*([^|]*?)\s*\|/g;
+  // Columns: | [id](path) | status | concern | invariant |. The status cell may
+  // carry a qualifier ("open (not-reproduced-at-N=4)"), so consume the rest of
+  // the cell after the status word (normalizeStatus takes the leading token);
+  // without the trailing `[^|]*` a qualified cell silently drops the whole row.
+  const rowRe =
+    /\|\s*\[(CL-\d+)\][^|]*\|\s*([a-z-]+)[^|]*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|/g;
   for (const m of text.matchAll(rowRe)) {
-    index.set(m[1], {indexStatus: normalizeStatus(m[2]), concern: m[3].trim()});
+    index.set(m[1], {
+      indexStatus: normalizeStatus(m[2]),
+      concern: m[3].trim(),
+      invariant: m[4].trim(),
+    });
   }
   return index;
 }
 
-// Merge the authored index (current status + concern) with the per-record parse
-// (lastGate, title, and a DRIFT flag where the record's own status line lags the
-// index — that set is precisely the WS8.1 normalization worklist).
+// Post-WS8.1: the RECORD's `### STATE` block is the status source of truth; the
+// index is the cross-check. `drift` flags any record whose STATE status disagrees
+// with the index, and `normalized` is false for any record still lacking a STATE
+// block — both are zero once `--migrate-state` has run, and the drift guard keeps
+// them zero.
 export function parseClosureLedger(dir = LEDGER_DIR, indexPath = INDEX_PATH) {
   const records = parseRecords(dir);
   const index = parseIndex(indexPath);
   const ids = [...new Set([...records.keys(), ...index.keys()])].sort();
   return ids.map((id) => {
     const rec = records.get(id) || {recordStatus: 'unknown', statusSource: 'missing'};
-    const idx = index.get(id) || {indexStatus: 'unknown', concern: ''};
-    const status = idx.indexStatus !== 'unknown' ? idx.indexStatus : rec.recordStatus;
+    const idx = index.get(id) || {indexStatus: 'unknown', concern: '', invariant: ''};
+    const status = rec.recordStatus !== 'unknown' ? rec.recordStatus : idx.indexStatus;
     return {
       id,
       status,
       recordStatus: rec.recordStatus,
+      indexStatus: idx.indexStatus,
       statusSource: rec.statusSource,
+      normalized: rec.statusSource === 'state-block',
       drift: rec.recordStatus !== 'unknown' &&
         idx.indexStatus !== 'unknown' && rec.recordStatus !== idx.indexStatus,
-      concern: idx.concern || '',
+      concern: rec.concern || idx.concern || '',
       title: rec.title || id,
       lastGate: rec.lastGate || null,
       active: !SETTLED_STATUSES.has(status),
       file: rec.file || null,
     };
   });
+}
+
+// WS8.1 one-shot migration: prepend a `### STATE` header (seeded from the index
+// row + the record's last gate) to every record that lacks one. Idempotent — a
+// record that already has a STATE block is left untouched.
+export function migrateState(dir = LEDGER_DIR, indexPath = INDEX_PATH) {
+  const index = parseIndex(indexPath);
+  const result = {migrated: [], skipped: [], noIndexRow: []};
+  for (const name of fs.readdirSync(dir).filter((n) => /^CL-\d+\.md$/.test(n))) {
+    const id = name.replace(/\.md$/, '');
+    const file = path.join(dir, name);
+    const text = fs.readFileSync(file, 'utf8');
+    if (/^### STATE/m.test(text)) {
+      result.skipped.push(id);
+      continue;
+    }
+    const idx = index.get(id);
+    if (!idx) {
+      result.noIndexRow.push(id);
+      continue;
+    }
+    const lastGate = extractLastGate(text) || '—';
+    const block = [
+      '',
+      '### STATE (current truth — read only this header to act; history below)',
+      '',
+      `- **status**: \`${idx.indexStatus}\``,
+      `- **concern**: ${idx.concern}`,
+      `- **firstViolatedInvariant**: ${idx.invariant}`,
+      `- **lastGate**: ${lastGate}`,
+      '',
+    ].join('\n');
+    const lines = text.split('\n');
+    const headingIdx = lines.findIndex((l) => /^#+\s+CL-\d+/.test(l));
+    const at = headingIdx === -1 ? 0 : headingIdx + 1;
+    lines.splice(at, 0, block);
+    fs.writeFileSync(file, lines.join('\n'));
+    result.migrated.push(id);
+  }
+  return result;
 }
 
 function tally(records) {
@@ -182,13 +241,13 @@ export function renderGenerated(records) {
     ...active.map((r) =>
       `| ${r.id} | ${r.status} | ${cell(r.lastGate)} | ${cell(r.concern)} |`),
     '',
-    '## Status drift — WS8.1 normalization worklist',
+    '## Status drift — record STATE vs index',
     '',
-    drifted.length === 0 ? '_(none — records agree with the index)_' :
-      ['| Id | Index status | Record status (stale) |',
+    drifted.length === 0 ? '_(none — every record STATE agrees with the index)_' :
+      ['| Id | Record STATE | Index |',
         '| --- | --- | --- |',
         ...drifted.map((r) =>
-          `| ${r.id} | ${r.status} | ${r.recordStatus} |`)].join('\n'),
+          `| ${r.id} | ${r.recordStatus} | ${r.indexStatus} |`)].join('\n'),
     '',
     '## Status tally (all records)',
     '',
@@ -201,7 +260,41 @@ export function renderGenerated(records) {
 
 function main() {
   const argv = process.argv.slice(2);
+
+  if (argv.includes('--migrate-state')) {
+    const r = migrateState();
+    process.stdout.write(
+      `migrated ${r.migrated.length} (${r.migrated.join(', ') || 'none'}); ` +
+      `skipped ${r.skipped.length} (already had STATE); ` +
+      `${r.noIndexRow.length} had no index row` +
+      `${r.noIndexRow.length ? ` (${r.noIndexRow.join(', ')})` : ''}.\n`);
+    return EXIT_OK;
+  }
+
   const records = parseClosureLedger();
+
+  // WS8.1 guard: every record must carry a STATE block, and its STATE status must
+  // agree with the index. Wired into CI so the stale-top-line drift cannot recur.
+  if (argv.includes('--check-state')) {
+    const unnormalized = records.filter((r) => !r.normalized);
+    const drifted = records.filter((r) => r.drift);
+    if (unnormalized.length > 0 || drifted.length > 0) {
+      if (unnormalized.length > 0) {
+        process.stderr.write(
+          `records missing a ### STATE block: ${unnormalized.map((r) => r.id).join(', ')}\n` +
+          'run `node scripts/closure-ledger-state.js --migrate-state`.\n');
+      }
+      for (const r of drifted) {
+        process.stderr.write(
+          `${r.id}: STATE status '${r.recordStatus}' disagrees with index ` +
+          `'${r.indexStatus}' — reconcile the record's STATE block and the index row.\n`);
+      }
+      return EXIT_DRIFT;
+    }
+    process.stdout.write(
+      `closure ledger STATE check: ${records.length} records normalized, 0 drift.\n`);
+    return EXIT_OK;
+  }
 
   if (argv.includes('--json')) {
     process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);
