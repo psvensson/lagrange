@@ -58,6 +58,7 @@
     "test:metrics:scoped:strict": "node scripts/check-scoped-ratchets.js --strict",
     "audit:file-size": "node scripts/check-file-size-thresholds.js",
     "audit:file-size:strict": "node scripts/check-file-size-thresholds.js --strict",
+    "audit:no-ordinal-files": "node scripts/check-no-ordinal-files.js",
     "audit:architecture-slices": "node scripts/check-architecture-slices.js",
     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",
     "test:mutation": "stryker run",

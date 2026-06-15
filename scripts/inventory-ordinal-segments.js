@@ -11,7 +11,6 @@ const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
 const NUM_THREE = 3;
-const JSON_INDENT = 2;
 const SOURCE_ROOT = 'src';
 const OUTPUT_JSON = '_legacy_work/inventory/ordinal-segments.json';
 const OUTPUT_MARKDOWN = '_legacy_work/inventory/ordinal-segments.md';
@@ -483,8 +482,10 @@ export {
   buildClusterKey,
   buildInventoryFromPaths,
   classifyPath,
+  collectSourceFiles,
   extractOrdinalTokens,
   renderInventoryJson,
   renderInventoryMarkdown,
   runCli,
+  SOURCE_ROOT,
 };
