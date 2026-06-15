@@ -476,7 +476,7 @@ async function writeScenarioFailureBundleFallback({
   };
   entry.failureBundle = links;
   console.warn(
-    `[harness] WARNING: failure-bundle write degraded to fallback for ` +
+    '[harness] WARNING: failure-bundle write degraded to fallback for ' +
     `scenario ${entry.scenario}: ${fallbackJson.bundleWriteError}`,
   );
   return {
@@ -488,6 +488,67 @@ async function writeScenarioFailureBundleFallback({
     },
     links,
   };
+}
+
+// A PASSING scenario still needs its measured publication-convergence evidence
+// in the report. The statistical gate classifies each run by the independent
+// measured missingPublishedCount (NOT by the scenario's own pass flag — see the
+// rolling-restart-stat-gate.sh header), and applyBundleDiagnosticsToScenarioEntry
+// (the only writer of entry.publicationConvergence) is reached solely through the
+// failure-bundle path. So a passing run, which skips that path, emits a null
+// publicationConvergence and is read as missing=null → downgraded to SLOW,
+// masking a genuine convergence (CL-037). Derive the SAME measured convergence
+// summary the failure path uses (from the captured playback control plane) and
+// attach ONLY the neutral measurement fields — never the failure-oriented
+// guidance and never refreshScenarioVerdict, so a pass is never flipped — without
+// writing any failure-triage artifacts. Best-effort: a derivation error must
+// leave publicationConvergence null (honest → SLOW, the gate could not read it),
+// never fabricate a converged verdict or fail the passing run.
+async function attachPassingScenarioConvergenceEvidence({
+  entry,
+  scenarioDir,
+  absoluteReportPath,
+  reportSummary,
+  standardSummary,
+  benchmarkRegressionGate,
+  workspaceRoot,
+}) {
+  try {
+    let logs = null;
+    try {
+      logs = await collectScenarioLogArtifacts(
+        scenarioDir,
+        resolveRelevantNodeIds(entry),
+        workspaceRoot,
+        entry,
+      );
+    } catch (_logError) {
+      // Playback-log collection is best-effort; the convergence summary can
+      // still be derived from the entry's own control-plane diagnostics.
+      logs = null;
+    }
+    const bundleJson = buildScenarioFailureBundle({
+      entry,
+      reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
+      reportSummary,
+      standardSummary,
+      benchmarkRegressionGate,
+      logs,
+    });
+    if (isRecord(bundleJson.publicationConvergence)) {
+      entry.publicationConvergence = bundleJson.publicationConvergence;
+    }
+    if (isRecord(bundleJson.controlPlane?.priorityRecoveryObservation)) {
+      entry.priorityRecoveryObservation =
+        bundleJson.controlPlane.priorityRecoveryObservation;
+    }
+  } catch (convergenceError) {
+    console.warn(
+      '[harness] WARNING: could not attach publication-convergence ' +
+      `evidence for passing scenario ${entry.scenario}: ` +
+      `${convergenceError?.message || convergenceError}`,
+    );
+  }
 }
 
 async function writeFailureBundlesForReport({
@@ -513,6 +574,15 @@ async function writeFailureBundlesForReport({
     if (entry.passed === true) {
       await removeScenarioFailureArtifacts(scenarioDir);
       delete entry.failureBundle;
+      await attachPassingScenarioConvergenceEvidence({
+        entry,
+        scenarioDir,
+        absoluteReportPath,
+        reportSummary,
+        standardSummary,
+        benchmarkRegressionGate,
+        workspaceRoot,
+      });
       continue;
     }
     await mkdir(scenarioDir, {recursive: true});
@@ -593,7 +663,7 @@ async function writeFailureBundlesForReport({
     };
   } catch (runBundleError) {
     console.warn(
-      `[harness] WARNING: run failure-bundle write failed: ` +
+      '[harness] WARNING: run failure-bundle write failed: ' +
       `${String(runBundleError?.message || runBundleError)}`,
     );
     return {runBundle: null, scenarioBundles};

@@ -1087,6 +1087,56 @@ describe('failure-bundle', () => {
   registerFailureBundleMissingActiveDebtOverCoordinationMismatchTests(failureBundleTestContext);
   registerFailureBundleAckClosureOrderingTests(failureBundleTestContext);
 
+  it('CL-037: attaches measured publicationConvergence to a PASSING scenario ' +
+     'so the gate is not masked as missing=null', async () => {
+    const writer = new ReportWriter(reportPath);
+    writer.addResult('rolling-restart', {
+      scenario: 'rolling-restart',
+      passed: true,
+      details: {
+        diagnostics: {
+          snapshotNodeId: 'seed-1',
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 37,
+              publicationStatus: 'PUBLISHED',
+              recoveryProtocolState: 'steady_published',
+              requiredAckNodeIds: [],
+              acknowledgedNodeIds: ['seed-1', 'joiner-1', 'joiner-2'],
+              pendingAckNodeIds: [],
+              publishedActiveNodeIds: ['seed-1', 'joiner-1', 'joiner-2'],
+              missingPublishedNodeIds: [],
+              missingPublishedCount: 0,
+              priorityRecoveryReasonCodes: [],
+            },
+          },
+        },
+      },
+    });
+    const entry = writer.scenarios[0];
+
+    await writeFailureBundlesForReport({
+      scenarios: writer.scenarios,
+      reportOutputPath: reportPath,
+      outputDir,
+      reportSummary: {total: 1, fail: 0, pass: 1},
+      standardSummary: {scenarios: []},
+      benchmarkRegressionGate: {status: 'skipped'},
+      workspaceRoot: tempDir,
+    });
+
+    // Red on revert: the pre-CL-037 passing-run early-return skipped bundle
+    // assembly, leaving entry.publicationConvergence null -> stat-gate reads
+    // missing=null -> SLOW (masking a genuine convergence). The measured
+    // convergence must now be present, and the pass must NOT be flipped.
+    assert.ok(
+      entry.publicationConvergence,
+      'passing scenario must carry measured publicationConvergence',
+    );
+    assert.equal(entry.publicationConvergence.missingPublishedCount, 0);
+    assert.equal(entry.passed, true, 'attach must not flip the pass verdict');
+  });
+
   registerFailureBundleActiveGateTailTests({
     it,
     assert,
