@@ -34,8 +34,9 @@ _(none — every record STATE agrees with the index)_
 
 ## Status tally (all records)
 
+- closed: 1
 - fix-landed: 2
-- guarded: 22
+- guarded: 21
 - narrowed: 11
 - open: 4
 
