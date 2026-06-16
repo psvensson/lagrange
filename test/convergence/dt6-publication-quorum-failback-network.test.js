@@ -38,15 +38,12 @@ import {TABLES} from '../../src/constants/index.js';
 // TRIGGER (a required-version bump standing in for a real membership change) and the row's content
 // (a fixed 3-node membership model rather than real membership/readiness derivation).
 //
-// VERIFICATION FINDING (documented honestly, not asserted-away): at the published-VERSION level the
-// cluster converges to v2 on heal, which is what these assertions check. At the raft LOG-ENTRY
-// level it does NOT cleanly reconcile — the healed old leader stale-commits its OWN v2 entry (its
-// publisher_node_id, its old term) at the same index where the rest of the cluster committed the
-// new leader's v2 entry (different publisher/term). That divergence is a pre-existing
-// @markwylde/liferaft + InMemoryLogAdapter log-safety gap (the append catch-up commits a
-// follower's own same-index entry without a term/command match check), NOT introduced here — so
-// this guard deliberately asserts VERSION convergence (the published membership set + version are
-// identical everywhere), not committed-COMMAND equality (which would expose that separate gap).
+// This guard asserts BOTH the published-VERSION convergence AND committed-COMMAND equality at the
+// raft LOG-ENTRY level. The latter once exposed CL-040 — a healed old leader stale-committing its
+// OWN v2 entry (its publisher/term) at the same index where the cluster committed the new leader's
+// entry — but that @markwylde/liferaft + InMemoryLogAdapter log-safety gap is now fixed
+// (src/raft/liferaft.js truncateConflictingSameIndexTail, Raft §5.3 same-index/different-term
+// truncation; see closure-ledger CL-040), so committed log entries now agree cluster-wide on heal.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
@@ -195,14 +192,35 @@ async function runQuorumFailback(seed) {
     oldLeaderCommands: pubs.get(leaderA).state.commands,
   };
 
-  // Phase C — heal; the old leader steps down and the published VERSION converges to v2
-  // cluster-wide (see the LOG-ENTRY divergence note in the header — version converges, committed
-  // row provenance does not, a separate liferaft gap).
+  // Phase C — heal; the old leader steps down and the cluster converges to v2 — both in published
+  // VERSION and (since the CL-040 fix) in committed raft LOG ENTRIES (no same-index divergence).
   for (const other of followers) {
     net.heal(leaderA, other);
   }
   await driveNetwork(net, {untilMs: 2200, stepMs: 5});
-  const afterHeal = {versions: committedVersions(), oldLeaderState: rafts.get(leaderA).state};
+  // Committed-log agreement: group every committed entry by index; any index with >1 distinct
+  // {term, command} across nodes is a Raft safety violation (this is what CL-040 used to expose).
+  const committedByIndex = new Map();
+  for (const id of IDS) {
+    for (const [index, entry] of rafts.get(id).log.entries) {
+      if (!entry || entry.committed !== true) {
+        continue;
+      }
+      const fingerprint = JSON.stringify({term: entry.term, command: entry.command});
+      if (!committedByIndex.has(index)) {
+        committedByIndex.set(index, new Set());
+      }
+      committedByIndex.get(index).add(fingerprint);
+    }
+  }
+  const divergentCommittedIndexes = [...committedByIndex.entries()]
+    .filter(([, fingerprints]) => fingerprints.size > 1)
+    .map(([index]) => index);
+  const afterHeal = {
+    versions: committedVersions(),
+    oldLeaderState: rafts.get(leaderA).state,
+    divergentCommittedIndexes,
+  };
 
   IDS.forEach((id) => {
     pubs.get(id).coordinator.stopOwnerMembershipDriver();
@@ -249,6 +267,9 @@ t.test('Phase C: heal converges every node to a committed published version 2; o
     }
     t.not(m.afterHeal.oldLeaderState, LifeRaft.LEADER,
       'the old leader stepped down (no longer LEADER)');
+    t.same(m.afterHeal.divergentCommittedIndexes, [],
+      'committed raft log entries agree across nodes at every index (CL-040 fixed — no ' +
+      'same-index/different-term stale-commit)');
   });
 
 t.test('the real-quorum publication fail-back is deterministic and holds across seeds',

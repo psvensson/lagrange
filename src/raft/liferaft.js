@@ -60,6 +60,37 @@ function resolveFollowerLastIndex(packet) {
     null;
 }
 
+// Raft §5.3 (Log Matching / State-Machine Safety): an inbound append references the leader's log
+// at `packet.last` (the leader's last entry on a heartbeat, or prevLog on an entry-append). If we
+// hold our OWN, UNCOMMITTED entry at that index with a DIFFERENT term, that is a conflicting entry
+// — delete it and everything after, so the base append-fail / catch-up path rebuilds the suffix
+// from the leader. Base liferaft only truncates on an index MISMATCH (`packet.last.index !==
+// localLastIndex`), so a same-index/different-term conflict otherwise survives and the base
+// commit-index catch-up then commits our STALE same-index entry — two nodes committing different
+// commands at one index (CL-040). This is INERT on the normal path: it fires only when a local
+// uncommitted entry actually conflicts in term; a matching term, a missing entry, or an
+// already-committed prefix entry are all left untouched.
+async function truncateConflictingSameIndexTail(raft, packet) {
+  if (!raft.log ||
+      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
+      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  const lastIndex = packet?.last?.index;
+  const lastTerm = packet?.last?.term;
+  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
+      !hasFiniteNumber(lastTerm)) {
+    return;
+  }
+  const localEntry = await raft.log.get(lastIndex);
+  if (localEntry &&
+      localEntry.committed !== true &&
+      hasFiniteNumber(localEntry.term) &&
+      localEntry.term !== lastTerm) {
+    await raft.log.removeEntriesAfter(lastIndex - NUMERIC_ONE);
+  }
+}
+
 async function readCatchupEntries(raft, startIndex, endIndex) {
   if (typeof raft.log.getRange === LOCAL_STR_FUNCTION) {
     const entries = await raft.log.getRange(startIndex, endIndex);
@@ -236,6 +267,13 @@ function patchIncomingDataListener(raft) {
     }
 
     if (packet?.type === RAFT_PACKET_TYPE.APPEND) {
+      // CL-040: repair a same-index/different-term conflict before the base handler's commit
+      // catch-up can stale-commit our own entry; converts the conflict into the append-fail path.
+      // Guarded SYNCHRONOUSLY on log presence so a logless node (no `Log` option) adds no microtask
+      // hop here — keeping its append timing byte-identical (the truncation is a real-log concern).
+      if (raft.log && typeof raft.log.get === LOCAL_STR_FUNCTION) {
+        await truncateConflictingSameIndexTail(raft, packet);
+      }
       const hasEntries = Array.isArray(packet?.data) &&
         packet.data.length > 0;
       const entry = hasEntries ? packet.data[0] : null;

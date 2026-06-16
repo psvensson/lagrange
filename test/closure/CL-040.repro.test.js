@@ -18,10 +18,11 @@ import {SeededRandomSource} from '../../src/random/random-source.js';
 // follower's OWN same-index entry without a term/command match check, so two nodes end up with two
 // DIFFERENT committed commands at the same index.
 //
-// This guard asserts the CORRECT invariant (committed-entry agreement across nodes). It currently
-// FAILS — so it is marked `todo`: tap reports it as a known-failing reproduction without breaking
-// the suite. EXIT CRITERION for CL-040: once the gap is fixed (a term/command match check before
-// stale-committing a same-index entry on catch-up), this passes and the `todo` is removed.
+// This guard asserts the CORRECT invariant (committed-entry agreement across nodes). It is GREEN
+// since the CL-040 fix (src/raft/liferaft.js truncateConflictingSameIndexTail — Raft §5.3
+// same-index/different-term truncation before the base commit catch-up). Red-on-revert: removing
+// that truncation re-exposes the divergence (old leader stale-commits its own term-T entry at the
+// index the cluster committed at term T+1).
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const REPRO_SEED = 0; // fixed: the divergence is deterministic (leaderA=N1, leaderB=N2 at idx 2)
@@ -66,7 +67,6 @@ function committedDivergenceByIndex(rafts) {
 }
 
 t.test('committed raft log entries agree across nodes after a partition + heal',
-  {todo: 'CL-040: liferaft/InMemoryLogAdapter same-index stale-commit (open)'},
   async (t) => {
     const net = createVirtualNetwork();
     const rafts = connectRaftCluster(net, IDS, clusterOptions(REPRO_SEED));
