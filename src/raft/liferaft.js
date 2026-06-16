@@ -1,6 +1,8 @@
 import BaseLifeRaft from '@markwylde/liferaft';
 import {VirtualTick} from './virtual-tick.js';
 
+const NUMERIC_ONE = 1;
+
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COMMAND = 'command';
@@ -281,6 +283,14 @@ class LifeRaft extends BaseLifeRaft {
   constructor(address, options = {}) {
     super(address, options);
     patchIncomingDataListener(this);
+    // DT5 election-jitter seam (OPT-IN): base liferaft's timeout() draws the
+    // randomized election delay from Math.random. When a randomSource is provided,
+    // timeout() (overridden below) draws from it instead, so a seed fully
+    // determines election timing. No randomSource -> Math.random, unchanged.
+    if (options && options.randomSource &&
+        typeof options.randomSource.random === 'function') {
+      this._electionRandomSource = options.randomSource;
+    }
     // DT4 Raft election seam (OPT-IN): base liferaft schedules its heartbeat +
     // randomized election timeout through `this.timers` (a tick-tock Tick on
     // native setTimeout). When a timeSource is provided, swap in a VirtualTick
@@ -295,6 +305,24 @@ class LifeRaft extends BaseLifeRaft {
       this.timers = new VirtualTick(this, options.timeSource);
       this.heartbeat(this.timeout());
     }
+  }
+
+  /**
+   * Randomized election timeout. Mirrors base liferaft's formula but draws from
+   * the injected DT5 RandomSource when present (deterministic), else defers to the
+   * base Math.random implementation (production-unchanged).
+   * @return {number} milliseconds in [election.min, election.max].
+   */
+  timeout() {
+    if (!this._electionRandomSource) {
+      return super.timeout();
+    }
+    const times = this.election;
+    return Math.floor(
+      this._electionRandomSource.random() *
+        (times.max - times.min + NUMERIC_ONE) +
+      times.min,
+    );
   }
 }
 
