@@ -51,7 +51,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       );
     } else {
       // Add jitter: ±25% of interval to spread load
-      const jitter = this.periodicCheckJitterMs * (Math.random() - 0.5) * 2;
+      const jitter =
+        this.periodicCheckJitterMs * (this.randomSource.random() - 0.5) * 2;
       delay = Math.max(
         UNIFIED_REBALANCER_LITERAL.THOUSAND,
         this.currentInterval + jitter,

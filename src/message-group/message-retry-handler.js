@@ -8,6 +8,7 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {resolveRandomSource} from '../random/random-source.js';
 import {LoggingService} from '../logging/logging-service.js';
 
 const LOCAL_STR_1BUA7 = 'message-retry-handler';
@@ -89,6 +90,9 @@ class MessageRetryHandler extends EventEmitter {
     this.jitterFactor = options.jitterFactor ??
       config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
       DEFAULT_RETRY_CONFIG.jitterFactor;
+    // DT5 seam: backoff jitter draws from a RandomSource (default RealRandomSource
+    // = Math.random, byte-identical) so a seed determines retry scheduling.
+    this.randomSource = resolveRandomSource(options);
 
     // Function to get alternative replicas for a target
     this.getAlternativeReplicas = options.getAlternativeReplicas || null;
@@ -127,7 +131,7 @@ class MessageRetryHandler extends EventEmitter {
     // Add jitter to prevent thundering herd
     // Jitter is ±jitterFactor of the base delay
     const jitterRange = baseDelay * this.jitterFactor;
-    const jitter = (Math.random() * 2 - 1) * jitterRange;
+    const jitter = (this.randomSource.random() * 2 - 1) * jitterRange;
 
     return Math.max(LOCAL_NUM_ZERO, Math.round(baseDelay + jitter));
   }

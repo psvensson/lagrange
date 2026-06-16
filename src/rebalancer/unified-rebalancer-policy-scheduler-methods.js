@@ -110,14 +110,14 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (this.isControlPlanePriorityPartition()) {
       return Math.max(
         UNIFIED_REBALANCER_LITERAL.ONE,
-        Math.floor(Math.random() * this.getPriorityRetryDelayMs()),
+        Math.floor(this.randomSource.random() * this.getPriorityRetryDelayMs()),
       );
     }
     // Stagger initial check with per-entity random offset to avoid
     // thundering herd when many partitions become leaders at once
     // (e.g. during bootstrap or rolling restarts).
     const initialJitter = Math.floor(
-      Math.random() * this.periodicCheckIntervalMs,
+      this.randomSource.random() * this.periodicCheckIntervalMs,
     );
     return this.periodicCheckIntervalMs + initialJitter;
   }
