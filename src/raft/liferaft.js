@@ -1,4 +1,5 @@
 import BaseLifeRaft from '@markwylde/liferaft';
+import {VirtualTick} from './virtual-tick.js';
 
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_OBJECT = 'object';
@@ -280,6 +281,20 @@ class LifeRaft extends BaseLifeRaft {
   constructor(address, options = {}) {
     super(address, options);
     patchIncomingDataListener(this);
+    // DT4 Raft election seam (OPT-IN): base liferaft schedules its heartbeat +
+    // randomized election timeout through `this.timers` (a tick-tock Tick on
+    // native setTimeout). When a timeSource is provided, swap in a VirtualTick
+    // backed by it so the harness can advance election timing deterministically.
+    // The base constructor ALREADY armed the election timer on the real Tick
+    // (_initialize -> initialize() -> heartbeat(timeout())), so we must clear that
+    // native timer first (else it leaks and fires on wall time), swap, then re-arm
+    // on the virtual clock. No timeSource -> the real Tick stays untouched, so
+    // production behavior is unchanged.
+    if (options && options.timeSource) {
+      this.timers.clear();
+      this.timers = new VirtualTick(this, options.timeSource);
+      this.heartbeat(this.timeout());
+    }
   }
 }
 
