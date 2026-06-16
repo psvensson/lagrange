@@ -15,9 +15,10 @@ candidate wins), DT6 STEP 4 (a real LEADERSHIP MIGRATION + fail-back end-to-end 
 the elected leader, a follower wins a higher term, the old leader steps down on heal), and DT6
 STEP 5 (the first REAL CONTROL-PLANE subsystem — the real owner-membership publication driver
 hosted per node, gated on live raft leadership, so a real migration drives a real owner handoff),
-and DT6 STEP 6 (the CL-039 publication FAIL-BACK with the REAL deficit decision + REAL published
-row — the migrated leader re-publishes for its term while the partitioned old owner cannot commit)
-are landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
+DT6 STEP 6 (the CL-039 publication FAIL-BACK with the REAL deficit decision + REAL published row),
+and DT6 STEP 7 (the publication commit made a REAL QUORUM-GATED raft-log commit via `raft.command`
+— a partitioned minority owner genuinely cannot commit; step 6's modelled commit removed) are
+landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -266,11 +267,35 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   so the new leader's re-publish is modelled as GUARANTEED to commit — the test proves the new
 >   owner RE-DETECTS the deficit and re-drives (the exact CL-039 gap) but NOT that the re-publish
 >   reaches a real quorum.
+> - **DT6 — STEP 7 LANDED (2026-06-16). The publication commit is now a REAL QUORUM-GATED raft
+>   commit — step 6's modelled commit removed.** `test/convergence/
+>   dt6-publication-quorum-failback-network.test.js`: each node is a real LifeRaft on the REAL log
+>   (`InMemoryLogAdapter` as the `Log` option), and the real owner driver's real deficit decision
+>   publishes by committing a REAL row through the REAL raft log via `raft.command()` — which
+>   replicates over the network and commits ONLY on a real majority. So a partitioned (minority)
+>   owner genuinely cannot commit (its append never reaches a quorum), not because a term comparison
+>   says so. **GUARD MET:** Phase A — the elected leader commits membership v1 cluster-wide via real
+>   replication; Phase B — a required-version bump (a membership change) + partition the leader → the
+>   NEW leader re-publishes v2 and it COMMITS via real quorum (the fail-back), while the partitioned
+>   old leader issues its v2 `raft.command` but its committed index stays frozen at v1 (no majority —
+>   proven by instrumentation: a leader cut off from both peers appends but never advances
+>   `committedIndex`); Phase C — heal → the old leader steps down and the published VERSION converges
+>   to v2 cluster-wide. Subagent-verified TRUSTED-WITH-CAVEATS — over a 41-seed census EVERY seed:
+>   v1 commits cluster-wide, the new leader commits v2 while the partitioned old leader stays at v1,
+>   and all converge to v2; the quorum gate is confirmed REAL raft replication; the deficit DECISION
+>   + ROW remain real; deterministic, no leak. FINDING (documented, not asserted-away): at the raft
+>   LOG-ENTRY level the heal does NOT cleanly reconcile — the healed old leader stale-commits its OWN
+>   v2 entry (its publisher/term) at the same index where the cluster committed the new leader's
+>   entry; the published VERSION converges but the committed ROW PROVENANCE diverges. That is a
+>   PRE-EXISTING `@markwylde/liferaft` + `InMemoryLogAdapter` log-safety gap (append catch-up commits
+>   a follower's own same-index entry without a term/command match check), NOT introduced by this
+>   step — the guard asserts version convergence, not committed-command equality, and the gap is
+>   flagged for a separate closure-ledger entry.
 >   **REMAINING toward full DT6:** host the OTHER real control-plane subsystems (readiness /
 >   rebalancer / the membership-lifecycle + placement controllers) alongside raft on the
->   VirtualNetwork and drive a REAL quorum-gated publication commit (real persistence/CDC/ack), so a
->   seed reproduces the control-plane CL-039 fail-back end-to-end with a real committed epoch — the
->   north-star whole-system DST.
+>   VirtualNetwork and drive the REAL persistence/CDC/ack (not the required-version stand-in), so a
+>   seed reproduces the control-plane CL-039 fail-back end-to-end with the real publication pipeline —
+>   the north-star whole-system DST.
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
@@ -284,7 +309,7 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — STEPS 1–6 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+> - **DT6 — STEPS 1–7 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
 >   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
 >   is built and guarded (step 1); the first REAL state machine — a `@markwylde/liferaft` node —
 >   runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
@@ -299,16 +324,22 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   (step 5); and the CL-039 publication FAIL-BACK runs end-to-end with the REAL deficit decision +
 >   REAL published-row materialisation — the migrated leader re-detects the stale epoch and
 >   re-publishes for its term while the partitioned old owner's stale-term writes are rejected
->   (step 6) — see "DT6 — STEP 1/2/3/4/5/6 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
->   instantiating the OTHER real subsystems (readiness/rebalancer/the membership-lifecycle + placement
->   controllers) alongside the real raft nodes on the VirtualNetwork and driving a REAL quorum-gated
->   publication commit (real persistence/CDC/ack, not the term-gated store model), seed-iterated via
->   the DT5 PCT scheduler, to reproduce the control-plane CL-039 fail-back end-to-end with a real
->   committed epoch — remains the gated program. The seams (TimeSource on all four subsystems + raft,
->   RandomSource on the jitter sites), the VirtualNetwork substrate, the adapter that hosts a real
->   TimeSource-seamed machine, the real raft RPC transport, a real raft leadership migration, the
->   first real control-plane subsystem, AND the real publication-deficit fail-back decision are now in
->   place; what remains is the OTHER real subsystems + a real quorum-gated published commit.
+>   (step 6); and the publication commit was made a REAL QUORUM-GATED raft-log commit — the real
+>   owner driver publishes via `raft.command()` on a real liferaft log, so the migrated leader's
+>   re-publish COMMITS only on a real majority while the partitioned old owner genuinely cannot
+>   (step 7, removing step 6's modelled commit) — see "DT6 — STEP 1…7 LANDED" under DT5 above.
+>   Seed-iterated WHOLE-SYSTEM DST — instantiating the OTHER real subsystems
+>   (readiness/rebalancer/the membership-lifecycle + placement controllers) alongside the real raft
+>   nodes on the VirtualNetwork and driving the REAL publication persistence/CDC/ack pipeline (not the
+>   required-version stand-in), seed-iterated via the DT5 PCT scheduler, to reproduce the control-plane
+>   CL-039 fail-back end-to-end with the real pipeline — remains the gated program. The seams
+>   (TimeSource on all four subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork
+>   substrate, the adapter that hosts a real TimeSource-seamed machine, the real raft RPC transport, a
+>   real raft leadership migration, the first real control-plane subsystem, the real publication-deficit
+>   fail-back decision, AND a real quorum-gated published commit are now in place; what remains is the
+>   OTHER real subsystems + the real publication pipeline. (A pre-existing liferaft/InMemoryLogAdapter
+>   log-entry divergence on heal — same-index stale-commit without a term/command match — was surfaced
+>   by step 7's verification and is flagged for a separate closure-ledger entry.)
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
