@@ -2,10 +2,11 @@
 
 Status: PARTIALLY IMPLEMENTED + VERIFIED (2026-06-16). The cheap, verifiable tier is
 built and tested; DT4 steps 1–3 (the TimeSource seam, the partial-seam collapses, the
-opt-in Raft election seam, and the in-process freeze→leadership scenario) and DT5 step 1
-(the seeded RandomSource seam + jitter-site coverage) and the in-process L1→TT
-freeze→leadership→publication-stall scenario are landed; the DT5 PCT scheduler and DT6
-(multi-node DST) proceed as a gated program (see below).
+opt-in Raft election seam, and the in-process freeze→leadership scenario) and DT5 steps 1–2
+(the seeded RandomSource seam + jitter-site coverage, and the PCT depth-bounded schedule
+search over the virtual clock) and the in-process L1→TT
+freeze→leadership→publication-stall scenario are landed; DT6
+(multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -57,18 +58,37 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >     against a real LifeRaft node and reproduces CL-039's L1→L2 deterministically: heartbeats
 >     within the window HOLD leadership; a freeze past the election timeout SHEDS it at the exact
 >     instant; identical across runs. Sub-second, no docker.
-> - **DT5 — STEP 1 LANDED (2026-06-16): the seeded `RandomSource` seam + jitter-site coverage.**
->   `src/random/random-source.js`: `RealRandomSource` (the default — `Math.random`, byte-for-byte
->   unchanged), `SeededRandomSource` (mulberry32, same seed -> same stream), `resolveRandomSource`.
->   Threaded OPT-IN (no production path passes a `randomSource`, so all sites stay `Math.random`):
->   the raft election `timeout()` jitter (`src/raft/liferaft.js` override — same formula, only the
->   source differs; removes the freeze scenario's `min==max` workaround), the message-retry backoff
->   jitter, and the unified-rebalancer scheduler / planning-gate staggering jitter. Tests:
->   `test/random/random-source.test.js`, `test/raft/election-jitter-seed.test.js`,
->   `test/random/dt5-jitter-seam.test.js` (same seed -> identical streams; defaults unchanged).
->   **REMAINING DT5:** the PCT-style depth-bounded scheduler over the virtual clock — the search
->   layer on top of these now-deterministic time+random seams (bound bug depth k, insert k
->   priority-change points per seed, iterate seeds with replay).
+> - **DT5 — STEPS 1–2 LANDED (2026-06-16).**
+>   - **Step 1 — the seeded `RandomSource` seam + jitter-site coverage.**
+>     `src/random/random-source.js`: `RealRandomSource` (the default — `Math.random`, byte-for-byte
+>     unchanged), `SeededRandomSource` (mulberry32, same seed -> same stream), `resolveRandomSource`.
+>     Threaded OPT-IN (no production path passes a `randomSource`, so all sites stay `Math.random`):
+>     the raft election `timeout()` jitter (`src/raft/liferaft.js` override — same formula, only the
+>     source differs; removes the freeze scenario's `min==max` workaround), the message-retry backoff
+>     jitter, and the unified-rebalancer scheduler / planning-gate staggering jitter. Tests:
+>     `test/random/random-source.test.js`, `test/raft/election-jitter-seed.test.js`,
+>     `test/random/dt5-jitter-seam.test.js` (same seed -> identical streams; defaults unchanged).
+>   - **Step 2 — the PCT depth-bounded schedule search.** `src/time/pct-scheduler.js`: a `PctScheduler`
+>     (Burckhardt et al. PLDI'10, the Coyote/P# formulation) that controls the one degree of freedom
+>     the time+random seams leave open — the ORDER in which timers due at the SAME virtual instant
+>     fire (cross-instant order is real causality, governed by the seeded delays, and is never
+>     reordered). Each task (a `keyOf`-grouped chain of timers) gets a random initial priority; for
+>     bug depth d it inserts d-1 priority-change points at seeded steps; a change point demotes the
+>     scheduled task into a low band so the search can delay one task ACROSS another (the move pure
+>     random priorities cannot force). `src/time/time-source.js` gains an OPT-IN `options.scheduler`
+>     seam (`_pickDueTimer` reorders only the co-due set; absent it is byte-identical to the old
+>     `(dueAt, seq)` order — the unchanged 12-subtest `time-source.test.js` still passes).
+>     `test/distributed/harness/pct-search.js` iterates seeds (`exploreWithPct`) and replays a failing
+>     seed (`runPctSeed`); the whole run is a pure function of the seed. **GUARD MET:** a known
+>     depth-2 race (`test/convergence/dt5-pct-search.test.js`) — two producer/consumer chains where
+>     corruption needs x2 delayed past y2 — is UNREACHABLE at depth 1 (independently verified: 0
+>     corruptions / 5000 seeds) and is FOUND at depth 2 within a 100-seed budget, then replays the
+>     identical schedule. The PCT lower bound 1/(n·stepBudget^(d-1)) = 1/8 (n=2, budget=4, d=2) is
+>     empirically tight (hit rate 0.1264 / 5000 seeds). Subagent-verified TRUSTED (determinism,
+>     default byte-identity, causality, depth-2 claim, the bound, and edge cases all confirmed).
+>     Unit contract: `test/time/pct-scheduler.test.js`.
+>   **REMAINING toward DT6:** lift the per-instant scheduler to multi-node (per-node virtual clocks +
+>   a virtual network), so the search reorders cross-node message delivery, not just co-due timers.
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
