@@ -7,6 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {
   NUM,
   STATE,
@@ -30,7 +31,6 @@ import {
   LEASE_ERROR_MSG,
   LEASE_EVENT,
   LEASE_LOG_MSG,
-  LEASE_NOW,
   LEASE_SQL,
   LEASE_STATE,
   LEASE_SUBSYSTEM,
@@ -70,15 +70,20 @@ class LeaseService extends EventEmitter {
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
     this.messageRouter = options.messageRouter || null;
+    // DT4 seam: clock + sweep timer run on one TimeSource (default RealTimeSource =
+    // platform Date.now/setInterval/clearInterval, byte-identical to the prior
+    // LEASE_NOW/setInterval/clearInterval) so the convergence harness can advance the
+    // lease deterministically. Explicit per-fn options keep precedence.
+    this.timeSource = resolveTimeSource(options);
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
-      LEASE_NOW;
+      () => this.timeSource.now();
     this.setIntervalFn = typeof options.setIntervalFn === TYPEOF.FUNCTION ?
       options.setIntervalFn :
-      setInterval;
+      (fn, ms) => this.timeSource.setInterval(fn, ms);
     this.clearIntervalFn = typeof options.clearIntervalFn === TYPEOF.FUNCTION ?
       options.clearIntervalFn :
-      clearInterval;
+      (handle) => this.timeSource.clearInterval(handle);
 
     const config = ConfigurationManager.getInstance();
     this.readyLeaseMs =

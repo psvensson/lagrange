@@ -4,6 +4,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
@@ -667,10 +668,20 @@ class MembershipPublicationCoordinatorReconcile extends
     }
     const intervalMs =
       options.intervalMs || OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS;
+    // DT4 seam: the owner-driver interval runs on a TimeSource (default
+    // RealTimeSource = the platform setInterval/clearInterval, byte-identical) so the
+    // convergence harness can advance it deterministically. Store the matching clear
+    // so stopOwnerMembershipDriver tears down a virtual timer too. Explicit
+    // setIntervalFn/clearIntervalFn options keep precedence.
+    const timeSource = resolveTimeSource(options);
     const setIntervalFn =
       typeof options.setIntervalFn === TYPEOF.FUNCTION ?
         options.setIntervalFn :
-        setInterval;
+        (fn, ms) => timeSource.setInterval(fn, ms);
+    this.ownerMembershipDriverClearInterval =
+      typeof options.clearIntervalFn === TYPEOF.FUNCTION ?
+        options.clearIntervalFn :
+        (handle) => timeSource.clearInterval(handle);
     this.ownerMembershipDriverTimer = setIntervalFn(() => {
       this.driveOwnerMembershipReconcile().catch(() => {});
     }, intervalMs);
@@ -681,7 +692,11 @@ class MembershipPublicationCoordinatorReconcile extends
 
   stopOwnerMembershipDriver() {
     if (this.ownerMembershipDriverTimer) {
-      clearInterval(this.ownerMembershipDriverTimer);
+      const clearIntervalFn =
+        typeof this.ownerMembershipDriverClearInterval === TYPEOF.FUNCTION ?
+          this.ownerMembershipDriverClearInterval :
+          clearInterval;
+      clearIntervalFn(this.ownerMembershipDriverTimer);
       this.ownerMembershipDriverTimer = null;
     }
   }

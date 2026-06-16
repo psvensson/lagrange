@@ -6,6 +6,7 @@
 
 import {HLCTimestamp} from './hlc-timestamp.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLC_CONFIG_KEY, HLC_DEFAULT, HLC_LOG_MSG, HLC_SUBSYSTEM} from './hlc-constants.js';
 
@@ -24,7 +25,11 @@ class HLCClockService {
    */
   constructor(nodeId, options = {}) {
     this.nodeId = nodeId;
-    this.physical = Date.now();
+    // DT4 seam: the HLC physical clock reads through a TimeSource (default
+    // RealTimeSource = Date.now, byte-identical) so the convergence harness can
+    // drive HLC timestamps deterministically alongside the other subsystems.
+    this.timeSource = resolveTimeSource(options);
+    this.physical = this.timeSource.now();
     this.logical = LOCAL_NUM_ZERO;
 
     // Get configuration
@@ -50,7 +55,7 @@ class HLCClockService {
    * @return {HLCTimestamp} A new HLC timestamp.
    */
   now() {
-    const physicalNow = Date.now();
+    const physicalNow = this.timeSource.now();
 
     if (physicalNow > this.physical) {
       // Physical clock advanced, reset logical
@@ -77,7 +82,7 @@ class HLCClockService {
    * @return {HLCTimestamp} The updated local timestamp.
    */
   update(remoteTimestamp) {
-    const physicalNow = Date.now();
+    const physicalNow = this.timeSource.now();
     const remotePhy = remoteTimestamp.physical;
 
     // Check for excessive clock drift
