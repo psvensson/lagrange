@@ -1,0 +1,406 @@
+/**
+ * VirtualNetwork — the DT6 multi-node lift of the DT4/DT5 virtual-clock + PCT seams
+ * (deterministic-directed-testing-plan.md, "REMAINING toward DT6": lift the per-instant
+ * scheduler to multi-node — per-node virtual clocks + a virtual network — so the search
+ * reorders cross-node MESSAGE DELIVERY, not just co-due timers on one clock).
+ *
+ * The single-node substrate (VirtualTimeSource + PctScheduler) controls one degree of
+ * freedom: the order co-due timers on ONE clock fire. A distributed system has a second,
+ * larger one: the order in which in-flight messages arrive at different nodes. That is the
+ * race the convergence bugs actually live in (leadership migrating off a frozen seed onto a
+ * restarting replica; a publication write racing a membership change). VirtualNetwork makes
+ * that order a function of the seed so the SAME PCT search that catches a co-due timer race
+ * catches a cross-node delivery race.
+ *
+ * What it is:
+ *   - N nodes, each with its own handler and its own LOGICAL CLOCK (nodeNow). An ACTIVE
+ *     node's clock tracks global virtual time (it is touched to `now` whenever the node
+ *     sends, receives, or arms a timer, or one of its events fires); a STOPPED node's clock
+ *     freezes at its last activity. (Divergent per-node clocks while a node keeps RUNNING —
+ *     the CL-039 "frozen seed still believes it leads" fault — is a later step; here a
+ *     node's clock only lags by being idle or stopped.)
+ *   - One global virtual clock and one global event queue holding both in-flight MESSAGES
+ *     (from -> to, due at send-time + delay) and per-node TIMERS (owned by one node). An
+ *     event's `dueAt` is real causality and is never reordered across distinct instants; the
+ *     genuine race — events that come due at the SAME earliest instant — is handed to the
+ *     injected PctScheduler exactly as VirtualTimeSource hands it its co-due timers.
+ *   - A virtual network with partition/heal and kill/start: a message to a partitioned link
+ *     or a stopped node is DROPPED at delivery (recorded), it does not invoke a handler.
+ *
+ * Determinism + production-inertness: with NO scheduler the co-due set fires in (dueAt, seq)
+ * order, byte-identical to a plain priority queue; nothing in src/ constructs a
+ * VirtualNetwork (it is a test-harness substrate, like deterministic-simulator.js). A run is
+ * a pure function of (seed -> scheduler change points + the scenario's seeded delays), so a
+ * failing seed replays the identical delivery interleaving.
+ *
+ * Reuse: a scenario built on VirtualNetwork plugs straight into the existing pct-search.js
+ * layer (exploreWithPct / runPctSeed / minimizePctDepth) — those pass {scheduler, random,
+ * seed} to the scenario, which constructs a VirtualNetwork wired to that scheduler. The
+ * search layer is unchanged; only this substrate is new.
+ */
+
+const VIRTUAL_NETWORK_NUM_ZERO = 0;
+const VIRTUAL_NETWORK_NUM_ONE = 1;
+const VIRTUAL_NETWORK_DEFAULT_MAX_STEPS = 100000;
+const VIRTUAL_NETWORK_LINK_SEPARATOR = '::';
+const VIRTUAL_NETWORK_STR_FUNCTION = 'function';
+
+const VIRTUAL_NETWORK_EVENT_KIND = Object.freeze({
+  MESSAGE: 'message',
+  TIMER: 'timer',
+});
+
+const VIRTUAL_NETWORK_NODE_STATE = Object.freeze({
+  RUNNING: 'running',
+  STOPPED: 'stopped',
+});
+
+const VIRTUAL_NETWORK_DROP_REASON = Object.freeze({
+  LINK_PARTITIONED: 'link_partitioned',
+  NODE_STOPPED: 'node_stopped',
+});
+
+const VIRTUAL_NETWORK_RECORD_KIND = Object.freeze({
+  DELIVERED: 'delivered',
+  DROPPED: 'dropped',
+  FIRED: 'fired',
+});
+
+// Undirected link identity (partition A<->B drops both directions), order-independent.
+function virtualNetworkLinkKey(leftNodeId, rightNodeId) {
+  return [leftNodeId, rightNodeId]
+    .sort()
+    .join(VIRTUAL_NETWORK_LINK_SEPARATOR);
+}
+
+function normalizeDelayMs(delayMs) {
+  const raw = Number(delayMs);
+  return Number.isFinite(raw) && raw > VIRTUAL_NETWORK_NUM_ZERO ?
+    Math.floor(raw) :
+    VIRTUAL_NETWORK_NUM_ZERO;
+}
+
+/**
+ * Create a multi-node virtual network on one global virtual clock.
+ * @param {Object} [options]
+ * @param {Object} [options.scheduler] - optional PctScheduler-shaped strategy with a
+ *   pick(coDueEvents) method, used to order events that come due at the SAME instant
+ *   (the cross-node delivery race). Absent: (dueAt, seq) order, byte-identical to a plain
+ *   priority queue.
+ * @param {Object} [options.random] - optional RandomSource (random(): number in [0,1)),
+ *   exposed to scenarios so per-message delay jitter is part of the seeded stream. Not used
+ *   internally; the network never invents delays.
+ * @param {number} [options.startMs=0] - initial global clock value.
+ * @return {Object} the network api.
+ */
+function createVirtualNetwork(options = {}) {
+  let nowMs = Number.isFinite(Number(options.startMs)) ?
+    Number(options.startMs) :
+    VIRTUAL_NETWORK_NUM_ZERO;
+  let seq = VIRTUAL_NETWORK_NUM_ZERO;
+  const scheduler =
+    options.scheduler &&
+    typeof options.scheduler.pick === VIRTUAL_NETWORK_STR_FUNCTION ?
+      options.scheduler :
+      null;
+  const random =
+    options.random &&
+    typeof options.random.random === VIRTUAL_NETWORK_STR_FUNCTION ?
+      options.random :
+      null;
+
+  // nodeId -> {state, clockMs, handler}
+  const nodes = new Map();
+  // in-flight events: {seq, dueAt, kind, from, to, type, payload, fn}
+  const queue = [];
+  const partitions = new Set();
+  const records = [];
+
+  function ensureNode(nodeId) {
+    const node = nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`VirtualNetwork: unknown node "${nodeId}" (register it first)`);
+    }
+    return node;
+  }
+
+  function touch(nodeId) {
+    // An active node's logical clock follows global time; a stopped node's does not.
+    const node = nodes.get(nodeId);
+    if (node && node.state === VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
+      node.clockMs = nowMs;
+    }
+  }
+
+  function registerNode(nodeId, handler) {
+    nodes.set(nodeId, {
+      state: VIRTUAL_NETWORK_NODE_STATE.RUNNING,
+      clockMs: nowMs,
+      handler: typeof handler === VIRTUAL_NETWORK_STR_FUNCTION ? handler : null,
+    });
+  }
+
+  function startNode(nodeId) {
+    const node = ensureNode(nodeId);
+    node.state = VIRTUAL_NETWORK_NODE_STATE.RUNNING;
+    node.clockMs = nowMs;
+  }
+
+  function killNode(nodeId) {
+    ensureNode(nodeId).state = VIRTUAL_NETWORK_NODE_STATE.STOPPED;
+  }
+
+  function partition(leftNodeId, rightNodeId) {
+    partitions.add(virtualNetworkLinkKey(leftNodeId, rightNodeId));
+  }
+
+  function heal(leftNodeId, rightNodeId) {
+    partitions.delete(virtualNetworkLinkKey(leftNodeId, rightNodeId));
+  }
+
+  function isPartitioned(fromNodeId, toNodeId) {
+    return partitions.has(virtualNetworkLinkKey(fromNodeId, toNodeId));
+  }
+
+  function enqueue(event) {
+    queue.push({seq: seq++, ...event});
+  }
+
+  /**
+   * Send a message from one node to another, arriving after delayMs of virtual time.
+   * @param {Object} message - {from, to, type, payload, delayMs}.
+   */
+  function send(message = {}) {
+    ensureNode(message.to);
+    if (message.from !== undefined) {
+      touch(message.from);
+    }
+    enqueue({
+      kind: VIRTUAL_NETWORK_EVENT_KIND.MESSAGE,
+      from: message.from,
+      to: message.to,
+      type: message.type,
+      payload: message.payload || {},
+      dueAt: nowMs + normalizeDelayMs(message.delayMs),
+      fn: null,
+    });
+  }
+
+  /**
+   * Arm a one-shot timer owned by a node, firing after delayMs of (global) virtual time.
+   * @param {string} nodeId
+   * @param {Function} fn
+   * @param {number} delayMs
+   * @param {Object} [payload] - carried on the event so a scheduler keyOf can group it.
+   */
+  function setTimer(nodeId, fn, delayMs, payload = {}) {
+    ensureNode(nodeId);
+    touch(nodeId);
+    enqueue({
+      kind: VIRTUAL_NETWORK_EVENT_KIND.TIMER,
+      from: nodeId,
+      to: nodeId,
+      type: 'timer',
+      payload,
+      dueAt: nowMs + normalizeDelayMs(delayMs),
+      fn: typeof fn === VIRTUAL_NETWORK_STR_FUNCTION ? fn : null,
+    });
+  }
+
+  function record(entry) {
+    records.push(Object.freeze({timeMs: nowMs, ...entry}));
+  }
+
+  /**
+   * The next event to fire among those due at or before the queue's earliest instant. The
+   * earliest dueAt always wins (cross-instant order is causality). Among the co-due set
+   * (taken in seq order) an injected scheduler picks; with none the lowest seq fires — so
+   * the result is the smallest (dueAt, seq), byte-identical to a plain priority queue.
+   * @return {Object|null}
+   */
+  function pickNext() {
+    if (queue.length === VIRTUAL_NETWORK_NUM_ZERO) {
+      return null;
+    }
+    let earliest = null;
+    for (const event of queue) {
+      if (earliest === null || event.dueAt < earliest) {
+        earliest = event.dueAt;
+      }
+    }
+    const coDue = queue
+      .filter((event) => event.dueAt === earliest)
+      .sort((left, right) => left.seq - right.seq);
+    if (scheduler !== null) {
+      // Honor the scheduler's pick ONLY if it is a member of the co-due set offered to it.
+      // The shipped PctScheduler always returns one of its arguments, so this never fires
+      // for production use — but a buggy custom scheduler that returned a foreign (e.g.
+      // later-due) event would otherwise bypass the cross-instant causality guard silently;
+      // fall back to (dueAt, seq) order instead.
+      const picked = scheduler.pick(coDue);
+      if (picked && coDue.indexOf(picked) >= VIRTUAL_NETWORK_NUM_ZERO) {
+        return picked;
+      }
+    }
+    return coDue[VIRTUAL_NETWORK_NUM_ZERO];
+  }
+
+  function removeFromQueue(event) {
+    const index = queue.indexOf(event);
+    if (index >= VIRTUAL_NETWORK_NUM_ZERO) {
+      queue.splice(index, VIRTUAL_NETWORK_NUM_ONE);
+    }
+  }
+
+  function deliverMessage(event) {
+    const target = nodes.get(event.to);
+    if (!target || target.state !== VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
+      record({
+        kind: VIRTUAL_NETWORK_RECORD_KIND.DROPPED,
+        reason: VIRTUAL_NETWORK_DROP_REASON.NODE_STOPPED,
+        from: event.from,
+        to: event.to,
+        type: event.type,
+      });
+      return;
+    }
+    if (event.from !== undefined && isPartitioned(event.from, event.to)) {
+      record({
+        kind: VIRTUAL_NETWORK_RECORD_KIND.DROPPED,
+        reason: VIRTUAL_NETWORK_DROP_REASON.LINK_PARTITIONED,
+        from: event.from,
+        to: event.to,
+        type: event.type,
+      });
+      return;
+    }
+    touch(event.to);
+    record({
+      kind: VIRTUAL_NETWORK_RECORD_KIND.DELIVERED,
+      from: event.from,
+      to: event.to,
+      type: event.type,
+    });
+    if (target.handler) {
+      target.handler(
+        Object.freeze({
+          from: event.from,
+          to: event.to,
+          type: event.type,
+          payload: event.payload,
+        }),
+        api,
+      );
+    }
+  }
+
+  function fireTimer(event) {
+    const owner = nodes.get(event.from);
+    if (!owner || owner.state !== VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
+      record({
+        kind: VIRTUAL_NETWORK_RECORD_KIND.DROPPED,
+        reason: VIRTUAL_NETWORK_DROP_REASON.NODE_STOPPED,
+        from: event.from,
+        to: event.to,
+        type: event.type,
+      });
+      return;
+    }
+    touch(event.from);
+    record({
+      kind: VIRTUAL_NETWORK_RECORD_KIND.FIRED,
+      from: event.from,
+      to: event.to,
+      type: event.type,
+    });
+    if (event.fn) {
+      event.fn(api);
+    }
+  }
+
+  function deliverOne(event) {
+    nowMs = event.dueAt;
+    removeFromQueue(event);
+    if (event.kind === VIRTUAL_NETWORK_EVENT_KIND.TIMER) {
+      fireTimer(event);
+    } else {
+      deliverMessage(event);
+    }
+  }
+
+  /**
+   * Drain the network until idle, delivering each due event in scheduler-chosen order.
+   * Handlers may send/setTimer further events; those due within the run fire too.
+   * @param {Object} [runOptions] - {maxSteps}.
+   * @return {Object} {steps, remaining, nowMs}.
+   */
+  function run(runOptions = {}) {
+    const maxSteps = Number.isFinite(Number(runOptions.maxSteps)) ?
+      Number(runOptions.maxSteps) :
+      VIRTUAL_NETWORK_DEFAULT_MAX_STEPS;
+    let steps = VIRTUAL_NETWORK_NUM_ZERO;
+    for (;;) {
+      const next = pickNext();
+      if (!next) {
+        break;
+      }
+      if (steps >= maxSteps) {
+        throw new Error(
+          `VirtualNetwork.run exceeded ${maxSteps} steps — a handler is likely ` +
+          'arming zero-delay events without progress',
+        );
+      }
+      steps += VIRTUAL_NETWORK_NUM_ONE;
+      deliverOne(next);
+    }
+    return Object.freeze({steps, remaining: queue.length, nowMs});
+  }
+
+  function now() {
+    return nowMs;
+  }
+
+  function nodeNow(nodeId) {
+    return ensureNode(nodeId).clockMs;
+  }
+
+  function nodeState(nodeId) {
+    return ensureNode(nodeId).state;
+  }
+
+  function getRecords() {
+    return Object.freeze([...records]);
+  }
+
+  function pendingEventCount() {
+    return queue.length;
+  }
+
+  const api = Object.freeze({
+    now,
+    nodeNow,
+    nodeState,
+    registerNode,
+    startNode,
+    killNode,
+    partition,
+    heal,
+    send,
+    setTimer,
+    run,
+    getRecords,
+    pendingEventCount,
+    random,
+  });
+
+  return api;
+}
+
+export {
+  createVirtualNetwork,
+  virtualNetworkLinkKey,
+  VIRTUAL_NETWORK_EVENT_KIND,
+  VIRTUAL_NETWORK_NODE_STATE,
+  VIRTUAL_NETWORK_DROP_REASON,
+  VIRTUAL_NETWORK_RECORD_KIND,
+};
