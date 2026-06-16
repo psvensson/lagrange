@@ -41,3 +41,6 @@ models/**/*_TTrace_*.bin
 # generated reports, and attempt change diffs are durable workflow evidence and
 # stay trackable.
 solve/state/
+
+# TLC scratch output from manual tlc2.TLC runs
+states/

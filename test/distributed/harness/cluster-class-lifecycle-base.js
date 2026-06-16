@@ -1,5 +1,6 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
+import {waitForState} from './wait-for-state.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   createNodeLogStreamer,
@@ -1358,6 +1359,13 @@ class ClusterLifecycleBase {
 
   async waitForAllActive(options = {}) {
     return this._waitForAllActive(options);
+  }
+
+  // DT1 directed-chaos primitive: block until an arbitrary observed predicate
+  // holds, then the scenario perturbs (restart/partition/kill) on that STATE
+  // rather than on a wall-clock timer. `predicate(cluster) => boolean|Promise`.
+  async waitForState(predicate, options = {}) {
+    return waitForState(this, predicate, options);
   }
 
   async assertConsistency(options) {

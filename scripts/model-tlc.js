@@ -150,6 +150,45 @@ const CONFIGS = [
     boundary: 'publication_convergence',
     expectedFailurePattern: 'Temporal property EventuallySteady was violated',
   },
+  {
+    id: 'leadership-failback-reconciled',
+    mode: 'leadership-failback-reconciled',
+    module: path.resolve(
+      'models',
+      'leadership-failback',
+      'LeadershipFailback.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'leadership-failback',
+      'LeadershipFailback_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'leadership-failback-tlc-reconciled.model.report.json',
+    scenario: 'rolling-restart-leadership-failback',
+    owner: 'membership_publication_owner',
+    boundary: 'publication_write_leadership',
+  },
+  {
+    id: 'leadership-failback-stranded',
+    mode: 'leadership-failback-stranded',
+    module: path.resolve(
+      'models',
+      'leadership-failback',
+      'LeadershipFailback.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'leadership-failback',
+      'LeadershipFailback_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'leadership-failback-tlc-stranded.model.report.json',
+    scenario: 'rolling-restart-leadership-failback',
+    owner: 'membership_publication_owner',
+    boundary: 'publication_write_leadership',
+    expectedFailurePattern: 'Temporal property EventuallyClosed was violated',
+  },
 ];
 
 function download(url, dest) {

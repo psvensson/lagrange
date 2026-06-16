@@ -66,7 +66,7 @@
     "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:closure-ledger",
     "test:quality": "npm run test:static && npm run test:mutation",
     "test:chart:endpoint-sync": "node scripts/check-endpoint-sync-chart.js",
-    "test:ci": "npm run test && npm run test:quality && npm run test:chart:endpoint-sync",
+    "test:ci": "npm run test && npm run test:quality && npm run test:chart:endpoint-sync && npm run model:check",
     "lint": "eslint src/ test/ --ignore-pattern 'test/.gitkeep'",
     "lint:fix": "eslint src/ test/ --fix --ignore-pattern 'test/.gitkeep'",
     "build:bundle": "node scripts/build-sea.js",

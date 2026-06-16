@@ -145,6 +145,35 @@ should have a repro but do not.
 
 Record the satisfied branch in the `reproducedBy` field (see Record Fields).
 
+### Gate Demotion Rule — falsify cheap, integrate rarely (DT8)
+
+The docker statistical gate is the *final emergent-integration check*, NOT the
+primary falsifier. Run a large N≥8 gate ONLY for genuinely statistical questions
+(convergence-rate promotion verdicts; see `[[stat-gate-run-count-guidance]]`). For a
+*correctness* fix, the falsifier is a cheaper, deterministic tier, chosen by the
+record's first-violated-invariant CLASS:
+
+- **Structural precondition** (an observable state: an OPEN epoch, a missing handler,
+  a specific topology) → a **directed state-triggered repro**: `waitForState(predicate)`
+  then perturb (the DT1 primitive `test/distributed/harness/wait-for-state.js`), so the
+  failure is forced, not sampled. Lands at `test/closure/CL-###.repro.test.js`.
+- **Pure decision-kernel race** → a **fast-check interleaving property** over the
+  kernel (shrinks to a minimal failing sequence; see
+  `test/rebalancer/operation-lifecycle-fold.property.test.js`).
+- **Design / liveness class** (circular formation/recovery dependency, lost wakeup,
+  leadership stranding) → a **TLC model check**: the bug is a counterexample under the
+  `_bug.cfg`, the fix holds under `_fixed.cfg` (`npm run model:tlc`, mapped in
+  [`models/CL-INDEX.md`](../../../models/CL-INDEX.md); e.g. CL-039 →
+  `models/leadership-failback/LeadershipFailback.tla`). This is the proof a docker gate
+  can never give — sampling can only fail to disprove a liveness bug.
+
+Only after a deterministic falsifier is green at the right level does the docker gate
+run, and then **N=2–3** to confirm the fix at the emergent level — not N≥8 to *hunt*
+for the bug. A timing-race precondition that no current tier can force deterministically
+(e.g. CL-039 until DT4's virtual raft clock lands) is the one case that still leans on
+the gate; record that explicitly in `reproducedBy` rather than treating the gate as the
+default falsifier.
+
 ## Concern Taxonomy
 
 Every record SHALL use one primary concern:
