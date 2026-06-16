@@ -196,3 +196,124 @@ t.test('with no scheduler the network is byte-identical to a plain priority queu
     t.same(seeded, plain,
       'distinct due-instants leave nothing to reorder — identical to the default order');
   });
+
+// DT6 step 2 — the per-node TimeSource adapter (networkTimeSource) + the bounded drain
+// (run({untilMs})) that together let a real state machine seamed on a DT4 TimeSource run on
+// the network. These verify the adapter mirrors VirtualTimeSource semantics on the queue.
+
+t.test('networkTimeSource.setTimeout schedules a node-owned timer that fires in run()',
+  async (t) => {
+    const net = createVirtualNetwork();
+    const fired = [];
+    net.registerNode('a');
+    net.registerNode('b', (message) => fired.push(message.type));
+    const clock = net.networkTimeSource('a');
+
+    clock.setTimeout(() => {
+      net.send({from: 'a', to: 'b', type: 'fromAdapterTimer', delayMs: 0});
+    }, 5);
+    net.run();
+    t.same(fired, ['fromAdapterTimer'], 'the adapter timer fired and sent over the network');
+    t.equal(net.now(), 5, 'clock advanced to the adapter timer instant');
+  });
+
+t.test('networkTimeSource.clearTimeout cancels a pending timer', async (t) => {
+  const net = createVirtualNetwork();
+  net.registerNode('a');
+  let fired = false;
+  const clock = net.networkTimeSource('a');
+
+  const handle = clock.setTimeout(() => {
+    fired = true;
+  }, 10);
+  clock.clearTimeout(handle);
+  net.run();
+  t.equal(fired, false, 'a cleared timer never fires');
+  t.equal(net.pendingEventCount(), 0, 'and it is removed from the queue');
+});
+
+t.test('networkTimeSource.setInterval re-arms until cleared', async (t) => {
+  const net = createVirtualNetwork();
+  net.registerNode('a');
+  const ticks = [];
+  const clock = net.networkTimeSource('a');
+
+  const handle = clock.setInterval(() => {
+    ticks.push(net.now());
+  }, 10);
+  net.run({untilMs: 35});
+  t.same(ticks, [10, 20, 30], 'the interval fired every 10ms within the bounded window');
+
+  clock.clearInterval(handle);
+  net.run({untilMs: 100});
+  t.same(ticks, [10, 20, 30], 'after clearInterval it stops re-arming');
+});
+
+t.test('an interval cleared from inside its own callback fires exactly once', async (t) => {
+  const net = createVirtualNetwork();
+  net.registerNode('a');
+  let count = 0;
+  const clock = net.networkTimeSource('a');
+
+  // Re-arm happens before the callback runs (VirtualTimeSource semantics); clearing inside
+  // the callback must cancel that already-queued next occurrence.
+  let handle = null;
+  handle = clock.setInterval(() => {
+    count += 1;
+    clock.clearInterval(handle);
+  }, 10);
+  net.run({untilMs: 100});
+  t.equal(count, 1, 'clearing from the callback cancels the re-armed occurrence');
+});
+
+t.test('a 0ms interval clamps to 1ms instead of spinning', async (t) => {
+  const net = createVirtualNetwork();
+  net.registerNode('a');
+  let count = 0;
+  const clock = net.networkTimeSource('a');
+
+  clock.setInterval(() => {
+    count += 1;
+  }, 0);
+  net.run({untilMs: 3});
+  t.equal(count, 4,
+    'a zero-delay interval fires at t=0 then once per clamped 1ms step (no infinite loop)');
+});
+
+t.test('networkTimeSource.now() tracks global time while running and freezes when stopped',
+  async (t) => {
+    const net = createVirtualNetwork();
+    net.registerNode('a');
+    const clock = net.networkTimeSource('a');
+
+    net.setTimer('a', () => {}, 7);
+    net.run();
+    t.equal(clock.now(), 7, 'a running node\'s adapter clock follows global time');
+
+    net.killNode('a');
+    net.setTimer('a', () => {}, 5); // a stopped node\'s timer is dropped, but advance global
+    const before = net.now();
+    net.run({untilMs: before + 20});
+    t.equal(net.now(), before + 20, 'global clock advanced');
+    t.equal(clock.now(), 7, 'a stopped node\'s adapter clock is frozen at its last activity');
+  });
+
+t.test('run({untilMs}) stops at the boundary and advances the clock; a later run resumes',
+  async (t) => {
+    const net = createVirtualNetwork();
+    const delivered = [];
+    net.registerNode('a');
+    net.registerNode('b', (message) => delivered.push(message.type));
+
+    net.send({from: 'a', to: 'b', type: 'early', delayMs: 5});
+    net.send({from: 'a', to: 'b', type: 'late', delayMs: 30});
+
+    const first = net.run({untilMs: 20});
+    t.same(delivered, ['early'], 'only the event due within the bound fired');
+    t.equal(first.remaining, 1, 'the later event is still pending');
+    t.equal(net.now(), 20, 'the clock advanced to the bound even past the last firing');
+
+    net.run(); // unbounded: drain the rest
+    t.same(delivered, ['early', 'late'], 'the deferred event fires on the next run');
+    t.equal(net.now(), 30, 'the clock advanced to the final delivery');
+  });

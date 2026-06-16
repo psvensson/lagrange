@@ -44,6 +44,13 @@ const VIRTUAL_NETWORK_NUM_ONE = 1;
 const VIRTUAL_NETWORK_DEFAULT_MAX_STEPS = 100000;
 const VIRTUAL_NETWORK_LINK_SEPARATOR = '::';
 const VIRTUAL_NETWORK_STR_FUNCTION = 'function';
+// A repeating adapter timer with a 0ms (or negative) interval would reschedule onto the
+// same instant and spin forever inside one drain; clamp the reschedule step to this
+// minimum, matching VirtualTimeSource's LOCAL_MIN_INTERVAL_MS (the single-node analog).
+const VIRTUAL_NETWORK_MIN_INTERVAL_MS = 1;
+// The event type carried by timers scheduled through networkTimeSource (a hosted real
+// state machine's VirtualTick), so records/keyOf can distinguish them from scenario timers.
+const VIRTUAL_NETWORK_ADAPTER_TIMER_TYPE = 'adapter-timer';
 
 const VIRTUAL_NETWORK_EVENT_KIND = Object.freeze({
   MESSAGE: 'message',
@@ -98,6 +105,7 @@ function createVirtualNetwork(options = {}) {
     Number(options.startMs) :
     VIRTUAL_NETWORK_NUM_ZERO;
   let seq = VIRTUAL_NETWORK_NUM_ZERO;
+  let timerSeq = VIRTUAL_NETWORK_NUM_ZERO;
   const scheduler =
     options.scheduler &&
     typeof options.scheduler.pick === VIRTUAL_NETWORK_STR_FUNCTION ?
@@ -115,6 +123,9 @@ function createVirtualNetwork(options = {}) {
   const queue = [];
   const partitions = new Set();
   const records = [];
+  // timerId -> {timerId, nodeId, fn, args, repeating, intervalMs, cancelled, event}
+  // for timers scheduled through a networkTimeSource adapter (cancellable + re-armable).
+  const adapterTimers = new Map();
 
   function ensureNode(nodeId) {
     const node = nodes.get(nodeId);
@@ -204,6 +215,118 @@ function createVirtualNetwork(options = {}) {
       payload,
       dueAt: nowMs + normalizeDelayMs(delayMs),
       fn: typeof fn === VIRTUAL_NETWORK_STR_FUNCTION ? fn : null,
+    });
+  }
+
+  // --- networkTimeSource: a per-node DT4 TimeSource backed by this network's queue ----
+  // The bridge that lets a REAL state machine seamed on a TimeSource (a LifeRaft node via
+  // VirtualTick, the owner driver, the lease) run ON the multi-node substrate: its timers
+  // become node-owned TIMER events on the SAME global queue as cross-node messages, so the
+  // drain loop advances them together and the injected scheduler can reorder a co-due timer
+  // against a co-due message — the cross-node delivery race on a real machine's real clock.
+  // The surface mirrors VirtualTimeSource (now/setTimeout/clearTimeout/setInterval/
+  // clearInterval) and its firing/re-arm/clamp semantics; the one difference is that delays
+  // are floored to whole ms (normalizeDelayMs, the same convention the network uses for
+  // message delays) rather than kept fractional — byte-identical for the integer-ms durations
+  // a real subsystem uses (liferaft routes every duration through `ms(...)` -> an integer).
+
+  function scheduleAdapterTimer(nodeId, fn, ms, args, repeating) {
+    ensureNode(nodeId);
+    touch(nodeId);
+    const timerId = ++timerSeq;
+    const record = {
+      timerId,
+      nodeId,
+      fn: typeof fn === VIRTUAL_NETWORK_STR_FUNCTION ? fn : null,
+      args: Array.isArray(args) ? args : [],
+      repeating,
+      intervalMs: normalizeDelayMs(ms),
+      cancelled: false,
+      event: null,
+    };
+    adapterTimers.set(timerId, record);
+    enqueueAdapterTimer(record, nowMs + record.intervalMs);
+    return timerId;
+  }
+
+  function enqueueAdapterTimer(record, dueAt) {
+    const event = {
+      kind: VIRTUAL_NETWORK_EVENT_KIND.TIMER,
+      from: record.nodeId,
+      to: record.nodeId,
+      type: VIRTUAL_NETWORK_ADAPTER_TIMER_TYPE,
+      payload: {owner: record.nodeId, timerId: record.timerId},
+      dueAt,
+      fn: () => fireAdapterTimer(record),
+    };
+    record.event = event;
+    enqueue(event);
+  }
+
+  // Invoked from fireTimer (so the owner-running guard already gated a stopped node out).
+  // Mirrors VirtualTimeSource.advance: a repeating timer re-arms (dueAt += clamped step)
+  // BEFORE its callback runs, so a callback that clears the interval cancels the re-armed
+  // occurrence; a one-shot is forgotten before firing.
+  function fireAdapterTimer(record) {
+    if (record.cancelled) {
+      return;
+    }
+    if (record.repeating) {
+      const step = record.intervalMs > VIRTUAL_NETWORK_NUM_ZERO ?
+        record.intervalMs :
+        VIRTUAL_NETWORK_MIN_INTERVAL_MS;
+      enqueueAdapterTimer(record, nowMs + step);
+    } else {
+      adapterTimers.delete(record.timerId);
+    }
+    if (record.fn) {
+      record.fn(...record.args);
+    }
+  }
+
+  function cancelAdapterTimer(handle) {
+    const record = adapterTimers.get(handle);
+    if (!record) {
+      return;
+    }
+    record.cancelled = true;
+    if (record.event) {
+      removeFromQueue(record.event);
+    }
+    adapterTimers.delete(handle);
+  }
+
+  /**
+   * A DT4 TimeSource bound to one node, scheduling on this network's queue. Pass it as a
+   * subsystem's `timeSource` (e.g. `new LifeRaft(id, {timeSource: net.networkTimeSource(id)})`)
+   * to host the real machine on the network. now() follows global virtual time while the node
+   * runs and freezes at the node's last activity once it is stopped (the per-node-clock
+   * contract), so a stopped node's hosted machine sees a frozen clock.
+   * @param {string} nodeId - must already be registered.
+   * @return {Object} {now, setTimeout, clearTimeout, setInterval, clearInterval}.
+   */
+  function networkTimeSource(nodeId) {
+    ensureNode(nodeId);
+    return Object.freeze({
+      now() {
+        const node = nodes.get(nodeId);
+        if (node && node.state === VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
+          return nowMs;
+        }
+        return node ? node.clockMs : nowMs;
+      },
+      setTimeout(fn, ms, ...args) {
+        return scheduleAdapterTimer(nodeId, fn, ms, args, false);
+      },
+      clearTimeout(handle) {
+        cancelAdapterTimer(handle);
+      },
+      setInterval(fn, ms, ...args) {
+        return scheduleAdapterTimer(nodeId, fn, ms, args, true);
+      },
+      clearInterval(handle) {
+        cancelAdapterTimer(handle);
+      },
     });
   }
 
@@ -329,19 +452,30 @@ function createVirtualNetwork(options = {}) {
   }
 
   /**
-   * Drain the network until idle, delivering each due event in scheduler-chosen order.
-   * Handlers may send/setTimer further events; those due within the run fire too.
-   * @param {Object} [runOptions] - {maxSteps}.
+   * Drain the network, delivering each due event in scheduler-chosen order. Handlers may
+   * send/setTimer further events; those due within the run fire too. With `untilMs` the
+   * drain is BOUNDED: it stops once the earliest pending event is due after untilMs (and
+   * advances the global clock to untilMs), the multi-node analog of VirtualTimeSource.advance.
+   * A bound is required to host a real state machine that arms repeating timers (a raft
+   * heartbeat) — draining to idle would never terminate. Absent untilMs the drain runs to
+   * idle, byte-identical to before.
+   * @param {Object} [runOptions] - {maxSteps, untilMs}.
    * @return {Object} {steps, remaining, nowMs}.
    */
   function run(runOptions = {}) {
     const maxSteps = Number.isFinite(Number(runOptions.maxSteps)) ?
       Number(runOptions.maxSteps) :
       VIRTUAL_NETWORK_DEFAULT_MAX_STEPS;
+    const untilMs = Number.isFinite(Number(runOptions.untilMs)) ?
+      Number(runOptions.untilMs) :
+      null;
     let steps = VIRTUAL_NETWORK_NUM_ZERO;
     for (;;) {
       const next = pickNext();
       if (!next) {
+        break;
+      }
+      if (untilMs !== null && next.dueAt > untilMs) {
         break;
       }
       if (steps >= maxSteps) {
@@ -352,6 +486,9 @@ function createVirtualNetwork(options = {}) {
       }
       steps += VIRTUAL_NETWORK_NUM_ONE;
       deliverOne(next);
+    }
+    if (untilMs !== null && untilMs > nowMs) {
+      nowMs = untilMs;
     }
     return Object.freeze({steps, remaining: queue.length, nowMs});
   }
@@ -387,6 +524,7 @@ function createVirtualNetwork(options = {}) {
     heal,
     send,
     setTimer,
+    networkTimeSource,
     run,
     getRecords,
     pendingEventCount,
@@ -403,4 +541,5 @@ export {
   VIRTUAL_NETWORK_NODE_STATE,
   VIRTUAL_NETWORK_DROP_REASON,
   VIRTUAL_NETWORK_RECORD_KIND,
+  VIRTUAL_NETWORK_ADAPTER_TIMER_TYPE,
 };
