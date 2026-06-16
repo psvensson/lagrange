@@ -87,6 +87,22 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >     empirically tight (hit rate 0.1264 / 5000 seeds). Subagent-verified TRUSTED (determinism,
 >     default byte-identity, causality, depth-2 claim, the bound, and edge cases all confirmed).
 >     Unit contract: `test/time/pct-scheduler.test.js`.
+>   - **Step 2b — the PCT witness minimizer (`minimizePctDepth`).** The unfulfilled half of the
+>     plan's DT5 step-3 clause ("record the seed for exact replay + minimize"):
+>     `minimizeDeterministicTrace` delta-debugs a node-command log and does NOT fit the PCT search,
+>     whose witness is `(seed, depth, change-points)`. The PCT-native analog is DEPTH minimization —
+>     because a depth-d schedule carries exactly d-1 change points, the smallest depth that still
+>     reproduces is the smallest witness, and it is PCT's headline diagnostic: the bug's TRUE
+>     ordering depth (how many independent ordering constraints the race needs), exactly what
+>     Coyote/P# report. `minimizePctDepth` (in `pct-search.js`) searches depth ascending and returns
+>     the first reproducing depth + its minimal-seed witness, plus a `notReproducedBelow` list —
+>     named to keep the "absence proves nothing" line: a non-finding depth is BOUNDED negative
+>     evidence within the seed budget, NOT a proof of impossibility (structural unreachability, like
+>     the guard's serialized chains, is a separate argument). The guard asserts the synthetic race's
+>     true depth is exactly 2 (`notReproducedBelow` = [1]) and exercises the not-found path.
+>     Subagent-verified TRUSTED (first-found-return correctness, witness minimality, honest wording,
+>     determinism, edge cases, and reuse of `exploreWithPct` all confirmed; "minimal" correctly
+>     scoped to `[minDepth, maxDepth]`).
 >   **REMAINING toward DT6:** lift the per-instant scheduler to multi-node (per-node virtual clocks +
 >   a virtual network), so the search reorders cross-node message delivery, not just co-due timers.
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
