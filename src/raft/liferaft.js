@@ -16,6 +16,7 @@ const RAFT_PACKET_TYPE = Object.freeze({
   APPEND: 'append',
   APPEND_ACK: 'append ack',
   APPEND_FAIL: 'append fail',
+  VOTE: 'vote',
 });
 
 function hasFiniteNumber(value) {
@@ -126,6 +127,16 @@ function patchIncomingDataListener(raft) {
   // per-source lane that is already capping. Fails are self-regenerating,
   // so suppression can never wedge — worst case is base-speed catch-up.
   const inflightBatchByAddress = new Map();
+
+  // CL-041: base liferaft's `vote` handler has a check-then-act race — the
+  // `await raft.log.getLastInfo()` (present only when a log adapter is configured) sits BETWEEN
+  // the "have I already voted this term?" check (`if (raft.votes.for && ...)`) and the assignment
+  // (`raft.votes.for = packet.address`). Two concurrent same-term vote requests both pass the
+  // check before either records the vote, so the follower grants BOTH — a double-vote that lets
+  // two candidates reach quorum (two leaders in one term -> split-brain / committed divergence).
+  // We serialize vote processing through this per-node chain so the second request runs only after
+  // the first has fully recorded its vote, and therefore correctly denies.
+  let voteSerializationChain = Promise.resolve();
 
   const handleLeaderAppendFailBatch = async (packet, write) => {
     // Only intercept when the base preamble would be a no-op (we are the
@@ -254,6 +265,17 @@ function patchIncomingDataListener(raft) {
 
   const patchedListener = async (packet, write = () => {}) => {
     const committedIndexBefore = getCommittedIndex(raft);
+
+    // CL-041: serialize vote processing so concurrent same-term votes cannot both pass the
+    // votes.for check across the handler's `await getLastInfo()`. Guarded on raft.log because the
+    // racy await only exists when a log is configured; a logless node (no `Log` option) has no
+    // race and must keep its synchronous append/vote timing byte-identical (cf. CL-040), so it
+    // falls through to the normal path. `.then(run, run)` keeps the chain alive past a rejection.
+    if (packet?.type === RAFT_PACKET_TYPE.VOTE && raft.log) {
+      const processVote = () => originalListener(packet, write);
+      voteSerializationChain = voteSerializationChain.then(processVote, processVote);
+      return voteSerializationChain;
+    }
 
     if (packet?.type === RAFT_PACKET_TYPE.APPEND_FAIL) {
       const handled = await handleLeaderAppendFailBatch(packet, write);
