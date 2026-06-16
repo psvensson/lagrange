@@ -67,6 +67,11 @@ class VirtualTimeSource {
   /**
    * @param {Object} [options]
    * @param {number} [options.startMs=0] - initial value of now().
+   * @param {Object} [options.scheduler] - optional DT5 schedule-search strategy with a
+   *   pick(coDueTimers) method. When present it chooses the firing order among timers
+   *   that come due at the SAME instant (the genuine race); cross-instant ordering is
+   *   always honored. Absent (the default), firing order is (dueAt, seq) — byte-identical
+   *   to the platform-faithful behavior.
    */
   constructor(options = {}) {
     const startMs = Number(options.startMs);
@@ -74,6 +79,9 @@ class VirtualTimeSource {
     // id -> {id, fn, args, intervalMs, dueAt, repeating, seq}
     this._timers = new Map();
     this._seq = NUM.ZERO;
+    const scheduler = options && options.scheduler;
+    this._scheduler =
+      scheduler && typeof scheduler.pick === TYPEOF.FUNCTION ? scheduler : null;
   }
 
   now() {
@@ -129,7 +137,7 @@ class VirtualTimeSource {
     const target = this._now + stepMs;
     let iterations = NUM.ZERO;
     for (;;) {
-      const next = this._earliestDueTimer(target);
+      const next = this._pickDueTimer(target);
       if (!next) {
         break;
       }
@@ -155,25 +163,43 @@ class VirtualTimeSource {
   }
 
   /**
-   * The timer due at or before target with the smallest (dueAt, seq), or null.
+   * The next timer to fire among those due at or before target. The earliest due-instant
+   * always wins (cross-instant order is real causality, not a race). Among the timers at
+   * that earliest instant — the co-due set, taken in (seq) order — an injected scheduler
+   * picks the firing order; with no scheduler the lowest seq fires, so the result is the
+   * smallest (dueAt, seq), byte-identical to the platform-faithful default.
    * @param {number} target
    * @return {Object|null}
    */
-  _earliestDueTimer(target) {
-    let best = null;
+  _pickDueTimer(target) {
+    let earliestDue = null;
     for (const timer of this._timers.values()) {
       if (timer.dueAt > target) {
         continue;
       }
-      if (
-        best === null ||
-        timer.dueAt < best.dueAt ||
-        (timer.dueAt === best.dueAt && timer.seq < best.seq)
-      ) {
-        best = timer;
+      if (earliestDue === null || timer.dueAt < earliestDue) {
+        earliestDue = timer.dueAt;
       }
     }
-    return best;
+    if (earliestDue === null) {
+      return null;
+    }
+    const coDue = [];
+    for (const timer of this._timers.values()) {
+      if (timer.dueAt === earliestDue) {
+        coDue.push(timer);
+      }
+    }
+    coDue.sort((left, right) => left.seq - right.seq);
+    if (this._scheduler !== null) {
+      // The scheduler counts a step for every firing (even a lone co-due timer, so a
+      // change point can land on it); a null/empty pick falls back to seq order.
+      const picked = this._scheduler.pick(coDue);
+      if (picked) {
+        return picked;
+      }
+    }
+    return coDue[0];
   }
 
   /**
