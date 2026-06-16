@@ -93,6 +93,7 @@
     "analyze:owner-files": "node scripts/analyze-owner-files.js",
     "analyze:priority-recovery-residuals": "node scripts/analyze-priority-recovery-residuals.js",
     "analyze:precondition-recurrence": "node scripts/analyze-precondition-recurrence.js",
+    "analyze:cl039-link-rate": "node scripts/analyze-cl039-link-rate.js",
     "analyze:fix-engagement": "node scripts/analyze-fix-engagement.js",
     "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
