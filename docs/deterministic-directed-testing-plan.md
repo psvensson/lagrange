@@ -11,9 +11,11 @@ delivery seam), DT6 STEP 2 (the first REAL state machine — a `@markwylde/lifer
 hosted on the network via a per-node TimeSource adapter, its real election timer PCT-raced
 against cross-node heartbeats), DT6 STEP 3 (REAL multi-node vote/append RPCs over the
 network — a real 3-node election + a PCT-raced contested election that flips which real
-candidate wins), and DT6 STEP 4 (a real LEADERSHIP MIGRATION + fail-back end-to-end — partition
-the elected leader, a follower wins a higher term, the old leader steps down on heal) are landed;
-DT6 (full multi-node DST) proceeds as a gated program (see below).
+candidate wins), DT6 STEP 4 (a real LEADERSHIP MIGRATION + fail-back end-to-end — partition
+the elected leader, a follower wins a higher term, the old leader steps down on heal), and DT6
+STEP 5 (the first REAL CONTROL-PLANE subsystem — the real owner-membership publication driver
+hosted per node, gated on live raft leadership, so a real migration drives a real owner handoff)
+are landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -214,10 +216,35 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   `raft.latency`); no leak/hang/unhandled-rejection. HONEST SCOPE: this is the RAFT-LAYER mechanism
 >   CL-039 is an instance of; CL-039's actual bug lived in the repo's control-plane leadership layer
 >   ABOVE raft — hosting that layer on the network is the remaining whole-system DST.
->   **REMAINING toward full DT6:** host the REAL owner/readiness/rebalancer subsystems alongside the
->   real raft nodes on the VirtualNetwork, so a seed drives the actual whole-system cross-node
->   exchange and reproduces the control-plane CL-039 fail-back end-to-end (the north-star whole-system
->   DST).
+> - **DT6 — STEP 5 LANDED (2026-06-16). The first REAL CONTROL-PLANE subsystem on the cluster —
+>   a real migration drives a real owner handoff.** Steps 2–4 built the consensus layer; step 5
+>   closes the loop to the layer where CL-039 actually lived. `test/convergence/
+>   dt6-control-plane-migration-network.test.js` hosts the REAL owner-membership publication driver
+>   (`MembershipPublicationCoordinatorReconcile`) on EVERY node of the real raft cluster, each gated
+>   on THAT node's live raft leadership through the PRODUCTION Tier-0 path
+>   (`resolveControlPlanePublicationsLeadership` → `cdcIntegrationService.canWriteSystemTableLocally`,
+>   with the `systemTableCache` tiers forced to miss), its driver interval running on the node's
+>   `networkTimeSource`. It is the multi-node, REAL-migration-driven generalisation of the DT4
+>   full-chain scenario (which composed the same real driver with ONE raft node on ONE clock and
+>   FAKED the leadership loss with `change({state})`). A per-node `gatePasses` counts driver ticks
+>   that pass the leadership gate and reach the publish path — the "this node is acting as the
+>   publication owner" signal. **GUARD MET:** Phase A — after a real election the owner gate settles
+>   on exactly the elected leader (followers defer, gatePasses 0); Phase B — partition the leader →
+>   real migration → the new leader becomes the owner AND the isolated old leader keeps acting as
+>   owner on its side (the genuine dual-owner hazard a partition creates — real raft does not
+>   self-demote); Phase C — heal → the old leader hears the higher term, steps down, its gate closes
+>   (gatePasses frozen), and exactly the migrated leader remains the sole stable owner (the
+>   control-plane fail-back). Subagent-verified TRUSTED — over a 41-seed census EVERY seed: only the
+>   elected leader owns after election, the migrated leader owns + old-leader-grows after partition,
+>   and exactly the migrated leader still owns after heal; `gatePasses` incremented while
+>   `raft.state !== LEADER` exactly 0 times (the gate is genuinely on raft); 25×-identical per seed;
+>   no native-timer leak / no unhandled rejection. HONEST SCOPE (unchanged from DT4 full-chain): it
+>   observes the owner LEADERSHIP GATE (which node acts as owner over time), not a materialised
+>   published epoch; the publish internals downstream of the gate are out of scope (their own tests).
+>   **REMAINING toward full DT6:** host the OTHER real control-plane subsystems (readiness /
+>   rebalancer / the membership-lifecycle + placement controllers) alongside raft on the
+>   VirtualNetwork and materialise a published epoch, so a seed reproduces the control-plane CL-039
+>   fail-back end-to-end with real published state — the north-star whole-system DST.
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
@@ -231,23 +258,28 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — STEPS 1–4 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+> - **DT6 — STEPS 1–5 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
 >   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
 >   is built and guarded (step 1); the first REAL state machine — a `@markwylde/liferaft` node —
 >   runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
 >   (`run({untilMs})`), its real election timer PCT-raced against cross-node heartbeats (step 2);
 >   REAL multi-node vote/append RPCs flow over the network (`connectRaftCluster`), so a real 3-node
 >   election completes and a PCT-raced contested election flips which real candidate wins (step 3);
->   and a real LEADERSHIP MIGRATION + raft §5.1 fail-back runs end-to-end from a seed — partition the
->   elected leader, a follower wins a higher term, the old leader steps down on heal (step 4) — see
->   "DT6 — STEP 1/2/3/4 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST — instantiating the
->   OTHER real subsystems (owner/readiness/rebalancer) alongside the real raft nodes on the
->   VirtualNetwork, seed-iterated via the DT5 PCT scheduler, to reproduce the control-plane CL-039
->   fail-back (ABOVE raft) end-to-end — remains the gated program. The seams (TimeSource on all four
->   subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork substrate, the adapter
->   that hosts a real TimeSource-seamed machine, the real raft RPC transport, AND a real raft
->   leadership migration are now in place; what remains is hosting the OTHER real subsystems and
->   reproducing the control-plane-layer CL-039 fail-back end-to-end from a seed.
+>   a real LEADERSHIP MIGRATION + raft §5.1 fail-back runs end-to-end from a seed — partition the
+>   elected leader, a follower wins a higher term, the old leader steps down on heal (step 4); and the
+>   first REAL CONTROL-PLANE subsystem — the real owner-membership publication driver — is hosted per
+>   node, gated on live raft leadership through the production Tier-0 path, so a real migration drives
+>   a real owner handoff (single owner → dual-owner-while-partitioned → single stable owner on heal)
+>   (step 5) — see "DT6 — STEP 1/2/3/4/5 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
+>   instantiating the OTHER real subsystems (readiness/rebalancer/the membership-lifecycle + placement
+>   controllers) alongside the real raft nodes on the VirtualNetwork and materialising a published
+>   epoch, seed-iterated via the DT5 PCT scheduler, to reproduce the control-plane CL-039 fail-back
+>   end-to-end with real published state — remains the gated program. The seams (TimeSource on all
+>   four subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork substrate, the
+>   adapter that hosts a real TimeSource-seamed machine, the real raft RPC transport, a real raft
+>   leadership migration, AND the first real control-plane subsystem on the cluster are now in place;
+>   what remains is hosting the OTHER real subsystems + materialised published state and reproducing
+>   the control-plane CL-039 fail-back end-to-end from a seed.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
