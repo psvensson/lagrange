@@ -7,7 +7,10 @@ opt-in Raft election seam, and the in-process freeze→leadership scenario) and 
 search over the virtual clock) and the in-process L1→TT
 freeze→leadership→publication-stall scenario are landed; DT6 STEP 1 (the multi-node
 lift — per-node virtual clocks + a virtual network with a PCT-reorderable cross-node
-delivery seam) is landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
+delivery seam) and DT6 STEP 2 (the first REAL state machine — a `@markwylde/liferaft` node
+hosted on the network via a per-node TimeSource adapter, its real election timer PCT-raced
+against cross-node heartbeats) are landed; DT6 (full multi-node DST) proceeds as a gated
+program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -126,6 +129,37 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   edge cases — self-send, mid-run co-due append, partition-after-send, frozen-clock, handler-throw
 >   — all confirmed; a foreign-event membership guard was added to harden `pickNext`).
 >   Unit contract: `test/distributed/harness/__tests__/virtual-network.test.js`.
+> - **DT6 — STEP 2 LANDED (2026-06-16). The first REAL state machine runs on the network.**
+>   Step 1's guard drove SYNTHETIC chains; step 2 hosts a REAL `@markwylde/liferaft` node ON the
+>   VirtualNetwork. The bridge is `net.networkTimeSource(nodeId)` — a per-node DT4 `TimeSource`
+>   (now/setTimeout/clearTimeout/setInterval/clearInterval) whose timers are scheduled as
+>   node-owned events on the SAME global queue as cross-node messages (interval re-arm + the 0ms
+>   clamp + cancel-from-callback all mirror VirtualTimeSource; delays floor to whole ms, the
+>   network's own convention — byte-identical for the integer-ms durations liferaft routes through
+>   `ms(...)`). So the node's REAL randomized election timer (the DT4 raft seam, a `VirtualTick`)
+>   and message delivery share ONE event timeline and ONE drain loop, and the SAME injected
+>   PctScheduler can reorder a co-due election timer against a co-due heartbeat message. A new
+>   `run({untilMs})` BOUNDED drain (advance to untilMs, fire only events due by then) is required
+>   to host a machine that arms repeating timers — draining to idle would never terminate; it also
+>   stops the post-promotion candidate/leader machinery so the guard observes the L1->L2 shed
+>   instant exactly as the single-clock DT4 scenario does. **GUARD MET:**
+>   `test/convergence/dt6-real-raft-network.test.js` — heartbeat MESSAGES delivered within the
+>   election window HOLD the real node's leadership; a partition drops them so the REAL election
+>   timer fires through the network drain and the node promotes FOLLOWER->CANDIDATE (CL-039 L1->L2,
+>   deterministic across runs); and `exploreWithPct`/`runPctSeed`/`minimizePctDepth` (REUSED
+>   UNCHANGED) over a co-due heartbeat-vs-election instant FLIP the real node's leadership — a
+>   genuine depth-1 cross-node delivery race (census: 51 shed / 49 hold over 100 seeds, both
+>   orders reachable), replayed identically from its seed. Fidelity scope (honest): the election
+>   timer, its firing, and the promotion are real liferaft; "leader contact" is a bare heartbeat
+>   MESSAGE that calls the real `node.heartbeat(window)` to re-arm (the same faithful abstraction
+>   the DT4 freeze scenario used), NOT a full AppendEntries packet with term/quorum bookkeeping —
+>   wiring two real raft nodes' vote/append RPCs over the network is step 3. Subagent-verified
+>   TRUSTED-WITH-CAVEATS (default byte-identity, src isolation, adapter<->VirtualTimeSource
+>   semantics, the real-timer/real-promotion faithfulness, the ~50/50 reorderability, determinism,
+>   and no native-timer leak / no unhandled rejection across the 100-seed search all confirmed; the
+>   two caveats — the fractional-ms floor and a post-shed `end()` teardown race — were fixed before
+>   landing). Unit contract: the adapter + bounded-drain cases added to
+>   `test/distributed/harness/__tests__/virtual-network.test.js`.
 >   **REMAINING toward full DT6:** instantiate the REAL owner/readiness/rebalancer/raft instances
 >   inside the VirtualNetwork (not synthetic chains), so a seed drives the actual state machines'
 >   cross-node message exchange — the north-star whole-system DST.
@@ -142,15 +176,19 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — STEP 1 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+> - **DT6 — STEPS 1–2 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
 >   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
->   is built and guarded — see "REMAINING toward DT6 — STEP 1 LANDED" under DT5 above. Seed-iterated
->   WHOLE-SYSTEM DST — instantiating the real multi-node cluster (owner/readiness/rebalancer/raft)
->   on the VirtualNetwork's per-node clocks + virtual network, seed-iterated via the DT5 PCT
->   scheduler — remains the gated program. The seams (TimeSource on all four subsystems + raft,
->   RandomSource on the jitter sites) plus the VirtualNetwork substrate are now in place; what
->   remains is wiring the REAL state machines into it (they currently run synthetic chains in the
->   guard) and driving a historical CL failure end-to-end from a seed.
+>   is built and guarded (step 1), and the first REAL state machine — a `@markwylde/liferaft` node
+>   — now runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
+>   (`run({untilMs})`), with its real election timer PCT-raced against cross-node heartbeats
+>   (step 2) — see "DT6 — STEP 1/STEP 2 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
+>   instantiating the real multi-node cluster (owner/readiness/rebalancer + a SECOND real raft node
+>   exchanging real vote/append RPCs) on the VirtualNetwork's per-node clocks + virtual network,
+>   seed-iterated via the DT5 PCT scheduler — remains the gated program. The seams (TimeSource on
+>   all four subsystems + raft, RandomSource on the jitter sites) plus the VirtualNetwork substrate
+>   AND the adapter that hosts a real TimeSource-seamed machine on it are now in place; what remains
+>   is hosting the OTHER real subsystems + a second raft node (step 2 hosts one) and driving a
+>   historical CL failure end-to-end from a seed.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
