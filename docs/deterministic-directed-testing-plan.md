@@ -3,8 +3,9 @@
 Status: PARTIALLY IMPLEMENTED + VERIFIED (2026-06-16). The cheap, verifiable tier is
 built and tested; DT4 steps 1–3 (the TimeSource seam, the partial-seam collapses, the
 opt-in Raft election seam, and the in-process freeze→leadership scenario) and DT5 step 1
-(the seeded RandomSource seam + jitter-site coverage) are landed; the DT5 PCT scheduler,
-DT6, and the full multi-subsystem clock wiring proceed as a gated program (see below).
+(the seeded RandomSource seam + jitter-site coverage) and the in-process L1→TT
+freeze→leadership→publication-stall scenario are landed; the DT5 PCT scheduler and DT6
+(multi-node DST) proceed as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -68,11 +69,23 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   **REMAINING DT5:** the PCT-style depth-bounded scheduler over the virtual clock — the search
 >   layer on top of these now-deterministic time+random seams (bound bug depth k, insert k
 >   priority-change points per seed, iterate seeds with replay).
-> - **DT6 — DEFERRED (north star).** Seed-iterated whole-system DST. The next concrete follow-up
->   bridging here is wiring the owner-driver + readiness + lease onto the SAME clock as the raft
->   node so the in-process scenario drives the full freeze→leadership→publication-stall chain
->   (L1→TT), not just L1→L2 — all four subsystems now take the TimeSource seam, so this is
->   integration, not new seam work.
+> - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
+>   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
+>   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
+>   raft state read through the production Tier-0 path
+>   (`resolveControlPlanePublicationsLeadership` → `cdcIntegrationService.canWriteSystemTableLocally`),
+>   and the real `driveOwnerMembershipReconcile` runs on the same clock via its seamed interval.
+>   While the seed holds publications leadership the driver passes the gate and proceeds to publish;
+>   once leadership leaves the seed the driver defers at the gate every tick and never reaches
+>   publish — the stuck-OPEN stall (TT). Honest scope: the L1→L2 freeze→shed is proven by the
+>   companion election-timer scenario and modeled here via `change({state})`; the test observes the
+>   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
+>   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
+>   across two virtual clocks + driving the actual publish/upsert (L4) internals.
+> - **DT6 — DEFERRED (north star).** Seed-iterated whole-system DST: a real multi-node cluster on
+>   per-node virtual clocks with message passing, seed-iterated via the DT5 PCT scheduler. The
+>   seams (TimeSource on all four subsystems + raft, RandomSource on the jitter sites) are the
+>   substrate; DT6 is the search + multi-node-isolation harness on top.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
