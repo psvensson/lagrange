@@ -220,6 +220,64 @@ function resolvePublishedActiveNodeIds(options = {}) {
   )].sort());
 }
 
+// CL-001 variant C re-admission: the retention grace's "is this an already-
+// published member" test must NOT ratchet to the LATEST published row only.
+// Otherwise a single transient trim drops the node from the baseline forever (the
+// trimmed set becomes the new latest baseline) and the grace can never re-admit it
+// once its heartbeat recovers — the binding cause of the sticky variant-C trim.
+// Union the published active-node sets across the recent published epochs (a
+// bounded window of the latest published epoch) so a node trimmed in epoch N is
+// still a baseline member via epoch N-1. A node absent from ALL recent published
+// rows (a genuinely new node) is still excluded, and the grace's own liveness
+// conjuncts (status=active + transport + fresh lease/heartbeat) still gate it — so
+// this only un-ratchets re-admission, it never promotes a new or removed node.
+// Returns a SUPERSET of resolvePublishedActiveNodeIds (never a regression).
+const RETENTION_BASELINE_EPOCH_WINDOW = 4;
+
+function resolveRecentlyPublishedActiveNodeIds(options = {}) {
+  // Forces requirePublishedMembership:false to match the sole caller
+  // (isPublishedBaselineMember), which always asks for a presence test, not a
+  // required-membership assertion; callers needing the latter must keep using
+  // resolvePublishedActiveNodeIds directly.
+  const latestBaseline = resolvePublishedActiveNodeIds({
+    ...options,
+    requirePublishedMembership: false,
+  });
+  const publishedRows = (Array.isArray(options.publicationRows) ?
+    options.publicationRows :
+    [])
+    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .map((row) => normalizeControlPlanePublicationRow(row))
+    .filter((row) => isMembershipPublicationRow(row))
+    .filter((row) =>
+      row?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED);
+  const unionedNodeIds = new Set(latestBaseline || []);
+  if (publishedRows.length > NUM.ZERO) {
+    const latestEpoch = publishedRows.reduce(
+      (max, row) => Math.max(max, Number(row.publicationEpoch) || NUM.ZERO),
+      NUM.ZERO,
+    );
+    const windowFloor = latestEpoch - RETENTION_BASELINE_EPOCH_WINDOW;
+    for (const row of publishedRows) {
+      if ((Number(row.publicationEpoch) || NUM.ZERO) < windowFloor) {
+        continue;
+      }
+      const ids = Array.isArray(row.publishedActiveNodeIds) ?
+        row.publishedActiveNodeIds :
+        [];
+      for (const nodeId of ids) {
+        if (typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO) {
+          unionedNodeIds.add(nodeId);
+        }
+      }
+    }
+  }
+  if (unionedNodeIds.size === NUM.ZERO) {
+    return latestBaseline === null ? null : Object.freeze([]);
+  }
+  return Object.freeze([...unionedNodeIds].sort());
+}
+
 function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) {
   const normalizedPublicationConvergence =
     publicationConvergence &&
@@ -667,4 +725,5 @@ export {
   resolveLatestPublishedPublicationRow,
   resolvePriorityRecoveryActiveNodeCohort,
   resolvePublishedActiveNodeIds,
+  resolveRecentlyPublishedActiveNodeIds,
 };

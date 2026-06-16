@@ -27,6 +27,7 @@ import {
   resolveLatestPublishedPublicationRow,
   resolvePriorityRecoveryActiveNodeCohort,
   resolvePublishedActiveNodeIds,
+  resolveRecentlyPublishedActiveNodeIds,
 } from './active-node-publication-snapshots.js';
 import {
   normalizeNodeIdList,
@@ -287,8 +288,13 @@ function resolveProjectionReadinessDecisionDimensions(options = {}) {
 }
 
 function isPublishedBaselineMember(nodeId, options = {}) {
+  // CL-001 variant C re-admission: use the NON-RATCHETING recently-published union
+  // (a superset of the latest published set) so a node trimmed in the latest epoch
+  // is still recognized as an already-published member by the transport-alive
+  // retention grace, and can be re-admitted once its liveness recovers — instead
+  // of being stranded out forever by the baseline ratcheting to the trimmed set.
   const publishedBaselineNodeIds = normalizeNodeIdList(
-    resolvePublishedActiveNodeIds({
+    resolveRecentlyPublishedActiveNodeIds({
       ...options,
       requirePublishedMembership: false,
     }),

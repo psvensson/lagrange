@@ -242,6 +242,101 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
       'retentionGraceMisses must attribute the stale trim of published node-4 and omit non-baseline node-3',
     );
   });
+test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoch but present in a recent prior epoch is re-admitted by the transport-alive grace once its liveness recovers, while a never-published node is not',
+  async (t) => {
+    const projectionOptions = {
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 200000,
+          last_heartbeat: 99000,
+        },
+        {
+          // variant-C node: trimmed in epoch 27 but published in epoch 26; its
+          // heartbeat has recovered (within the 60s grace) and it is transport-
+          // connected => the non-ratcheting union baseline must re-admit it.
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 90000,
+          last_heartbeat: 70000,
+        },
+        {
+          // identical liveness but NEVER published (a new node) => the strict-mode
+          // promotion guard must still keep it OUT.
+          node_id: 'node-9',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 90000,
+          last_heartbeat: 70000,
+        },
+      ],
+      connectedNodeIds: ['node-1', 'node-2', 'node-9'],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+          },
+        },
+        {
+          nodeId: 'node-9',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+          },
+        },
+      ],
+      // The baseline RATCHET: epoch 27 (latest) trimmed node-2; epoch 26 still
+      // names it. Latest-only baseline would strand node-2 forever; the union
+      // baseline recognizes it as a returning member.
+      publicationRows: [
+        {
+          publication_id: 'publication-26',
+          publication_epoch: 26,
+          status: 'PUBLISHED',
+          published_active_node_ids: ['node-1', 'node-2'],
+          updated_at: 100,
+        },
+        {
+          publication_id: 'publication-27',
+          publication_epoch: 27,
+          status: 'PUBLISHED',
+          published_active_node_ids: ['node-1'],
+          updated_at: 200,
+        },
+      ],
+      nowMs: 100000,
+    };
+
+    const projection = resolveActiveNodeViews(projectionOptions);
+
+    t.ok(
+      projection.projectedServingNodeIds.includes('node-2'),
+      'node-2, trimmed in the latest epoch but published in a recent prior epoch, must be re-admitted by the union baseline (ratchet broken)',
+    );
+    t.notOk(
+      projection.projectedServingNodeIds.includes('node-9'),
+      'a never-published node-9 with identical liveness must NOT be promoted (strict-mode guard intact)',
+    );
+    t.ok(
+      projection.projectionDiagnostics.livenessFallbackIncludedNodeIds
+        .includes('node-2'),
+      'node-2 is re-admitted via the transport-alive liveness fallback grace',
+    );
+    t.same(
+      projection.projectionDiagnostics.retentionGraceMisses,
+      [],
+      'node-2 is retained (no miss) and node-9 is non-baseline (no attribution)',
+    );
+  });
 test('active-node projection can include recovery-eligible nodes during publication convergence windows',
   async (t) => {
     const commonProjectionOptions = {
