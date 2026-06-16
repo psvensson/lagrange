@@ -9,9 +9,11 @@ freeze→leadership→publication-stall scenario are landed; DT6 STEP 1 (the mul
 lift — per-node virtual clocks + a virtual network with a PCT-reorderable cross-node
 delivery seam), DT6 STEP 2 (the first REAL state machine — a `@markwylde/liferaft` node
 hosted on the network via a per-node TimeSource adapter, its real election timer PCT-raced
-against cross-node heartbeats), and DT6 STEP 3 (REAL multi-node vote/append RPCs over the
+against cross-node heartbeats), DT6 STEP 3 (REAL multi-node vote/append RPCs over the
 network — a real 3-node election + a PCT-raced contested election that flips which real
-candidate wins) are landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
+candidate wins), and DT6 STEP 4 (a real LEADERSHIP MIGRATION + fail-back end-to-end — partition
+the elected leader, a follower wins a higher term, the old leader steps down on heal) are landed;
+DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -189,10 +191,33 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   invoked on the election path; correct majority/quorum + no split-brain; genuine both-ways race;
 >   determinism — `Math.random` neutralized by `election min==max`, `+new Date()` feeds only the
 >   diagnostic `raft.latency`; no leak/hang/unhandled-rejection across the 50-election census).
->   **REMAINING toward full DT6:** drive a real LEADERSHIP MIGRATION end-to-end — partition/freeze
->   the leader so a follower's seeded election timeout wins a new term (CL-039 L1→L2→fail-back) —
->   and host the REAL owner/readiness/rebalancer subsystems alongside raft on the VirtualNetwork,
->   so a seed drives the actual whole-system cross-node exchange (the north-star whole-system DST).
+> - **DT6 — STEP 4 LANDED (2026-06-16). A real LEADERSHIP MIGRATION + fail-back, end-to-end.**
+>   The CL-039 mechanism class — leadership migrating off a leader that stops being reachable, then
+>   re-stabilizing — reproduced deterministically over the network at the consensus layer.
+>   `test/convergence/dt6-leadership-migration-network.test.js`, three real liferaft nodes
+>   (`connectRaftCluster`, step 3's transport) with uniform real election windows (100–200ms),
+>   a 30ms heartbeat, and a per-node `SeededRandomSource` (DT5 jitter seam) for election-timeout
+>   symmetry-breaking: **Phase A** they elect a leader NATURALLY (the shortest seeded timeout wins,
+>   real vote RPCs); **Phase B** PARTITION the elected leader from the other two — they stop hearing
+>   its heartbeats, a remaining node's real election timer fires `promote()` and it wins a STRICTLY
+>   HIGHER term (real migration: leadership leaves the unreachable node, CL-039 L1→L2); **Phase C**
+>   HEAL — the old leader hears the new leader's higher-term append and steps down to FOLLOWER (raft
+>   §5.1), leaving exactly one stable leader (the fail-back). Every transition is real liferaft over
+>   real network messages; the run is a pure function of the seed, replays identically, and the
+>   winner varies with the seed. Subagent-verified TRUSTED — **61/61 seeds migrate cleanly to a
+>   higher term AND fail back to exactly one stable leader**; the no-op `write` sink is invoked 0
+>   times (RPCs really traverse the network — 56 partition-dropped packets observed); the transient
+>   two-leader window during heal is correct raft, and the final single-leader state is stable to
+>   4000ms; determinism 20×-identical per seed (the seeded `randomSource` override drives all three
+>   nodes' timeouts; the base constructor's 3 unseeded `Math.random` calls land on the native Tick
+>   that is immediately cleared + re-armed seeded — provably inert; `+new Date()` feeds only
+>   `raft.latency`); no leak/hang/unhandled-rejection. HONEST SCOPE: this is the RAFT-LAYER mechanism
+>   CL-039 is an instance of; CL-039's actual bug lived in the repo's control-plane leadership layer
+>   ABOVE raft — hosting that layer on the network is the remaining whole-system DST.
+>   **REMAINING toward full DT6:** host the REAL owner/readiness/rebalancer subsystems alongside the
+>   real raft nodes on the VirtualNetwork, so a seed drives the actual whole-system cross-node
+>   exchange and reproduces the control-plane CL-039 fail-back end-to-end (the north-star whole-system
+>   DST).
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
@@ -206,21 +231,23 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — STEPS 1–3 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+> - **DT6 — STEPS 1–4 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
 >   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
 >   is built and guarded (step 1); the first REAL state machine — a `@markwylde/liferaft` node —
 >   runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
 >   (`run({untilMs})`), its real election timer PCT-raced against cross-node heartbeats (step 2);
->   and REAL multi-node vote/append RPCs now flow over the network (`connectRaftCluster`), so a real
->   3-node election completes and a PCT-raced contested election flips which real candidate wins
->   (step 3) — see "DT6 — STEP 1/2/3 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
->   instantiating the real multi-node cluster (owner/readiness/rebalancer alongside the real raft
->   nodes) on the VirtualNetwork, seed-iterated via the DT5 PCT scheduler, driving a historical CL
->   (a leadership migration / fail-back) end-to-end — remains the gated program. The seams
->   (TimeSource on all four subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork
->   substrate, the adapter that hosts a real TimeSource-seamed machine, AND the real raft RPC
->   transport are now in place; what remains is hosting the OTHER real subsystems and driving a
->   real leadership migration end-to-end from a seed.
+>   REAL multi-node vote/append RPCs flow over the network (`connectRaftCluster`), so a real 3-node
+>   election completes and a PCT-raced contested election flips which real candidate wins (step 3);
+>   and a real LEADERSHIP MIGRATION + raft §5.1 fail-back runs end-to-end from a seed — partition the
+>   elected leader, a follower wins a higher term, the old leader steps down on heal (step 4) — see
+>   "DT6 — STEP 1/2/3/4 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST — instantiating the
+>   OTHER real subsystems (owner/readiness/rebalancer) alongside the real raft nodes on the
+>   VirtualNetwork, seed-iterated via the DT5 PCT scheduler, to reproduce the control-plane CL-039
+>   fail-back (ABOVE raft) end-to-end — remains the gated program. The seams (TimeSource on all four
+>   subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork substrate, the adapter
+>   that hosts a real TimeSource-seamed machine, the real raft RPC transport, AND a real raft
+>   leadership migration are now in place; what remains is hosting the OTHER real subsystems and
+>   reproducing the control-plane-layer CL-039 fail-back end-to-end from a seed.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
