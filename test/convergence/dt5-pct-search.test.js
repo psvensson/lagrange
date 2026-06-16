@@ -1,5 +1,5 @@
 import t from 'tap';
-import {exploreWithPct, runPctSeed} from
+import {exploreWithPct, runPctSeed, minimizePctDepth} from
   '../distributed/harness/pct-search.js';
 
 // DT5 step 2 — the PCT search guard. A KNOWN depth-2 race is found within a bounded seed
@@ -107,3 +107,39 @@ t.test('the failing seed replays the identical corrupting schedule', async (t) =
   t.same(replayA.scheduler.changePointSteps(), replayB.scheduler.changePointSteps(),
     'identical change points on replay');
 });
+
+t.test('minimizePctDepth reports the race\'s TRUE depth (exactly 2)', async (t) => {
+  // The PCT-native witness minimizer: search depth ascending and report the smallest
+  // depth that reproduces. For this race the answer must be exactly 2 — depth 1 cannot
+  // (the chains stay serialized) and depth 2 can. That number IS the diagnostic: the bug
+  // needs two ordering constraints (x1 before y1, x2 after y2). minimizeDeterministicTrace
+  // shrinks a node-command log and does not apply here; depth is the PCT witness's size.
+  const minimal = minimizePctDepth({...SCENARIO, minDepth: 1, maxDepth: 4});
+
+  t.equal(minimal.found, true, 'the race is reachable within the depth bound');
+  t.equal(minimal.depth, 2, 'the minimal reproducing depth is exactly 2 (the bug depth)');
+  t.same(minimal.notReproducedBelow, [1],
+    'depth 1 did not reproduce (here structurally unreachable: the chains stay serialized)');
+  t.equal(minimal.observation.corrupted, true,
+    'the returned minimal witness actually corrupts');
+  t.same(minimal.observation.order, ['x1', 'y1', 'y2', 'x2'],
+    'the minimal witness is the canonical x1 -> y1 -> y2 -> x2 interleaving');
+  t.same(minimal.changePointSteps.length, 1,
+    'the minimal witness carries exactly depth-1 = 1 change point');
+});
+
+t.test('minimizePctDepth reports not-found when no depth reproduces in the bound',
+  async (t) => {
+    // An invariant that always holds -> no depth can violate it -> the minimizer reports
+    // found:false and the full list of depths it ruled out (honest negative evidence).
+    const result = minimizePctDepth({
+      ...SCENARIO,
+      invariant: () => true,
+      minDepth: 1,
+      maxDepth: 3,
+    });
+    t.equal(result.found, false, 'no reproducing depth within [1, 3]');
+    t.equal(result.depthsTried, 3, 'all three depths were tried');
+    t.same(result.notReproducedBelow, [1, 2, 3],
+      'every tried depth is reported as not-reproduced (bounded negative evidence)');
+  });

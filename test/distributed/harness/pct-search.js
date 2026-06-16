@@ -19,6 +19,8 @@ import {PctScheduler} from '../../../src/time/pct-scheduler.js';
 const PCT_SEARCH_DEFAULT_DEPTH = 2;
 const PCT_SEARCH_DEFAULT_STEP_BUDGET = 100;
 const PCT_SEARCH_DEFAULT_SEED_BUDGET = 200;
+const PCT_SEARCH_DEFAULT_MIN_DEPTH = 1;
+const PCT_SEARCH_DEFAULT_MAX_DEPTH = 8;
 const PCT_SEARCH_NUM_ZERO = 0;
 const PCT_SEARCH_NUM_ONE = 1;
 
@@ -100,4 +102,56 @@ function exploreWithPct({
   });
 }
 
-export {runPctSeed, exploreWithPct};
+/**
+ * Find the MINIMAL PCT bug depth at which the scenario violates the invariant — the
+ * PCT-native witness minimizer (the unfulfilled half of the DT5 step-3 clause "record the
+ * seed for exact replay + minimize"). minimizeDeterministicTrace shrinks a node-command
+ * log; it does not fit the PCT search, whose witness is (seed, depth, change-points). The
+ * PCT analog is depth minimization: because a depth-d schedule carries exactly d-1 change
+ * points, the smallest depth that still reproduces is the smallest witness — and it is
+ * PCT's headline diagnostic, the bug's TRUE ordering depth (the number of independent
+ * ordering constraints the race needs). Coyote/P# report exactly this number.
+ *
+ * It searches depth ascending from minDepth and returns the first depth whose bounded
+ * seed search finds the bug, together with that depth's first failing seed (the minimal
+ * witness, since exploreWithPct scans seeds in order). A non-finding depth below the
+ * answer is BOUNDED evidence that fewer ordering constraints do not trigger it within the
+ * seed budget — NOT a proof of impossibility (absence within a budget proves nothing;
+ * structural unreachability, like this guard's serialized chains, is a separate argument).
+ * Hence the field is notReproducedBelow, not "unreachable".
+ *
+ * @param {Object} options - all exploreWithPct options EXCEPT depth, plus:
+ * @param {number} [options.minDepth=1] - lowest depth to try.
+ * @param {number} [options.maxDepth=8] - highest depth to try before giving up.
+ * @return {Object} {found, depth?, seed?, seedsTried?, observation?, changePointSteps?,
+ *   depthsTried, notReproducedBelow} — notReproducedBelow lists the depths that did NOT
+ *   reproduce within the seed budget (bounded negative evidence, not a proof).
+ */
+function minimizePctDepth({
+  minDepth = PCT_SEARCH_DEFAULT_MIN_DEPTH,
+  maxDepth = PCT_SEARCH_DEFAULT_MAX_DEPTH,
+  ...exploreOptions
+}) {
+  const notReproducedBelow = [];
+  const lowestDepth = Math.max(PCT_SEARCH_DEFAULT_MIN_DEPTH, Math.floor(minDepth));
+  const highestDepth = Math.floor(maxDepth);
+  for (let depth = lowestDepth; depth <= highestDepth; depth += PCT_SEARCH_NUM_ONE) {
+    const result = exploreWithPct({...exploreOptions, depth});
+    if (result.found === true) {
+      return Object.freeze({
+        ...result,
+        depth,
+        depthsTried: depth - lowestDepth + PCT_SEARCH_NUM_ONE,
+        notReproducedBelow: Object.freeze([...notReproducedBelow]),
+      });
+    }
+    notReproducedBelow.push(depth);
+  }
+  return Object.freeze({
+    found: false,
+    depthsTried: notReproducedBelow.length,
+    notReproducedBelow: Object.freeze([...notReproducedBelow]),
+  });
+}
+
+export {runPctSeed, exploreWithPct, minimizePctDepth};
