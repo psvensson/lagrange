@@ -7,10 +7,11 @@ opt-in Raft election seam, and the in-process freeze→leadership scenario) and 
 search over the virtual clock) and the in-process L1→TT
 freeze→leadership→publication-stall scenario are landed; DT6 STEP 1 (the multi-node
 lift — per-node virtual clocks + a virtual network with a PCT-reorderable cross-node
-delivery seam) and DT6 STEP 2 (the first REAL state machine — a `@markwylde/liferaft` node
+delivery seam), DT6 STEP 2 (the first REAL state machine — a `@markwylde/liferaft` node
 hosted on the network via a per-node TimeSource adapter, its real election timer PCT-raced
-against cross-node heartbeats) are landed; DT6 (full multi-node DST) proceeds as a gated
-program (see below).
+against cross-node heartbeats), and DT6 STEP 3 (REAL multi-node vote/append RPCs over the
+network — a real 3-node election + a PCT-raced contested election that flips which real
+candidate wins) are landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -160,9 +161,38 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   two caveats — the fractional-ms floor and a post-shed `end()` teardown race — were fixed before
 >   landing). Unit contract: the adapter + bounded-drain cases added to
 >   `test/distributed/harness/__tests__/virtual-network.test.js`.
->   **REMAINING toward full DT6:** instantiate the REAL owner/readiness/rebalancer/raft instances
->   inside the VirtualNetwork (not synthetic chains), so a seed drives the actual state machines'
->   cross-node message exchange — the north-star whole-system DST.
+> - **DT6 — STEP 3 LANDED (2026-06-16). Two+ REAL raft nodes' vote/append RPCs over the network.**
+>   Step 2 hosted ONE real liferaft node and modelled "leader contact" as a bare heartbeat
+>   message; step 3 wires the ACTUAL liferaft transport so a real MULTI-NODE election runs
+>   end-to-end over the seeded network. `test/distributed/harness/raft-network-host.js`
+>   (`connectRaftCluster`) hosts a cluster of real `@markwylde/liferaft` nodes on a VirtualNetwork:
+>   each node's outbound packet travels as a network message and its real `on('data')` handler
+>   processes the inbound ones, with request/reply correlation matching liferaft's
+>   `write(packet, written)` contract (a `raftReq` carries the packet + a `reqId`; the receiver
+>   feeds it to the real handler and routes the handler's reply back as a correlated `raftReply`
+>   that fires the original `written` callback — an empty liferaft reply carries `null` and
+>   re-emits nothing, exactly as a real transport). Real liferaft handlers are async, so an
+>   election completes across MICROTASKS: `driveNetwork` (bounded `run({untilMs})` +
+>   `flushMicrotasks`) is the async analog of draining to idle (the synchronous `exploreWithPct`
+>   search layer is therefore NOT reused here — the same `PctScheduler` + `SeededRandomSource` are
+>   driven directly). Clusters are ODD-sized (canonical raft — liferaft `majority()` =
+>   `floor(N/2)+1`, so N=3 needs 2 votes; an even cluster is legal but tolerates no more failures
+>   than the next-lower odd). **GUARD MET:** `test/convergence/dt6-raft-election-network.test.js` —
+>   a real 3-node election completes over the network (a candidate reaches a real majority and
+>   becomes LEADER; followers learn the leader via real append RPCs; real `raftReq`/`raftReply`
+>   packets are delivered over the wire); and a PCT-RACED CONTESTED election where two real
+>   candidates stand at the same term and the decisive follower F grants its single real vote to
+>   whichever vote packet the seeded `PctScheduler` delivers FIRST — so which REAL node wins is a
+>   function of the seed (census 29/21 over 50 seeds, both candidates winnable; delivery-order ⇒
+>   winner in 30/30; no scheduler ⇒ fixed lowest-seq winner), replayed identically per seed.
+>   Subagent-verified TRUSTED (real-logic-decided not staged — the no-op `write` sink is never
+>   invoked on the election path; correct majority/quorum + no split-brain; genuine both-ways race;
+>   determinism — `Math.random` neutralized by `election min==max`, `+new Date()` feeds only the
+>   diagnostic `raft.latency`; no leak/hang/unhandled-rejection across the 50-election census).
+>   **REMAINING toward full DT6:** drive a real LEADERSHIP MIGRATION end-to-end — partition/freeze
+>   the leader so a follower's seeded election timeout wins a new term (CL-039 L1→L2→fail-back) —
+>   and host the REAL owner/readiness/rebalancer subsystems alongside raft on the VirtualNetwork,
+>   so a seed drives the actual whole-system cross-node exchange (the north-star whole-system DST).
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
@@ -176,19 +206,21 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — STEPS 1–2 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+> - **DT6 — STEPS 1–3 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
 >   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
->   is built and guarded (step 1), and the first REAL state machine — a `@markwylde/liferaft` node
->   — now runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
->   (`run({untilMs})`), with its real election timer PCT-raced against cross-node heartbeats
->   (step 2) — see "DT6 — STEP 1/STEP 2 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
->   instantiating the real multi-node cluster (owner/readiness/rebalancer + a SECOND real raft node
->   exchanging real vote/append RPCs) on the VirtualNetwork's per-node clocks + virtual network,
->   seed-iterated via the DT5 PCT scheduler — remains the gated program. The seams (TimeSource on
->   all four subsystems + raft, RandomSource on the jitter sites) plus the VirtualNetwork substrate
->   AND the adapter that hosts a real TimeSource-seamed machine on it are now in place; what remains
->   is hosting the OTHER real subsystems + a second raft node (step 2 hosts one) and driving a
->   historical CL failure end-to-end from a seed.
+>   is built and guarded (step 1); the first REAL state machine — a `@markwylde/liferaft` node —
+>   runs ON it via a per-node TimeSource adapter (`networkTimeSource`) + a bounded drain
+>   (`run({untilMs})`), its real election timer PCT-raced against cross-node heartbeats (step 2);
+>   and REAL multi-node vote/append RPCs now flow over the network (`connectRaftCluster`), so a real
+>   3-node election completes and a PCT-raced contested election flips which real candidate wins
+>   (step 3) — see "DT6 — STEP 1/2/3 LANDED" under DT5 above. Seed-iterated WHOLE-SYSTEM DST —
+>   instantiating the real multi-node cluster (owner/readiness/rebalancer alongside the real raft
+>   nodes) on the VirtualNetwork, seed-iterated via the DT5 PCT scheduler, driving a historical CL
+>   (a leadership migration / fail-back) end-to-end — remains the gated program. The seams
+>   (TimeSource on all four subsystems + raft, RandomSource on the jitter sites), the VirtualNetwork
+>   substrate, the adapter that hosts a real TimeSource-seamed machine, AND the real raft RPC
+>   transport are now in place; what remains is hosting the OTHER real subsystems and driving a
+>   real leadership migration end-to-end from a seed.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
