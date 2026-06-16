@@ -1,8 +1,9 @@
 # Deterministic & Directed Testing Strategy (DT1–DT8)
 
 Status: PARTIALLY IMPLEMENTED + VERIFIED (2026-06-16). The cheap, verifiable tier is
-built and tested; DT4/DT5/DT6 are deferred by design (see below). Author: analysis of
-the convergence loop + harness, 2026-06-16.
+built and tested; DT4 step 1 (the `TimeSource` seam) is landed; DT4 steps 2-3 (Raft
+election seam + in-process scenario) and DT5/DT6 proceed as a gated program (see below).
+Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
 > - **DT7 (model-check the design class) — DONE.** `models/leadership-failback/LeadershipFailback.tla`
@@ -25,11 +26,25 @@ the convergence loop + harness, 2026-06-16.
 >   provably reaches terminal states — ~93% of random folds — so the absorbing property
 >   is actually exercised; an earlier draft seeded a non-existent state and was vacuous).
 > - **DT8 — DONE.** Gate-demotion rule added to `closure-grammar.md`.
-> - **DT4 / DT5 / DT6 — DEFERRED BY DESIGN.** DT4 (virtual clock incl. the LiferRaft
->   election seam) touches the hottest convergence paths under active CL work; doing it
->   blind, without the docker gate-validation loop, is exactly the destabilization this
->   repo fights. DT5 depends on DT4; DT6 is the multi-month north star. They proceed as a
->   gated program, not a one-session change.
+> - **DT4 — STEP 1 STARTED (2026-06-16): the `TimeSource` seam is landed.**
+>   `src/time/time-source.js` introduces `RealTimeSource` (the default — byte-for-byte the
+>   platform globals: `Date.now`/`setTimeout`/`clearTimeout`/`setInterval`/`clearInterval`),
+>   `VirtualTimeSource` (a deterministic fake clock the harness advances with `advance(ms)`;
+>   timers fire in `(dueAt, scheduling-order)` order, intervals reschedule, zero-interval
+>   clamps, runaway re-arm fails loud), and `resolveTimeSource(options)`. First collapse:
+>   `control-plane-readiness-participation-base.js` threads its `now`/`setTimeoutFn`/
+>   `clearTimeoutFn` onto it (explicit per-fn options keep precedence → byte-identical
+>   default; 834 readiness tests green, no regression). Tests: `test/time/time-source.test.js`
+>   + `test/control-plane/readiness-time-source-seam.test.js` (red-on-revert; a VirtualTimeSource
+>   drives `service.now()`). Subagent-verified TRUSTED. **REMAINING DT4:** collapse the other
+>   partial seams (owner-driver `setIntervalFn`, lease all-three, HLC physical clock); then the
+>   hard part — the Raft election-timer seam (`raft-replica-base.js` native `setTimeout` /
+>   `applyRaftTimingConfig`); then the in-process freeze→leadership scenario in
+>   `deterministic-convergence-harness`. The Raft seam stays gated against a small docker
+>   equivalence check before reliance.
+> - **DT5 / DT6 — DEFERRED BY DESIGN.** DT5 (seeded PCT scheduler) depends on the full DT4
+>   seam coverage; DT6 is the multi-month north star. They proceed as a gated program, not a
+>   one-session change.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a

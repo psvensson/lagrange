@@ -1,5 +1,6 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness-service-node-methods.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const LOCAL_STR_ZHDQ9 = 'control-plane-readiness-evaluation';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
@@ -138,14 +139,20 @@ class ControlPlaneReadinessParticipationBase {
       ...MEMBERSHIP_PUBLICATION_READ_OPTIONS,
       queryTimeoutMs: this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
+    // DT4 seam: one TimeSource backs this subsystem's clock + timers. The default
+    // is a RealTimeSource that delegates to the platform globals, so behavior is
+    // byte-for-byte unchanged; the convergence harness can pass a VirtualTimeSource
+    // to drive readiness deterministically. Explicit per-fn options keep precedence
+    // so existing callers/tests are untouched.
+    this.timeSource = resolveTimeSource(options);
     this.setTimeoutFn =
       typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
         options.setTimeoutFn :
-        setTimeout;
+        (fn, ms, ...args) => this.timeSource.setTimeout(fn, ms, ...args);
     this.clearTimeoutFn =
       typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
         options.clearTimeoutFn :
-        clearTimeout;
+        (handle) => this.timeSource.clearTimeout(handle);
     this.loggedMissingStorageAccountingOwner = false;
     this.loggedMissingPublicationOwner = false;
     this.readinessTransitionHistoryLimit =
@@ -223,7 +230,9 @@ class ControlPlaneReadinessParticipationBase {
         options.getLocalClusterIncarnationFence :
         null;
     this.now =
-      typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+      typeof options.now === TYPEOF.FUNCTION ?
+        options.now :
+        () => this.timeSource.now();
     this.participationDecisionLedger =
       options.participationDecisionLedger ||
       new ControlPlaneDiagnosticsLedger({
