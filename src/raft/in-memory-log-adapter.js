@@ -81,15 +81,20 @@ class InMemoryLogAdapter {
    * @return {Promise<Object>} Last entry or default
    */
   async getLastEntry() {
+    // CL-042: an EMPTY log has last-log-term 0 by Raft definition (§5.4.1). Returning the node's
+    // election term here masquerades an empty log as up-to-date, letting an empty-log candidate
+    // that bumped its term out-rank a voter holding committed entries (Leader-Completeness
+    // violation → committed-log divergence). Use 0 so the up-to-date comparison is correct on both
+    // sides (an empty candidate never out-ranks a log-bearing voter; an empty voter still grants).
     if (this.lastIndex === NUM.ZERO) {
       return {
         index: NUM.ZERO,
-        term: this.node ? this.node.term : NUM.ZERO,
+        term: NUM.ZERO,
       };
     }
     return this.entries.get(this.lastIndex) || {
       index: NUM.ZERO,
-      term: this.node ? this.node.term : NUM.ZERO,
+      term: NUM.ZERO,
     };
   }
 

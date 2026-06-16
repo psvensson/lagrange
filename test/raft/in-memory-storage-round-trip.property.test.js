@@ -102,6 +102,10 @@ test('Property 1: In-Memory Storage Round-Trip', async (t) => {
 
   /**
    * Property: getLastEntry returns default for empty log.
+   *
+   * CL-042: an empty log's last-log-term is 0 by Raft definition (§5.4.1), NOT the node's election
+   * term. (Previously this returned node.term, which let an empty-log candidate that bumped its
+   * term out-rank a voter holding committed entries — a Leader-Completeness violation.)
    */
   t.test('getLastEntry returns default for empty log', async (t) => {
     const node = createMockNode('test-node', 5);
@@ -109,7 +113,7 @@ test('Property 1: In-Memory Storage Round-Trip', async (t) => {
 
     const lastEntry = await adapter.getLastEntry();
     t.equal(lastEntry.index, 0, 'index should be 0 for empty log');
-    t.equal(lastEntry.term, 5, 'term should match node term');
+    t.equal(lastEntry.term, 0, 'term should be 0 for an empty log (not the node election term)');
   });
 
   /**

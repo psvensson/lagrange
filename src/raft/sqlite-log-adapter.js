@@ -5,7 +5,6 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 12.1, 12.2, 12.3, 12.4, 12.5
  */
 
-import {NUM} from '../constants/index.js';
 import {
   isCanonicalLogEntryShape,
   normalizeLogEntry,
@@ -159,10 +158,14 @@ class SQLiteLogAdapter {
    * @return {Object} {index, term, committedIndex}
    */
   getLastInfo() {
+    // CL-042: an empty log's last-log-term is 0 by Raft definition (§5.4.1), not the node's
+    // election term — masquerading it lets an empty-log candidate out-rank a voter holding
+    // committed entries (Leader-Completeness violation → committed-log divergence). See the
+    // in-memory adapter's getLastEntry for the full rationale.
     if (!this.isOpen()) {
       return {
         index: LOCAL_NUM_ZERO,
-        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
+        term: LOCAL_NUM_ZERO,
         committedIndex: this.getCommittedIndex(),
       };
     }
@@ -173,7 +176,7 @@ class SQLiteLogAdapter {
     if (!row) {
       return {
         index: LOCAL_NUM_ZERO,
-        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
+        term: LOCAL_NUM_ZERO,
         committedIndex: this.getCommittedIndex(),
       };
     }
@@ -410,10 +413,11 @@ class SQLiteLogAdapter {
    * @return {Object} Last entry or default
    */
   getLastEntry() {
+    // CL-042: an empty log's last-log-term is 0 (§5.4.1), not the node's election term.
     if (!this.isOpen()) {
       return {
         index: LOCAL_NUM_ZERO,
-        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
+        term: LOCAL_NUM_ZERO,
       };
     }
     const row = this.db.prepare(
@@ -423,7 +427,7 @@ class SQLiteLogAdapter {
     if (!row) {
       return {
         index: LOCAL_NUM_ZERO,
-        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
+        term: LOCAL_NUM_ZERO,
       };
     }
 
