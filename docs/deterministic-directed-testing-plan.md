@@ -5,8 +5,9 @@ built and tested; DT4 steps 1–3 (the TimeSource seam, the partial-seam collaps
 opt-in Raft election seam, and the in-process freeze→leadership scenario) and DT5 steps 1–2
 (the seeded RandomSource seam + jitter-site coverage, and the PCT depth-bounded schedule
 search over the virtual clock) and the in-process L1→TT
-freeze→leadership→publication-stall scenario are landed; DT6
-(multi-node DST) proceeds as a gated program (see below).
+freeze→leadership→publication-stall scenario are landed; DT6 STEP 1 (the multi-node
+lift — per-node virtual clocks + a virtual network with a PCT-reorderable cross-node
+delivery seam) is landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
 > **Implementation status (2026-06-16).**
@@ -103,8 +104,31 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >     Subagent-verified TRUSTED (first-found-return correctness, witness minimality, honest wording,
 >     determinism, edge cases, and reuse of `exploreWithPct` all confirmed; "minimal" correctly
 >     scoped to `[minDepth, maxDepth]`).
->   **REMAINING toward DT6:** lift the per-instant scheduler to multi-node (per-node virtual clocks +
->   a virtual network), so the search reorders cross-node message delivery, not just co-due timers.
+>   **REMAINING toward DT6 — STEP 1 LANDED (2026-06-16).** The per-instant scheduler is
+>   lifted to multi-node: `test/distributed/harness/virtual-network.js` (`createVirtualNetwork`)
+>   is N nodes on one global virtual clock + a virtual network, each node with its own logical
+>   clock (`nodeNow` — an active node tracks global time, a stopped node's clock freezes at its
+>   last activity, the CL-039 freeze substrate). One global event queue holds both in-flight
+>   MESSAGES (from→to, due at send-time + delay) and per-node TIMERS; `dueAt` is causality and is
+>   never reordered across instants, while the co-due set (events at the same earliest instant —
+>   the genuine cross-node delivery race) is handed to the SAME injected PctScheduler.pick the
+>   single-node VirtualTimeSource uses. With no scheduler the order is byte-identical (dueAt, seq);
+>   nothing in src/ constructs a VirtualNetwork (inert, a harness substrate like
+>   deterministic-simulator.js). Partition/heal + kill/start drop messages at delivery. **GUARD MET:**
+>   `test/convergence/dt6-network-pct-search.test.js` — a coordinator-window race across 3 nodes
+>   (sender A "open"→C self-"close" chain, sender B "probe") is UNREACHABLE at depth 1
+>   (independently brute-verified: 0 corruptions / 5000 seeds) and FOUND at depth 2 within a
+>   100-seed budget (floor 1/(2·4)=1/8), replays the identical cross-node interleaving, and
+>   `minimizePctDepth` reports the true depth = 2. The DT5 search layer (exploreWithPct /
+>   runPctSeed / minimizePctDepth) is REUSED UNCHANGED — the scenario builds a VirtualNetwork
+>   wired to the scheduler the search injects. Subagent-verified TRUSTED (determinism, default
+>   byte-identity, cross-instant causality, the depth-1-unreachable/depth-2-reachable claim, and
+>   edge cases — self-send, mid-run co-due append, partition-after-send, frozen-clock, handler-throw
+>   — all confirmed; a foreign-event membership guard was added to harden `pickNext`).
+>   Unit contract: `test/distributed/harness/__tests__/virtual-network.test.js`.
+>   **REMAINING toward full DT6:** instantiate the REAL owner/readiness/rebalancer/raft instances
+>   inside the VirtualNetwork (not synthetic chains), so a seed drives the actual state machines'
+>   cross-node message exchange — the north-star whole-system DST.
 > - **Full freeze→leadership→publication-stall scenario (L1→TT) — LANDED (2026-06-16).**
 >   `test/convergence/dt4-full-chain-scenario.test.js` composes the REAL owner-membership driver
 >   with a real LifeRaft node on one VirtualTimeSource: the leadership signal is the seed's live
@@ -118,10 +142,15 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 >   leadership GATE (real code), not a materialized published epoch. Subagent-reviewed
 >   FAITHFUL-WITH-CAVEATS. Remaining toward a higher-fidelity end-to-end: a real 2-node election
 >   across two virtual clocks + driving the actual publish/upsert (L4) internals.
-> - **DT6 — DEFERRED (north star).** Seed-iterated whole-system DST: a real multi-node cluster on
->   per-node virtual clocks with message passing, seed-iterated via the DT5 PCT scheduler. The
->   seams (TimeSource on all four subsystems + raft, RandomSource on the jitter sites) are the
->   substrate; DT6 is the search + multi-node-isolation harness on top.
+> - **DT6 — STEP 1 LANDED, full DST DEFERRED (north star).** The multi-node-isolation harness
+>   (per-node virtual clocks + a virtual network with a PCT-reorderable cross-node delivery seam)
+>   is built and guarded — see "REMAINING toward DT6 — STEP 1 LANDED" under DT5 above. Seed-iterated
+>   WHOLE-SYSTEM DST — instantiating the real multi-node cluster (owner/readiness/rebalancer/raft)
+>   on the VirtualNetwork's per-node clocks + virtual network, seed-iterated via the DT5 PCT
+>   scheduler — remains the gated program. The seams (TimeSource on all four subsystems + raft,
+>   RandomSource on the jitter sites) plus the VirtualNetwork substrate are now in place; what
+>   remains is wiring the REAL state machines into it (they currently run synthetic chains in the
+>   guard) and driving a historical CL failure end-to-end from a seed.
 
 > Corrections from the verification pass are marked **[V]** inline. The load-bearing
 > one reworked DT1: **"force the precondition" is deterministic only for bugs with a
