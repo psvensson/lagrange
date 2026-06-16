@@ -1,6 +1,7 @@
 {
   "comment": "CL-### -> deterministic repro test. Resolution: this registry wins; otherwise the runner falls back to the convention path test/closure/CL-###.repro.test.js. Existing deterministic tests are referenced in place (no churn); new repros should land at the convention path. See docs/deterministic-repro-tier.md.",
   "repros": {
+    "CL-001": "test/control-plane/active-node-projection.test.js",
     "CL-035": "test/control-plane/cl-035-voter-ready-row-seed.test.js",
     "CL-038": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js"
   }
