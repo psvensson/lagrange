@@ -269,6 +269,9 @@ export function registerFailureBundlePlaybackTests({
                   recoveryEligibleIncludedNodeIds: ['joiner-1'],
                   readinessExcludedNodeIds: ['seed-2'],
                   clusterMemberUnhealthyExcludedNodeIds: ['seed-2'],
+                  retentionGraceMisses: [
+                    {nodeId: 'seed-2', reason: 'stale_lease_and_heartbeat'},
+                  ],
                 },
                 priorityPartitionSummary: {
                   satisfied: false,
@@ -561,6 +564,9 @@ export function registerFailureBundlePlaybackTests({
         recoveryEligibleIncludedNodeIds: ['joiner-1'],
         readinessExcludedNodeIds: ['seed-2'],
         clusterMemberUnhealthyExcludedNodeIds: ['seed-2'],
+        retentionGraceMisses: [
+          {nodeId: 'seed-2', reason: 'stale_lease_and_heartbeat'},
+        ],
       },
     );
     assert.equal(

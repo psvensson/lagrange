@@ -39,6 +39,24 @@ function resolveProjectionDiagnostics(publicationConvergence = null) {
         projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
       ),
     ),
+    // CL-001 variant C: carry the per-node retention-grace miss attribution so a
+    // trimmed already-published node's binding condition (no_runtime_transport_
+    // evidence / stale_lease_and_heartbeat) surfaces in the publication report.
+    retentionGraceMisses: Object.freeze(
+      (Array.isArray(projectionDiagnostics.retentionGraceMisses) ?
+        projectionDiagnostics.retentionGraceMisses :
+        [])
+        .filter((entry) =>
+          isRecord(entry) &&
+          typeof entry.nodeId === TYPEOF.STRING &&
+          entry.nodeId.length > NUM.ZERO)
+        .map((entry) => Object.freeze({
+          nodeId: entry.nodeId,
+          reason: typeof entry.reason === TYPEOF.STRING ?
+            entry.reason :
+            LOCAL_STR_EMPTY,
+        })),
+    ),
   });
 }
 

@@ -231,6 +231,16 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
       projection.projectedServingNodeIds.includes('node-4'),
       'a published node stalled past the heartbeat grace must still be trimmed (no masking)',
     );
+    // CL-001 variant C instrumentation: a trimmed PUBLISHED-BASELINE member must be
+    // attributed with the grace condition that failed, so the trim root is
+    // observable in the publication diagnostics. node-4 is published + transport-
+    // connected but heartbeat/lease stale => 'stale_lease_and_heartbeat'. node-3 is
+    // NOT a baseline member (ordinary exclusion) => no attribution.
+    t.same(
+      projection.projectionDiagnostics.retentionGraceMisses,
+      [{nodeId: 'node-4', reason: 'stale_lease_and_heartbeat'}],
+      'retentionGraceMisses must attribute the stale trim of published node-4 and omit non-baseline node-3',
+    );
   });
 test('active-node projection can include recovery-eligible nodes during publication convergence windows',
   async (t) => {

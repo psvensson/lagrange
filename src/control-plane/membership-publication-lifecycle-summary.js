@@ -231,6 +231,14 @@ function buildProjectionDiagnosticsSummary(activeNodeViews = null, helperFns = {
     clusterMemberUnhealthyExcludedNodeIds: helperFns.normalizeNodeIdList(
       projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
     ),
+    // CL-001 variant C: surface the per-node retention-grace miss attribution so a
+    // trimmed already-published node's binding condition (no transport / stale
+    // lease+heartbeat) is observable in the publication diagnostics.
+    retentionGraceMisses: Array.isArray(
+      projectionDiagnostics.retentionGraceMisses,
+    ) ?
+      projectionDiagnostics.retentionGraceMisses.slice() :
+      [],
   };
 }
 

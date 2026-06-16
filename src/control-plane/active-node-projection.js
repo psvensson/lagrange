@@ -348,6 +348,34 @@ function shouldAllowLivenessFallbackProjection(
   );
 }
 
+// CL-001 variant C instrumentation: for a node being trimmed from the projection,
+// return WHICH retention-grace condition failed — but ONLY when the node is an
+// already-published-baseline member (a trimmed baseline member is the variant-C
+// regression; a non-baseline node is an ordinary, correct exclusion). null = not a
+// baseline member (no attribution recorded). Mirrors the three conjuncts of
+// shouldRetainTransportAlivePublishedNode so the next gate's seed-side diagnostics
+// name the binding condition without a new observer-effect log.
+function resolveTransportAliveRetentionMissReason(
+  nodeId,
+  nodeRow,
+  runtimeTransportEvidence,
+  options = {},
+) {
+  if (!isPublishedBaselineMember(nodeId, options)) {
+    return null;
+  }
+  if (runtimeTransportEvidence !== true) {
+    return 'no_runtime_transport_evidence';
+  }
+  if (!hasFreshReadyLeaseOrHeartbeat(nodeRow, options)) {
+    return 'stale_lease_and_heartbeat';
+  }
+  // Both grace conjuncts held yet the node was still excluded — the grace path was
+  // not consulted on this trim (e.g. the strict-mode gating upstream). Flag it so a
+  // genuinely anomalous trim is not silently attributed to staleness.
+  return 'grace_conditions_met_but_excluded';
+}
+
 function isCanonicallyActiveNode(nodeRow, options = {}) {
   const normalizedNode = normalizeNodeRow(nodeRow);
   if (!normalizedNode.nodeId) {
@@ -429,6 +457,10 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   const livenessFallbackIncludedNodeIds = new Set();
   const readinessExcludedNodeIds = new Set();
   const clusterMemberUnhealthyExcludedNodeIds = new Set();
+  // CL-001 variant C instrumentation: when an already-published-baseline node is
+  // trimmed despite the retention grace, attribute WHICH grace condition failed,
+  // surfaced through this same diagnostics object (no perturbing per-node log).
+  const retentionGraceMisses = [];
   for (const nodeRow of nodeRows) {
     const normalizedNode = normalizeNodeRow(nodeRow);
     if (!normalizedNode.nodeId) {
@@ -475,6 +507,17 @@ function resolveProjectedActiveNodeSelection(options = {}) {
         readinessExcludedNodeIds.add(nodeId);
         if (readinessProjection.clusterMemberHealthyMissing) {
           clusterMemberUnhealthyExcludedNodeIds.add(nodeId);
+        }
+        const retentionMissReason = resolveTransportAliveRetentionMissReason(
+          nodeId,
+          nodeRow,
+          runtimeTransportEvidence,
+          options,
+        );
+        if (retentionMissReason) {
+          retentionGraceMisses.push(
+            Object.freeze({nodeId, reason: retentionMissReason}),
+          );
         }
         continue;
       }
@@ -571,6 +614,10 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       Object.freeze([...readinessExcludedNodeIds].sort()),
     clusterMemberUnhealthyExcludedNodeIds:
       Object.freeze([...clusterMemberUnhealthyExcludedNodeIds].sort()),
+    retentionGraceMisses: Object.freeze(
+      [...retentionGraceMisses].sort((a, b) =>
+        a.nodeId.localeCompare(b.nodeId)),
+    ),
   });
 }
 
@@ -683,6 +730,9 @@ function resolveActiveNodeViews(options = {}) {
       clusterMemberUnhealthyExcludedNodeIds: Object.freeze([
         ...projectedActiveNodeSelection
           .clusterMemberUnhealthyExcludedNodeIds,
+      ]),
+      retentionGraceMisses: Object.freeze([
+        ...(projectedActiveNodeSelection.retentionGraceMisses || []),
       ]),
     }),
     publishedMembershipAvailable: hasPublishedMembership,

@@ -733,6 +733,19 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
         )
           .map((nodeId) => String(nodeId || ''))
           .filter((nodeId) => nodeId.length > ZERO),
+        // CL-001 variant C: carry the per-node retention-grace miss attribution
+        // through to the scenario report so a trimmed already-published node's
+        // binding condition is observable on the next gate.
+        retentionGraceMisses: parseJsonArrayField(
+          projectionDiagnosticsRaw.retentionGraceMisses,
+        )
+          .map((entry) => (entry && typeof entry === 'object' ?
+            {
+              nodeId: String(entry.nodeId || ''),
+              reason: String(entry.reason || ''),
+            } :
+            null))
+          .filter((entry) => entry && entry.nodeId.length > ZERO),
       } :
       null;
     const publishedActiveNodeIdsNormalized = publishedActiveNodeIds
