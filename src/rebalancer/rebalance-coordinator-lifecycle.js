@@ -1,4 +1,5 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -177,6 +178,19 @@ class RebalanceCoordinatorLifecycle {
     this.timeoutCheckInFlight = false;
     this.timeoutCheckIntervalMs =
       REBALANCER_DEFAULT.COORDINATOR.TIMEOUT_CHECK_INTERVAL_MS;
+    // DT6 seam: the timeout-check loop runs on a TimeSource (default RealTimeSource =
+    // the platform setInterval/clearInterval, byte-identical) so the convergence harness
+    // can host this coordinator on a virtual network clock and advance it deterministically.
+    // Explicit setIntervalFn/clearIntervalFn options keep precedence. Inert in production.
+    this.timeSource = resolveTimeSource(options);
+    this.timeoutCheckSetIntervalFn =
+      typeof options.setIntervalFn === LOCAL_STR_FUNCTION ?
+        options.setIntervalFn :
+        (fn, ms) => this.timeSource.setInterval(fn, ms);
+    this.timeoutCheckClearIntervalFn =
+      typeof options.clearIntervalFn === LOCAL_STR_FUNCTION ?
+        options.clearIntervalFn :
+        (handle) => this.timeSource.clearInterval(handle);
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
     this.incompleteOperationQueryEmptyBackoffMs =
       INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS;
@@ -536,7 +550,7 @@ class RebalanceCoordinatorLifecycle {
       return;
     }
 
-    this.timeoutCheckInterval = setInterval(() => {
+    this.timeoutCheckInterval = this.timeoutCheckSetIntervalFn(() => {
       if (this.isShuttingDown || this.timeoutCheckInFlight === true) {
         return;
       }
@@ -549,8 +563,11 @@ class RebalanceCoordinatorLifecycle {
           this.timeoutCheckInFlight = false;
         });
     }, this.timeoutCheckIntervalMs);
-    // Unref to allow process exit when this is the only timer
-    this.timeoutCheckInterval.unref();
+    // Unref to allow process exit when this is the only timer (real platform timers
+    // only; a virtual TimeSource handle has no unref).
+    if (typeof this.timeoutCheckInterval?.unref === LOCAL_STR_FUNCTION) {
+      this.timeoutCheckInterval.unref();
+    }
   }
 
   /**
@@ -559,7 +576,7 @@ class RebalanceCoordinatorLifecycle {
    */
   stopTimeoutChecking() {
     if (this.timeoutCheckInterval) {
-      clearInterval(this.timeoutCheckInterval);
+      this.timeoutCheckClearIntervalFn(this.timeoutCheckInterval);
       this.timeoutCheckInterval = null;
     }
     this.timeoutCheckInFlight = false;
