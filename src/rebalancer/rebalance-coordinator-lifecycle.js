@@ -291,6 +291,10 @@ class RebalanceCoordinatorLifecycle {
         config: this.config,
         nodeId: this.nodeId,
         stats: this.stats,
+        // DT6 seam: thread the coordinator's TimeSource (step 9; default RealTimeSource =
+        // platform clock, byte-identical) so the owner's checkTimeouts orchestration shares the
+        // same clock and is virtual-clock-drivable when a network TimeSource is injected.
+        timeSource: this.timeSource,
         isShuttingDown: () => this.isShuttingDown,
         isInitialized: () => this.initialized,
         releaseReservationForOperation: (op) =>

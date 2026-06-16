@@ -420,6 +420,10 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
     super(options);
+    // DT6 seam: optional TimeSource so the timeout-check orchestration can run on a virtual clock
+    // (default null -> checkTimeouts falls back to Date.now(), byte-identical). See
+    // OperationWorkflowRecoveryTimeout.resolveTimeoutCheckNowMs.
+    this.timeSource = options?.timeSource || null;
     this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =
       new Map();
     this.operationWorkflowOwnerPorts =

@@ -119,12 +119,23 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     );
   }
 
+  // DT6 seam: the timeout-check orchestration reads time through a TimeSource when one is injected
+  // (default: none -> Date.now(), byte-identical), so the convergence harness can drive checkTimeouts
+  // on a virtual clock. RealTimeSource.now() === Date.now(), so production hosting is unchanged.
+  resolveTimeoutCheckNowMs() {
+    const timeSource = this.timeSource;
+    if (timeSource && typeof timeSource.now === TYPEOF.FUNCTION) {
+      return timeSource.now();
+    }
+    return Date.now();
+  }
+
   async checkTimeouts() {
     if (this.isShuttingDown || !this.isInitialized) {
       return;
     }
 
-    const now = Date.now();
+    const now = this.resolveTimeoutCheckNowMs();
     if (
       this.lastEmptyIncompleteOperationQueryAtMs > NUM.ZERO &&
       now - this.lastEmptyIncompleteOperationQueryAtMs <
@@ -246,7 +257,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             return;
           }
 
-          await this.reconcileTimeoutOperation(timeoutOperation, Date.now());
+          await this.reconcileTimeoutOperation(
+            timeoutOperation,
+            this.resolveTimeoutCheckNowMs(),
+          );
         },
       ).catch((error) => {
         if (
