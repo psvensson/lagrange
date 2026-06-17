@@ -761,6 +761,7 @@ export {
   resolveActiveNodeViews,
   buildReadinessByNodeId,
   hasCanonicalActiveService,
+  hasFreshReadyLeaseOrHeartbeat,
   hasCanonicalWebSocketEndpoint,
   hasCanonicalWebSocketEndpoints,
   isCanonicalWebSocketEndpointRow,
