@@ -12,19 +12,18 @@
 - Frontier: rolling-restart-core-stability-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: topology_gap
-- Movement: solved: startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304 -> PASS
-- Latest evidence: test-output/reports/stat-gate-20260616T161647Z-run4.report.json
+- Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72
+- Mechanism: transition_gap
+- Movement: narrowed: PASS -> publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72
+- Latest evidence: test-output/reports/stat-gate-20260617T141034Z-run7.report.json
 - Selected theory: theory-20260606-active-gate-owner-reconcile-queue-drain
 - Next move: continue supervised step for rolling-restart-core-stability-main
-- Oscillation: blocker "startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304" revisited 2x (whack-a-mole; change strategy)
-- No longer current: startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
+- No longer current: PASS
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: continue rolling-restart-core-stability-main with modelRef or modelNotApplicable evidence
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id rolling-restart-core-stability --frontier rolling-restart-core-stability-main --evidence test-output/reports/stat-gate-20260617T141034Z-run8.report.json
 
 ## Scope Pressure
 - Changed files: 26
@@ -45,7 +44,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 3, attempts 62, reopened 12, metric 1 -> 300 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
+- **rolling-restart-core-stability-main** [open] rung 3, attempts 62, reopened 12, metric 1 -> 201 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -300,6 +299,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 105 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 101 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260616T161647Z-run4.report.json. Metric: 101 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260616T161647Z-run4.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260617T141034Z-run7.report.json. Metric: 300 -> 201. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260617T141034Z-run7.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -558,6 +558,7 @@
 - **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=failed, theory=partial, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
 - **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 - **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260616T161647Z-run4.report.json]
+- **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260617T141034Z-run7.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
