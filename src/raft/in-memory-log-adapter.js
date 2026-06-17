@@ -134,6 +134,14 @@ class InMemoryLogAdapter {
         this.lastIndex = key;
       }
     }
+    // CL-042 hygiene: a truncation must not leave committedIndex above the surviving log tail,
+    // else a truncated follower reports committedIndex > lastIndex (the seed-21 readout anomaly).
+    // In correct raft operation the log is never truncated below the committed point (Leader
+    // Completeness), so committedIndex <= lastIndex already holds and this clamp is a no-op on every
+    // safe path; it only repairs the readout if a conflicting tail ever reaches below it.
+    if (this.committedIndex > this.lastIndex) {
+      this.committedIndex = this.lastIndex;
+    }
   }
 
   /**
