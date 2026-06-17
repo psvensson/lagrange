@@ -73,6 +73,11 @@
       "priority": 120
     },
     {
+      "file": "memory-boundary.md",
+      "domain": "governance",
+      "priority": 118
+    },
+    {
       "file": "workflow-guidelines/lifecycle.md",
       "domain": "governance",
       "priority": 115
@@ -101,15 +106,20 @@
       "file": "workflow-guidelines/solver-quests.md",
       "domain": "governance",
       "priority": 110
+    },
+    {
+      "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+      "domain": "governance",
+      "priority": 100
     }
   ],
   "stats": {
-    "candidateCount": 266,
-    "dedupedRuleCount": 260,
-    "exportedRuleCount": 260,
+    "candidateCount": 272,
+    "dedupedRuleCount": 266,
+    "exportedRuleCount": 266,
     "aliasRuleCount": 0,
-    "masterRuleCount": 260,
-    "estimatedAllRulesTokens": 9436
+    "masterRuleCount": 266,
+    "estimatedAllRulesTokens": 9734
   },
   "rules": [
     {
@@ -1396,6 +1406,21 @@
       ]
     },
     {
+      "id": "GOV-0003",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Session/narrative state (current blocker, handoff notes, working hypotheses) stays in external memory and MUST NOT be copied into in-repo steering.",
+      "score": 224,
+      "sources": [
+        {
+          "file": "memory-boundary.md",
+          "line": 23,
+          "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
+        }
+      ]
+    },
+    {
       "id": "ARCH-0048",
       "domain": "architecture",
       "strength": "must",
@@ -1447,7 +1472,7 @@
       ]
     },
     {
-      "id": "GOV-0003",
+      "id": "GOV-0004",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1972,7 +1997,22 @@
       ]
     },
     {
-      "id": "GOV-0004",
+      "id": "GOV-0005",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "They have different jobs and MUST NOT duplicate each other; duplication is how the same \"truth\" drifts into three conflicting copies.",
+      "score": 214,
+      "sources": [
+        {
+          "file": "memory-boundary.md",
+          "line": 3,
+          "section": "Memory boundary — in-repo steering vs external auto-memory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2092,7 +2132,7 @@
       ]
     },
     {
-      "id": "GOV-0005",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2107,7 +2147,7 @@
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2122,7 +2162,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2137,7 +2177,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2152,7 +2192,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2232,7 +2272,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2249,7 +2289,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2266,7 +2306,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2281,7 +2321,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2659,7 +2699,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2674,7 +2714,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2689,7 +2729,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2704,7 +2744,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2721,7 +2761,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2738,7 +2778,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2753,7 +2793,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2768,7 +2808,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2783,7 +2823,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2800,7 +2840,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2815,7 +2855,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2832,7 +2872,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2847,7 +2887,37 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0028",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see findings/README.md), NOT left only in external memory.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "memory-boundary.md",
+          "line": 20,
+          "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0029",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Durable operational ground truth has exactly one canonical home, operational-ground-truth.md. AGENTS.md and the external auto-memory MUST link to it rather than restate it.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "memory-boundary.md",
+          "line": 25,
+          "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2862,7 +2932,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2877,7 +2947,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2892,7 +2962,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2907,7 +2977,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2939,7 +3009,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2956,7 +3026,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2971,7 +3041,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2986,7 +3056,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3001,7 +3071,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3016,7 +3086,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3031,7 +3101,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3231,7 +3301,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3246,7 +3316,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3263,7 +3333,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3278,7 +3348,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3295,7 +3365,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3310,7 +3380,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3359,7 +3429,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3376,7 +3446,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3391,7 +3461,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3421,7 +3491,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3438,7 +3508,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3453,7 +3523,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3468,7 +3538,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3485,7 +3555,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3500,7 +3570,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3606,7 +3676,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3623,7 +3693,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3755,7 +3825,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3770,7 +3840,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3785,7 +3855,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3803,7 +3873,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3820,7 +3890,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3983,7 +4053,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3998,7 +4068,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4015,7 +4085,22 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0066",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Findings promoted into steering MUST be written as a normative sentence containing MUST, SHOULD, or NEVER, because the steering pack generator infers rule strength from the body text and ignores front-matter strength and domain fields.",
+      "score": 172,
+      "sources": [
+        {
+          "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4124,7 +4209,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4139,7 +4224,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4154,7 +4239,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4169,7 +4254,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4201,7 +4286,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4212,6 +4297,21 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 144,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0073",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "In-repo steering (.kiro/steering/, the generated packs under .kiro/steering/llm/, rules.json, and AGENTS.md): durable, shared, version-controlled, CI-gated rules and ground truth*. This is the home for anything that should bind future work for everyone*.",
+      "score": 150,
+      "sources": [
+        {
+          "file": "memory-boundary.md",
+          "line": 9,
+          "section": "Memory boundary — in-repo steering vs external auto-memory > The two systems"
         }
       ]
     },
@@ -4231,7 +4331,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4246,7 +4346,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4276,7 +4376,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4293,7 +4393,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4308,7 +4408,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4325,7 +4425,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4342,7 +4442,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4359,5 +4459,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-06T06:52:32.666Z"
+  "generatedAt": "2026-06-17T13:11:17.057Z"
 }

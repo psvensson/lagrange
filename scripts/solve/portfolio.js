@@ -31,13 +31,20 @@ import {
 import {loadQuest, readLog, projectState} from './store.js';
 import {questClass, closureKind} from './closure-kind.js';
 
-function listQuestIds(root) {
+export function listQuestIds(root) {
   const dir = path.join(root, SOLVE_DATA_DIR, QUESTS_SUBDIR);
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir)
     .filter((name) => name.endsWith('.json'))
     .map((name) => name.slice(0, -'.json'.length))
     .sort();
+}
+
+// Load every sealed quest file (id-sorted). The shared loader for any cross-quest
+// surface that needs the quest objects themselves (e.g. their `links` block), not
+// just the log-derived portfolio rows.
+export function loadAllQuests(root) {
+  return listQuestIds(root).map((id) => loadQuest(root, id));
 }
 
 // Terminal outcome is read straight from the last quest event in the log; an

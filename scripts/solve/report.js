@@ -40,6 +40,22 @@ function frontierLine(f) {
     `attempts ${f.attempts}${reopened}, metric ${base} -> ${metric}${reason}`;
 }
 
+// Render the optional `links` block. Returns [] when the quest declares no links
+// (so legacy reports without a Links section are byte-for-byte unchanged).
+function linkLines(quest) {
+  const links = quest.links || {};
+  const rows = [];
+  if (links.roadmapRow) rows.push(`- roadmap row: ${links.roadmapRow}`);
+  if (links.specRef) rows.push(`- spec: ${links.specRef}`);
+  if (Array.isArray(links.closesCL) && links.closesCL.length > 0) {
+    rows.push(`- closes: ${links.closesCL.join(', ')}`);
+  }
+  if (links.parentQuest) rows.push(`- parent quest: ${links.parentQuest}`);
+  if (links.planDoc) rows.push(`- plan: ${links.planDoc}`);
+  if (rows.length === 0) return [];
+  return ['## Links', ...rows, ''];
+}
+
 function findingLines(state) {
   const rows = [];
   for (const f of state.frontiers) {
@@ -145,6 +161,7 @@ export function buildReport(quest, log, state, root = process.cwd()) {
     '',
     `**Attempts:** ${attempts.length}`,
     '',
+    ...linkLines(quest),
     ...renderCurrentBlocker(currentBlocker),
     '',
     '## Continuation',

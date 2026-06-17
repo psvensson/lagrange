@@ -79,6 +79,11 @@
       "priority": 120
     },
     {
+      "file": "memory-boundary.md",
+      "domain": "governance",
+      "priority": 118
+    },
+    {
       "file": "workflow-guidelines/lifecycle.md",
       "domain": "governance",
       "priority": 115
@@ -107,6 +112,11 @@
       "file": "workflow-guidelines/solver-quests.md",
       "domain": "governance",
       "priority": 110
+    },
+    {
+      "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+      "domain": "governance",
+      "priority": 100
     }
   ],
   "outputs": [

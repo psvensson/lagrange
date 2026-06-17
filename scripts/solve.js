@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
-  appendGuardOverride, appendReflection}
+  appendGuardOverride, appendReflection, readFindings}
   from './solve/store.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
@@ -44,8 +44,8 @@ import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
-import {runPortfolioCommand} from './solve/portfolio.js';
-import {runFrontierCommand} from './solve/frontier.js';
+import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
+import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {
@@ -89,6 +89,17 @@ function questTemplate(id, statement) {
     // "process" goals are scaffolding/decision records and may close on an oracle.
     // This drives report closure-strength labeling and the audit closure-mismatch warning.
     class: 'product',
+    // links: optional, declarative-only cross-references that situate this Quest in
+    // the planning graph (roadmap row, spec/task, the closure-ledger records it
+    // closes, a parent Quest). Readers MUST treat the whole block as optional
+    // (`quest.links ?? {}`); nothing here is enforced. `solve.js trace` and the
+    // FRONTIER board read these to join the otherwise-disconnected planning layers.
+    links: {
+      roadmapRow: null,
+      specRef: null,
+      closesCL: [],
+      parentQuest: null,
+    },
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
     doneWhen: {
       probe: 'scenario-harness',
@@ -303,6 +314,90 @@ function cmdFinding(root, args) {
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
 }
 
+const PROMOTE_DOMAINS = Object.freeze(['architecture', 'testing', 'governance', 'style']);
+const NORMATIVE_KEYWORD = /\b(MUST NOT|MUST|SHOULD NOT|SHOULD|SHALL NOT|SHALL|NEVER|MAY)\b/;
+const PACK_CONFIG_REL = '.kiro/steering/llm-pack.config.json';
+const FINDINGS_REL = '.kiro/steering/findings';
+
+function slugify(text) {
+  return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '').slice(0, 48) || 'finding';
+}
+
+function isoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Append a {file, domain, priority} entry to the pack config so the generator picks
+// up the new findings file with the right domain. The generator keys domain off the
+// config entry (not file front-matter), so this is the only place domain is carried.
+function appendPackSource(root, relFile, domain) {
+  const configPath = path.join(root, PACK_CONFIG_REL);
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  config.sources = config.sources || [];
+  if (config.sources.some((s) => s.file === relFile)) return false;
+  config.sources.push({file: relFile, domain, priority: 100});
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  return true;
+}
+
+// Promote a recorded Quest finding into a durable source-steering file. Findings
+// have no key — they are addressed by (quest, frontier) and disambiguated by
+// --match (claim substring) or --ts when a frontier carries several. The body is
+// the finding's claim; it must read as a normative sentence to become a rule.
+function cmdPromoteFinding(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('promote-finding: --id <questId> is required');
+  if (!args.frontier) throw new Error('promote-finding: --frontier <frontierId> is required');
+  const domain = typeof args.domain === 'string' ? args.domain : null;
+  if (!domain || !PROMOTE_DOMAINS.includes(domain)) {
+    throw new Error(`promote-finding: --domain <${PROMOTE_DOMAINS.join('|')}> is required ` +
+      '(the pack generator cannot infer domain from the file)');
+  }
+  loadQuest(root, id);
+  let findings = readFindings(root, id, args.frontier);
+  if (findings.length === 0) {
+    throw new Error(`promote-finding: no findings recorded for ${id} / ${args.frontier}`);
+  }
+  if (typeof args.match === 'string') {
+    findings = findings.filter((f) => (f.claim || '').includes(args.match));
+  }
+  if (typeof args.ts === 'string') {
+    findings = findings.filter((f) => f.ts === args.ts);
+  }
+  if (findings.length === 0) {
+    throw new Error('promote-finding: no finding matched --match/--ts');
+  }
+  if (findings.length > 1) {
+    throw new Error(`promote-finding: ${findings.length} findings match; narrow with ` +
+      '--match "<claim substring>" or --ts <iso>');
+  }
+  const finding = findings[0];
+  const claim = finding.claim || '';
+  const slug = typeof args.slug === 'string' ? slugify(args.slug) : slugify(claim);
+  const baseName = `${isoDate()}-${id}-${slug}.md`;
+  const relFile = `findings/${baseName}`; // relative to .kiro/steering (sourceDir)
+  const absFile = path.join(root, FINDINGS_REL, baseName);
+  if (fs.existsSync(absFile) && !args.force) {
+    throw new Error(`promote-finding: ${absFile} already exists (use --force)`);
+  }
+  const body = `---\nsource: quest:${id}#${args.frontier}\n---\n\n${claim}\n`;
+  fs.mkdirSync(path.dirname(absFile), {recursive: true});
+  fs.writeFileSync(absFile, body);
+  const added = appendPackSource(root, relFile, domain);
+  process.stdout.write(`promoted finding -> ${absFile}\n`);
+  process.stdout.write(added ?
+    `added sources[] entry {file:"${relFile}", domain:"${domain}", priority:100}\n` :
+    `(sources[] already had ${relFile})\n`);
+  if (!NORMATIVE_KEYWORD.test(claim)) {
+    process.stdout.write(
+      'WARNING: claim has no normative keyword (MUST/SHOULD/NEVER/...). The pack ' +
+      'generator will classify it as `info` and it will NOT become a rule. Edit the ' +
+      `body of ${relFile} into a normative sentence before regenerating.\n`);
+  }
+  process.stdout.write('next: npm run steering:llm:pack && npm run steering:check\n');
+}
+
 // Friendly aliases for the overridable guard codes so a driver can write `--guard theory`
 // or `--guard scope` instead of the internal continuation code.
 const OVERRIDE_GUARD_ALIASES = Object.freeze({
@@ -513,8 +608,82 @@ function cmdPortfolio(root) {
 
 // Frontier fuses the closure-ledger active records with the open quests into one
 // boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
-function cmdFrontier(root) {
-  process.stdout.write(runFrontierCommand(root));
+// --write also persists solve/FRONTIER.generated.md (a regenerable board file).
+function cmdFrontier(root, args) {
+  const md = runFrontierCommand(root);
+  if (args.write) {
+    const file = writeFrontier(root, md);
+    process.stdout.write(`wrote ${file}\n`);
+  }
+  process.stdout.write(md);
+}
+
+// trace joins the otherwise-disconnected planning layers via each quest's optional
+// `links` block. Pick exactly one selector:
+//   --row <id>   quests whose links.roadmapRow === id
+//   --cl <CL-#>  quests whose links.closesCL includes the record
+//   --spec <ref> quests whose links.specRef starts with ref
+//   --quest <id> reverse view: this quest's links + its child quests (parentQuest)
+// It asserts nothing the sealed quest files do not already contain.
+function traceRow(quest, portfolioById) {
+  const row = portfolioById.get(quest.id);
+  const outcome = row ? row.outcome : 'unknown';
+  const klass = row ? row.class : '?';
+  return `| ${quest.id} | ${klass} | ${outcome} |`;
+}
+
+function cmdTrace(root, args) {
+  const selectors = ['row', 'cl', 'spec', 'quest'].filter((k) => args[k] !== undefined);
+  if (selectors.length !== 1) {
+    throw new Error('trace: pass exactly one of --row <id> | --cl <CL-#> | ' +
+      '--spec <ref> | --quest <id>');
+  }
+  const quests = loadAllQuests(root);
+  const portfolioById = new Map(buildPortfolio(root).rows.map((r) => [r.id, r]));
+  const out = [];
+  if (args.quest !== undefined) {
+    const id = String(args.quest);
+    const self = quests.find((q) => q.id === id);
+    if (!self) throw new Error(`trace: no quest "${id}"`);
+    const links = self.links || {};
+    out.push(`# trace ${id}`, '', '## Links');
+    out.push(`- roadmap row: ${links.roadmapRow || '—'}`);
+    out.push(`- spec: ${links.specRef || '—'}`);
+    out.push(`- closes: ${(links.closesCL || []).join(', ') || '—'}`);
+    out.push(`- parent quest: ${links.parentQuest || '—'}`);
+    const children = quests.filter((q) => (q.links || {}).parentQuest === id);
+    out.push('', `## Child quests — ${children.length}`);
+    if (children.length === 0) {
+      out.push('_(none)_');
+    } else {
+      out.push('| id | class | outcome |', '| --- | --- | --- |');
+      for (const c of children) out.push(traceRow(c, portfolioById));
+    }
+    process.stdout.write(`${out.join('\n')}\n`);
+    return;
+  }
+  let match;
+  let title;
+  if (args.row !== undefined) {
+    const v = String(args.row);
+    title = `quests for roadmap row ${v}`;
+    match = (q) => (q.links || {}).roadmapRow === v;
+  } else if (args.cl !== undefined) {
+    const v = String(args.cl);
+    title = `quests closing ${v}`;
+    match = (q) => Array.isArray((q.links || {}).closesCL) && q.links.closesCL.includes(v);
+  } else {
+    const v = String(args.spec);
+    title = `quests for spec ${v}`;
+    match = (q) => typeof (q.links || {}).specRef === 'string' && q.links.specRef.startsWith(v);
+  }
+  const hits = quests.filter(match);
+  out.push(`# trace — ${title}`, '', `${hits.length} match(es)`, '');
+  if (hits.length > 0) {
+    out.push('| id | class | outcome |', '| --- | --- | --- |');
+    for (const q of hits) out.push(traceRow(q, portfolioById));
+  }
+  process.stdout.write(`${out.join('\n')}\n`);
 }
 
 function cmdHandoff(root, args) {
@@ -528,9 +697,11 @@ const COMMANDS = {
   'report': cmdReport,
   'portfolio': cmdPortfolio,
   'frontier': cmdFrontier,
+  'trace': cmdTrace,
   'handoff': cmdHandoff,
   'probe': cmdProbe,
   'finding': cmdFinding,
+  'promote-finding': cmdPromoteFinding,
   'override': cmdOverride,
   'reflect': cmdReflect,
   'step': cmdStep,
