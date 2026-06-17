@@ -66,6 +66,20 @@ const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
 const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
 
+// CL-001 variant D: a non-write-leader's control_plane_publications cache is fed
+// ONLY by the leader's point-in-time CDC fan-out (leader-gated emission, no replay
+// — see closure-ledger CL-014). A node that missed the fan-out window (e.g. a
+// former owner that shed leadership mid-epoch-advance, or a replica still wiring
+// CDC) stays PERMANENTLY stale: getLatestPublicationRowSync freezes at a stale
+// epoch while the cluster advances, and the harness consistency oracle reports
+// `publication_epochs_disagree`. The only authoritative re-read
+// (hydrateCdcPropagatedTablesFromAuthority) was previously one-shot at join. A
+// deferring non-write-leader must pull its publications cache forward — but at most
+// once per this cooldown so it does NOT issue an owner read on every reconcile tick.
+const MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG =
+  'Deferred non-write-leader publications cache catch-up failed';
+const DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS = 5000;
+
 // Per-tick convergence decision trace. Console-only + debug-level BY DESIGN (see
 // LoggingService.logConsoleOnly): the owner driver fires every
 // OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS on the very distributed write path a
@@ -228,6 +242,43 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
 
 class MembershipPublicationCoordinatorReconcile extends
   MembershipPublicationCoordinatorPersist {
+  // CL-001 variant D: pull this node's CDC-propagated control_plane_publications
+  // cache forward from the authoritative owner so a non-write-leader that missed
+  // the leader's point-in-time CDC fan-out does not stay permanently stale. Reuses
+  // the CL-014 catch-up (hydrateCdcPropagatedTablesFromAuthority), scoped to the
+  // publications table, best-effort, and rate-limited to one owner read per cooldown
+  // (a deferring non-leader runs this on every reconcile tick). Never throws; a
+  // partitioned node's read fails-soft inside hydrate (recorded, skipped).
+  async refreshDeferredPublicationsCacheFromAuthority() {
+    const service = this.cdcIntegrationService;
+    if (
+      !service ||
+      typeof service.hydrateCdcPropagatedTablesFromAuthority !== TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    const nowMs = typeof this.now === TYPEOF.FUNCTION ? this.now() : Date.now();
+    const lastMs = this._lastDeferredPublicationsCatchupAtMs;
+    if (
+      Number.isFinite(lastMs) &&
+      nowMs - lastMs < DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS
+    ) {
+      return null;
+    }
+    this._lastDeferredPublicationsCatchupAtMs = nowMs;
+    try {
+      return await service.hydrateCdcPropagatedTablesFromAuthority({
+        tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+      });
+    } catch (error) {
+      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {
+        nodeId: this.nodeId,
+        error: error?.message || String(error),
+      });
+      return null;
+    }
+  }
+
   async reconcileClusterMembership(options = {}) {
     const ownerKey = this.buildOwnerKey();
     if (shouldDeferMembershipReconcileToWriteLeader(this)) {
@@ -240,6 +291,7 @@ class MembershipPublicationCoordinatorReconcile extends
         reason: CONVERGENCE_REASON.NOT_WRITE_LEADER,
         ownerKey,
       });
+      await this.refreshDeferredPublicationsCacheFromAuthority();
       return {
         deferred: true,
         reason: NOT_PUBLICATIONS_WRITE_LEADER_REASON,
