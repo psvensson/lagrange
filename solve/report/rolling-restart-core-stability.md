@@ -10,16 +10,16 @@
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
-- Owner: startup_active_gate_owner
-- Boundary: snapshot_coverage
-- Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
-- Mechanism: transition_gap
-- Movement: narrowed: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72 -> startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
-- Latest evidence: test-output/reports/rolling-restart-local-20260607T075548Z.report.json
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: topology_gap
+- Movement: solved: startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304 -> PASS
+- Latest evidence: test-output/reports/stat-gate-20260616T161647Z-run4.report.json
 - Selected theory: theory-20260606-active-gate-owner-reconcile-queue-drain
-- Next move: rolling-restart-core-stability-main: retry
+- Next move: continue supervised step for rolling-restart-core-stability-main
 - Oscillation: blocker "startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304" revisited 2x (whack-a-mole; change strategy)
-- No longer current: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72; Do not trade publication_converged for another invariant family before measuring the active-gate owner-reconcile queue-drain patch; the next evidence must restore or falsify that publication convergence target.
+- No longer current: startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
 
 ## Continuation
 - Status: allowed
@@ -45,7 +45,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 3, attempts 62, reopened 12, metric 1 -> 101 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
+- **rolling-restart-core-stability-main** [open] rung 3, attempts 62, reopened 12, metric 1 -> 300 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -299,6 +299,7 @@
 - **rolling-restart-core-stability-main**: publication_converged is not being abandoned after the active-gate owner-reconcile queue-drain attempt; it is the selected theory's explicit restoration target. The current red label is accepted as the live invariant debt until a fresh measured rolling-restart report proves it restored or falsifies the queue-drain theory with unchanged owner_reconcile_pending/write_deferred evidence. (rules out: Do not trade publication_converged for another invariant family before measuring the active-gate owner-reconcile queue-drain patch; the next evidence must restore or falsify that publication convergence target.) [solve/changes/rolling-restart-core-stability/active-gate-owner-reconcile-queue-drain.diff]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 105 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 101 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260616T161647Z-run4.report.json. Metric: 101 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260616T161647Z-run4.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -556,6 +557,7 @@
 - **theory-20260606-active-gate-measurement-owner-reconcile-closure**: falsified (scenario=failed, theory=oscillating, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
 - **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=failed, theory=partial, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
 - **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
+- **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260616T161647Z-run4.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
