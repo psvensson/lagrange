@@ -30,14 +30,13 @@ source and regenerate with `npm run steering:llm:pack`.
 
 ## Quest Vocabulary
 
+The canonical glossary (Quest, `doneWhen`, Frontier, Attempt, Finding, Theory,
+park, owner, sealed, proof ladder, subagent, probe, gate states) lives in
+[`core.md`](core.md) "Vocabulary" — always loaded and read first. One additional
+term used here:
+
 | Term | Meaning |
 | --- | --- |
-| Quest | One sealed unit of work under `solve/quests/<id>.json`. |
-| `doneWhen` | Binary terminal predicate measured by a probe. |
-| Frontier | Independent attack surface with its own metric. |
-| Attempt | One measured try against a frontier. |
-| Finding | Durable knowledge or a ruled-out approach. |
-| Theory | System-level or frontier-level causal explanation tested by evidence. |
 | Report | Projection of the event log and terminal state. |
 
 ## First Commands
@@ -49,6 +48,10 @@ terminal; see core.md "Default Posture: Autonomy"):
 node scripts/solve.js new --id <id> --statement "<sealed result>"
 node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
 ```
+
+`--yes` only auto-advances non-terminal gates (e.g. MAX_CYCLES, THEORY_REQUIRED);
+it does not override the core.md "Default Posture: Autonomy" stop-triggers
+(Authorization / Goalpost ambiguity / EXHAUSTED / Safety), which still pause the run.
 
 For human-paced or exploratory work, drive it step by step instead:
 

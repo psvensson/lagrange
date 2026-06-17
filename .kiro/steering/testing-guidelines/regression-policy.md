@@ -230,7 +230,9 @@ pressure, the fix is not closed until tests show memory-related state plateaus.
 Required coverage:
 
 1. Add a deterministic unit or integration regression for the owning component
-   that repeats the triggering cycle enough times to expose accumulation.
+   that repeats the triggering cycle a bounded number of times — enough to
+   expose accumulation while staying within the duration limits (2s unit / 30s
+   integration).
 2. Assert owned resource metrics such as queue depth, subscriber count,
    in-flight map size, or buffered-event count return to a bounded plateau.
 3. If the distributed harness reported heap growth, add or refine diagnostics
@@ -280,7 +282,8 @@ Required coverage:
 
 ## Availability Under Pressure Test Policy
 
-System guideline §1.10 requires that all subsystems remain correct under load.
+System guideline §9 (Load May Slow The System, Not Break It) requires that all
+subsystems remain correct under load.
 Tests MUST verify this property at the unit and integration layers, not only in
 the distributed harness.
 
@@ -322,7 +325,8 @@ For any component that:
 
 ### Idempotency regression coverage
 
-For any state-mutating operation path (system guideline §1.13), add at least
+For any state-mutating operation path (system guideline §11, Mutations Are
+Idempotent), add at least
 one test that:
 
 1. Executes the operation once and records the resulting state.

@@ -20,7 +20,7 @@ queryable rule.
   other stops resumable), `:658-685` Keep-Alive Supervisor (auto-restarts across
   MAX_CYCLES / THEORY_REQUIRED / recoverable BLOCKED), `:525-558` soft-first quorum.
 - There is **no positive parallelism norm** anywhere. The only "parallel" mentions
-  are prohibitions (no parallel system-data caches `ARCH-0091`; test-harness
+  are prohibitions (no parallel system-data caches `ARCH-0094`; test-harness
   parallelism budget `harness.md:33`) or the narrow `decision-experiments.md:103`
   paragraph on parallel *Quest* execution — and that paragraph is source prose only:
   it is classified `info` and NOT emitted as a queryable rule (no MUST/SHOULD/NEVER
@@ -220,7 +220,7 @@ that source line so it also becomes a queryable rule.
 ### B3. consistency check (no edit, just verify)
 
 Confirm the new norm does not contradict `decision-experiments.md:103-105` (parallel
-Quests need disjoint scope / single owner) or `ARCH-0091` (no parallel system-data
+Quests need disjoint scope / single owner) or `ARCH-0094` (no parallel system-data
 caches — a runtime-data rule, unrelated to work concurrency). Both are about
 *data/ownership*, not *task concurrency*; the new norm is about task concurrency and
 cross-references them.
@@ -232,7 +232,7 @@ cross-references them.
 - `npm run steering:llm:pack` ingests it; the new rule is queryable in rules.json
   (`npm run rule -- --domain governance | grep -i "concurrently\|parallel"`) at
   `must`/`should` strength. It need not surface in the capped compact `governance.md`.
-- Manual read confirms no contradiction with `decision-experiments.md` or `ARCH-0091`.
+- Manual read confirms no contradiction with `decision-experiments.md` or `ARCH-0094`.
 
 ### B risk
 

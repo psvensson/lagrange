@@ -117,6 +117,11 @@
       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
       "domain": "governance",
       "priority": 100
+    },
+    {
+      "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro-at-correct-altitude.md",
+      "domain": "testing",
+      "priority": 100
     }
   ],
   "outputs": [
@@ -176,5 +181,58 @@
       "maxRules": 30
     }
   ],
-  "ruleAliases": []
+  "ruleAliases": [
+    {
+      "note": "synonyms ban: code-style canonical (code/file naming home); suppress system-guidelines restatement",
+      "canonical": {
+        "file": "code-style.md",
+        "line": 84
+      },
+      "aliases": [
+        {
+          "file": "system-guidelines.md",
+          "line": 166
+        }
+      ]
+    },
+    {
+      "note": "ordinal/grab-bag filenames: code-style canonical; suppress system-guidelines restatement",
+      "canonical": {
+        "file": "code-style.md",
+        "line": 66
+      },
+      "aliases": [
+        {
+          "file": "system-guidelines.md",
+          "line": 169
+        }
+      ]
+    },
+    {
+      "note": "file-size ratchet (byte-identical): code-style canonical; suppress proof-ladders copy",
+      "canonical": {
+        "file": "code-style.md",
+        "line": 58
+      },
+      "aliases": [
+        {
+          "file": "testing-guidelines/proof-ladders.md",
+          "line": 101
+        }
+      ]
+    },
+    {
+      "note": "degraded-evidence (same architecture domain): runtime-contracts canonical; suppress state-encoding restatement",
+      "canonical": {
+        "file": "runtime-contracts.md",
+        "line": 312
+      },
+      "aliases": [
+        {
+          "file": "doctrine/state-encoding.md",
+          "line": 90
+        }
+      ]
+    }
+  ]
 }

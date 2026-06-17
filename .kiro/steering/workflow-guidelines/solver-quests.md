@@ -33,6 +33,13 @@ A Quest must:
 Do not move goalposts in place. If the goal is wrong, record the finding and
 author a new Quest with the corrected `doneWhen`.
 
+Terms used below — Quest, frontier, attempt, finding, theory, `doneWhen`, park,
+owner, sealed — are defined in core.md's canonical "Vocabulary" glossary and in
+the "User-Facing Vocabulary" section at the end of this file. For the full command
+surface beyond the primary workflow commands shown here — including `frontier`,
+`trace`, `promote-finding`, `ingest-evidence`, and the supervised `step` /
+`step --commit` / `step --abort` phases — run `node scripts/solve.js --help`.
+
 ## Quest Anatomy
 
 A Quest lives at `solve/quests/<id>.json` and is authored with:
@@ -497,9 +504,11 @@ SHOULD drive to SOLVED or EXHAUSTED and MUST treat non-terminal gates (MAX_CYCLE
 THEORY_REQUIRED, recoverable BLOCKED) as resume points, not handoffs. Longer work
 SHOULD use `run --keep-alive` so the loop survives those gates.
 
-The agent MUST stop and request user input only on one of: an unauthorized
-irreversible or outward-facing action; a genuinely undetermined success condition
-that no repo default resolves; EXHAUSTED; or a destructive or out-of-scope boundary.
+The agent MUST stop and request user input only on one of the four canonical
+core.md stop triggers: (1) Authorization — an unauthorized irreversible or
+outward-facing action; (2) Goalpost ambiguity — a genuinely undetermined success
+condition that no repo default resolves; (3) EXHAUSTED — no honest remaining move;
+(4) Safety / scope — a destructive boundary or work outside the sealed Quest scope.
 For any other open choice the agent MUST pick a sensible default, record a finding,
 and continue rather than pause.
 

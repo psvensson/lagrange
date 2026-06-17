@@ -77,7 +77,8 @@ Required workflow:
    - the Quest weakens a guard, expands an allowlist, or moves code out of
      scan scope to make validation pass
 6. Existing violations in touched files must be fixed when they are part of the
-   same semantic boundary. If they are genuinely outside scope, the Quest must
+   same semantic boundary (one owner / one concern, per system-guidelines §2 One
+   Semantic Owner Per Concern). If they are genuinely outside scope, the Quest must
    name the excluded boundary and record a follow-on Quest/frontier before
    closure.
 7. Static guardrail proof is required even when focused unit and integration

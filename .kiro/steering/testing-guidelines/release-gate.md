@@ -39,7 +39,8 @@ If a fixture or harness contract was wrong, fix it and prove why. If the fixture
 contract was correct, the next attempt must target the runtime owner boundary
 that now dominates.
 
-Classification-only is valid only when the Quest records:
+Classification-only (accepting a finding without a runtime fix) is valid only
+when the Quest records all of:
 
 - the focused probe command;
 - the evidence path;

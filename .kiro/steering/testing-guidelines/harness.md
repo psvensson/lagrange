@@ -51,12 +51,11 @@ tail of unrelated suite failures.
 
 ## Test Duration Hard Limit
 
-**Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds**
+**Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds.**
 
-This is a powerful multi-core machine running in-memory tests. There is no valid reason for tests to take more than a couple of seconds. When a test exceeds this limit you must not accept the test as passing; instead, follow this remediation procedure in order:
+This is a powerful multi-core machine running in-memory tests, so there is no valid reason for a unit test to exceed 2 seconds (or an integration test 30 seconds). When a test exceeds this limit you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it.
 
-1. **Identify the root cause.** Look for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation.
-2. **Resolve the issue before proceeding.** Mock time-based behavior instead of waiting for real time, ensure all timers are cleared in `finally` blocks, disable background features (speculative execution, intervals) in unit tests, and use `Promise.resolve()` or immediate callbacks instead of delays.
+Identify the root cause by looking for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation. Resolve it by mocking time-based behavior instead of waiting for real time, clearing all timers in `finally` blocks, disabling background features (speculative execution, intervals) in unit tests, and using `Promise.resolve()` or immediate callbacks instead of delays.
 
 **Common violations:**
 ```javascript
@@ -110,7 +109,7 @@ When running tests during task execution:
 ## When to Run Full Test Suite
 
 Only run the complete test suite (`npm test`) at:
-- Checkpoint tasks explicitly marked in the task list
+- Checkpoint tasks explicitly marked in the active Quest's `doneWhen` or frontier list
 - Final integration verification
 - When explicitly requested by the user
 

@@ -24,11 +24,15 @@ separate: a falling metric never closes a Quest by itself.
 The strategy ladder is:
 
 ```text
-local-fix -> widen-scope -> model -> change-approach -> park
+observe -> local-fix -> widen-scope -> model -> change-approach -> park
 ```
 
-Honest progress keeps the rung, a stall climbs it, and `park` redirects the
-scheduler to another frontier. The run stops on **SOLVED** or **EXHAUSTED**.
+The ladder opens on `observe`, an instrument-before-patch rung (add measurement
+that discriminates explanations before changing source); see
+`.kiro/steering/workflow-guidelines/solver-quests.md` Strategy Ladder for the
+canonical definition. Honest progress keeps the rung, a stall climbs it, and
+`park` redirects the scheduler to another frontier. The run stops on **SOLVED**
+or **EXHAUSTED**.
 
 ## Reading The Current Blocker
 

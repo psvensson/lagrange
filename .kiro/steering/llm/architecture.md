@@ -14,25 +14,27 @@ Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle 
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
+> **Priority subset — not the full corpus.** This pack lists only the highest-priority architecture rules (capped per `maxRules` in `llm-pack.config.json`). For every architecture rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain architecture`.
+
 ## Rules
 
 ### General Guidelines
 
 1. [ARCH-0001] Model choice notes are advisory only. They never replace validation, delegated review, Solver attempts, or terminal reports. _(see system-guidelines.md:92)_
 2. [ARCH-0005] null and undefined MUST NOT encode runtime or domain state. Use an explicit named state variant. _(see system-guidelines.md:163)_
-3. [ARCH-0006] Each concept has one name. Do not add synonyms for existing concepts. _(see system-guidelines.md:166)_
-4. [ARCH-0007] Do not introduce ordinal, segment, or grab-bag source filenames such as part-2, segment, misc, helpers, or utils unless that name is an established domain concept. _(see system-guidelines.md:169)_
-5. [ARCH-0014] Throughput may fall under pressure; correctness must not. _(see system-guidelines.md:275)_
-6. [ARCH-0015] Operations must not fail, return incorrect results, leak memory, or silently drop work because the system is under load. _(see system-guidelines.md:276)_
-7. [ARCH-0017] Control-plane pressure must not cause query/data-plane correctness failures. _(see system-guidelines.md:281)_
-8. [ARCH-0018] Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses. _(see system-guidelines.md:297)_
-9. [ARCH-0020] Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments. _(see system-guidelines.md:190)_
-10. [ARCH-0021] Non-forced readers do not repair authoritative state on the hot path. _(see system-guidelines.md:217)_
-11. [ARCH-0027] Do not pre-slice candidates to the requested replica count before admission. _(see runtime-contracts.md:296)_
-12. [ARCH-0034] Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint. _(see system-guidelines.md:352)_
-13. [ARCH-0036] During splits, moves, and leader elections, queries may be slower but must not fail because topology is transient. _(see runtime-contracts.md:365)_
-14. [ARCH-0037] All non-trivial implementation work MUST follow the Quest workflow. _(see system-guidelines.md:80)_
-15. [ARCH-0039] Any runtime function or semantic concern MUST have one active path after input normalization. _(see system-guidelines.md:129)_
+3. [ARCH-0014] Throughput may fall under pressure; correctness must not. _(see system-guidelines.md:275)_
+4. [ARCH-0015] Operations must not fail, return incorrect results, leak memory, or silently drop work because the system is under load. _(see system-guidelines.md:276)_
+5. [ARCH-0017] Control-plane pressure must not cause query/data-plane correctness failures. _(see system-guidelines.md:281)_
+6. [ARCH-0018] Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses. _(see system-guidelines.md:297)_
+7. [ARCH-0020] Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments. _(see system-guidelines.md:190)_
+8. [ARCH-0021] Non-forced readers do not repair authoritative state on the hot path. _(see system-guidelines.md:217)_
+9. [ARCH-0027] Do not pre-slice candidates to the requested replica count before admission. _(see runtime-contracts.md:331)_
+10. [ARCH-0034] Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint. _(see system-guidelines.md:352)_
+11. [ARCH-0036] During splits, moves, and leader elections, queries may be slower but must not fail because topology is transient. _(see runtime-contracts.md:400)_
+12. [ARCH-0037] All non-trivial implementation work MUST follow the Quest workflow. _(see system-guidelines.md:80)_
+13. [ARCH-0039] Any runtime function or semantic concern MUST have one active path after input normalization. _(see system-guidelines.md:129)_
+14. [ARCH-0041] The system must remain correct under contention, topology change, recovery, and control-plane pressure. _(see system-guidelines.md:270)_
+15. [ARCH-0042] All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps. _(see system-guidelines.md:305)_
 
 ### Ownership & Authority Policies
 
@@ -41,10 +43,10 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 18. [ARCH-0010] Events may enqueue owner-key work; they must not execute long-running progression inline. _(see system-guidelines.md:232)_
 19. [ARCH-0013] Missing owner dependencies fail loudly with typed errors. They do not synthesize "allow by default" or equivalent fallback decisions. _(see system-guidelines.md:262)_
 20. [ARCH-0023] Temporary delegators may forward to the owner, but must not add a second decision path. _(see runtime-contracts.md:39)_
-21. [ARCH-0025] Participant executors emit outcomes and do not persist owner-managed phase transitions directly. _(see runtime-contracts.md:243)_
+21. [ARCH-0025] Participant executors emit outcomes and do not persist owner-managed phase transitions directly. _(see runtime-contracts.md:270)_
 22. [ARCH-0029] Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling created by a phase must transfer to an explicit runtime owner before the phase completes. _(see system-guidelines.md:229)_
 23. [ARCH-0030] Quest validation must prove the owner path and affected tail consumers. _(see system-guidelines.md:338)_
-24. [ARCH-0035] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes. _(see runtime-contracts.md:183)_
+24. [ARCH-0035] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes. _(see runtime-contracts.md:210)_
 25. [ARCH-0038] Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource MUST have one semantic owner. _(see system-guidelines.md:101)_
 26. [ARCH-0040] Cache divergence, stale reads, missing rows, and repair needs must surface as typed owner outcomes or diagnostics. _(see system-guidelines.md:217)_
 
@@ -57,7 +59,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 
 ### Readiness & Health Contracts
 
-31. [ARCH-0026] Degraded or cross-plane evidence may explain or defer, but must not upgrade a blocked entity to ready or admitted. _(see runtime-contracts.md:281)_
+31. [ARCH-0026] Degraded or cross-plane evidence may explain or defer, but must not upgrade a blocked entity to ready or admitted. _(see runtime-contracts.md:312)_
 
 ### Change Data Capture (CDC) Policies
 

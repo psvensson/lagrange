@@ -158,6 +158,33 @@ Forbidden patterns:
 - collapsing owner-row mismatch and replica-role mismatch into one generic
   error
 
+### Canonical writers
+
+The owner rows above declare which row is authoritative; the components below are
+the single writers. The full matrix is
+[`architecture/current-owner-maps.md`](../../architecture/current-owner-maps.md)
+and `architecture/control-plane.md` ("services Row Ownership Matrix") — this table
+is a steering summary that defers to them, not a second source of truth.
+
+| Concern (table.field) | Single writer |
+| --- | --- |
+| `nodes.node_state` | `NodeLifecycleStateMachine` (owner); published via `NodeStatePublicationOwner` (NODE_STATE_UPDATE) |
+| `services` replica lifecycle (`status`, `state_entered_at`, `trigger_reason`, …) | `ReplicaStateMachine` |
+| `services.raft_role` | `PartitionService` / `MessageGroupService` (distinct field owner, not the lifecycle owner) |
+| `services` identity (`service_id`, `address`, …) | service-row creation owner (`PartitionService` / `MessageGroupService`) |
+| membership publication (`control_plane_publications`) | `MembershipPublicationCoordinator` |
+| `partitions.leader_node_id`, `message_groups.leader_node_id` | the owner ROW is canonical, but no single writer component is named today — treat the row as authoritative, never reconstruct leader identity from `services.raft_role`, and assign/confirm the writer before extending this path |
+
+The `services` row is the canonical example of non-overlapping field owners on one
+row: identity, lifecycle (`ReplicaStateMachine`), and `raft_role`
+(`PartitionService` / `MessageGroupService`) are written by different components on
+disjoint field subsets — permitted precisely because the subsets do not overlap.
+
+Retry is not fallback: routing MAY retry or redirect to another live replica or a
+new leader within the caller budget (for example `QueryExecutorWriteRetryRouting`);
+it MUST NOT reconstruct an owner decision from secondary evidence when the owner is
+unavailable.
+
 ## Runtime Shared-Metadata Gateways
 
 Runtime shared-metadata access must cross canonical ingress owners.
@@ -246,6 +273,10 @@ Required patterns:
 ## Durable Workflow And Transaction Boundaries
 
 Topology-changing operations use one durable workflow contract.
+`DurableWorkflowCoordinator` owns generic durable-workflow state and fencing;
+`DistributedTransactionCoordinator` is a distinct higher-level component that adds
+the atomic multi-row (2PC) protocol on top of it. They are two components, not
+two names for one.
 
 Required patterns:
 
@@ -283,7 +314,11 @@ Required patterns:
 
 Specific readiness rules:
 
-- Use `ControlPlaneReadinessService` as the readiness owner.
+- Use `ControlPlaneReadinessService` as the readiness owner (node readiness and
+  planning surfaces). The snapshot/watch surface — control snapshot, service
+  discovery, freshness and observation state — has a DISTINCT owner,
+  `ControlPlaneSnapshotOwner`. Readiness and snapshot ownership are two separate
+  components; do not conflate "readiness owner" with "snapshot/watch owner".
 - Combine write-time lease/readiness evidence with live transport evidence
   when the transport owner has it.
 - Apply bounded stale-heartbeat tolerance.

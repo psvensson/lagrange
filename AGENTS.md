@@ -47,11 +47,13 @@ active steering path for new work.
 ## Operational Ground Truth (distributed work — don't get fooled)
 
 The distributed-work traps that repeatedly cost agents large amounts of time
-(stale-code runs, absence-proves-nothing, non-deterministic convergence, use the
-analyzers, one-invariant-at-a-time closure, research-first + subagent-verify) have a
+(stale-code runs, absence-proves-nothing, deterministic-first/gate-last, use the
+analyzers, one-invariant-at-a-time closure, research-first, subagent-verify) have a
 single canonical home: **[`.kiro/steering/operational-ground-truth.md`](.kiro/steering/operational-ground-truth.md)**.
-Read it before any distributed-harness or convergence work. It is not restated here
-so the two copies cannot drift; see
+Read it before any distributed-harness or convergence work. The deterministic
+in-process substrate (virtual clock, seeded RNG, fault injection) is mapped in
+[`docs/deterministic-directed-testing-plan.md`](docs/deterministic-directed-testing-plan.md).
+It is not restated here so the two copies cannot drift; see
 [`.kiro/steering/memory-boundary.md`](.kiro/steering/memory-boundary.md) for the
 in-repo-steering vs external-memory split.
 
@@ -69,7 +71,10 @@ in-repo-steering vs external-memory split.
    regenerating the packs.
 
 The compact packs under [`.kiro/steering/llm/`](.kiro/steering/llm/) are the
-default LLM execution surface. Source steering files under
+default LLM execution surface, but each generated domain pack is a priority-ranked
+subset (capped per `maxRules`), not the full rule corpus — consult
+[`rules-index.md`](.kiro/steering/llm/rules-index.md) or `npm run rule` for every
+rule in a domain. Source steering files under
 [`.kiro/steering/`](.kiro/steering/) are the canonical inputs used to generate
 those packs and add cited detail; they are not a separate runtime override path.
 

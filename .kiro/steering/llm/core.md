@@ -14,6 +14,28 @@ last_reviewed: 2026-06-01
 
 # Core Steering Pack
 
+## Vocabulary
+
+These terms are used throughout this pack and the Quest workflow. This is the
+canonical first-read glossary; `boot.md` points here.
+
+| Term | Meaning |
+| --- | --- |
+| Quest | One sealed unit of work under `solve/quests/<id>.json`. |
+| Sealed | Fixed at declaration; not changed mid-Quest (see Must-Not #1). |
+| `doneWhen` | Binary terminal success predicate, measured by a probe. |
+| Probe | Automated reader over real artifacts that answers `doneWhen`/metric; the Solver trusts probes, not self-report. |
+| Frontier | An independent attack surface within a Quest, with its own metric. |
+| Attempt | One measured try against a frontier, recorded with a `changeRef`. |
+| Finding | A durable recorded result: tested hypothesis, ruled-out approach, or decision. |
+| Theory | A testable causal explanation (system- or frontier-level) selected to break a stall. |
+| Park / parked | A frontier set aside with no honest remaining local move; the scheduler redirects elsewhere. |
+| Owner / owner boundary | The single component that owns a semantic decision or resource; others observe (cache), they do not re-derive it. |
+| Proof ladder | A compact sequence of 3-5 executable commands that demonstrates a claim. |
+| Subagent | A spawned worker that produces verification or research; recorded as evidence `subagent:<id>`. |
+| SOLVED / EXHAUSTED | Terminal Solver states: `doneWhen` met, or every frontier parked with no honest move. |
+| MAX_CYCLES / THEORY_REQUIRED / BLOCKED | Non-terminal run gates the executor resolves and resumes (not handoff points). |
+
 ## North Star
 
 Preserve the highest-level owner boundary, choose the lightest Quest shape that
@@ -59,16 +81,21 @@ promotion, and one-Quest-per-commit stay serial and intact.
 
 ## Source Authority Precedence
 
-Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Source
-steering under [`.kiro/steering/`](../) is consulted only to chase cited detail
-behind a compact-pack rule or to repair pack drift. If source detail shows the
-pack is wrong, fix the source and regenerate with `npm run steering:llm:pack`.
+Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Each
+generated domain pack is a priority-ranked SUBSET (capped per `maxRules`), not the
+full rule corpus — consult [`rules-index.md`](rules-index.md) or `npm run rule` for
+every rule in a domain. Source steering under [`.kiro/steering/`](../) is consulted
+only to chase cited detail behind a compact-pack rule or to repair pack drift. If
+source detail shows the pack is wrong, fix the source and regenerate with
+`npm run steering:llm:pack`.
 
 ## 30-Second Must-Not Checklist
 
 Use this list before non-trivial work:
 
-1. **Do not move Quest goalposts** after the first declaration.
+1. **Do not move Quest goalposts** after the first declaration. (Gradient
+   refinement — sharpening a frontier metric within the same sealed `doneWhen`
+   predicate — is allowed; see solver-quests.md "Gradient Refinement".)
 2. **Do not claim SOLVED** without live `doneWhen` evidence.
 3. **Do not trust agent self-report** for done or metric movement; probes decide.
 4. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be

@@ -124,6 +124,13 @@ where `reproduced` means ONE of:
 - (b) the precondition's recurrence rate has been MEASURED on a statistical gate
   (so a fix gated on a rare precondition is known-rare BEFORE it is authored).
 
+Altitude requirement: a repro under (a) MUST exercise the layer where the
+invariant is produced or violated — the owner write, the commit edge, the
+election — NOT merely a downstream projection of it (a readiness snapshot, a
+settled cache, an admin view). A green repro at the wrong altitude passes without
+ever exercising the broken mechanism and is a primary cause of
+land-correct-but-recur.
+
 Rationale: non-deterministic convergence fixes have repeatedly landed correct
 but INERT — the precondition did not recur for multiple gate rounds, costing
 hours of gate wall to discover the fix never engaged (see CL-001 variant A,

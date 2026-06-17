@@ -224,7 +224,9 @@ function stripInlineMarkdown(value) {
       .replace(/\*\*([^*]+)\*\*/gu, LOCAL_STR_1)
       .replace(/__([^_]+)__/gu, LOCAL_STR_1)
       .replace(/\*([^*]+)\*/gu, LOCAL_STR_1)
-      .replace(/_([^_]+)_/gu, LOCAL_STR_1)
+      // Underscore emphasis only at word boundaries; never strip snake_case
+      // (e.g. MAX_CYCLES, THEORY_REQUIRED) where underscores are intra-word.
+      .replace(/(?<![A-Za-z0-9])_([^_]+?)_(?![A-Za-z0-9])/gu, LOCAL_STR_1)
       .replace(/^>\s*/gu, LOCAL_STR_EMPTY),
   );
 }
@@ -928,7 +930,7 @@ function countMarkdownRules(content = LOCAL_STR_EMPTY) {
     .length;
 }
 
-function renderPackMarkdown(output = {}, rules = []) {
+function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
   validateCompleteRules(rules, output.name);
   validateRulesHaveTriggerAndCitation(rules, output.name);
 
@@ -1002,6 +1004,10 @@ function renderPackMarkdown(output = {}, rules = []) {
     '',
     `Rule count, token estimate, and domain coverage live in \`manifest.json\` (regenerated on each \`npm run steering:llm:pack\`). Do not maintain those numbers inline.`,
     '',
+    (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
+      `> **Priority subset — not the full corpus.** This pack lists only the highest-priority ${sourceForScope} rules (capped per \`maxRules\` in \`llm-pack.config.json\`). For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
+      `> **Complete pack.** All ${sourceForScope} rules are included below.`,
+    '',
     '## Rules',
     '',
     ...rulesBody,
@@ -1053,7 +1059,7 @@ function renderReadme(manifestEntries = []) {
   // Pack sizes live in manifest.json (regenerated alongside this file).
   const purpose = {
     core: 'Always-load operating contract, must-not checklist, template picker.',
-    boot: 'Authority order, lane vocabulary aliases, per-lane first commands, conflict rule.',
+    boot: 'Authority order, Quest vocabulary pointer, first commands, conflict rule.',
     architecture: 'Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy.',
     testing: 'Test design, fixtures, regression policy, harness rules.',
     style: 'Lint, formatting, naming policy.',
@@ -1082,7 +1088,7 @@ function renderReadme(manifestEntries = []) {
     '| File | Mode | Purpose |',
     '| --- | --- | --- |',
     '| `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |',
-    '| `boot.md` | manual | Authority order, lane vocabulary aliases, per-lane first commands, conflict rule. |',
+    '| `boot.md` | manual | Authority order, Quest vocabulary pointer, first commands, conflict rule. |',
     ...manifestEntries
       .filter((entry) => entry.name !== 'core')
       .map((entry) =>
@@ -1094,7 +1100,7 @@ function renderReadme(manifestEntries = []) {
     '',
     '## Conflict Resolution',
     '',
-    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the canonical execution-time surface; the source-vs-pack distinction is a generator concern, not a runtime one.',
+    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the always-loaded priority subset of the rule corpus (capped per `maxRules`); consult `rules-index.md` or `npm run rule` for every rule in a domain. The source-vs-pack distinction is a generator concern, not a runtime one.',
     '',
     'If a domain pack rule looks wrong, fix the underlying source file under `.kiro/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
     '',
@@ -1224,7 +1230,10 @@ async function main() {
     const selected = selectOutputRules(allRules, output);
     selectedByOutput.set(output.name, selected);
 
-    const markdown = renderPackMarkdown(output, selected);
+    const domainTotal = allRules.filter(
+      (rule) => (output.domains || []).includes(rule.domain) && !rule.canonical_of,
+    ).length;
+    const markdown = renderPackMarkdown(output, selected, domainTotal);
     await writeTextIfChanged(
       path.join(llmDir, `${output.name}.md`),
       `${markdown}`,

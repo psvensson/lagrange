@@ -17,8 +17,16 @@ any distributed-harness or convergence work:
 - **Absence proves nothing.** The playback bundle is a sparse curated sample — a
   missing log line does NOT mean the code did not run. Ground truth is the full
   per-node logs under `test-output/reports/.playback/<run>/.full-logs/`.
-- **Convergence is non-deterministic.** Never conclude from a single run; use the
-  statistical gate `scripts/rolling-restart-stat-gate.sh` from clean containers.
+- **Deterministic-first, gate-last.** Reproduce a convergence failure
+  deterministically in-process BEFORE changing code — build a targeted or
+  fault-injected repro at the layer where the invariant is produced (see the
+  reproduced-before-fix rule in
+  [`closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
+  and the substrate map in
+  [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
+  The docker statistical gate (`scripts/rolling-restart-stat-gate.sh`) is
+  non-deterministic and expensive: it is last-resort certification of a landed
+  fix, NOT the iteration loop. Never conclude from a single gate run.
 - **Use the analyzers, not raw-log grep.** Read
   [`test/distributed/harness/README.md`](../../test/distributed/harness/README.md) first,
   then `npm run analyze:distributed-failure -- --report <r>` /
@@ -29,6 +37,8 @@ any distributed-harness or convergence work:
   [`.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file
   under `closure-ledger/CL-###.md`; `closure-ledger.md` is the index.
-- **Two standing defaults:** research existing mechanisms before writing new ones
-  (parallel machinery has been built here by accident); and after implementing,
-  have a separate subagent independently verify the change before relying on it.
+- **Research existing mechanisms first.** Before writing new machinery, search for
+  an existing owner-boundary solution — parallel machinery has been built here by
+  accident.
+- **Independently verify after implementing.** After a change, have a separate
+  subagent independently verify it before relying on or reporting it.

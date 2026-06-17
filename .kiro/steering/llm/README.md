@@ -20,7 +20,7 @@ npm run steering:llm:pack
 | File | Mode | Purpose |
 | --- | --- | --- |
 | `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |
-| `boot.md` | manual | Authority order, lane vocabulary aliases, per-lane first commands, conflict rule. |
+| `boot.md` | manual | Authority order, Quest vocabulary pointer, first commands, conflict rule. |
 | `architecture.md` | generated | Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy. |
 | `testing.md` | generated | Test design, fixtures, regression policy, harness rules. |
 | `style.md` | generated | Lint, formatting, naming policy. |
@@ -31,7 +31,7 @@ npm run steering:llm:pack
 
 ## Conflict Resolution
 
-At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the canonical execution-time surface; the source-vs-pack distinction is a generator concern, not a runtime one.
+At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the always-loaded priority subset of the rule corpus (capped per `maxRules`); consult `rules-index.md` or `npm run rule` for every rule in a domain. The source-vs-pack distinction is a generator concern, not a runtime one.
 
 If a domain pack rule looks wrong, fix the underlying source file under `.kiro/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.
 
