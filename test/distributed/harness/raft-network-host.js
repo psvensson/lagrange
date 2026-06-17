@@ -157,4 +157,45 @@ async function driveNetwork(net, driveOptions = {}) {
   }
 }
 
-export {connectRaftCluster, driveNetwork, flushMicrotasks};
+/**
+ * Drive an async network at MAX FIDELITY: deliver ONE event (net.runStep), flush microtasks to
+ * quiescence, then optionally observe — so every observation point is a SETTLED protocol state.
+ * Unlike driveNetwork (which drains a whole stepMs batch before flushing, so a mid-churn sample
+ * can land between a batch's deliveries and their async continuations — the drive-granularity
+ * artifact), this samples at single-event granularity, which is what mid-churn safety invariants
+ * require. `onSettled(net, event)` runs after each delivered event has fully settled.
+ * @param {Object} net
+ * @param {Object} driveOptions - {untilMs, flushTurns, onSettled, maxEvents}.
+ * @return {Promise<number>} the count of settled events observed.
+ */
+async function driveNetworkFine(net, driveOptions = {}) {
+  const untilMs = Number(driveOptions.untilMs);
+  const flushTurns = Number.isFinite(Number(driveOptions.flushTurns)) ?
+    Number(driveOptions.flushTurns) :
+    RAFT_NETWORK_DEFAULT_FLUSH_TURNS;
+  const onSettled = typeof driveOptions.onSettled === 'function' ?
+    driveOptions.onSettled :
+    null;
+  const maxEvents = Number.isFinite(Number(driveOptions.maxEvents)) ?
+    Number(driveOptions.maxEvents) :
+    1000000;
+  let settled = RAFT_NETWORK_NUM_ZERO;
+  for (let i = RAFT_NETWORK_NUM_ZERO; i < maxEvents; i += RAFT_NETWORK_NUM_ONE) {
+    // Drain pending async FIRST so events an async handler (or the initial promote/timer) has yet to
+    // enqueue are on the queue before we step; then deliver exactly one event; then flush again so
+    // THAT event's async handler settles before the caller observes a quiescent state.
+    await flushMicrotasks(flushTurns);
+    const step = net.runStep({untilMs});
+    if (!step.delivered) {
+      break;
+    }
+    await flushMicrotasks(flushTurns);
+    settled += RAFT_NETWORK_NUM_ONE;
+    if (onSettled) {
+      onSettled(net, step.event);
+    }
+  }
+  return settled;
+}
+
+export {connectRaftCluster, driveNetwork, driveNetworkFine, flushMicrotasks};

@@ -493,6 +493,38 @@ function createVirtualNetwork(options = {}) {
     return Object.freeze({steps, remaining: queue.length, nowMs});
   }
 
+  /**
+   * Deliver exactly ONE event — the next due at or before untilMs in scheduler-chosen order — and
+   * return. Unlike run() (which drains a whole co-due batch synchronously before the caller can
+   * flush microtasks or observe), this is the unit step for MAX-FIDELITY driving: deliver one
+   * event, flush microtasks to quiescence, observe a SETTLED state, repeat. Every observation point
+   * is then a real protocol state, so a mid-churn safety invariant can be sampled faithfully with no
+   * drive-granularity batch artifact. Mirrors run()'s untilMs/clock semantics.
+   * @param {Object} [runOptions] - {untilMs}.
+   * @return {Object} {delivered, event|null, nowMs}.
+   */
+  function runStep(runOptions = {}) {
+    const untilMs = Number.isFinite(Number(runOptions.untilMs)) ?
+      Number(runOptions.untilMs) :
+      null;
+    const next = pickNext();
+    if (!next || (untilMs !== null && next.dueAt > untilMs)) {
+      if (untilMs !== null && untilMs > nowMs) {
+        nowMs = untilMs;
+      }
+      return Object.freeze({delivered: false, event: null, nowMs});
+    }
+    const event = Object.freeze({
+      kind: next.kind,
+      from: next.from,
+      to: next.to,
+      type: next.type,
+      dueAt: next.dueAt,
+    });
+    deliverOne(next);
+    return Object.freeze({delivered: true, event, nowMs});
+  }
+
   function now() {
     return nowMs;
   }
@@ -526,6 +558,7 @@ function createVirtualNetwork(options = {}) {
     setTimer,
     networkTimeSource,
     run,
+    runStep,
     getRecords,
     pendingEventCount,
     random,
