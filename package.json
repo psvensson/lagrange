@@ -113,7 +113,7 @@
     "audit:operation-progress-authority": "node scripts/check-operation-progress-authority.js",
     "audit:owner-boundary-segments": "node scripts/check-file-size-thresholds.js --owner-boundary-guidance",
     "audit:closure-ledger": "node scripts/closure-ledger-state.js --check-state",
-    "steering:llm:pack": "node scripts/generate-steering-llm-pack.js && node scripts/lookup-rule.js --write-index",
+    "steering:llm:pack": "node scripts/generate-steering-llm-pack.js && node scripts/lookup-rule.js --write-index && node scripts/gen-tools-index.js",
     "steering:check": "npm run steering:llm:pack && git diff --quiet -- .kiro/steering/llm",
     "rule": "node scripts/lookup-rule.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",

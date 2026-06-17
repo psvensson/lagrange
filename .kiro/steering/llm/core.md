@@ -124,6 +124,25 @@ Use this list before non-trivial work:
 15. **Do not hand off Quest source changes without subagent verification**;
     spawn a subagent verifier and record a Solver finding with evidence
     `subagent:<id>` before audit/git handoff.
+16. **Do not hand-roll a shell command where a script already does it**; consult
+    `npm run commands` / [`tools-index.md`](tools-index.md) first (see "Tool
+    Discovery").
+
+## Tool Discovery
+
+Before writing an ad-hoc shell command for a repo task (log triage, artifact
+cleanup, evidence extraction, validation, summarization), check for an existing
+script first — this repo has 100+ of them and ad-hoc commands routinely
+reinvent one. Discovery surfaces:
+
+- `npm run commands` — curated quickstart of the highest-value entrypoints.
+- [`tools-index.md`](tools-index.md) — generated complete index of every
+  `package.json` script, grouped by prefix.
+- `npm run rule` / [`rules-index.md`](rules-index.md) — steering rules.
+- For distributed or harness work, read
+  [`test/distributed/harness/README.md`](../../../test/distributed/harness/README.md)
+  and use the `analyze:*` tools before raw-log grep
+  (see [operational-ground-truth.md](../operational-ground-truth.md)).
 
 ## Canonical Guardrail Command Map
 

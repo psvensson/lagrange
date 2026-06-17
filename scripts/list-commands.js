@@ -228,6 +228,23 @@ const COMMAND_GROUPS = Object.freeze([
       }),
     ]),
   }),
+  Object.freeze({
+    title: 'Maintenance',
+    commands: Object.freeze([
+      Object.freeze({
+        command: 'npm run test-output:prune:dry',
+        description: 'Preview which old test-harness artifacts would be pruned, without deleting.',
+      }),
+      Object.freeze({
+        command: 'npm run test-output:prune',
+        description: 'Delete old test-harness artifacts; keeps pinned names, recent items, and a few per category.',
+      }),
+      Object.freeze({
+        command: 'npm run summarize:harness',
+        description: 'Summarize distributed harness runs across reports.',
+      }),
+    ]),
+  }),
 ]);
 
 const NEWLINE = '\n';

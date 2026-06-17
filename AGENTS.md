@@ -43,6 +43,7 @@ active steering path for new work.
 | Cross-layer planning trace | `node scripts/solve.js trace --row\|--cl\|--spec\|--quest <id>` (joins quests via their `links` block) |
 | Rule IDs and source citations | `npm run rule -- --id <ID>` (also `--tag`/`--domain`/free-text); browse [`.kiro/steering/llm/rules-index.md`](.kiro/steering/llm/rules-index.md). `rules.json` is generator output, too large to Read whole. |
 | Architecture document tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
+| An npm tool for a task (before any ad-hoc command) | `npm run commands` (curated quickstart) or [`.kiro/steering/llm/tools-index.md`](.kiro/steering/llm/tools-index.md) (generated full index of every script) |
 
 ## Operational Ground Truth (distributed work — don't get fooled)
 
