@@ -21,7 +21,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 1. [GOV-0003] Session/narrative state (current blocker, handoff notes, working hypotheses) stays in external memory and MUST NOT be copied into in-repo steering. _(see memory-boundary.md:23)_
 2. [GOV-0004] Seal the goal. Define doneWhen before implementation begins. Do not change it after the first attempt has been recorded. _(see workflow-guidelines/lifecycle.md:22)_
 3. [GOV-0005] They have different jobs and MUST NOT duplicate each other; duplication is how the same "truth" drifts into three conflicting copies. _(see memory-boundary.md:3)_
-4. [GOV-0006] Override-tagged advisories are excluded from soft-first quorum counting, so an override never silently spends the quorum ramp. _(see workflow-guidelines/solver-quests.md:584)_
+4. [GOV-0006] Override-tagged advisories are excluded from soft-first quorum counting, so an override never silently spends the quorum ramp. _(see workflow-guidelines/solver-quests.md:612)_
 5. [GOV-0007] Do not treat symptom movement as SOLVED. _(see workflow-guidelines/closure.md:51)_
 6. [GOV-0008] Delegated agents do not decide whether the Quest is solved. _(see workflow-guidelines/subagents.md:18)_
 7. [GOV-0009] The worker must not report done: true as proof. _(see workflow-guidelines/subagents.md:45)_

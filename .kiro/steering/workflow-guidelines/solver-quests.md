@@ -368,6 +368,21 @@ The agent executor writes a request dossier, runs the configured command, and
 reads back `{changeRef, summary, notes?}`. The agent reports only what changed.
 Truth always comes from the post-attempt probe measurement.
 
+## Parallel-First Execution
+
+Independent work within a Quest SHOULD run concurrently: batch independent reads,
+fan out read-only research subagents, and verify independent findings with
+concurrent verifiers rather than serially. Broad mechanical sweeps SHOULD use the
+Workflow harness to pipeline the work-list.
+
+Work MUST be serialized only when one step's output feeds another, or when workers
+would mutate the same files; in the latter case workers MUST be isolated (worktrees)
+or their writes ordered. Parallelism MUST NOT be applied to the proof path: subagent
+verification before handoff, measured theory promotion, and one-Quest-per-commit
+remain serial. Parallel Quest execution on one owner boundary remains allowed only
+under disjoint file/owner scope or a single owning closure plan (see
+`doctrine/decision-experiments.md`).
+
 ## Evidence And Change References
 
 `changeRef` is an evidence pointer for one attempt. It must be a resolvable
@@ -474,6 +489,19 @@ ad-hoc memory and chat-only handoff notes.
 Theory result events are likewise durable memory. A measured attempt linked to a
 theory records supported, falsified, or needs-rerun learning so failed attempts
 still narrow the next move.
+
+## Autonomy Default And Stop Triggers
+
+The default execution posture for a non-trivial Quest is autonomous: the agent
+SHOULD drive to SOLVED or EXHAUSTED and MUST treat non-terminal gates (MAX_CYCLES,
+THEORY_REQUIRED, recoverable BLOCKED) as resume points, not handoffs. Longer work
+SHOULD use `run --keep-alive` so the loop survives those gates.
+
+The agent MUST stop and request user input only on one of: an unauthorized
+irreversible or outward-facing action; a genuinely undetermined success condition
+that no repo default resolves; EXHAUSTED; or a destructive or out-of-scope boundary.
+For any other open choice the agent MUST pick a sensible default, record a finding,
+and continue rather than pause.
 
 ## Terminal And Blocking Conditions
 

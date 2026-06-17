@@ -20,6 +20,43 @@ Preserve the highest-level owner boundary, choose the lightest Quest shape that
 proves the boundary was not weakened, and do not locally patch symptoms when
 the owner contract is porous.
 
+## Default Posture: Autonomy
+
+On a non-trivial task, drive the Quest to a true terminal (SOLVED or EXHAUSTED)
+without pausing for confirmation. Non-terminal gates (MAX_CYCLES, THEORY_REQUIRED,
+recoverable BLOCKED) are yours to resolve and resume — they are not handoff points.
+Prefer `run ... --keep-alive` for longer work so the loop survives those gates.
+
+Stop and ask the user ONLY when one of these holds:
+
+1. **Authorization** — an irreversible or outward-facing action (push, publish,
+   delete, deploy, send) that is not already durably authorized.
+2. **Goalpost ambiguity** — the success condition itself is genuinely undetermined
+   and cannot be resolved from the repo, the Quest, or a sensible default; a wrong
+   guess would change what "done" means. (A wrong guess about *how* to implement is
+   NOT this: pick the obvious option, record a finding, proceed.)
+3. **EXHAUSTED** — no honest remaining move.
+4. **Safety / scope** — a destructive boundary, or work outside the sealed Quest
+   scope.
+
+Otherwise: choose the obvious default, record a finding stating the choice and why,
+and keep going. Surface the decisions in the final report, not mid-run.
+
+## Default Posture: Parallelism
+
+When sub-tasks are independent, run them concurrently rather than in sequence:
+
+- Batch independent reads/searches into one step; fan out read-only Explore or
+  research subagents for breadth instead of reading serially.
+- Verify N independent findings with N concurrent verifiers, not one at a time.
+- For broad mechanical work (audits, migrations, sweeps over a known file list), use
+  the Workflow harness to pipeline the work-list.
+
+Serialize ONLY when outputs feed each other, or when workers would mutate the same
+files (then isolate via worktrees or order the writes). Parallelism applies to the
+work, never to the proof: the subagent-verify-before-handoff gate, measured theory
+promotion, and one-Quest-per-commit stay serial and intact.
+
 ## Source Authority Precedence
 
 Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Source

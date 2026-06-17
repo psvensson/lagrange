@@ -42,10 +42,17 @@ source and regenerate with `npm run steering:llm:pack`.
 
 ## First Commands
 
-For a new task:
+For a new task, default to an autonomous, self-resuming run (drive to a true
+terminal; see core.md "Default Posture: Autonomy"):
 
 ```sh
 node scripts/solve.js new --id <id> --statement "<sealed result>"
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+```
+
+For human-paced or exploratory work, drive it step by step instead:
+
+```sh
 node scripts/solve.js step --id <id>
 ```
 
@@ -73,12 +80,6 @@ node scripts/solve.js step --id <id> --commit \
   --changeRef diff:<path> --summary "<what changed>"
 ```
 
-To run autonomously:
-
-```sh
-node scripts/solve.js run --id <id> --executor agent --yes --max 20
-```
-
 To close or inspect:
 
 ```sh
@@ -95,6 +96,8 @@ domain-pack constraints:
 
 1. State the contradiction in the chat or the Quest finding log.
 2. Ask for confirmation before weakening safety bounds, deleting guardrails, or
-   bypassing validation.
+   bypassing validation. This is the safety-specific instance of the core.md
+   "Default Posture: Autonomy" stop-triggers (Authorization / Safety); the default
+   posture stays autonomous for everything outside that stop-list.
 3. If a domain pack rule is outdated, edit its source under `.kiro/steering/`
    and run `npm run steering:llm:pack`.
