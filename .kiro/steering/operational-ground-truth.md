@@ -26,7 +26,12 @@ any distributed-harness or convergence work:
   [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
   The docker statistical gate (`scripts/rolling-restart-stat-gate.sh`) is
   non-deterministic and expensive: it is last-resort certification of a landed
-  fix, NOT the iteration loop. Never conclude from a single gate run.
+  fix, NOT the iteration loop. Never conclude from a single gate run, but do not
+  over-sample either — match the sample size to the question. Default to N=3-4
+  for latency/mechanistic gates and stop early once the answer is conclusive
+  (e.g. a hard breach or a clean mechanistic confirmation needs no more runs);
+  escalate to N≥8 ONLY for a convergence-rate promotion verdict where the
+  statistic itself is the claim. Do not default to N=8 every iteration.
 - **Use the analyzers, not raw-log grep.** Read
   [`test/distributed/harness/README.md`](../../test/distributed/harness/README.md) first,
   then `npm run analyze:distributed-failure -- --report <r>` /
