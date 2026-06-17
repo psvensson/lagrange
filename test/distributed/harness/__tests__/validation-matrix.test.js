@@ -431,6 +431,72 @@ describe('validation-matrix helpers', () => {
     );
   });
 
+  it('grades a measured cross-node consistency disagreement as topology ' +
+    'convergence, not evidence-incomplete (CL-001 variant D attribution)', () => {
+    // Real-world regression (rolling-restart gate stat-gate-20260616T145705Z-run4):
+    // a node's published epoch lags the cluster-committed epoch. The oracle raised
+    // `publication_epochs_disagree` (proof it read and compared two nodes), but the
+    // error text contains no 'invariant'/'consistency' substring, rootCauseClass is
+    // 'unknown', and loadMetrics are null — so it fell through to the NON-MEASURING
+    // BLOCK_EVIDENCE_INCOMPLETE and was mis-attributed as harness incompleteness
+    // instead of the real product convergence gap. It must now grade as measured.
+    const epochDisagreeRun = {
+      passed: false,
+      error: 'Publication epochs disagree between 7493b0ab and 35a891b8. ' +
+        '7493b0ab: 19. 35a891b8: 40',
+      rootCauseClass: 'unknown',
+      failureClassification: {
+        failureClass: 'unknown',
+        rootCauseClass: 'unknown',
+        dominantReason: 'publication_epochs_disagree',
+        signals: [],
+      },
+      loadMetrics: null,
+    };
+    const epochVerdict = classifyScenarioVerdict(epochDisagreeRun);
+    assert.equal(epochVerdict.verdict, HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE);
+    assert.equal(epochVerdict.reason, 'topology_progress_blocked');
+
+    // A published active-set disagreement is likewise graded as measured.
+    const activeSetDisagreeRun = {
+      ...epochDisagreeRun,
+      failureClassification: {
+        ...epochDisagreeRun.failureClassification,
+        dominantReason: 'published_active_nodes_disagree',
+      },
+    };
+    assert.equal(
+      classifyScenarioVerdict(activeSetDisagreeRun).verdict,
+      HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
+    );
+
+    // NEGATIVE 1: an observer-lag reason is an oracle-observation-timing artifact,
+    // NOT a measured disagreement — it must stay BLOCK_EVIDENCE_INCOMPLETE.
+    const observerLagRun = {
+      ...epochDisagreeRun,
+      failureClassification: {
+        ...epochDisagreeRun.failureClassification,
+        dominantReason: 'observer_snapshot_revision_lag',
+      },
+    };
+    assert.equal(
+      classifyScenarioVerdict(observerLagRun).verdict,
+      HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    );
+
+    // NEGATIVE 2: a genuinely incomplete run (no measured disagreement, null
+    // loadMetrics) must still be BLOCK_EVIDENCE_INCOMPLETE.
+    const genuinelyIncompleteRun = {
+      passed: false,
+      error: 'Operation timeout',
+      loadMetrics: null,
+    };
+    assert.equal(
+      classifyScenarioVerdict(genuinelyIncompleteRun).verdict,
+      HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    );
+  });
+
   it('correctly classifies validation matrix summaries into typed verdicts', () => {
     // 1. BLOCK_EVIDENCE_INCOMPLETE (insufficient runs)
     const incompleteSummary = {

@@ -340,6 +340,26 @@ const SCENARIO_EVIDENCE_INCOMPLETE_PATTERNS = Object.freeze([
   'incomplete',
 ]);
 
+// Consistency-oracle reason codes that denote a MEASURED cross-node DISAGREEMENT:
+// the oracle could only raise these after reading and comparing two nodes'
+// control snapshots, so the cluster demonstrably ran and was measured. These are
+// real product convergence/agreement gaps (e.g. CL-001 variant D — a non-leader's
+// published epoch lagging the cluster-committed epoch). DISTINCT from the
+// observer-lag / repair-deferred / mixed-observation-mode codes, which are
+// oracle-observation-timing artifacts and must NOT be treated as measured product
+// failures. Source of truth for the strings:
+// test/distributed/harness/assertions-consistency-shared.js
+// (CONSISTENCY_REASON_CODE_*_DISAGREE / *_DIVERGED / FINAL_CONSISTENCY_MISMATCH).
+const MEASURED_CONSISTENCY_DISAGREEMENT_REASONS = Object.freeze(new Set([
+  'active_nodes_disagree',
+  'partition_assignments_disagree',
+  'published_active_nodes_disagree',
+  'leader_identities_disagree',
+  'partition_leader_authority_diverged',
+  'publication_epochs_disagree',
+  'final_consistency_mismatch',
+]));
+
 const READINESS_HARNESS_INVALID_PATTERNS = Object.freeze([
   'harness',
   'socket',
@@ -419,10 +439,28 @@ function hasConcreteStructuredFailureEvidence(result) {
     hasConcreteTopologyEvidenceValue(result?.details?.diagnostics?.activeGate);
 }
 
+// A computed cross-node consistency disagreement is itself measured convergence
+// evidence: the oracle can only raise it after comparing two nodes' snapshots, so
+// the cluster ran and was measured. Without this, a published-epoch / active-set
+// disagreement whose rootCauseClass is "unknown" and whose loadMetrics are null
+// falls through to BLOCK_EVIDENCE_INCOMPLETE (a NON-MEASURING verdict) and is
+// mis-attributed as harness incompleteness rather than the real product
+// convergence gap (CL-001 variant D). Keyed on the structured dominantReason, not
+// the error-message substring.
+function hasConsistencyDisagreementEvidence(result) {
+  const dominantReason = result?.failureClassification?.dominantReason;
+  return typeof dominantReason === 'string' &&
+    MEASURED_CONSISTENCY_DISAGREEMENT_REASONS.has(dominantReason);
+}
+
 // Convergence/liveness product failure measured with concrete evidence. Routed
 // to BLOCK_TOPOLOGY_CONVERGENCE so control-plane non-quiescence / discovery /
-// startup stalls become gradeable instead of discarded as harness-invalid.
+// startup stalls — and measured cross-node consistency disagreements — become
+// gradeable instead of discarded as harness-invalid or evidence-incomplete.
 function hasMeasuredConvergenceEvidence(result) {
+  if (hasConsistencyDisagreementEvidence(result)) {
+    return true;
+  }
   const rootCauseClass = resolveResultRootCauseClass(result);
   if (!CONVERGENCE_ROOT_CAUSE_CLASSES.has(rootCauseClass)) {
     return false;
