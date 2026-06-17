@@ -2,7 +2,7 @@
 
 Latest dated gate seen in records: 20260616T161647Z. This is a projection; act on a record only after reading its file.
 
-## Closure frontier — 16 active of 42 records
+## Closure frontier — 15 active of 42 records
 
 | Id | Status | Last gate | Concern |
 | --- | --- | --- | --- |
@@ -21,14 +21,12 @@ Latest dated gate seen in records: 20260616T161647Z. This is a projection; act o
 | CL-030 | open | 20260612T173105Z | harness-oracle (primary) + node-resource-safety (secondary) |
 | CL-031 | open | 20260612T223302Z | harness-oracle (blindness) + node-resource-safety (root) |
 | CL-039 | open | 20260615T205549Z | membership-publication write-substrate / control-plane raft leadership placement |
-| CL-043 | open | 20260616T145705Z | placement-priority-spread / operation-workflow-liveness (surplus-drain settle — same |
 
-## Open quests — 4
+## Open quests — 3
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | membership-publication-drain-determinism | product | 0 | 0 | — |
 | non-docker-validation-green | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 62 | 12 | — |
-| workflow-linking-and-memory-loop | process | 0 | 0 | — |
 

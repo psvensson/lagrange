@@ -418,6 +418,27 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     );
   }
 
+  // CL-043: the concurrent-partition-operation safety gate (evaluateRemoveSafety)
+  // defers a critical REMOVE/REPLACE whenever ANY non-terminal op shares the
+  // partition. A persist-failed surplus-drain REPLACE — whose replica_operations
+  // coordination row never committed (control-plane write timeout during recovery)
+  // — is stuck non-terminal with no terminal-timeout anchor, so it blocks every
+  // peer drain forever (surplus 5/3 -> readiness oscillation -> scheduler-leader
+  // thrash -> leadership_unstable).
+  //
+  // Treat a concurrent op whose configured step timeout has already elapsed as
+  // NOT active. This does not invent a looser notion of "active": such an op is,
+  // by the system's own policy, already a reaper candidate
+  // (isPriorityRecoveryOperationDrainStepStale + checkTimeouts). A genuinely
+  // in-flight op bumps updatedAt each step and stays within its step timeout, so
+  // it still blocks; an op with no parseable timestamps cannot be aged and is
+  // conservatively still treated as active. The downstream quorum projection in
+  // evaluateRemoveSafety independently protects the voter-ready minimum, so the
+  // gate is a serialization guard, not the sole quorum protector.
+  isConcurrentOperationStalePastStepTimeout(operation, now = Date.now()) {
+    return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
+  }
+
   resolvePriorityRecoveryOperationDrainState(
     completion,
     sourceSnapshot,

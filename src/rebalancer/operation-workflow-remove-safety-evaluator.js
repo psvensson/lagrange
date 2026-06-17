@@ -285,10 +285,19 @@ async function evaluateRemoveSafety(context, operation) {
     'partition',
     operation.partitionId,
   );
+  // CL-043: a persist-failed concurrent op (coordination row never committed)
+  // stays non-terminal with no terminal-timeout anchor and would otherwise block
+  // every peer surplus-drain forever. Exclude ops whose configured step timeout
+  // has already elapsed — they are reaper candidates, not genuinely in-flight.
+  const concurrentOperationNowMs = context.resolveTimeoutCheckNowMs();
   const concurrentActiveOp = allOps.find(
     (op) =>
       op.operationId !== operation.operationId &&
-      !context.repository.isOperationTerminal(op),
+      !context.repository.isOperationTerminal(op) &&
+      !context.isConcurrentOperationStalePastStepTimeout(
+        op,
+        concurrentOperationNowMs,
+      ),
   );
   if (concurrentActiveOp) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
