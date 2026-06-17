@@ -1,0 +1,6 @@
+test/closure/CL-040.repro.test.js
+test/closure/CL-041.repro.test.js
+test/closure/CL-042.repro.test.js
+test/convergence/dt6-publication-quorum-failback-network.test.js
+test/convergence/dt6-publication-failback-pct-search.test.js
+test/convergence/dt6-fine-drive-midchurn-safety.test.js
