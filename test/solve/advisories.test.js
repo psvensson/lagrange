@@ -39,6 +39,28 @@ tap.test('reflectionTriggersFromHealth maps signals to triggers', (t) => {
   t.end();
 });
 
+tap.test('buildAdvisories single-sample-gate (gate-sample economy)', (t) => {
+  t.test('fires when the metric hit zero but closure needs >1 consecutive passes', (t) => {
+    const advisories = buildAdvisories(quest,
+      health({signals: [{type: 'metric-zero-but-done-false', consecutive: 3}]}), []);
+    const gate = advisories.find((a) => a.kind === 'single-sample-gate');
+    t.ok(gate, 'single-sample-gate advisory present');
+    t.equal(gate.consecutive, 3);
+    t.match(gate.message, /3 consecutive passes/, 'names the consecutive target');
+    t.match(gate.message, /deterministic in-process harness/, 'steers to deterministic-first');
+    t.end();
+  });
+
+  t.test('does not fire when one passing run can close (consecutive <= 1)', (t) => {
+    const advisories = buildAdvisories(quest,
+      health({signals: [{type: 'metric-zero-but-done-false', consecutive: 1}]}), []);
+    t.notOk(advisories.find((a) => a.kind === 'single-sample-gate'),
+      'a single-run goal needs no multi-sample steer');
+    t.end();
+  });
+  t.end();
+});
+
 tap.test('buildAdvisories reflection-due', (t) => {
   t.test('no advisory when nothing is due', (t) => {
     const advisories = buildAdvisories(quest, health(), []);

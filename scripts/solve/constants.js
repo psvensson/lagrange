@@ -190,9 +190,11 @@ export const COUPLED_OSC_SWAP_THRESHOLD = 2;
 
 // rr-E tuning: changed-file count across recorded attempts above which scope pressure is
 // treated as terminal (the Solver must split/reduce scope before more edits land). Set
-// well above the advisory large-diff signal so the terminal bound only trips on a runaway
-// blast radius, not on an ordinary multi-file fix.
-export const SCOPE_PRESSURE_FILE_LIMIT = 60;
+// above the advisory large-diff signal (LARGE_DIFF_FILE_LIMIT=10 / BROAD_OWNER_AREA_LIMIT=2)
+// so the agent is first advised to split, then HARD-gated, before a blast radius runs away.
+// Lowered from 60 after a 9h run accumulated a 50-file stack that sailed under the old
+// bound (see solver oscillation post-mortem): 25 forces the split the advisory only suggested.
+export const SCOPE_PRESSURE_FILE_LIMIT = 25;
 
 // rr-B: frontier gradient metric kinds that are interchangeable refinements of one
 // another for the SAME probe+scenario. Swapping among these sharpens the search gradient
@@ -356,6 +358,17 @@ export const CANNOT_MEASURE_RETRY_BUDGET = 3;
 export const PARK_REASON_EXHAUSTED = 'ladder exhausted without metric movement';
 export const PARK_REASON_CANNOT_MEASURE =
   'measurement unavailable: no attempt produced a trustworthy sample';
+
+// Oscillation reopen budget: how many times a frontier may auto-reopen (a previously
+// SOLVED frontier re-fails on fresh measured evidence) before the Solver stops chasing
+// the flap. A frontier whose gradient hits zero but cannot hold the quest's stricter
+// consecutive-pass bar will solve↔reopen indefinitely; capping the auto-reopens leaves the
+// frontier SOLVED so the scheduler runs out of open frontiers and terminalizes the quest as
+// EXHAUSTED (an honest "the goal is reachable but not reliably holdable" verdict) instead of
+// looping forever. Recovery is quest-level, not a per-frontier reopen: the loop re-checks
+// doneWhen every cycle, so a later run that genuinely holds the consecutive bar still closes
+// it, and an EXHAUSTED quest can be re-run once the underlying blocker changes.
+export const OSCILLATION_REOPEN_BUDGET = 8;
 
 // Quest classification: product goals must be measured against real artifacts;
 // process goals are scaffolding/decision records (often oracle-backed).

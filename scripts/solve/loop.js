@@ -45,10 +45,6 @@ import {
   SUPERVISOR_STALL_WINDOW,
   DISPOSITION_PARK_RESUMABLE,
   EVENT_THEORY_SYSTEM_DECLARED,
-  EVENT_THEORY_OPTION_DECLARED,
-  EVENT_THEORY_SELECTED,
-  EVENT_THEORY_RESULT,
-  EVENT_FRONTIER_REOPENED,
   EVENT_REFLECTION,
   EVENT_EVIDENCE_INGESTED,
 } from './constants.js';
@@ -294,6 +290,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     blockerMovement: diagnosticMovement.movement,
     diagnosticMovement: diagnosticMovement.summary,
     satisfiedInvariants: satisfiedInvariants.length > 0 ? satisfiedInvariants : null,
+    nodeExit: after.nodeExit?.present ? after.nodeExit : null,
     discrimination: normalizeDiscrimination(result.discrimination || ctx.discrimination || null),
   };
   const violations = [
@@ -338,12 +335,29 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   // by a finding — is not blocked, so the honest reconcile still earns its credit.
   const coupledBlocked = measured && CONVERGENCE_GUARDS.couplingReconcile &&
     coupledLocalFixBlocked(log, pick.def.id, satisfiedInvariants);
+  // Failure-class pivot: when the measured run records an unexpected node exit (a process
+  // died mid-scenario), the convergence/topology dominantReason can MASK the crash. A
+  // convergence-theory attempt must not bank progress credit on such a run — the crash is
+  // its own blocker to rule out first. Deny credit (force-stall toward the system-reconcile
+  // rung) and record the distinct blocker so it is surfaced instead of mis-theorized.
+  const nodeExit = measured && after.nodeExit?.present ? after.nodeExit : null;
+  if (nodeExit) {
+    appendEvent(root, quest.id, {
+      type: EVENT_FINDING,
+      frontier: pick.def.id,
+      claim: `unexpected node exit (${nodeExit.count} node(s)` +
+        `${nodeExit.nodes.length ? `: ${nodeExit.nodes.join(', ')}` : ''}) — a distinct ` +
+        'crash blocker that confounds the convergence signal; rule it out before crediting ' +
+        'any convergence/publication theory on this run',
+      evidence: after.evidence || null,
+    });
+  }
   const forceStall = (measured && oscillation.oscillating) || regressed.length > 0 ||
-    coupledBlocked;
+    coupledBlocked || Boolean(nodeExit);
   const progressed = decideAndRecord(
     root, quest, pick, event, after, violations, forceStall);
   appendTheoryResultForAttempt(root, quest, event, progressed, violations);
-  return {event, after, violations, progressed, oscillation, regressed};
+  return {event, after, violations, progressed, oscillation, regressed, nodeExit};
 }
 
 function normalizeDiscrimination(value) {
@@ -733,20 +747,21 @@ export function runLoop(root, quest, options = {}) {
 }
 
 // Durable-progress cursor: the count of events that change quest state or add durable
-// knowledge — a MEASURED attempt, a measuring ingested-evidence sample, a finding, any
-// theory move, a reflection, a park, or a frontier reopen. It deliberately EXCLUDES
-// gate-decision and violation records, which a hard block appends on every cycle; counting
-// those would make a hot spin look like progress and defeat the supervisor's stall guard.
+// KNOWLEDGE — a MEASURED attempt, a measuring ingested-evidence sample, a finding, a
+// reflection, a system-theory declaration, a park, or a solve. It deliberately EXCLUDES
+// gate-decision and violation records (a hard block appends those every cycle), AND the
+// per-frontier theory bookkeeping (option-declared / selected / theory-result) plus
+// frontier reopens: those are churn a stuck Solver emits on every cycle, so counting them
+// let pure whack-a-mole — "select theory N+1, re-run, repeat" — masquerade as progress and
+// defeat the supervisor's stall guard. Knowledge (findings/reflections) and real state
+// changes (measured attempts, parks, solves) still count, so a productive session is never
+// starved; a theory-churn-only session now correctly stalls.
 export function durableProgressCount(log) {
   const always = new Set([
     EVENT_FINDING,
     EVENT_THEORY_SYSTEM_DECLARED,
-    EVENT_THEORY_OPTION_DECLARED,
-    EVENT_THEORY_SELECTED,
-    EVENT_THEORY_RESULT,
     EVENT_REFLECTION,
     EVENT_PARK,
-    EVENT_FRONTIER_REOPENED,
     EVENT_SOLVED,
   ]);
   let count = 0;

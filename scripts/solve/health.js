@@ -170,18 +170,22 @@ function frontierNeeds(quest, state, log, frontier) {
 
   const evidenceEvents = log.filter((e) =>
     e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+  const lastEv = evidenceEvents[evidenceEvents.length - 1];
+  const prevEv = evidenceEvents[evidenceEvents.length - 2];
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+    Boolean(lastEv.dominantReason) &&
+    lastEv.dominantReason === prevEv.dominantReason;
   const sameOwnerBoundaryRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].owner &&
-    evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
-    evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+    Boolean(lastEv.owner) &&
+    lastEv.owner === prevEv.owner &&
+    lastEv.boundary === prevEv.boundary;
 
   const latestEvidence = [...log].reverse().find((e) =>
     e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
-  const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
-  const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+  const namesLiveness = latestEvidence &&
+    (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+  const selectedIsObservationGap = selected &&
+    (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
 
   const coupledOscillation = CONVERGENCE_GUARDS.coupledOscillation &&
@@ -238,7 +242,6 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const log = readLog(root, quest.id);
   const state = options.state || projectState(quest, log);
   const pick = pickFrontier(quest, state, options.scoreFn);
-  const liveProbe = options.liveProbe || evaluate(quest.doneWhen, {root});
   const frontierLiveProbe = pick ?
     (options.frontierLiveProbe || evaluate(pick.def.metric, {root})) :
     null;
@@ -283,9 +286,11 @@ export function analyzeQuestHealth(root, quest, options = {}) {
 
   const evidenceEvents = log.filter((e) =>
     e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+  const lastEv = evidenceEvents[evidenceEvents.length - 1];
+  const prevEv = evidenceEvents[evidenceEvents.length - 2];
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+    Boolean(lastEv.dominantReason) &&
+    lastEv.dominantReason === prevEv.dominantReason;
   if (sameDominantReasonRepeat) {
     signals.push({
       type: 'same-dominant-reason-repeat',
@@ -294,9 +299,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   }
 
   const sameOwnerBoundaryRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].owner &&
-    evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
-    evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+    Boolean(lastEv.owner) &&
+    lastEv.owner === prevEv.owner &&
+    lastEv.boundary === prevEv.boundary;
   if (sameOwnerBoundaryRepeat) {
     signals.push({
       type: 'same-owner-boundary-repeat',
@@ -315,7 +320,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const latestMetricEvent = [...log].reverse().find((e) =>
     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
     (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
-      typeof e.metric === 'number')
+      typeof e.metric === 'number'),
   );
   let metricZeroNotDone = false;
   if (latestMetricEvent) {
@@ -326,6 +331,10 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       signals.push({
         type: 'metric-zero-but-done-false',
         severity: 'high',
+        // The consecutive-pass target makes the "single zero is not closure" gap explicit:
+        // a >1 target means one passing run cannot close, so single-run gate samples are an
+        // iteration signal at best, never a closure verdict.
+        consecutive: consecutiveTarget(quest.doneWhen),
       });
     }
   }
@@ -335,8 +344,10 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     const selected = selectedId ? state.theories.byId[selectedId] : null;
     const latestEvidence = [...log].reverse().find((e) =>
       e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
-    const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
-    const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+    const namesLiveness = latestEvidence &&
+      (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+    const selectedIsObservationGap = selected &&
+      (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
     if (namesLiveness && selectedIsObservationGap) {
       signals.push({
         type: 'local-theory-too-narrow',

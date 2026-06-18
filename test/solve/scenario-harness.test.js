@@ -230,3 +230,47 @@ tap.test('scenario-harness probe (P1)', async (t) => {
     t.end();
   });
 });
+
+// A node-exit run carries a topology/publication dominantReason that MASKS the crash; the
+// probe surfaces it separately so the Solver treats the exit as its own blocker.
+function writeNodeExitReport(dir, name, {ts, scenario, exits}) {
+  fs.writeFileSync(
+    path.join(dir, `${name}.report.json`),
+    JSON.stringify({
+      timestamp: ts,
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 3},
+      scenarios: [{
+        scenario,
+        passed: false,
+        classification: exits ? 'unexpected_node_exit' : 'topology',
+        ...(exits ? {unexpectedNodeExits: exits} : {}),
+        details: {diagnostics: {failure: {dominantReason: 'publication_missing_active_node'}}},
+      }],
+    }),
+  );
+}
+
+tap.test('scenario-harness surfaces an unexpected node exit as a distinct signal', (t) => {
+  t.test('present when the run records an unexpected node exit', (t) => {
+    const dir = tmp();
+    writeNodeExitReport(dir, 'crash', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      exits: [{nodeId: 'n-abc', role: 'joiner', exitCode: 1}]});
+    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
+    t.ok(r.nodeExit?.present, 'nodeExit is surfaced even though dominantReason is topology');
+    t.equal(r.nodeExit.count, 1, 'counts the exits');
+    t.same(r.nodeExit.nodes, ['n-abc'], 'names the exited node');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('absent on a normal failing run', (t) => {
+    const dir = tmp();
+    writeNodeExitReport(dir, 'ok', {ts: '2026-06-01T01:00:00Z', scenario: SC, exits: null});
+    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
+    t.equal(r.nodeExit, null, 'no node-exit signal on a run without an unexpected exit');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+  t.end();
+});

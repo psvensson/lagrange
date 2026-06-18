@@ -14,6 +14,8 @@ import {distanceMetricFromReport}
 import {
   EVENT_SOLVED,
   STATUS_OPEN,
+  STATUS_SOLVED,
+  OSCILLATION_REOPEN_BUDGET,
 } from '../../scripts/solve/constants.js';
 
 function tmp() {
@@ -556,6 +558,53 @@ tap.test('evidence ingestion (P2)', async (t) => {
       'projection reopens the frontier after a fresh measured failure');
     t.equal(frontier.current, event.metric,
       'projection keeps the latest measured metric');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('auto-reopen oscillation is bounded: after the budget the frontier stays solved', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'fail.report.json');
+    fs.writeFileSync(reportPath, JSON.stringify({
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        passed: false,
+        verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
+        verdictReason: 'topology_progress_blocked',
+      }],
+    }));
+    const id = 'evidence-quest-test-main';
+    const statusAfterCycle = () => projectState(goal, readLog(root, goal.id))
+      .frontiers.find((f) => f.id === id).status;
+
+    // Each cycle re-solves the frontier then feeds it a fresh measured FAILURE. The first
+    // OSCILLATION_REOPEN_BUDGET cycles reopen it (the flap); the next one must NOT — the
+    // frontier stays solved so the scheduler runs dry and the quest can terminalize.
+    for (let cycle = 0; cycle < OSCILLATION_REOPEN_BUDGET; cycle += 1) {
+      appendEvent(root, goal.id, {type: EVENT_SOLVED, frontier: id, evidence: 'pass.json'});
+      ingestEvidence(root, {questId: goal.id, frontierId: id, evidencePath: reportPath});
+      t.equal(statusAfterCycle(), STATUS_OPEN,
+        `cycle ${cycle}: within budget, fresh failure reopens the frontier`);
+    }
+    const finalState = projectState(goal, readLog(root, goal.id));
+    const frontier = finalState.frontiers.find((f) => f.id === id);
+    t.equal(frontier.autoReopenCount, OSCILLATION_REOPEN_BUDGET,
+      'auto-reopens are counted up to the budget');
+
+    appendEvent(root, goal.id, {type: EVENT_SOLVED, frontier: id, evidence: 'pass.json'});
+    ingestEvidence(root, {questId: goal.id, frontierId: id, evidencePath: reportPath});
+    const after = projectState(goal, readLog(root, goal.id))
+      .frontiers.find((f) => f.id === id);
+    t.equal(after.status, STATUS_SOLVED,
+      'past the budget the frontier stays solved instead of reopening forever');
+    t.match(after.reason, /oscillation reopen budget/,
+      'the reason records why the flap was stopped');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

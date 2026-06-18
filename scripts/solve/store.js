@@ -31,6 +31,7 @@ import {
   STATUS_SOLVED,
   STATUS_PARKED,
   PARK_KIND_EXHAUSTED,
+  OSCILLATION_REOPEN_BUDGET,
   FIRST_RUNG_INDEX,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPERSEDED,
@@ -109,6 +110,7 @@ function initialFrontierState(frontier) {
     attempts: 0,
     parkedCount: 0,
     reopenCount: 0,
+    autoReopenCount: 0,
     parkKind: null,
     baseline: null,
     current: null,
@@ -179,7 +181,21 @@ function applyEvidenceIngested(frontierState, event) {
   if (event.done === false &&
     event.invalidSample !== true &&
     frontierState.status === STATUS_SOLVED) {
+    // Oscillation bound: a frontier that has already auto-reopened
+    // OSCILLATION_REOPEN_BUDGET times keeps solving on a single-run gradient zero and
+    // re-failing the quest's stricter consecutive bar. Stop chasing the flap — leave it
+    // SOLVED so the scheduler finds no open frontier and the quest terminalizes as
+    // EXHAUSTED rather than looping forever. The frontier stays SOLVED (its gradient really
+    // did reach zero); recovery is quest-level — the loop still re-checks doneWhen each
+    // cycle, so a later run that holds the consecutive bar closes it honestly.
+    if (frontierState.autoReopenCount >= OSCILLATION_REOPEN_BUDGET) {
+      frontierState.reason =
+        'oscillation reopen budget exhausted: gradient zero reached but the ' +
+        'consecutive-pass bar never held';
+      return;
+    }
     frontierState.status = STATUS_OPEN;
+    frontierState.autoReopenCount += 1;
     frontierState.reason = 'fresh measured evidence no longer satisfies frontier';
   }
 }

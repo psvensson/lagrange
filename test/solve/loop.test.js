@@ -35,6 +35,7 @@ import {
   EVENT_REFLECTION,
   REFLECTION_INTERVAL,
   EVENT_THEORY_RESULT,
+  EVENT_FRONTIER_REOPENED,
   EVENT_EVIDENCE_INGESTED,
   DISPOSITION_PARK_RESUMABLE,
   DISPOSITION_EXPLORE,
@@ -576,14 +577,22 @@ tap.test('durableProgressCount counts durable knowledge, not gate noise', (t) =>
     {type: EVENT_EVIDENCE_INGESTED, invalidSample: false, metric: null},
     {type: EVENT_FINDING},
     {type: EVENT_THEORY_RESULT},
+    {type: EVENT_THEORY_SELECTED},
+    {type: EVENT_THEORY_OPTION_DECLARED},
+    {type: EVENT_FRONTIER_REOPENED},
     {type: EVENT_REFLECTION},
     {type: EVENT_PARK},
     {type: EVENT_GATE_DECISION},
     {type: EVENT_GATE_DECISION},
   ];
-  t.equal(durableProgressCount(log), 6,
-    'measured attempt + measuring evidence + finding + theory-result + reflection + park; ' +
-    'invalid samples and gate-decisions excluded');
+  // Knowledge + real state changes count: measured attempt + measuring evidence + finding
+  // + reflection + park = 5. EXCLUDED as churn a stuck Solver emits every cycle: invalid
+  // samples, null-metric evidence, gate-decisions, AND the per-frontier theory bookkeeping
+  // (theory-result/selected/option-declared) plus frontier reopens — so pure whack-a-mole
+  // theory churn can no longer masquerade as progress and defeat the stall guard.
+  t.equal(durableProgressCount(log), 5,
+    'measured attempt + measuring evidence + finding + reflection + park; invalid samples, ' +
+    'gate-decisions, theory bookkeeping, and reopens excluded');
   t.end();
 });
 

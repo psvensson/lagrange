@@ -86,6 +86,26 @@ function classification(data, scenario) {
   };
 }
 
+// Did the latest run record an unexpected node exit — a process that died mid-scenario?
+// This is a DIFFERENT failure class than the topology/convergence rootCauseClass the run
+// otherwise reports: a crash confounds the convergence signal, and the report's
+// dominantReason (e.g. publication_missing_active_node) can MASK it. Surfaced separately
+// so the Solver treats the crash as its own blocker to rule out, instead of crediting a
+// convergence theory on a run where a node actually died.
+export function unexpectedNodeExit(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  if (!entry) return null;
+  const exits = Array.isArray(entry.unexpectedNodeExits) ? entry.unexpectedNodeExits :
+    Array.isArray(entry.details?.diagnostics?.unexpectedNodeExits) ?
+      entry.details.diagnostics.unexpectedNodeExits : [];
+  const present = entry.classification === 'unexpected_node_exit' || exits.length > 0;
+  if (!present) return null;
+  const nodes = exits
+    .map((e) => e?.nodeId || e?.id || e?.node || null)
+    .filter(Boolean);
+  return {present: true, count: exits.length, nodes};
+}
+
 // Most-recent-first, de-duplicated by run timestamp so re-read/identical reports do
 // not inflate the "consecutive distinct runs" count.
 function listRuns(dir, scenario) {
@@ -266,6 +286,7 @@ export const scenarioHarnessProbe = {
       invalidSample,
       satisfiedInvariants: extractSatisfiedInvariants(latest.data, scenario),
       classification: classification(latest.data, scenario),
+      nodeExit: unexpectedNodeExit(latest.data, scenario),
       detail: {
         runs: runs.length,
         verdict: scenarioEntry(latest.data, scenario)?.current?.verdict || null,

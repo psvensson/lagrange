@@ -63,6 +63,30 @@ export function buildAdvisories(quest, health, log) {
         `node scripts/solve.js ingest-evidence --id ${quest.id} --evidence <fresh report>`,
     });
   }
+  // Gate-sample economy: when the frontier gradient hits zero but the quest needs N>1
+  // consecutive passes to close, a single-run gate is an iteration signal, never closure.
+  // Steer toward deterministic-first iteration (cheap, in-process) and reserve the expensive
+  // multi-run docker gate (N >= consecutive) for the promotion verdict — not for chasing a
+  // one-off zero, which is exactly how a flaky convergence burns hours at N=1.
+  for (const signal of (health && health.signals) || []) {
+    if (signal.type !== 'metric-zero-but-done-false') continue;
+    const consecutive = Number(signal.consecutive) || 0;
+    if (consecutive <= 1) break;
+    advisories.push({
+      kind: 'single-sample-gate',
+      severity: 'advisory',
+      consecutive,
+      message:
+        `the metric hit zero but closure needs ${consecutive} consecutive passes — a ` +
+        'single-run gate cannot close it. Iterate the mechanism on the deterministic ' +
+        'in-process harness, then spend ONE multi-run gate (N >= ' + consecutive + ') for ' +
+        'the promotion verdict; do not read a single-run zero as success',
+      command:
+        `node scripts/solve.js status --id ${quest.id}  # build the consecutive streak; ` +
+        'reserve the docker gate for the promotion verdict, not iteration',
+    });
+    break;
+  }
   const trigger = reflectionDue(log || [], reflectionTriggersFromHealth(health));
   if (trigger) {
     advisories.push({
