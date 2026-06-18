@@ -544,8 +544,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       now: () => now,
     });
 
-    const updatedAt = operation.updatedAt ?? operation.updatedAtMs;
-    const elapsed = now - updatedAt;
+    // Report time-in-current-step (the anchor isOperationStepTimedOut now uses),
+    // not time-since-updatedAt, so the timeout log/message is not under-reported
+    // for an op whose dispatch retry loop kept re-stamping updatedAt (CL-044).
+    const elapsedAnchorMs = this.resolveOperationStepEnteredAtMs?.(operation);
+    const elapsed = now - (Number.isFinite(elapsedAnchorMs) ?
+      elapsedAnchorMs :
+      (operation.updatedAt ?? operation.updatedAtMs));
     const stepExceeded = this.isOperationStepTimedOut(operation, now);
     const budgetExhausted = !stepAllocation.allowed;
 

@@ -585,7 +585,15 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   if (owner.isProtectedCreateDispatchRetryBudgetActive(operation, now)) {
     return false;
   }
-  const updatedAt = Number(operation.updatedAt ?? operation.updatedAtMs);
+  // Prefer time-in-current-step over updatedAt: a wedged op whose dispatch retry
+  // loop re-persists updatedAt every ~1s would otherwise never age past its step
+  // timeout, so this reaper could never retire it (CL-044). updateStep appends a
+  // step-history entry only on a real transition, so the step-entry anchor is
+  // immune to same-step retry churn; fall back to updatedAt when it is absent.
+  const stepEnteredAtMs = owner.resolveOperationStepEnteredAtMs?.(operation);
+  const updatedAt = Number.isFinite(stepEnteredAtMs) ?
+    stepEnteredAtMs :
+    Number(operation.updatedAt ?? operation.updatedAtMs);
   if (!Number.isFinite(updatedAt)) {
     return false;
   }

@@ -256,10 +256,35 @@ function inferSourceReplicaIdFromStepsHistory(stepsHistory) {
   return null;
 }
 
+function resolveStepEnteredAtMs(record) {
+  const stepsHistory = Array.isArray(record?.stepsHistory) ?
+    record.stepsHistory :
+    null;
+  const workflowStep = record?.workflowStep;
+  if (!stepsHistory || stepsHistory.length === NUM.ZERO || !workflowStep) {
+    return null;
+  }
+  // Newest step-history entry for the CURRENT workflow step. A step entry is
+  // appended only on a real transition, so this is the true time-in-step and is
+  // immune to same-step dispatch-retry churn that keeps re-stamping updatedAt.
+  for (let index = stepsHistory.length - NUM.ONE; index >= NUM.ZERO; index--) {
+    const entry = stepsHistory[index];
+    if (entry && entry.step === workflowStep) {
+      return normalizeEpochMillis(entry.timestamp);
+    }
+  }
+  return null;
+}
+
 function resolveAgeMs(record, nowMs) {
-  const referenceAtMs = normalizeEpochMillis(
-    record?.updatedAt ?? record?.createdAt,
-  );
+  // Prefer time-in-current-step over updatedAt: a wedged op whose dispatch retry
+  // loop re-persists updatedAt every ~1s would otherwise read as perpetually
+  // young, so staleness consumers (isReplicaOperationStale -> topology-settling
+  // gate, follow-up planning) could never classify it stale (CL-044).
+  const stepEnteredAtMs = resolveStepEnteredAtMs(record);
+  const referenceAtMs = Number.isFinite(stepEnteredAtMs) ?
+    stepEnteredAtMs :
+    normalizeEpochMillis(record?.updatedAt ?? record?.createdAt);
   if (!Number.isFinite(referenceAtMs) || !Number.isFinite(nowMs)) {
     return null;
   }
@@ -383,7 +408,10 @@ function normalizeReplicaOperationRecord(row, options = {}) {
     completedAt,
     hasCompletedAt,
     stepsHistory,
-    ageMs: resolveAgeMs({updatedAt, createdAt}, nowMs),
+    ageMs: resolveAgeMs(
+      {updatedAt, createdAt, stepsHistory, workflowStep},
+      nowMs,
+    ),
     semanticPhase,
     witnesses,
   };
