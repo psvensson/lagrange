@@ -172,6 +172,26 @@ function createMovePlannerStateMethods(deps = {}) {
     }
 
     /**
+     * Resolve this partition's recorded raft leader node id, used to bias
+     * surplus-drain removal source selection away from the leader. Only
+     * meaningful for partitions; returns null otherwise or when unknown.
+     * @return {string|null}
+     * @private
+     */
+    resolveRemovalSourcePartitionLeaderNodeId() {
+      if (this.entityType !== EntityType.PARTITION) {
+        return null;
+      }
+      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
+      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
+      const leaderNodeId =
+        typeof partitionRow?.leader_node_id === 'string' ?
+          partitionRow.leader_node_id.trim() :
+          '';
+      return leaderNodeId.length > NUM.ZERO ? leaderNodeId : null;
+    }
+
+    /**
      * Resolve whether this entity is one system-table partition.
      * @return {boolean}
      * @private

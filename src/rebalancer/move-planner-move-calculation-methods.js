@@ -18,6 +18,7 @@ import {
   isSystemTablePartition,
 } from '../bootstrap/system-partition-classification.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_DECISION,
   PARTITION_DESCRIPTOR_EPOCH_REASON,
@@ -257,6 +258,7 @@ class MovePlannerMoveCalculationMethods {
     const toExecutableRemove = (move) => {
       const {
         prioritySpreadStandaloneSafe: _prioritySpreadStandaloneSafe,
+        sourceIsLeader: _sourceIsLeader,
         ...executableMove
       } = move;
       return executableMove;
@@ -363,6 +365,34 @@ class MovePlannerMoveCalculationMethods {
       }
     }
 
+    // Leadership-aware removal source preference (rolling-restart settle-time
+    // lever). Removing a partition's raft LEADER forces a leadership move, and
+    // when the leader is chosen as a REPLACE *source* it wedges the CL-043
+    // WAIT_REPLACEMENT_LEADER_OWNERSHIP gate. When surplus drain has a choice of
+    // removal source, prefer a non-leader replica so draining does not force a
+    // leadership move. This never changes WHICH replicas are removed (the
+    // surplus set is fixed by targetNodes) — only whether the leader is drained
+    // as a REPLACE source vs a plain REMOVE, and which same-node replica drops.
+    const partitionLeaderNodeId = this.resolveRemovalSourcePartitionLeaderNodeId();
+    const isLeaderRemovalCandidate = (replica) => {
+      if (!replica) {
+        return false;
+      }
+      const role =
+        typeof replica.raft_role === 'string' ?
+          replica.raft_role.trim().toLowerCase() :
+          null;
+      if (role === RAFT_ROLE.LEADER) {
+        return true;
+      }
+      const candidateNodeId = replica.node_id || replica.nodeId || null;
+      return (
+        !!partitionLeaderNodeId &&
+        !!candidateNodeId &&
+        candidateNodeId === partitionLeaderNodeId
+      );
+    };
+
     // Group active placement replicas by node for removal selection
     const replicasByNode = new Map();
     for (const replica of activePlacementReplicas) {
@@ -372,6 +402,15 @@ class MovePlannerMoveCalculationMethods {
         }
         replicasByNode.get(replica.node_id).push(replica);
       }
+    }
+    // Within each node, drain non-leader replicas before the leader (stable —
+    // preserves the prior order among same-leadership replicas).
+    for (const replicas of replicasByNode.values()) {
+      replicas.sort(
+        (left, right) =>
+          (isLeaderRemovalCandidate(left) ? NUM.ONE : NUM.ZERO) -
+          (isLeaderRemovalCandidate(right) ? NUM.ONE : NUM.ZERO),
+      );
     }
 
     // Generate ADD moves for under-represented nodes FIRST
@@ -520,6 +559,7 @@ class MovePlannerMoveCalculationMethods {
           replicaId,
           nodeId: nodeId,
           reason,
+          sourceIsLeader: isLeaderRemovalCandidate(replicaToRemove),
           prioritySpreadStandaloneSafe: priorityRemoveSafety.safe,
           standaloneSafe:
             activePlacementReplicas.length - candidateRemoves.length >
@@ -554,6 +594,15 @@ class MovePlannerMoveCalculationMethods {
           move.reason === MOVE_REASON.SPREAD_REPLICAS
         );
       });
+      // Prefer non-leader sources for REPLACE (stable). A leader that must drain
+      // then falls past replaceCount into a plain REMOVE (normal re-election)
+      // instead of becoming a REPLACE source that wedges on replacement-leader
+      // ownership (CL-043). The removed-replica set is unchanged either way.
+      replaceCandidates.sort(
+        (left, right) =>
+          (left.sourceIsLeader ? NUM.ONE : NUM.ZERO) -
+          (right.sourceIsLeader ? NUM.ONE : NUM.ZERO),
+      );
       const replaceCount = Math.min(addMoves.length, replaceCandidates.length);
       const consumedRemoveReplicaIds = new Set();
       for (let i = NUM.ZERO; i < replaceCount; i++) {
