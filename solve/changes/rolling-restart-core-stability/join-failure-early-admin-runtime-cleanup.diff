@@ -1,0 +1,233 @@
+diff --git a/src/admin/admin-websocket-lifecycle-methods.js b/src/admin/admin-websocket-lifecycle-methods.js
+index 887f5be2..56bee546 100644
+--- a/src/admin/admin-websocket-lifecycle-methods.js
++++ b/src/admin/admin-websocket-lifecycle-methods.js
+@@ -109,6 +109,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
+     }
+ 
+     this.initialized = false;
++    this.listening = false;
+ 
+     this.logger.info(ADMIN_LOG_MSG.SHUTDOWN, {
+       nodeId: this.nodeId,
+diff --git a/src/entrypoint-runtime-admin-composition.js b/src/entrypoint-runtime-admin-composition.js
+index e647837f..7f6986ea 100644
+--- a/src/entrypoint-runtime-admin-composition.js
++++ b/src/entrypoint-runtime-admin-composition.js
+@@ -464,6 +464,23 @@ function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
+   }
+ }
+ 
++/**
++ * Shut down admin plus live query startup composition.
++ * @param {Object|null} adminRuntime
++ * @return {Promise<void>}
++ */
++async function shutdownAdminRuntimeComposition(adminRuntime) {
++  if (!adminRuntime) {
++    return;
++  }
++  if (typeof adminRuntime.adminAPI?.shutdown === LOCAL_STR_FUNCTION) {
++    await adminRuntime.adminAPI.shutdown();
++  }
++  if (typeof adminRuntime.liveQueryWiring?.shutdown === LOCAL_STR_FUNCTION) {
++    adminRuntime.liveQueryWiring.shutdown();
++  }
++}
++
+ export {
+   attachSqlEngineToAdminRuntime,
+   createAdminAPIWithLiveQuery,
+@@ -475,5 +492,6 @@ export {
+   resolvePartitionServiceByPartitionId,
+   resolveSystemCacheHandles,
+   reportStartupRuntimeHandoff,
++  shutdownAdminRuntimeComposition,
+   startAdminRuntimeComposition,
+ };
+diff --git a/src/entrypoint-runtime-helpers.js b/src/entrypoint-runtime-helpers.js
+index 06d5d2ae..6e34e142 100644
+--- a/src/entrypoint-runtime-helpers.js
++++ b/src/entrypoint-runtime-helpers.js
+@@ -22,6 +22,7 @@ export {
+   resolvePartitionServiceByPartitionId,
+   resolveSystemCacheHandles,
+   reportStartupRuntimeHandoff,
++  shutdownAdminRuntimeComposition,
+   startAdminRuntimeComposition,
+ } from './entrypoint-runtime-admin-composition.js';
+ 
+diff --git a/src/entrypoint-runtime-shutdown-lifecycle.js b/src/entrypoint-runtime-shutdown-lifecycle.js
+index ef093e0b..a3ff6738 100644
+--- a/src/entrypoint-runtime-shutdown-lifecycle.js
++++ b/src/entrypoint-runtime-shutdown-lifecycle.js
+@@ -13,6 +13,9 @@ import {
+   ENTRYPOINT_DEFAULT,
+   ENTRYPOINT_LOG_MSG,
+ } from './constants/entrypoint.js';
++import {
++  shutdownAdminRuntimeComposition,
++} from './entrypoint-runtime-admin-composition.js';
+ 
+ const LOCAL_NUM_ZERO = 0;
+ const LOCAL_NUM_ONE = 1;
+@@ -250,8 +253,10 @@ function createShutdownSignalHandler(options) {
+       }
+       await options.ownerCleanup();
+       await options.bootstrapAPI.shutdown();
+-      await options.adminAPI.shutdown();
+-      options.liveQueryWiring.shutdown();
++      await shutdownAdminRuntimeComposition({
++        adminAPI: options.adminAPI,
++        liveQueryWiring: options.liveQueryWiring,
++      });
+       process.exit(LOCAL_NUM_ZERO);
+     } catch (error) {
+       options.logger.error(options.failureMessage, {
+diff --git a/src/index.js b/src/index.js
+index 94b75973..4eb4a6d2 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -65,6 +65,7 @@ import {
+   resolveStartupJoinDecision,
+   reportStartupRuntimeHandoff,
+   scheduleStartupLivenessPulse,
++  shutdownAdminRuntimeComposition,
+   startAdminRuntimeComposition,
+   startDynamicConfigWiring,
+   startLogsTablePersistence,
+@@ -82,6 +83,9 @@ const LOCAL_STR_SEED = 'seed';
+ const LOCAL_STR_PY3S1 = 'Configuration loaded';
+ const LOCAL_STR_REATTEMPT_JOIN =
+   'Re-attempting cluster join after retryable failure';
++const LOCAL_STR_UNBOUNDED = 'unbounded';
++const LOCAL_STR_DEBUG = 'debug';
++const LOCAL_STR_INFO = 'info';
+ // A retryable join failure (e.g. transient transport/participant unavailability
+ // during a rolling restart) should re-compose a fresh join rather than exiting
+ // the node permanently. Bounded so a genuinely non-joinable node still fails
+@@ -305,6 +309,8 @@ async function startJoinNode(options) {
+       attempt: joinAttempt,
+     });
+     await bootstrapAPI.shutdown();
++    await shutdownAdminRuntimeComposition(joinAdminRuntime);
++    joinAdminRuntime = null;
+     // Never abandon on a transient: when JOIN_NEVER_ABANDON_ON_RETRYABLE is set,
+     // a retryable failure re-attempts forever (only a non-retryable failure
+     // exits). Otherwise fall back to the bounded re-attempt count.
+@@ -333,7 +339,7 @@ async function startJoinNode(options) {
+         nodeId,
+         attempt: joinAttempt + LOCAL_NUM_ONE,
+         maxAttempts: JOIN_NEVER_ABANDON_ON_RETRYABLE ?
+-          'unbounded' :
++          LOCAL_STR_UNBOUNDED :
+           JOIN_REATTEMPT_MAX_ATTEMPTS,
+         delayMs,
+       });
+@@ -754,9 +760,9 @@ async function main() {
+   const loggingService = LoggingService.getInstance();
+   loggingService.initialize({
+     nodeId: config.get(CONFIG_KEY.NODE_ID),
+-    level: debugLogsEnabled ? 'debug' : configuredLogLevel,
++    level: debugLogsEnabled ? LOCAL_STR_DEBUG : configuredLogLevel,
+     persistLevel: debugLogsEnabled ?
+-      (configuredLogLevel || 'info') :
++      (configuredLogLevel || LOCAL_STR_INFO) :
+       undefined,
+     prettyPrint: config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT),
+   });
+
+diff --git a/test/entrypoint/entrypoint-admin-runtime-cleanup.test.js b/test/entrypoint/entrypoint-admin-runtime-cleanup.test.js
+new file mode 100644
+index 00000000..58cac337
+--- /dev/null
++++ b/test/entrypoint/entrypoint-admin-runtime-cleanup.test.js
+@@ -0,0 +1,52 @@
++import {readFileSync} from 'node:fs';
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  shutdownAdminRuntimeComposition,
++} from '../../src/entrypoint-runtime-admin-composition.js';
++
++test('shutdownAdminRuntimeComposition releases admin runtime surfaces', async (t) => {
++  const calls = [];
++  const adminRuntime = {
++    adminAPI: {
++      async shutdown() {
++        calls.push('admin-api');
++      },
++    },
++    liveQueryWiring: {
++      shutdown() {
++        calls.push('live-query');
++      },
++    },
++  };
++
++  await shutdownAdminRuntimeComposition(adminRuntime);
++
++  t.same(
++    calls,
++    ['admin-api', 'live-query'],
++    'admin API must release its port before live query wiring is torn down',
++  );
++});
++
++test('shutdownAdminRuntimeComposition tolerates absent early runtime', async (t) => {
++  await shutdownAdminRuntimeComposition(null);
++  await shutdownAdminRuntimeComposition({});
++
++  t.pass('join failure cleanup may run before early admin runtime exists');
++});
++
++test('join failure path releases early admin runtime before reattempt', (t) => {
++  const source = readFileSync('src/index.js', 'utf8');
++  const joinFailureBlockMatch = source.match(
++    /if \(!joinResult\.success\) \{[\s\S]*?const reattemptAllowed/,
++  );
++
++  t.ok(joinFailureBlockMatch, 'entrypoint should retain a join failure branch');
++  t.match(
++    joinFailureBlockMatch[0],
++    /await bootstrapAPI\.shutdown\(\);\s*await shutdownAdminRuntimeComposition\(joinAdminRuntime\);\s*joinAdminRuntime = null;/,
++    'join failure branch should release early admin runtime before retry logic',
++  );
++  t.end();
++});
+
+diff --git a/test/admin/admin-websocket-api-shutdown-state.test.js b/test/admin/admin-websocket-api-shutdown-state.test.js
+new file mode 100644
+index 00000000..6b7cf96b
+--- /dev/null
++++ b/test/admin/admin-websocket-api-shutdown-state.test.js
+@@ -0,0 +1,29 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++function initializeTestEnvironment() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize();
++  LoggingService.getInstance().initialize({level: 'error'});
++}
++
++test('AdminWebSocketAPI shutdown clears initialized and listening state',
++  async (t) => {
++    initializeTestEnvironment();
++
++    const api = new AdminWebSocketAPI({
++      nodeId: 'admin-shutdown-state-node',
++    });
++
++    await api.initialize(0);
++    t.equal(api.isInitialized(), true, 'admin API should initialize');
++    t.equal(api.isListening(), true, 'admin API should listen before shutdown');
++
++    await api.shutdown();
++
++    t.equal(api.isInitialized(), false, 'shutdown clears initialized state');
++    t.equal(api.isListening(), false, 'shutdown clears listening state');
++  });

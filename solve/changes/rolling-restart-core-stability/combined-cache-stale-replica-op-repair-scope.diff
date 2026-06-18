@@ -1,0 +1,64 @@
+diff --git a/src/admin/admin-authoritative-repair-policy.js b/src/admin/admin-authoritative-repair-policy.js
+index 0861c8fe..49e941c9 100644
+--- a/src/admin/admin-authoritative-repair-policy.js
++++ b/src/admin/admin-authoritative-repair-policy.js
+@@ -109,6 +109,16 @@ function deriveAuthoritativeRepairTables(options = {}) {
+       .filter(Boolean) :
+     [];
+   const uniqueTriggerCodes = [...new Set(triggerCodes)];
++  if (
++    uniqueTriggerCodes.includes(
++      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++    ) &&
++    uniqueTriggerCodes.includes(
++      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
++    )
++  ) {
++    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
++  }
+   const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
+     triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
+   const effectiveTriggerCodes = narrowedTriggerCodes.length > NUM.ZERO ?
+diff --git a/test/admin/admin-authoritative-repair-policy.test.js b/test/admin/admin-authoritative-repair-policy.test.js
+index 84ae9bea..c66fa86b 100644
+--- a/test/admin/admin-authoritative-repair-policy.test.js
++++ b/test/admin/admin-authoritative-repair-policy.test.js
+@@ -133,6 +133,38 @@ test('authoritative repair policy narrows stale replica-operation repair to repl
+     );
+   });
+ 
++test('authoritative repair policy keeps full repair for combined stale cache ' +
++  'and stale replica operations', async (t) => {
++  const tables = deriveAuthoritativeRepairTables({
++    triggerCodes: [
++      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
++    ],
++  });
++
++  t.equal(
++    tables.includes(TABLES.PARTITIONS),
++    true,
++    'combined cache-stale repair must refresh partition leader authority',
++  );
++  t.equal(
++    tables.includes(TABLES.REPLICA_OPERATIONS),
++    true,
++    'combined cache-stale repair still refreshes stale replica operations',
++  );
++  t.same(tables, [
++    TABLES.NODES,
++    TABLES.PARTITIONS,
++    TABLES.SERVICES,
++    TABLES.TABLES,
++    TABLES.CONTROL_PLANE_PUBLICATIONS,
++    TABLES.NODE_ENDPOINTS,
++    TABLES.SERVICE_DEFINITIONS,
++    TABLES.SERVICE_ENDPOINTS,
++    TABLES.REPLICA_OPERATIONS,
++  ]);
++});
++
+ test('authoritative repair policy narrows scoped discovery repair to topology tables',
+   async (t) => {
+     const tables = deriveAuthoritativeRepairTables({

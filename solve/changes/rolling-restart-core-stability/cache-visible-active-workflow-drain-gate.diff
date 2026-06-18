@@ -1,0 +1,443 @@
+diff --git a/test/distributed/harness/__tests__/assertions-priority-recovery-test-cases.js b/test/distributed/harness/__tests__/assertions-priority-recovery-test-cases.js
+index 01df24d8..4abb820f 100644
+--- a/test/distributed/harness/__tests__/assertions-priority-recovery-test-cases.js
++++ b/test/distributed/harness/__tests__/assertions-priority-recovery-test-cases.js
+@@ -8,6 +8,8 @@ const CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID =
+   'op-cache-visible-spread-satisfied';
+ const CACHE_VISIBLE_PRIORITY_RECOVERY_DECISION_OPERATION_ID =
+   'op-cache-visible-spread-satisfied-decision-snapshot';
++const CACHE_VISIBLE_PRIORITY_RECOVERY_FAILED_WORKFLOW_OPERATION_ID =
++  'op-cache-visible-failed-workflow-decision-snapshot';
+ const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_FALLBACK_OPERATION_ID =
+   'op-cache-visible-spread-satisfied-partition-fallback';
+ const CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID = 'node-d';
+@@ -23,6 +25,9 @@ const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+   'spread_satisfied_in_flight';
+ const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+ const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
++const PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
++const PRIORITY_RECOVERY_OPERATION_STATUS_FAILED = 'failed';
++const PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED = 'FAILED';
+ 
+ test(
+   'waitForConvergence — can ignore cache-visible spread-satisfied priority recovery operations',
+@@ -202,6 +207,13 @@ test(
+             replicaOperations: {
+               staleInFlightCount: 0,
+             },
++            publicationConvergence: {
++              priorityRecoveryPartitionIdsBySemanticState: {
++                [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
++                  CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++                ],
++              },
++            },
+             priorityRecoveryDecisionSnapshots: {
+               snapshots: [{
+                 partitionId: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+@@ -254,6 +266,126 @@ test(
+   },
+ );
+ 
++test(
++  'waitForConvergence — does not ignore active failed priority recovery decision snapshots',
++  async () => {
++    const node = {
++      id: 'mock-cache-visible-priority-recovery-failed-workflow-node',
++      isReachable: async () => true,
++      getControlSnapshot: async () => ({
++        rows: [buildControlSnapshotRecord({
++          nodeId:
++            'mock-cache-visible-priority-recovery-failed-workflow-node',
++          partitionIds: [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID],
++          servicesRows: [
++            {
++              service_type: 'partition',
++              status: 'ACTIVE',
++              raft_role: 'leader',
++              address:
++                'mock-cache-visible-priority-recovery-failed-workflow-node/' +
++                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
++                '/r0',
++              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++            },
++            {
++              service_type: 'partition',
++              status: 'ACTIVE',
++              raft_role: 'follower',
++              address:
++                'node-b/' +
++                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
++                '/r1',
++              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++            },
++            {
++              service_type: 'partition',
++              status: 'ACTIVE',
++              raft_role: 'follower',
++              address:
++                'node-c/' +
++                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
++                '/r2',
++              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++            },
++            {
++              service_type: 'partition',
++              status: 'ACTIVE',
++              raft_role: 'follower',
++              address:
++                CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID +
++                '/' +
++                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
++                '/r4',
++              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++            },
++          ],
++          operationRows: [{
++            operation_id:
++              CACHE_VISIBLE_PRIORITY_RECOVERY_FAILED_WORKFLOW_OPERATION_ID,
++            type: 'REPLACE',
++            partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++            source_node_id: 'node-a',
++            target_node_id: CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID,
++            replica_id:
++              CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID + '-r4',
++            status: 'creating',
++            workflow_step: 'CREATING',
++            updated_at: Date.now() - 1000,
++          }],
++          controlPlaneDiagnostics: {
++            replicaOperations: {
++              staleInFlightCount: 0,
++            },
++            priorityRecoveryDecisionSnapshots: {
++              snapshots: [{
++                partitionId: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
++                operationId:
++                  CACHE_VISIBLE_PRIORITY_RECOVERY_FAILED_WORKFLOW_OPERATION_ID,
++                semanticStateId:
++                  PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
++                observation: {
++                  visibilityState:
++                    PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
++                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
++                  latestOperationWorkflowStep:
++                    PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
++                  latestOperationStatus:
++                    PRIORITY_RECOVERY_OPERATION_STATUS_FAILED,
++                },
++                completion: {
++                  state: PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
++                },
++                spreadCompletion: {
++                  satisfied: true,
++                },
++                coordinator: {
++                  operationIds: [
++                    CACHE_VISIBLE_PRIORITY_RECOVERY_FAILED_WORKFLOW_OPERATION_ID,
++                  ],
++                },
++              }],
++            },
++          },
++        })],
++      }),
++    };
++
++    await assert.rejects(
++      waitForConvergence([node], {
++        settleTimeoutMs: 80,
++        quietWindowMs: 0,
++        maxSustainedOverTargetMs: 80,
++        sampleIntervalMs: 10,
++        targetVoterCount: 3,
++        ignoreStaleInFlightReplicaOperations: true,
++      }),
++      /Convergence timeout/,
++      'active failed priority recovery workflow should keep convergence gated',
++    );
++  },
++);
++
+ test(
+   'waitForConvergence — can ignore spread-satisfied priority recovery partitions without explicit operation ids',
+   async () => {
+diff --git a/test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js b/test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js
+index e953e7c7..39d4b192 100644
+--- a/test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js
++++ b/test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js
+@@ -46,6 +46,9 @@ const CDC_PROJECTION_OWNER_OPERATION_ID_ONE =
+   'op-cdc-projection-owner-one';
+ const CDC_PROJECTION_OWNER_OPERATION_ID_TWO =
+   'op-cdc-projection-owner-two';
++const PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
++const PRIORITY_RECOVERY_OPERATION_STATUS_FAILED = 'failed';
++const PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED = 'FAILED';
+ const ACTIVE_NODE_IDS_THREE = Object.freeze([NODE_ONE, NODE_TWO, NODE_THREE]);
+ const ACTIVE_NODE_IDS_FOUR = Object.freeze([
+   NODE_ONE,
+@@ -98,17 +101,24 @@ const OWNER_COVERED_MISSING_PARTITION_IDS = Object.freeze([
+ const OWNER_UNCOVERED_MISSING_PARTITION_IDS = Object.freeze([PARTITION_THREE]);
+ const PARTITION_ONLY_PRIORITY_RECOVERY_OPERATION_COUNT = 1;
+ 
+-function buildCacheVisiblePriorityRecoverySnapshot(partitionId, operationId) {
++function buildCacheVisiblePriorityRecoverySnapshot(
++  partitionId,
++  operationId,
++  overrides = {},
++) {
+   return {
+     partitionId,
+     operationId,
+     semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+     observation: {
+       visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
++      ...(overrides.observation || {}),
+     },
+     completion: {
+       state: PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
++      ...(overrides.completion || {}),
+     },
++    ...overrides,
+   };
+ }
+ 
+@@ -546,6 +556,45 @@ test('post-rebalance closure counts partition-only priority recovery evidence',
+     );
+   });
+ 
++test('post-rebalance closure does not discount active failed priority recovery workflow evidence',
++  async () => {
++    assert.strictEqual(
++      countCacheVisibleSatisfiedPriorityRecoveryOperations(
++        {
++          publicationConvergence: {
++            priorityRecoveryPartitionIdsBySemanticState: {
++              [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
++                PARTITION_TWO,
++              ],
++            },
++          },
++          priorityRecoveryDecisionSnapshots: {
++            snapshots: [
++              buildCacheVisiblePriorityRecoverySnapshot(
++                PARTITION_TWO,
++                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
++                {
++                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
++                  latestOperationWorkflowStep:
++                    PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
++                  latestOperationStatus:
++                    PRIORITY_RECOVERY_OPERATION_STATUS_FAILED,
++                },
++              ),
++            ],
++          },
++        },
++        [{
++          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
++          partition_id: PARTITION_TWO,
++          status: 'creating',
++          workflow_step: 'CREATING',
++        }],
++      ),
++      NO_REPLICA_OPERATION_COUNT,
++    );
++  });
++
+ test('post-rebalance closure keeps CDC projection leader gaps open without full owner coverage',
+   async () => {
+     const closure = buildPostRebalanceClosureSnapshot({
+diff --git a/test/distributed/harness/post-rebalance-closure-contract.js b/test/distributed/harness/post-rebalance-closure-contract.js
+index 6c523080..c0d0c44f 100644
+--- a/test/distributed/harness/post-rebalance-closure-contract.js
++++ b/test/distributed/harness/post-rebalance-closure-contract.js
+@@ -53,10 +53,17 @@ const PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+   'spread_satisfied_in_flight';
+ const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
+ const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
++const PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
++const PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE = 'remove_phase';
++const PRIORITY_RECOVERY_OPERATION_STATUS_FAILED = 'failed';
+ const PRIORITY_RECOVERY_SATISFIED_COMPLETION_STATES = Object.freeze([
+   PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+   PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
+ ]);
++const PRIORITY_RECOVERY_ACTIVE_WORKFLOW_STATES = Object.freeze(new Set([
++  PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
++  PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
++]));
+ const POST_REBALANCE_CLOSURE_TERMINAL_STATES = Object.freeze([
+   POST_REBALANCE_CLOSURE_STATE.CLOSED,
+   POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
+@@ -360,10 +367,15 @@ function collectCacheVisiblePriorityRecoveryEvidence(
+   const diagnosticsSources = collectPriorityRecoveryDiagnosticsSources(
+     controlPlaneDiagnostics,
+   );
++  const openWorkflowPartitionIds =
++    collectOpenPriorityRecoveryWorkflowPartitionIds(diagnosticsSources);
+   const evidence = [];
+   for (const source of diagnosticsSources) {
+     evidence.push(...collectPriorityRecoveryWitnessEvidence(source));
+-    evidence.push(...collectPriorityRecoverySummaryEvidence(source));
++    evidence.push(...collectPriorityRecoverySummaryEvidence(
++      source,
++      openWorkflowPartitionIds,
++    ));
+     evidence.push(...collectPriorityRecoveryDecisionSnapshotEvidence(source));
+   }
+   return evidence;
+@@ -391,13 +403,8 @@ function collectPriorityRecoveryDiagnosticsSources(
+ }
+ 
+ function collectPriorityRecoveryWitnessEvidence(source) {
+-  const witnesses = Array.isArray(source?.priorityRecoveryPartitionWitnesses) ?
+-    source.priorityRecoveryPartitionWitnesses :
+-    Array.isArray(source?.partitionWitnesses) ?
+-      source.partitionWitnesses :
+-      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+   const evidence = [];
+-  for (const witness of witnesses) {
++  for (const witness of collectPriorityRecoveryWitnessSnapshots(source)) {
+     if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(witness)) {
+       continue;
+     }
+@@ -409,7 +416,10 @@ function collectPriorityRecoveryWitnessEvidence(source) {
+   return evidence;
+ }
+ 
+-function collectPriorityRecoverySummaryEvidence(source) {
++function collectPriorityRecoverySummaryEvidence(
++  source,
++  openWorkflowPartitionIds = new Set(),
++) {
+   const evidence = [];
+   const partitionIdsBySemanticState =
+     source?.priorityRecoveryPartitionIdsBySemanticState &&
+@@ -428,18 +438,15 @@ function collectPriorityRecoverySummaryEvidence(source) {
+     ) ?
+       partitionIdsBySemanticState[
+         PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+-      ] :
++      ].filter((partitionId) => !openWorkflowPartitionIds.has(String(
++        partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
++      ).trim())) :
+       POST_REBALANCE_CLOSURE_EMPTY_LIST,
+   });
+ 
+-  const partitionSnapshots = Array.isArray(
+-    source?.priorityRecoveryPartitionSnapshots,
+-  ) ?
+-    source.priorityRecoveryPartitionSnapshots :
+-    Array.isArray(source?.partitionSnapshots) ?
+-      source.partitionSnapshots :
+-      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+-  for (const partitionSnapshot of partitionSnapshots) {
++  for (const partitionSnapshot of collectPriorityRecoveryPartitionSnapshots(
++    source,
++  )) {
+     if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(partitionSnapshot)) {
+       continue;
+     }
+@@ -453,13 +460,8 @@ function collectPriorityRecoverySummaryEvidence(source) {
+ }
+ 
+ function collectPriorityRecoveryDecisionSnapshotEvidence(source) {
+-  const snapshots = Array.isArray(source?.priorityRecoveryDecisionSnapshots) ?
+-    source.priorityRecoveryDecisionSnapshots :
+-    Array.isArray(source?.priorityRecoveryDecisionSnapshots?.snapshots) ?
+-      source.priorityRecoveryDecisionSnapshots.snapshots :
+-      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+   const evidence = [];
+-  for (const snapshot of snapshots) {
++  for (const snapshot of collectPriorityRecoveryDecisionSnapshots(source)) {
+     if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot)) {
+       continue;
+     }
+@@ -471,6 +473,52 @@ function collectPriorityRecoveryDecisionSnapshotEvidence(source) {
+   return evidence;
+ }
+ 
++function collectPriorityRecoveryWitnessSnapshots(source) {
++  return Array.isArray(source?.priorityRecoveryPartitionWitnesses) ?
++    source.priorityRecoveryPartitionWitnesses :
++    Array.isArray(source?.partitionWitnesses) ?
++      source.partitionWitnesses :
++      POST_REBALANCE_CLOSURE_EMPTY_LIST;
++}
++
++function collectPriorityRecoveryPartitionSnapshots(source) {
++  return Array.isArray(source?.priorityRecoveryPartitionSnapshots) ?
++    source.priorityRecoveryPartitionSnapshots :
++    Array.isArray(source?.partitionSnapshots) ?
++      source.partitionSnapshots :
++      POST_REBALANCE_CLOSURE_EMPTY_LIST;
++}
++
++function collectPriorityRecoveryDecisionSnapshots(source) {
++  return Array.isArray(source?.priorityRecoveryDecisionSnapshots) ?
++    source.priorityRecoveryDecisionSnapshots :
++    Array.isArray(source?.priorityRecoveryDecisionSnapshots?.snapshots) ?
++      source.priorityRecoveryDecisionSnapshots.snapshots :
++      POST_REBALANCE_CLOSURE_EMPTY_LIST;
++}
++
++function collectOpenPriorityRecoveryWorkflowPartitionIds(sources) {
++  const partitionIds = new Set();
++  for (const source of sources) {
++    for (const snapshot of [
++      ...collectPriorityRecoveryWitnessSnapshots(source),
++      ...collectPriorityRecoveryPartitionSnapshots(source),
++      ...collectPriorityRecoveryDecisionSnapshots(source),
++    ]) {
++      if (!isPriorityRecoveryWorkflowOpen(snapshot)) {
++        continue;
++      }
++      const partitionId = String(
++        snapshot?.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
++      ).trim();
++      if (partitionId.length > NUM.ZERO) {
++        partitionIds.add(partitionId);
++      }
++    }
++  }
++  return partitionIds;
++}
++
+ function collectPriorityRecoverySnapshotOperationIds(snapshot) {
+   const operationIds = [];
+   if (snapshot?.operationId) {
+@@ -488,6 +536,25 @@ function collectPriorityRecoverySnapshotOperationIds(snapshot) {
+   return operationIds;
+ }
+ 
++function isPriorityRecoveryWorkflowOpen(snapshot) {
++  const workflowState = String(
++    snapshot?.workflowState ||
++      snapshot?.observation?.workflowState ||
++      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
++  ).trim();
++  const latestOperationStatus = String(
++    snapshot?.latestOperationStatus ||
++      snapshot?.observation?.latestOperationStatus ||
++      snapshot?.coordinator?.operation?.status ||
++      snapshot?.coordinator?.operation?.latestTimelineStatus ||
++      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
++  ).trim().toLowerCase();
++  return (
++    PRIORITY_RECOVERY_ACTIVE_WORKFLOW_STATES.has(workflowState) ||
++    latestOperationStatus === PRIORITY_RECOVERY_OPERATION_STATUS_FAILED
++  );
++}
++
+ function isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot) {
+   const visibilityState = String(
+     snapshot?.visibilityState ||
+@@ -516,6 +583,7 @@ function isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot) {
+ 
+   return (
+     visibilitySatisfied &&
++    !isPriorityRecoveryWorkflowOpen(snapshot) &&
+     (semanticSatisfied || completionSatisfied || spreadSatisfied)
+   );
+ }
