@@ -11,6 +11,10 @@ import {
 } from '../../scripts/solve/evidence.js';
 import {distanceMetricFromReport}
   from '../../scripts/solve/probes/scenario-harness.js';
+import {
+  EVENT_SOLVED,
+  STATUS_OPEN,
+} from '../../scripts/solve/constants.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-test-'));
@@ -509,6 +513,49 @@ tap.test('evidence ingestion (P2)', async (t) => {
       distanceMetricFromReport(validReport, 'rolling-restart') + 1,
     );
     t.type(event.probeKey, 'string');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('fresh measured failed evidence reopens a solved frontier projection', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'latest.report.json');
+    const validFailedReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        passed: false,
+        verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
+        verdictReason: 'topology_progress_blocked',
+      }],
+    };
+    fs.writeFileSync(reportPath, JSON.stringify(validFailedReport));
+    appendEvent(root, goal.id, {
+      type: EVENT_SOLVED,
+      frontier: 'evidence-quest-test-main',
+      evidence: 'previous-pass.report.json',
+    });
+
+    const event = ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+    });
+    const state = projectState(goal, readLog(root, goal.id));
+    const frontier = state.frontiers.find((item) =>
+      item.id === 'evidence-quest-test-main');
+
+    t.equal(event.done, false, 'latest measured evidence does not satisfy frontier');
+    t.equal(event.invalidSample, false, 'latest evidence is a valid measured sample');
+    t.equal(frontier.status, STATUS_OPEN,
+      'projection reopens the frontier after a fresh measured failure');
+    t.equal(frontier.current, event.metric,
+      'projection keeps the latest measured metric');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

@@ -176,6 +176,12 @@ function applyEvidenceIngested(frontierState, event) {
   if (event.metric !== undefined && event.metric !== null) {
     frontierState.current = event.metric;
   }
+  if (event.done === false &&
+    event.invalidSample !== true &&
+    frontierState.status === STATUS_SOLVED) {
+    frontierState.status = STATUS_OPEN;
+    frontierState.reason = 'fresh measured evidence no longer satisfies frontier';
+  }
 }
 
 function emptyTheoryState() {
