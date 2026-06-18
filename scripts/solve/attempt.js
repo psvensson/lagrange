@@ -123,7 +123,7 @@ export function runAttemptCommand(root, args) {
   const after = evaluate(def.metric, ctx.probeCtx);
   const evidencePath = after.evidence;
   if (!evidencePath || !fs.existsSync(evidencePath)) {
-    throw new Error(`No evidence report found after running harness command`);
+    throw new Error('No evidence report found after running harness command');
   }
 
   // 4. Record normal attempt

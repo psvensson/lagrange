@@ -31,7 +31,6 @@ import {
   BLOCKER_MOVEMENT_MOVED_BOUNDARY,
   BLOCKER_MOVEMENT_MOVED_OWNER,
   BLOCKER_MOVEMENT_NARROWED,
-  diagnosticMovementFor,
   selectedTheoryStaleness,
 } from './current-blocker.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
@@ -270,18 +269,22 @@ export function stepTheoryGateProblems({
   // Escalation rule 1 & 3:
   const evidenceEvents = log.filter((e) =>
     e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+  const lastEv = evidenceEvents[evidenceEvents.length - 1];
+  const prevEv = evidenceEvents[evidenceEvents.length - 2];
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason &&
-    evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+    Boolean(lastEv.dominantReason) &&
+    lastEv.dominantReason === prevEv.dominantReason;
   const sameOwnerBoundaryRepeat = evidenceEvents.length >= 2 &&
-    evidenceEvents[evidenceEvents.length - 1].owner &&
-    evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
-    evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+    Boolean(lastEv.owner) &&
+    lastEv.owner === prevEv.owner &&
+    lastEv.boundary === prevEv.boundary;
 
   const latestEvidence = [...log].reverse().find((e) =>
     e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
-  const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
-  const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+  const namesLiveness = latestEvidence &&
+    (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+  const selectedIsObservationGap = selected &&
+    (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
 
   // rr-D: coupled-invariant oscillation (two disjoint invariant families bouncing green
@@ -372,7 +375,7 @@ export function stepTheoryGateProblems({
   const latestMetricEvent = [...log].reverse().find((e) =>
     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
     (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
-      typeof e.metric === 'number')
+      typeof e.metric === 'number'),
   );
   if (latestMetricEvent) {
     const metricVal = latestMetricEvent.type === 'attempt' ? latestMetricEvent.metricAfter : latestMetricEvent.metric;
@@ -389,9 +392,11 @@ export function stepTheoryGateProblems({
   // Escalation rule 4: If selected theory is older than latest evidence, require theory result update
   if (selected && latestEvidence) {
     const selectedEvent = log.find((e) =>
-      (e.type === 'theory-system-declared' || e.type === 'theory-option-declared') && e.theory === selected.id
+      (e.type === 'theory-system-declared' || e.type === 'theory-option-declared') &&
+      e.theory === selected.id,
     );
-    const selectedTs = selectedEvent ? new Date(selectedEvent.ts).getTime() : new Date(selected.ts).getTime();
+    const selectedTs = selectedEvent ?
+      new Date(selectedEvent.ts).getTime() : new Date(selected.ts).getTime();
     const latestEvidenceTs = new Date(latestEvidence.ts).getTime();
     if (selectedTs < latestEvidenceTs) {
       const latestEvidenceIndex = log.indexOf(latestEvidence);

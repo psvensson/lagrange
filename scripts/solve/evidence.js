@@ -84,7 +84,9 @@ export function detectUnrecordedEvidence(root, questId, options = {}) {
           `--frontier ${spec.frontier}${probeFlag} --evidence ${probe.evidence}`,
       };
     }
-  } catch (err) {}
+  } catch (_err) {
+    // best-effort: a missing/unreadable probe surfaces no command, not a hard failure
+  }
   return null;
 }
 
@@ -259,7 +261,10 @@ export function ingestEvidence(root, {
     metric = distanceMetricFromReport(data, scenarioName);
   } else {
     const items = data?.optimizationSummary?.totalPriorityItems;
-    metric = Number.isInteger(items) ? items : (Number.isInteger(data?.summary?.failed) ? data.summary.failed : (Number.isInteger(data?.metric) ? data.metric : null));
+    const failed = data?.summary?.failed;
+    const fallback = Number.isInteger(failed) ? failed :
+      Number.isInteger(data?.metric) ? data.metric : null;
+    metric = Number.isInteger(items) ? items : fallback;
   }
 
   let satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
@@ -279,7 +284,7 @@ export function ingestEvidence(root, {
   } else if (invalidSample) {
     metric = null;
   }
-  
+
   const failure = firstFailureCandidate(data, scenarioName);
   const rootCauseClass = firstRootCause(data, scenarioName);
   const dominantReason = firstDominantReason(data, scenarioName);
@@ -290,10 +295,11 @@ export function ingestEvidence(root, {
   const owner = witness?.owner || null;
   const boundary = witness?.boundary || null;
   const waitMode = witness?.source?.waitModes || witness?.source?.waitMode || null;
-  const nextAction = witness?.source?.nextRequiredActions || witness?.source?.nextAction || witness?.nextAction || null;
-  const mechanism = witness?.source?.actuationStates || witness?.source?.actuationState || witness?.source?.mechanism || null;
+  const nextAction = witness?.source?.nextRequiredActions ||
+    witness?.source?.nextAction || witness?.nextAction || null;
 
-  const summary = sc?.error || sc?.stackTrace || data?.summary?.error || 'Evidence ingested successfully';
+  const summary = sc?.error || sc?.stackTrace || data?.summary?.error ||
+    'Evidence ingested successfully';
   const reportTimestamp = data.timestamp || new Date().toISOString();
 
   const selectedTheory = state.theories.selectedByFrontier[frontierId] || null;
@@ -376,7 +382,7 @@ export function ingestEvidence(root, {
   const repeatStatus = isVerdictRepeat ? 'repeated' : 'changed';
 
   const claim = `Ingested evidence from ${path.basename(evidencePath)}. Metric: ${beforeMetric} -> ${metric}. Verdict: ${verdict}${verdictReason ? ` (${verdictReason})` : ''}. Root cause: ${rootCauseClass || 'none'}. Dominant reason: ${dominantReason || 'none'}. Owner: ${owner || 'none'}. Ingestion outcome: ${repeatStatus}.`;
-  
+
   appendFinding(root, questId, {
     frontier: frontierId,
     claim,

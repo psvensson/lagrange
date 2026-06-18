@@ -200,31 +200,31 @@ export function continuationNextCommand(continuation, context = {}) {
   const id = questId ? ` --id ${questId}` : '';
   const f = frontier ? ` --frontier ${frontier}` : '';
   switch (continuation.code || continuation.status) {
-    case CONTINUATION_BLOCKED_THEORY: {
-      const wantsSystem = problems.some((p) => /system theory/.test(p));
-      if (wantsSystem) {
-        return `node scripts/solve.js theory system${id} ` +
+  case CONTINUATION_BLOCKED_THEORY: {
+    const wantsSystem = problems.some((p) => /system theory/.test(p));
+    if (wantsSystem) {
+      return `node scripts/solve.js theory system${id} ` +
           '--problem <...> --mechanism <...> --owner <...> --evidence <path> ' +
           '--success <...> --discriminator <...> --missing-edge <...>';
-      }
-      return `node scripts/solve.js theory option${id}${f} ` +
+    }
+    return `node scripts/solve.js theory option${id}${f} ` +
         '--layer <...> --mechanism <...> --intervention <...> ' +
         '--expected-movement <...> --negative-result <...> --discriminator <...> ' +
         '--promotion <...> --rejection <...>';
-    }
-    case CONTINUATION_BLOCKED_SCOPE:
-      return `node scripts/solve.js status${id} ` +
+  }
+  case CONTINUATION_BLOCKED_SCOPE:
+    return `node scripts/solve.js status${id} ` +
         '# land or split the current changes to reduce scope before the next attempt';
-    case CONTINUATION_BLOCKED_REGRESSION:
-      return `node scripts/solve.js finding${id}${f} ` +
+  case CONTINUATION_BLOCKED_REGRESSION:
+    return `node scripts/solve.js finding${id}${f} ` +
         '--note <restore the regressed invariant or explain why it was abandoned>';
-    case CONTINUATION_BLOCKED_MEASUREMENT:
-      return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
+  case CONTINUATION_BLOCKED_MEASUREMENT:
+    return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
         `then: node scripts/solve.js reopen${id}${f} --reason "harness fixed"`;
-    case CONTINUATION_BLOCKED_METRIC_PROJECTION:
-      return `node scripts/solve.js ingest-evidence${id}${f} --evidence <fresh report>`;
-    default:
-      return null;
+  case CONTINUATION_BLOCKED_METRIC_PROJECTION:
+    return `node scripts/solve.js ingest-evidence${id}${f} --evidence <fresh report>`;
+  default:
+    return null;
   }
 }
 
