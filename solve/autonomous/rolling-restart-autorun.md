@@ -74,3 +74,12 @@ radius (shared placement scorer move-planner.js placementOwnerDecision).
   catch-up read (local fallback preserved). Falsifier red-on-revert 16/16.
   Adversarial-verify TRUSTED (sweep side-effect cleared). 0 new regressions.
   Committing + N=3 gate. RESIDUAL: the leadership/handler split itself (deeper).
+- iter2 GATE 191703Z (N=3, srcFP 8a9227a6 = epoch fix): scenario-PASS 1/3 (run3
+  PASS). publication_epochs_disagree GONE (epoch fix worked). Rotating tails now:
+  run1 = consumer_lag / waiting_for_consumer / missing=1 (node 11601fe0) = the
+  Option-2 consumer-lag tail (USER-DEFERRED prior session); run2 = convergence_
+  timeout but fresh/ready = settle-time-vs-wall-budget (CL-038). Cleared tails so
+  far: nodeSlotUnavailable (iter1), epochs_disagree (iter2). REMAINING = the hard
+  core (consumer-lag + settle-time). INFLECTION: goalpost Q (re-open deferred
+  Option-2?) + integrity Q (barrier-settle lever legit?). Rubber-ducking before
+  proceeding.
