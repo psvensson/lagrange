@@ -25,11 +25,12 @@ const LOCAL_STR_14077 = 'Shutdown already in progress, forcing process exit';
 const LOCAL_STR_SHUTDOWN_STEP = 'Shutdown step timing';
 const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
   'Shutdown best-effort step exceeded time-box, continuing to exit';
-// CL-030 fix C: the two control-plane-dependent best-effort drain steps
-// (publishNodeShutdownStatus, shutdownLogsTablePersistence) can each block ~5-7s
-// under rolling-restart churn. They already swallow their own errors, so the only
-// risk is BLOCKING the path to exit(0). Time-box them so a slow control plane never
-// makes a graceful drain race the docker SIGKILL grace.
+// CL-030 fix C: shutdownLogsTablePersistence (a PURELY-LOCAL observability flush)
+// can block ~5-7s under churn. It swallows its own errors, so the only risk is
+// BLOCKING the path to exit(0); time-box it so a slow control plane never makes a
+// graceful drain race the docker SIGKILL grace. NOTE: the sibling slow step
+// publishNodeShutdownStatus is deliberately NOT boxed here — it is cluster-facing
+// and already internally bounded by reporterTimeoutMs (see its call site).
 const SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS = 3000;
 const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';
@@ -316,9 +317,15 @@ function createShutdownSignalHandler(options) {
         reasons: drainingSnapshot?.reasons || [],
         drainDeadlineMs,
       });
-      await timeBoxBestEffortShutdownStep(
-        options.logger, signal, 'publishNodeShutdownStatus',
-        SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS, () =>
+      // CL-030: publishNodeShutdownStatus is a CLUSTER-FACING write (NODES row ->
+      // STOPPED/DISCONNECTED, the proactive "I'm leaving" signal). It is ALREADY
+      // internally bounded by reporterTimeoutMs (heartbeatService.reportNodeShutdown
+      // -> callNodeStateReporterWithTimeout), so it is NOT given the aggressive
+      // best-effort time-box — cutting the cluster notification short below its own
+      // designed bound risks slower peer reaction / more churn. Fix A's docker
+      // stop-grace headroom (25s) covers its internal bound.
+      await timeShutdownStep(
+        options.logger, signal, 'publishNodeShutdownStatus', () =>
           publishNodeShutdownStatus(
             options.heartbeatService,
             options.logger,

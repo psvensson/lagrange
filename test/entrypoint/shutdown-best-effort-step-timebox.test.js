@@ -25,9 +25,9 @@ test('fix C: a step slower than the time-box returns near the timeout, not the s
   async (t) => {
     const {logger, calls} = makeCapturingLogger();
     const startedAt = Date.now();
-    // A step that never settles — stands in for a control-plane write hung under churn.
+    // A step that never settles — stands in for the local logs-flush hung under churn.
     await timeBoxBestEffortShutdownStep(
-      logger, 'SIGTERM', 'publishNodeShutdownStatus', 50,
+      logger, 'SIGTERM', 'shutdownLogsTablePersistence', 50,
       () => new Promise(() => {}),
     );
     const elapsed = Date.now() - startedAt;
@@ -36,10 +36,10 @@ test('fix C: a step slower than the time-box returns near the timeout, not the s
       `time-box returned in ${elapsed}ms (< 1000ms), did not wait on the hung step`,
     );
     const warned = calls.warn.some((c) =>
-      /time-box/i.test(c.msg) && c.ctx?.step === 'publishNodeShutdownStatus');
+      /time-box/i.test(c.msg) && c.ctx?.step === 'shutdownLogsTablePersistence');
     t.ok(warned, 'a timed-out best-effort step logs the time-box warning');
     const timing = calls.info.find((c) =>
-      c.ctx?.step === 'publishNodeShutdownStatus');
+      c.ctx?.step === 'shutdownLogsTablePersistence');
     t.equal(timing?.ctx?.timedOut, true, 'timing log marks the step timedOut=true');
   });
 
