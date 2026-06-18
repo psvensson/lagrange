@@ -120,6 +120,33 @@ function excludeUnavailableNodeIds(nodeIds = [], unavailableNodeIds = new Set())
   );
 }
 
+// CL-001 / cp-pub-01 (regression 8f5bc72a): the published-baseline FLOOR. A
+// baseline node trimmed by readiness-exclusion is only safe to re-admit into the
+// published active set when BOTH liveness conjuncts held (process+transport alive
+// with a fresh lease) yet strict-mode upstream still excluded it — i.e. the
+// projection recorded reason `grace_conditions_met_but_excluded`. A baseline node
+// excluded because it is genuinely transport-dead (`no_runtime_transport_evidence`)
+// or stale (`stale_lease_and_heartbeat`) must NOT be floored: keeping a dead node
+// in the published set inflates the remove-safety denominator (the dangerous
+// direction). Trimming a live node is merely a liveness stall (safe direction).
+function resolveGraceFlooredBaselineNodeIds(publicationConvergence = null) {
+  const projectionDiagnostics = resolveProjectionDiagnostics(publicationConvergence);
+  const retentionGraceMisses = Array.isArray(
+    projectionDiagnostics?.retentionGraceMisses,
+  ) ?
+    projectionDiagnostics.retentionGraceMisses :
+    [];
+  return normalizeNodeIdList(
+    retentionGraceMisses
+      .filter((miss) =>
+        miss &&
+        typeof miss === TYPEOF.OBJECT &&
+        miss.reason === 'grace_conditions_met_but_excluded',
+      )
+      .map((miss) => miss.nodeId),
+  );
+}
+
 function readPublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
     const value = Number(row?.[key]);
@@ -332,10 +359,25 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   const projectionDiagnostics = resolveProjectionDiagnostics(
     normalizedPublicationConvergence,
   );
+  const admissionBlockedNodeIdSet = new Set(
+    resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+  );
   const unavailableNodeIdSet = new Set([
-    ...resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+    ...admissionBlockedNodeIdSet,
     ...resolveReadinessExcludedNodeIds(normalizedPublicationConvergence),
   ]);
+  // The published baseline (the remove-safety denominator) applies the unavailable
+  // set EXCEPT for grace-floored live nodes (cp-pub-01 regression fix). An
+  // admission-blocked node is never floored even if it also has a grace miss.
+  const graceFlooredBaselineNodeIdSet = new Set(
+    resolveGraceFlooredBaselineNodeIds(normalizedPublicationConvergence),
+  );
+  const publishedBaselineUnavailableNodeIdSet = new Set(
+    [...unavailableNodeIdSet].filter((nodeId) =>
+      admissionBlockedNodeIdSet.has(nodeId) ||
+      !graceFlooredBaselineNodeIdSet.has(nodeId),
+    ),
+  );
   const publishedActiveNodeIds = normalizeNodeIdList(
     Array.isArray(normalizedPublicationConvergence?.publishedActiveNodeIds) ?
       normalizedPublicationConvergence.publishedActiveNodeIds :
@@ -385,7 +427,7 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   ]);
   const admittedPublishedActiveNodeIds = excludeUnavailableNodeIds(
     publishedActiveNodeIds,
-    unavailableNodeIdSet,
+    publishedBaselineUnavailableNodeIdSet,
   );
   const admittedProjectedServingNodeIds = excludeUnavailableNodeIds(
     projectedServingNodeIds,
