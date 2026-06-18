@@ -422,11 +422,35 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     const sourceLeadershipReleaseFresh =
       safetySnapshot?.sourceLeadershipReleaseObserved === true ||
       safetySnapshot?.handoffRequestRetrySuppressed === true;
+    // CL-043 (2026-06-18): a surplus-drain REPLACE on a priority partition removes a
+    // source that is the partition LEADER. The snapshot can only observe the successor
+    // via the persisted replacement raft_role + partition leader_node_id rows, which lag
+    // live raft leadership (CL-016/CL-035 write-through family). When they lag, the gate
+    // wedges in WAIT_REPLACEMENT_LEADER_OWNERSHIP and the drain defers indefinitely
+    // (control plane never quiesces). The completed replacement-leader ELECTION evidence
+    // means the EXACT replacement replica acknowledged its leader-election handoff request
+    // (it accepted the election or was already a live follower) — a fresh successor-
+    // candidate signal independent of those lagging rows, and exactly what the priority-
+    // recovery completion path already trusts. Authorize removal on it for the SAME class
+    // of priority partitions even outside priority-recovery completion, requiring the
+    // EXACT replacement replica (not just any replica) and keeping every other guardrail
+    // (source leadership released, replacement voter-ready, ownership not yet row-observed).
+    // This is SAFE because: (a) quorum COUNT is enforced INDEPENDENTLY upstream
+    // (operation-workflow-remove-safety-evaluator.js minReplicaCount + published-membership
+    // checks, both gated on !priorityRecoveryCompletionSafe and run BEFORE this gate), so a
+    // voter floor always remains; (b) the replacement is voter-ready. The evidence proves
+    // the election was requested/accepted, NOT necessarily already won — so the worst case
+    // if that specific election loses is a brief NORMAL raft re-election among the remaining
+    // voter-ready replicas (a transient liveness dip), never a quorum loss. This governs
+    // leadership SUCCESSION only and cannot drop voters below the minimum.
+    const replacementElectionAuthorizesRemoval =
+      replacementElectionCompletionReady &&
+      (options.priorityRecoveryCompletionSafe === true ||
+        replacementElectionCompletedForCurrentReplica);
     return (
-      options.priorityRecoveryCompletionSafe === true &&
+      replacementElectionAuthorizesRemoval &&
       sourceLeadershipReleaseConfirmed &&
       sourceLeadershipReleaseFresh &&
-      replacementElectionCompletionReady &&
       safetySnapshot?.replacementLeaderOwnershipObserved !== true &&
       this.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
         options.operation || null,
