@@ -216,13 +216,15 @@ function stepCommit(root, quest, options = {}) {
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
   clearPending(root, quest.id);
   writeReport(root, quest.id);
-  // Persist the Quest's own scope-clean work once it finishes (R1). Auto-commit is a
-  // no-op outside a git work tree and refuses until the commit gate is met (quest
-  // finished without errors + verified), so it is safe to call unconditionally. It
-  // commits only — it never pushes.
+  // Persist the Quest's own scope-clean work. Once the Quest finishes (R1) this is the
+  // durable terminal commit; while it is still running it is a squashable CHECKPOINT
+  // commit, gated on source-change verification rather than a terminal status, so a
+  // supervised attempt is never left to accumulate in the dirty tree. Auto-commit is a
+  // no-op outside a git work tree and refuses until its gate is met, so it is safe to
+  // call unconditionally. It commits only — it never pushes.
   const commit = outcome.violations.length > 0 ?
     {committed: false, skipped: 'attempt-violations'} :
-    autoCommitQuest(root, quest.id);
+    autoCommitQuest(root, quest.id, {checkpoint: !questOutcome.done});
   return {
     frontier: def.id,
     before: pending.before.metric,

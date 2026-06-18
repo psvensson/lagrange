@@ -29,7 +29,7 @@ import {
   stateFilePath,
 } from './store.js';
 import {reportFilePath} from './report.js';
-import {auditQuest, commitGate} from './audit.js';
+import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {
   expectedChangeDir,
   changedPathsFromDiffContent,
@@ -109,9 +109,13 @@ function gitDirtyFiles(root) {
 export function buildHandoff(root, quest, options = {}) {
   // The commit decision is gated ONLY by the minimal commit gate (quest finished
   // without errors + source-change verification). The full audit is still computed
-  // for informational reporting, but it no longer blocks the commit.
+  // for informational reporting, but it no longer blocks the commit. In checkpoint
+  // mode the terminal requirement is dropped (source-change verification still
+  // applies) so a long non-terminal Quest persists each verified attempt instead of
+  // accumulating an unrecoverable dirty tree.
+  const checkpoint = options.checkpoint === true;
   const audit = auditQuest(root, quest);
-  const gate = commitGate(root, quest);
+  const gate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
   const scope = {
     ...questArtifactPaths(root, quest.id),
     diffReferenced: diffReferencedPaths(root, quest.id),
@@ -121,6 +125,7 @@ export function buildHandoff(root, quest, options = {}) {
   const ok = gate.ready;
   return {
     ok,
+    checkpoint,
     questId: quest.id,
     audit,
     gate,
@@ -134,7 +139,12 @@ const COAUTHOR_TRAILER =
   'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
 
 function commitMessage(handoff) {
-  return `${handoff.questId}: ${handoff.summary}\n\n${COAUTHOR_TRAILER}`;
+  // Checkpoints are squashable, mid-quest saves of one verified attempt; the
+  // subject marks them so they are distinguishable from the durable terminal commit.
+  const subject = handoff.checkpoint ?
+    `checkpoint(quest): ${handoff.questId}: ${handoff.summary}` :
+    `${handoff.questId}: ${handoff.summary}`;
+  return `${subject}\n\n${COAUTHOR_TRAILER}`;
 }
 
 function gitCommands(handoff) {
@@ -216,14 +226,19 @@ function insideWorkTree(root) {
 //   - commits only the Quest's in-scope pathspec, never the dirty-tree shape;
 //   - skips cleanly when there is nothing in scope to commit;
 //   - commits, nothing else — it never pushes.
-export function autoCommitQuest(root, questId) {
+export function autoCommitQuest(root, questId, options = {}) {
   if (!insideWorkTree(root)) {
     return {committed: false, skipped: 'not-a-git-work-tree'};
   }
+  const checkpoint = options.checkpoint === true;
   const quest = loadQuest(root, questId);
-  const handoff = buildHandoff(root, quest);
+  const handoff = buildHandoff(root, quest, {checkpoint});
   if (!handoff.ok) {
-    return {committed: false, skipped: 'commit-gate', gate: handoff.gate};
+    return {
+      committed: false,
+      skipped: checkpoint ? 'checkpoint-gate' : 'commit-gate',
+      gate: handoff.gate,
+    };
   }
   if (handoff.inScope.length === 0) {
     return {committed: false, skipped: 'nothing-in-scope'};
@@ -233,6 +248,7 @@ export function autoCommitQuest(root, questId) {
     ...handoff.inScope], {cwd: root, stdio: 'ignore'});
   return {
     committed: true,
+    checkpoint,
     paths: handoff.inScope,
     pushed: false,
     questId,

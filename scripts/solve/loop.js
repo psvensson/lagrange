@@ -499,11 +499,13 @@ export function makeRunContext(options = {}) {
   };
 }
 
-// Attempt the scope-clean auto-commit after a measured attempt. The commit gate
-// itself (quest finished without errors + verified) decides whether anything is
-// committed, so this is a no-op until the quest finishes; it never pushes. Also a
-// no-op outside a git work tree, on non-measuring samples, and when the change
-// artifact does not resolve, so throwaway tmpdir tests never create commits.
+// Attempt the scope-clean auto-commit after a measured attempt. While the Quest is
+// still running this is a CHECKPOINT commit, gated only on source-change verification
+// (not on a terminal status), so a long non-terminal Quest persists each verified,
+// scope-clean attempt instead of accumulating an unrecoverable dirty tree; the durable
+// terminal commit at SOLVED/EXHAUSTED still happens at the loop's terminal sites. It
+// never pushes. Also a no-op outside a git work tree, on non-measuring samples, and
+// when the change artifact does not resolve, so throwaway tmpdir tests never commit.
 function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
   if (!ctx.autoCommit) return;
   const event = outcome?.event;
@@ -512,13 +514,19 @@ function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
   const resolves = ctx.honestyCtx.inspectChangeRef ?
     Boolean(ctx.honestyCtx.inspectChangeRef(event.changeRef)?.valid) : true;
   if (!resolves) return;
-  const measuredCount = readLog(root, quest.id).filter((e) =>
+  const log = readLog(root, quest.id);
+  const measuredCount = log.filter((e) =>
     e.type === EVENT_ATTEMPT &&
     e.frontier === pick.def.id &&
     e.invalidSample !== true).length;
   if (measuredCount % ctx.commitEvery !== 0) return;
+  // If the Quest has already terminalized this cycle, let the durable terminal commit
+  // own it; otherwise persist this attempt as a squashable checkpoint.
+  const terminalized = log.some((e) => e.type === EVENT_QUEST &&
+    (e.status === STATUS_SOLVED || e.status === STATUS_EXHAUSTED));
+  if (terminalized) return;
   writeReportForQuest(root, quest);
-  return autoCommitQuest(root, quest.id);
+  return autoCommitQuest(root, quest.id, {checkpoint: true});
 }
 
 // Seal the goalposts on first declaration and reject any later goalpost drift. Shared

@@ -294,9 +294,10 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
   });
 });
 
-// The loop auto-commits the quest's scope-clean work once the quest FINISHES
-// without errors (and any source change is verified) — the commit gate. It never
-// commits mid-run and never pushes.
+// The loop auto-commits the quest's scope-clean work. Each verified, scope-clean
+// attempt is persisted mid-run as a squashable `checkpoint(quest):` commit (so a long
+// non-terminal quest never accumulates an unrecoverable dirty tree), and the quest's
+// finish produces one durable terminal commit. It never pushes.
 tap.test('auto-commit on quest finish (loop path)', async (t) => {
   function initGit(root) {
     const run = (...args) => execFileSync('git', args, {cwd: root, stdio: 'ignore'});
@@ -339,7 +340,7 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
       {cwd: root, encoding: 'utf8'}).trim();
   }
 
-  t.test('commits once when the quest finishes, never pushes', (t) => {
+  t.test('checkpoints each verified attempt and makes a terminal commit, never pushes', (t) => {
     const {root, quest, changeDir} = setup({metric: 2, target: 0});
     saveQuest(root, quest);
     initGit(root);
@@ -350,9 +351,17 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
     });
     t.equal(res.outcome, STATUS_SOLVED, 'quest solved');
     const after = Number(commitCount(root));
-    // Mid-run attempts do not commit (the quest has not finished); the finish
-    // produces a single scope-clean commit.
-    t.equal(after - before, 1, 'exactly one commit, made when the quest finished');
+    // Each verified attempt is checkpointed mid-run; the finish adds the durable
+    // terminal commit. So there is at least one checkpoint plus exactly one terminal.
+    const subjects = execFileSync('git',
+      ['log', '--format=%s', '-n', String(after - before)],
+      {cwd: root, encoding: 'utf8'}).trim().split('\n').filter(Boolean);
+    const checkpoints = subjects.filter((s) => s.startsWith('checkpoint(quest):'));
+    const terminals = subjects.filter((s) => !s.startsWith('checkpoint(quest):'));
+    t.ok(checkpoints.length >= 1, 'mid-run attempts are persisted as checkpoints');
+    t.equal(terminals.length, 1, 'exactly one durable terminal commit on finish');
+    t.notMatch(subjects[0], /^checkpoint\(quest\):/u,
+      'the HEAD commit is the terminal commit, not a checkpoint');
     const msg = execFileSync('git', ['log', '-1', '--format=%B'],
       {cwd: root, encoding: 'utf8'});
     t.match(msg, /Co-authored-by: Copilot/, 'the commit carries the co-author trailer');

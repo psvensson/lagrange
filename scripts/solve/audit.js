@@ -347,6 +347,23 @@ export function commitGate(root, quest) {
   };
 }
 
+// Checkpoint gate: like commitGate but WITHOUT the terminal requirement, so the
+// Solver can persist a verified, scope-clean attempt MID-quest instead of letting the
+// working tree accumulate into an unrecoverable blob over a long non-terminal run. A
+// source change still requires a later subagent-verification finding, so unverified
+// experimental edits are never checkpointed.
+export function checkpointGate(root, quest) {
+  const log = readLog(root, quest.id);
+  const startIndex = strictAuditStartIndex(log);
+  const problems = auditSourceChangeVerification(root, quest, log, startIndex);
+  return {
+    questId: quest.id,
+    ready: problems.length === 0,
+    status: problems.length === 0 ? 'pass' : 'fail',
+    problems,
+  };
+}
+
 export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
