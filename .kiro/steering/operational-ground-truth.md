@@ -25,13 +25,23 @@ any distributed-harness or convergence work:
   and the substrate map in
   [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
   The docker statistical gate (`scripts/rolling-restart-stat-gate.sh`) is
-  non-deterministic and expensive: it is last-resort certification of a landed
-  fix, NOT the iteration loop. Never conclude from a single gate run, but do not
-  over-sample either — match the sample size to the question. Default to N=3-4
-  for latency/mechanistic gates and stop early once the answer is conclusive
-  (e.g. a hard breach or a clean mechanistic confirmation needs no more runs);
-  escalate to N≥8 ONLY for a convergence-rate promotion verdict where the
-  statistic itself is the claim. Do not default to N=8 every iteration.
+  non-deterministic and expensive (each run is ~5–10 min): it is last-resort
+  certification of a landed fix, NOT the iteration loop. **Start with the lowest N
+  that could answer the question and escalate only when the result forces it.**
+  Each run costs wall-clock you can't get back, so the burden is on justifying a
+  LARGER N, never a smaller one. Concretely:
+  - **Default to the smallest informative N, usually N=3.** N=3 is not merely a
+    probe — `rolling-restart-core-stability`'s `doneWhen` is *3 consecutive
+    scenario-PASS*, so a clean N=3 (3/3) literally satisfies closure (confirm with
+    `solve.js probe`). A single hard breach, corruption, or clean mechanistic
+    confirmation is also conclusive at N=1–3 — stop early; more runs add nothing.
+  - **Escalate ONLY when the small run is genuinely inconclusive** — e.g. a
+    borderline/mixed pass rate (2/3) where you need to tell variance from signal,
+    or a convergence-*rate* promotion verdict where the statistic itself is the
+    claim. Then, and only then, go to N≥8.
+  - Never conclude a *rate* from N=1, and never default to N=8 every iteration —
+    both are sampling errors, one optimistic, one wasteful. Match the sample size
+    to the question, smallest-first.
   BEFORE queuing a gate, run `npm run analyze:latent-blockers`: the gate is a
   serial max-frequency oracle that shows only the single dominant reason and masks
   the rest, so do not spend a ~40-min gate to learn the next layer the corpus

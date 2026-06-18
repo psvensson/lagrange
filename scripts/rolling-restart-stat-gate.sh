@@ -9,9 +9,19 @@
 #
 # See .kiro/specs/metastable-convergence-resilience/ (Phase 0).
 #
+# Sample size — SMALLEST FIRST (see .kiro/steering/operational-ground-truth.md
+# "Deterministic-first, gate-last"): start with the lowest N that could answer the
+# question and escalate ONLY when a small run is inconclusive. Default to N=3 — it
+# is also the `rolling-restart-core-stability` doneWhen streak (3 consecutive
+# scenario-PASS), so a clean 3/3 satisfies closure; a hard breach/corruption is
+# conclusive even sooner. Reserve N>=8 for a convergence-RATE promotion verdict
+# where the statistic itself is the claim. The N=10 arg-default below is a legacy
+# ceiling, NOT a recommendation — pass the run count explicitly, lowest-first.
+#
 # Usage:
-#   bash scripts/rolling-restart-stat-gate.sh            # N=10 (default)
-#   bash scripts/rolling-restart-stat-gate.sh 5          # N=5
+#   bash scripts/rolling-restart-stat-gate.sh 3          # N=3  (start here)
+#   bash scripts/rolling-restart-stat-gate.sh 8          # N=8  (rate promotion verdict)
+#   bash scripts/rolling-restart-stat-gate.sh            # N=10 (legacy default — avoid)
 #   N=3 CONFIG=test/distributed/config/local.json bash scripts/rolling-restart-stat-gate.sh
 #   DEBUG_LOGS=1 bash scripts/rolling-restart-stat-gate.sh 3   # capture decision trace
 #
