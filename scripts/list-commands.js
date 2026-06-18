@@ -180,6 +180,10 @@ const COMMAND_GROUPS = Object.freeze([
         command: 'npm run summarize:harness -- --report-dir test-output/reports',
         description: 'List latest harness reports by scenario and status.',
       }),
+      Object.freeze({
+        command: 'npm run analyze:latent-blockers -- [--markdown|--json]',
+        description: 'Census the masked blocker distribution the serial gate hides: peel-order + emerging/masked candidates + grounding pack across the whole report corpus (Phase 0/L5 of the latent-blocker census).',
+      }),
     ]),
   }),
   Object.freeze({

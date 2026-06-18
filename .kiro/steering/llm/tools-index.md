@@ -32,6 +32,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:cl039-link-rate` — `node scripts/analyze-cl039-link-rate.js`
 - `analyze:distributed-failure` — Print consolidated distributed report and triage diagnostics.
 - `analyze:fix-engagement` — Report whether candidate fixes actually engaged in a run.
+- `analyze:latent-blockers` — Census the masked blocker distribution the serial gate hides: peel-order + emerging/masked candidates + grounding pack across the whole report corpus (Phase 0/L5 of the latent-blocker census).
 - `analyze:owner-decisions` — Print the topology owner decision table/state-machine index.
 - `analyze:owner-explain` — Explain topology evidence snapshot to owner decision outcome.
 - `analyze:owner-files` — Find files most associated with an owner and optional boundary.
@@ -215,4 +216,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-140 scripts indexed; 63 have a curated description, 77 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+141 scripts indexed; 64 have a curated description, 77 fall back to their raw command. Improve coverage in the two sources named in the header comment.
