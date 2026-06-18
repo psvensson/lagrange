@@ -23,6 +23,14 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_VPBYI = 'Failed to publish node shutdown status';
 const LOCAL_STR_14077 = 'Shutdown already in progress, forcing process exit';
 const LOCAL_STR_SHUTDOWN_STEP = 'Shutdown step timing';
+const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
+  'Shutdown best-effort step exceeded time-box, continuing to exit';
+// CL-030 fix C: the two control-plane-dependent best-effort drain steps
+// (publishNodeShutdownStatus, shutdownLogsTablePersistence) can each block ~5-7s
+// under rolling-restart churn. They already swallow their own errors, so the only
+// risk is BLOCKING the path to exit(0). Time-box them so a slow control plane never
+// makes a graceful drain race the docker SIGKILL grace.
+const SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS = 3000;
 const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';
 const LOCAL_STR_BEFOREEXIT = 'beforeExit';
@@ -224,6 +232,50 @@ async function timeShutdownStep(logger, signal, step, run) {
 }
 
 /**
+ * Time-box a best-effort shutdown step (CL-030 fix C). Races the step against
+ * timeoutMs; if the timeout wins, log and CONTINUE (the step keeps running in the
+ * background but is abandoned by process.exit shortly after). The step already
+ * swallows its own errors, so this only bounds blocking, never changes error flow.
+ * @param {Object} logger
+ * @param {string} signal
+ * @param {string} step
+ * @param {number} timeoutMs
+ * @param {() => Promise<*>} run
+ * @return {Promise<void>}
+ */
+async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, run) {
+  const startedAt = Date.now();
+  let timer = null;
+  const timedOut = Symbol('timedOut');
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(timedOut), timeoutMs);
+  });
+  try {
+    const outcome = await Promise.race([
+      Promise.resolve(run()).then(() => null),
+      timeout,
+    ]);
+    logger.info(LOCAL_STR_SHUTDOWN_STEP, {
+      signal,
+      step,
+      elapsedMs: Date.now() - startedAt,
+      timedOut: outcome === timedOut,
+    });
+    if (outcome === timedOut) {
+      logger.warn(LOCAL_STR_SHUTDOWN_STEP_TIMEBOX, {
+        signal,
+        step,
+        timeoutMs,
+      });
+    }
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
  * Build one shared shutdown signal handler for seed and join branches.
  * @param {Object} options
  * @return {(signal: string) => Promise<void>}
@@ -264,8 +316,9 @@ function createShutdownSignalHandler(options) {
         reasons: drainingSnapshot?.reasons || [],
         drainDeadlineMs,
       });
-      await timeShutdownStep(
-        options.logger, signal, 'publishNodeShutdownStatus', () =>
+      await timeBoxBestEffortShutdownStep(
+        options.logger, signal, 'publishNodeShutdownStatus',
+        SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS, () =>
           publishNodeShutdownStatus(
             options.heartbeatService,
             options.logger,
@@ -276,8 +329,9 @@ function createShutdownSignalHandler(options) {
       const logsTableService = await resolveLogsTableServiceFromPersistence(
         options.logsPersistence,
       );
-      await timeShutdownStep(
-        options.logger, signal, 'shutdownLogsTablePersistence', () =>
+      await timeBoxBestEffortShutdownStep(
+        options.logger, signal, 'shutdownLogsTablePersistence',
+        SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS, () =>
           shutdownLogsTablePersistence(logsTableService, options.logger),
       );
       await timeShutdownStep(
@@ -426,4 +480,5 @@ export {
   shutdownDynamicConfigWiring,
   startDynamicConfigWiring,
   startLogsTablePersistence,
+  timeBoxBestEffortShutdownStep,
 };
