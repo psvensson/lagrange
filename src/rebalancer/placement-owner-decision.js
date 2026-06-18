@@ -207,8 +207,22 @@ function buildPlacementOwnerScoreResult(evidence, filterResult) {
 
 function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   const targetCount = Math.min(evidence.targetCount, scoreResult.rankedNodeIds.length);
-  const reservedNodeIds = scoreResult.rankedNodeIds
-    .filter((nodeId) => evidence.transitionReservations.has(nodeId))
+  // Transition reservations (in-flight entity establishment) take precedence over
+  // CL-038 leader retention: when the budget is tight, retaining the leader must
+  // never EVICT a node mid-establishment (that would re-introduce the churn the
+  // lever exists to remove). So fill from transition reservations first, then add
+  // the surplus-drain leader node only on the leftover budget. Filtering on
+  // rankedNodeIds keeps both classes feasible (capacity-accepted) — a
+  // capacity-rejected leader is never floored back in.
+  const transitionReserved = scoreResult.rankedNodeIds
+    .filter((nodeId) => evidence.transitionReservations.has(nodeId));
+  const leaderReserved =
+    evidence.leaderRetentionNodeId.length > NUM.ZERO &&
+      scoreResult.rankedNodeIds.includes(evidence.leaderRetentionNodeId) &&
+      !evidence.transitionReservations.has(evidence.leaderRetentionNodeId) ?
+      [evidence.leaderRetentionNodeId] :
+      [];
+  const reservedNodeIds = [...transitionReserved, ...leaderReserved]
     .slice(NUM.ZERO, targetCount);
   const reservedNodeIdSet = new Set(reservedNodeIds);
   const deferredNodeIds = scoreResult.rankedNodeIds
@@ -222,8 +236,14 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
       PLACEMENT_OWNER_RESERVATION_STATE.RESERVATIONS_APPLIED :
       PLACEMENT_OWNER_RESERVATION_STATE.NO_RESERVATIONS;
   const reasons = [];
-  if (reservedNodeIds.length > NUM.ZERO) {
+  if (reservedNodeIds.some(
+    (nodeId) => evidence.transitionReservations.has(nodeId),
+  )) {
     reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.SAME_ENTITY_TRANSITION);
+  }
+  if (evidence.leaderRetentionNodeId.length > NUM.ZERO &&
+      reservedNodeIds.includes(evidence.leaderRetentionNodeId)) {
+    reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.LEADER_RETENTION);
   }
   if (deferredNodeIds.length > NUM.ZERO) {
     reasons.push(

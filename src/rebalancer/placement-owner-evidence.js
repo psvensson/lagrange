@@ -1,4 +1,5 @@
 import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PLACEMENT_OWNER,
   PLACEMENT_OWNER_POLICY,
@@ -102,6 +103,12 @@ function normalizeCandidateNodes(nodes) {
     });
 }
 
+function normalizeRaftRole(value) {
+  return typeof value === TYPEOF.STRING ?
+    value.trim().toLowerCase() :
+    PLACEMENT_OWNER_EMPTY_STRING;
+}
+
 function normalizeCurrentReplicas(currentReplicas) {
   if (!Array.isArray(currentReplicas)) {
     return [];
@@ -112,9 +119,30 @@ function normalizeCurrentReplicas(currentReplicas) {
       return Object.freeze({
         replica,
         nodeId,
+        raftRole: normalizeRaftRole(replica?.[COLUMN.RAFT_ROLE]),
         valid: nodeId.length > NUM.ZERO,
       });
     });
+}
+
+// CL-038 churn-root lever: when a partition is OVER target (a surplus drain),
+// resolve the node that currently hosts the raft leader so the placement owner
+// can RETAIN it instead of draining it. Draining the leader's replica forces a
+// re-election, and every re-election resets the topology-quiescence quiet window
+// — the demonstrated reason a 5-node rolling restart cannot settle within the
+// wall budget. Returns '' unless there is a genuine surplus to drain
+// (valid replica count > targetCount), so at/under-target placement is unchanged.
+// Feasibility is enforced downstream: the reservation only retains a node that
+// survived the capacity filter, so an unhealthy/over-capacity leader still drains.
+function resolveLeaderRetentionNodeId(currentReplicas, targetCount) {
+  const validReplicas = currentReplicas.filter((replica) => replica.valid);
+  if (validReplicas.length <= targetCount) {
+    return PLACEMENT_OWNER_EMPTY_STRING;
+  }
+  const leaderReplica = validReplicas.find(
+    (replica) => replica.raftRole === RAFT_ROLE.LEADER,
+  );
+  return leaderReplica ? leaderReplica.nodeId : PLACEMENT_OWNER_EMPTY_STRING;
 }
 
 function normalizeCapacityDiagnostics(capacityDiagnostics, fallbackCount) {
@@ -244,6 +272,10 @@ function normalizePlacementOwnerEvidence(options = {}) {
     latencyGroupContext: buildLatencyGroupContext(
       candidateNodes,
       currentReplicas,
+    ),
+    leaderRetentionNodeId: resolveLeaderRetentionNodeId(
+      currentReplicas,
+      normalizePositiveInteger(options.targetCount),
     ),
     forbiddenReinterpretations: PLACEMENT_OWNER_REINTERPRETATION,
   });
