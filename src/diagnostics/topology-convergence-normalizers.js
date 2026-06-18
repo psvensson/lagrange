@@ -88,6 +88,21 @@ import {
   buildPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 
+const READINESS_PROJECTION_EXCLUDED_CLASS_CODE =
+  'readiness_projection_excluded';
+export const READINESS_PROJECTION_EXCLUDED_SOURCE =
+  'publicationConvergence.projectionDiagnostics';
+const READINESS_PROJECTION_EXCLUDED_CAUSE =
+  'readiness_projection_excluded';
+const READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE =
+  'cluster_member_unhealthy';
+const READINESS_PROJECTION_PROGRESS_STATE = 'readiness_retryable';
+const READINESS_PROJECTION_PROGRESS_NEXT_ACTION =
+  'wait_for_readiness_support';
+const READINESS_PROJECTION_PROGRESS_TERMINAL_STATE = 'satisfied';
+const READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY =
+  'cluster_member_health';
+
 // Scenarios & Reports
 export function firstScenario(report) {
   const scenarios = arrayOrEmpty(report.scenarios);
@@ -330,6 +345,69 @@ export function normalizeReadinessSupportEvidence(readinessFailure, activeGate) 
   };
 }
 
+export function deriveProjectionReadinessFailure(publication) {
+  const projectionDiagnostics = asRecord(publication.projectionDiagnostics);
+  const missingPublishedNodeIds = arrayOrEmpty(
+    publication.missingPublishedNodeIds,
+  );
+  const readinessExcludedNodeIds = arrayOrEmpty(
+    projectionDiagnostics.readinessExcludedNodeIds,
+  );
+  const unhealthyExcludedNodeIds = arrayOrEmpty(
+    projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
+  );
+  const excludedNodeIdSet = new Set([
+    ...readinessExcludedNodeIds,
+    ...unhealthyExcludedNodeIds,
+  ]);
+  const blockedNodeIds = missingPublishedNodeIds
+    .filter((nodeId) => excludedNodeIdSet.has(nodeId))
+    .sort();
+  if (blockedNodeIds.length === SOURCE_ORDER_BASE) {
+    return {};
+  }
+  const unhealthyNodeIdSet = new Set(unhealthyExcludedNodeIds);
+  const nodeReasonsByNodeId = {};
+  for (const nodeId of blockedNodeIds) {
+    nodeReasonsByNodeId[nodeId] = unhealthyNodeIdSet.has(nodeId) ?
+      [
+        READINESS_PROJECTION_EXCLUDED_CAUSE,
+        READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE,
+      ] :
+      [READINESS_PROJECTION_EXCLUDED_CAUSE];
+  }
+  const hasUnhealthyBlockedNode = blockedNodeIds.some((nodeId) =>
+    unhealthyNodeIdSet.has(nodeId),
+  );
+  const cause = hasUnhealthyBlockedNode ?
+    READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE :
+    READINESS_PROJECTION_EXCLUDED_CAUSE;
+  return {
+    mode: textOrUnknown(projectionDiagnostics.readinessDecisionMode),
+    classCode: READINESS_PROJECTION_EXCLUDED_CLASS_CODE,
+    terminalReason: UNKNOWN_VALUE,
+    source: READINESS_PROJECTION_EXCLUDED_SOURCE,
+    cause,
+    nodeReasonsByNodeId,
+    progressSignal: {
+      attemptsSinceProgress: UNKNOWN_VALUE,
+      maxAttempts: UNKNOWN_VALUE,
+      stalled: false,
+    },
+    progressContract: {
+      owner: OWNER.READINESS,
+      boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+      state: READINESS_PROJECTION_PROGRESS_STATE,
+      reason: cause,
+      nextAction: READINESS_PROJECTION_PROGRESS_NEXT_ACTION,
+      wakeSource: READINESS_PROJECTION_EXCLUDED_SOURCE,
+      retryAfterMs: SOURCE_ORDER_BASE,
+      terminalState: READINESS_PROJECTION_PROGRESS_TERMINAL_STATE,
+      blockingDependency: READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY,
+    },
+  };
+}
+
 // Top Reasons Normalizer
 export function normalizeTopReasons(topReasons) {
   return arrayOrEmpty(topReasons).map((entry) => ({
@@ -392,20 +470,35 @@ export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
   if (Object.keys(coverage).length === SOURCE_ORDER_BASE) {
     return {};
   }
-  const selectedObservedNodeIds = arrayOrEmpty(coverage.selectedObservedNodeIds);
-  const completeCoverage = coverage.completeCoverage === true || coverage.snapshotCoverageComplete === true;
+  const selectedObservedNodeIds = arrayOrEmpty(
+    coverage.selectedObservedNodeIds,
+  );
+  const completeCoverage =
+    coverage.completeCoverage === true ||
+    coverage.snapshotCoverageComplete === true;
   const rawContract = coverage.progressContract || coverage.progress?.progressContract;
-  
-  const isRepairDeferred = coverage.selectedSnapshotRepairDeferred === true || coverage.selectedSnapshotObservationMode === 'repair_deferred';
+
+  const isRepairDeferred =
+    coverage.selectedSnapshotRepairDeferred === true ||
+    coverage.selectedSnapshotObservationMode === 'repair_deferred';
   const selectedSnapshotError = firstText(
     coverage.selectedSnapshotError,
     coverage.selectedError,
     coverage.selectedSnapshotReachabilityError,
     coverage.selectedReachabilityError,
   );
-  
-  const fallbackState = completeCoverage ? 'satisfied' : (isRepairDeferred ? 'deferred' : (selectedSnapshotError ? 'blocked' : 'deferred'));
-  const fallbackReason = completeCoverage ? 'snapshot_coverage_complete' : (selectedSnapshotError ? `snapshot_coverage_incomplete: ${selectedSnapshotError}` : 'snapshot_coverage_incomplete');
+  const fallbackState = completeCoverage ?
+    'satisfied' :
+    isRepairDeferred ?
+      'deferred' :
+      selectedSnapshotError ?
+        'blocked' :
+        'deferred';
+  const fallbackReason = completeCoverage ?
+    'snapshot_coverage_complete' :
+    selectedSnapshotError ?
+      `snapshot_coverage_incomplete: ${selectedSnapshotError}` :
+      'snapshot_coverage_incomplete';
   const fallbackNextAction = completeCoverage ? 'none' : (coverage.selectedSnapshotObservationNextAction || 'retry');
   const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
   const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof coverage.selectedSnapshotObservationRetryAfterMs === 'number' ? coverage.selectedSnapshotObservationRetryAfterMs : 1000);
@@ -709,12 +802,21 @@ export function normalizeTopologyConvergenceInput(input = {}) {
       priorityRecoveryPartitionWitnessesEvidence.items,
       priorityRecoveryDecisionSnapshots,
     );
+  const projectionReadinessFailure =
+    deriveProjectionReadinessFailure(publication);
   const readinessFailureEvidence = firstRecordWithSource(
     recordCandidate(scenario.readinessFailure, SOURCE_PATH.REPORT_SCENARIO_READINESS_FAILURE),
     recordCandidate(summary.readinessFailure, SOURCE_PATH.READINESS_FAILURE),
     recordCandidate(
       activeGate.readinessFailure,
       flattenEvidencePath(activeGateEvidence.sourcePath, SOURCE_FIELD.READINESS_FAILURE),
+    ),
+    recordCandidate(
+      projectionReadinessFailure,
+      flattenEvidencePath(
+        publicationEvidence.sourcePath,
+        SOURCE_FIELD.PROJECTION_DIAGNOSTICS,
+      ),
     ),
     recordCandidate(failureBundle.readiness?.failure, SOURCE_PATH.READINESS_FAILURE),
     recordCandidate(triageSummary.readiness?.failure, SOURCE_PATH.READINESS_FAILURE),

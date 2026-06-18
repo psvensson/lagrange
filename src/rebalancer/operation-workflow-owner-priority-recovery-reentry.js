@@ -70,6 +70,13 @@ const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES = Object.freeze(
   ]),
 );
 
+const OPERATION_WORKFLOW_OWNER_SOURCE_REMOVAL_PROGRESS_PHASES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+    ]),
+  );
+
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES =
   Object.freeze(new Set([
     PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
@@ -184,6 +191,19 @@ function isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) {
       true;
 }
 
+function isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot) {
+  return OPERATION_WORKFLOW_OWNER_SOURCE_REMOVAL_PROGRESS_PHASES.has(
+    snapshot?.actuation?.workflowProgressPhaseId,
+  ) &&
+    OPERATION_WORKFLOW_OWNER_SOURCE_REMOVAL_PROGRESS_PHASES.has(
+      snapshot?.progress?.workflowProgressPhaseId,
+    ) &&
+    snapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
+      true;
+}
+
 function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
   owner,
   snapshot,
@@ -201,6 +221,8 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       snapshot,
       targetVisibilityState,
     );
+  const sourceRemovalProgressWait =
+    isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot);
   const representativeRerunRoute =
     snapshot?.progressContract?.representativeRerunRoute ||
     snapshot?.progress?.progressContract?.representativeRerunRoute ||
@@ -215,14 +237,16 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
     targetProgressWait:
       representativeRerunRoute !== 'blocked_model_route' && (
         isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
-        dispatchPendingTargetProgressWait === true
+        dispatchPendingTargetProgressWait === true ||
+        sourceRemovalProgressWait === true
       ),
     targetServiceTerminal:
       snapshot?.coordinator?.operation?.targetServiceTerminalState ===
         PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
       operation?.targetServiceTerminalState ===
         PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
-      dispatchPendingTargetProgressWait === true,
+      dispatchPendingTargetProgressWait === true ||
+      sourceRemovalProgressWait === true,
     locallyOwned: owner.repository.isOperationLocallyOwned(operation),
     remoteOwnerAvailable:
       typeof ownerNodeId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&

@@ -413,6 +413,77 @@ test(
 );
 
 test(
+  'replica-operation-liveness caps priority control-plane SYNCING stale timeout',
+  async (t) => {
+    const nowMs = 200000;
+    const stalePrioritySyncingOperation = {
+      operation_id: 'op-priority-syncing',
+      type: 'REPLACE',
+      partition_id: 'sql_transactions-p1',
+      entity_type: 'partition',
+      entity_id: 'sql_transactions-p1',
+      source_node_id: 'node-source',
+      source_replica_id: 'sql_transactions-p1-r5',
+      target_node_id: 'node-target',
+      replica_id: 'sql_transactions-p1-r6',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      updated_at: nowMs - 61000,
+    };
+    const freshOrdinarySyncingOperation = {
+      operation_id: 'op-ordinary-syncing',
+      type: 'REPLACE',
+      partition_id: 'ordinary_table-p1',
+      entity_type: 'partition',
+      entity_id: 'ordinary_table-p1',
+      source_node_id: 'node-source',
+      source_replica_id: 'ordinary_table-p1-r5',
+      target_node_id: 'node-target',
+      replica_id: 'ordinary_table-p1-r6',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      updated_at: nowMs - 61000,
+    };
+
+    const priorityRecord = normalizeReplicaOperationRecord(
+      stalePrioritySyncingOperation,
+      {nowMs},
+    );
+    const ordinaryRecord = normalizeReplicaOperationRecord(
+      freshOrdinarySyncingOperation,
+      {nowMs},
+    );
+    const summary = summarizeReplicaOperationLiveness([
+      stalePrioritySyncingOperation,
+      freshOrdinarySyncingOperation,
+    ], {
+      nowMs,
+    });
+
+    t.equal(
+      isReplicaOperationStale(priorityRecord, {nowMs}),
+      true,
+      'priority control-plane SYNCING should honor the owner 60s cap',
+    );
+    t.equal(
+      isReplicaOperationStale(ordinaryRecord, {nowMs}),
+      false,
+      'ordinary SYNCING rows should keep the generic syncing timeout',
+    );
+    t.equal(
+      summary.inFlightCount,
+      2,
+      'both syncing rows remain in the in-flight set',
+    );
+    t.equal(
+      summary.staleInFlightCount,
+      1,
+      'only the priority syncing row should be stale at 61 seconds',
+    );
+  },
+);
+
+test(
   'normalizeReplicaOperationRecord infers REMOVE type for failed source-removal rows without canonical columns',
   async (t) => {
     const record = normalizeReplicaOperationRecord({
@@ -515,12 +586,18 @@ test(
     );
 
     t.equal(
-      isReplicaOperationStale(oldRecord, { ...testOptions, ignorePreRestart: true }),
+      isReplicaOperationStale(oldRecord, {
+        ...testOptions,
+        ignorePreRestart: true,
+      }),
       false,
       'old record should NOT be stale with bypass enabled',
     );
     t.equal(
-      isReplicaOperationStale(newRecord, { ...testOptions, ignorePreRestart: true }),
+      isReplicaOperationStale(newRecord, {
+        ...testOptions,
+        ignorePreRestart: true,
+      }),
       true,
       'new record should still be stale with bypass enabled',
     );
@@ -557,8 +634,8 @@ test(
           service_id: 's2',
           node_id: 'node-B',
           started_at: 300, // Node B started at 300
-        }
-      ]
+        },
+      ],
     };
 
     // Owner is node-A (since sourceNodeId is node-A).
@@ -595,4 +672,3 @@ test(
     );
   },
 );
-

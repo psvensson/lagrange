@@ -109,6 +109,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
     }
 
     this.initialized = false;
+    this.listening = false;
 
     this.logger.info(ADMIN_LOG_MSG.SHUTDOWN, {
       nodeId: this.nodeId,

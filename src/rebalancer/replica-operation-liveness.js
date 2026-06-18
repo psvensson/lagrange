@@ -1,5 +1,8 @@
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
 import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   buildReplicaOperationSemanticWitnesses,
@@ -56,6 +59,7 @@ const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   TIME_MS.MINUTE *
   HOURS_PER_DAY *
   MINUTES_PER_HOUR;
+const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE;
 
 const REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
   REPLICA_OPERATION_STATUS_REMOVED,
@@ -530,9 +534,21 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
     options.stepTimeoutMsByWorkflowStep :
     DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP;
   const timeoutMs = Number(timeoutByStep[workflowStep]);
-  return Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO ?
-    Math.floor(timeoutMs) :
-    null;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+    return null;
+  }
+  const normalizedTimeoutMs = Math.floor(timeoutMs);
+  const partitionId = String(options.partitionId || '').trim();
+  if (
+    workflowStep === WORKFLOW_STEP.SYNCING &&
+    isPriorityControlPlanePartition({partitionId})
+  ) {
+    return Math.min(
+      normalizedTimeoutMs,
+      PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
+    );
+  }
+  return normalizedTimeoutMs;
 }
 
 function isReplicaOperationStale(record, options = {}) {
@@ -559,7 +575,10 @@ function isReplicaOperationStale(record, options = {}) {
       nowMs - updatedAtMs > staleTimeoutLookbackMs) {
     return false;
   }
-  const timeoutMs = resolveStepTimeoutMs(record.workflowStep, options);
+  const timeoutMs = resolveStepTimeoutMs(record.workflowStep, {
+    ...options,
+    partitionId: record.partitionId,
+  });
   if (!Number.isFinite(timeoutMs)) {
     return false;
   }
@@ -636,7 +655,10 @@ function buildReplicaOperationTimeline(record, options = {}) {
       status: record.status || UNKNOWN_STATUS,
       inFlight: isReplicaOperationInFlight(record, options),
       staleTimeout: isReplicaOperationStale(record, options),
-      timeoutMs: resolveStepTimeoutMs(record.workflowStep, options),
+      timeoutMs: resolveStepTimeoutMs(record.workflowStep, {
+        ...options,
+        partitionId: record.partitionId,
+      }),
     });
   }
 

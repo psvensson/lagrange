@@ -432,9 +432,20 @@ function buildControlPlaneQuiescenceSnapshot(options = {}) {
     normalizeNonNegativeInteger(
       snapshotProbe.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
     );
-  const staleInFlightDiscountCount = Math.max(
-    staleInFlightCount,
-    cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+  const rawAdditionalInFlightDiscountCount =
+    Number.isInteger(snapshotProbe.additionalInFlightDiscountCount) &&
+    snapshotProbe.additionalInFlightDiscountCount >= ZERO ?
+      snapshotProbe.additionalInFlightDiscountCount :
+      cacheVisibleSatisfiedPriorityRecoveryOperationCount;
+  const additionalInFlightDiscountCount =
+    normalizeNonNegativeInteger(rawAdditionalInFlightDiscountCount);
+  const appliedAdditionalInFlightDiscountCount =
+    criticalSystemTopology.ready === true ?
+      additionalInFlightDiscountCount :
+      ZERO;
+  const staleInFlightDiscountCount = Math.min(
+    inFlightCount,
+    staleInFlightCount + appliedAdditionalInFlightDiscountCount,
   );
   const ignoreStaleInFlightReplicaOperations =
     options.ignoreStaleInFlightReplicaOperations === true;
@@ -511,6 +522,8 @@ function buildControlPlaneQuiescenceSnapshot(options = {}) {
       effectiveInFlightCount,
       staleInFlightCount,
       cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+      additionalInFlightDiscountCount,
+      appliedAdditionalInFlightDiscountCount,
       staleInFlightDiscountCount,
       ignoreStaleInFlightReplicaOperations,
       controlPlanePressureSignals,
@@ -610,6 +623,8 @@ function buildControlPlaneQuiescenceSnapshot(options = {}) {
     effectiveInFlightCount,
     staleInFlightCount,
     cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    additionalInFlightDiscountCount,
+    appliedAdditionalInFlightDiscountCount,
     staleInFlightDiscountCount,
     ignoreStaleInFlightReplicaOperations,
     controlPlanePressureSignals,

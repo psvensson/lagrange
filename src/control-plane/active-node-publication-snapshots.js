@@ -75,9 +75,48 @@ function resolveAdmissionBlockedNodeIds(publicationConvergence = null) {
   return normalizeNodeIdList(blockedNodeIds);
 }
 
-function excludeAdmissionBlockedNodeIds(nodeIds = [], blockedNodeIds = new Set()) {
+function resolveProjectionDiagnostics(publicationConvergence = null) {
+  const normalizedPublicationConvergence =
+    publicationConvergence &&
+      typeof publicationConvergence === TYPEOF.OBJECT ?
+      publicationConvergence :
+      {};
+  const membershipLifecycleSummary =
+    normalizedPublicationConvergence.membershipLifecycleSummary &&
+      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.membershipLifecycleSummary :
+      null;
+  return normalizedPublicationConvergence.projectionDiagnostics &&
+    typeof normalizedPublicationConvergence.projectionDiagnostics ===
+      TYPEOF.OBJECT ?
+    normalizedPublicationConvergence.projectionDiagnostics :
+    membershipLifecycleSummary?.projectionDiagnostics &&
+      typeof membershipLifecycleSummary.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      membershipLifecycleSummary.projectionDiagnostics :
+      null;
+}
+
+function resolveReadinessExcludedNodeIds(publicationConvergence = null) {
+  const projectionDiagnostics = resolveProjectionDiagnostics(publicationConvergence);
+  return normalizeNodeIdList([
+    ...(Array.isArray(projectionDiagnostics?.readinessExcludedNodeIds) ?
+      projectionDiagnostics.readinessExcludedNodeIds :
+      []),
+    ...(Array.isArray(
+      projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
+    ) ?
+      projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds :
+      []),
+  ]);
+}
+
+function excludeUnavailableNodeIds(nodeIds = [], unavailableNodeIds = new Set()) {
   return normalizeNodeIdList(
-    normalizeNodeIdList(nodeIds).filter((nodeId) => !blockedNodeIds.has(nodeId)),
+    normalizeNodeIdList(nodeIds).filter((nodeId) =>
+      !unavailableNodeIds.has(nodeId),
+    ),
   );
 }
 
@@ -290,19 +329,13 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
         TYPEOF.OBJECT ?
       normalizedPublicationConvergence.membershipLifecycleSummary :
       null;
-  const projectionDiagnostics =
-    normalizedPublicationConvergence.projectionDiagnostics &&
-      typeof normalizedPublicationConvergence.projectionDiagnostics ===
-        TYPEOF.OBJECT ?
-      normalizedPublicationConvergence.projectionDiagnostics :
-      membershipLifecycleSummary?.projectionDiagnostics &&
-        typeof membershipLifecycleSummary.projectionDiagnostics ===
-          TYPEOF.OBJECT ?
-        membershipLifecycleSummary.projectionDiagnostics :
-        null;
-  const admissionBlockedNodeIdSet = new Set(
-    resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+  const projectionDiagnostics = resolveProjectionDiagnostics(
+    normalizedPublicationConvergence,
   );
+  const unavailableNodeIdSet = new Set([
+    ...resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+    ...resolveReadinessExcludedNodeIds(normalizedPublicationConvergence),
+  ]);
   const publishedActiveNodeIds = normalizeNodeIdList(
     Array.isArray(normalizedPublicationConvergence?.publishedActiveNodeIds) ?
       normalizedPublicationConvergence.publishedActiveNodeIds :
@@ -350,34 +383,34 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
       membershipLifecycleSummary.missingPublishedRecoveryActiveNodeIds :
       []),
   ]);
-  const admittedPublishedActiveNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedPublishedActiveNodeIds = excludeUnavailableNodeIds(
     publishedActiveNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
-  const admittedProjectedServingNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedProjectedServingNodeIds = excludeUnavailableNodeIds(
     projectedServingNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
-  const admittedLocallyEligibleNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedLocallyEligibleNodeIds = excludeUnavailableNodeIds(
     locallyEligibleNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
-  const admittedRecoveryEligibleIncludedNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedRecoveryEligibleIncludedNodeIds = excludeUnavailableNodeIds(
     recoveryEligibleIncludedNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
-  const admittedLivenessFallbackIncludedNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedLivenessFallbackIncludedNodeIds = excludeUnavailableNodeIds(
     livenessFallbackIncludedNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
-  const admittedExplicitRecoveryActiveNodeIds = excludeAdmissionBlockedNodeIds(
+  const admittedExplicitRecoveryActiveNodeIds = excludeUnavailableNodeIds(
     explicitRecoveryActiveNodeIds,
-    admissionBlockedNodeIdSet,
+    unavailableNodeIdSet,
   );
   const admittedMissingPublishedRecoveryActiveNodeIds =
-    excludeAdmissionBlockedNodeIds(
+    excludeUnavailableNodeIds(
       missingPublishedRecoveryActiveNodeIds,
-      admissionBlockedNodeIdSet,
+      unavailableNodeIdSet,
     );
   const explicitRecoveryActiveNodeSource =
     typeof normalizedPublicationConvergence?.recoveryActiveNodeSource ===
@@ -491,22 +524,9 @@ function buildActiveMembershipSnapshot(publicationConvergence = null) {
       typeof publicationConvergence === TYPEOF.OBJECT ?
       publicationConvergence :
       {};
-  const membershipLifecycleSummary =
-    normalizedPublicationConvergence.membershipLifecycleSummary &&
-      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
-        TYPEOF.OBJECT ?
-      normalizedPublicationConvergence.membershipLifecycleSummary :
-      null;
-  const projectionDiagnostics =
-    normalizedPublicationConvergence.projectionDiagnostics &&
-      typeof normalizedPublicationConvergence.projectionDiagnostics ===
-        TYPEOF.OBJECT ?
-      normalizedPublicationConvergence.projectionDiagnostics :
-      membershipLifecycleSummary?.projectionDiagnostics &&
-        typeof membershipLifecycleSummary.projectionDiagnostics ===
-          TYPEOF.OBJECT ?
-        membershipLifecycleSummary.projectionDiagnostics :
-        null;
+  const projectionDiagnostics = resolveProjectionDiagnostics(
+    normalizedPublicationConvergence,
+  );
   const activeNodeCohort =
     resolvePriorityRecoveryActiveNodeCohort(normalizedPublicationConvergence);
 

@@ -464,6 +464,23 @@ function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
   }
 }
 
+/**
+ * Shut down admin plus live query startup composition.
+ * @param {Object|null} adminRuntime
+ * @return {Promise<void>}
+ */
+async function shutdownAdminRuntimeComposition(adminRuntime) {
+  if (!adminRuntime) {
+    return;
+  }
+  if (typeof adminRuntime.adminAPI?.shutdown === LOCAL_STR_FUNCTION) {
+    await adminRuntime.adminAPI.shutdown();
+  }
+  if (typeof adminRuntime.liveQueryWiring?.shutdown === LOCAL_STR_FUNCTION) {
+    adminRuntime.liveQueryWiring.shutdown();
+  }
+}
+
 export {
   attachSqlEngineToAdminRuntime,
   createAdminAPIWithLiveQuery,
@@ -475,5 +492,6 @@ export {
   resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
+  shutdownAdminRuntimeComposition,
   startAdminRuntimeComposition,
 };

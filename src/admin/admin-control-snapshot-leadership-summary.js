@@ -12,7 +12,11 @@
  */
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
-import {summarizeReplicaOperationLiveness} from '../rebalancer/replica-operation-liveness.js';
+import {
+  isReplicaOperationInFlight,
+  isReplicaOperationStale,
+  summarizeReplicaOperationLiveness,
+} from '../rebalancer/replica-operation-liveness.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
@@ -67,6 +71,21 @@ const PARTITION_LEADER_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
 const PARTITION_LEADER_AUTHORITY_INTEGER_STATE_UNAVAILABLE = 'unavailable';
 const PARTITION_LEADER_AUTHORITY_LEADER_STATE_AVAILABLE = 'available';
 const PARTITION_LEADER_AUTHORITY_LEADER_STATE_UNAVAILABLE = 'unavailable';
+const ADMIN_PRIORITY_RECOVERY_PARTITION_IDS = Object.freeze(new Set([
+  'control_plane_publications-p1',
+  'replica_operations-p1',
+  'sql_transaction_participants-p1',
+  'sql_transactions-p1',
+  'sql_write_operations-p1',
+]));
+const ADMIN_POST_PUBLICATION_TOPOLOGY_PARTITION_IDS = Object.freeze(new Set([
+  'message_groups-p1',
+  'node_endpoints-p1',
+  'nodes-p1',
+  'partitions-p1',
+  'service_endpoints-p1',
+  'services-p1',
+]));
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -172,6 +191,84 @@ function resolveControlSnapshotLeaderDecision({
     decision.leaderNodeId = canonicalLeader.value;
   }
   return Object.freeze(decision);
+}
+
+function resolvePublicationPendingAckCount(publicationConvergence = null) {
+  if (Number.isInteger(publicationConvergence?.pendingAckCount)) {
+    return Math.max(NUM.ZERO, publicationConvergence.pendingAckCount);
+  }
+  if (Array.isArray(publicationConvergence?.pendingAckNodeIds)) {
+    return publicationConvergence.pendingAckNodeIds.length;
+  }
+  return NUM.ZERO;
+}
+
+function isPostPublicationPriorityRecoveryClosed(
+  controlPlaneDiagnostics = null,
+) {
+  const publicationConvergence =
+    controlPlaneDiagnostics?.publicationConvergence &&
+    typeof controlPlaneDiagnostics.publicationConvergence === TYPEOF.OBJECT ?
+      controlPlaneDiagnostics.publicationConvergence :
+      controlPlaneDiagnostics;
+  const publicationStatus = String(
+    publicationConvergence?.publicationStatus ||
+      publicationConvergence?.status ||
+      publicationConvergence?.publicationObservation?.status ||
+      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+  ).toUpperCase();
+  const priorityPartitionSummary =
+    publicationConvergence?.priorityPartitionSummary &&
+    typeof publicationConvergence.priorityPartitionSummary === TYPEOF.OBJECT ?
+      publicationConvergence.priorityPartitionSummary :
+      null;
+  return (
+    publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED &&
+    resolvePublicationPendingAckCount(publicationConvergence) === NUM.ZERO &&
+    priorityPartitionSummary?.satisfied === true
+  );
+}
+
+function isPostPublicationTopologyReplicaOperation(record) {
+  const partitionId = String(record?.partitionId || '').trim();
+  const entityType = String(record?.entityType || '').trim().toLowerCase();
+  return (
+    entityType === 'message_group' ||
+    partitionId.startsWith('mg-') ||
+    ADMIN_POST_PUBLICATION_TOPOLOGY_PARTITION_IDS.has(partitionId)
+  );
+}
+
+function isPostPublicationDiscountableReplicaOperation(record) {
+  const partitionId = String(record?.partitionId || '').trim();
+  return (
+    ADMIN_PRIORITY_RECOVERY_PARTITION_IDS.has(partitionId) ||
+    isPostPublicationTopologyReplicaOperation(record)
+  );
+}
+
+function countPostPublicationStaleInFlightDiscounts(
+  rows,
+  livenessOptions,
+  controlPlaneDiagnostics,
+) {
+  if (
+    isPostPublicationPriorityRecoveryClosed(controlPlaneDiagnostics) !== true
+  ) {
+    return NUM.ZERO;
+  }
+  let discountCount = NUM.ZERO;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (
+      isReplicaOperationInFlight(row, livenessOptions) !== true ||
+      isReplicaOperationStale(row, livenessOptions) !== true ||
+      isPostPublicationDiscountableReplicaOperation(row) !== true
+    ) {
+      continue;
+    }
+    discountCount += NUM.ONE;
+  }
+  return discountCount;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -401,15 +498,26 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
       typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION ?
         this.startupRecoveryCoordinator.evaluate()?.ready !== true :
         false;
+    const livenessOptions = {
+      partitionIds: scopedPartitionIds,
+      serviceRows,
+      nowMs: this.nowFn(),
+      includeTimeline: true,
+      ignorePreRestart: isStartup || options.ignorePreRestart === true,
+    };
     const livenessSummary = summarizeReplicaOperationLiveness(
       replicaOperationRows,
-      {
-        partitionIds: scopedPartitionIds,
-        serviceRows,
-        nowMs: this.nowFn(),
-        includeTimeline: true,
-        ignorePreRestart: isStartup || options.ignorePreRestart === true,
-      },
+      livenessOptions,
+    );
+    const staleInFlightDiscountCount =
+      countPostPublicationStaleInFlightDiscounts(
+        livenessSummary.rows,
+        livenessOptions,
+        options.controlPlaneDiagnostics,
+      );
+    const effectiveStaleInFlightCount = Math.max(
+      NUM.ZERO,
+      livenessSummary.staleInFlightCount - staleInFlightDiscountCount,
     );
     return {
       inFlightCount: livenessSummary.inFlightCount,
@@ -418,6 +526,8 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
       stepHistogram: livenessSummary.stepHistogram,
       oldestInFlightAgeMs: livenessSummary.oldestInFlightAgeMs,
       staleInFlightCount: livenessSummary.staleInFlightCount,
+      staleInFlightDiscountCount,
+      effectiveStaleInFlightCount,
       inFlightOperationIds: livenessSummary.inFlightOperationIds,
       operationTimelineById: livenessSummary.operationTimelineById,
       rows: livenessSummary.rows,

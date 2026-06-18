@@ -562,6 +562,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     }
 
     async resolveBoundedLocalControlSnapshot(resolveOptions = {}) {
+      if (resolveOptions.forceAuthoritativeRepair === true) {
+        return this.resolveLocalControlSnapshot(resolveOptions);
+      }
       const deadlineMs = resolveBoundedSnapshotProbeDeadlineMs(
         resolveOptions.queryTimeoutMs,
       );

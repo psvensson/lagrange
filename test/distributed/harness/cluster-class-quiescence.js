@@ -1,5 +1,9 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {
+  buildPostRebalanceReplicaOperationDrainDiagnostics,
+  countAdditionalPostRebalanceReplicaOperationDiscounts,
+} from './post-rebalance-closure-contract.js';
+import {
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
 } from './control-plane-quiescence-snapshot.js';
@@ -61,6 +65,65 @@ const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
 
+function buildQuiescenceReplicaOperationDrainRows(
+  snapshotProbe,
+  criticalSystemTopology,
+  nowMs,
+) {
+  const operationRows = Array.isArray(snapshotProbe?.replicaOperationRows) ?
+    snapshotProbe.replicaOperationRows :
+    [];
+  return buildPostRebalanceReplicaOperationDrainDiagnostics(
+    snapshotProbe?.controlPlaneDiagnostics || {},
+    operationRows,
+    {
+      nowMs,
+      allowPostPublicationNonBlockingReplicaOperations: true,
+      cdcProjectionVisibleSatisfied:
+        snapshotProbe?.cdcProjectionVisibleSatisfied === true,
+      criticalSystemTopologyReady: criticalSystemTopology?.ready === true,
+      inFlightOperationIds: snapshotProbe?.inFlightOperationIds,
+      operationTimelineById: snapshotProbe?.operationTimelineById,
+    },
+  );
+}
+
+function buildQuiescenceSnapshotProbeWithDiscount(
+  snapshotProbe,
+  criticalSystemTopology,
+  nowMs,
+) {
+  if (snapshotProbe?.error) {
+    return snapshotProbe;
+  }
+  const operationRows = Array.isArray(snapshotProbe?.replicaOperationRows) ?
+    snapshotProbe.replicaOperationRows :
+    [];
+  const additionalInFlightDiscountCount =
+    countAdditionalPostRebalanceReplicaOperationDiscounts(
+      snapshotProbe?.controlPlaneDiagnostics || {},
+      operationRows,
+      {
+        nowMs,
+        allowPostPublicationNonBlockingReplicaOperations: true,
+        cdcProjectionVisibleSatisfied:
+          snapshotProbe?.cdcProjectionVisibleSatisfied === true,
+        criticalSystemTopologyReady: criticalSystemTopology?.ready === true,
+        inFlightOperationIds: snapshotProbe?.inFlightOperationIds,
+        operationTimelineById: snapshotProbe?.operationTimelineById,
+      },
+    );
+  return Object.freeze({
+    ...snapshotProbe,
+    additionalInFlightDiscountCount,
+    replicaOperationDrainRows: buildQuiescenceReplicaOperationDrainRows(
+      snapshotProbe,
+      criticalSystemTopology,
+      nowMs,
+    ),
+  });
+}
+
 function resolveQuiescenceProgressInFlightCount(
   snapshotProbe,
   quiescenceSnapshot,
@@ -117,7 +180,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         sleep: (ms) => this._sleep(ms),
         probe: async () => {
           const snapshotProbe =
-            await this._probeControlPlaneQuiescenceSnapshot(deadline);
+            await this._probeControlPlaneQuiescenceSnapshot(deadline, options);
           const nowMs = Date.now();
           if (snapshotProbe.error) {
             oracleBlindnessTracker.recordBlindPoll(snapshotProbe.error, nowMs);
@@ -162,14 +225,19 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
           const leaderQuietElapsedMs = nowMs - lastLeaderChangeAtMs;
           const criticalSystemTopology =
             await this._probeCriticalSystemTopology(deadline, options);
+          const adjustedSnapshotProbe = buildQuiescenceSnapshotProbeWithDiscount(
+            snapshotProbe,
+            criticalSystemTopology,
+            nowMs,
+          );
           const operationTimelineChanged =
-            snapshotProbe.operationTimelineSignature !== null &&
-            snapshotProbe.operationTimelineSignature !==
+            adjustedSnapshotProbe.operationTimelineSignature !== null &&
+            adjustedSnapshotProbe.operationTimelineSignature !==
               lastOperationTimelineSignature;
           const candidateWindowStartedAtMs =
             stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs;
           let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
-            snapshotProbe,
+            snapshotProbe: adjustedSnapshotProbe,
             criticalSystemTopology,
             leaderQuietElapsedMs,
             nowMs,
@@ -183,7 +251,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
             candidateWindowReset,
           });
           const progressInFlightCount = resolveQuiescenceProgressInFlightCount(
-            snapshotProbe,
+            adjustedSnapshotProbe,
             quiescenceSnapshot,
           );
           const operationProgressObserved =
@@ -191,7 +259,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
             operationTimelineChanged;
           if (operationProgressObserved) {
             quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
-              snapshotProbe,
+              snapshotProbe: adjustedSnapshotProbe,
               criticalSystemTopology,
               leaderQuietElapsedMs,
               nowMs,
@@ -229,7 +297,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
           }
           if (operationTimelineChanged) {
             lastOperationTimelineSignature =
-              snapshotProbe.operationTimelineSignature;
+              adjustedSnapshotProbe.operationTimelineSignature;
           }
           if (operationProgressObserved) {
             lastOperationProgressAtMs = nowMs;
@@ -304,6 +372,11 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
               cacheVisibleSatisfiedPriorityRecoveryOperationCount:
                 quiescenceSnapshot
                   .cacheVisibleSatisfiedPriorityRecoveryOperationCount ?? null,
+              additionalInFlightDiscountCount:
+                quiescenceSnapshot.additionalInFlightDiscountCount ?? null,
+              appliedAdditionalInFlightDiscountCount:
+                quiescenceSnapshot
+                  .appliedAdditionalInFlightDiscountCount ?? null,
               staleInFlightDiscountCount:
                 quiescenceSnapshot.staleInFlightDiscountCount ?? null,
               ignoreStaleInFlightReplicaOperations:
@@ -314,6 +387,8 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
               reasons: quiescenceSnapshot.reasons,
               controlPlanePressureSignals:
                 quiescenceSnapshot.controlPlanePressureSignals || [],
+              replicaOperationDrainRows:
+                adjustedSnapshotProbe.replicaOperationDrainRows || [],
               candidateWindowReset:
                 quiescenceSnapshot.candidateWindowReset || null,
               stableElapsedMs: quiescenceSnapshot.stableElapsedMs,
@@ -330,7 +405,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
           }
 
           return {
-            ...snapshotProbe,
+            ...adjustedSnapshotProbe,
             ...quiescenceSnapshot,
             criticalSystemTopology,
             stableElapsedMs:
@@ -461,6 +536,11 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       cacheVisibleSatisfiedPriorityRecoveryOperationCount:
         pollResult.lastResult
           ?.cacheVisibleSatisfiedPriorityRecoveryOperationCount ?? null,
+      additionalInFlightDiscountCount:
+        pollResult.lastResult?.additionalInFlightDiscountCount ?? null,
+      appliedAdditionalInFlightDiscountCount:
+        pollResult.lastResult
+          ?.appliedAdditionalInFlightDiscountCount ?? null,
       staleInFlightDiscountCount:
         pollResult.lastResult?.staleInFlightDiscountCount ?? null,
       ignoreStaleInFlightReplicaOperations:
@@ -471,6 +551,8 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       reasons: pollResult.lastResult?.reasons || [],
       controlPlanePressureSignals:
         pollResult.lastResult?.controlPlanePressureSignals || [],
+      replicaOperationDrainRows:
+        pollResult.lastResult?.replicaOperationDrainRows || [],
       candidateWindowReset:
         pollResult.lastResult?.candidateWindowReset || null,
       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,

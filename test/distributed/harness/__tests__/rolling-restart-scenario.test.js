@@ -44,6 +44,8 @@ const POSITIVE_POST_RESTART_QUIET_WINDOW_MS = 1;
 const EXPECTED_POST_RESTART_RECOVERY_STABLE_WINDOW_MS = 15000;
 const SHORT_BARRIER_TIMEOUT_MS = 200;
 const DEFAULT_CONSISTENCY_FORCE_REPAIR_AFTER_MS = 10000;
+const ACK_VISIBILITY_RETRY_TIMEOUT_MS = 50;
+const ACK_VISIBILITY_RETRY_POLL_INTERVAL_MS = 1;
 const TABLE_POLICIES_JSON = JSON.stringify({
   externalCdcAllowed: false,
   splitStorageThreshold: 16384,
@@ -652,6 +654,157 @@ describe('rolling-restart scenario', () => {
       });
     });
 
+  it('waits for acknowledged writes to become visible after convergence',
+    async () => {
+      const acknowledgedWriteIds = ['load-ack-visible', 'load-ack-late'];
+      const joinerAckQueries = [];
+      const loadRun = {
+        getMetrics: () => ({total: 10, success: 10}),
+        getAcknowledgedWrites: () => ({
+          tableName: 'logs',
+          idColumn: 'log_id',
+          ids: acknowledgedWriteIds,
+        }),
+        cancel: () => {},
+        waitComplete: async () => ({
+          total: 20,
+          success: 20,
+          failed: 0,
+        }),
+      };
+
+      const cluster = {
+        getNodes: () => [
+          {
+            id: 'seed-1',
+            role: 'seed',
+            query: async (sql) => {
+              if (sql.includes(ACK_QUERY_FRAGMENT)) {
+                return {
+                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
+                };
+              }
+              return {rows: []};
+            },
+          },
+          {
+            id: 'joiner-1',
+            role: 'joiner',
+            query: async (sql) => {
+              if (!sql.includes(ACK_QUERY_FRAGMENT)) {
+                return {rows: []};
+              }
+              joinerAckQueries.push(sql);
+              if (joinerAckQueries.length === 1) {
+                return {rows: [{ack_id: acknowledgedWriteIds[ZERO]}]};
+              }
+              return {
+                rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
+              };
+            },
+          },
+        ],
+        startLoad: () => loadRun,
+        restartNode: async () => {},
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForAllActive: async () => {},
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      const result = await run(cluster, {
+        preRestartSettleMs: ZERO,
+        interRestartDelayMs: ZERO,
+        postRestartLoadSoakMs: ZERO,
+        postRestartQuietWindowMs: ZERO,
+        acknowledgedWriteVisibilityTimeoutMs:
+          ACK_VISIBILITY_RETRY_TIMEOUT_MS,
+        acknowledgedWriteVisibilityPollIntervalMs:
+          ACK_VISIBILITY_RETRY_POLL_INTERVAL_MS,
+      });
+
+      assert.deepEqual(result.acknowledgedWriteVisibility, {
+        acknowledgedWriteCount: acknowledgedWriteIds.length,
+        reachableNodeCount: 2,
+      });
+      assert.equal(joinerAckQueries.length, 2);
+      assert.equal(joinerAckQueries[1].includes(acknowledgedWriteIds[ZERO]),
+        true);
+      assert.equal(joinerAckQueries[1].includes(acknowledgedWriteIds[1]),
+        true);
+    });
+
+  it('requires acknowledged writes to be visible in the same retry pass',
+    async () => {
+      const acknowledgedWriteIds = ['load-ack-unstable-a',
+        'load-ack-unstable-b'];
+      let joinerAckQueryCount = ZERO;
+      const loadRun = {
+        getMetrics: () => ({total: 10, success: 10}),
+        getAcknowledgedWrites: () => ({
+          tableName: 'logs',
+          idColumn: 'log_id',
+          ids: acknowledgedWriteIds,
+        }),
+        cancel: () => {},
+        waitComplete: async () => ({
+          total: 20,
+          success: 20,
+          failed: 0,
+        }),
+      };
+
+      const cluster = {
+        getNodes: () => [
+          {
+            id: 'seed-1',
+            role: 'seed',
+            query: async (sql) => {
+              if (sql.includes(ACK_QUERY_FRAGMENT)) {
+                return {
+                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
+                };
+              }
+              return {rows: []};
+            },
+          },
+          {
+            id: 'joiner-1',
+            role: 'joiner',
+            query: async (sql) => {
+              if (!sql.includes(ACK_QUERY_FRAGMENT)) {
+                return {rows: []};
+              }
+              joinerAckQueryCount += 1;
+              const ackId = joinerAckQueryCount % 2 === 1 ?
+                acknowledgedWriteIds[ZERO] :
+                acknowledgedWriteIds[1];
+              return {rows: [{ack_id: ackId}]};
+            },
+          },
+        ],
+        startLoad: () => loadRun,
+        restartNode: async () => {},
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForAllActive: async () => {},
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await assert.rejects(
+        run(cluster, {
+          preRestartSettleMs: ZERO,
+          interRestartDelayMs: ZERO,
+          postRestartLoadSoakMs: ZERO,
+          postRestartQuietWindowMs: ZERO,
+          acknowledgedWriteVisibilityTimeoutMs:
+            ACK_VISIBILITY_RETRY_TIMEOUT_MS,
+          acknowledgedWriteVisibilityPollIntervalMs:
+            ACK_VISIBILITY_RETRY_POLL_INTERVAL_MS,
+        }),
+        /Acknowledged writes missing after rolling restart/,
+      );
+      assert.ok(joinerAckQueryCount > 1);
+    });
+
   it('fails when acknowledged writes are missing after convergence',
     async () => {
       const loadRun = {
@@ -706,6 +859,8 @@ describe('rolling-restart scenario', () => {
           postRestartLoadSoakMs: 0,
           postRestartQuietWindowMs: 0,
           minRestartSuccessRate: 0.6,
+          acknowledgedWriteVisibilityTimeoutMs: ZERO,
+          acknowledgedWriteVisibilityPollIntervalMs: ZERO,
         }),
         /Acknowledged writes missing after rolling restart/,
       );

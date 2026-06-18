@@ -29,6 +29,9 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 
 const LOCAL_STR_NODE_WITHDRAWAL = 'node withdrawal';
 const LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED =
@@ -80,6 +83,10 @@ const JOIN_CLEANUP_LIFECYCLE_STOP_PATH_BY_STATE = Object.freeze({
   ]),
   [NodeState.STOPPED]: Object.freeze([]),
 });
+
+function resolveJoinFailureRetryable(error) {
+  return error?.retryable === true || isRetryableControlPlaneError(error);
+}
 
 /**
  * Handles failure cleanup and resource teardown for a joining node.
@@ -143,7 +150,7 @@ class JoinCleanupHandler {
         duration,
         error: error.message,
         phase: failedPhase,
-        retryable: error?.retryable === true,
+        retryable: resolveJoinFailureRetryable(error),
         retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
           Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
           NUM.ZERO,
@@ -182,7 +189,7 @@ class JoinCleanupHandler {
       duration,
       error: error.message,
       phase: failedPhase,
-      retryable: error?.retryable === true,
+      retryable: resolveJoinFailureRetryable(error),
       retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
         Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
         NUM.ZERO,

@@ -243,7 +243,8 @@ function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotControlPlaneDiagnostics extends AdminControlSnapshotCoverageGapEvaluation {
+class AdminControlSnapshotControlPlaneDiagnostics
+  extends AdminControlSnapshotCoverageGapEvaluation {
   /**
    * Compute local cache staleness for active node heartbeat rows.
    * Stale live-node rows indicate the control snapshot should rebuild from
@@ -414,7 +415,11 @@ class AdminControlSnapshotControlPlaneDiagnostics extends AdminControlSnapshotCo
     const serviceRows =
       this.systemTableCache?.getAll(TABLES.SERVICES) || ADMIN_CACHE_DUMP.EMPTY;
     const replicaOperations =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, {
+        controlPlaneDiagnostics: {
+          publicationConvergence,
+        },
+      });
     const logsTable = mergeLogsTableOwnerQueueDiagnostics(
       buildLogsTableRetentionDiagnostics(),
       buildMembershipPublicationOwnerQueueDiagnostics(

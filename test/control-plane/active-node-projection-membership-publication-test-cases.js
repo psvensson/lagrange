@@ -5,12 +5,19 @@ import {
   resolvePublishedActiveNodeIds,
 } from '../../src/control-plane/active-node-projection.js';
 import {
+  buildPublicationRecoveryProtocolSnapshot,
+} from '../../src/control-plane/recovery-protocol-snapshot.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const ACTIVE_NODE_ADMISSION_STATE_BLOCKED = 'blocked';
 const ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY =
   'cluster_incarnation_identity_mismatch';
+const ACTIVE_NODE_PARTICIPATION_REASON_READINESS_EXCLUDED =
+  'readiness_excluded';
+const ACTIVE_NODE_PARTICIPATION_REASON_CLUSTER_MEMBER_UNHEALTHY =
+  'cluster_member_unhealthy';
 const ACTIVE_NODE_BLOCKED_FENCE = Object.freeze({
   state: 'identity_mismatch',
   allowed: false,
@@ -215,6 +222,73 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
         snapshot?.missingPublishedRecoveryActiveNodeIds,
         [],
         'removing the blocked target from the admitted cohort should not fabricate a missing-publication gap',
+      );
+    });
+
+  test('active-node projection excludes a readiness-blocked target from the concrete recovery cohort',
+    async (t) => {
+      const membershipPublication = {
+        publication_epoch: 29,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-a', 'node-b'],
+        membership_lifecycle_summary: {
+          publishedActiveNodeIds: ['node-a', 'node-b'],
+          projectedServingNodeIds: ['node-a', 'node-b'],
+          locallyEligibleNodeIds: ['node-a', 'node-b'],
+          recoveryActiveNodeIds: ['node-a', 'node-b', 'node-c'],
+          recoveryActiveNodeSource: 'recovery_eligible_projection',
+          missingPublishedRecoveryActiveNodeIds: ['node-c'],
+          projectionDiagnostics: {
+            readinessExcludedNodeIds: ['node-c'],
+            clusterMemberUnhealthyExcludedNodeIds: ['node-c'],
+          },
+        },
+        recovery_active_node_ids: ['node-a', 'node-b', 'node-c'],
+        recovery_active_node_source: 'recovery_eligible_projection',
+        missing_published_recovery_active_node_ids: ['node-c'],
+      };
+      const snapshot = buildMembershipPublicationActiveSnapshot(
+        membershipPublication,
+      );
+      const recoveryProtocolSnapshot = buildPublicationRecoveryProtocolSnapshot(
+        membershipPublication,
+      );
+
+      t.same(
+        snapshot?.publishedActiveNodeIds,
+        ['node-a', 'node-b'],
+        'the durable published active set should remain observable',
+      );
+      t.same(
+        snapshot?.projectionDiagnostics,
+        {
+          readinessExcludedNodeIds: ['node-c'],
+          clusterMemberUnhealthyExcludedNodeIds: ['node-c'],
+        },
+        'projection diagnostics should preserve the readiness exclusion reason',
+      );
+      t.same(
+        snapshot?.concreteEligibleNodeIds,
+        ['node-a', 'node-b'],
+        'the concrete recovery cohort should exclude readiness-blocked nodes',
+      );
+      t.same(
+        snapshot?.recoveryActiveNodeIds,
+        ['node-a', 'node-b'],
+        'the recovery-active cohort should follow projection readiness',
+      );
+      t.same(
+        snapshot?.missingPublishedRecoveryActiveNodeIds,
+        [],
+        'a readiness-excluded target should not fabricate a missing-publication gap',
+      );
+      t.same(
+        recoveryProtocolSnapshot?.participationByNodeId?.['node-c']?.reasons,
+        [
+          ACTIVE_NODE_PARTICIPATION_REASON_READINESS_EXCLUDED,
+          ACTIVE_NODE_PARTICIPATION_REASON_CLUSTER_MEMBER_UNHEALTHY,
+        ],
+        'participation evidence should keep the concrete readiness-blocking reason',
       );
     });
 

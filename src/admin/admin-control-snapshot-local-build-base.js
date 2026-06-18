@@ -671,7 +671,10 @@ class AdminControlSnapshotLocalBuildBase {
       activePartitionServiceRows,
     );
     const replicaOperations =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, {
+        ...options,
+        controlPlaneDiagnostics,
+      });
     return {
       schemaVersion: ADMIN_CONTROL_SNAPSHOT.SCHEMA_VERSION,
       nodeId: this.nodeId,

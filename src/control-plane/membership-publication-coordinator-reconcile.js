@@ -159,14 +159,20 @@ function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
     candidateStatus !== normalizedLatestPublication.status;
 }
 
+const OWNER_ACK_COMPLETION_REDRIVE_STATUSES = Object.freeze([
+  MEMBERSHIP_PUBLICATION_STATUS.OPEN,
+  MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
+]);
+
 // CL-001 variant A: the owner-driver's drive/skip gate keys only on
 // missingPublishedCount, so once a published epoch covers every active node the
 // driver SKIPS forever (decision=skip reason=no-deficit) and never re-runs the
-// reconcile that would CLOSE a still-OPEN publication awaiting acks. After a
-// rolling-restart rejoin the owner re-includes the rejoined node into an OPEN
-// publication that then never closes because no stable (publicationChanged===
-// false) reconcile tick ever runs to carry its recovery-eligible ack. This
-// surfaces the pending acks the owner SHOULD still re-drive on.
+// reconcile that would CLOSE a still-open publication awaiting acks. After a
+// rolling-restart rejoin the owner re-includes the rejoined node into an OPEN or
+// ACK_PENDING publication that then never closes because no stable
+// (publicationChanged===false) reconcile tick ever runs to carry its recovery-
+// eligible ack. This surfaces the pending acks the owner SHOULD still re-drive
+// on.
 //
 // Never-break / thrash guard: only return pending acks when EVERY pending-ack
 // node is one the close lane will actually CARRY into the acknowledged set on a
@@ -191,7 +197,10 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
   const latestRow = normalizeControlPlanePublicationRow(
     planningSnapshot?.latestPublicationRow,
   );
-  if (!latestRow || latestRow.status !== MEMBERSHIP_PUBLICATION_STATUS.OPEN) {
+  if (
+    !latestRow ||
+    !OWNER_ACK_COMPLETION_REDRIVE_STATUSES.includes(latestRow.status)
+  ) {
     return [];
   }
   const requiredAckNodeIds = normalizeNodeIdList(latestRow.requiredAckNodeIds);
@@ -700,16 +709,15 @@ class MembershipPublicationCoordinatorReconcile extends
   /**
    * Start the always-on owner-membership driver. MUST be called UNCONDITIONALLY
    * at node startup — never behind metadata-publication readiness, or it can be
-   * gated behind the very progress it exists to create. No-op unless leader-driven
-   * mode is enabled.
+   * gated behind the very progress it exists to create. No-op only when
+   * explicitly disabled; each tick gates on the publications write-leader
+   * predicate before doing work.
    */
   startOwnerMembershipDriver(options = {}) {
     if (this.ownerMembershipDriverTimer) {
       return;
     }
-    const enabled =
-      options.enabled ??
-      process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    const enabled = options.enabled ?? true;
     this.logger?.warn?.('DIAG startOwnerMembershipDriver called', {
       nodeId: this.nodeId,
       enabled,

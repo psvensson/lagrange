@@ -4,6 +4,7 @@ import {normalizeReplicaOperationRecord} from '../../../src/rebalancer/replica-o
 import {ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION} from './assertions-control-snapshot-extraction.js';
 import {
   buildPostRebalanceClosureSnapshot,
+  countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
   isPostRebalanceCdcProjectionVisibleSatisfied,
 } from './post-rebalance-closure-contract.js';
@@ -554,6 +555,7 @@ async function waitForConvergence(nodes, options = {}) {
   let latestInFlightReplicaOperationCount = 0;
   let latestStaleInFlightReplicaOperationCount = 0;
   let latestCacheVisibleSatisfiedPriorityRecoveryOperationCount = 0;
+  let latestAdditionalInFlightDiscountCount = 0;
   let latestEffectiveInFlightReplicaOperationCount = 0;
   let latestInFlightReplicaOperationStatuses = new Map();
   let latestPartitionMembership = null;
@@ -693,9 +695,39 @@ async function waitForConvergence(nodes, options = {}) {
       staleInFlightReplicaOperationCount;
     latestCacheVisibleSatisfiedPriorityRecoveryOperationCount =
       cacheVisibleSatisfiedPriorityRecoveryOperationCount;
+    const preliminaryCdcProjectionVisibleSatisfied =
+      isPostRebalanceCdcProjectionVisibleSatisfied({
+        expectedPartitionIds: latestExpectedPartitionIds,
+        leaders: latestLeaders,
+        voterCounts: latestCounts,
+        targetVoterCount,
+        inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
+        staleInFlightReplicaOperationCount,
+        cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+        ignoreStaleInFlightReplicaOperations,
+        publishedActiveNodeIds: latestPublishedActiveNodeIds,
+        projectedActiveNodeIds: latestProjectedActiveNodeIds,
+        controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+      });
+    const additionalInFlightDiscountCount =
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        latestControlPlaneDiagnostics,
+        latestOperationRows,
+        {
+          nowMs: now,
+          allowPostPublicationNonBlockingReplicaOperations:
+            preliminaryCdcProjectionVisibleSatisfied,
+          cdcProjectionVisibleSatisfied: preliminaryCdcProjectionVisibleSatisfied,
+          criticalSystemTopologyReady: options.criticalSystemTopologyReady === true,
+        },
+      );
+    latestAdditionalInFlightDiscountCount = additionalInFlightDiscountCount;
     const staleInFlightDiscountCount = Math.max(
-      staleInFlightReplicaOperationCount,
-      cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+      0,
+      Math.min(
+        latestInFlightReplicaOperationCount,
+        staleInFlightReplicaOperationCount + additionalInFlightDiscountCount,
+      ),
     );
     const effectiveInFlightReplicaOperationCount =
       ignoreStaleInFlightReplicaOperations ?
@@ -724,6 +756,7 @@ async function waitForConvergence(nodes, options = {}) {
         effectiveInFlightReplicaOperationCount,
         staleInFlightReplicaOperationCount,
         cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+        additionalInFlightDiscountCount,
         ignoreStaleInFlightReplicaOperations,
         publishedActiveNodeIds: latestPublishedActiveNodeIds,
         projectedActiveNodeIds: latestProjectedActiveNodeIds,
@@ -824,6 +857,7 @@ async function waitForConvergence(nodes, options = {}) {
       latestStaleInFlightReplicaOperationCount,
     cacheVisibleSatisfiedPriorityRecoveryOperationCount:
       latestCacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    additionalInFlightDiscountCount: latestAdditionalInFlightDiscountCount,
     ignoreStaleInFlightReplicaOperations,
     inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
     publishedActiveNodeIds: latestPublishedActiveNodeIds,
@@ -934,6 +968,7 @@ async function waitForConvergence(nodes, options = {}) {
       latestStaleInFlightReplicaOperationCount,
     cacheVisibleSatisfiedPriorityRecoveryOperationCount:
       latestCacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    additionalInFlightDiscountCount: latestAdditionalInFlightDiscountCount,
     inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
     replicaOperationRows: latestOperationRows,
     maxOverTargetMs: maxOT,
@@ -1459,6 +1494,7 @@ export const ASSERTIONS_CONVERGENCE_WAIT = {
   isConvergedSnapshot,
   queryReachableClusterSnapshot,
   waitForConvergence,
+  countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
   buildPartitionMembership,
   compareReplicaMembershipEntries,

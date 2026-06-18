@@ -29,7 +29,9 @@ import {
 } from '../control-plane/active-node-projection.js';
 import {
   buildPublicationActiveGateHandoffContract,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   projectPublicationActiveGateHandoffToOwnerCohort,
+  selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
 import {
@@ -203,12 +205,54 @@ function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
   const readinessByNodeId = buildReadinessByNodeId({
     readinessByNodeId: options.readinessByNodeId || null,
   });
-  return buildPublicationActiveGateHandoffContract({
+  const computedHandoff = buildPublicationActiveGateHandoffContract({
     nodeRows: options.nodeRows,
     activeNodeViews: options.activeNodeViews,
     publicationConvergence: options.publicationConvergence,
     readinessByNodeId,
   });
+  const progressHandoff = selectPublicationActiveGateHandoffContract(
+    options.publicationConvergence,
+  );
+  const progressPendingReconcileNodeIds = Array.isArray(
+    progressHandoff?.pendingReconcileNodeIds,
+  ) ?
+    progressHandoff.pendingReconcileNodeIds :
+    [];
+  const progressPendingReconcileCount = Number(
+    progressHandoff?.pendingReconcileCount,
+  );
+  const hasProgressOwnerReconcileDebt =
+    progressHandoff?.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
+    (
+      progressPendingReconcileNodeIds.length > NUM.ZERO ||
+      Number.isFinite(progressPendingReconcileCount) &&
+        progressPendingReconcileCount > NUM.ZERO
+    );
+  const computedPendingReconcileNodeIds = Array.isArray(
+    computedHandoff?.pendingReconcileNodeIds,
+  ) ?
+    computedHandoff.pendingReconcileNodeIds :
+    [];
+  const computedPendingReconcileCount = Number(
+    computedHandoff?.pendingReconcileCount,
+  );
+  const hasComputedOwnerReconcileDebt =
+    computedHandoff?.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
+    computedPendingReconcileNodeIds.length > NUM.ZERO ||
+    Number.isFinite(computedPendingReconcileCount) &&
+      computedPendingReconcileCount > NUM.ZERO;
+  if (
+    hasProgressOwnerReconcileDebt &&
+    hasComputedOwnerReconcileDebt !== true
+  ) {
+    return progressHandoff;
+  }
+  return computedHandoff;
 }
 function buildControlSnapshotActiveGateOwnerCohort(options = {}) {
   const publicationActiveGateHandoff =
@@ -700,7 +744,10 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
         connectedNodeCoverage.hasCoverageGap ||
         activeProjectionCoverage.hasCoverageGap,
       topologyGap,
-      staleReplicaOpsInFlightCount: replicaOperationSummary.staleInFlightCount,
+      staleReplicaOpsInFlightCount:
+        Number.isInteger(replicaOperationSummary.effectiveStaleInFlightCount) ?
+          replicaOperationSummary.effectiveStaleInFlightCount :
+          replicaOperationSummary.staleInFlightCount,
     });
     return Object.freeze({
       ...evaluation,

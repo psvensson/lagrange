@@ -3,11 +3,7 @@ import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  buildCanonicalPublicationRecoveryEvidence,
-} from '../../src/control-plane/publication-recovery-evidence.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
 
@@ -169,6 +165,177 @@ test('AdminControlSnapshot includes canonical replica operation rows in the cont
         replicaId: 'nodes-p1-r4',
       },
       'control snapshot summaries should expose one normalized operation record per visible row',
+    );
+  });
+
+test('AdminControlSnapshot discounts post-publication stale replica-operation repair triggers',
+  async (t) => {
+    const nowMs = 200000;
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => nowMs,
+      startupRecoveryCoordinator: {
+        evaluate: () => ({ready: true}),
+      },
+    });
+    const buildStaleOperation = (operationId, partitionId, entityType) => ({
+      operation_id: operationId,
+      operation_type: 'REPLACE',
+      partition_id: partitionId,
+      entity_type: entityType,
+      entity_id: partitionId,
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      replica_id: `${partitionId}-r4`,
+      status: 'pending',
+      workflow_step: 'PENDING',
+      created_at: nowMs - 120000,
+      updated_at: nowMs - 120000,
+    });
+
+    const summary = snapshot.buildControlSnapshotReplicaOperationSummary([
+      buildStaleOperation(
+        'op-priority',
+        `${TABLES.REPLICA_OPERATIONS}-p1`,
+        'partition',
+      ),
+      buildStaleOperation(
+        'op-message-group',
+        'mg-node-1',
+        'message_group',
+      ),
+      buildStaleOperation('op-user-table', 'user_table-p1', 'partition'),
+    ], {
+      serviceRows: [],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+      },
+    });
+
+    t.equal(
+      summary.staleInFlightCount,
+      3,
+      'raw stale in-flight count remains visible for diagnostics',
+    );
+    t.equal(
+      summary.staleInFlightDiscountCount,
+      2,
+      'post-publication priority and topology rows should be discounted',
+    );
+    t.equal(
+      summary.effectiveStaleInFlightCount,
+      1,
+      'ordinary stale work should still trigger repair policy',
+    );
+  });
+
+test('AdminControlSnapshot exposes effective stale replica-operation counts in diagnostics',
+  async (t) => {
+    const nowMs = 200000;
+    const nodeRows = [{
+      node_id: 'node-1',
+      status: 'active',
+      connection_state: 'ready',
+      ready_lease_expires_at: nowMs + 1000,
+    }];
+    const serviceRows = [{
+      service_id: 'svc-1',
+      node_id: 'node-1',
+      status: 'active',
+    }];
+    const buildStaleOperation = (operationId, partitionId, entityType) => ({
+      operation_id: operationId,
+      operation_type: 'REPLACE',
+      partition_id: partitionId,
+      entity_type: entityType,
+      entity_id: partitionId,
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      replica_id: `${partitionId}-r4`,
+      status: 'pending',
+      workflow_step: 'PENDING',
+      created_at: nowMs - 120000,
+      updated_at: nowMs - 120000,
+    });
+    const replicaOperationRows = [
+      buildStaleOperation(
+        'op-priority',
+        `${TABLES.REPLICA_OPERATIONS}-p1`,
+        'partition',
+      ),
+      buildStaleOperation(
+        'op-message-group',
+        'mg-node-1',
+        'message_group',
+      ),
+      buildStaleOperation('op-user-table', 'user_table-p1', 'partition'),
+    ];
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => nowMs,
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.NODES) return nodeRows;
+          if (tableName === TABLES.SERVICES) return serviceRows;
+          if (tableName === TABLES.REPLICA_OPERATIONS) {
+            return replicaOperationRows;
+          }
+          return [];
+        },
+      },
+      startupRecoveryCoordinator: {
+        evaluate: () => ({ready: true}),
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }];
+        },
+        membershipPublicationService: {
+          async getLatestClusterPublication() {
+            return {
+              publicationEpoch: 7,
+              status: 'PUBLISHED',
+              publishedActiveNodeIds: ['node-1'],
+              requiredAckNodeIds: ['node-1'],
+              acknowledgedNodeIds: ['node-1'],
+              priorityPartitionSummary: {
+                satisfied: true,
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.equal(
+      result.controlPlaneDiagnostics.replicaOperations.staleInFlightCount,
+      3,
+      'control-plane diagnostics should preserve raw stale in-flight count',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.replicaOperations
+        .staleInFlightDiscountCount,
+      2,
+      'control-plane diagnostics should expose post-publication discounts',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.replicaOperations
+        .effectiveStaleInFlightCount,
+      1,
+      'control-plane diagnostics should expose effective stale count',
     );
   });
 

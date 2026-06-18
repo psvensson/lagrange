@@ -277,6 +277,7 @@ export const SOURCE_FIELD = Object.freeze({
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   PRIORITY_RECOVERY_PARTITION_WITNESSES: 'priorityRecoveryPartitionWitnesses',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
+  PROJECTION_DIAGNOSTICS: 'projectionDiagnostics',
   TOPOLOGY_OPERATOR_WITNESS: TOPOLOGY_OPERATOR_WITNESS_FIELD_NAME,
   READINESS_FAILURE: 'readinessFailure',
   PARTITION_ID: 'partitionId',

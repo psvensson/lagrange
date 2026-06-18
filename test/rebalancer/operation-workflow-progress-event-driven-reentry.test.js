@@ -136,15 +136,11 @@ const TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'remote target-service terminal progress snapshots wake the workflow owner';
 const TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'dispatch-pending active target progress snapshots re-enter workflow progress';
+const TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME =
+  'source-removal workflow progress snapshots re-enter workflow progress';
 const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
   'locally owned coordinator-created priority PENDING rows retry after ' +
   'workflow owner initialization';
-const TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME =
-  'timeout-due dispatch-pending snapshots should carry the stale-progress ' +
-  'reconcile owner outcome';
-const TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT =
-  'timeout-due dispatch-pending snapshots should use the stale-progress ' +
-  'reconcile command';
 const TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE =
   'timeout-due dispatch-pending snapshot normalization should wake the ' +
   'remote owner inline and arm bounded verification';
@@ -161,6 +157,9 @@ const TEST_ASSERT_TARGET_PROGRESS_PHASE =
 const TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY =
   'dispatch-pending active target progress should re-enter the ' +
   'observed-progress owner lane';
+const TEST_ASSERT_SOURCE_REMOVAL_PROGRESS_REENTRY =
+  'source-removal workflow progress should re-enter the observed-progress ' +
+  'owner lane';
 const TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT =
   'direct decision snapshot build should retain operation workflow progress ' +
   'contract';
@@ -1022,17 +1021,6 @@ test(
   async (t) => {
     const deliveries = [];
     const deferredTimers = [];
-    const operation = buildEventDrivenOperation({
-      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
-      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-      entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-      replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
-      sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
-      targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      createdAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
-      updatedAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
-    });
     const operationRow = buildEventDrivenOperationRow({
       operation_id: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
       partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
@@ -1803,6 +1791,93 @@ test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         representativeRerunRoute: TEST_PROGRESS_CONTRACT_ELIGIBLE_ROUTE,
       },
       TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const observedProgressOperationIds = [];
+  const operation = buildEventDrivenOperation({
+    status: ReplicaStatus.ACTIVE,
+    workflowStep: WORKFLOW_STEP.ACTIVE,
+    targetNodeId: TEST_OBSERVER_NODE_ID,
+  });
+  const operationWithSourceRemovalProgress = Object.freeze({
+    ...operation,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    status: ReplicaStatus.ACTIVE,
+    workflow_step: WORKFLOW_STEP.ACTIVE,
+    target_node_id: TEST_OBSERVER_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+      latestOperationStatus: ReplicaStatus.ACTIVE,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      completionState: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+      spreadGap: NUM.ZERO,
+      coordinatorOperation: operationWithSourceRemovalProgress,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.reconcileObservedProgressOperation =
+      async (operationId) => {
+        observedProgressOperationIds.push(operationId);
+        return true;
+      };
+
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operationWithSourceRemovalProgress],
+        buildEventDrivenPlanningSnapshot({
+          workflowStep: WORKFLOW_STEP.ACTIVE,
+          latestOperationStatus: ReplicaStatus.ACTIVE,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+          completionState: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+          spreadGap: NUM.ZERO,
+          coordinatorOperation: operationWithSourceRemovalProgress,
+        }),
+      );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+      'the focused fixture should preserve the source-removal phase',
+    );
+    t.same(
+      observedProgressOperationIds,
+      [operation.operationId],
+      TEST_ASSERT_SOURCE_REMOVAL_PROGRESS_REENTRY,
+    );
+    t.same(
+      [deliveries.length, deferredTimers.length],
+      [NUM.ZERO, NUM.ZERO],
+      'local source-removal re-entry should not wake the remote owner',
     );
   } finally {
     Date.now = originalDateNow;

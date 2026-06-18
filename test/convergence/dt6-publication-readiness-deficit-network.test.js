@@ -7,6 +7,10 @@ import {buildPublicationActiveGateHandoffContract} from
   '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {CONTROL_PLANE_READINESS_REASON} from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  EDGE_STATE,
+  buildTopologyConvergenceGraphFromArtifacts,
+} from '../../src/diagnostics/topology-convergence-graph.js';
 
 // DT6 item 1 — drive REAL readiness derivation into the REAL publication deficit decision on the
 // virtual clock. Step 8's publisher used a hardcoded `readinessByNodeId: {ready: true}` and a fixed
@@ -38,6 +42,27 @@ const INTERVAL_MS = 20;
 const N3_LEASE_EXPIRES_AT = START_MS + 150; // N3's ready-lease lapses mid-run
 const LONG_LEASE_AT = START_MS + 10_000; // N1/N2 stay live for the whole window
 const PENDING_REASON = CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING;
+const READINESS_EDGE_ID = 'readiness_startup_support';
+const PROJECTION_EVIDENCE_PATH =
+  'failureBundle.publicationConvergence.projectionDiagnostics';
+const READINESS_PROJECTION_EXCLUDED_SOURCE =
+  'publicationConvergence.projectionDiagnostics';
+const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+const FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
+const RECOVERY_OUTCOME_WAITING_FOR_CONSUMER = 'waiting_for_consumer';
+const REVISION_STATE_CURRENT = 'current';
+const STREAM_OUTCOME_STALE = 'stale';
+const READINESS_DECISION_MODE_CLUSTER_MEMBER_HEALTHY_ONLY =
+  'cluster_member_healthy_only';
+const READINESS_PROJECTION_EXCLUDED = 'readiness_projection_excluded';
+const CLUSTER_MEMBER_UNHEALTHY = 'cluster_member_unhealthy';
+const STARTUP_READINESS_OWNER = 'startup_readiness_owner';
+const STARTUP_SUPPORT_EVIDENCE = 'startup_support_evidence';
+const READINESS_RETRYABLE = 'readiness_retryable';
+const WAIT_FOR_READINESS_SUPPORT = 'wait_for_readiness_support';
+const READINESS_TERMINAL_STATE_SATISFIED = 'satisfied';
+const CLUSTER_MEMBER_HEALTH = 'cluster_member_health';
 
 // Node rows with real ready_lease_expires_at fields; no heartbeat, so once a lease lapses the real
 // liveness check reports the node not-live.
@@ -94,6 +119,70 @@ async function runReadinessDeficit() {
   return owner.samples;
 }
 
+function buildProjectionDiagnosticFailureBundle() {
+  const rows = nodeRows();
+  const readinessByNodeId = deriveReadinessByNodeId(
+    rows,
+    N3_LEASE_EXPIRES_AT,
+  );
+  const contract = buildPublicationActiveGateHandoffContract({
+    nodeRows: rows,
+    readinessByNodeId,
+    publicationConvergence: {
+      publicationEpoch: 1,
+      publishedActiveNodeIds: [...IDS],
+    },
+  });
+  const missingPublishedNodeIds = [...contract.pendingRecoveryNodeIds];
+  return {
+    scenario: 'dt6-publication-readiness-deficit',
+    summary: {
+      passed: false,
+      topReasons: [
+        {
+          reason: `publication_missing_active_node=${missingPublishedNodeIds[0]}`,
+          count: 1,
+        },
+      ],
+    },
+    publicationConvergence: {
+      publicationEpoch: 1,
+      publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+      publicationPending: true,
+      pendingAckCount: 0,
+      blockedNodeCount: 0,
+      missingPublishedCount: missingPublishedNodeIds.length,
+      missingPublishedNodeIds,
+      publishedActiveNodeIds: [...IDS],
+      ackState: ACK_STATE_ACKNOWLEDGED,
+      freshnessFence: FRESHNESS_FENCE_CONSUMER_LAG,
+      recoveryOutcome: RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+      streamOutcome: STREAM_OUTCOME_STALE,
+      publicationOwnerStream: {
+        revision: {state: REVISION_STATE_CURRENT},
+      },
+      activeGate: {
+        state: 'waiting',
+        ready: false,
+        progress: {
+          snapshotCoverageComplete: true,
+          activeNodeCount: IDS.length,
+          expectedNodeCount: IDS.length,
+          pendingAckCount: 0,
+          missingPublishedCount: missingPublishedNodeIds.length,
+        },
+      },
+      projectionDiagnostics: {
+        readinessDecisionMode:
+          READINESS_DECISION_MODE_CLUSTER_MEMBER_HEALTHY_ONLY,
+        recoveryEligibleProjectionEnabled: false,
+        readinessExcludedNodeIds: missingPublishedNodeIds,
+        clusterMemberUnhealthyExcludedNodeIds: missingPublishedNodeIds,
+      },
+    },
+  };
+}
+
 t.test('real readiness liveness drives the real deficit decision on the virtual clock', async (t) => {
   const samples = await runReadinessDeficit();
   t.ok(samples.length > 0, 'the owner tick recomputed readiness on the virtual clock');
@@ -126,4 +215,32 @@ t.test('the readiness-deficit drive is deterministic across runs', async (t) => 
   const a = await runReadinessDeficit();
   const b = await runReadinessDeficit();
   t.same(a, b, 'identical virtual drive -> identical readiness/deficit samples');
+});
+
+t.test('projection diagnostics become readiness-support evidence for a missing published active node', async (t) => {
+  const graph = buildTopologyConvergenceGraphFromArtifacts({
+    failureBundle: buildProjectionDiagnosticFailureBundle(),
+  });
+  const readinessEdge = graph.edges.find((edge) =>
+    edge.id === READINESS_EDGE_ID,
+  );
+
+  t.equal(graph.summary.firstFrontierEdgeId, READINESS_EDGE_ID);
+  t.equal(readinessEdge.state, EDGE_STATE.RETRYABLE);
+  t.equal(readinessEdge.evidencePath, PROJECTION_EVIDENCE_PATH);
+  t.equal(readinessEdge.source.classCode, READINESS_PROJECTION_EXCLUDED);
+  t.equal(readinessEdge.source.cause, CLUSTER_MEMBER_UNHEALTHY);
+  t.same(readinessEdge.reasons, [READINESS_RETRYABLE]);
+  t.match(readinessEdge.progressContract, {
+    owner: STARTUP_READINESS_OWNER,
+    boundary: STARTUP_SUPPORT_EVIDENCE,
+    state: READINESS_RETRYABLE,
+    reason: CLUSTER_MEMBER_UNHEALTHY,
+    nextAction: WAIT_FOR_READINESS_SUPPORT,
+    wakeSource: READINESS_PROJECTION_EXCLUDED_SOURCE,
+    retryAfterMs: 0,
+    terminalState: READINESS_TERMINAL_STATE_SATISFIED,
+    evidencePath: PROJECTION_EVIDENCE_PATH,
+    blockingDependency: CLUSTER_MEMBER_HEALTH,
+  });
 });

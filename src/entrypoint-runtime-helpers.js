@@ -22,6 +22,7 @@ export {
   resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
+  shutdownAdminRuntimeComposition,
   startAdminRuntimeComposition,
 } from './entrypoint-runtime-admin-composition.js';
 

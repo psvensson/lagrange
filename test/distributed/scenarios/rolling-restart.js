@@ -25,6 +25,8 @@ import {
 
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
 const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
+const ACKNOWLEDGED_WRITE_VISIBILITY_TIMEOUT_MS = 30000;
+const ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS = 500;
 const PRE_LOAD_READINESS_TIMEOUT_MS = 300000;
 const PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 8;
 const LOAD_READINESS_PHASE_PRE_LOAD = 'pre_load';
@@ -60,6 +62,10 @@ function rowsFromResult(result) {
     return result.rows;
   }
   return [];
+}
+
+function sleep(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function resolveClusterNodes(cluster) {
@@ -232,6 +238,7 @@ function buildAcknowledgedWriteVisibilityQuery(tableName, idColumn, ids) {
 async function assertAcknowledgedWritesVisibleOnReachableNodes(
   acknowledgedWrites,
   nodes,
+  options = {},
 ) {
   const ids = Array.isArray(acknowledgedWrites?.ids) ?
     [...new Set(acknowledgedWrites.ids
@@ -258,28 +265,63 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
     acknowledgedWrites?.idColumn,
     'log_id',
   );
+  const visibilityTimeoutMs = Math.max(
+    ZERO,
+    Math.floor(
+      normalizeFiniteNumber(
+        options.visibilityTimeoutMs,
+        ACKNOWLEDGED_WRITE_VISIBILITY_TIMEOUT_MS,
+      ),
+    ),
+  );
+  const visibilityPollIntervalMs = Math.max(
+    1,
+    Math.floor(
+      normalizeFiniteNumber(
+        options.visibilityPollIntervalMs,
+        ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS,
+      ),
+    ),
+  );
 
   for (const node of reachableNodes) {
-    const missingIds = [];
-    for (let index = ZERO; index < ids.length;
-      index += ACKNOWLEDGED_WRITE_BATCH_SIZE) {
-      const idBatch = ids.slice(index, index + ACKNOWLEDGED_WRITE_BATCH_SIZE);
-      const query = buildAcknowledgedWriteVisibilityQuery(
-        tableName,
-        idColumn,
-        idBatch,
-      );
-      const result = await node.query(query);
-      const visibleIds = new Set(
-        rowsFromResult(result)
-          .map((row) => row?.[ACKNOWLEDGED_WRITE_ALIAS])
-          .filter((id) => typeof id === 'string' && id.length > ZERO),
-      );
-      for (const id of idBatch) {
-        if (!visibleIds.has(id)) {
-          missingIds.push(id);
+    let missingIds = ids;
+    const deadlineMs = Date.now() + visibilityTimeoutMs;
+    for (;;) {
+      const nextMissingIds = [];
+      for (let index = ZERO; index < ids.length;
+        index += ACKNOWLEDGED_WRITE_BATCH_SIZE) {
+        const idBatch = ids.slice(
+          index,
+          index + ACKNOWLEDGED_WRITE_BATCH_SIZE,
+        );
+        const query = buildAcknowledgedWriteVisibilityQuery(
+          tableName,
+          idColumn,
+          idBatch,
+        );
+        const result = await node.query(query);
+        const visibleIds = new Set(
+          rowsFromResult(result)
+            .map((row) => row?.[ACKNOWLEDGED_WRITE_ALIAS])
+            .filter((id) => typeof id === 'string' && id.length > ZERO),
+        );
+        for (const id of idBatch) {
+          if (!visibleIds.has(id)) {
+            nextMissingIds.push(id);
+          }
         }
       }
+      missingIds = nextMissingIds;
+      if (missingIds.length === ZERO || Date.now() >= deadlineMs) {
+        break;
+      }
+      await sleep(
+        Math.min(
+          visibilityPollIntervalMs,
+          Math.max(ZERO, deadlineMs - Date.now()),
+        ),
+      );
     }
     assert.equal(
       missingIds.length,
@@ -369,6 +411,16 @@ function resolveRollingRestartScenarioConfig(options = {}) {
       normalizeFiniteNumber(
         options.postRestartConsistencyForceRepairAfterMs,
         TIMEOUTS.CONSISTENCY_CONVERGENCE_FORCE_REPAIR_AFTER,
+      ),
+    acknowledgedWriteVisibilityTimeoutMs:
+      normalizeFiniteNumber(
+        options.acknowledgedWriteVisibilityTimeoutMs,
+        ACKNOWLEDGED_WRITE_VISIBILITY_TIMEOUT_MS,
+      ),
+    acknowledgedWriteVisibilityPollIntervalMs:
+      normalizeFiniteNumber(
+        options.acknowledgedWriteVisibilityPollIntervalMs,
+        ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS,
       ),
   });
 }
@@ -499,6 +551,8 @@ async function run(cluster, options = {}) {
     postRestartConsistencyTimeoutMs,
     postRestartConsistencyPollIntervalMs,
     postRestartConsistencyForceRepairAfterMs,
+    acknowledgedWriteVisibilityTimeoutMs,
+    acknowledgedWriteVisibilityPollIntervalMs,
   } = resolveRollingRestartScenarioConfig(scenarioOptions);
   const benchmarkAdmissionSupported =
     supportsBenchmarkLoadAdmissionPlanning(cluster);
@@ -679,6 +733,11 @@ async function run(cluster, options = {}) {
         await assertAcknowledgedWritesVisibleOnReachableNodes(
           acknowledgedWrites,
           resolveClusterNodes(cluster),
+          {
+            visibilityTimeoutMs: acknowledgedWriteVisibilityTimeoutMs,
+            visibilityPollIntervalMs:
+              acknowledgedWriteVisibilityPollIntervalMs,
+          },
         );
     } catch (error) {
       failureMessages.push(error?.message || String(error));

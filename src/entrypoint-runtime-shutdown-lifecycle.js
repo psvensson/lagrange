@@ -13,6 +13,9 @@ import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
 } from './constants/entrypoint.js';
+import {
+  shutdownAdminRuntimeComposition,
+} from './entrypoint-runtime-admin-composition.js';
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
@@ -250,8 +253,10 @@ function createShutdownSignalHandler(options) {
       }
       await options.ownerCleanup();
       await options.bootstrapAPI.shutdown();
-      await options.adminAPI.shutdown();
-      options.liveQueryWiring.shutdown();
+      await shutdownAdminRuntimeComposition({
+        adminAPI: options.adminAPI,
+        liveQueryWiring: options.liveQueryWiring,
+      });
       process.exit(LOCAL_NUM_ZERO);
     } catch (error) {
       options.logger.error(options.failureMessage, {

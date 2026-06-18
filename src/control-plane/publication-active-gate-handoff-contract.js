@@ -51,7 +51,6 @@ import {
   buildPublicationActiveGateHandoffReconcileTarget,
   hasPublicationActiveGateOwnerRecoveryWaitSignal,
   selectMostAdvancedPublicationActiveGateHandoffCandidate,
-  selectPublicationActiveGateHandoffProgressContextRecord,
   selectPublicationActiveGateProgressRecord,
 } from './publication-active-gate-handoff-contract-selection.js';
 
@@ -602,28 +601,51 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
   const selectedHandoffContract = selectPublicationActiveGateHandoffContract(
     value,
   );
+  const selectedPendingReconcileNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      selectedHandoffContract?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
+      ],
+    );
+  const selectedPendingReconcileCount = Number(
+    selectedHandoffContract?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT
+    ],
+  );
+  const hasSelectedOwnerReconcileDebt =
+    isPublicationActiveGateHandoffRecord(selectedHandoffContract) &&
+    selectedHandoffContract.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
+    (
+      selectedPendingReconcileNodeIds.length > NUM.ZERO ||
+      Number.isFinite(selectedPendingReconcileCount) &&
+        selectedPendingReconcileCount > NUM.ZERO
+    );
   const handoffContract = normalizePublicationActiveGateHandoffContract(
     selectedHandoffContract,
   );
+  const targetHandoffContract =
+    hasSelectedOwnerReconcileDebt ? selectedHandoffContract : handoffContract;
   if (
-    !handoffContract ||
-    (handoffContract.nextAction !==
+    !targetHandoffContract ||
+    (targetHandoffContract.nextAction !==
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
-     handoffContract.nextAction !==
+     targetHandoffContract.nextAction !==
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .OBSERVE_OWNER_HANDOFF) ||
-    (handoffContract.missingPublishedCount === 0 &&
-     handoffContract.nextAction !==
+    (targetHandoffContract.missingPublishedCount === 0 &&
+     targetHandoffContract.nextAction !==
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION)
   ) {
     return buildPublicationActiveGateHandoffEmptyReconcileTarget(
-      handoffContract,
+      targetHandoffContract,
     );
   }
   return buildPublicationActiveGateHandoffReconcileTarget(
-    handoffContract,
+    targetHandoffContract,
     value,
   );
 }

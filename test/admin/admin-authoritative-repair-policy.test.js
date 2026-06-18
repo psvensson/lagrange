@@ -133,6 +133,38 @@ test('authoritative repair policy narrows stale replica-operation repair to repl
     );
   });
 
+test('authoritative repair policy keeps full repair for combined stale cache ' +
+  'and stale replica operations', async (t) => {
+  const tables = deriveAuthoritativeRepairTables({
+    triggerCodes: [
+      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+    ],
+  });
+
+  t.equal(
+    tables.includes(TABLES.PARTITIONS),
+    true,
+    'combined cache-stale repair must refresh partition leader authority',
+  );
+  t.equal(
+    tables.includes(TABLES.REPLICA_OPERATIONS),
+    true,
+    'combined cache-stale repair still refreshes stale replica operations',
+  );
+  t.same(tables, [
+    TABLES.NODES,
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    TABLES.NODE_ENDPOINTS,
+    TABLES.SERVICE_DEFINITIONS,
+    TABLES.SERVICE_ENDPOINTS,
+    TABLES.REPLICA_OPERATIONS,
+  ]);
+});
+
 test('authoritative repair policy narrows scoped discovery repair to topology tables',
   async (t) => {
     const tables = deriveAuthoritativeRepairTables({

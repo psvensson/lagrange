@@ -82,7 +82,11 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
 // CL-001 variant A guard: an OPEN publication whose published set has NO deficit
 // (missingPublishedCount === 0) but is still awaiting a recovery-eligible ack must
 // re-drive the owner reconcile to CLOSE it, instead of skipping with no-deficit.
-function ackCompletionCtx({recoveryEligible, dimensions}) {
+function ackCompletionCtx({
+  recoveryEligible,
+  dimensions,
+  publicationStatus = 'OPEN',
+} = {}) {
   let reconcileCalls = 0;
   // recoveryEligible is the legacy single-dimension shorthand; dimensions lets a
   // case set the full readiness shape (clusterMemberHealthy/processAlive) directly.
@@ -105,7 +109,7 @@ function ackCompletionCtx({recoveryEligible, dimensions}) {
       },
       latestPublicationRow: {
         publicationEpoch: 20,
-        status: 'OPEN',
+        status: publicationStatus,
         publishedActiveNodeIds: ['seed', 'peer'],
         requiredAckNodeIds: ['seed', 'peer'],
         acknowledgedNodeIds: ['seed'],
@@ -123,6 +127,20 @@ t.test('drive: re-drives an OPEN publication awaiting a recovery-eligible ack (C
   const drove = await drive.call(ctx);
   t.equal(drove, true, 'drives despite zero published-set deficit');
   t.equal(reconcileCalls(), 1, 'reconcile invoked to close the OPEN publication');
+});
+
+t.test('drive: re-drives an ACK_PENDING publication awaiting a recovery-eligible ack (CL-001)', async (t) => {
+  const {ctx, reconcileCalls} = ackCompletionCtx({
+    publicationStatus: 'ACK_PENDING',
+    recoveryEligible: true,
+  });
+  const drove = await drive.call(ctx);
+  t.equal(drove, true, 'drives despite zero published-set deficit');
+  t.equal(
+    reconcileCalls(),
+    1,
+    'reconcile invoked to close the ACK_PENDING publication',
+  );
 });
 
 // CL-001 broadening (gate 20260613T075853Z): the recurring wedge is an OPEN
@@ -198,7 +216,7 @@ t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
   t.notOk(multi.membershipSinglePartitionAsserted, 'not latched while violated');
 });
 
-t.test('start: no-op when leader-driven mode is disabled', async (t) => {
+t.test('start: no-op when explicitly disabled', async (t) => {
   let intervals = 0;
   const ctx = {};
   start.call(ctx, {enabled: false, setIntervalFn: () => {
@@ -206,6 +224,27 @@ t.test('start: no-op when leader-driven mode is disabled', async (t) => {
   }});
   t.equal(intervals, 0);
   t.equal(ctx.ownerMembershipDriverTimer, undefined);
+});
+
+t.test('start: defaults enabled when no explicit option is provided', async (t) => {
+  const priorFlag = process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+  delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+  t.teardown(() => {
+    if (priorFlag === undefined) {
+      delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+      return;
+    }
+    process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = priorFlag;
+  });
+  let intervals = 0;
+  const fakeTimer = {unref() {}};
+  const ctx = {};
+  start.call(ctx, {setIntervalFn: () => {
+    intervals += 1; return fakeTimer;
+  }});
+  t.equal(intervals, 1, 'interval started with legacy flag unset');
+  t.equal(ctx.ownerMembershipDriverTimer, fakeTimer);
+  stop.call(ctx);
 });
 
 t.test('start/stop: enabled starts an interval; stop clears it', async (t) => {

@@ -65,6 +65,7 @@ import {
   resolveStartupJoinDecision,
   reportStartupRuntimeHandoff,
   scheduleStartupLivenessPulse,
+  shutdownAdminRuntimeComposition,
   startAdminRuntimeComposition,
   startDynamicConfigWiring,
   startLogsTablePersistence,
@@ -82,6 +83,9 @@ const LOCAL_STR_SEED = 'seed';
 const LOCAL_STR_PY3S1 = 'Configuration loaded';
 const LOCAL_STR_REATTEMPT_JOIN =
   'Re-attempting cluster join after retryable failure';
+const LOCAL_STR_UNBOUNDED = 'unbounded';
+const LOCAL_STR_DEBUG = 'debug';
+const LOCAL_STR_INFO = 'info';
 // A retryable join failure (e.g. transient transport/participant unavailability
 // during a rolling restart) should re-compose a fresh join rather than exiting
 // the node permanently. Bounded so a genuinely non-joinable node still fails
@@ -305,6 +309,8 @@ async function startJoinNode(options) {
       attempt: joinAttempt,
     });
     await bootstrapAPI.shutdown();
+    await shutdownAdminRuntimeComposition(joinAdminRuntime);
+    joinAdminRuntime = null;
     // Never abandon on a transient: when JOIN_NEVER_ABANDON_ON_RETRYABLE is set,
     // a retryable failure re-attempts forever (only a non-retryable failure
     // exits). Otherwise fall back to the bounded re-attempt count.
@@ -333,7 +339,7 @@ async function startJoinNode(options) {
         nodeId,
         attempt: joinAttempt + LOCAL_NUM_ONE,
         maxAttempts: JOIN_NEVER_ABANDON_ON_RETRYABLE ?
-          'unbounded' :
+          LOCAL_STR_UNBOUNDED :
           JOIN_REATTEMPT_MAX_ATTEMPTS,
         delayMs,
       });
@@ -754,9 +760,9 @@ async function main() {
   const loggingService = LoggingService.getInstance();
   loggingService.initialize({
     nodeId: config.get(CONFIG_KEY.NODE_ID),
-    level: debugLogsEnabled ? 'debug' : configuredLogLevel,
+    level: debugLogsEnabled ? LOCAL_STR_DEBUG : configuredLogLevel,
     persistLevel: debugLogsEnabled ?
-      (configuredLogLevel || 'info') :
+      (configuredLogLevel || LOCAL_STR_INFO) :
       undefined,
     prettyPrint: config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT),
   });

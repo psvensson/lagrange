@@ -583,6 +583,394 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
     });
 
   await t.test(
+    'RebalanceCoordinator timeout scan wakes target owner for system REPLACE source-removal rows',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-system-source',
+        enableTimeouts: false,
+        messageRouter,
+        cacheData: {
+          nodes: [
+            {
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-system-target',
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+          ],
+          services: [
+            {
+              service_id: 'contexts-p1-r1',
+              replica_id: 'contexts-p1-r1',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+              address: 'node-system-source/partition/contexts-p1-r1',
+            },
+            {
+              service_id: 'contexts-p1-r2',
+              replica_id: 'contexts-p1-r2',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-source/partition/contexts-p1-r2',
+            },
+            {
+              service_id: 'contexts-p1-r3',
+              replica_id: 'contexts-p1-r3',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-source/partition/contexts-p1-r3',
+            },
+            {
+              service_id: 'contexts-p1-r4',
+              replica_id: 'contexts-p1-r4',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-target',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-target/partition/contexts-p1-r4',
+            },
+          ],
+        },
+      });
+      coordinator.initialize();
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'contexts-p1',
+          entityType: 'partition',
+          entityId: 'contexts-p1',
+          nodeId: 'node-system-target',
+          sourceNodeId: 'node-system-source',
+          replicaId: 'contexts-p1-r1',
+        });
+
+        operation.replicaId = 'contexts-p1-r4';
+        await coordinator.workflowOwner.updateStep(
+          operation,
+          WORKFLOW_STEP.ACTIVE,
+        );
+        coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
+
+        await coordinator.checkTimeouts();
+
+        t.equal(
+          deliveries.length,
+          1,
+          'source timeout scan should wake the target operation owner',
+        );
+        t.equal(
+          deliveries[0]?.options?.targetNodeId,
+          'node-system-target',
+          'handoff should target the semantic operation owner',
+        );
+        t.equal(
+          deliveries[0]?.options?.deliverySource,
+          'coordinator_created_remote_handoff',
+          'handoff should use the bounded remote owner path',
+        );
+        t.equal(
+          deliveries[0]?.payload?.operationId,
+          operation.operationId,
+          'handoff payload should identify the ACTIVE replace operation',
+        );
+        t.equal(
+          deliveries[0]?.payload?.operationRow?.workflow_step,
+          WORKFLOW_STEP.ACTIVE,
+          'handoff should preserve the ACTIVE source-removal row',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'RebalanceCoordinator keeps system REPLACE handoff rows hidden from third-node cache scans',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-system-observer',
+        enableTimeouts: false,
+        cacheData: {
+          nodes: [
+            {
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-system-target',
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-system-observer',
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+          ],
+          services: [
+            {
+              service_id: 'contexts-p1-r1',
+              replica_id: 'contexts-p1-r1',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+              address: 'node-system-source/partition/contexts-p1-r1',
+            },
+            {
+              service_id: 'contexts-p1-r2',
+              replica_id: 'contexts-p1-r2',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-source/partition/contexts-p1-r2',
+            },
+            {
+              service_id: 'contexts-p1-r3',
+              replica_id: 'contexts-p1-r3',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-source',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-source/partition/contexts-p1-r3',
+            },
+            {
+              service_id: 'contexts-p1-r4',
+              replica_id: 'contexts-p1-r4',
+              service_type: 'partition',
+              partition_id: 'contexts-p1',
+              node_id: 'node-system-target',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-system-target/partition/contexts-p1-r4',
+            },
+          ],
+        },
+      });
+      coordinator.initialize();
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'contexts-p1',
+          entityType: 'partition',
+          entityId: 'contexts-p1',
+          nodeId: 'node-system-target',
+          sourceNodeId: 'node-system-source',
+          replicaId: 'contexts-p1-r1',
+        });
+
+        operation.replicaId = 'contexts-p1-r4';
+        await coordinator.workflowOwner.updateStep(
+          operation,
+          WORKFLOW_STEP.ACTIVE,
+        );
+
+        const cachedIncompleteOperations =
+          coordinator.repository.queryCachedIncompleteOperations();
+
+        t.equal(
+          cachedIncompleteOperations.length,
+          0,
+          'third-node cache scans should not expose remote system REPLACE rows',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'RebalanceCoordinator replays system REPLACE source removal for the exact recorded source',
+    async (t) => {
+      const SOURCE_NODE_ID = 'node-system-source';
+      const TARGET_NODE_ID = 'node-system-target';
+      const PARTITION_ID = 'contexts-p1';
+      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
+      const STABLE_REPLICA_ID = `${PARTITION_ID}-r3`;
+      const TARGET_REPLICA_ID = `${PARTITION_ID}-r4`;
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: TARGET_NODE_ID,
+        enableTimeouts: false,
+        messageRouter,
+        cacheData: {
+          nodes: [
+            {
+              node_id: SOURCE_NODE_ID,
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: TARGET_NODE_ID,
+              status: ReplicaStatus.ACTIVE,
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+          ],
+          services: [
+            {
+              service_id: SOURCE_REPLICA_ID,
+              replica_id: SOURCE_REPLICA_ID,
+              service_type: 'partition',
+              partition_id: PARTITION_ID,
+              node_id: SOURCE_NODE_ID,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+              address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
+            },
+            {
+              service_id: STABLE_REPLICA_ID,
+              replica_id: STABLE_REPLICA_ID,
+              service_type: 'partition',
+              partition_id: PARTITION_ID,
+              node_id: SOURCE_NODE_ID,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: `${SOURCE_NODE_ID}/partition/${STABLE_REPLICA_ID}`,
+            },
+            {
+              service_id: TARGET_REPLICA_ID,
+              replica_id: TARGET_REPLICA_ID,
+              service_type: 'partition',
+              partition_id: PARTITION_ID,
+              node_id: TARGET_NODE_ID,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: `${TARGET_NODE_ID}/partition/${TARGET_REPLICA_ID}`,
+            },
+          ],
+        },
+      });
+      coordinator.initialize();
+      coordinator.workflowOwner.getActualReplicaStatus =
+        async () => ReplicaStatus.ACTIVE;
+      const originalEvaluateRemoveSafety =
+        coordinator.workflowOwner.evaluateRemoveSafety.bind(
+          coordinator.workflowOwner,
+        );
+      coordinator.workflowOwner.evaluateRemoveSafety = async (operation) => {
+        if (
+          operation?.type === OperationType.REPLACE &&
+          operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+        ) {
+          return coordinator.workflowOwner.buildSafeRemoveSafetyEvaluation();
+        }
+        return originalEvaluateRemoveSafety(operation);
+      };
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: PARTITION_ID,
+          entityType: 'partition',
+          entityId: PARTITION_ID,
+          nodeId: TARGET_NODE_ID,
+          sourceNodeId: SOURCE_NODE_ID,
+          replicaId: SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId = TARGET_REPLICA_ID;
+        operation.sourceReplicaId = SOURCE_REPLICA_ID;
+        await coordinator.workflowOwner.updateStep(
+          operation,
+          WORKFLOW_STEP.ACTIVE,
+        );
+
+        const progressed =
+          await coordinator.workflowOwner.reconcileOperationProgress(operation);
+        const persistedOperation =
+          await coordinator.getOperation(operation.operationId);
+
+        t.equal(
+          progressed,
+          true,
+          'ACTIVE system REPLACE should continue source removal',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'ACTIVE system REPLACE should dispatch source removal once',
+        );
+        t.equal(
+          deliveries[0]?.target,
+          `${SOURCE_NODE_ID}/service/replica-handler`,
+          'source removal should dispatch to the recorded source node',
+        );
+        t.equal(
+          deliveries[0]?.payload?.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'ACTIVE system REPLACE should dispatch a remove request',
+        );
+        t.equal(
+          deliveries[0]?.payload?.replicaId,
+          SOURCE_REPLICA_ID,
+          'source removal should target the exact recorded source replica',
+        );
+        t.not(
+          deliveries[0]?.payload?.replicaId,
+          `${PARTITION_ID}-r2`,
+          'source removal must not treat an unrelated removed sibling as completion',
+        );
+        t.equal(
+          persistedOperation?.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'REPLACE should remain in source-removal progress rather than completing from missing sibling evidence',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
     'RebalanceCoordinator keeps critical REPLACE in syncing while the authoritative replacement remains learner',
     async (t) => {
       const deliveries = [];

@@ -45,7 +45,6 @@ import {
   OBSERVATION_MODE_UNKNOWN,
   OBSERVATION_SOURCE_CONTROL_SNAPSHOT,
   PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH,
-  PARTITION_LEADER_AUTHORITY_FIELD_SNAPSHOT_REVISION,
   PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH,
   VALUE_UNKNOWN,
   normalizeConsistencyInteger,
@@ -438,34 +437,69 @@ function buildAuthorityEvidenceByPartitionId(records, partitionIds) {
   return evidenceByPartitionId;
 }
 
-function collectAuthorityEpochValues(certificates, fieldName) {
-  return [
-    ...new Set(
-      certificates
-        .map((certificate) => certificate?.[fieldName])
-        .filter(Number.isInteger),
-    ),
-  ];
+function buildAuthorityEpochKey(certificate) {
+  const topologyEpoch = Number.isInteger(
+    certificate?.[PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH],
+  ) ?
+    certificate[PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH] :
+    VALUE_UNKNOWN;
+  const membershipEpoch = Number.isInteger(
+    certificate?.[PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH],
+  ) ?
+    certificate[PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH] :
+    VALUE_UNKNOWN;
+  return String(topologyEpoch) + ':' + String(membershipEpoch);
 }
 
-function hasDivergentAuthorityEpoch(certificates) {
-  const topologyEpochValues = collectAuthorityEpochValues(
-    certificates,
-    PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH,
-  );
-  const membershipEpochValues = collectAuthorityEpochValues(
-    certificates,
-    PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH,
-  );
-  const snapshotRevisionValues = collectAuthorityEpochValues(
-    certificates,
-    PARTITION_LEADER_AUTHORITY_FIELD_SNAPSHOT_REVISION,
-  );
-  return (
-    topologyEpochValues.length > CONSISTENCY_SINGLE_REASON_COUNT ||
-    membershipEpochValues.length > CONSISTENCY_SINGLE_REASON_COUNT ||
-    snapshotRevisionValues.length > CONSISTENCY_SINGLE_REASON_COUNT
-  );
+function isStaleUsableAuthorityRecord(record) {
+  return record?.snapshotRevisionState ===
+    CONTROL_PLANE_SNAPSHOT_REVISION_STATE.STALE_USABLE;
+}
+
+function buildRecordsByNodeId(records) {
+  const recordsByNodeId = new Map();
+  for (const record of Array.isArray(records) ? records : []) {
+    const nodeId = String(record?.nodeId || VALUE_UNKNOWN);
+    recordsByNodeId.set(nodeId, record);
+  }
+  return recordsByNodeId;
+}
+
+function findSameEpochAuthorityLeaderDivergence(
+  evidenceEntries,
+  recordsByNodeId,
+) {
+  const cohortsByEpochKey = new Map();
+  for (const [nodeId, certificate] of evidenceEntries) {
+    const epochKey = buildAuthorityEpochKey(certificate);
+    const cohort = cohortsByEpochKey.get(epochKey) || [];
+    cohort.push({nodeId, certificate});
+    cohortsByEpochKey.set(epochKey, cohort);
+  }
+  for (const cohort of cohortsByEpochKey.values()) {
+    if (cohort.length < CONSISTENCY_SINGLE_REASON_COUNT + 1) {
+      continue;
+    }
+    if (
+      cohort.some((entry) =>
+        isStaleUsableAuthorityRecord(recordsByNodeId.get(entry.nodeId)),
+      )
+    ) {
+      continue;
+    }
+    const authorityLeaderIds = [
+      ...new Set(
+        cohort.map((entry) => entry.certificate.leaderNodeId),
+      ),
+    ];
+    if (authorityLeaderIds.length > CONSISTENCY_SINGLE_REASON_COUNT) {
+      return {
+        authorityLeaderIds,
+        evidenceEntries: cohort,
+      };
+    }
+  }
+  return null;
 }
 
 function buildAuthorityMismatchMessage({
@@ -484,6 +518,7 @@ function buildAuthorityMismatchMessage({
 }
 
 function buildAuthorityBackedLeaderMismatch(records, leaderMismatch) {
+  const recordsByNodeId = buildRecordsByNodeId(records);
   const referenceRecord = (Array.isArray(records) ? records : []).find(
     (record) => record?.nodeId === leaderMismatch?.referenceNodeId,
   );
@@ -509,9 +544,13 @@ function buildAuthorityBackedLeaderMismatch(records, leaderMismatch) {
     const authorityLeaderIds = [
       ...new Set(certificates.map((certificate) => certificate.leaderNodeId)),
     ];
+    const sameEpochAuthorityLeaderDivergence =
+      findSameEpochAuthorityLeaderDivergence(
+        evidenceEntries,
+        recordsByNodeId,
+      );
     const reasonCode =
-      authorityLeaderIds.length > CONSISTENCY_SINGLE_REASON_COUNT &&
-      !hasDivergentAuthorityEpoch(certificates) ?
+      sameEpochAuthorityLeaderDivergence ?
         CONSISTENCY_REASON_CODE_PARTITION_LEADER_AUTHORITY_DIVERGED :
         CONSISTENCY_REASON_CODE_OBSERVER_AUTHORITY_VISIBILITY_LAG;
     const authorityDetails =

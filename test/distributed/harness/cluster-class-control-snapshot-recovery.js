@@ -1,5 +1,7 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
+import {CONVERGENCE_DEFAULTS} from './constants.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
+import {isPostRebalanceCdcProjectionVisibleSatisfied} from './post-rebalance-closure-contract.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
@@ -11,7 +13,6 @@ import {
   CONTROL_SNAPSHOT_MISSING_ROWS_ERROR,
   CONTROL_SNAPSHOT_NO_CANDIDATES_ERROR,
   CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE,
-  CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE,
   CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_GATE_UNAVAILABLE,
   CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_UNAVAILABLE,
   CONTROL_SNAPSHOT_REACHABILITY_SOURCE,
@@ -39,8 +40,61 @@ import {
   selectAlternativeSnapshotWitness,
 } from './cluster-control-snapshot-recovery.js';
 const {
+  countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
 } = ASSERTIONS_CONVERGENCE_WAIT;
+
+function normalizeControlSnapshotRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ?
+    value :
+    {};
+}
+
+function resolveControlSnapshotExpectedPartitionIds(leaders, voterCounts) {
+  return [
+    ...new Set([
+      ...Object.keys(normalizeControlSnapshotRecord(leaders)),
+      ...Object.keys(normalizeControlSnapshotRecord(voterCounts)),
+    ]),
+  ];
+}
+
+function normalizeControlSnapshotNonNegativeCount(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+function resolveControlSnapshotCdcProjectionVisibleSatisfied({
+  leaders,
+  voterCounts,
+  replicaOperations,
+  controlPlaneDiagnostics,
+  cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+  options,
+}) {
+  const expectedPartitionIds = resolveControlSnapshotExpectedPartitionIds(
+    leaders,
+    voterCounts,
+  );
+  if (expectedPartitionIds.length === 0) {
+    return false;
+  }
+  return isPostRebalanceCdcProjectionVisibleSatisfied({
+    expectedPartitionIds,
+    leaders,
+    voterCounts,
+    targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    inFlightReplicaOperationCount: normalizeControlSnapshotNonNegativeCount(
+      replicaOperations?.inFlightCount,
+    ),
+    staleInFlightReplicaOperationCount: normalizeControlSnapshotNonNegativeCount(
+      replicaOperations?.staleInFlightCount,
+    ),
+    cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    ignoreStaleInFlightReplicaOperations:
+      options.ignoreStaleInFlightReplicaOperations === true,
+    controlPlaneDiagnostics,
+  });
+}
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -980,7 +1034,7 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
     };
   }
 
-  async _probeControlPlaneQuiescenceSnapshot(deadline) {
+  async _probeControlPlaneQuiescenceSnapshot(deadline, options = {}) {
     const nodes = [...this._nodes.values()];
     nodes.sort((left, right) => {
       const leftRank = left.role === NODE_ROLES.SEED ? 0 : 1;
@@ -1030,6 +1084,31 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
           payload.leaders && typeof payload.leaders === 'object' ?
             payload.leaders :
             {};
+        const voterCounts =
+          payload.voterCounts && typeof payload.voterCounts === 'object' ?
+            payload.voterCounts :
+            {};
+        const cdcProjectionVisibleSatisfied =
+          resolveControlSnapshotCdcProjectionVisibleSatisfied({
+            leaders,
+            voterCounts,
+            replicaOperations,
+            controlPlaneDiagnostics,
+            cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+            options,
+          });
+        const additionalInFlightDiscountCount =
+          countAdditionalPostRebalanceReplicaOperationDiscounts(
+            controlPlaneDiagnostics,
+            replicaOperationRows,
+            {
+              allowPostPublicationNonBlockingReplicaOperations: true,
+              cdcProjectionVisibleSatisfied,
+              criticalSystemTopologyReady: false,
+              inFlightOperationIds: replicaOperations.inFlightOperationIds,
+              operationTimelineById: replicaOperations.operationTimelineById,
+            },
+          );
         const leaderEntries = Object.entries(leaders).sort((left, right) =>
           left[0].localeCompare(right[0]),
         );
@@ -1049,6 +1128,7 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
               replicaOperations.staleInFlightCount :
               ZERO,
           cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+          additionalInFlightDiscountCount,
           partitionGroupInFlight:
             normalizeReplicaOperationPartitionGroupInFlight(
               replicaOperations.partitionGroupInFlight,
@@ -1058,6 +1138,11 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
           operationTimelineSignature: buildReplicaOperationTimelineSignature(
             replicaOperations.operationTimelineById,
           ),
+          replicaOperationRows,
+          inFlightOperationIds: replicaOperations.inFlightOperationIds,
+          operationTimelineById: replicaOperations.operationTimelineById,
+          controlPlaneDiagnostics,
+          cdcProjectionVisibleSatisfied,
           controlPlanePressureSignals:
             buildControlPlaneQuiescencePressureSignalsFromDiagnostics(
               controlPlaneDiagnostics,

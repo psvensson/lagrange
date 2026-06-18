@@ -370,7 +370,7 @@ class ControlPlaneSetup {
     // Workstream A: start the always-on owner-membership driver UNCONDITIONALLY
     // here at setup — NOT in the readiness-gated startup handoff — so it cannot be
     // gated behind the metadata-publication readiness it exists to drive. Self-
-    // gates on the LAGRANGE_MEMBERSHIP_LEADER_DRIVEN flag and the owner predicate.
+    // gates on the control_plane_publications write-leader predicate.
     logger.warn('DIAG control-plane-setup reached startOwnerMembershipDriver call', {
       nodeId,
       hasMethod:

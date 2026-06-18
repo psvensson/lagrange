@@ -654,6 +654,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   isPriorityControlPlanePartition,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
+  isSystemTablePartition,
   readAuthoritativeControlPlaneRows,
   resolveAuthoritativeReadModeContract,
   resolveReplicaOperationVisibilityReadMode,

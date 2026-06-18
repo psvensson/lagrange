@@ -109,6 +109,16 @@ function deriveAuthoritativeRepairTables(options = {}) {
       .filter(Boolean) :
     [];
   const uniqueTriggerCodes = [...new Set(triggerCodes)];
+  if (
+    uniqueTriggerCodes.includes(
+      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+    ) &&
+    uniqueTriggerCodes.includes(
+      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+    )
+  ) {
+    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+  }
   const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
     triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
   const effectiveTriggerCodes = narrowedTriggerCodes.length > NUM.ZERO ?

@@ -30,6 +30,8 @@ const TEST_SEED_ADDRESS = 'http://localhost:8080';
 const RETRYABLE_REGISTRATION_ERROR =
   'Distributed operation failed due to participant failures';
 const NON_RETRYABLE_ERROR = 'join plan validation rejected the node identity';
+const JOIN_READINESS_TIMEOUT_ERROR =
+  'join_readiness_timeout: topology_not_ready after 120000ms';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -114,6 +116,17 @@ function buildRetryableError() {
   return new Error(RETRYABLE_REGISTRATION_ERROR);
 }
 
+function buildJoinReadinessTimeoutError() {
+  const error = new Error(JOIN_READINESS_TIMEOUT_ERROR);
+  error.code = 'JOIN_READINESS_TIMEOUT';
+  error.deferRetry = true;
+  error.joinReadiness = {
+    reasons: ['topology_not_ready'],
+    timeoutKind: 'no_progress',
+  };
+  return error;
+}
+
 test('CL-006: retryable join-step failure preserves join state for the ' +
   'resume re-entry (no destructive cleanup, no FAILED event)', async (t) => {
   initializeTestEnvironment();
@@ -158,6 +171,33 @@ test('CL-006: non-retryable join failure still runs the full destructive ' +
     'terminal failure must clean up partially initialized services');
   t.equal(spies.failedEvents, 1,
     'terminal failure must emit FAILED for diagnostics consumers');
+});
+
+test('CL-006: exhausted join-readiness timeout preserves retryable result ' +
+  'for outer reattempt', async (t) => {
+  initializeTestEnvironment();
+
+  const {service, spies} = buildResumableJoinHarness({
+    maxAttempts: 1,
+    failures: [buildJoinReadinessTimeoutError()],
+  });
+
+  const result = await service.join();
+
+  t.equal(result.success, false,
+    'join should fail terminally after the in-process resume budget exhausts');
+  t.equal(result.retryable, true,
+    'deferred join-readiness timeout must remain retryable for the entrypoint');
+  t.equal(result.error, JOIN_READINESS_TIMEOUT_ERROR,
+    'result should preserve the canonical readiness timeout message');
+  t.equal(spies.coordinatorRuns, 1,
+    'exhausted budget should not re-enter the checkpointed coordinator');
+  t.equal(spies.cleanupFailedJoinCalls, 1,
+    'terminal failure still runs destructive cleanup before outer reattempt');
+  t.equal(spies.genericCleanupCalls, 1,
+    'terminal failure still cleans partially initialized services');
+  t.equal(spies.failedEvents, 1,
+    'terminal failure still emits FAILED diagnostics');
 });
 
 test('CL-006: a resumed pass that skips the infrastructure segment catches ' +

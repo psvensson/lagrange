@@ -5,6 +5,7 @@ import {
   POST_REBALANCE_CLOSURE_REASON,
   POST_REBALANCE_CLOSURE_STATE,
   buildPostRebalanceClosureSnapshot,
+  countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
 } from '../post-rebalance-closure-contract.js';
 
@@ -41,11 +42,22 @@ const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
 const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+const PRIORITY_RECOVERY_VISIBILITY_STATE_UNAVAILABLE = 'unavailable';
 const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
 const CDC_PROJECTION_OWNER_OPERATION_ID_ONE =
   'op-cdc-projection-owner-one';
 const CDC_PROJECTION_OWNER_OPERATION_ID_TWO =
   'op-cdc-projection-owner-two';
+const PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE = 'remove_phase';
+const PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_TERMINAL = 'terminal';
+const PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH =
+  'closure_satisfied_fresh';
+const PRIORITY_RECOVERY_OPERATION_STATUS_FAILED = 'failed';
+const PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE = 'active';
+const PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED = 'FAILED';
+const PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE = 'ACTIVE';
+const PRIORITY_RECOVERY_STATE_TERMINAL_FAILED = 'terminal_failed';
 const ACTIVE_NODE_IDS_THREE = Object.freeze([NODE_ONE, NODE_TWO, NODE_THREE]);
 const ACTIVE_NODE_IDS_FOUR = Object.freeze([
   NODE_ONE,
@@ -98,17 +110,24 @@ const OWNER_COVERED_MISSING_PARTITION_IDS = Object.freeze([
 const OWNER_UNCOVERED_MISSING_PARTITION_IDS = Object.freeze([PARTITION_THREE]);
 const PARTITION_ONLY_PRIORITY_RECOVERY_OPERATION_COUNT = 1;
 
-function buildCacheVisiblePriorityRecoverySnapshot(partitionId, operationId) {
+function buildCacheVisiblePriorityRecoverySnapshot(
+  partitionId,
+  operationId,
+  overrides = {},
+) {
   return {
     partitionId,
     operationId,
     semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
     observation: {
       visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+      ...(overrides.observation || {}),
     },
     completion: {
       state: PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
+      ...(overrides.completion || {}),
     },
+    ...overrides,
   };
 }
 
@@ -543,6 +562,728 @@ test('post-rebalance closure counts partition-only priority recovery evidence',
         [],
       ),
       PARTITION_ONLY_PRIORITY_RECOVERY_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not discount active failed priority recovery workflow evidence',
+  async () => {
+    assert.strictEqual(
+      countCacheVisibleSatisfiedPriorityRecoveryOperations(
+        {
+          publicationConvergence: {
+            priorityRecoveryPartitionIdsBySemanticState: {
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+                PARTITION_TWO,
+              ],
+            },
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [
+              buildCacheVisiblePriorityRecoverySnapshot(
+                PARTITION_TWO,
+                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                {
+                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+                  latestOperationWorkflowStep:
+                    PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+                  latestOperationStatus:
+                    PRIORITY_RECOVERY_OPERATION_STATUS_FAILED,
+                },
+              ),
+            ],
+          },
+        },
+        [{
+          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+          partition_id: PARTITION_TWO,
+          status: 'creating',
+          workflow_step: 'CREATING',
+        }],
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure discounts terminal cache-visible priority recovery workflow evidence',
+  async () => {
+    assert.strictEqual(
+      countCacheVisibleSatisfiedPriorityRecoveryOperations(
+        {
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [
+              buildCacheVisiblePriorityRecoverySnapshot(
+                PARTITION_TWO,
+                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                {
+                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+                  workflowProgressPhaseId:
+                    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_TERMINAL,
+                  latestOperationWorkflowStep:
+                    PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+                  latestOperationStatus:
+                    PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+                },
+              ),
+            ],
+          },
+        },
+        [{
+          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+          partition_id: PARTITION_TWO,
+          status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+        }],
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not discount terminal priority recovery workflow before cache visibility',
+  async () => {
+    assert.strictEqual(
+      countCacheVisibleSatisfiedPriorityRecoveryOperations(
+        {
+          publicationConvergence: {
+            priorityRecoveryPartitionIdsBySemanticState: {
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+                PARTITION_TWO,
+              ],
+            },
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [
+              buildCacheVisiblePriorityRecoverySnapshot(
+                PARTITION_TWO,
+                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                {
+                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+                  workflowProgressPhaseId:
+                    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_TERMINAL,
+                  latestOperationWorkflowStep:
+                    PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+                  latestOperationStatus:
+                    PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+                  observation: {
+                    visibilityState:
+                      PRIORITY_RECOVERY_VISIBILITY_STATE_UNAVAILABLE,
+                  },
+                },
+              ),
+            ],
+          },
+        },
+        [{
+          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+          partition_id: PARTITION_TWO,
+          status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+        }],
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure keeps failed terminal priority recovery carriers open',
+  async () => {
+    const failureCarrierOverrides = [
+      {conditions: {latestOperationStatus: PRIORITY_RECOVERY_OPERATION_STATUS_FAILED}},
+      {actuationState: PRIORITY_RECOVERY_STATE_TERMINAL_FAILED},
+      {topologyOperatorWitness: {
+        currentStepState: PRIORITY_RECOVERY_STATE_TERMINAL_FAILED,
+      }},
+    ];
+
+    for (const overrides of failureCarrierOverrides) {
+      assert.strictEqual(
+        countCacheVisibleSatisfiedPriorityRecoveryOperations(
+          {
+            priorityRecoveryDecisionSnapshots: {
+              snapshots: [
+                buildCacheVisiblePriorityRecoverySnapshot(
+                  PARTITION_TWO,
+                  CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                  {
+                    workflowState:
+                      PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+                    workflowProgressPhaseId:
+                      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_TERMINAL,
+                    latestOperationWorkflowStep:
+                      PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+                    latestOperationStatus:
+                      PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+                    ...overrides,
+                  },
+                ),
+              ],
+            },
+          },
+          [{
+            operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+            partition_id: PARTITION_TWO,
+            status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+            workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+          }],
+        ),
+        NO_REPLICA_OPERATION_COUNT,
+      );
+    }
+  });
+
+test('post-rebalance closure counts additional post-publication topology operation discounts',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          },
+        },
+        [{
+          operation_id: 'message-groups-replace',
+          type: 'REPLACE',
+          partition_id: 'message_groups-p1',
+          entity_type: 'partition',
+          entity_id: 'message_groups-p1',
+          replica_id: 'message_groups-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure counts post-publication discounts when priority summary is satisfied',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+              blockedPartitions: [],
+              blockedPartitionCount: NO_REPLICA_OPERATION_COUNT,
+            },
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [{
+              partitionId: PARTITION_TWO,
+              semanticState:
+                PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            }],
+          },
+        },
+        [{
+          operation_id: 'message-group-replace',
+          type: 'REPLACE',
+          partition_id: 'mg-node-1',
+          entity_type: 'message_group',
+          entity_id: 'mg-node-1',
+          replica_id: 'mg-node-1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure keeps sparse priority snapshots blocking without satisfied summary',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [{
+              partitionId: PARTITION_TWO,
+              semanticState:
+                PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            }],
+          },
+        },
+        [{
+          operation_id: 'message-group-replace',
+          type: 'REPLACE',
+          partition_id: 'mg-node-1',
+          entity_type: 'message_group',
+          entity_id: 'mg-node-1',
+          replica_id: 'mg-node-1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not count post-publication topology discounts without explicit PUBLISHED',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {},
+        },
+        [{
+          operation_id: 'message-groups-replace',
+          type: 'REPLACE',
+          partition_id: 'message_groups-p1',
+          entity_type: 'partition',
+          entity_id: 'message_groups-p1',
+          replica_id: 'message_groups-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not count topology discounts with priority recovery residuals',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: [PARTITION_TWO],
+              blockedPartitions: [{partitionId: PARTITION_TWO}],
+              blockedPartitionCount: RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+            },
+          },
+        },
+        [{
+          operation_id: 'message-groups-replace',
+          type: 'REPLACE',
+          partition_id: 'message_groups-p1',
+          entity_type: 'partition',
+          entity_id: 'message_groups-p1',
+          replica_id: 'message_groups-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not count post-publication topology discounts before safety is enabled',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          },
+        },
+        [{
+          operation_id: 'message-groups-replace',
+          type: 'REPLACE',
+          partition_id: 'message_groups-p1',
+          entity_type: 'partition',
+          entity_id: 'message_groups-p1',
+          replica_id: 'message_groups-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: false,
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not count active priority recovery as an ordinary topology discount',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [
+              buildCacheVisiblePriorityRecoverySnapshot(
+                PARTITION_ONE,
+                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                {
+                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+                },
+              ),
+            ],
+          },
+        },
+        [{
+          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+          type: 'REPLACE',
+          partition_id: PARTITION_ONE,
+          entity_type: 'partition',
+          entity_id: PARTITION_ONE,
+          replica_id: 'control_plane_publications-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: 'pending',
+          workflow_step: 'PENDING',
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          allowPostPublicationNonBlockingReplicaOperations: true,
+          cdcProjectionVisibleSatisfied: true,
+          criticalSystemTopologyReady: true,
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure does not count summary-only active priority rows without fresh closure witness',
+  async () => {
+    const activePriorityRow = {
+      operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+      type: 'REPLACE',
+      partition_id: PARTITION_ONE,
+      entity_type: 'partition',
+      entity_id: PARTITION_ONE,
+      replica_id: 'control_plane_publications-p1-r4',
+      source_node_id: NODE_ONE,
+      target_node_id: NODE_TWO,
+      status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+      workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+      updated_at: 900,
+    };
+    const summaryOnlyDiagnostics = (priorityRecoveryClosureWitness = null) => ({
+      publicationConvergence: {
+        ...(priorityRecoveryClosureWitness ?
+          {priorityRecoveryClosureWitness} :
+          {}),
+        priorityRecoveryPartitionIdsBySemanticState: {
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+            PARTITION_ONE,
+          ],
+        },
+      },
+    });
+    const invalidClosureWitnesses = [
+      null,
+      {
+        state: PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH,
+        blockedPartitionIds: [PARTITION_ONE],
+      },
+      {
+        state: 'closure_satisfied_stale',
+        blockedPartitionIds: [],
+      },
+    ];
+
+    for (const closureWitness of invalidClosureWitnesses) {
+      assert.strictEqual(
+        countAdditionalPostRebalanceReplicaOperationDiscounts(
+          summaryOnlyDiagnostics(closureWitness),
+          [activePriorityRow],
+          {
+            nowMs: 1000,
+            inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+          },
+        ),
+        NO_REPLICA_OPERATION_COUNT,
+      );
+    }
+  });
+
+test('post-rebalance closure does not join summary-only priority rows to unrelated closure partitions',
+  async () => {
+    const activePriorityRow = {
+      operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+      type: 'REPLACE',
+      partition_id: PARTITION_ONE,
+      entity_type: 'partition',
+      entity_id: PARTITION_ONE,
+      replica_id: 'control_plane_publications-p1-r4',
+      source_node_id: NODE_ONE,
+      target_node_id: NODE_TWO,
+      status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+      workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+      updated_at: 900,
+    };
+
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          publicationConvergence: {
+            priorityRecoveryClosureWitness: {
+              state: PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH,
+              prioritySpreadPending: false,
+              publicationRefreshRequired: false,
+              blockedPartitionIds: [],
+              blockedPartitionCount: NO_REPLICA_OPERATION_COUNT,
+              unresolvedSemanticStateIds: [],
+              unresolvedSemanticStateCount: NO_REPLICA_OPERATION_COUNT,
+              satisfiedPartitionIds: [PARTITION_TWO],
+              decisionPartitionIds: [PARTITION_TWO],
+            },
+            priorityRecoveryPartitionIdsBySemanticState: {
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+                PARTITION_ONE,
+              ],
+            },
+          },
+        },
+        [activePriorityRow],
+        {
+          nowMs: 1000,
+          inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure counts closure-satisfied cache-visible active priority rows as exact discounts',
+  async () => {
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        {
+          priorityRecoveryClosureWitness: {
+            state: PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH,
+            prioritySpreadPending: false,
+            publicationRefreshRequired: false,
+            blockedPartitionIds: [],
+            blockedPartitionCount: NO_REPLICA_OPERATION_COUNT,
+            unresolvedSemanticStateIds: [],
+            unresolvedSemanticStateCount: NO_REPLICA_OPERATION_COUNT,
+          },
+          priorityRecoveryDecisionSnapshots: {
+            snapshots: [
+              buildCacheVisiblePriorityRecoverySnapshot(
+                PARTITION_ONE,
+                CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+                {
+                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+                  latestOperationStatus:
+                    PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+                  latestOperationWorkflowStep:
+                    PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+                },
+              ),
+            ],
+          },
+          publicationConvergence: {
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          },
+        },
+        [{
+          operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+          type: 'REPLACE',
+          partition_id: PARTITION_ONE,
+          entity_type: 'partition',
+          entity_id: PARTITION_ONE,
+          replica_id: 'control_plane_publications-p1-r4',
+          source_node_id: NODE_ONE,
+          target_node_id: NODE_TWO,
+          status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+          updated_at: 900,
+        }],
+        {
+          nowMs: 1000,
+          inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+        },
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure joins sibling closure witnesses by covered priority partition',
+  async () => {
+    const activePriorityRow = {
+      operation_id: CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+      type: 'REPLACE',
+      partition_id: PARTITION_ONE,
+      entity_type: 'partition',
+      entity_id: PARTITION_ONE,
+      replica_id: 'control_plane_publications-p1-r4',
+      source_node_id: NODE_ONE,
+      target_node_id: NODE_TWO,
+      status: PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+      workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+      updated_at: 900,
+    };
+    const buildClosureWitness = (coveredPartitionIds) => ({
+      state: PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH,
+      prioritySpreadPending: false,
+      publicationRefreshRequired: false,
+      blockedPartitionIds: [],
+      blockedPartitionCount: NO_REPLICA_OPERATION_COUNT,
+      unresolvedSemanticStateIds: [],
+      unresolvedSemanticStateCount: NO_REPLICA_OPERATION_COUNT,
+      satisfiedPartitionIds: coveredPartitionIds,
+      decisionPartitionIds: coveredPartitionIds,
+    });
+    const siblingDiagnostics = (
+      coveredPartitionIds,
+      gateNested = false,
+    ) => ({
+      publicationConvergence: gateNested ?
+        {
+          publicationConvergenceGate: {
+            priorityRecoveryClosureWitness:
+              buildClosureWitness(coveredPartitionIds),
+          },
+        } :
+        {
+          priorityRecoveryClosureWitness:
+            buildClosureWitness(coveredPartitionIds),
+        },
+      priorityRecoveryDecisionSnapshots: {
+        snapshots: [
+          buildCacheVisiblePriorityRecoverySnapshot(
+            PARTITION_ONE,
+            CDC_PROJECTION_OWNER_OPERATION_ID_ONE,
+            {
+              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+              latestOperationStatus:
+                PRIORITY_RECOVERY_OPERATION_STATUS_ACTIVE,
+              latestOperationWorkflowStep:
+                PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+            },
+          ),
+        ],
+      },
+    });
+
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        siblingDiagnostics([PARTITION_ONE]),
+        [activePriorityRow],
+        {
+          nowMs: 1000,
+          inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+        },
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        siblingDiagnostics([PARTITION_ONE], true),
+        [activePriorityRow],
+        {
+          nowMs: 1000,
+          inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+        },
+      ),
+      RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+    assert.strictEqual(
+      countAdditionalPostRebalanceReplicaOperationDiscounts(
+        siblingDiagnostics([PARTITION_TWO]),
+        [activePriorityRow],
+        {
+          nowMs: 1000,
+          inFlightOperationIds: [CDC_PROJECTION_OWNER_OPERATION_ID_ONE],
+        },
+      ),
+      NO_REPLICA_OPERATION_COUNT,
+    );
+  });
+
+test('post-rebalance closure soft-closes operation drain for additional post-publication discounts',
+  async () => {
+    const closure = buildPostRebalanceClosureSnapshot({
+      expectedPartitionIds: EXPECTED_PARTITION_IDS,
+      leaders: STABLE_LEADERS,
+      voterCounts: TARGET_VOTER_COUNTS,
+      overTargetDurations: {},
+      maxOverTargetMs: TRANSIENT_OVERTARGET_MS,
+      maxSustainedOverTargetMs: MAX_SUSTAINED_OVERTARGET_MS,
+      targetVoterCount: TARGET_VOTER_COUNT,
+      inFlightReplicaOperationCount: RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+      effectiveInFlightReplicaOperationCount:
+        EFFECTIVE_CLOSED_REPLICA_OPERATION_COUNT,
+      additionalInFlightDiscountCount:
+        RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+      ignoreStaleInFlightReplicaOperations: true,
+      publishedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
+      projectedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
+        },
+      },
+    });
+
+    assert.strictEqual(closure.state, POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED);
+    assert.deepStrictEqual(
+      closure.softClosures.map((softClosure) => softClosure.id),
+      [OPERATION_DRAIN_SOFT_CLOSED_ID],
+    );
+    assert.deepStrictEqual(
+      closure.dimensions[
+        POST_REBALANCE_CLOSURE_DIMENSION.OPERATION_DRAIN
+      ].reasonCodes,
+      [
+        POST_REBALANCE_CLOSURE_REASON
+          .IGNORED_POST_PUBLICATION_REPLICA_OPERATIONS,
+      ],
     );
   });
 

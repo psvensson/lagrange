@@ -1349,6 +1349,8 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
       const STABLE_WINDOW_MS = 50;
       const TIMEOUT_MS = 15;
       const MAX_IN_FLIGHT_COUNT = 0;
+      const STALE_OPERATION_ID = 'op1';
+      const STALE_PARTITION_ID = 'message_groups-p1';
 
       const cluster = createCluster({
         size: 3,
@@ -1369,8 +1371,20 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
                 staleInFlightCount: STALE_IN_FLIGHT_COUNT,
                 partitionGroupInFlight: {groupA: 1},
                 operationTimelineById: {
-                  op1: [{step: 'PENDING', status: 'ACTIVE', inFlight: true}],
+                  [STALE_OPERATION_ID]: [{
+                    step: 'PENDING',
+                    status: 'ACTIVE',
+                    inFlight: true,
+                  }],
                 },
+                rows: [{
+                  operationId: STALE_OPERATION_ID,
+                  type: 'REPLACE',
+                  partitionId: STALE_PARTITION_ID,
+                  status: 'creating',
+                  workflowStep: 'CREATING',
+                  updatedAt: Date.now() - 70000,
+                }],
               },
             }],
           };
@@ -1410,6 +1424,19 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
             error.quiescence.ignoreStaleInFlightReplicaOperations,
             true,
           );
+          assert.deepEqual(error.quiescence.replicaOperationDrainRows.map(
+            (row) => ({
+              operationId: row.operationId,
+              partitionId: row.partitionId,
+              stale: row.stale,
+              effectiveInFlight: row.effectiveInFlight,
+            }),
+          ), [{
+            operationId: STALE_OPERATION_ID,
+            partitionId: STALE_PARTITION_ID,
+            stale: true,
+            effectiveInFlight: false,
+          }]);
           return true;
         },
       );
@@ -1533,6 +1560,13 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
                 inFlight: true,
               }],
             },
+            rows: [{
+              operationId: QUIESCENCE_RESET_OPERATION_ID,
+              partitionId: QUIESCENCE_RESET_PARTITION_ID,
+              status: QUIESCENCE_RESET_STATUS,
+              workflowStep: QUIESCENCE_RESET_STEP,
+              updatedAt: QUIESCENCE_RESET_START_AT_MS,
+            }],
           },
         }],
       };
@@ -1553,6 +1587,13 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
                 inFlight: true,
               }],
             },
+            rows: [{
+              operationId: QUIESCENCE_RESET_OPERATION_ID,
+              partitionId: QUIESCENCE_RESET_PARTITION_ID,
+              status: QUIESCENCE_RESET_STATUS,
+              workflowStep: QUIESCENCE_RESET_STEP,
+              updatedAt: QUIESCENCE_RESET_START_AT_MS,
+            }],
           },
         }],
       };
@@ -1604,6 +1645,19 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
               error.quiescence.candidateWindowReset.canonicalBlocker,
               CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
             );
+            assert.deepEqual(error.quiescence.replicaOperationDrainRows.map(
+              (row) => ({
+                operationId: row.operationId,
+                partitionId: row.partitionId,
+                stale: row.stale,
+                effectiveInFlight: row.effectiveInFlight,
+              }),
+            ), [{
+              operationId: QUIESCENCE_RESET_OPERATION_ID,
+              partitionId: QUIESCENCE_RESET_PARTITION_ID,
+              stale: false,
+              effectiveInFlight: true,
+            }]);
             return true;
           },
         );

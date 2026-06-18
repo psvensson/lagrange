@@ -21,12 +21,15 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     isCoordinatorOwnedOperationType,
     isPriorityControlPlanePartition,
     isRetryableControlPlaneError,
+    isSystemTablePartition,
     resolveReplicaOperationVisibilityReadMode,
   } = options;
 
   const INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE = Object.freeze({
     LOCAL_OWNER: 'local_owner',
     PRIORITY_RECOVERY_DRAIN_CANDIDATE: 'priority_recovery_drain_candidate',
+    REMOTE_SYSTEM_REPLACE_HANDOFF_CANDIDATE:
+      'remote_system_replace_handoff_candidate',
     REMOTE_OWNER: 'remote_owner',
     NON_COORDINATOR_OPERATION: 'non_coordinator_operation',
     TERMINAL_OPERATION: 'terminal_operation',
@@ -46,6 +49,11 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
       [
         INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
           .PRIORITY_RECOVERY_DRAIN_CANDIDATE,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
+      ],
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
+          .REMOTE_SYSTEM_REPLACE_HANDOFF_CANDIDATE,
         INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
       ],
       [
@@ -116,11 +124,16 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         this.isPriorityRecoveryIncompleteOperationVisibilityCandidate(
           operation,
         );
+      const remoteSystemReplaceHandoffCandidate =
+        this.isRemoteSystemReplaceIncompleteOperationVisibilityCandidate(
+          operation,
+        );
       const evidence = Object.freeze({
         coordinatorOwned,
         terminal,
         localOwner,
         priorityRecoveryDrainCandidate,
+        remoteSystemReplaceHandoffCandidate,
       });
       const state =
         this.resolveIncompleteOperationOwnerVisibilityState(evidence);
@@ -159,6 +172,12 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
             .PRIORITY_RECOVERY_DRAIN_CANDIDATE
         );
       }
+      if (evidence.remoteSystemReplaceHandoffCandidate) {
+        return (
+          INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
+            .REMOTE_SYSTEM_REPLACE_HANDOFF_CANDIDATE
+        );
+      }
       return INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.REMOTE_OWNER;
     }
 
@@ -172,6 +191,29 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         operation &&
         operation.type === OperationType.REPLACE &&
         isPriorityControlPlanePartition({
+          partitionId: operation.partitionId,
+        }) &&
+        PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
+          operation.workflowStep,
+        ),
+      );
+    }
+
+    /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+    isRemoteSystemReplaceIncompleteOperationVisibilityCandidate(operation) {
+      const sourceNodeId = String(
+        operation?.sourceNodeId || operation?.source_node_id || '',
+      );
+      return Boolean(
+        operation &&
+        operation.type === OperationType.REPLACE &&
+        sourceNodeId.length > NUM.ZERO &&
+        sourceNodeId === this.nodeId &&
+        isSystemTablePartition({
           partitionId: operation.partitionId,
         }) &&
         PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(

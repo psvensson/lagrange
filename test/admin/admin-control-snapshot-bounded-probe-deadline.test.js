@@ -75,6 +75,30 @@ test('buildControlSnapshotQueryResult arms the bounded fallback for short snapsh
       'the short-budget fallback uses the bounded observation probe');
   });
 
+test('buildControlSnapshotQueryResult does not downgrade forced repair to bounded cache',
+  async (t) => {
+    const snapshot = buildSnapshot();
+    let boundedFallbackCalls = 0;
+    snapshot.resolveLocalControlSnapshot = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return REAL_SNAPSHOT;
+    };
+    snapshot.buildLocalControlSnapshot = async () => {
+      boundedFallbackCalls += 1;
+      return CACHE_SNAPSHOT;
+    };
+
+    const result = await snapshot.buildControlSnapshotQueryResult({
+      forceAuthoritativeRepair: true,
+      queryTimeoutMs: 6,
+    });
+
+    t.same(result.rows, [REAL_SNAPSHOT],
+      'forced repair waits for authoritative resolution instead of returning bounded local cache');
+    t.equal(boundedFallbackCalls, 0,
+      'forced repair does not use the cache-only fallback');
+  });
+
 test('a stalled lane drives the membership-publication reconcile through the bounded enqueue path',
   async (t) => {
     const snapshot = buildSnapshot();

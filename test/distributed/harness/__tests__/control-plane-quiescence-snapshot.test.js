@@ -172,6 +172,56 @@ test('control-plane quiescence snapshot discounts cache-visible satisfied priori
     );
   });
 
+test('control-plane quiescence snapshot combines stale and explicit additional operation discounts',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        inFlightCount: 2,
+        staleInFlightCount: 1,
+        cacheVisibleSatisfiedPriorityRecoveryOperationCount: 3,
+        additionalInFlightDiscountCount: 1,
+      }),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+
+    assert.equal(snapshot.state, CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT);
+    assert.equal(snapshot.effectiveInFlightCount, 0);
+    assert.equal(snapshot.staleInFlightDiscountCount, 2);
+    assert.equal(snapshot.additionalInFlightDiscountCount, 1);
+    assert.equal(snapshot.appliedAdditionalInFlightDiscountCount, 1);
+  });
+
+test('control-plane quiescence snapshot keeps additional operation discounts gated by critical topology',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        inFlightCount: IN_FLIGHT_COUNT,
+        additionalInFlightDiscountCount: IN_FLIGHT_COUNT,
+      }),
+      criticalSystemTopology: OPEN_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+
+    assert.equal(
+      snapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING,
+    );
+    assert.equal(snapshot.effectiveInFlightCount, IN_FLIGHT_COUNT);
+    assert.equal(snapshot.staleInFlightDiscountCount, 0);
+    assert.equal(snapshot.appliedAdditionalInFlightDiscountCount, 0);
+  });
+
 test('control-plane quiescence candidate preserves prior stable-window reset',
   () => {
     const blockedSnapshot = buildControlPlaneQuiescenceSnapshot({

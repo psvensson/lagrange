@@ -485,6 +485,14 @@ function buildParticipationByNodeId(context) {
     ...context.recoveryActiveNodeIds,
     ...context.missingPublishedRecoveryActiveNodeIds,
     ...context.suspectedOrTransitioningNodeIds,
+    ...(Array.isArray(context.projectionDiagnostics?.readinessExcludedNodeIds) ?
+      context.projectionDiagnostics.readinessExcludedNodeIds :
+      []),
+    ...(Array.isArray(
+      context.projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
+    ) ?
+      context.projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds :
+      []),
     ...Object.keys(context.memberStatesByNodeId || {}),
     ...Object.keys(context.recoveryEpochByNodeId || {}),
     ...Object.keys(context.participationByNodeId || {}),

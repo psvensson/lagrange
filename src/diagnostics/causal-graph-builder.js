@@ -26,6 +26,10 @@ import {
   REASON,
   buildTopologyConvergenceGraph,
 } from './topology-convergence-graph.js';
+import {
+  deriveProjectionReadinessFailure,
+  READINESS_PROJECTION_EXCLUDED_SOURCE,
+} from './topology-convergence-normalizers.js';
 
 const NODE_TYPE_PHASE = 'phase';
 const NODE_TYPE_ROLLING_RESTART_NODE = 'rolling_restart_node';
@@ -277,7 +281,12 @@ function normalizeCausalInput(input) {
   const progress = asRecord(activeGate.progress);
   const progressSummary = asRecord(publication.priorityRecoveryProgressSummary);
   const dominantWitness = asRecord(progressSummary.dominantWitness);
-  const readinessEvidence = normalizeReadinessEvidence(failureBundle, scenario, summary);
+  const readinessEvidence = normalizeReadinessEvidence(
+    failureBundle,
+    scenario,
+    summary,
+    publication,
+  );
   const reportOutcome = resolveReportOutcome({
     report,
     scenario,
@@ -359,12 +368,13 @@ function resolveReportOutcome({report, scenario, summary}) {
   return REPORT_OUTCOME_RULES.find((rule) => rule.matches(snapshot)).outcome;
 }
 
-function normalizeReadinessEvidence(failureBundle, scenario, summary) {
+function normalizeReadinessEvidence(failureBundle, scenario, summary, publication) {
   const readiness = firstRecord(failureBundle.readiness, scenario.readiness);
   const readinessFailure = firstRecord(
     failureBundle.readinessFailure,
     scenario.readinessFailure,
     summary.readinessFailure,
+    deriveProjectionReadinessFailure(publication),
   );
   return {
     readiness,
@@ -377,6 +387,7 @@ function normalizeReadinessEvidence(failureBundle, scenario, summary) {
 function normalizeReadinessNodeReasons(readiness, readinessFailure) {
   return firstRecord(
     asRecord(readiness.nodeReasonsByNodeId),
+    asRecord(readinessFailure.nodeReasonsByNodeId),
     buildReadinessFailureNodeReasons(readinessFailure),
   );
 }
@@ -406,6 +417,12 @@ function selectReadinessEvidencePath(readiness, readinessFailure) {
     {
       path: EVIDENCE_PATH_READINESS_NODE_REASONS,
       matches: () => Object.keys(asRecord(readiness.nodeReasonsByNodeId)).length > ZERO_COUNT,
+    },
+    {
+      path: READINESS_PROJECTION_EXCLUDED_SOURCE,
+      matches: () =>
+        textOrUnknown(readinessFailure.source) ===
+        READINESS_PROJECTION_EXCLUDED_SOURCE,
     },
     {
       path: EVIDENCE_PATH_READINESS_FAILURE,
@@ -634,15 +651,33 @@ function buildMemberEdges(normalized) {
 
 function buildWaits(normalized) {
   const pc = normalized.dominantWitness.progressContract || {};
-  const waitMode = textOrAbsent(pc.waitMode || (pc.state !== ABSENT_VALUE ? pc.state : '') || normalized.dominantWitness.waitMode);
+  const waitMode = textOrAbsent(
+    pc.waitMode ||
+    (pc.state !== ABSENT_VALUE ? pc.state : '') ||
+    normalized.dominantWitness.waitMode,
+  );
   if (waitMode === ABSENT_VALUE) {
     return [];
   }
-  const owner = textOrUnknown(pc.owner || pc.currentOwner || normalized.dominantWitness.currentOwner);
-  const boundary = textOrUnknown(pc.boundary || pc.blockingBoundary || normalized.dominantWitness.blockingBoundary);
-  const stepAgeMs = numberOrUnknown(pc.stepAgeMs || normalized.dominantWitness.stepAgeMs);
-  const stepTimeoutMs = numberOrUnknown(pc.stepTimeoutMs || normalized.dominantWitness.stepTimeoutMs);
-  const nextRequiredAction = textOrUnknown(pc.nextRequiredAction || pc.nextAction || normalized.dominantWitness.nextRequiredAction);
+  const owner = textOrUnknown(
+    pc.owner || pc.currentOwner || normalized.dominantWitness.currentOwner,
+  );
+  const boundary = textOrUnknown(
+    pc.boundary ||
+    pc.blockingBoundary ||
+    normalized.dominantWitness.blockingBoundary,
+  );
+  const stepAgeMs = numberOrUnknown(
+    pc.stepAgeMs || normalized.dominantWitness.stepAgeMs,
+  );
+  const stepTimeoutMs = numberOrUnknown(
+    pc.stepTimeoutMs || normalized.dominantWitness.stepTimeoutMs,
+  );
+  const nextRequiredAction = textOrUnknown(
+    pc.nextRequiredAction ||
+    pc.nextAction ||
+    normalized.dominantWitness.nextRequiredAction,
+  );
 
   return [{
     id: `${DEPENDENCY_KIND.PRIORITY_RECOVERY}:${waitMode}`,

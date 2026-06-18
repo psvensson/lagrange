@@ -439,6 +439,199 @@ test('assertConsistency uses authority certificates to classify authority diverg
     }
   });
 
+test('assertConsistency ignores per-observer snapshot revision skew for authority divergence',
+  async () => {
+    const buildAuthorityCertificate = (leaderNodeId, snapshotRevision) => ({
+      schemaVersion: 1,
+      partitionId: TEST_PARTITION_ID,
+      leaderNodeId,
+      leaderSource: 'partitions',
+      topologyEpoch: TEST_TOPOLOGY_EPOCH,
+      membershipEpoch: TEST_PUBLICATION_EPOCH,
+      snapshotRevision,
+      replicaRoleConsistent: true,
+      replicaLeaderNodeIds: [leaderNodeId],
+    });
+    const referenceNode = buildControlSnapshotNode('node-a', {
+      leaders: {
+        [TEST_PARTITION_ID]: TEST_LEADER_ADDRESS,
+      },
+      partitionLeaderAuthority: {
+        [TEST_PARTITION_ID]: buildAuthorityCertificate(
+          TEST_LEADER_ADDRESS,
+          TEST_SNAPSHOT_REVISION_A,
+        ),
+      },
+    });
+    const divergedNode = buildControlSnapshotNode('node-b', {
+      leaders: {
+        [TEST_PARTITION_ID]: TEST_WS_ADDRESS,
+      },
+      partitionLeaderAuthority: {
+        [TEST_PARTITION_ID]: buildAuthorityCertificate(
+          TEST_WS_ADDRESS,
+          TEST_SNAPSHOT_REVISION_B,
+        ),
+      },
+    });
+
+    try {
+      await assertConsistency([referenceNode, divergedNode]);
+      assert.fail('expected authority divergence');
+    } catch (error) {
+      assert.match(
+        String(error?.message || ''),
+        /partition_leader_authority_diverged/i,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.finalConsistency
+          ?.reasonCode,
+        TEST_CONSISTENCY_REASON_PARTITION_LEADER_AUTHORITY_DIVERGED,
+      );
+      assert.equal(
+        error?.diagnostics?.failure?.rootCauseClass,
+        TEST_ROOT_CAUSE_TOPOLOGY,
+      );
+    }
+  });
+
+test('assertConsistency prefers same-publication authority divergence over older observer lag',
+  async () => {
+    const previousPublicationEpoch = TEST_PUBLICATION_EPOCH - 1;
+    const buildAuthorityCertificate = (
+      leaderNodeId,
+      membershipEpoch,
+      snapshotRevision,
+    ) => ({
+      schemaVersion: 1,
+      partitionId: TEST_PARTITION_ID,
+      leaderNodeId,
+      leaderSource: 'partitions',
+      topologyEpoch: TEST_TOPOLOGY_EPOCH,
+      membershipEpoch,
+      snapshotRevision,
+      replicaRoleConsistent: true,
+      replicaLeaderNodeIds: [leaderNodeId],
+    });
+    const referenceNode = buildControlSnapshotNode('node-a', {
+      leaders: {
+        [TEST_PARTITION_ID]: TEST_LEADER_ADDRESS,
+      },
+      partitionLeaderAuthority: {
+        [TEST_PARTITION_ID]: buildAuthorityCertificate(
+          TEST_LEADER_ADDRESS,
+          TEST_PUBLICATION_EPOCH,
+          TEST_SNAPSHOT_REVISION_A,
+        ),
+      },
+    });
+    const divergedNode = buildControlSnapshotNode('node-b', {
+      leaders: {
+        [TEST_PARTITION_ID]: TEST_WS_ADDRESS,
+      },
+      partitionLeaderAuthority: {
+        [TEST_PARTITION_ID]: buildAuthorityCertificate(
+          TEST_WS_ADDRESS,
+          TEST_PUBLICATION_EPOCH,
+          TEST_SNAPSHOT_REVISION_B,
+        ),
+      },
+    });
+    const olderObserverNode = buildControlSnapshotNode('node-c', {
+      leaders: {
+        [TEST_PARTITION_ID]: TEST_LEADER_ADDRESS,
+      },
+      partitionLeaderAuthority: {
+        [TEST_PARTITION_ID]: buildAuthorityCertificate(
+          TEST_LEADER_ADDRESS,
+          previousPublicationEpoch,
+          TEST_SNAPSHOT_REVISION_B,
+        ),
+      },
+    });
+
+    try {
+      await assertConsistency([referenceNode, divergedNode, olderObserverNode]);
+      assert.fail('expected authority divergence');
+    } catch (error) {
+      assert.match(
+        String(error?.message || ''),
+        /partition_leader_authority_diverged/i,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.finalConsistency
+          ?.reasonCode,
+        TEST_CONSISTENCY_REASON_PARTITION_LEADER_AUTHORITY_DIVERGED,
+      );
+      assert.equal(
+        error?.diagnostics?.failure?.rootCauseClass,
+        TEST_ROOT_CAUSE_TOPOLOGY,
+      );
+    }
+  });
+
+test('assertConsistency keeps stale usable authority conflicts classified as observer lag',
+  async () => {
+    const buildAuthorityCertificate = (leaderNodeId, snapshotRevision) => ({
+      schemaVersion: 1,
+      partitionId: TEST_PARTITION_ID,
+      leaderNodeId,
+      leaderSource: 'partitions',
+      topologyEpoch: TEST_TOPOLOGY_EPOCH,
+      membershipEpoch: TEST_PUBLICATION_EPOCH,
+      snapshotRevision,
+      replicaRoleConsistent: true,
+      replicaLeaderNodeIds: [leaderNodeId],
+    });
+    const buildStaleNode = (nodeId, leaderNodeId, snapshotRevision) =>
+      buildControlSnapshotNode(nodeId, {
+        leaders: {
+          [TEST_PARTITION_ID]: leaderNodeId,
+        },
+        observationMode: 'forced_repair',
+        snapshotRevision,
+        snapshotExpectedMinimumRevision: snapshotRevision,
+        snapshotRevisionGap: TEST_EMPTY_COUNT,
+        snapshotRevisionState: TEST_SNAPSHOT_REVISION_STATE_STALE_USABLE,
+        partitionLeaderAuthority: {
+          [TEST_PARTITION_ID]: buildAuthorityCertificate(
+            leaderNodeId,
+            snapshotRevision,
+          ),
+        },
+      });
+
+    try {
+      await assertConsistency([
+        buildStaleNode(
+          'node-a',
+          TEST_LEADER_ADDRESS,
+          TEST_SNAPSHOT_REVISION_A,
+        ),
+        buildStaleNode(
+          'node-b',
+          TEST_WS_ADDRESS,
+          TEST_SNAPSHOT_REVISION_B,
+        ),
+      ]);
+      assert.fail('expected observer authority visibility lag');
+    } catch (error) {
+      assert.match(
+        String(error?.message || ''),
+        /observer_authority_visibility_lag/i,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.finalConsistency
+          ?.reasonCode,
+        TEST_CONSISTENCY_REASON_OBSERVER_AUTHORITY_VISIBILITY_LAG,
+      );
+      assert.equal(
+        error?.diagnostics?.failure?.rootCauseClass,
+        TEST_ROOT_CAUSE_CACHE,
+      );
+    }
+  });
+
 test('waitForConsistencyConvergence escalates to authoritative snapshot repair',
   async () => {
     const controlSnapshotCalls = [];
