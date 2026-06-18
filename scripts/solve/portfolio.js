@@ -60,6 +60,10 @@ export function questPortfolioRow(quest, log) {
   const outcome = terminalOutcome(log);
   const state = projectState(quest, log);
   const reopens = state.frontiers.reduce((sum, f) => sum + (f.reopenCount || 0), 0);
+  // Auto-reopens are the SOLVED->fresh-failure flap (distinct from deliberate `reopen`
+  // CLI revivals): they climb toward OSCILLATION_REOPEN_BUDGET and then terminalize the
+  // quest EXHAUSTED, so they are surfaced separately as a stuck-work signal.
+  const autoReopens = state.frontiers.reduce((sum, f) => sum + (f.autoReopenCount || 0), 0);
   const cannotMeasure = state.frontiers.filter(
     (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_CANNOT_MEASURE).length;
   return {
@@ -71,6 +75,7 @@ export function questPortfolioRow(quest, log) {
     open: outcome === STATUS_OPEN,
     attempts: log.filter((e) => e.type === EVENT_ATTEMPT).length,
     reopens,
+    autoReopens,
     cannotMeasure,
   };
 }

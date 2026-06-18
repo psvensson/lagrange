@@ -95,6 +95,7 @@ function linkedQuests(root, portfolio) {
       open: Boolean(row.open),
       attempts: row.attempts,
       reopens: row.reopens,
+      autoReopens: row.autoReopens || 0,
       specRef: typeof links.specRef === 'string' ? links.specRef : null,
       roadmapRow: links.roadmapRow || null,
       closesCL: Array.isArray(links.closesCL) ? links.closesCL : [],
@@ -129,6 +130,15 @@ export function buildOverview(root) {
     quests,
     records: parseClosureLedger(),
   };
+}
+
+// Reopens cell: deliberate `reopen` revivals, annotated with the solve<->failure
+// oscillation count (autoReopens) when present, since that flap climbs toward the
+// reopen budget and a budget-driven EXHAUSTED — a stuck-work signal a planning view
+// should not hide behind a healthy-looking reopens=0.
+function reopensCell(quest) {
+  return quest.autoReopens > 0 ?
+    `${quest.reopens} (+${quest.autoReopens} osc)` : String(quest.reopens);
 }
 
 // Coerce a cell to a single-line, table-safe string. Long ledger concerns can
@@ -216,7 +226,7 @@ export function renderOverview(overview) {
     '### Open',
     '',
     ...table(['id', 'class', 'spec', 'attempts', 'reopens', 'closes'],
-      open.map((q) => [q.id, q.class, q.specRef || '—', q.attempts, q.reopens,
+      open.map((q) => [q.id, q.class, q.specRef || '—', q.attempts, reopensCell(q),
         q.closesCL.join(', ') || '—'])),
     '### Terminal',
     '',
