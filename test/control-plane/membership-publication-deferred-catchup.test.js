@@ -81,6 +81,20 @@ function makeDeferringCoordinator({cache, cdcIntegrationService, now}) {
   return coordinator;
 }
 
+// A follower exercised through the REAL periodic owner-driver
+// (driveOwnerMembershipReconcile). resolveControlPlanePublicationsLeadership reads
+// canWriteSystemTableLocally (false here) then the cache PARTITIONS/SERVICES leader
+// rows (absent on a publications-only cache) → resolves isLeader=false, the !isLeader
+// branch this fix targets. No reconcileQueue / demand-driven reason is enqueued — the
+// only thing that can advance a steady follower's stale epoch is this periodic tick.
+function makeFollowerDriverCoordinator({cache, cdcIntegrationService, now}) {
+  const coordinator = makeDeferringCoordinator({cache, cdcIntegrationService, now});
+  coordinator.ownerMembershipReconcileInFlight = false;
+  coordinator.ownerDriverPredicateSnapshot = undefined;
+  coordinator.ownerDriverSnapSnapshot = undefined;
+  return coordinator;
+}
+
 test('CL-001 variant D: a deferring non-write-leader pulls its stale publications ' +
   'cache forward to the cluster-committed epoch (end-to-end through the real path)',
 async (t) => {
@@ -130,6 +144,37 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
   clock += 2000; // now past the cooldown since the last read
   await coordinator.reconcileClusterMembership();
   t.equal(seen.length, 2, 'after the cooldown elapses the catch-up runs again');
+});
+
+test('CL-001 variant D (re-diagnosis 2026-06-18): the PERIODIC owner-driver pulls a ' +
+  'steady follower forward — the defer branch is unreachable without a demand-driven ' +
+  'reconcile, so the periodic !isLeader tick is the only thing that closes the gap',
+async (t) => {
+  const cache = new SystemTableCache();
+  // A follower that settled at a stale epoch 19 and is now "steady" — nothing left to
+  // enqueue a reconcile reason, so reconcileClusterMembership (and its defer-branch
+  // catch-up) is never called on demand again.
+  cache.applySystemTableChange(
+    PUBLICATIONS, 'UPSERT', publicationRow(19, 1000), {causeId: 'seed-stale'});
+  const service = makeAuthorityService(cache, [publicationRow(40, 2000)]);
+  // resolveControlPlanePublicationsLeadership consults this first; false → fall to the
+  // cache tiers, which have no leader row for N1 → isLeader=false.
+  service.canWriteSystemTableLocally = () => false;
+  const coordinator = makeFollowerDriverCoordinator(
+    {cache, cdcIntegrationService: service, now: () => 5000});
+
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 19,
+    'exposed epoch starts stale at 19 (a steady follower that missed the CDC fan-out)');
+
+  const drove = await coordinator.driveOwnerMembershipReconcile();
+  t.equal(drove, false,
+    'the follower is not the publications write-leader — the periodic driver does NOT ' +
+    'reconcile as owner');
+
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 40,
+    'the periodic !isLeader tick triggered the authoritative catch-up — the steady ' +
+    'follower converged to the cluster-committed epoch 40 (RED before the fix: the ' +
+    'driver returned at !isLeader without ever reaching the catch-up)');
 });
 
 test('CL-001 variant D: deferral stays safe when no CDC catch-up is available',

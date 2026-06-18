@@ -541,6 +541,18 @@ class MembershipPublicationCoordinatorReconcile extends
         reason: CONVERGENCE_REASON.NOT_OWNER,
         leadershipTier: leadership.tier,
       });
+      // CL-001 variant D (re-diagnosis 2026-06-18): the variant-D catch-up lives in
+      // reconcileClusterMembership's not-write-leader defer branch, but that branch is
+      // reached on a follower ONLY on demand (reconcileQueue). This periodic driver is
+      // the ONLY loop that ticks every node every interval, yet it returned here without
+      // ever reaching the catch-up — so a follower that missed the leader's point-in-time
+      // CDC fan-out and settled at `steady_published` (nothing left to enqueue a reconcile
+      // reason) stayed FROZEN at a stale committed epoch to teardown, surfacing as the
+      // `publication_epochs_disagree` consistency mismatch. The catch-up's 5s cooldown ==
+      // this driver's 5s interval: it was designed to be driven from here. Read-only +
+      // local-cache-only + rate-limited + best-effort (never throws) → B4 single-writer
+      // gate intact; a non-leader never writes/promotes/trims via this path.
+      await this.refreshDeferredPublicationsCacheFromAuthority();
       return false;
     }
     this.assertSingleMembershipPartition();
