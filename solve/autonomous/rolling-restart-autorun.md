@@ -222,3 +222,31 @@ then only a below-gate-falsifiable + TRUSTED change).
   verify+investigate on owner-vs-follower + freeze mechanism + fix seam. CLASS 2 (convergence_timeout)
   = seed re-elects ~187x churn (separate). NOTE: did NOT commit anything iter3/iter4; quiescence
   instrumentation (78148877) remains the only landed keep this run besides CL-038 lever.
+
+## SYNTHESIS 2026-06-19 (~6h in) — TWO ROTATING CLASSES ARE ONE ENTANGLED UPSTREAM ROOT
+Deep diagnosis (primary evidence + 5 subagents) unifies the whole rolling-restart frontier:
+**A node rejoining the rolling restart lands in a BAD STATE the cluster cannot cleanly reconcile**, and
+the rotating gate tails are downstream facets of it:
+- CLASS 1 (publication_epochs_disagree): the rejoined node resumes as publications OWNER frozen at a
+  stale revision believing steady (CL-001; owner-path has NO catch-up — leadership-role gated, source-
+  traced). Fix = leader-path incarnation-gated catch-up via preferOwnerRpcRead. PARKED (incarnation
+  plumbing into single-writer coordinator = B4 blast radius; human design call). nodeSlotUnavailable /
+  observer_authority_visibility_lag are sibling observation faces.
+- CLASS 2 (convergence_timeout / over-target 138s>120s): the seed runs a readiness-cache REPAIR STORM
+  (444× on the seed, ALL contextNodeId=the frozen rejoiner, repairedRowCount=1) → seed CPU overload →
+  raft heartbeat starvation → seed loses+regains partition leadership 50× REAL elections (same partition
+  re-elects 6×) → leaderSignature churn → 15s quiet window never closes → over budget. CL-038 retain-
+  leader lever (4457c7aa) confirmed near-no-op (churn is upstream of placement). Raft seam src/raft/
+  liferaft.js IF spurious, but evidence leans GENUINE heartbeat-starvation = load-bound = the repair
+  storm = downstream of the bad rejoiner. NOT an independent loop bug.
+- COMMON ROOT: both reduce to the bad-rejoiner the cluster churns on. = the COUPLED-SYSTEM / diffuse-
+  membership-state thesis of .kiro/epics/membership-single-owner-cutover.md (CoupledAdmission proves
+  point-fixes bounce — EMPIRICALLY CONFIRMED this run: 6 rotating tails across 3 gates, each fix
+  surfaces the next). The real lever is the single-owner cutover (architectural, human-directed), NOT
+  more autonomous patches.
+LANDED this run (verified keeps): CL-038 retain-leader lever (4457c7aa, near-no-op but clean),
+per-poll quiescence reset-history instrumentation (78148877, observability). Diagnosis records: CL-001
+(rejoined-owner freeze, corrected mechanism), CL-038 (churn-root lever). doneWhen NOT advanced (still
+1/3, best 2/3 on the lucky 180s-window diagnostic). HONEST FRONTIER: remaining fixes are human-gated
+(CL-001 B4 blast radius) or architectural (the cutover). Stopping deep-autonomous-patching here is the
+correctness-over-speed call; the rubber-ducks independently flagged both roots as human-in-the-loop.
