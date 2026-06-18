@@ -17,7 +17,16 @@ import {
 
 const CONTAINER_RUNNING_STATE = 'running';
 const START_POLL_INTERVAL_MS = 250;
-const STOP_TIMEOUT_SECONDS = 10;
+// CL-030: docker's SIGTERM->SIGKILL grace MUST exceed the app's graceful-drain
+// budget (READINESS_DRAIN_DEADLINE_MS = 10s, src/constants/entrypoint.js) plus the
+// worst-case shutdown await chain, or a clean drain races the kill and the node
+// force-exits 1 (classified as unexpected_node_exit). Measured clean-drain timings
+// (Shutdown step timing logs) are normally <600ms but the two control-plane writes
+// publishNodeShutdownStatus (~5.5s) and shutdownLogsTablePersistence (~6.8s) can
+// stack to ~12s under rolling-restart churn. 25s gives comfortable headroom while
+// staying bounded — docker stop returns the instant the process exits, so fast
+// drains pay nothing; only a slow drain uses the extra grace.
+const STOP_TIMEOUT_SECONDS = 25;
 const PERCENT_MULTIPLIER = 100;
 const MIN_CPU_COUNT = 1;
 const ZERO = 0;
