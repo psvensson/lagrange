@@ -53,7 +53,7 @@ tail of unrelated suite failures.
 
 **Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds.**
 
-This is a powerful multi-core machine running in-memory tests, so there is no valid reason for a unit test to exceed 2 seconds (or an integration test 30 seconds). When a test exceeds this limit you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it.
+This is a powerful multi-core machine running in-memory tests, so there is no valid reason for a unit test to exceed 2 seconds (or an integration test 30 seconds). When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an integration test) you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it.
 
 Identify the root cause by looking for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation. Resolve it by mocking time-based behavior instead of waiting for real time, clearing all timers in `finally` blocks, disabling background features (speculative execution, intervals) in unit tests, and using `Promise.resolve()` or immediate callbacks instead of delays.
 

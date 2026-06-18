@@ -21,7 +21,9 @@ from a worker's self-report.
 `doneWhen` is binary terminal success. `metric` is a progress gradient. Keep them
 separate: a falling metric never closes a Quest by itself.
 
-The strategy ladder is:
+The strategy ladder is (canonical definition:
+`.kiro/steering/workflow-guidelines/solver-quests.md` — this runbook restates it
+for convenience and defers to that source if they ever diverge):
 
 ```text
 observe -> local-fix -> widen-scope -> model -> change-approach -> park

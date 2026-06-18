@@ -23,15 +23,15 @@ Use this tree for:
 
 Do not use this tree for:
 
-- current concrete component owner maps (see [`../../architecture/INDEX.md`](../../../architecture/INDEX.md))
+- current concrete component owner maps (see [`../../../architecture/INDEX.md`](../../../architecture/INDEX.md))
 - workstream-local testing procedure (see [`../testing-guidelines/INDEX.md`](../testing-guidelines/INDEX.md))
 - style and lint details (see [`../code-style.md`](../code-style.md))
 - roadmap scope decisions (see [`../roadmap.md`](../roadmap.md))
 
 Read together with [`../system-guidelines.md`](../system-guidelines.md),
 [`../testing-guidelines/INDEX.md`](../testing-guidelines/INDEX.md), and the canonical
-[`../../architecture/INDEX.md`](../../../architecture/INDEX.md). Root
-[`../../architecture.md`](../../../architecture.md) is a compatibility pointer
+[`../../../architecture/INDEX.md`](../../../architecture/INDEX.md). Root
+[`../../../architecture.md`](../../../architecture.md) is a compatibility pointer
 for older links only.
 
 ## Doctrine Summary

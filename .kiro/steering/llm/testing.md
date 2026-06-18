@@ -57,7 +57,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 26. [TEST-0017] Do not ignore a failing test. A failing test indicates broken functionality and must be treated as a stop-the-line signal for the touched area. _(see testing-guidelines/regression-policy.md:345)_
 27. [TEST-0021] Do not rely on a broad scenario test alone when the bug is in a narrow system-table write path. _(see testing-guidelines/fixtures.md:28)_
 28. [TEST-0022] Production code must never contain alternate code paths, branches, or special-case logic that exist solely to make tests pass. _(see testing-guidelines/fixtures.md:42)_
-29. [TEST-0023] When a test exceeds this limit you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it. _(see testing-guidelines/harness.md:56)_
+29. [TEST-0023] When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an integration test) you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it. _(see testing-guidelines/harness.md:56)_
 30. [TEST-0025] Tests must never be skipped. _(see testing-guidelines/fixtures.md:33)_
 31. [TEST-0027] Tests added during the change must match the Quest concern rather than an unrelated umbrella scope. _(see testing-guidelines/proof-ladders.md:23)_
 32. [TEST-0032] The test must fail with the current code _(see testing-guidelines/regression-policy.md:22)_

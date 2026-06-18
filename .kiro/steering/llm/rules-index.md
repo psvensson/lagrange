@@ -86,7 +86,7 @@ Total rules: 279
 | STYLE-0006 | must_not | style | NEVER introduce eslint override comments. |
 | TEST-0021 | must_not | testing | Do not rely on a broad scenario test alone when the bug is in a narrow system-table write… |
 | TEST-0022 | must_not | testing | Production code must never contain alternate code paths, branches, or special-case logic … |
-| TEST-0023 | must_not | testing | When a test exceeds this limit you must not accept it as passing; remediate before procee… |
+| TEST-0023 | must_not | testing | When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an inte… |
 | TEST-0024 | must_not | testing | Work must not close while the touched area remains red. |
 | GOV-0003 | must_not | governance | Session/narrative state (current blocker, handoff notes, working hypotheses) stays in ext… |
 | ARCH-0048 | must | architecture | Components constructed with owner dependencies must route owned behavior through those de… |

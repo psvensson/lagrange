@@ -31,7 +31,9 @@ A Quest must:
 7. after audit passes, commit and push every Quest-scoped change.
 
 Do not move goalposts in place. If the goal is wrong, record the finding and
-author a new Quest with the corrected `doneWhen`.
+author a new Quest with the corrected `doneWhen`. (Sharpening a frontier metric
+within the same sealed `doneWhen` is not moving goalposts; see "Gradient
+refinement of the sealed metric" below.)
 
 Terms used below — Quest, frontier, attempt, finding, theory, `doneWhen`, park,
 owner, sealed — are defined in core.md's canonical "Vocabulary" glossary and in

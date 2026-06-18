@@ -95,7 +95,8 @@ Use this list before non-trivial work:
 
 1. **Do not move Quest goalposts** after the first declaration. (Gradient
    refinement — sharpening a frontier metric within the same sealed `doneWhen`
-   predicate — is allowed; see solver-quests.md "Gradient Refinement".)
+   predicate — is allowed; see solver-quests.md "Gradient refinement of the
+   sealed metric".)
 2. **Do not claim SOLVED** without live `doneWhen` evidence.
 3. **Do not trust agent self-report** for done or metric movement; probes decide.
 4. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be

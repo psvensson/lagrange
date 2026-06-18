@@ -18,13 +18,13 @@
 - Frontier: rolling-restart-core-stability-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: publication_epochs_disagree
-- Mechanism: transition_gap
-- Movement: narrowed: restart_recovery_timeout -> publication_epochs_disagree
-- Latest evidence: test-output/reports/stat-gate-20260618T091351Z-run3.report.json
+- Dominant reason: unknown
+- Mechanism: topology_gap
+- Movement: solved: publication_epochs_disagree -> PASS
+- Latest evidence: test-output/reports/stat-gate-20260618T095532Z-run5.report.json
 - Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
 - Next move: continue supervised step for rolling-restart-core-stability-main
-- No longer current: restart_recovery_timeout
+- No longer current: publication_epochs_disagree
 
 ## Continuation
 - Status: blocked-scope
@@ -54,7 +54,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 101 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 300 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -409,6 +409,8 @@
 - **rolling-restart-core-stability-main**: CL-044 consistency sweep committed (955fc84c): audited every operation staleness/timeout anchor and migrated the ones vulnerable to the updatedAt-churn defeat to the time-in-step anchor — isOperationStepTimedOut (main reaper predicate), resolveAgeMs (liveness staleness feeding topology-settling + follow-up planning), and the reaper elapsed log. Deliberately KEPT updatedAt for getOperationAgeMs intent-reuse (churn-young is protective there) and the add-budget timeout (migrating would loosen admission; documented follow-up). Regression test operation-step-staleness-anchor.test.js red->green; 700 rebalancer staleness/timeout/quorum assertions green; lint clean. Full fix stack now: 4a048db1 (EADDRINUSE) + 0a5b548c (CL-044 livelock) + 955fc84c (sweep). NOTE: the prior CL-044 gate (stat-gate ts=20260618T084026Z) was compromised by a mid-run src edit (fast-local live-mounts src/); a CLEAN full-stack gate is now running. Do not trust the 084026Z gate for attribution. [solve/report/rolling-restart-core-stability.md]
 - **rolling-restart-core-stability-main**: CL-044 staleness-anchor migration COMPLETE (commit 0ffd287a). Extracted one canonical scan (operation-step-age.js resolveOperationCurrentStepEntry); recovery-timeout (gate+drain reaper+isOperationStepTimedOut) and liveness (resolveAgeMs) both delegate to it. D1 (add-budget workflow timeout) MIGRATED to step-entry (a churning add-budget op no longer holds a concurrent-add slot forever / starves peers). D2 (getOperationAgeMs intent-reuse) KEPT on updatedAt by design + documented in code (recency-of-activity exclusivity; aging on step-time would re-admit duplicate replicas). All other timeout anchors (publication ack, leases, heartbeat, coordinator interval timers) correctly use their own event time, out of scope. Regression coverage: operation-step-staleness-anchor.test.js (M1/M3/D1, red->green; safety cases pass on revert); 433+58 rebalancer assertions green; lint clean. Full fix stack: 4a048db1 EADDRINUSE + 0a5b548c CL-044 livelock + 955fc84c sweep + 0ffd287a complete-migration. Final clean full-stack rolling-restart gate running. [solve/report/rolling-restart-core-stability.md]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T091351Z-run3.report.json. Metric: 100 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: unknown. Dominant reason: publication_epochs_disagree. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
+- **rolling-restart-core-stability-main**: FULL-STACK GATE RESULT (stat-gate-20260618T091351Z, N=3 clean docker, srcFingerprint 952af223): passRate=0.667 (2/3 scenario PASS), convergeRate=1 (3/3 missing=0), nodeExit=0, corrupt=0, oracleBlind=0, stale=0. MAJOR movement: passRate 0/3 -> 2/3 across this session (was ~17% scenario-PASS at start). Runs 1+2 PASS with reason=none (clean recovery); run 3 converges but fails on publication_epochs_disagree. The EADDRINUSE death, the SYNC-to-down-node head-of-line livelock, and the updatedAt-churn staleness defeat are all resolved — recovery now completes within deadline for 2/3 runs. REMAINING binding blocker = publication_epochs_disagree (rejoined node observed epoch ahead of owner committed epoch; the epoch lineage of CL-001/CL-039), a DIFFERENT frontier from the recovery-completion path just fixed. doneWhen (3 consecutive PASS) not yet met; need to close the publication-epoch-disagreement tail. [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T095532Z-run5.report.json. Metric: 101 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T095532Z-run5.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -724,6 +726,7 @@
 - **theory-20260618-combined-cache-stale-replica-op-repair-scope**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260618T032424Z-run1.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260618T073037Z-run1.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260618T095532Z-run5.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
