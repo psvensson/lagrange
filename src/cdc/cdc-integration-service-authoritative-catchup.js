@@ -74,6 +74,18 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
 
   const now = typeof options.now === 'function' ? options.now : Date.now;
+  // Read-consistency for the catch-up read. By default the authoritative read
+  // short-circuits to the LOCAL replica (local-wins), which is correct for the
+  // CL-014 join-time bulk hydrate. But a rejoined non-write-leader whose own
+  // local control_plane_publications replica has stopped applying committed
+  // entries (publications leadership/handler split) would read ITSELF a stale
+  // epoch forever. When the caller requests preferOwnerRpcRead, route the read
+  // through the authoritative OWNER (with local fallback preserved — prefer,
+  // not require — so a partitioned node still fails soft), which also enables
+  // the owner-read anti-entropy sweep. See CL-001 "VARIANT D DEEPER LAYER".
+  const readOptions = options.preferOwnerRpcRead === true ?
+    {preferOwnerRpcRead: true} :
+    {};
   const summary = {
     tablesAttempted: 0,
     tablesHydrated: 0,
@@ -95,6 +107,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
           tableName,
           `SELECT * FROM ${tableName}`,
           [],
+          readOptions,
         );
       } catch (error) {
         lastFailure = error?.message || String(error);

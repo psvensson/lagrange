@@ -278,6 +278,13 @@ class MembershipPublicationCoordinatorReconcile extends
     try {
       return await service.hydrateCdcPropagatedTablesFromAuthority({
         tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+        // Route the catch-up read through the authoritative owner, not this
+        // node's own (possibly stale) local publications replica. A rejoined
+        // follower whose local replica stopped applying committed entries would
+        // otherwise re-read its own frozen epoch forever (the variant-D
+        // recurrence). Local fallback is preserved (prefer, not require), so a
+        // partitioned node still fails soft. See CL-001 "VARIANT D DEEPER LAYER".
+        preferOwnerRpcRead: true,
       });
     } catch (error) {
       this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {

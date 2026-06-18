@@ -67,3 +67,10 @@ radius (shared placement scorer move-planner.js placementOwnerDecision).
   owner stream desired=committed=observed all current → a FOLLOWER frozen at a
   stale local epoch, the known CL-001 epoch-half). NEXT iter2 = deep-diagnose the
   variant-D-doesn't-cover mechanism (3 open candidate traces; rank1 REFUTED).
+- iter2 2026-06-18: publication_epochs_disagree deep-diagnosed (subagent) + FIXED.
+  Root: variant-D catch-up read defaulted local-wins → frozen node re-read its
+  OWN stale local replica (which stopped applying committed entries due to a
+  publications leadership/handler split). FIX: preferOwnerRpcRead:true on the
+  catch-up read (local fallback preserved). Falsifier red-on-revert 16/16.
+  Adversarial-verify TRUSTED (sweep side-effect cleared). 0 new regressions.
+  Committing + N=3 gate. RESIDUAL: the leadership/handler split itself (deeper).

@@ -133,8 +133,9 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
 
   await coordinator.reconcileClusterMembership();
   t.equal(seen.length, 1, 'the first defer triggers a catch-up');
-  t.same(seen[0], {tables: [PUBLICATIONS]},
-    'the catch-up is scoped to control_plane_publications only');
+  t.same(seen[0], {tables: [PUBLICATIONS], preferOwnerRpcRead: true},
+    'the catch-up is scoped to control_plane_publications only and routes through ' +
+    'the authoritative owner (preferOwnerRpcRead) rather than the local replica');
 
   clock += 4000; // still within the 5000ms cooldown
   await coordinator.reconcileClusterMembership();
@@ -175,6 +176,67 @@ async (t) => {
     'the periodic !isLeader tick triggered the authoritative catch-up — the steady ' +
     'follower converged to the cluster-committed epoch 40 (RED before the fix: the ' +
     'driver returned at !isLeader without ever reaching the catch-up)');
+});
+
+test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through the ' +
+  'authoritative OWNER, not the node\'s own (frozen) local publications replica — a ' +
+  'follower whose local replica stopped applying committed entries still converges ' +
+  '(RED on revert: a local-wins read re-serves the stale epoch forever)', async (t) => {
+  const cache = new SystemTableCache();
+  // The exposed cache AND the node's own local control_plane_publications replica are
+  // BOTH frozen at epoch 19 (the publications leadership/handler split: the local
+  // replica silently stopped applying committed entries). Only the authoritative OWNER
+  // holds the current epoch 40. A local-wins catch-up read would re-read 19 forever.
+  cache.applySystemTableChange(
+    PUBLICATIONS, 'UPSERT', publicationRow(19, 1000), {causeId: 'seed-stale'});
+
+  const service = Object.create(CacheRepairHost.prototype);
+  service.cacheMutationTarget = cache;
+  service.getPrimaryKeyField = () => 'publication_id';
+  const reads = [];
+  service.executeAuthoritativeSystemTableRead =
+    async (_tableName, _sql, _params, options = {}) => {
+      const owner = options.preferOwnerRpcRead === true;
+      reads.push(owner ? 'owner' : 'local');
+      return owner ?
+        {
+          success: true,
+          source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+          rows: [publicationRow(40, 2000)],
+        } :
+        {
+          // The node's own local replica is frozen at the stale epoch.
+          success: true,
+          source: AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA,
+          rows: [publicationRow(19, 1000)],
+        };
+    };
+  service.logger = {warn() {}, info() {}, debug() {}, error() {}};
+  service.hydrateCdcPropagatedTablesFromAuthority = (opts) =>
+    hydrateCdcPropagatedTablesFromAuthority(service, opts);
+
+  const coordinator = makeDeferringCoordinator(
+    {cache, cdcIntegrationService: service, now: () => 5000});
+
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 19,
+    'exposed epoch starts stale at 19 (local replica frozen)');
+
+  await coordinator.reconcileClusterMembership();
+
+  t.equal(reads[0], 'owner',
+    'the catch-up read was routed through the authoritative OWNER, not local-wins');
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 40,
+    'a follower whose own local replica is frozen still converged to the owner ' +
+    'epoch 40 (RED on revert: a local-wins read returns the stale 19 forever)');
+  // The owner read is the COMPLETE authoritative set, so the owner-only
+  // anti-entropy sweep evicts the stale epoch-19 row (race-guarded, cache-local).
+  // Convergence does not depend on the sweep, but pin the sweep contract so a
+  // future regression that re-broadens eviction is caught.
+  const remaining = cache.getAll(PUBLICATIONS);
+  t.equal(remaining.length, 1,
+    'the owner-read anti-entropy sweep evicted the stale epoch-19 row — only the ' +
+    'current epoch remains');
+  t.equal(remaining[0].publication_epoch, 40, 'the surviving row is epoch 40');
 });
 
 test('CL-001 variant D: deferral stays safe when no CDC catch-up is available',
