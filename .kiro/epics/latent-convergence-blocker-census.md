@@ -222,6 +222,21 @@ ranks 1–2 (coupled: rank2 masks rank1; falsify both before fixing either).
    requireOwnerRpcRead); pressure-govern to avoid CL-012 seed amplification. FALSIFIER: decision-kernel
    stub at `queryLocalAuthoritativeSystemTableRows` returning a LOCAL_PARTITION_REPLICA stale epoch (NOT
    at the read-flow boundary — that's the existing-test bypass).
+   > **REFUTED 2026-06-18 (adversarial below-gate trace, HIGH confidence).** The premise "a follower
+   > serves ITSELF a stale local DB row" is FALSE. `applyCommittedEntry` runs the row UPSERT on EVERY
+   > replica (leader AND follower) with no role gate (partition-service-entry-apply-base.js:619-627); only
+   > CDC *event generation* is leader-gated (:628). `executeLocalSystemTableRead` reads that same fresh
+   > `this.db`. The variant-D ledger itself says the stale thing is the `systemTableCache`, NOT the local
+   > DB (CL-001.md:1206-1207) — the census conflated the two. Both topologies refute the fix: replica node →
+   > local DB already fresh → `preferOwnerRpcRead` unneeded; non-replica node → local read `available:false`
+   > → flow ALREADY falls through to owner-RPC → no-op. So `{preferOwnerRpcRead:true}` rescues nothing and
+   > only adds owner-RPC load (CL-012 risk). The variant-D test DOES stub the path (confirmed) but exercising
+   > the real local read would NOT reveal a bug. **The real epoch-disagree mechanism is still OPEN** — next
+   > traces (in order): (1) the catch-up read returns a deferral/transport-not-ready early-return on the
+   > frozen node so no rows reach `applyAuthoritativeCacheRepair` (read-flow.js:369-402); (2) node not
+   > classified as a publications replica AND owner-RPC lane itself failing; (3) `hydrateCdcPropagated...`
+   > not actually firing on the steady follower (verify the 7bc38dd9 periodic-driver call site fires for
+   > the specific frozen node id). NO falsifier built (would be a fabricated-precondition tautology).
 2. **cp-pub-01-readiness-exclude-empties-cohort** · product-bug · fixRisk HIGH · peelDepth 0 —
    `resolvePriorityRecoveryActiveNodeCohort` (active-node-publication-snapshots.js:320) runs
    `excludeUnavailableNodeIds` over the published baseline using readiness-excluded ids; a just-restarted
@@ -230,6 +245,16 @@ ranks 1–2 (coupled: rank2 masks rank1; falsify both before fixing either).
    Flagged as a possible REGRESSION from commit **8f5bc72a** (Jun 18, added readiness exclusion to the
    baseline). FIX: treat publishedBaselineNodeIds as a FLOOR (exclude only on admission-BLOCKED/fenced,
    never readiness-not-yet-eligible-alone during recovery). FALSIFIER: pure-unit on the cohort resolver.
+   > **CONFIRMED + FIXED 2026-06-18 (commit 16f10dea, adversarial subagent safety-verify: TRUSTED).**
+   > Regression confirmed via `git show 8f5bc72a` (renamed excludeAdmissionBlocked→excludeUnavailable,
+   > started unioning readiness-excluded into the published-baseline exclusion). Mechanism confirmed by
+   > driving the live resolver. Fix landed in the SAFE-direction REFINED form (not the naive floor-everything,
+   > which was MEDIUM-HIGH risk): re-admit a readiness-excluded baseline node ONLY when the projection
+   > recorded retention-grace reason `grace_conditions_met_but_excluded` (both liveness conjuncts held =
+   > proven live). Transport-dead/stale nodes are NOT floored (would inflate the remove-safety denominator);
+   > admission-blocked never floored. Falsifier priority-recovery-cohort-baseline-floor.test.js (red-on-revert
+   > 4/8; 2 FLOOR + 2 SAFETY-negative + admission-blocked negative). Note (rank1 REFUTED above): the
+   > rank2-masks-rank1 coupling is moot — there is no rank1 fix; this lands alone.
 3. **dp-placement-quorum-4** · product-bug · fixRisk med · peelDepth 1 — data-plane (non-critical)
    partitions skip the min-voter quorum guard (operation-workflow-remove-safety-evaluator.js:279-281 gates
    it on isCriticalSystemPartition); `calculateMoves` pushes an unconditional REMOVE(REPLICA_FAILED) that
