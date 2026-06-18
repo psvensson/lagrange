@@ -12,6 +12,7 @@ const ERRORS = Object.freeze({
 const ERRNO = Object.freeze({
   EPERM: 'EPERM',
   EACCES: 'EACCES',
+  EADDRINUSE: 'EADDRINUSE',
   ENOENT: 'ENOENT',
   NOT_RUNNING: 'ERR_SERVER_NOT_RUNNING',
 });

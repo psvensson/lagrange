@@ -277,6 +277,15 @@ class AdminWebSocketAPIBase {
           await this.fastify.ready();
           this.listening = false;
         } else {
+          if (err && err.code === ERRNO.EADDRINUSE) {
+            // A still-draining prior listener on this admin port is transient:
+            // tag the bind conflict retryable so the join re-attempt loop backs
+            // off and rebinds once the OS releases the socket, instead of
+            // classifying the bind as fatal and exiting the node — which drops
+            // the rejoiner from membership and surfaces downstream as
+            // publication_missing_active_node for that node.
+            err.retryable = true;
+          }
           throw err;
         }
       }
