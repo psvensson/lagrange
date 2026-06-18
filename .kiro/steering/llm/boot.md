@@ -100,7 +100,8 @@ domain-pack constraints:
 1. State the contradiction in the chat or the Quest finding log.
 2. Ask for confirmation before weakening safety bounds, deleting guardrails, or
    bypassing validation. This is the safety-specific instance of the core.md
-   "Default Posture: Autonomy" stop-triggers (Authorization / Safety); the default
+   "Default Posture: Autonomy" stop-triggers (Authorization / Safety / scope — see
+   core.md for the authoritative four); the default
    posture stays autonomous for everything outside that stop-list.
 3. If a domain pack rule is outdated, edit its source under `.kiro/steering/`
    and run `npm run steering:llm:pack`.

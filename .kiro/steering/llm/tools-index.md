@@ -93,7 +93,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## lint
 
 - `lint:fix` — `eslint src/ test/ --fix --ignore-pattern 'test/.gitkeep'`
-- `lint:scripts` — `eslint scripts/solve/`
+- `lint:scripts` — `eslint scripts/`
 
 ## migration
 

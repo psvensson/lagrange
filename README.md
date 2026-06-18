@@ -313,9 +313,10 @@ npm run quest:context
 ```
 
 That command prints the active Quest, latest probe, findings, pending step,
-useful commands, and dirty worktree summary. After that, load the compact
-steering pack from [.kiro/steering/llm/README.md](.kiro/steering/llm/README.md)
-instead of opening every steering document by default.
+useful commands, and dirty worktree summary. After that, start from the steering
+entry point [AGENTS.md](AGENTS.md) and load the compact steering pack index
+[.kiro/steering/llm/README.md](.kiro/steering/llm/README.md) instead of opening
+every steering document by default.
 
 ---
 

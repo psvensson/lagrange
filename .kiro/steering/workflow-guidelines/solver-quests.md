@@ -38,7 +38,8 @@ owner, sealed — are defined in core.md's canonical "Vocabulary" glossary and i
 the "User-Facing Vocabulary" section at the end of this file. For the full command
 surface beyond the primary workflow commands shown here — including `frontier`,
 `trace`, `promote-finding`, `ingest-evidence`, and the supervised `step` /
-`step --commit` / `step --abort` phases — run `node scripts/solve.js --help`.
+`step --commit` / `step --abort` phases — run `npm run commands` or invoke
+`node scripts/solve.js` with no arguments to list the subcommands.
 
 ## Quest Anatomy
 
@@ -303,7 +304,7 @@ The active command surface is:
 node scripts/solve.js theory system --id <id> ...
 node scripts/solve.js theory option --id <id> --frontier <frontier> ...
 node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <theory-id>
-node scripts/solve.js theory record --id <id> --theory <theory-id> --result supported|falsified|superseded|avoided|stale|needs-rerun ...
+node scripts/solve.js theory record --id <id> --theory <theory-id> --result active|supported|falsified|superseded|avoided|stale|needs-rerun ...
 node scripts/solve.js theory card --evidence <artifact>
 node scripts/solve.js health --id <id>
 ```
@@ -361,7 +362,7 @@ only where it removes repeated local patching:
 For supervised work:
 
 1. Do the work and rerun the relevant harness/probe.
-2. `node scripts/solve.js step --id <id> --changeRef diff:<path> --summary "<hypothesis>"`
+2. `node scripts/solve.js step --id <id> --commit --changeRef diff:<path> --summary "<hypothesis>"`
    measures, validates the attempt, updates the strategy ladder, and records the log
    event synchronously without intermediate pending files or pauses.
 

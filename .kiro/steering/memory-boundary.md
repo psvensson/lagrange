@@ -19,7 +19,8 @@ conflicting copies.
 
 - A lesson that should bind future work for everyone MUST be promoted into in-repo
   steering via `node scripts/solve.js promote-finding` (see
-  [`findings/README.md`](findings/README.md)), NOT left only in external memory.
+  [`.kiro/steering/findings/README.md`](findings/README.md)), NOT left only in
+  external memory.
 - Session/narrative state (current blocker, handoff notes, working hypotheses) stays
   in external memory and MUST NOT be copied into in-repo steering.
 - Durable operational ground truth has exactly one canonical home,

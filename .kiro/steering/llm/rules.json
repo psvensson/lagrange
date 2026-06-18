@@ -124,7 +124,7 @@
     "exportedRuleCount": 279,
     "aliasRuleCount": 4,
     "masterRuleCount": 275,
-    "estimatedAllRulesTokens": 10321
+    "estimatedAllRulesTokens": 10325
   },
   "rules": [
     {
@@ -1449,7 +1449,7 @@
       "sources": [
         {
           "file": "memory-boundary.md",
-          "line": 23,
+          "line": 24,
           "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
         }
       ]
@@ -2077,7 +2077,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 621,
+          "line": 622,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -2744,7 +2744,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 67,
+          "line": 68,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2759,7 +2759,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 67,
+          "line": 68,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2776,7 +2776,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 67,
+          "line": 68,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2793,7 +2793,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 84,
+          "line": 85,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2808,7 +2808,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 94,
+          "line": 95,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2823,7 +2823,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 94,
+          "line": 95,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2838,7 +2838,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 94,
+          "line": 95,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2855,7 +2855,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 144,
+          "line": 145,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
         }
       ]
@@ -2870,7 +2870,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 160,
+          "line": 161,
           "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
@@ -2887,7 +2887,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 160,
+          "line": 161,
           "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
@@ -2902,7 +2902,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 175,
+          "line": 176,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -2912,7 +2912,7 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see findings/README.md), NOT left only in external memory.",
+      "rule": "A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see .kiro/steering/findings/README.md), NOT left only in external memory.",
       "score": 206,
       "sources": [
         {
@@ -2932,7 +2932,7 @@
       "sources": [
         {
           "file": "memory-boundary.md",
-          "line": 25,
+          "line": 26,
           "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
         }
       ]
@@ -2947,7 +2947,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 343,
+          "line": 344,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2962,7 +2962,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 385,
+          "line": 386,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
@@ -2977,7 +2977,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 421,
+          "line": 422,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -2992,7 +2992,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 432,
+          "line": 433,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3007,7 +3007,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 479,
+          "line": 480,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -3024,7 +3024,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 479,
+          "line": 480,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -3071,7 +3071,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 539,
+          "line": 540,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -3086,7 +3086,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 627,
+          "line": 628,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -3101,7 +3101,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 657,
+          "line": 658,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -3116,7 +3116,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 691,
+          "line": 692,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -3131,7 +3131,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 712,
+          "line": 713,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -3146,7 +3146,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 745,
+          "line": 746,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3346,7 +3346,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 60,
+          "line": 61,
           "section": "Quest Workflow > Quest Anatomy"
         }
       ]
@@ -3363,7 +3363,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 353,
+          "line": 354,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3378,7 +3378,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 354,
+          "line": 355,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3395,7 +3395,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 356,
+          "line": 357,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3425,7 +3425,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 529,
+          "line": 530,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3440,7 +3440,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 709,
+          "line": 710,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -3591,7 +3591,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 184,
+          "line": 185,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3606,7 +3606,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 198,
+          "line": 199,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3621,7 +3621,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 246,
+          "line": 247,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3638,7 +3638,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 253,
+          "line": 254,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3653,7 +3653,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 522,
+          "line": 523,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3670,7 +3670,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 532,
+          "line": 533,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3774,7 +3774,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 385,
+          "line": 386,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
@@ -3791,7 +3791,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 409,
+          "line": 410,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3806,7 +3806,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 409,
+          "line": 410,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3821,7 +3821,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 507,
+          "line": 508,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -3953,7 +3953,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 67,
+          "line": 68,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -3968,7 +3968,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 84,
+          "line": 85,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -3986,7 +3986,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 436,
+          "line": 437,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -4003,7 +4003,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 648,
+          "line": 649,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -4018,7 +4018,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 665,
+          "line": 666,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -4181,7 +4181,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 53,
+          "line": 54,
           "section": "Quest Workflow > Quest Anatomy"
         }
       ]
@@ -4198,7 +4198,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 233,
+          "line": 234,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -4249,7 +4249,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 546,
+          "line": 547,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4356,7 +4356,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 297,
+          "line": 298,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -4371,7 +4371,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 491,
+          "line": 492,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -4386,7 +4386,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 502,
+          "line": 503,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -4403,7 +4403,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 507,
+          "line": 508,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -4480,7 +4480,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 151,
+          "line": 152,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
         }
       ]
@@ -4495,7 +4495,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 380,
+          "line": 381,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
@@ -4510,7 +4510,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 380,
+          "line": 381,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
@@ -4525,7 +4525,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 502,
+          "line": 503,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -4570,7 +4570,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 554,
+          "line": 555,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4617,7 +4617,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 138,
+          "line": 139,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
         }
       ]
@@ -4632,7 +4632,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 343,
+          "line": 344,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -4666,7 +4666,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 745,
+          "line": 746,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -4683,11 +4683,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 617,
+          "line": 618,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     }
   ],
-  "generatedAt": "2026-06-17T17:51:07.993Z"
+  "generatedAt": "2026-06-18T06:58:53.933Z"
 }

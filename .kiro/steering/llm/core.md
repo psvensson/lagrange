@@ -154,7 +154,14 @@ reinvent one. Discovery surfaces:
 | Quest theory | `node scripts/solve.js theory ...` | `scripts/solve/theory.js` |
 | Quest health | `node scripts/solve.js health --id <id>` | `scripts/solve/health.js` |
 | Touched/created file-size limits | `npm run audit:file-size` | `scripts/check-file-size-thresholds.js` |
-| Runtime syntax and grammar | `npm run check-runtime-grammar` | `scripts/check-runtime-grammar.js` |
+| Runtime syntax and grammar | `npm run audit:runtime-grammar` | `scripts/check-runtime-grammar-contracts.js` |
+| Record a finding | `node scripts/solve.js finding --id <id> --frontier <f> --claim "<learning>"` | `scripts/solve.js` |
+| Promote a finding to steering | `node scripts/solve.js promote-finding --id <id> --frontier <f> --domain <domain>` | `scripts/solve.js` |
+
+`finding` records a learning into the Quest event log; `promote-finding` promotes
+a recorded finding into in-repo steering as a rule (requires
+`--domain <architecture|testing|governance|style>`, then regenerate with
+`npm run steering:llm:pack`).
 
 ## Quest Shape Picker
 

@@ -385,8 +385,7 @@ single bad `git checkout` can never lose it. This happens automatically:
 - after **every measured attempt of an autonomous `run`** (not only at the
   terminal), so a long narrowing Quest leaves a per-attempt trail of rollback
   points instead of stacking dozens of attempts in one dirty tree, and
-- on every autonomous-run terminal (`SOLVED`, and the `cannot-measure` terminal)
-  as a final flush.
+- on every autonomous-run terminal (`SOLVED` or `EXHAUSTED`) as a final flush.
 
 Each auto-commit obeys the same rules as `handoff`: it refuses when `audit` does
 not pass (a scope-clean commit of dishonest evidence is still dishonest), stages
@@ -411,7 +410,7 @@ node scripts/solve.js run --id <quest> --no-commit
 ## Convergence Guards
 
 A narrowing Quest can otherwise shuffle the same blocker between owners forever
-and call it progress. Four guards keep the loop honest and converging:
+and call it progress. These guards keep the loop honest and converging:
 
 - **Oscillation detection.** The blocker history is tracked frontier-wide, not
   just last-vs-current. When an attempt returns the frontier to a

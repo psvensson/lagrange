@@ -15,7 +15,8 @@ derived from the Solver event log.
 
 The Solver owns work execution:
 
-- `node scripts/solve.js new --id <id>` creates a Quest draft.
+- `node scripts/solve.js new --id <id> --statement "<sealed result>"` creates a
+  Quest draft.
 - `node scripts/solve.js step --id <id>` starts a supervised attempt.
 - `node scripts/solve.js step --id <id> --commit --changeRef diff:<path>`
   records the measured result of that attempt.
@@ -83,7 +84,7 @@ those packs and add cited detail; they are not a separate runtime override path.
 
 Prefer these canonical tools before raw JSON, log slicing, or ad-hoc queries:
 
-- **Quest scaffold**: `node scripts/solve.js new --id <id>`
+- **Quest scaffold**: `node scripts/solve.js new --id <id> --statement "<sealed result>"`
 - **Quest status**: `node scripts/solve.js status --id <id>`
 - **Quest supervised step**: `node scripts/solve.js step --id <id>`
 - **Quest autonomous run**: `node scripts/solve.js run --id <id>`
