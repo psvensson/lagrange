@@ -1,0 +1,9 @@
+{
+  "goal": "rolling-restart-core-stability doneWhen = 3 consecutive scenario-PASS",
+  "startedAtEpoch": 1781805387,
+  "startedAtIso": "2026-06-18T17:56:27Z",
+  "deadlineEpoch": 1781841387,
+  "deadlineIso": "2026-06-19T03:56:27Z",
+  "budgetHours": 10,
+  "stopConditions": ["doneWhen met (SOLVED)", "EXHAUSTED (no honest move)", "10h wall elapsed", "a safety regression I introduce", "genuine goalpost ambiguity (rubber-duck first, only stop if unresolved)"]
+}

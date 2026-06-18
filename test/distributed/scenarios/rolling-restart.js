@@ -286,9 +286,12 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
 
   for (const node of reachableNodes) {
     let missingIds = ids;
+    let completedCleanRead = false;
+    let lastQueryError = null;
     const deadlineMs = Date.now() + visibilityTimeoutMs;
     for (;;) {
       const nextMissingIds = [];
+      let roundErrored = false;
       for (let index = ZERO; index < ids.length;
         index += ACKNOWLEDGED_WRITE_BATCH_SIZE) {
         const idBatch = ids.slice(
@@ -300,7 +303,22 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
           idColumn,
           idBatch,
         );
-        const result = await node.query(query);
+        let result;
+        try {
+          result = await node.query(query);
+        } catch (error) {
+          // A THROWN visibility query (e.g. a transient
+          // DISTRIBUTED_PARTICIPANT_FAILURE while a replica is mid-removal during
+          // the rolling-restart placement tail) means visibility is UNKNOWN this
+          // round, NOT that the acknowledged write is missing. Retry within the
+          // existing deadline that already exists for transient non-visibility; a
+          // participant that stays unqueryable for the whole window still fails
+          // below (completedCleanRead never set). The "query succeeded but rows
+          // missing" path is unchanged — a genuine stale read still fails.
+          lastQueryError = error;
+          roundErrored = true;
+          break;
+        }
         const visibleIds = new Set(
           rowsFromResult(result)
             .map((row) => row?.[ACKNOWLEDGED_WRITE_ALIAS])
@@ -312,8 +330,13 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
           }
         }
       }
-      missingIds = nextMissingIds;
-      if (missingIds.length === ZERO || Date.now() >= deadlineMs) {
+      if (!roundErrored) {
+        missingIds = nextMissingIds;
+        completedCleanRead = true;
+        lastQueryError = null;
+      }
+      if ((!roundErrored && missingIds.length === ZERO) ||
+        Date.now() >= deadlineMs) {
         break;
       }
       await sleep(
@@ -323,6 +346,15 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
         ),
       );
     }
+    assert.ok(
+      completedCleanRead,
+      'Could not complete acknowledged-write visibility query on node ' +
+      String(node?.id || 'unknown') + ' within ' + visibilityTimeoutMs +
+      'ms' +
+      (lastQueryError ?
+        ': ' + (lastQueryError?.message || String(lastQueryError)) :
+        ''),
+    );
     assert.equal(
       missingIds.length,
       ZERO,
@@ -771,4 +803,4 @@ async function run(cluster, options = {}) {
   }
 }
 
-export {run};
+export {run, assertAcknowledgedWritesVisibleOnReachableNodes};
