@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
@@ -235,33 +234,34 @@ function buildPriorityRecoveryResiduals(artifactPath, artifact) {
     const pendingRecoveryNodeIdsStr = String(
       activeGateProgress.publicationActiveGateHandoffPendingRecoveryNodeIds ||
       activeGateProgress.activeGateOwnerCohortPendingRecoveryNodeIds ||
-      EMPTY_TEXT
+      EMPTY_TEXT,
     );
     const pendingRecoveryNodeIds = pendingRecoveryNodeIdsStr
       .split(',')
-      .map(id => id.trim())
+      .map((id) => id.trim())
       .filter(Boolean);
 
     const pendingRecoveryCount = Number(
       activeGateProgress.publicationActiveGateHandoffPendingRecoveryCount ??
       activeGateProgress.activeGateOwnerCohortPendingRecoveryCount ??
-      NUM_ZERO
+      NUM_ZERO,
     );
 
     const priorityRecoveryDominantReason = String(
       activeGateProgress.priorityRecoveryProgressClasses?.dominantReason ||
       activeGateProgress.priorityRecoveryProgressClasses?.source?.dominantReason ||
       activeGateProgress.progress?.priorityRecoveryProgressClasses?.dominantReason ||
-      EMPTY_TEXT
+      EMPTY_TEXT,
     );
 
     const ownerRecoveryPendingWrites = Number(
       activeGateProgress.selectedControlPlaneOwnerQueuePendingWrites ??
-      NUM_ZERO
+      NUM_ZERO,
     );
 
     if (pendingRecoveryNodeIds.length > NUM_ZERO || pendingRecoveryCount > NUM_ZERO || priorityRecoveryDominantReason === 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING' || ownerRecoveryPendingWrites > NUM_ZERO) {
-      const nodeIds = pendingRecoveryNodeIds.length > NUM_ZERO ? pendingRecoveryNodeIds : [UNKNOWN_VALUE];
+      const nodeIds = pendingRecoveryNodeIds.length > NUM_ZERO ?
+        pendingRecoveryNodeIds : [UNKNOWN_VALUE];
       for (const nodeId of nodeIds) {
         lowConfidenceResiduals.push({
           nodeId,
@@ -308,7 +308,7 @@ function renderMarkdown(summary) {
       lines.push(
         `- Node \`${residual.nodeId}\`: ` +
         `derived from \`${residual.source}\` with reason \`${residual.reasonCode}\` (confidence: \`${residual.confidence}\`); ` +
-        `owner \`${residual.owner}\`, boundary \`${residual.boundary}\``
+        `owner \`${residual.owner}\`, boundary \`${residual.boundary}\``,
       );
     }
     lines.push(EMPTY_TEXT);

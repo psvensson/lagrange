@@ -643,14 +643,14 @@ function getWordSet(text) {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]/gu, ' ')
       .split(/\s+/)
-      .map(w => w.slice(0, 4))
-      .filter(w => w.length >= 3)
+      .map((w) => w.slice(0, 4))
+      .filter((w) => w.length >= 3),
   );
 }
 
 function isExtremelySimilar(wordsA, wordsB) {
   if (wordsA.size === 0 || wordsB.size === 0) return false;
-  const intersection = new Set([...wordsA].filter(x => wordsB.has(x)));
+  const intersection = new Set([...wordsA].filter((x) => wordsB.has(x)));
   const union = new Set([...wordsA, ...wordsB]);
   const jaccard = intersection.size / union.size;
   if (jaccard >= 0.55) {
@@ -903,15 +903,15 @@ function validateRulesHaveTriggerAndCitation(
       const where = formatRuleCitation(rule) || 'unknown source';
       failures.push(
         `${ruleId} (${where}) is aphoristic (${aphorismKind}): "${rule.text}". ` +
-          `Rephrase the source paragraph so the rule names its trigger condition ` +
-          `or subject (avoid bare admonition markers and dangling pronouns).`,
+          'Rephrase the source paragraph so the rule names its trigger condition ' +
+          'or subject (avoid bare admonition markers and dangling pronouns).',
       );
       continue;
     }
     if (!formatRuleCitation(rule)) {
       failures.push(
         `${ruleId} has no source citation. Every emitted rule must record ` +
-          `at least one {file, line} entry in rules.json sources.`,
+          'at least one {file, line} entry in rules.json sources.',
       );
     }
   }
@@ -962,7 +962,7 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
     timeout: 'Timeouts & Budget Management',
     testing: 'Testing & Harness Guidelines',
     style: 'Code Style & Formatting Guidelines',
-    governance: 'Governance & Scope Controls'
+    governance: 'Governance & Scope Controls',
   };
 
   const rulesBody = [];
@@ -996,13 +996,13 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
     'regenerate_with: npm run steering:llm:pack',
     '---',
     '',
-    `> **Compiled pack — do not hand-edit.** Regenerate with \`npm run steering:llm:pack\` after editing canonical sources under \`.kiro/steering/\`.`,
+    '> **Compiled pack — do not hand-edit.** Regenerate with `npm run steering:llm:pack` after editing canonical sources under `.kiro/steering/`.',
     '',
     `# ${output.title || 'LLM Steering Pack'}`,
     '',
     output.description || '',
     '',
-    `Rule count, token estimate, and domain coverage live in \`manifest.json\` (regenerated on each \`npm run steering:llm:pack\`). Do not maintain those numbers inline.`,
+    'Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.',
     '',
     (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
       `> **Priority subset — not the full corpus.** This pack lists only the highest-priority ${sourceForScope} rules (capped per \`maxRules\` in \`llm-pack.config.json\`). For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :

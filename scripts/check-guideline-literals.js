@@ -71,7 +71,8 @@ function isModuleSourceLiteral(node, parent) {
 function isObjectKeyLiteral(node, parent) {
   return (
     (parent?.type === LOCAL_STR_PROPERTY && parent.key === node && parent.computed !== true) ||
-    (parent?.type === LOCAL_STR_METHODDEFINITION && parent.key === node && parent.computed !== true) ||
+    (parent?.type === LOCAL_STR_METHODDEFINITION && parent.key === node &&
+      parent.computed !== true) ||
     (parent?.type === LOCAL_STR_PROPERTYDEFINITION && parent.key === node &&
       parent.computed !== true)
   );
@@ -90,7 +91,8 @@ function isParseIntRadixLiteral(node, parent) {
 }
 
 function findConstDeclarationContext(ancestors) {
-  for (let index = ancestors.length - LOCAL_NUM_ONE; index >= LOCAL_NUM_ZERO; index -= LOCAL_NUM_ONE) {
+  for (let index = ancestors.length - LOCAL_NUM_ONE;
+    index >= LOCAL_NUM_ZERO; index -= LOCAL_NUM_ONE) {
     const ancestor = ancestors[index];
     if (ancestor?.type === LOCAL_STR_VARIABLEDECLARATOR) {
       const declaration = ancestors[index - 1];

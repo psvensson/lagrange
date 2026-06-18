@@ -150,10 +150,10 @@ async function main() {
   try {
     for (const bundle of BUNDLES) {
       await buildBundle(
-          bundle.entryPoint,
-          bundle.outputFile,
-          bundle.name,
-          bundle.external,
+        bundle.entryPoint,
+        bundle.outputFile,
+        bundle.name,
+        bundle.external,
       );
     }
 

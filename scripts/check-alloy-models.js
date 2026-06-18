@@ -361,7 +361,10 @@ function reportNameForModel(metadata, filePath) {
 }
 
 function sanitizeAlloyOutput(output) {
+  // The Alloy tool emits literal backspace (U+0008) control chars; stripping them is the
+  // intent, so the control-char-in-regex match below is deliberate.
   return String(output || '')
+    // eslint-disable-next-line no-control-regex
     .replace(/\u0008/gu, '')
     .replace(/\r/gu, '');
 }

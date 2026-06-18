@@ -31,7 +31,7 @@ const LOCAL_NUM_ONE = 1;
 
 if (process.argv.includes(LOCAL_STR_HELP) || process.argv.includes(LOCAL_STR_H)) {
   console.log(
-      LOCAL_STR_1N4MF,
+    LOCAL_STR_1N4MF,
   );
   process.exit(LOCAL_NUM_ZERO);
 }

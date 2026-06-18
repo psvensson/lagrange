@@ -204,8 +204,10 @@ async function main() {
   const latestByStagePath = join(outDir, `latest-${args.stage}.json`);
   const latestPath = join(outDir, 'latest.json');
 
-  await writeFile(timestampedPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
-  await writeFile(latestByStagePath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(
+    timestampedPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(
+    latestByStagePath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
   await writeFile(latestPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
 
   if (!stageReport.passed) {

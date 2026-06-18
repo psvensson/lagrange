@@ -105,7 +105,8 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === ARG_SCENARIO && index + LOCAL_NUM_ONE < argv.length) {
-      scenarioName = String(argv[index + LOCAL_NUM_ONE] || LOCAL_STR_EMPTY).trim() || TARGET_SCENARIO;
+      scenarioName =
+        String(argv[index + LOCAL_NUM_ONE] || LOCAL_STR_EMPTY).trim() || TARGET_SCENARIO;
       index += LOCAL_NUM_ONE;
     }
   }

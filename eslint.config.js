@@ -78,4 +78,20 @@ export default [
       'no-invalid-this': 'off',
     },
   },
+  // MUST stay last: flat config is last-match-wins, so this overrides the earlier
+  // sourceType:'module' for CommonJS files. A .cjs file is CommonJS at runtime
+  // regardless of package.json "type":"module", so require/module/exports are globals.
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        exports: 'writable',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+  },
 ];

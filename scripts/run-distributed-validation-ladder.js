@@ -97,7 +97,8 @@ function printLines(lines) {
 function printStageHeader(stageKind, index, total, command) {
   printLines([
     EMPTY,
-    LOCAL_STR_1PLYW + stageKind + LOCAL_STR_SPACE + index + LOCAL_STR_SLASH + total + LOCAL_STR_10CT0 + command,
+    LOCAL_STR_1PLYW + stageKind + LOCAL_STR_SPACE + index + LOCAL_STR_SLASH +
+      total + LOCAL_STR_10CT0 + command,
   ]);
 }
 

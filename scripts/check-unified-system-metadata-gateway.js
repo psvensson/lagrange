@@ -195,7 +195,7 @@ function buildSystemTableReferencePattern() {
     .join('|');
   return new RegExp([
     LOCAL_STR_SYSTEM_TABLE_NAME,
-    `['"\`][\\s\\S]{0,400}?\\b(?:FROM|INTO|UPDATE|DELETE\\s+FROM)\\s+` +
+    '[\'"`][\\s\\S]{0,400}?\\b(?:FROM|INTO|UPDATE|DELETE\\s+FROM)\\s+' +
       `(?:${tableAlternation})\\b[\\s\\S]{0,400}?['"\`]`,
   ].join(LOCAL_STR_PIPE), LOCAL_STR_I);
 }

@@ -32,9 +32,9 @@ function resolveRegistryPath(rootDir = process.cwd()) {
 }
 
 function loadInvariantRegistry(filePath, rootDir = process.cwd()) {
-  const resolved = filePath
-    ? path.resolve(rootDir, filePath)
-    : resolveRegistryPath(rootDir);
+  const resolved = filePath ?
+    path.resolve(rootDir, filePath) :
+    resolveRegistryPath(rootDir);
   if (!fs.existsSync(resolved)) {
     return {registry: null, path: resolved, error: 'registry-not-found'};
   }

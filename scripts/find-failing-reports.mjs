@@ -22,7 +22,7 @@ for (const f of files) {
       config: r.config?.configPath || r.metadata?.configPath || LOCAL_STR_QUESTION,
       ts: r.timestamp || LOCAL_STR_EMPTY,
     });
-  } catch (_e) { /* skip */ }
+  } catch (_e) {/* skip */}
 }
 
 results.sort((a, b) => b.ts.localeCompare(a.ts));

@@ -759,11 +759,11 @@ function buildProbeHandoffContract(consumerWitness) {
     (
       pendingRecoveryCount > NUM_ZERO ?
         HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY :
-      contractReasonCode ===
+        contractReasonCode ===
         HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING ||
       pendingReconcileCount > NUM_ZERO ?
-        HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION :
-        ABSENT_VALUE
+          HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION :
+          ABSENT_VALUE
     );
   return {
     ...HANDOFF_CONTRACT_ABSENT,
