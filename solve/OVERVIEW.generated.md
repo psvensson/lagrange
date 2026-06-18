@@ -36,40 +36,40 @@ _Detailed planning (.kiro/specs/): design + requirements + tasks. Implemented by
 | raft-logic-migration                        | 0/0                 | —                                                                                                                                                                                   |
 | spec-led-runtime-modularization             | 0/0                 | —                                                                                                                                                                                   |
 
-## 4 · Quests — 3 open / 19 terminal
+## 4 · Quests — 2 open / 20 terminal
 _The only measured layer (solve/quests/). Sealed goal; attempts and findings live in the append-only log._
 
 ### Open
 
-| id                                       | class   | spec                                        | attempts | reopens | closes                 |
-| ---------------------------------------- | ------- | ------------------------------------------- | -------- | ------- | ---------------------- |
-| membership-publication-drain-determinism | product | membership-lifecycle-placement-hard-cutover | 0        | 0       | CL-001                 |
-| non-docker-validation-green              | product | —                                           | 0        | 0       | —                      |
-| rolling-restart-core-stability           | product | membership-lifecycle-placement-hard-cutover | 74       | 13      | CL-001, CL-004, CL-030 |
+| id                                       | class   | spec                                        | attempts | reopens | osc | closes                 |
+| ---------------------------------------- | ------- | ------------------------------------------- | -------- | ------- | --- | ---------------------- |
+| membership-publication-drain-determinism | product | membership-lifecycle-placement-hard-cutover | 0        | 0       | 0   | CL-001                 |
+| rolling-restart-core-stability           | product | membership-lifecycle-placement-hard-cutover | 74       | 13      | 2   | CL-001, CL-004, CL-030 |
 
 ### Terminal
 
-| id                                        | class   | outcome | attempts |
-| ----------------------------------------- | ------- | ------- | -------- |
-| alloy-execution-guardrails-verifier-fix   | product | solved  | 1        |
-| autonomy-and-parallel-defaults            | process | solved  | 0        |
-| cdc-cache-delete-resurrection             | product | solved  | 1        |
-| core-system-logic-alloy-adjacency         | product | solved  | 1        |
-| core-system-logic-model-adjacency         | product | solved  | 1        |
-| hlc-cross-leader-monotonicity             | product | solved  | 1        |
-| legacy-work-tracker-removal               | product | solved  | 1        |
-| model-bounded-retry-exit-routing          | product | solved  | 1        |
-| model-owner-trace-validation              | product | solved  | 1        |
-| model-owner-transition-recoverable-wake   | product | solved  | 1        |
-| model-projection-freshness-epoch-fencing  | product | solved  | 1        |
-| model-readiness-handoff-liveness          | product | solved  | 1        |
-| quest-git-handoff-requirement             | product | solved  | 1        |
-| quest-model-guidance-theory-use           | product | solved  | 1        |
-| quest-source-change-subagent-verification | product | solved  | 1        |
-| quest-system-continuation-gates           | process | solved  | 1        |
-| quest-workflow-signal-quality             | process | solved  | 1        |
-| steering-doc-clarity                      | process | solved  | 0        |
-| workflow-linking-and-memory-loop          | process | solved  | 0        |
+| id                                        | class   | outcome   | attempts |
+| ----------------------------------------- | ------- | --------- | -------- |
+| alloy-execution-guardrails-verifier-fix   | product | solved    | 1        |
+| autonomy-and-parallel-defaults            | process | solved    | 0        |
+| cdc-cache-delete-resurrection             | product | solved    | 1        |
+| core-system-logic-alloy-adjacency         | product | solved    | 1        |
+| core-system-logic-model-adjacency         | product | solved    | 1        |
+| hlc-cross-leader-monotonicity             | product | solved    | 1        |
+| legacy-work-tracker-removal               | product | solved    | 1        |
+| model-bounded-retry-exit-routing          | product | solved    | 1        |
+| model-owner-trace-validation              | product | solved    | 1        |
+| model-owner-transition-recoverable-wake   | product | solved    | 1        |
+| model-projection-freshness-epoch-fencing  | product | solved    | 1        |
+| model-readiness-handoff-liveness          | product | solved    | 1        |
+| non-docker-validation-green               | product | exhausted | 0        |
+| quest-git-handoff-requirement             | product | solved    | 1        |
+| quest-model-guidance-theory-use           | product | solved    | 1        |
+| quest-source-change-subagent-verification | product | solved    | 1        |
+| quest-system-continuation-gates           | process | solved    | 1        |
+| quest-workflow-signal-quality             | process | solved    | 1        |
+| steering-doc-clarity                      | process | solved    | 0        |
+| workflow-linking-and-memory-loop          | process | solved    | 0        |
 
 ## 5 · Closure frontier — 15 active of 42
 _Cross-quest invariant tracking (closure-ledger/CL-###), grouped by subsystem. Quests claim these via links.closesCL._
