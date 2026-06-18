@@ -628,6 +628,12 @@ class RebalanceCoordinatorOperationIntentMethods {
    * @private
    */
   getOperationAgeMs(operation) {
+    // Intentionally anchored on updatedAt (recency-of-activity), NOT the
+    // time-in-step anchor used by the CL-044 staleness sweep: this drives
+    // intent-reuse exclusivity (shouldReuseRecentOperationIntentOnAuthoritativeMiss),
+    // where a recently-touched op must KEEP its intent exclusive to avoid
+    // multiplying replacement replicas. Aging it out on step time would re-admit
+    // a duplicate intent — the opposite of the safety intent here.
     const updatedAt = Number(operation?.updatedAt);
     const createdAt = Number(operation?.createdAt);
     const startedAt =

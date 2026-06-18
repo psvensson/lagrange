@@ -3,6 +3,7 @@ import {
   applyOperationWorkflowExecutorOutcomeReconcileMethods,
 } from './operation-workflow-executor-outcome-reconcile-methods.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -370,28 +371,11 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   resolveOperationStepEnteredAtMs(operation) {
-    const stepsHistory = Array.isArray(operation?.stepsHistory) ?
-      operation.stepsHistory :
-      null;
-    const workflowStep = operation?.workflowStep;
-    if (
-      !stepsHistory ||
-      stepsHistory.length === NUM.ZERO ||
-      !workflowStep
-    ) {
+    const stepEntry = resolveOperationCurrentStepEntry(operation);
+    if (!stepEntry) {
       return null;
     }
-    // Newest step-history entry for the CURRENT workflow step. updateStep only
-    // appends on a real transition (it no-ops when previousStep === step), so
-    // this timestamp is the true time-in-step and is immune to the same-step
-    // dispatch-retry churn that keeps re-persisting updatedAt every ~1s.
-    for (let index = stepsHistory.length - NUM.ONE; index >= NUM.ZERO; index--) {
-      const entry = stepsHistory[index];
-      if (entry && entry.step === workflowStep) {
-        return this.normalizeOperationDrainEpochMillis(entry.timestamp);
-      }
-    }
-    return null;
+    return this.normalizeOperationDrainEpochMillis(stepEntry.timestamp);
   }
 
   resolvePriorityRecoveryOperationDrainStepAgeMs(

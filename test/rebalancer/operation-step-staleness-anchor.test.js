@@ -148,3 +148,43 @@ test('M3 — isOperationStepTimedOut does NOT reap an op recently in-step (no pr
       await coordinator.shutdown();
     }
   }));
+
+// --- D1: add-budget workflow timeout -------------------------------------
+
+// isAddBudgetOperationPastWorkflowTimeout reads coordinator.nowFn() internally
+// (real Date.now()), so anchor the op timestamps to real wall-clock; the
+// 12m/10s margins dwarf the few-ms drift between building the op and the call.
+test('D1 — add-budget timeout releases a wedged in-step op despite a fresh (churned) updatedAt',
+  withConfig(async (t) => {
+    const coordinator = createTestCoordinator({nodeId: 'seed-node', enableTimeouts: false});
+    coordinator.initialize();
+    try {
+      t.equal(
+        coordinator.isAddBudgetOperationPastWorkflowTimeout(
+          buildWedgedOp({stepEnteredAgoMs: PAST_ANY_STEP_TIMEOUT_MS, nowMs: Date.now()}),
+        ),
+        true,
+        'a wedged add-budget op must read as past its workflow timeout so it ' +
+          'stops starving other partitions of concurrent-add budget',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  }));
+
+test('D1 — add-budget timeout keeps a recently in-step op active (no premature release)',
+  withConfig(async (t) => {
+    const coordinator = createTestCoordinator({nodeId: 'seed-node', enableTimeouts: false});
+    coordinator.initialize();
+    try {
+      t.equal(
+        coordinator.isAddBudgetOperationPastWorkflowTimeout(
+          buildWedgedOp({stepEnteredAgoMs: FRESH_IN_STEP_MS, nowMs: Date.now()}),
+        ),
+        false,
+        'an op recently in its step must still hold its add-budget slot',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  }));

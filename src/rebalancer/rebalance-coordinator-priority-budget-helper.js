@@ -333,12 +333,21 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
   ) {
     return false;
   }
-  const observedAtMs = Number(
-    operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT] ??
-      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT_SNAKE] ??
-      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT] ??
-      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT_SNAKE],
-  );
+  // Prefer time-in-current-step over updatedAt (CL-044): a wedged add-budget op
+  // whose dispatch retry loop keeps re-stamping updatedAt would otherwise never
+  // read as past its workflow timeout, so it would hold a concurrent-add budget
+  // slot forever and starve other partitions. The step-entry anchor is immune to
+  // that churn; fall back to updatedAt -> createdAt when no step entry is present.
+  const stepEnteredAtMs =
+    coordinator.workflowOwner?.resolveOperationStepEnteredAtMs?.(operation);
+  const observedAtMs = Number.isFinite(stepEnteredAtMs) ?
+    stepEnteredAtMs :
+    Number(
+      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT_SNAKE] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT_SNAKE],
+    );
   if (!Number.isFinite(observedAtMs)) {
     return false;
   }

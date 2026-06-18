@@ -1,4 +1,5 @@
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
+import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 import {
   isPriorityControlPlanePartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -257,23 +258,11 @@ function inferSourceReplicaIdFromStepsHistory(stepsHistory) {
 }
 
 function resolveStepEnteredAtMs(record) {
-  const stepsHistory = Array.isArray(record?.stepsHistory) ?
-    record.stepsHistory :
-    null;
-  const workflowStep = record?.workflowStep;
-  if (!stepsHistory || stepsHistory.length === NUM.ZERO || !workflowStep) {
+  const stepEntry = resolveOperationCurrentStepEntry(record);
+  if (!stepEntry) {
     return null;
   }
-  // Newest step-history entry for the CURRENT workflow step. A step entry is
-  // appended only on a real transition, so this is the true time-in-step and is
-  // immune to same-step dispatch-retry churn that keeps re-stamping updatedAt.
-  for (let index = stepsHistory.length - NUM.ONE; index >= NUM.ZERO; index--) {
-    const entry = stepsHistory[index];
-    if (entry && entry.step === workflowStep) {
-      return normalizeEpochMillis(entry.timestamp);
-    }
-  }
-  return null;
+  return normalizeEpochMillis(stepEntry.timestamp);
 }
 
 function resolveAgeMs(record, nowMs) {
