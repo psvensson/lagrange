@@ -83,3 +83,24 @@ radius (shared placement scorer move-planner.js placementOwnerDecision).
   core (consumer-lag + settle-time). INFLECTION: goalpost Q (re-open deferred
   Option-2?) + integrity Q (barrier-settle lever legit?). Rubber-ducking before
   proceeding.
+
+## STOPPED 2026-06-18 (user: "stop when convenient" + deferred-frontier reached)
+Stopped at a clean point with ~8.1h budget unused. doneWhen STILL FALSE (best 2/3).
+Two fixes landed + gate-confirmed-engaged (5d487b37 lever-a, 88e02ea6 visibility-retry,
+48faf269 epoch owner-read). Two tractable rotating tails ELIMINATED across gates:
+nodeSlotUnavailable (gone iter1) + publication_epochs_disagree (gone iter2).
+TERMINAL FINDING (rubber-duck subagent, log-verified): the two SURVIVING failures
+(run1 consumer_lag/missing=1; run2 convergence_timeout) share ONE root and are BOTH
+the user-deferred class — during rolling-restart recovery the control plane is
+backpressured (ROUTER_MESSAGE_TIMEOUT / control_plane_backpressure on the leader),
+so (a) the restarted node's state=ready re-publish does not land and (b) the
+rebalancer cannot drain the surplus voter (node_not_ready/repair_ineligible); the
+over-target window (122-159s) exceeds the 120s convergence budget. = CL-003
+(publication_converged_priority_spread_pending, pressure=write_backlog) + CL-038
+(over-target drain vs wall budget) + Option-2 consumer-lag. The recovery barrier
+ALREADY waits on convergence (it is what times out) — extending it would MASK
+non-convergence, not fix it. NO integrity-preserving harness lever remains without
+re-opening deferred product work. NEXT (needs user/product decision, NOT autonomous):
+profile the recovery-time control-plane backpressure (the deferred Option-2
+precondition) — measure true surplus-drain time (run1 raise settleTimeoutMs as a
+DIAGNOSTIC only) to quantify the budget gap.
