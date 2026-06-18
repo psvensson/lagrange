@@ -22,6 +22,7 @@ const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_VPBYI = 'Failed to publish node shutdown status';
 const LOCAL_STR_14077 = 'Shutdown already in progress, forcing process exit';
+const LOCAL_STR_SHUTDOWN_STEP = 'Shutdown step timing';
 const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';
 const LOCAL_STR_BEFOREEXIT = 'beforeExit';
@@ -199,6 +200,30 @@ async function resolveLogsTableServiceFromPersistence(logsPersistence) {
 }
 
 /**
+ * Time one awaited shutdown step (observe-only, CL-030 drain-timing attribution).
+ * Logs the step's elapsed ms so a single run names which drain step consumes the
+ * READINESS_DRAIN_DEADLINE_MS window before the harness SIGKILLs (STOP_TIMEOUT).
+ * Never alters control flow — a throw still propagates to the handler's catch.
+ * @param {Object} logger
+ * @param {string} signal
+ * @param {string} step
+ * @param {() => Promise<*>} run
+ * @return {Promise<*>}
+ */
+async function timeShutdownStep(logger, signal, step, run) {
+  const startedAt = Date.now();
+  try {
+    return await run();
+  } finally {
+    logger.info(LOCAL_STR_SHUTDOWN_STEP, {
+      signal,
+      step,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+}
+
+/**
  * Build one shared shutdown signal handler for seed and join branches.
  * @param {Object} options
  * @return {(signal: string) => Promise<void>}
@@ -216,46 +241,71 @@ function createShutdownSignalHandler(options) {
     }
 
     options.logger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
+    const shutdownStartedAt = Date.now();
     try {
       const drainDeadlineMs =
         Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
-      const drainingSnapshot =
-        typeof options.membershipLifecycleController?.submitDrainIntent ===
-          'function' ?
-          await options.membershipLifecycleController.submitDrainIntent({
-            drainDeadlineMs,
-            reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
-            signal,
-          }) :
-          options.bootstrapAPI.markDraining({
-            drainDeadlineMs,
-          });
+      const drainingSnapshot = await timeShutdownStep(
+        options.logger, signal, 'submitDrainIntent', () =>
+          typeof options.membershipLifecycleController?.submitDrainIntent ===
+            'function' ?
+            options.membershipLifecycleController.submitDrainIntent({
+              drainDeadlineMs,
+              reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
+              signal,
+            }) :
+            options.bootstrapAPI.markDraining({
+              drainDeadlineMs,
+            }),
+      );
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,
         phase: drainingSnapshot?.phase || null,
         reasons: drainingSnapshot?.reasons || [],
         drainDeadlineMs,
       });
-      await publishNodeShutdownStatus(
-        options.heartbeatService,
-        options.logger,
-        options.nodeId,
+      await timeShutdownStep(
+        options.logger, signal, 'publishNodeShutdownStatus', () =>
+          publishNodeShutdownStatus(
+            options.heartbeatService,
+            options.logger,
+            options.nodeId,
+          ),
       );
       options.logsPersistence?.cancel?.();
       const logsTableService = await resolveLogsTableServiceFromPersistence(
         options.logsPersistence,
       );
-      await shutdownLogsTablePersistence(logsTableService, options.logger);
-      await options.rejoinHintsPersistence?.stop?.();
+      await timeShutdownStep(
+        options.logger, signal, 'shutdownLogsTablePersistence', () =>
+          shutdownLogsTablePersistence(logsTableService, options.logger),
+      );
+      await timeShutdownStep(
+        options.logger, signal, 'rejoinHintsPersistence.stop', () =>
+          Promise.resolve(options.rejoinHintsPersistence?.stop?.()),
+      );
       shutdownDynamicConfigWiring(options.dynamicConfigWiring, options.logger);
       if (typeof options.detachMigrationRecovery === LOCAL_STR_FUNCTION) {
         options.detachMigrationRecovery();
       }
-      await options.ownerCleanup();
-      await options.bootstrapAPI.shutdown();
-      await shutdownAdminRuntimeComposition({
-        adminAPI: options.adminAPI,
-        liveQueryWiring: options.liveQueryWiring,
+      await timeShutdownStep(
+        options.logger, signal, 'ownerCleanup', () => options.ownerCleanup(),
+      );
+      await timeShutdownStep(
+        options.logger, signal, 'bootstrapAPI.shutdown', () =>
+          options.bootstrapAPI.shutdown(),
+      );
+      await timeShutdownStep(
+        options.logger, signal, 'shutdownAdminRuntimeComposition', () =>
+          shutdownAdminRuntimeComposition({
+            adminAPI: options.adminAPI,
+            liveQueryWiring: options.liveQueryWiring,
+          }),
+      );
+      options.logger.info(LOCAL_STR_SHUTDOWN_STEP, {
+        signal,
+        step: 'total_clean_drain',
+        elapsedMs: Date.now() - shutdownStartedAt,
       });
       process.exit(LOCAL_NUM_ZERO);
     } catch (error) {
