@@ -60,3 +60,10 @@ radius (shared placement scorer move-planner.js placementOwnerDecision).
   fix tolerates the transient blip; if the gate still fails on a 30s-persistent
   participant failure, escalate to barrier move-quiescence / route-around.
   Committing + N=3 gate.
+- iter1 GATE 182252Z (N=3, harness-fix src=lever-a): scenario-PASS 1/3 (run3 PASS;
+  run1/run2 FAIL publication_epochs_disagree). 3/3 CONVERGED, 0 breaches.
+  nodeSlotUnavailable tail GONE (visibility-retry fix worked). ROTATING tail
+  surfaced: publication_epochs_disagree×2 (run1 owner epoch 27, run2 epoch 57,
+  owner stream desired=committed=observed all current → a FOLLOWER frozen at a
+  stale local epoch, the known CL-001 epoch-half). NEXT iter2 = deep-diagnose the
+  variant-D-doesn't-cover mechanism (3 open candidate traces; rank1 REFUTED).
