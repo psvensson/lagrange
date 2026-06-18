@@ -132,15 +132,6 @@ export function buildOverview(root) {
   };
 }
 
-// Reopens cell: deliberate `reopen` revivals, annotated with the solve<->failure
-// oscillation count (autoReopens) when present, since that flap climbs toward the
-// reopen budget and a budget-driven EXHAUSTED — a stuck-work signal a planning view
-// should not hide behind a healthy-looking reopens=0.
-function reopensCell(quest) {
-  return quest.autoReopens > 0 ?
-    `${quest.reopens} (+${quest.autoReopens} osc)` : String(quest.reopens);
-}
-
 // Coerce a cell to a single-line, table-safe string. Long ledger concerns can
 // carry newlines or `|`, which would otherwise break the markdown table.
 function cell(value) {
@@ -225,9 +216,9 @@ export function renderOverview(overview) {
     '',
     '### Open',
     '',
-    ...table(['id', 'class', 'spec', 'attempts', 'reopens', 'closes'],
-      open.map((q) => [q.id, q.class, q.specRef || '—', q.attempts, reopensCell(q),
-        q.closesCL.join(', ') || '—'])),
+    ...table(['id', 'class', 'spec', 'attempts', 'reopens', 'osc', 'closes'],
+      open.map((q) => [q.id, q.class, q.specRef || '—', q.attempts, q.reopens,
+        q.autoReopens, q.closesCL.join(', ') || '—'])),
     '### Terminal',
     '',
     ...table(['id', 'class', 'outcome', 'attempts'],
