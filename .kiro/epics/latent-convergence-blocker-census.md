@@ -195,3 +195,65 @@ and `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`. Masked-but-never-dominant co-reas
   **until-dry, budget-capped**. Added the data-plane L1 agents, the uniform candidate-record
   schema, the anti-speculation guard for deep layers (guardrail 6), and the budget/stop-condition
   section. Status `drafting` pending go on execution vehicle (pilot vs full workflow).
+
+## Census results — run 1 (2026-06-18)
+
+First parallel census run (workflow `wf_c7be43af-d42`): 68 agents, **54 candidates → 47 refuted,
+7 survived** adversarial verification → 6 ranked frontier items (one merge). Bounded first iteration
+(finders → verify → synthesize; no peel-until-dry). Raw: `test-output/latent-blocker-census-run1.json`
+(build output, not committed).
+
+**Masking DAG head:** `publication_missing_active_node` (gate-dominant ×14) is the single top mask —
+it fails the gate first and hides everything beneath. The two product surfaces that FEED it are
+ranks 1–2 (coupled: rank2 masks rank1; falsify both before fixing either).
+
+### Ranked frontier
+
+1. **cp-cdc-stale-local-replica-catchup** · product-bug · fixRisk med · peelDepth 0/1 —
+   `hydrateCdcPropagatedTablesFromAuthority` (cdc-integration-service-authoritative-catchup.js:94-98)
+   calls `executeAuthoritativeSystemTableRead(table, sql, [])` with NO options, so `preferOwnerRpcRead`
+   can't be threaded; read-flow.js:282-287/358-364 defaults ANY_REPLICA + local-replica-wins. A rejoined
+   node hosting its OWN stale `control_plane_publications` follower serves ITSELF the stale epoch → the
+   UPSERT no-ops → never advances. **This is the deeper layer beneath CL-001 variant-D** (7bc38dd9): that
+   fix made the catch-up FIRE periodically, but the catch-up READ can still return local-stale. The
+   variant-D test passes only because it stubs the read boundary with fresh OWNER_RPC rows
+   (membership-publication-deferred-catchup.test.js:57-60) — the bypass that hides this bug. FIX: thread
+   `{preferOwnerRpcRead:true}` through hydrate for the publications catch-up (keep local fallback; do NOT
+   requireOwnerRpcRead); pressure-govern to avoid CL-012 seed amplification. FALSIFIER: decision-kernel
+   stub at `queryLocalAuthoritativeSystemTableRows` returning a LOCAL_PARTITION_REPLICA stale epoch (NOT
+   at the read-flow boundary — that's the existing-test bypass).
+2. **cp-pub-01-readiness-exclude-empties-cohort** · product-bug · fixRisk HIGH · peelDepth 0 —
+   `resolvePriorityRecoveryActiveNodeCohort` (active-node-publication-snapshots.js:320) runs
+   `excludeUnavailableNodeIds` over the published baseline using readiness-excluded ids; a just-restarted
+   process-alive-but-readiness-excluded baseline node is stripped → `published_active_nodes_disagree`, and
+   if last baseline node, cohort → []/NONE → `publication_missing_active_node` (CL-001 circular face).
+   Flagged as a possible REGRESSION from commit **8f5bc72a** (Jun 18, added readiness exclusion to the
+   baseline). FIX: treat publishedBaselineNodeIds as a FLOOR (exclude only on admission-BLOCKED/fenced,
+   never readiness-not-yet-eligible-alone during recovery). FALSIFIER: pure-unit on the cohort resolver.
+3. **dp-placement-quorum-4** · product-bug · fixRisk med · peelDepth 1 — data-plane (non-critical)
+   partitions skip the min-voter quorum guard (operation-workflow-remove-safety-evaluator.js:279-281 gates
+   it on isCriticalSystemPartition); `calculateMoves` pushes an unconditional REMOVE(REPLICA_FAILED) that
+   the execution path (unified-rebalancer-move-execution.js:391-394) does NOT defer → a transiently-FAILED
+   data-plane replica is torn down before its replacement is voter-ready → momentary sub-quorum write-stall.
+   FIX: data-plane min-voter-ready guard on the FAILED-removal loop + the line-393 exemption.
+4. **CPR-SD-03** · settle-time · fixRisk low — coordinator-created remote-handoff retry sheds at a
+   per-target cap of 4 (operation-workflow-coordinator-handoff-retry.js:136-166); in a 5-node restart,
+   surplus-drain REPLACEs converge on one recovering target → shed → re-driven only by the 1s checkTimeouts
+   sweep (fired 1767× across 255 node logs). Lever: raise cap during recovery / fair-share scheduler.
+5. **dp-routing-1-stale-routing-snapshot-recovery-candidates** · settle-time · fixRisk med — query/write
+   routing queues leader-recovery candidates from a stale routing snapshot; doesn't re-resolve when
+   candidates are exhausted by no_handler/leader-unavailable. Lever: merge-refresh the snapshot in-attempt.
+6. **cp-quiescence-oracle-blind-vs-stall-interleaved-undercount** · oracle-strictness · fixRisk low —
+   the quiescence oracle can throw a sighted-poll stall over a window that was actually oracle-BLIND →
+   false-RED attribution (NOT a convergence blocker). Fix to stop mislabeling, not to converge.
+
+### Recommended execution order
+rank1 + rank2 together (coupled, both feed the gate-dominant `publication_missing_active_node`; rank1
+is lower-risk and is the deeper variant-D layer) → then rank3 (data-plane correctness) → settle-time
+tail (rank4/5) → rank6 (attribution hygiene). Build each below-gate falsifier FIRST.
+
+### Caveats (from the synthesis, kept honest)
+Only rank1's CDC read-path was independently re-verified in source this run; the 8f5bc72a regression
+diff (rank2), the 1767× shed count (rank4), and the gate-run-3 tail are taken from verdict evidence —
+confirm before fixing. Cross-item interaction (does fixing rank2 re-expose rank1 as the binding tail?)
+was flagged, not modeled. No peel-until-dry this run (the next, larger iteration).
