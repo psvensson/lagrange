@@ -42,6 +42,28 @@ test('parseSecondaryReasons pulls canonicalBlocker / quiescenceState / instabili
   t.end();
 });
 
+test('extractRun reads the REAL .report.json shape (top-level scenario.error + ' +
+  'failureClassification, no scenario.summary) and drops the canonicalBlocker=none sentinel', (t) => {
+  // Real per-run reports carry error/classification at the scenario top level, NOT under
+  // scenario.summary (that is the failure-BUNDLE shape). Guard the production fallback path.
+  const realShape = {
+    scenarios: [{
+      scenario: 'rolling-restart',
+      passed: false,
+      failureClassification: {dominantReason: 'quiescence_candidate'},
+      error: 'Control plane quiescence stalled (canonicalBlocker=none, ' +
+        'quiescenceState=quiescence_candidate, instabilitySummary=leadership_unstable=0:7)',
+    }],
+  };
+  const run = extractRun(reportFile('20260618T030000Z', 1), realShape);
+  t.equal(run.dominantReason, 'quiescence_candidate', 'dominant read from top-level failureClassification');
+  t.notOk(run.secondaryReasons.includes('none'),
+    'canonicalBlocker=none sentinel is NOT ingested as a phantom blocker (must-fix BUG 1)');
+  t.ok(run.secondaryReasons.includes('leadership_unstable'),
+    'a real instabilitySummary member is still captured from the top-level error');
+  t.end();
+});
+
 test('extractRun: passed run has no dominant reason; failing run normalizes + dedups secondary', (t) => {
   const pass = extractRun(reportFile('20260618T010000Z', 1), report({passed: true}));
   t.equal(pass.passed, true);

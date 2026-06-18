@@ -49,6 +49,10 @@ const DEFAULT_REPORT_DIR = 'test-output/reports';
 const REPORT_SUFFIX = '.report.json';
 const SCHEMA_VERSION = 'latent-blocker-census-v1';
 const EMERGING_MAX_DOMINANT_GATES = 2; // dominant in <= this many gates = still emerging
+// Harness sentinels that are NOT real blockers: `canonicalBlocker=none` marks "no blocker
+// this sample". Ingesting them would emit a phantom candidate (`none`) and send a census
+// agent chasing a non-existent blocker, so they are dropped everywhere a reason is recorded.
+const SENTINEL_REASONS = new Set(['none', 'passed', 'null', '']);
 
 // The uniform candidate-record schema every parallel finder emits (kept here so the tool
 // prints the exact contract the agent census fills in — single source of truth).
@@ -102,6 +106,10 @@ function selectRollingRestartScenario(report) {
 // Secondary / co-present reasons hide inside the human error string the harness writes
 // (canonicalBlocker=…, quiescenceState=…, instabilitySummary=name=a:b, name2=c:d, …).
 // These are blockers co-present in a run but NOT the dominant one — i.e. masked.
+// instabilitySummary has two grammars: `name=count:count` (a blocker name we want) and
+// `state:detail:count` / `error:detail:count` (node-state-distribution noise, NOT a blocker
+// name). We intentionally match ONLY the `name=` grammar so the distribution noise is skipped.
+// Sentinel filtering (e.g. canonicalBlocker=none) happens in extractRun after normalization.
 function parseSecondaryReasons(errorText) {
   if (typeof errorText !== 'string' || errorText.length === 0) {
     return [];
@@ -146,10 +154,14 @@ function extractRun(filePath, report) {
   const passed = scenario?.passed ?? null;
   const rawDominant =
     passed === true ? null : (fc.dominantReason ?? scenario?.dominantReason ?? null);
-  const dominantReason = rawDominant === null ? null : normalizeReason(rawDominant);
+  const normalizedDominant = rawDominant === null ? null : normalizeReason(rawDominant);
+  const dominantReason =
+    normalizedDominant !== null && !SENTINEL_REASONS.has(normalizedDominant) ?
+      normalizedDominant :
+      null;
   const secondaryReasons = parseSecondaryReasons(errorText)
     .map(normalizeReason)
-    .filter((r) => r !== dominantReason);
+    .filter((r) => r !== dominantReason && !SENTINEL_REASONS.has(r));
   return {
     label: runLabelFromPath(filePath),
     gateId: gateIdFromPath(filePath),
@@ -317,7 +329,9 @@ function renderText(summary, grounding) {
     `${summary.gateCount} gate(s), overall pass ${summary.passedRuns}/${summary.totalRuns} ` +
     `(${summary.overallPassRate})`);
   lines.push('');
-  lines.push('PEEL ORDER (dominance time-centroid; later = surfaced after earlier layers fixed):');
+  lines.push('PEEL ORDER (dominance time-centroid 0..1 over chronological gates — HEURISTIC:');
+  lines.push('"later = surfaced after earlier layers fixed" holds ONLY across a controlled');
+  lines.push('fix→regate sequence; in a mixed/one-off corpus a late one-off scores the same):');
   for (const p of summary.peelOrder) {
     lines.push(`  [${p.dominanceTimeCentroid ?? '—'}] ${p.reason} (dominant x${p.dominantCount})`);
   }
@@ -364,6 +378,10 @@ function renderMarkdown(summary, grounding) {
     `- overall scenario-PASS: ${summary.passedRuns}/${summary.totalRuns} (${summary.overallPassRate})`,
     '',
     '## Peel order (the onion, oldest→newest dominance)',
+    '',
+    '_Heuristic: dominance time-centroid over chronological gates. "Later = surfaced after_',
+    '_earlier layers fixed" is sound ONLY across a controlled fix→regate sequence; a late_',
+    '_one-off in a mixed corpus scores the same as a genuine survivor._',
     '',
     '| centroid | reason | dominant×N |',
     '| --- | --- | --- |',

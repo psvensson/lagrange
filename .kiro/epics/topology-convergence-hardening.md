@@ -33,6 +33,14 @@ Owner-model Quests that formalize the four semantic owners this depends on
 `model-owner-trace-validation`, `model-bounded-retry-exit-routing` — all SOLVED;
 they bound the design space this convergence work executes against.
 
+## Where to start each session
+
+Before queuing a gate or diagnosing the next blocker, run `npm run analyze:latent-blockers`
+— it mines the whole report corpus for the masked blocker distribution the serial gate
+hides (peel-order + emerging candidates). It is the deterministic backbone of the
+`latent-convergence-blocker-census` epic (which graduates into this one); use it as the
+cheap pilot that grounds the frontier before any expensive fan-out or gate.
+
 ## Open questions
 
 - Is `CL-039` (publication write-substrate / control-plane raft leadership) a

@@ -32,12 +32,20 @@ any distributed-harness or convergence work:
   (e.g. a hard breach or a clean mechanistic confirmation needs no more runs);
   escalate to N≥8 ONLY for a convergence-rate promotion verdict where the
   statistic itself is the claim. Do not default to N=8 every iteration.
+  BEFORE queuing a gate, run `npm run analyze:latent-blockers`: the gate is a
+  serial max-frequency oracle that shows only the single dominant reason and masks
+  the rest, so do not spend a ~40-min gate to learn the next layer the corpus
+  already reveals.
 - **Use the analyzers, not raw-log grep.** Read
   [`test/distributed/harness/README.md`](../../test/distributed/harness/README.md) first,
   then `npm run analyze:distributed-failure -- --report <r>` /
   `analyze:causal-model` / `analyze:topology-convergence` /
-  `analyze:priority-recovery-residuals`. Open raw ndjson only after an analyzer
-  has named the owner/edge.
+  `analyze:priority-recovery-residuals`. For the cross-gate picture — which
+  blockers are MASKED behind today's dominant reason, the peel-order, and emerging
+  candidates — run `npm run analyze:latent-blockers` over the whole report corpus
+  (the deterministic backbone of the latent-blocker census;
+  [`.kiro/epics/latent-convergence-blocker-census.md`](../epics/latent-convergence-blocker-census.md)).
+  Open raw ndjson only after an analyzer has named the owner/edge.
 - **Distributed blockers are tracked one invariant at a time.** Follow
   [`.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file

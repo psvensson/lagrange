@@ -15,6 +15,11 @@ Start here before opening large `cluster-segment-*` files.
 
 ## LLM Starting Points
 
+0. For the CROSS-CORPUS picture first — which blockers are masked behind the current
+   dominant reason, the peel-order, and emerging candidates — run
+   `npm run analyze:latent-blockers` (mines every `test-output/reports/*.report.json`).
+   A single gate/report shows only one dominant reason; this shows the masked
+   distribution. Steps 1-6 below then diagnose a single artifact.
 1. Run `npm run analyze:distributed-failure -- --report <report-or-failure-bundle.json>`.
 2. Run `npm run analyze:topology-convergence -- <artifact>` and, when needed,
    `npm run analyze:topology-convergence -- <artifact> --explain <edge>`.
