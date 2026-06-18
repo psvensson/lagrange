@@ -60,6 +60,19 @@ any distributed-harness or convergence work:
   [`.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file
   under `closure-ledger/CL-###.md`; `closure-ledger.md` is the index.
+  - **…but one-invariant-at-a-time fails when the invariants are COUPLED.** If
+    single-frontier patches keep flipping one family green and another red — the
+    rotating dominant reason, the whack-a-mole — you are not making progress, you
+    are bouncing a coupling. The `CoupledAdmission` TLA+ model
+    (`models/readiness-starvation/`) proves it: when two green-ranges overlap at one
+    shared knob, single-owner patches bounce forever and only an *atomic cross-owner
+    reconcile* converges. The Solver detects this (`coupled-invariant-oscillation`,
+    guards rr-D/rr-F) and forces the system-theory/model rung plus an **altitude
+    (framing) reflection** (`reflect --altitude`). When you see it, stop patching and
+    zoom to architecture altitude: question the Quest's altitude, the modeling
+    strategy, and whether truth is diffuse across owners — then EXHAUST-and-pivot if
+    the lever is out of the current Quest's scope (see solver-quests.md "Mandatory
+    Step-Back Reflection Turn").
 - **Research existing mechanisms first.** Before writing new machinery, search for
   an existing owner-boundary solution — parallel machinery has been built here by
   accident.

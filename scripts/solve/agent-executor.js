@@ -176,6 +176,7 @@ export function makeAgentExecutor(root, options = {}) {
       const responseFile = path.join(dir, 'response.json');
       fs.writeFileSync(requestFile, JSON.stringify({
         kind: 'reflection',
+        reflectionKind: task.kind === 'altitude' ? 'altitude' : 'micro',
         questId: task.quest?.id || null,
         statement: task.quest?.statement || null,
         frontier: task.health?.frontier || null,

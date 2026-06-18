@@ -9,7 +9,12 @@
 // only tells the driver that a move is available and the exact command to take it. Recording
 // the move (reflect / override) stays an explicit operator action.
 
-import {reflectionDue, reflectionPrompt} from './reflection.js';
+import {
+  reflectionDue,
+  reflectionPrompt,
+  altitudeReflectionDue,
+  altitudeReflectionPrompt,
+} from './reflection.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -87,20 +92,42 @@ export function buildAdvisories(quest, health, log) {
     });
     break;
   }
-  const trigger = reflectionDue(log || [], reflectionTriggersFromHealth(health));
-  if (trigger) {
+  // Altitude (framing) reflection is surfaced FIRST, exactly as the run loop checks it: an
+  // oscillation/coarse-cadence trigger pulls the agent out to question the frame before any
+  // within-frame micro reframe. Only when no altitude reflection is due do we surface the
+  // micro one.
+  const triggers = reflectionTriggersFromHealth(health);
+  const altitudeTrigger = altitudeReflectionDue(log || [], triggers);
+  if (altitudeTrigger) {
     advisories.push({
-      kind: 'reflection-due',
+      kind: 'altitude-reflection-due',
       severity: 'advisory',
-      trigger,
+      trigger: altitudeTrigger,
       message:
-        `a step-back reflection is due (${trigger}); read the whole history and ` +
-        'record a falsifiable reframing before the next attempt',
-      prompt: reflectionPrompt(quest, health, trigger),
+        `an altitude (framing) reflection is due (${altitudeTrigger}); look up and out — ` +
+        'is this Quest at the right altitude, are the models/harness pulling their weight, ' +
+        'is truth diffuse? Land the answer durably (finding / epic / system theory)',
+      prompt: altitudeReflectionPrompt(quest, health, altitudeTrigger),
       command:
-        `node scripts/solve.js reflect --id ${quest.id} --trigger ${trigger} ` +
-        '--note "<falsifiable reframing>"',
+        `node scripts/solve.js reflect --id ${quest.id} --altitude ` +
+        `--trigger ${altitudeTrigger} --note "<framing reframing + where it was captured>"`,
     });
+  } else {
+    const trigger = reflectionDue(log || [], triggers);
+    if (trigger) {
+      advisories.push({
+        kind: 'reflection-due',
+        severity: 'advisory',
+        trigger,
+        message:
+          `a step-back reflection is due (${trigger}); read the whole history and ` +
+          'record a falsifiable reframing before the next attempt',
+        prompt: reflectionPrompt(quest, health, trigger),
+        command:
+          `node scripts/solve.js reflect --id ${quest.id} --trigger ${trigger} ` +
+          '--note "<falsifiable reframing>"',
+      });
+    }
   }
   for (const signal of (health && health.signals) || []) {
     if (signal.type !== 'cannot-measure') continue;

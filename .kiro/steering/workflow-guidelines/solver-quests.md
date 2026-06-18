@@ -637,25 +637,49 @@ Long-running agents drift or oscillate. A reflection turn is a bounded, pure
 to step back and re-read its own situation:
 
 ```
-node scripts/solve.js reflect --id <id> [--frontier <fid>] [--note "<text>"]
+node scripts/solve.js reflect --id <id> [--frontier <fid>] [--altitude] [--note "<text>"]
 ```
 
-In the autonomous run loop a reflection fires automatically (`reflectionDue`)
-when any of these triggers hold, at most once per attempt cycle:
+There are two reflection **kinds**, recorded on the `EVENT_REFLECTION` event as
+`kind: "micro"` or `kind: "altitude"`. The loop checks **altitude first** (it
+outranks a within-frame reframe), then micro; either one, when due, records the
+event and **skips that cycle's gate and attempt**.
 
-- **oscillation**: a `coupled-invariant-oscillation` signal is live.
+**Micro reflection** (`reflectionDue`) — the within-frame step-back: re-read the
+situation *inside* the sealed Quest. Triggers:
+
 - **scope-pressure**: a `scope-pressure-terminal` signal is live.
 - **cadence**: `REFLECTION_INTERVAL` (default 5) attempts have elapsed since the
   last reflection.
 
-When a reflection is due, the loop records an `EVENT_REFLECTION` event and
-**skips that cycle's gate and attempt** — the agent spends the turn reflecting,
-not acting. The production reflection path runs only when the executor exposes a
-`reflect()` method (the generic filesystem request/response contract, request
+**Altitude (framing) reflection** (`altitudeReflectionDue`) — the step-back that
+questions the **frame itself**: is this Quest at the right altitude, are the
+formal models / harness pulling their weight, is the code arranged to be reasoned
+about, should this Quest continue or honestly EXHAUST and pivot. Triggers:
+
+- **oscillation**: a `coupled-invariant-oscillation` signal is live — a bouncing
+  coupling is the canonical "the frame, not the next fix, is wrong" signal, so it
+  routes to *altitude*, not micro.
+- **altitude-cadence**: `ALTITUDE_REFLECTION_INTERVAL` (default 20) attempts have
+  elapsed since the last *altitude* reflection (a coarse, rarer beat than micro).
+- **on-demand**: an operator or agent runs `reflect --altitude` (recorded with
+  `trigger: "on-demand"`).
+
+An altitude reflection's prompt demands the insight be **captured durably** — a
+`finding` (with `rulesOut`), a `.kiro/epics/` entry, or a recorded system theory
+— so a structural insight cannot evaporate in chat. EXHAUST-and-pivot to a
+higher-altitude Quest/epic is a **legitimate, encouraged outcome** of an altitude
+reflection; questioning a Quest's altitude is not moving its goalposts (see the
+Must-Not list in `core.md`).
+
+The production reflection path runs only when the executor exposes a `reflect()`
+method (the generic filesystem request/response contract, request
 `kind:'reflection'`); dry/test executors without `reflect()` are unaffected, so
 the reflection turn never perturbs the deterministic test suite. A reflection
 that times out or returns no note is still recorded (the cadence resets) — the
-event simply carries no text.
+event simply carries no text. A supervised driver sees the same conditions as the
+read-only `reflection-due` / `altitude-reflection-due` advisories
+(`scripts/solve/advisories.js`).
 
 Reflection is additive and reversible: it produces a recorded note and resets a
 cadence counter; it never changes a verdict, threshold, or `doneWhen`.
@@ -680,9 +704,13 @@ command to take it; recording the move stays an explicit operator action.
 - **evidence-unrecorded**: a fresh probe/harness measurement is newer than quest
   memory. Run the printed `ingest-evidence` command so the measurement becomes
   durable quest memory rather than living only in source changes.
-- **reflection-due**: a step-back reflection is due (same `oscillation` /
-  `scope-pressure` / `cadence` triggers as the loop). Run the printed `reflect`
-  command to record a falsifiable reframing.
+- **reflection-due**: a micro step-back reflection is due (`scope-pressure` /
+  `cadence` triggers). Run the printed `reflect` command to record a falsifiable
+  reframing.
+- **altitude-reflection-due**: a framing reflection is due (`oscillation` /
+  `altitude-cadence` triggers). Run the printed `reflect --altitude` command, look
+  up and out (right-altitude / models / arrangement / pivot-or-continue), and land
+  the answer durably as a finding, an epic, or a system theory.
 - **override-available**: the current block is a soft, overridable guard (theory
   or scope). If there is a falsifiable reason to proceed, run the printed
   `override` command to authorize one recorded-reason bypass.

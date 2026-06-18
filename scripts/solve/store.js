@@ -475,6 +475,7 @@ export function appendReflection(root, questId, reflection) {
     type: EVENT_REFLECTION,
     frontier: reflection.frontier || null,
     trigger: reflection.trigger || null,
+    kind: reflection.kind === 'altitude' ? 'altitude' : 'micro',
     note: typeof reflection.note === 'string' && reflection.note.trim() ?
       reflection.note.trim() :
       null,

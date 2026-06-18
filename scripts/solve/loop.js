@@ -74,6 +74,8 @@ import {appendReflection} from './store.js';
 import {
   reflectionDue,
   reflectionPrompt,
+  altitudeReflectionDue,
+  altitudeReflectionPrompt,
 } from './reflection.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
@@ -582,15 +584,19 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
 // this cycle's gate + attempt (the think turn stands alone). When the configured executor is
 // not reflection-capable, returns false: the loop proceeds normally and the reflection is
 // only surfaced as advice (health/CLI), so non-reflective drivers are never disturbed.
-function maybeRunReflection(root, quest, ctx, health, trigger) {
+function maybeRunReflection(root, quest, ctx, health, trigger, kind = 'micro') {
   if (!ctx.executor || typeof ctx.executor.reflect !== 'function') return false;
+  const prompt = kind === 'altitude' ?
+    altitudeReflectionPrompt(quest, health, trigger) :
+    reflectionPrompt(quest, health, trigger);
   let note = null;
   try {
     const out = ctx.executor.reflect({
       quest,
       health,
       trigger,
-      prompt: reflectionPrompt(quest, health, trigger),
+      kind,
+      prompt,
     });
     note = out && typeof out.reflection === 'string' ? out.reflection :
       (out && typeof out.note === 'string' ? out.note : null);
@@ -600,6 +606,7 @@ function maybeRunReflection(root, quest, ctx, health, trigger) {
   appendReflection(root, quest.id, {
     frontier: health.frontier || null,
     trigger,
+    kind,
     note,
   });
   return true;
@@ -646,18 +653,29 @@ export function runLoop(root, quest, options = {}) {
         },
       });
       // Mandatory step-back reflection turn. Before resolving any gate, force a reflection
-      // when one is due (cadence, oscillation, or runaway scope). It is a pure think turn —
-      // NO gate fires during it — so when one is recorded we skip this cycle's gate + attempt
-      // and re-enter the loop fresh. Only a reflection-capable executor performs it; other
-      // drivers are unaffected (maybeRunReflection returns false and the loop proceeds).
-      const reflectTrigger = reflectionDue(readLog(root, quest.id), {
+      // when one is due. It is a pure think turn — NO gate fires during it — so when one is
+      // recorded we skip this cycle's gate + attempt and re-enter the loop fresh. Only a
+      // reflection-capable executor performs it; other drivers are unaffected
+      // (maybeRunReflection returns false and the loop proceeds).
+      //
+      // Altitude (framing) reflection is checked FIRST: coupled-invariant oscillation, or the
+      // coarse altitude cadence, pulls the agent out to question the frame itself before any
+      // within-frame micro reframe. Only if no altitude reflection is due do we consider the
+      // micro reflection (its 5-attempt cadence or runaway scope pressure).
+      const altitudeTrigger = altitudeReflectionDue(readLog(root, quest.id), {
         oscillating: (executionHealth.signals || []).some(
           (signal) => signal.type === 'coupled-invariant-oscillation'),
+      });
+      if (altitudeTrigger &&
+        maybeRunReflection(root, quest, ctx, executionHealth, altitudeTrigger, 'altitude')) {
+        continue;
+      }
+      const reflectTrigger = reflectionDue(readLog(root, quest.id), {
         scope: (executionHealth.signals || []).some(
           (signal) => signal.type === 'scope-pressure-terminal'),
       });
       if (reflectTrigger &&
-        maybeRunReflection(root, quest, ctx, executionHealth, reflectTrigger)) {
+        maybeRunReflection(root, quest, ctx, executionHealth, reflectTrigger, 'micro')) {
         continue;
       }
       if (!continuationIsAllowed(executionHealth.continuation)) {

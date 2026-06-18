@@ -80,14 +80,17 @@ tap.test('buildAdvisories reflection-due', (t) => {
     t.end();
   });
 
-  t.test('oscillation forces a reflection advisory regardless of cadence', (t) => {
+  t.test('oscillation forces an ALTITUDE reflection advisory regardless of cadence', (t) => {
     const advisories = buildAdvisories(
       quest,
       health({signals: [{type: 'coupled-invariant-oscillation'}]}),
       []);
-    const reflect = advisories.find((a) => a.kind === 'reflection-due');
-    t.ok(reflect, 'reflection-due advisory present');
+    const reflect = advisories.find((a) => a.kind === 'altitude-reflection-due');
+    t.ok(reflect, 'altitude-reflection-due advisory present');
     t.equal(reflect.trigger, 'oscillation');
+    t.match(reflect.command, /reflect --id q1 --altitude --trigger oscillation/);
+    t.notOk(advisories.find((a) => a.kind === 'reflection-due'),
+      'the micro reflection-due is not also surfaced');
     t.end();
   });
 

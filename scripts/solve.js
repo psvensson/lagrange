@@ -18,7 +18,7 @@
 //   upgrade establish a strict-audit baseline for an existing legacy Quest
 //   reopen  re-open a frontier parked on non-measuring samples (evidence-gated)
 //   override authorize one recorded-reason bypass of an overridable soft guard
-//   reflect record a step-back reflection (free-form reframing) turn
+//   reflect record a step-back reflection turn (--altitude for a framing reflection)
 //
 // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
 // append-only log; reports and state are projections.
@@ -451,12 +451,16 @@ function cmdReflect(root, args) {
     throw new Error('reflect: --note "<free-form reframing>" is required');
   }
   loadQuest(root, id);
+  const altitude = args.altitude === true;
   const stamped = appendReflection(root, id, {
     frontier: typeof args.frontier === 'string' ? args.frontier : null,
-    trigger: typeof args.trigger === 'string' ? args.trigger : 'manual',
+    trigger: typeof args.trigger === 'string' ? args.trigger :
+      (altitude ? 'on-demand' : 'manual'),
+    kind: altitude ? 'altitude' : 'micro',
     note: args.note,
   });
-  process.stdout.write(`recorded reflection @ ${stamped.ts}\n`);
+  process.stdout.write(
+    `recorded ${altitude ? 'altitude ' : ''}reflection @ ${stamped.ts}\n`);
 }
 function cmdStep(root, args) {
   const id = args.id || args._[0];

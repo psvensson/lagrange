@@ -64,6 +64,15 @@ Stop and ask the user ONLY when one of these holds:
 Otherwise: choose the obvious default, record a finding stating the choice and why,
 and keep going. Surface the decisions in the final report, not mid-run.
 
+**Questioning a Quest's altitude is not pausing and is not moving goalposts.**
+Autonomy means driving to a *true* terminal, not grinding a frame that an altitude
+(framing) reflection shows is wrong. When the evidence says the real lever is an
+owner boundary or cutover the current Quest cannot touch — or that the modeling or
+arrangement, not the next patch, is what must change — the correct move is to
+honestly EXHAUST this Quest and author the higher-altitude Quest/epic, capturing the
+insight durably first (finding / epic / system theory). See solver-quests.md
+"Mandatory Step-Back Reflection Turn".
+
 ## Default Posture: Parallelism
 
 When sub-tasks are independent, run them concurrently rather than in sequence:
@@ -119,6 +128,9 @@ Use this list before non-trivial work:
     proof pass.
 13. **Do not keep patching a parked frontier**; record findings and redirect to
     another frontier or end EXHAUSTED.
+13a. **Do not keep patching a sealed Quest when an altitude reflection shows the
+    lever is out of its scope**; capture the insight durably (finding / epic /
+    system theory), then honestly EXHAUST and author the higher-altitude Quest/epic.
 14. **Do not hand off solved Quest work without git durability**; after Solver
     audit passes, commit and push all Quest-scoped changes, excluding unrelated
     dirty worktree entries.

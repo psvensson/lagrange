@@ -119,12 +119,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 285,
-    "dedupedRuleCount": 279,
-    "exportedRuleCount": 279,
+    "candidateCount": 287,
+    "dedupedRuleCount": 281,
+    "exportedRuleCount": 281,
     "aliasRuleCount": 4,
-    "masterRuleCount": 275,
-    "estimatedAllRulesTokens": 10343
+    "masterRuleCount": 277,
+    "estimatedAllRulesTokens": 10473
   },
   "rules": [
     {
@@ -3101,7 +3101,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 660,
+          "line": 684,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -3116,7 +3116,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 694,
+          "line": 722,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -3131,7 +3131,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 715,
+          "line": 743,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -3142,11 +3142,11 @@
       "strength": "must_not",
       "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
-      "score": 204,
+      "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 748,
+          "line": 776,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3440,7 +3440,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 712,
+          "line": 740,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -3827,6 +3827,21 @@
       ]
     },
     {
+      "id": "GOV-0062",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of an altitude reflection; questioning a Quest's altitude is not moving its goalposts (see the Must-Not list in core.md).",
+      "score": 186,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 668,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
       "id": "STYLE-0011",
       "domain": "style",
       "strength": "should",
@@ -3944,7 +3959,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3959,7 +3974,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3974,7 +3989,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3992,7 +4007,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4003,13 +4018,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 651,
+          "line": 675,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4018,7 +4033,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 668,
+          "line": 692,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -4172,7 +4187,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4187,7 +4202,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4204,7 +4219,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4238,7 +4253,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4347,7 +4362,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4362,7 +4377,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4377,7 +4392,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4392,7 +4407,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4409,7 +4424,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4424,7 +4439,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4471,7 +4486,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4486,7 +4501,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4501,7 +4516,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4516,7 +4531,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4531,7 +4546,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4561,7 +4576,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4576,7 +4591,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4606,7 +4621,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4623,7 +4638,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4638,7 +4653,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4655,24 +4670,39 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "cache"
       ],
       "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
-      "score": 138,
+      "score": 137,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 748,
+          "line": 776,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0089",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the frame itself: is this Quest at the right altitude, are the formal models / harness pulling their weight, is the code arranged to be reasoned about, should this Quest continue or honestly EXHAUST and pivot.",
+      "score": 130,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 655,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4689,5 +4719,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-18T10:34:12.825Z"
+  "generatedAt": "2026-06-18T20:01:42.864Z"
 }

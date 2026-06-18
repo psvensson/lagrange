@@ -6,18 +6,41 @@
 // which no gate fires. It never blocks, never closes a quest, and produces only an
 // append-only EVENT_REFLECTION note, so it is safe to run unconditionally where supported.
 //
-// Triggers (any one makes a reflection due):
-//   cadence       REFLECTION_INTERVAL recorded attempts have passed since the last
-//                 reflection (a regular "are we still on the right track?" beat).
-//   oscillation   the frontier is flapping between coupled invariant families — exactly the
-//                 situation where grinding the next local fix is worst and a reframe helps.
-//   scope         scope pressure has crossed its terminal bound (the blast radius is
-//                 running away) — step back and consolidate rather than pile on more edits.
+// There are two reflection KINDS, softest to hardest:
 //
-// A reflection (recorded note) resets the cadence, and the per-attempt guard below means a
-// trigger fires at most once per attempt, so the turn is always bounded.
+//   micro     The within-frame step-back. Re-reads the situation INSIDE the sealed Quest:
+//             is the selected theory still best, is this approach converging, what cheaper
+//             hypothesis to try next. Triggers:
+//               cadence   REFLECTION_INTERVAL attempts since the last reflection.
+//               scope     scope pressure has crossed its terminal bound — consolidate.
+//
+//   altitude  The framing step-back. Looks UP and OUT at the FRAME itself: is this Quest at
+//             the right altitude, are the formal models / harness pulling their weight, is
+//             the code arranged to be reasoned about, should this Quest continue or honestly
+//             EXHAUST and pivot to a higher-altitude Quest/epic. Triggers:
+//               oscillation       coupled invariant families are bouncing — the canonical
+//                                 "the frame, not the next fix, is wrong" signal.
+//               altitude-cadence  ALTITUDE_REFLECTION_INTERVAL attempts since the last
+//                                 altitude reflection (a coarse, rarer beat).
+//               on-demand         `solve.js reflect --altitude` (operator/agent invoked).
+//
+// The loop checks altitude FIRST (oscillation outranks a micro reframe), then micro. An
+// altitude reflection's output must be captured durably (finding / epic / system theory) —
+// see reflectionPrompt vs altitudeReflectionPrompt. A reflection (recorded note) resets the
+// relevant cadence, and the per-attempt guard below means a trigger fires at most once per
+// attempt, so the turn is always bounded.
 
-import {EVENT_ATTEMPT, EVENT_REFLECTION, REFLECTION_INTERVAL} from './constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_REFLECTION,
+  REFLECTION_INTERVAL,
+  ALTITUDE_REFLECTION_INTERVAL,
+} from './constants.js';
+
+// Reflection kinds, recorded on each EVENT_REFLECTION so the altitude cadence can count
+// attempts since the last *altitude* reflection independently of micro reflections.
+export const REFLECTION_KIND_MICRO = 'micro';
+export const REFLECTION_KIND_ALTITUDE = 'altitude';
 
 // Index of the most recent reflection note in the log, or -1 if none has been recorded.
 export function lastReflectionIndex(log) {
@@ -52,15 +75,49 @@ function reflectionRecordedThisCycle(log) {
   return false;
 }
 
-// Decide whether a step-back reflection is due. `triggers.oscillating` / `triggers.scope`
-// force a reflection immediately; otherwise the cadence (REFLECTION_INTERVAL attempts since
-// the last reflection) applies. Returns the trigger label that fired, or null when not due.
+// Index of the most recent ALTITUDE reflection in the log, or -1 if none.
+export function lastAltitudeReflectionIndex(log) {
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    if (log[i].type === EVENT_REFLECTION && log[i].kind === REFLECTION_KIND_ALTITUDE) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Number of recorded attempts since the last altitude reflection (or since the start).
+export function attemptsSinceAltitudeReflection(log) {
+  const since = lastAltitudeReflectionIndex(log);
+  let count = 0;
+  for (let i = since + 1; i < log.length; i += 1) {
+    if (log[i].type === EVENT_ATTEMPT) count += 1;
+  }
+  return count;
+}
+
+// Decide whether a MICRO step-back reflection is due. `triggers.scope` forces one
+// immediately; otherwise the cadence (REFLECTION_INTERVAL attempts since the last
+// reflection of any kind) applies. Oscillation is handled by altitudeReflectionDue, which
+// the loop checks first. Returns the trigger label that fired, or null when not due.
 export function reflectionDue(log, triggers = {}) {
   if (reflectionRecordedThisCycle(log)) return null;
-  if (triggers.oscillating) return 'oscillation';
   if (triggers.scope) return 'scope-pressure';
   if (REFLECTION_INTERVAL > 0 && attemptsSinceReflection(log) >= REFLECTION_INTERVAL) {
     return 'cadence';
+  }
+  return null;
+}
+
+// Decide whether an ALTITUDE (framing) reflection is due. `triggers.oscillating` forces one
+// immediately (a bouncing coupling means the frame is suspect); otherwise the coarse
+// ALTITUDE_REFLECTION_INTERVAL cadence (attempts since the last altitude reflection)
+// applies. Returns the trigger label that fired, or null when not due.
+export function altitudeReflectionDue(log, triggers = {}) {
+  if (reflectionRecordedThisCycle(log)) return null;
+  if (triggers.oscillating) return 'oscillation';
+  if (ALTITUDE_REFLECTION_INTERVAL > 0 &&
+    attemptsSinceAltitudeReflection(log) >= ALTITUDE_REFLECTION_INTERVAL) {
+    return 'altitude-cadence';
   }
   return null;
 }
@@ -82,4 +139,27 @@ export function reflectionPrompt(quest, health, trigger) {
     'this approach actually converging, and what cheaper hypothesis should be abandoned ' +
     'or tried next? No gate fires during this turn — it is pure reasoning, recorded as a ' +
     'reflection note.';
+}
+
+// The instruction handed to a reflection-capable executor for an ALTITUDE (framing)
+// reflection. Unlike reflectionPrompt, it deliberately pulls the agent OUT of the frame: it
+// questions the Quest's altitude, the modeling/harness strategy, and the code arrangement,
+// and it demands the insight be captured durably (it must not evaporate in chat) and names
+// EXHAUST-and-pivot as a legitimate outcome.
+export function altitudeReflectionPrompt(quest, health, trigger) {
+  const frontier = health?.frontier || 'the open frontier';
+  const reason = trigger === 'oscillation' ?
+    'invariant families are oscillating — single-frontier patches are bouncing a coupling, ' +
+    'the canonical signal that the FRAME, not the next fix, is what must change' :
+    `${ALTITUDE_REFLECTION_INTERVAL} attempts have passed without an altitude step-back`;
+  return `Altitude (framing) reflection on quest ${quest.id} (${frontier}): ${reason}. ` +
+    'Look UP and OUT, not at the next local move. Ask: (1) Is this Quest at the right ' +
+    'ALTITUDE, or is the real lever an owner boundary / cutover this Quest cannot touch? ' +
+    '(2) Are the formal models and the deterministic harness pulling their weight, or is ' +
+    'one facet being re-modeled per blocker? (3) Is the code ARRANGED so this can be ' +
+    'reasoned about, or is truth diffuse across many sources/files? (4) Given the answers, ' +
+    'should this Quest continue, or honestly EXHAUST and pivot to a higher-altitude ' +
+    'Quest/epic? You MUST land the answer durably — record a finding (with rulesOut), author ' +
+    'or update a .kiro/epics/ entry, or record a system theory; an altitude insight must not ' +
+    'evaporate in chat. No gate fires during this turn — it is pure reasoning.';
 }

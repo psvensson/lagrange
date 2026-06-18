@@ -298,6 +298,16 @@ export const GUARD_QUORUM = 2;
 // is still nudged to take the reflection turn.
 export const REFLECTION_INTERVAL = 5;
 
+// Altitude (framing) reflection cadence: a deliberately COARSE beat for the higher-altitude
+// step-back that questions the FRAME itself — is this Quest at the right altitude, are the
+// formal models / harness pulling their weight, is the code arranged to be reasoned about,
+// should this Quest continue or honestly EXHAUST and pivot? It is rarer than the micro
+// REFLECTION_INTERVAL above. Coupled-invariant oscillation forces an altitude reflection
+// immediately, regardless of this cadence (a bouncing coupling is the canonical "the frame,
+// not the next fix, is wrong" signal). Set to 0 to disable the cadence trigger (the
+// oscillation and on-demand `reflect --altitude` triggers still fire).
+export const ALTITUDE_REFLECTION_INTERVAL = 20;
+
 export const FIRST_RUNG_INDEX = 0;
 
 // Harness verdicts/reasons that mean a run did NOT actually measure the metric

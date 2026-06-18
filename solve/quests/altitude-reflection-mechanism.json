@@ -1,0 +1,37 @@
+{
+  "id": "altitude-reflection-mechanism",
+  "statement": "Altitude (framing) reflection is a first-class, automatically-triggered part of the Quest workflow: the solve.js run loop fires an altitude reflection on coupled-oscillation and on a coarse cadence (distinct from the 5-attempt micro reflection), recorded as a kind:'altitude' EVENT_REFLECTION with a frame-questioning prompt (right-altitude / modeling-efficiency / arrangement / pivot-or-continue); on-demand via 'reflect --altitude'; steering defines it and sanctions EXHAUST-and-pivot on a structural insight; capture-as-finding|epic|system-theory is required; packs regenerated, reflection tests green, and the change is subagent-verified.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": ".kiro/epics/architecture-altitude-review.md"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/altitude-reflection-mechanism.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "altitude-reflection-mechanism-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/altitude-reflection-mechanism-main.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
