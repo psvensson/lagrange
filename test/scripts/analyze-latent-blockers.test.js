@@ -4,8 +4,25 @@ import {
   parseSecondaryReasons,
   extractRun,
   summarizeLatentBlockers,
+  renderText,
+  renderMarkdown,
   runCli,
 } from '../../scripts/analyze-latent-blockers.js';
+
+function minimalSummary() {
+  return summarizeLatentBlockers([
+    extractRun(reportFile('20260101T000000Z', 1), report({passed: true})),
+  ]);
+}
+const freshDeepCensus = {
+  relPath: 'test-output/latent-blocker-census-run1.json',
+  mtimeIso: '2026-06-18T12:49:46.381Z',
+  candidatesTotal: 54,
+  survivors: 7,
+  refuted: 47,
+  frontierLen: 6,
+  fresherThanGate: true,
+};
 
 function reportFile(ts, run) {
   return `test-output/reports/stat-gate-${ts}-run${run}.report.json`;
@@ -125,5 +142,51 @@ test('runCli --help returns usage', async (t) => {
   const res = await runCli(['--help']);
   t.notOk(res.ok);
   t.match(res.output, /usage: analyze-latent-blockers/u);
+  t.end();
+});
+
+test('renderText leads with a deep-census banner when a fresh artifact exists', (t) => {
+  const out = renderText(minimalSummary(), null, freshDeepCensus);
+  t.match(out, /^⮕ DEEP CENSUS AVAILABLE/u, 'banner is the very first line');
+  t.match(out, /latent-blocker-census-run1\.json/u, 'cites the artifact path');
+  t.match(out, /54 cand → 7 survivors → 6 ranked/u, 'shows the counts');
+  t.match(out, /newer than the latest gate report/u, 'states freshness');
+  t.end();
+});
+
+test('renderText omits the banner (and keeps the fan-out NEXT) when no deep census', (t) => {
+  // grounding present so the NEXT footer renders; deepCensus null = no banner.
+  const grounding = {
+    closureRecords: [],
+    closureLedgerDir: 'x',
+    deterministicSubstrate: 'y',
+    finderLenses: [],
+    candidateSchemaFields: ['id'],
+  };
+  const out = renderText(minimalSummary(), grounding, null);
+  t.notMatch(out, /DEEP CENSUS AVAILABLE/u, 'no banner without an artifact');
+  t.match(out, /feed this frontier to the L1-L4 agent fan-out/u,
+    'falls back to the run-the-fan-out NEXT line');
+  t.end();
+});
+
+test('renderText steers NEXT to the existing census when the artifact is fresh', (t) => {
+  const grounding = {
+    closureRecords: [],
+    closureLedgerDir: 'x',
+    deterministicSubstrate: 'y',
+    finderLenses: [],
+    candidateSchemaFields: ['id'],
+  };
+  const out = renderText(minimalSummary(), grounding, freshDeepCensus);
+  t.match(out, /a FRESH deep census already exists — read it/u,
+    'NEXT points at the existing artifact instead of re-running the fan-out');
+  t.end();
+});
+
+test('renderMarkdown emits a banner blockquote when a fresh artifact exists', (t) => {
+  const out = renderMarkdown(minimalSummary(), null, freshDeepCensus);
+  t.match(out, /> \*\*⮕ DEEP CENSUS AVAILABLE/u, 'markdown banner is a blockquote');
+  t.match(out, /latent-blocker-census-run1\.json/u, 'cites the artifact path');
   t.end();
 });

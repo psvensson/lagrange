@@ -323,8 +323,85 @@ async function buildGroundingPack(repoRoot) {
   };
 }
 
-function renderText(summary, grounding) {
-  const lines = [];
+// The deep, expensive artifact: the L1-L4 multi-agent census writes its ranked
+// frontier to test-output/latent-blocker-census-*.json. This tool (the cheap
+// gate-corpus summary) is what every agent runs FIRST, so it must point at a
+// completed deep run when one exists — otherwise agents re-derive by hand a
+// root-cause ranking that is already on disk. Returns null if no artifact is
+// present or readable.
+const DEEP_CENSUS_DIR = 'test-output';
+const DEEP_CENSUS_PREFIX = 'latent-blocker-census';
+async function findFreshDeepCensus(repoRoot, latestReportMtimeMs) {
+  const dir = path.join(repoRoot, DEEP_CENSUS_DIR);
+  let candidates = [];
+  try {
+    candidates = (await fs.readdir(dir)).filter(
+      (f) => f.startsWith(DEEP_CENSUS_PREFIX) && f.endsWith('.json'),
+    );
+  } catch {
+    return null;
+  }
+  let newest = null;
+  for (const name of candidates) {
+    const full = path.join(dir, name);
+    try {
+      const stat = await fs.stat(full);
+      if (!newest || stat.mtimeMs > newest.mtimeMs) {
+        newest = {full, name, mtimeMs: stat.mtimeMs};
+      }
+    } catch {
+      // skip unreadable
+    }
+  }
+  if (!newest) {
+    return null;
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(await fs.readFile(newest.full, ENCODING_UTF8));
+  } catch {
+    return null;
+  }
+  return {
+    relPath: path.relative(repoRoot, newest.full),
+    mtimeIso: new Date(newest.mtimeMs).toISOString(),
+    candidatesTotal: parsed.candidatesTotal ?? null,
+    survivors: parsed.survivors ?? null,
+    refuted: parsed.refuted ?? null,
+    frontierLen: Array.isArray(parsed.frontier) ? parsed.frontier.length : null,
+    // "Fresh" = written at or after the newest gate report this corpus saw, so
+    // the deep ranking reflects the latest gate rather than predating it.
+    fresherThanGate:
+      latestReportMtimeMs == null || newest.mtimeMs >= latestReportMtimeMs,
+  };
+}
+
+function renderDeepCensusBanner(deepCensus) {
+  if (!deepCensus) {
+    return [];
+  }
+  const stamp = `${deepCensus.relPath} (${deepCensus.mtimeIso})`;
+  const counts =
+    deepCensus.candidatesTotal != null ?
+      `${deepCensus.candidatesTotal} cand → ${deepCensus.survivors} survivors → ` +
+        `${deepCensus.frontierLen} ranked frontier item(s)` :
+      'ranked frontier on disk';
+  const freshness = deepCensus.fresherThanGate ?
+    'newer than the latest gate report' :
+    'PREDATES the latest gate report — re-run the fan-out to refresh';
+  return [
+    '⮕ DEEP CENSUS AVAILABLE — READ THIS BEFORE RE-DERIVING BY HAND:',
+    `    ${stamp}`,
+    `    ${counts} (${freshness}).`,
+    '    Ranked frontier + per-item falsifiers are already computed there +',
+    '    .kiro/epics/latent-convergence-blocker-census.md. This summary is only the',
+    '    cheap gate-corpus backbone; do not reconstruct the ranking from raw bundles.',
+    '',
+  ];
+}
+
+function renderText(summary, grounding, deepCensus) {
+  const lines = [...renderDeepCensusBanner(deepCensus)];
   lines.push(`Latent convergence-blocker census — ${summary.totalRuns} run(s), ` +
     `${summary.gateCount} gate(s), overall pass ${summary.passedRuns}/${summary.totalRuns} ` +
     `(${summary.overallPassRate})`);
@@ -364,14 +441,36 @@ function renderText(summary, grounding) {
     lines.push(`  deterministic substrate: ${grounding.deterministicSubstrate}`);
     lines.push(`  finder lenses: ${grounding.finderLenses.length}`);
     lines.push(`  candidate-record schema: { ${grounding.candidateSchemaFields.join(', ')} }`);
-    lines.push('  NEXT: feed this frontier to the L1-L4 agent fan-out + adversarial verify +');
-    lines.push('        peel-until-dry (see .kiro/epics/latent-convergence-blocker-census.md).');
+    if (deepCensus && deepCensus.fresherThanGate) {
+      lines.push('  NEXT: a FRESH deep census already exists — read it (see banner above)');
+      lines.push('        before re-running the fan-out; only re-run to refresh the frontier.');
+    } else {
+      lines.push('  NEXT: feed this frontier to the L1-L4 agent fan-out + adversarial verify +');
+      lines.push('        peel-until-dry (see .kiro/epics/latent-convergence-blocker-census.md).');
+    }
   }
   return lines.join(NEWLINE);
 }
 
-function renderMarkdown(summary, grounding) {
+function renderMarkdown(summary, grounding, deepCensus) {
+  const banner = deepCensus ?
+    [
+      `> **⮕ DEEP CENSUS AVAILABLE — read before re-deriving:** \`${deepCensus.relPath}\` ` +
+          `(${deepCensus.mtimeIso}) — ` +
+          (deepCensus.candidatesTotal != null ?
+            `${deepCensus.candidatesTotal} cand → ${deepCensus.survivors} survivors → ` +
+              `${deepCensus.frontierLen} ranked frontier` :
+            'ranked frontier on disk') +
+          (deepCensus.fresherThanGate ?
+            ' (newer than the latest gate). ' :
+            ' (PREDATES the latest gate — re-run the fan-out). ') +
+          'Ranked frontier + falsifiers are already computed there + ' +
+          '`.kiro/epics/latent-convergence-blocker-census.md`.',
+      '',
+    ] :
+    [];
   const lines = [
+    ...banner,
     '# Latent convergence-blocker census',
     '',
     `- runs: ${summary.totalRuns} across ${summary.gateCount} gate(s)`,
@@ -404,9 +503,13 @@ function renderMarkdown(summary, grounding) {
     lines.push('', '## Grounding pack (Phase 0)', '',
       `- closure records: ${grounding.closureRecords.length} under \`${grounding.closureLedgerDir}\``,
       `- substrate: ${grounding.deterministicSubstrate}`,
-      `- candidate schema: \`{ ${grounding.candidateSchemaFields.join(', ')} }\``,
-      '- next: parallel L1–L4 fan-out + adversarial verify + peel-until-dry',
-      '  (`.kiro/epics/latent-convergence-blocker-census.md`).');
+      `- candidate schema: \`{ ${grounding.candidateSchemaFields.join(', ')} }\``);
+    if (deepCensus && deepCensus.fresherThanGate) {
+      lines.push('- next: a FRESH deep census already exists — read it (banner above) before re-running the fan-out');
+    } else {
+      lines.push('- next: parallel L1–L4 fan-out + adversarial verify + peel-until-dry',
+        '  (`.kiro/epics/latent-convergence-blocker-census.md`).');
+    }
   }
   return lines.join(NEWLINE);
 }
@@ -457,9 +560,14 @@ async function runCli(argv, {repoRoot} = {}) {
     return {ok: false, output: `no ${REPORT_SUFFIX} files found in ${reportDir}`};
   }
   const runs = [];
+  let latestReportMtimeMs = null;
   for (const filePath of files) {
     try {
       runs.push(await readRun(filePath));
+      const stat = await fs.stat(filePath);
+      if (latestReportMtimeMs == null || stat.mtimeMs > latestReportMtimeMs) {
+        latestReportMtimeMs = stat.mtimeMs;
+      }
     } catch {
       // skip unreadable/partial report (e.g. a gate still writing)
     }
@@ -469,15 +577,24 @@ async function runCli(argv, {repoRoot} = {}) {
   }
   const summary = summarizeLatentBlockers(runs);
   const grounding = repoRoot ? await buildGroundingPack(repoRoot) : null;
+  const deepCensus = repoRoot ?
+    await findFreshDeepCensus(repoRoot, latestReportMtimeMs) :
+    null;
   if (asJson) {
     return {
       ok: true,
-      output: JSON.stringify({...summary, groundingPack: grounding}, null, JSON_INDENT_SPACES),
+      output: JSON.stringify(
+        {...summary, groundingPack: grounding, freshDeepCensus: deepCensus},
+        null,
+        JSON_INDENT_SPACES,
+      ),
     };
   }
   return {
     ok: true,
-    output: markdown ? renderMarkdown(summary, grounding) : renderText(summary, grounding),
+    output: markdown ?
+      renderMarkdown(summary, grounding, deepCensus) :
+      renderText(summary, grounding, deepCensus),
   };
 }
 
@@ -506,6 +623,7 @@ export {
   extractRun,
   summarizeLatentBlockers,
   buildGroundingPack,
+  findFreshDeepCensus,
   renderText,
   renderMarkdown,
   runCli,
