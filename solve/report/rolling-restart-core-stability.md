@@ -8,23 +8,29 @@
 
 **Attempts:** 74
 
+## Links
+- roadmap row: RM-0.1-fs-rolling-restart
+- spec: membership-lifecycle-placement-hard-cutover
+- closes: CL-001, CL-004, CL-030
+- plan: .kiro/epics/topology-convergence-hardening.md
+
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
-- Owner: operation_workflow_owner
-- Boundary: workflow_progress
-- Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72
-- Mechanism: observation_gap
-- Movement: narrowed: observer_authority_visibility_lag -> operation_workflow_owner / workflow_progress / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72
-- Latest evidence: test-output/reports/stat-gate-20260618T032424Z-run1.report.json
-- Selected theory: theory-20260618-combined-cache-stale-replica-op-repair-scope (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for rolling-restart-core-stability-main
-- Oscillation: blocker "operation_workflow_owner / workflow_progress / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72" revisited 4x (whack-a-mole; change strategy)
-- No longer current: observer_authority_visibility_lag
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: restart_recovery_timeout
+- Mechanism: transition_gap
+- Movement: narrowed: operation_workflow_owner / workflow_progress / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72 -> restart_recovery_timeout
+- Latest evidence: test-output/reports/stat-gate-20260618T073037Z-run1.report.json
+- Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
+- Next move: continue supervised step for rolling-restart-core-stability-main
+- Oscillation: blocker "restart_recovery_timeout" revisited 2x (whack-a-mole; change strategy)
+- No longer current: operation_workflow_owner / workflow_progress / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72; Do not add a second cleanup helper or treat the analyzer's operation_workflow_owner projection as excluding the joiner EADDRINUSE root cause; the corrected selected theory keeps the Solver owner/boundary while preserving the node-exit mechanism.; Do not start a closure batch or use invalid run8 evidence; the only next expensive discriminator is one fresh rolling-restart gate sample for NODE_EXIT/EADDRINUSE movement under the corrected owner/boundary theory.
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for rolling-restart-core-stability-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: blocked-unrecorded-evidence
+- Next action: reduce change scope for rolling-restart-core-stability-main (50 changed files exceed the limit) before the next attempt
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id rolling-restart-core-stability --frontier rolling-restart-core-stability-main --evidence test-output/reports/stat-gate-20260618T073037Z-run3.report.json
 
 ## Scope Pressure
 - Changed files: 50
@@ -49,7 +55,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 110 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 100 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -394,6 +400,9 @@
 - **rolling-restart-core-stability-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T032424Z-run1.report.json. Metric: 110 -> 110. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T032424Z-run1.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T032424Z-run1.report.json. Metric: 110 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T032424Z-run1.report.json]
+- **rolling-restart-core-stability-main**: Subagent Kant independently confirmed the latest publication_missing_active_node blocker is plausibly downstream of the joiner NODE_EXIT/EADDRINUSE hard event: early admin runtime is started before join completion, no existing narrow helper owned failed-join admin runtime teardown, and the minimal regression belongs in entrypoint/admin-runtime cleanup coverage. (rules out: Do not add a second cleanup helper or treat the analyzer's operation_workflow_owner projection as excluding the joiner EADDRINUSE root cause; the corrected selected theory keeps the Solver owner/boundary while preserving the node-exit mechanism.) [subagent:019ed8d5-0f76-7642-bfad-c285911f0d16]
+- **rolling-restart-core-stability-main**: Join failure cleanup now releases the early admin runtime before retry/exit: the shared admin-runtime composition shutdown helper closes AdminWebSocketAPI and live-query wiring, startJoinNode invokes it after unsuccessful join, AdminWebSocketAPI clears listening on shutdown, and entrypoint/admin cleanup tests prove both helper order and join failure branch wiring. Focused admin/join/startup tests, DT6, model contracts, lint, runtime grammar, literal guard, and diff checks passed for the patch scope. (rules out: Do not start a closure batch or use invalid run8 evidence; the only next expensive discriminator is one fresh rolling-restart gate sample for NODE_EXIT/EADDRINUSE movement under the corrected owner/boundary theory.) [solve/changes/rolling-restart-core-stability/join-failure-early-admin-runtime-cleanup.diff]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T073037Z-run1.report.json. Metric: 110 -> 100. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: restart_recovery_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T073037Z-run1.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -496,9 +505,11 @@
 - **theory-20260618-acknowledged-write-visibility-observation-grace** [supported] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism rolling-restart verifies acknowledged load writes with a single immediate read on each reachable node even though load cancellation and final convergence can leave a short read-visibility tail, modelGate npm run model:contracts
 - **theory-20260618-final-consistency-forced-repair-bounded-fallback** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism Forced final consistency probes can be downgraded by the admin bounded snapshot deadline into raw local-cache publication observations, so stale publication epochs are compared as final truth., owner test/distributed/harness,src/admin, boundary final_consistency_authoritative_observation, modelGate npm run model:contracts
 - **theory-20260618-combined-cache-stale-replica-op-repair-scope** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism Forced authoritative repair scopes combined cache_stale_watermark plus stale_replica_operations_in_flight down to replica_operations only, leaving stale partition leader authority rows visible to final consistency., owner src/admin, boundary authoritative_discovery_repair_table_scope, modelGate npm run model:contracts
+- **theory-20260618-join-failure-early-admin-runtime-cleanup** [active] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism A retry or second join incarnation after a join failure can keep the early local admin runtime bound to port 8081 because the join failure branch shuts down BootstrapAPI but does not shut down the admin runtime composition created by notifyLocalAdminRuntimeReady; the next join attempt reaches admin runtime initialization and fails with EADDRINUSE, killing the joiner and surfacing as publication_missing_active_node., owner src/bootstrap, boundary join_failure_runtime_cleanup, modelGate npm run model:contracts
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak** [supported] frontier, frontier rolling-restart-core-stability-main, layer topology, mechanism The analyzer projects publication_missing_active_node under operation_workflow_owner/workflow_progress, but the cited run's primary hard event is a joiner NODE_EXIT: the second join attempt starts early local admin runtime and fails with EADDRINUSE on 0.0.0.0:8081 because the previous unsuccessful join only shut down BootstrapAPI, leaving the early admin runtime bound. The missing active node and publication topology blocker are downstream of that joiner process exit., owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260618-combined-cache-stale-replica-op-repair-scope
+- **rolling-restart-core-stability-main**: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -705,6 +716,7 @@
 - **theory-20260618-final-consistency-forced-repair-bounded-fallback**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/stat-gate-20260618T030409Z-run1.report.json]
 - **theory-20260618-combined-cache-stale-replica-op-repair-scope**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/stat-gate-20260618T032424Z-run1.report.json]
 - **theory-20260618-combined-cache-stale-replica-op-repair-scope**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260618T032424Z-run1.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260618T073037Z-run1.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
