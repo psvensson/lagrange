@@ -24,5 +24,16 @@
         }
       }
     }
-  ]
+  ],
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [
+      "CL-001",
+      "CL-004",
+      "CL-030"
+    ],
+    "parentQuest": null,
+    "planDoc": ".kiro/epics/topology-convergence-hardening.md"
+  }
 }

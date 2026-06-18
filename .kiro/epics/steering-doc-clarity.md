@@ -1,4 +1,14 @@
+---
+id: steering-doc-clarity
+roadmapRow: null
+status: graduated
+graduatesTo: null
+---
+
 # Epic: Steering-doc clarity remediation
+
+> Graduated to Quest `steering-doc-clarity` (SOLVED). This page is retained as the
+> intent/rationale record; live status is the Quest report, not this file.
 
 **Intent:** Resolve the 17 audited issues that would confuse an LLM agent reading
 the steering corpus (contradictions, vocab-before-definition, pack-truncation

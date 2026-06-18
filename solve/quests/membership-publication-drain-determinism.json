@@ -3,6 +3,15 @@
   "statement": "A reconciled active node can never remain unpublished without an enabled drain/wake obligation: the membership-publication drain is deterministic and self-rescheduling, proven by a PublicationConvergence model property and a deterministic-drain reschedule regression test for the active-gate reconcile deferral branch.",
   "priority": 1,
   "class": "model",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [
+      "CL-001"
+    ],
+    "parentQuest": null,
+    "planDoc": ".kiro/epics/topology-convergence-hardening.md"
+  },
   "doneWhen": {
     "probe": "oracle",
     "args": {

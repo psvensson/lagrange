@@ -257,6 +257,22 @@ function closureStrengthWarnings(quest, log) {
   return [];
 }
 
+// Link hygiene (warning only — links are declarative, never gated). A product
+// quest with NO planning link (roadmapRow, specRef, or any closesCL) is invisible
+// to `solve trace`/`frontier`/`overview`, so the planning graph cannot show what
+// it advances. Process/meta quests legitimately have no roadmap row, so they are
+// exempt. This is the anti-decay nudge for the links backfill, not a gate.
+function linkHygieneWarnings(quest) {
+  if (questClass(quest) !== 'product') return [];
+  const links = quest.links || {};
+  const closes = Array.isArray(links.closesCL) ? links.closesCL : [];
+  if (links.roadmapRow || links.specRef || closes.length > 0) return [];
+  return [
+    'product quest has no planning link (links.roadmapRow / specRef / closesCL all ' +
+    'empty); it will not appear in solve trace / frontier / overview joins',
+  ];
+}
+
 function isTheoryApprovalFinding(event, frontier) {
   return event.type === EVENT_FINDING &&
     event.frontier === frontier &&
@@ -385,7 +401,10 @@ export function auditQuest(root, quest) {
       `fresh probe evidence is not recorded: ${unrecorded.evidence}`,
     ));
   }
-  const warnings = closureStrengthWarnings(quest, log);
+  const warnings = [
+    ...closureStrengthWarnings(quest, log),
+    ...linkHygieneWarnings(quest),
+  ];
   return {
     questId: quest.id,
     status: problems.length === 0 ? 'pass' : 'fail',

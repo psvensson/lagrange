@@ -3,6 +3,12 @@
   "statement": "A dropped or reordered CDC DELETE never leaves a permanently resurrected row in any downstream system-table cache: for every internalCachePropagation table, after a missed or late DELETE all replica caches converge to authoritative absence within a bounded interval, proven by a deterministic regression test plus a green suite.",
   "priority": 1,
   "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "proximity-spray-cdc-propagation-overlay",
+    "closesCL": [],
+    "parentQuest": null
+  },
   "doneWhen": {
     "probe": "scenario-harness",
     "args": {

@@ -8,6 +8,7 @@
 //   report  (re)generate and print the markdown result projection
 //   portfolio cross-quest governance view (class/closure/outcome + meta ratio)
 //   frontier one-screen board: active closure-ledger records + open quests
+//   overview top-down walk of the planning stack: roadmap → epic → spec → quest → ledger
 //   probe   ad-hoc: ask a probe for {metric, done, evidence} without recording
 //   theory  record two-layer Quest theories and their outcomes
 //   health  print Quest loop-health and next-action signals
@@ -46,6 +47,7 @@ import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
+import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {
@@ -99,6 +101,10 @@ function questTemplate(id, statement) {
       specRef: null,
       closesCL: [],
       parentQuest: null,
+      // planDoc: optional path to the epic/spec page carrying this Quest's intent
+      // and rationale (e.g. ".kiro/epics/<id>.md"). Narrative belongs there, not in
+      // the Quest; this is just the pointer.
+      planDoc: null,
     },
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
     doneWhen: {
@@ -686,6 +692,15 @@ function cmdTrace(root, args) {
   process.stdout.write(`${out.join('\n')}\n`);
 }
 
+function cmdOverview(root, args) {
+  if (args.write) {
+    const file = writeOverview(root);
+    process.stdout.write(`wrote ${path.relative(root, file)}\n`);
+    return;
+  }
+  process.stdout.write(runOverviewCommand(root));
+}
+
 function cmdHandoff(root, args) {
   process.stdout.write(runHandoffCommand(root, args));
 }
@@ -697,6 +712,7 @@ const COMMANDS = {
   'report': cmdReport,
   'portfolio': cmdPortfolio,
   'frontier': cmdFrontier,
+  'overview': cmdOverview,
   'trace': cmdTrace,
   'handoff': cmdHandoff,
   'probe': cmdProbe,

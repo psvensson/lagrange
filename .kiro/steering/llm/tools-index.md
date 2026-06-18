@@ -17,6 +17,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `frontier` — Print the Solver frontier board.
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
+- `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
@@ -92,6 +93,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## lint
 
 - `lint:fix` — `eslint src/ test/ --fix --ignore-pattern 'test/.gitkeep'`
+- `lint:scripts` — `eslint scripts/solve/`
 
 ## migration
 
@@ -113,6 +115,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `model:owner-traces` — Validate owner trace suites so valid traces satisfy invariants and forbidden traces violate declared invariants.
 - `model:statecharts` — Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.
 - `model:tlc` — `node scripts/model-tlc.js`
+
+## overview
+
+- `overview:write` — Write the durable work-overview board to solve/OVERVIEW.generated.md.
 
 ## quest
 
@@ -209,4 +215,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-137 scripts indexed; 61 have a curated description, 76 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+140 scripts indexed; 63 have a curated description, 77 fall back to their raw command. Improve coverage in the two sources named in the header comment.

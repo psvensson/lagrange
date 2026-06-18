@@ -37,6 +37,26 @@ linked spec or architecture document that makes the intended behavior concrete.
 | 🔧     | Approved implementation scope; execution still requires a Quest |
 | 🔲     | Planned but not yet active implementation scope |
 
+## Roadmap Row IDs
+
+Rows that a Quest needs to cite carry a stable id in an `Id` column, of the form
+`RM-<phase>-<slug>` (e.g. `RM-0.1-fs-rolling-restart`). A Quest links to a row by
+putting that id in its `links.roadmapRow`; `node scripts/solve.js trace --row
+RM-...` and `npm run overview` then join the row to the Quests advancing it.
+
+Two rules keep the ids durable:
+
+- **Slugs, never positions.** The id encodes the phase and a topic slug, not a row
+  number, so inserting or reordering rows never renumbers existing ids (the
+  positional-renumbering trap that breaks rule-id and CL citations). A row keeps
+  its id for life; a removed row's id is retired, not reused.
+- **Added on first link, not all at once.** A table gains the `Id` column when one
+  of its rows first becomes a Quest link target. Tables without active Quest links
+  may omit the column until they need it; this is intentional, not drift.
+
+This roadmap still does not certify proof; for an id'd row in flight, the live
+status is the linked Quest report and the closure ledger, not the row's symbol.
+
 ## Live Truth Pointers
 
 Use these documents for mutable execution and readiness state:
@@ -71,16 +91,16 @@ context only.
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 
-| Item | Roadmap state | Scope notes |
-|------|--------|-------|
-| `replica_operations` single-writer cutover | ✅ | `RebalanceCoordinator` is the canonical writer/owner path |
-| Managed split durable-owner cutover | ✅ | `ManagedSplitWorkflow` owns split lifecycle and resume |
-| Readiness stratification for internal vs load lanes | ✅ | Internal topology paths use `repairEligible`; load/routing paths use `serveEligible` |
-| Atomic topology transitions fail closed without transaction owner | ✅ | Optional fallback semantics removed on atomic cut points |
-| Cache observation boundary enforcement | ✅ | Workflow advance requires owner commit and acknowledgement, not cache timing |
-| Owner-dependency fallback removal | ✅ | Active topology paths fail closed when required owners are missing |
-| Deterministic regression ladder enforcement | ✅ | Repros and focused suites run before 7-node harness confirmation |
-| Scenario policy SQL ownership guard | ✅ | `npm run guard:scenario-policy:file` enforces `table_policies` owner helper usage |
+| Id | Item | Roadmap state | Scope notes |
+|----|------|--------|-------|
+| RM-0.1a-replica-operations-cutover | `replica_operations` single-writer cutover | ✅ | `RebalanceCoordinator` is the canonical writer/owner path |
+| RM-0.1a-managed-split-cutover | Managed split durable-owner cutover | ✅ | `ManagedSplitWorkflow` owns split lifecycle and resume |
+| RM-0.1a-readiness-stratification | Readiness stratification for internal vs load lanes | ✅ | Internal topology paths use `repairEligible`; load/routing paths use `serveEligible` |
+| RM-0.1a-atomic-topology-transitions | Atomic topology transitions fail closed without transaction owner | ✅ | Optional fallback semantics removed on atomic cut points |
+| RM-0.1a-cache-observation-boundary | Cache observation boundary enforcement | ✅ | Workflow advance requires owner commit and acknowledgement, not cache timing |
+| RM-0.1a-owner-dependency-fallback-removal | Owner-dependency fallback removal | ✅ | Active topology paths fail closed when required owners are missing |
+| RM-0.1a-deterministic-regression-ladder | Deterministic regression ladder enforcement | ✅ | Repros and focused suites run before 7-node harness confirmation |
+| RM-0.1a-scenario-policy-sql-guard | Scenario policy SQL ownership guard | ✅ | `npm run guard:scenario-policy:file` enforces `table_policies` owner helper usage |
 
 ### 1. Distributed Transactions
 
@@ -133,24 +153,24 @@ deterministic recovery/timeout handling.
 
 ### 4. Failure Simulations
 
-| Item | Roadmap state | Scope notes |
-|------|---------------|-------------|
-| Distributed test harness | ✅ | Harness exists and remains the proof surface |
-| Node failure tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Network partition tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Rolling restart tests | ✅ | Capability is in roadmap scope; current representative truth belongs in the active Quest report |
-| Node join under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Seed restart under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Sustained throughput tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Write visibility tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| WASM service failover | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Partition kill/heal | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| 7-node stress scenarios | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Postgres baseline comparison | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Invariant engine | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Disk full simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| Slow follower simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
-| In-cluster chaos injection | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-0.1-fs-distributed-harness | Distributed test harness | ✅ | Harness exists and remains the proof surface |
+| RM-0.1-fs-node-failure | Node failure tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-network-partition | Network partition tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-rolling-restart | Rolling restart tests | ✅ | Capability is in roadmap scope; current representative truth belongs in the active Quest report |
+| RM-0.1-fs-node-join-under-load | Node join under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-seed-restart-under-load | Seed restart under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-sustained-throughput | Sustained throughput tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-write-visibility | Write visibility tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-wasm-failover | WASM service failover | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-partition-kill-heal | Partition kill/heal | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-7-node-stress | 7-node stress scenarios | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-postgres-baseline | Postgres baseline comparison | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-invariant-engine | Invariant engine | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-disk-full | Disk full simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-slow-follower | Slow follower simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| RM-0.1-fs-chaos-injection | In-cluster chaos injection | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
 
 ### Phase 0.1 Exit Criteria
 

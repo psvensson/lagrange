@@ -345,6 +345,43 @@ tap.test('Quest audit', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('warns when a product quest has no planning link', (t) => {
+    const root = tmp();
+    const {quest} = makeQuest(root, 'unlinked'); // product, no links block
+    const audit = auditQuest(root, quest);
+    t.match(
+      (audit.warnings || []).join('\n'),
+      /no planning link/u,
+      'surfaces the link-hygiene warning so the quest is not invisible to the joins',
+    );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a linked product quest emits no link-hygiene warning', (t) => {
+    const root = tmp();
+    const {quest} = makeQuest(root, 'linked');
+    quest.links = {roadmapRow: null, specRef: 'some-spec', closesCL: [], parentQuest: null};
+    saveQuest(root, quest);
+    const audit = auditQuest(root, quest);
+    t.notMatch((audit.warnings || []).join('\n'), /no planning link/u,
+      'a specRef link satisfies link hygiene');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a process quest with no link emits no link-hygiene warning', (t) => {
+    const root = tmp();
+    const {quest} = makeQuest(root, 'procnolink');
+    quest.class = 'process';
+    saveQuest(root, quest);
+    const audit = auditQuest(root, quest);
+    t.notMatch((audit.warnings || []).join('\n'), /no planning link/u,
+      'process quests are exempt from the link-hygiene nudge');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });
 
 // R6: a theory may only be promoted by a MEASURED post-patch report, never by an

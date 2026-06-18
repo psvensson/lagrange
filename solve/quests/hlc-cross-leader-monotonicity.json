@@ -3,6 +3,12 @@
   "statement": "The partition HLC is monotonic across leadership change and process restart: applying any committed Raft entry advances the applying replica's HLC to at least that entry's HLC, and a restarted node never emits an HLC below one it previously committed, so a causally-later write for any key always receives a strictly higher HLC than an earlier write even across leader handoff. Proven by deterministic tests plus a green suite.",
   "priority": 1,
   "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "hlc-cross-leader-monotonicity",
+    "closesCL": [],
+    "parentQuest": null
+  },
   "doneWhen": {
     "probe": "oracle",
     "args": {

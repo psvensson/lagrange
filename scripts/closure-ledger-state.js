@@ -138,6 +138,15 @@ function parseIndex(indexPath = INDEX_PATH) {
   return index;
 }
 
+// Bucket a record by the leading token of its `concern` field — the subsystem the
+// record belongs to (e.g. "harness-oracle (primary) + node-resource-safety" →
+// "harness-oracle"). Lets the frontier surfaces group the active ledger by area
+// instead of presenting one flat list, so "where is the work" reads at a glance.
+export function concernArea(concern) {
+  const head = String(concern || '').split(/[\s(/+]/u)[0].trim();
+  return head || 'unclassified';
+}
+
 // Post-WS8.1: the RECORD's `### STATE` block is the status source of truth; the
 // index is the cross-check. `drift` flags any record whose STATE status disagrees
 // with the index, and `normalized` is false for any record still lacking a STATE

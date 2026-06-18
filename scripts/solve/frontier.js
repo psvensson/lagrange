@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {SOLVE_DATA_DIR} from './constants.js';
-import {parseClosureLedger} from '../closure-ledger-state.js';
+import {parseClosureLedger, concernArea} from '../closure-ledger-state.js';
 import {buildPortfolio, loadAllQuests} from './portfolio.js';
 
 const ACTIVE_GATE_PREVIEW = 8;
@@ -34,13 +34,23 @@ function renderClosureFrontier(records) {
   if (active.length === 0) {
     lines.push('_(no active closure records)_', '');
   } else {
-    lines.push('| Id | Status | Last gate | Concern |');
-    lines.push('| --- | --- | --- | --- |');
+    const byArea = new Map();
     for (const r of active) {
-      lines.push(
-        `| ${r.id} | ${r.status} | ${r.lastGate || '—'} | ${r.concern || '—'} |`);
+      const area = concernArea(r.concern);
+      if (!byArea.has(area)) byArea.set(area, []);
+      byArea.get(area).push(r);
     }
-    lines.push('');
+    const areas = [...byArea.keys()].sort();
+    lines.push(`Areas: ${areas.map((a) => `${a} (${byArea.get(a).length})`).join(' · ')}`, '');
+    for (const area of areas) {
+      lines.push(`### ${area}`, '', '| Id | Status | Last gate | Concern |',
+        '| --- | --- | --- | --- |');
+      for (const r of byArea.get(area).sort((a, b) => a.id.localeCompare(b.id))) {
+        lines.push(
+          `| ${r.id} | ${r.status} | ${r.lastGate || '—'} | ${r.concern || '—'} |`);
+      }
+      lines.push('');
+    }
   }
   if (drifted.length > 0) {
     lines.push(
