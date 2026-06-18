@@ -290,15 +290,32 @@ async function evaluateRemoveSafety(context, operation) {
   // every peer surplus-drain forever. Exclude ops whose configured step timeout
   // has already elapsed — they are reaper candidates, not genuinely in-flight.
   const concurrentOperationNowMs = context.resolveTimeoutCheckNowMs();
-  const concurrentActiveOp = allOps.find(
-    (op) =>
-      op.operationId !== operation.operationId &&
-      !context.repository.isOperationTerminal(op) &&
-      !context.isConcurrentOperationStalePastStepTimeout(
+  let concurrentActiveOp = null;
+  for (const op of allOps) {
+    if (
+      op.operationId === operation.operationId ||
+      context.repository.isOperationTerminal(op) ||
+      context.isConcurrentOperationStalePastStepTimeout(
         op,
         concurrentOperationNowMs,
-      ),
-  );
+      )
+    ) {
+      continue;
+    }
+    // CL-044: an op stuck SYNCING/moving to a down target makes no progress yet
+    // would head-of-line-block this peer recovery that targets a LIVE node. Its
+    // ~1s dispatch-retry loop keeps the step-timeout staleness clock fresh, so
+    // the exclusion above can lag the recovery deadline. An op whose move target
+    // fails a live ping is not genuinely in-flight, so it must not hold the
+    // partition serialization lock. The independent voter-ready-minimum,
+    // published-membership, and per-peer-ping checks below still protect quorum
+    // for the operation that is now allowed to proceed.
+    if (await context.isConcurrentOperationTargetUncontactable(op)) {
+      continue;
+    }
+    concurrentActiveOp = op;
+    break;
+  }
   if (concurrentActiveOp) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,

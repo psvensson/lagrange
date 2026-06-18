@@ -369,17 +369,47 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     );
   }
 
+  resolveOperationStepEnteredAtMs(operation) {
+    const stepsHistory = Array.isArray(operation?.stepsHistory) ?
+      operation.stepsHistory :
+      null;
+    const workflowStep = operation?.workflowStep;
+    if (
+      !stepsHistory ||
+      stepsHistory.length === NUM.ZERO ||
+      !workflowStep
+    ) {
+      return null;
+    }
+    // Newest step-history entry for the CURRENT workflow step. updateStep only
+    // appends on a real transition (it no-ops when previousStep === step), so
+    // this timestamp is the true time-in-step and is immune to the same-step
+    // dispatch-retry churn that keeps re-persisting updatedAt every ~1s.
+    for (let index = stepsHistory.length - NUM.ONE; index >= NUM.ZERO; index--) {
+      const entry = stepsHistory[index];
+      if (entry && entry.step === workflowStep) {
+        return this.normalizeOperationDrainEpochMillis(entry.timestamp);
+      }
+    }
+    return null;
+  }
+
   resolvePriorityRecoveryOperationDrainStepAgeMs(
     operation,
     now = Date.now(),
   ) {
+    const stepEnteredAtMs = this.resolveOperationStepEnteredAtMs(operation);
     const updatedAtMs = this.normalizeOperationDrainEpochMillis(
       operation?.updatedAt,
     );
     const createdAtMs = this.normalizeOperationDrainEpochMillis(
       operation?.createdAt,
     );
-    const baseMs = updatedAtMs ?? createdAtMs;
+    // Prefer time-in-current-step over updatedAt: a wedged op whose dispatch
+    // retry loop re-persists updatedAt every ~1s would otherwise never age past
+    // its step timeout, so neither the concurrent-op staleness gate (CL-043) nor
+    // the timeout reaper that share this clock could ever retire it (CL-044).
+    const baseMs = stepEnteredAtMs ?? updatedAtMs ?? createdAtMs;
     if (baseMs === null) {
       return null;
     }
@@ -437,6 +467,30 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // gate is a serialization guard, not the sole quorum protector.
   isConcurrentOperationStalePastStepTimeout(operation, now = Date.now()) {
     return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
+  }
+
+  // CL-044: a concurrent op stuck SYNCING/moving to a down or unreachable target
+  // cannot make progress, yet it head-of-line-blocks peer recovery that targets
+  // LIVE nodes via the concurrent-partition-operation serialization gate. Its
+  // dispatch retry loop keeps the staleness clock fresh, so the step-timeout
+  // exclusion can lag the recovery deadline. Treat such an op as not-active when
+  // its move target fails a live ping. This is a serialization relief only: the
+  // independent voter-ready-minimum, published-membership, and per-peer-ping
+  // checks still protect quorum for the op that is allowed to proceed. A live,
+  // pingable target still blocks (pingNode returns false fast for a
+  // non-CONNECTED peer, so a clearly-down target does not delay the gate).
+  async isConcurrentOperationTargetUncontactable(operation) {
+    const targetNodeId =
+      operation?.targetNodeId || operation?.target_node_id || null;
+    if (!targetNodeId || targetNodeId === this.nodeId) {
+      return false;
+    }
+    const router = this.messageRouter;
+    if (!router || typeof router.pingNode !== TYPEOF.FUNCTION) {
+      return false;
+    }
+    const reachable = await router.pingNode(targetNodeId).catch(() => false);
+    return reachable === false;
   }
 
   resolvePriorityRecoveryOperationDrainState(
