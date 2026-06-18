@@ -208,6 +208,92 @@ export function registerClusterControlPlaneQuiescenceLifecycleTests(context) {
   );
 
   test(
+    'Unit: waitForControlPlaneQuiescence records a per-poll candidate-window ' +
+    'reset history so a settle-time failure can be pinned to its reason',
+    async () => {
+      // Observability falsifier: the report previously surfaced only the final
+      // poll + the LAST reset, so a window-truncating reason could not be pinned
+      // across polls. Drive a snapshot that resets the stable window every poll
+      // (control-plane pressure) and assert the history accumulates the resets
+      // with their discriminating signals (state/reasonCodes/leaderSignature).
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      cluster._nodes = new Map([['seed-h', {
+        id: 'seed-h',
+        role: NODE_ROLES.SEED,
+        async getControlSnapshot() {
+          return {
+            rows: [{
+              capturedAt: Date.now(),
+              leaders: {'partitions-p1': 'seed-h'},
+              replicaOperations: {
+                inFlightCount: 0,
+                partitionGroupInFlight: {},
+                operationTimelineById: {},
+              },
+              controlPlaneDiagnostics: {
+                readinessByNodeId: {
+                  'seed-h': {
+                    runtimeAuthority: {
+                      repair: {
+                        state: RUNTIME_AUTHORITY_REPAIR_STATE.FAILED,
+                        error: DISCOVERY_REPAIR_TIMEOUT_ERROR,
+                      },
+                    },
+                  },
+                },
+              },
+            }],
+          };
+        },
+        async getLogs() {
+          return '';
+        },
+      }]]);
+      cluster._sleep = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      };
+      cluster._collectFailureLogs = async () => {};
+
+      await assert.rejects(
+        async () => cluster.waitForControlPlaneQuiescence({
+          stableWindowMs: 2,
+          timeoutMs: 15,
+          maxInFlightCount: 0,
+        }),
+        (error) => {
+          const history = error.quiescence.candidateWindowResetHistory;
+          assert.ok(
+            Array.isArray(history) && history.length > 0,
+            'reset history is recorded',
+          );
+          const entry = history[history.length - 1];
+          assert.equal(
+            entry.state,
+            CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+          );
+          assert.ok(
+            Array.isArray(entry.reasonCodes) && entry.reasonCodes.length > 0,
+            'each reset records its reason codes',
+          );
+          assert.equal(
+            entry.leaderSignature,
+            JSON.stringify([['partitions-p1', 'seed-h']]),
+            'each reset records the leader signature (to tell a real raft ' +
+            'change from an AVAILABLE-map flicker)',
+          );
+          assert.equal(typeof entry.observedAtMs, 'number');
+          return true;
+        },
+      );
+    },
+  );
+
+  test(
     'Unit: waitForControlPlaneQuiescence waits for critical system table spread',
     async () => {
       const cluster = createCluster({

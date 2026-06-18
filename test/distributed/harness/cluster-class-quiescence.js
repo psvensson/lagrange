@@ -167,6 +167,47 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     let lastOperationTimelineSignature = null;
     let lastOperationProgressAtMs = Date.now();
     let candidateWindowReset = null;
+    // Per-poll window-truncation history (OBSERVABILITY ONLY — does not change
+    // the quiesce verdict). The report previously surfaced only the FINAL poll
+    // plus the LAST reset, so a settle-time failure could not be pinned to the
+    // reason that actually truncated the stable window (leadership-signature
+    // flip vs in-flight ops vs spread). Each reset records its reason AND the
+    // discriminating signals (leaderSignature/leaderQuietElapsedMs to tell a
+    // real raft change from an AVAILABLE-map flicker; effectiveInFlightCount).
+    // Bounded so a long stall cannot grow the report unbounded.
+    const candidateWindowResetHistory = [];
+    const QUIESCENCE_RESET_HISTORY_CAP = 64;
+    const recordCandidateWindowResetHistory = (
+      reset,
+      quiescenceSnapshot,
+      snapshotProbe,
+      observedAtMs,
+    ) => {
+      if (!reset) {
+        return;
+      }
+      candidateWindowResetHistory.push(Object.freeze({
+        observedAtMs,
+        state: reset.state ?? quiescenceSnapshot?.state ?? null,
+        canonicalBlocker:
+          reset.canonicalBlocker ?? quiescenceSnapshot?.canonicalBlocker ?? null,
+        reasonCodes: Object.freeze([
+          ...(Array.isArray(reset.reasonCodes) ? reset.reasonCodes : []),
+        ]),
+        leaderQuietElapsedMs: quiescenceSnapshot?.leaderQuietElapsedMs ?? null,
+        effectiveInFlightCount:
+          quiescenceSnapshot?.effectiveInFlightCount ?? null,
+        staleInFlightCount: quiescenceSnapshot?.staleInFlightCount ?? null,
+        leaderSignature: snapshotProbe?.leaderSignature ?? null,
+        leaderCount: snapshotProbe?.leaderCount ?? null,
+      }));
+      if (candidateWindowResetHistory.length > QUIESCENCE_RESET_HISTORY_CAP) {
+        candidateWindowResetHistory.splice(
+          ZERO,
+          candidateWindowResetHistory.length - QUIESCENCE_RESET_HISTORY_CAP,
+        );
+      }
+    };
     // CL-031: when the snapshot probe fails on every node (e.g. 'Max payload
     // size exceeded') the quiesce oracle is BLIND — the failure must classify
     // as oracle_blind, never as a quiesce stall/timeout.
@@ -204,6 +245,12 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
                 quiescenceSnapshot,
                 nowMs,
               );
+            recordCandidateWindowResetHistory(
+              candidateWindowReset,
+              quiescenceSnapshot,
+              snapshotProbe,
+              nowMs,
+            );
             quiescenceSnapshot = Object.freeze({
               ...quiescenceSnapshot,
               candidateWindowReset,
@@ -285,6 +332,12 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
                 quiescenceSnapshot,
                 nowMs,
               );
+            recordCandidateWindowResetHistory(
+              candidateWindowReset,
+              quiescenceSnapshot,
+              snapshotProbe,
+              nowMs,
+            );
             quiescenceSnapshot = Object.freeze({
               ...quiescenceSnapshot,
               candidateWindowReset,
@@ -452,6 +505,9 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
           pollResult.lastResult?.controlPlanePressureSignals || [],
         candidateWindowReset:
           pollResult.lastResult?.candidateWindowReset || null,
+        candidateWindowResetHistory: Object.freeze([
+          ...candidateWindowResetHistory,
+        ]),
         partitionGroupInFlight:
           pollResult.lastResult?.partitionGroupInFlight || {},
         criticalSystemTopology:
@@ -555,6 +611,9 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         pollResult.lastResult?.replicaOperationDrainRows || [],
       candidateWindowReset:
         pollResult.lastResult?.candidateWindowReset || null,
+      candidateWindowResetHistory: Object.freeze([
+        ...candidateWindowResetHistory,
+      ]),
       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
       leaderQuietElapsedMs:
         pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO,
