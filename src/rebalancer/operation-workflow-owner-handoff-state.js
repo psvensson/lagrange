@@ -204,16 +204,33 @@ function withOwnerHandoffState(Base) {
      * @private
      */
     async wakeCoordinatorCreatedRemoteOwner(operation) {
+      if (!operation?.operationId) {
+        return false;
+      }
+
+      const ownerNodeId =
+        this.resolveCoordinatorCreatedOperationOwnerNodeId(operation);
+
+      // A self-owned operation must never be woken through the transport to its
+      // own `${nodeId}/service/replica-dispatch` ingress. During restart
+      // re-init the recovery timer (rebalance-coordinator init) starts before
+      // the dispatch-service ingress handler registers (control-plane-setup.js
+      // coordinator-init precedes dispatch-service-init), so the router's
+      // deliverLocal self short-circuit falls through to a websocket self-send
+      // that fails ROUTER_CONNECTION_CLOSED and re-drives forever. Dispatch it
+      // in-process on the owner's own lane instead (mirrors the DISPATCH_LOCAL
+      // arm; remote follow-up scheduling is already a no-op for self ownership).
+      if (ownerNodeId && ownerNodeId === this.nodeId) {
+        return this.dispatchSelfOwnedCoordinatorCreatedHandoff(operation);
+      }
+
       if (
-        !operation?.operationId ||
         !this.messageRouter ||
         typeof this.messageRouter.deliver !== TYPEOF.FUNCTION
       ) {
         return false;
       }
 
-      const ownerNodeId =
-        this.resolveCoordinatorCreatedOperationOwnerNodeId(operation);
       const target = this.buildCoordinatorCreatedDispatchIngress(ownerNodeId);
       if (!target) {
         return false;
@@ -277,6 +294,49 @@ function withOwnerHandoffState(Base) {
         return true;
       } catch (error) {
         if (this.deferCoordinatorCreatedRemoteHandoffRetry(operation, error)) {
+          return false;
+        }
+        throw error;
+      }
+    }
+
+    /**
+     * Dispatch a coordinator-created operation whose resolved owner is this
+     * node on the canonical owner lane instead of the replica-dispatch
+     * transport ingress. Routes through dispatchOperation so it acquires the
+     * owner single-flight lane (no concurrent double-claim) and honors the
+     * initialized/shutdown gate — during restart re-init an uninitialized owner
+     * cleanly defers in-process rather than emitting a failing self-send. On a
+     * transient error it re-drives through the same transition retry path the
+     * DISPATCH_LOCAL arm uses, keeping the wake-up caller contract intact.
+     *
+     * @param {Object} operation
+     * @return {Promise<boolean>}
+     * @private
+     */
+    async dispatchSelfOwnedCoordinatorCreatedHandoff(operation) {
+      this.clearCreatedOperationHandoffRetry(operation.operationId);
+      try {
+        const dispatchResult = await this.dispatchOperation(operation, {
+          skipWhenOwnerLaneHeld: true,
+        });
+        return (
+          dispatchResult?.success === true ||
+          dispatchResult?.reason ===
+            REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING
+        );
+      } catch (error) {
+        if (
+          this.deferCoordinatorCreatedOperationTransitionRetry(
+            operation.operationId,
+            operation,
+            error,
+            {
+              includeOperationSnapshot: true,
+              partitionId: operation.partitionId || null,
+            },
+          )
+        ) {
           return false;
         }
         throw error;
