@@ -1,11 +1,11 @@
 ---
 scope: index
-status: manual-pack
+status: generated
 always_load: false
 source_of_truth: self
 ---
 
-> **Manual pack — edit here directly.** This is a pure file index for the LLM steering pack directory. Load order is owned by [`AGENTS.md`](../../../AGENTS.md). Do not duplicate the load sequence here.
+> **Generated — do not hand-edit.** This file is emitted by `renderReadme` in [`scripts/generate-steering-llm-pack.js`](../../../scripts/generate-steering-llm-pack.js); regenerate with `npm run steering:llm:pack`. A direct edit is overwritten on the next run. This is a pure file index for the LLM steering pack directory; load order is owned by [`AGENTS.md`](../../../AGENTS.md). Do not duplicate the load sequence here.
 
 # Steering LLM Pack — Index
 

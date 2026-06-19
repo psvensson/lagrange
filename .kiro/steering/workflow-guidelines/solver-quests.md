@@ -166,12 +166,17 @@ by default pushes — each Quest's own scope-clean work as it progresses: after 
 **every measured attempt of an autonomous `run`**, and on every autonomous-run
 terminal as a final flush. Each auto-commit refuses when `audit` does not
 pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
-carries the `Co-authored-by: Copilot` trailer. It is a no-op outside a git work
+carries a `Co-Authored-By:` trailer for the agent that drove the loop. It is a
+no-op outside a git work
 tree, on a non-measuring sample, and when the changeRef does not resolve. Push is
 best-effort: a failure is non-fatal and the commit is kept. Suppress pushing with
 `--no-push` or `SOLVER_NO_PUSH=1`; throttle volume with `--commit-every N` /
 `--push-every N`; disable per-attempt commits with `--no-commit` (the terminal
 flush still commits).
+
+For the always-load commit-on-completion default — which also covers ad-hoc,
+non-Quest work (finished work is committed, not left pending) — see core.md
+"Default Posture: Commit On Completion".
 
 ## Convergence Guards
 
@@ -637,8 +642,11 @@ Long-running agents drift or oscillate. A reflection turn is a bounded, pure
 to step back and re-read its own situation:
 
 ```
-node scripts/solve.js reflect --id <id> [--frontier <fid>] [--altitude] [--note "<text>"]
+node scripts/solve.js reflect --id <id> --note "<text>" [--frontier <fid>] [--altitude]
 ```
+
+(`--note` is mandatory: it is the recorded artifact, so `reflect` refuses a
+missing or blank note.)
 
 There are two reflection **kinds**, recorded on the `EVENT_REFLECTION` event as
 `kind: "micro"` or `kind: "altitude"`. The loop checks **altitude first** (it

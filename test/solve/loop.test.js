@@ -365,7 +365,7 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
       'the HEAD commit is the terminal commit, not a checkpoint');
     const msg = execFileSync('git', ['log', '-1', '--format=%B'],
       {cwd: root, encoding: 'utf8'});
-    t.match(msg, /Co-authored-by: Copilot/, 'the commit carries the co-author trailer');
+    t.match(msg, /Co-Authored-By: Claude/, 'the commit carries the co-author trailer');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

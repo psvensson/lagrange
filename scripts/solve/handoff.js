@@ -21,6 +21,7 @@ import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {SOLVE_DATA_DIR, CONFIG_FILE} from './constants.js';
 import {
   loadQuest,
   readLog,
@@ -132,11 +133,29 @@ export function buildHandoff(root, quest, options = {}) {
     inScope,
     outOfScope,
     summary: quest.statement || quest.id,
+    coauthorTrailer: resolveCoauthorTrailer(root),
   };
 }
 
-const COAUTHOR_TRAILER =
-  'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
+// The agent that drives this Solver is the commit's co-author. Default to the
+// Claude trailer (the assistant that runs the autonomous loop here) rather than a
+// hard-coded vendor; allow `solve/config.json` { "coauthorTrailer": "..." } to
+// override it so the attribution follows whoever actually runs the loop and never
+// silently drifts from the active agent.
+const DEFAULT_COAUTHOR_TRAILER =
+  'Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>';
+
+function resolveCoauthorTrailer(root) {
+  try {
+    const file = path.join(root, SOLVE_DATA_DIR, CONFIG_FILE);
+    const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const trailer = config.coauthorTrailer;
+    if (typeof trailer === 'string' && trailer.trim()) return trailer.trim();
+  } catch {
+    // No config / unreadable / no override key — fall back to the default.
+  }
+  return DEFAULT_COAUTHOR_TRAILER;
+}
 
 function commitMessage(handoff) {
   // Checkpoints are squashable, mid-quest saves of one verified attempt; the
@@ -144,7 +163,8 @@ function commitMessage(handoff) {
   const subject = handoff.checkpoint ?
     `checkpoint(quest): ${handoff.questId}: ${handoff.summary}` :
     `${handoff.questId}: ${handoff.summary}`;
-  return `${subject}\n\n${COAUTHOR_TRAILER}`;
+  const trailer = handoff.coauthorTrailer || DEFAULT_COAUTHOR_TRAILER;
+  return `${subject}\n\n${trailer}`;
 }
 
 function gitCommands(handoff) {

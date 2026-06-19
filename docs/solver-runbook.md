@@ -391,8 +391,9 @@ single bad `git checkout` can never lose it. This happens automatically:
 
 Each auto-commit obeys the same rules as `handoff`: it refuses when `audit` does
 not pass (a scope-clean commit of dishonest evidence is still dishonest), stages
-only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the
-`Co-authored-by: Copilot` trailer. It is a no-op outside a git work tree, on a
+only the Quest's in-scope pathspec (never the dirty-tree shape), and carries a
+`Co-Authored-By:` trailer attributing the agent that drove the loop (default: the
+Claude trailer; override via `solve/config.json` `coauthorTrailer`). It is a no-op outside a git work tree, on a
 non-measuring sample, and when the attempt's `changeRef` does not resolve.
 
 Push is best-effort: a push failure (no remote, no auth) is non-fatal and the

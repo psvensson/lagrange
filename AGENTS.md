@@ -17,10 +17,14 @@ The Solver owns work execution:
 
 - `node scripts/solve.js new --id <id> --statement "<sealed result>"` creates a
   Quest draft.
-- `node scripts/solve.js step --id <id>` starts a supervised attempt.
+- `node scripts/solve.js step --id <id>` begins a supervised attempt — it pins
+  the frontier and prints the rung dossier; it records nothing until you commit.
 - `node scripts/solve.js step --id <id> --commit --changeRef diff:<path>`
   records the measured result of that attempt.
-- `node scripts/solve.js run --id <id>` runs the Quest loop to a terminal.
+- `node scripts/solve.js run --id <id> --executor agent --yes --keep-alive` runs
+  the Quest loop to a terminal. The bare `run --id <id>` uses the default `dry`
+  executor — a skeleton that makes no real edits — so real autonomous work needs
+  `--executor agent --yes` (and `--keep-alive` to survive non-terminal gates).
 - `node scripts/solve.js report --id <id>` writes the Quest report.
 
 Archived execution artifacts may remain in the repository, but they are not the
@@ -87,9 +91,10 @@ Prefer these canonical tools before raw JSON, log slicing, or ad-hoc queries:
 - **Quest scaffold**: `node scripts/solve.js new --id <id> --statement "<sealed result>"`
 - **Quest status**: `node scripts/solve.js status --id <id>`
 - **Quest supervised step**: `node scripts/solve.js step --id <id>`
-- **Quest autonomous run**: `node scripts/solve.js run --id <id>`
+- **Quest autonomous run**: `node scripts/solve.js run --id <id> --executor agent --yes --keep-alive` (bare `run --id <id>` is the no-op `dry` executor)
 - **Quest report**: `node scripts/solve.js report --id <id>`
 - **Quest probe**: `node scripts/solve.js probe ...`
+- **Full command reference**: [`.kiro/steering/llm/solve-commands.md`](.kiro/steering/llm/solve-commands.md) (generated; every `solve.js` subcommand)
 - **Steering Pack Refresh**: `npm run steering:llm:pack` after editing any
   source listed in `.kiro/steering/llm-pack.config.json`, including nested
   `.kiro/steering/**/*.md` files.

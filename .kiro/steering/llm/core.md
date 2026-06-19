@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: .kiro/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-19
 ---
 
 > **Manual pack - edit here directly.** This file is the always-load operating
@@ -73,6 +73,21 @@ honestly EXHAUST this Quest and author the higher-altitude Quest/epic, capturing
 insight durably first (finding / epic / system theory). See solver-quests.md
 "Mandatory Step-Back Reflection Turn".
 
+## Default Posture: Commit On Completion
+
+When a unit of work is complete and coherent — a Quest terminal, a bug fix, a
+docs or tooling change, any task you would report as "done" — **commit it.** Do
+not leave finished work sitting uncommitted waiting to be asked. The user has
+durably authorized committing completed work, so a commit is NOT an Authorization
+stop-trigger; only never-before-authorized *pushes/publishes* still pause under
+"Default Posture: Autonomy".
+
+Scope every commit to the work at hand (the Quest's or task's own files), never
+sweeping unrelated dirty worktree entries (see solver-quests.md "Git Handoff").
+This applies to ad-hoc work just as much as to Quests; for Quests the Solver's
+post-audit commit handoff already does it. Work on `main` (the user's standing
+directive), and end commit messages with the configured co-author trailer.
+
 ## Default Posture: Parallelism
 
 When sub-tasks are independent, run them concurrently rather than in sequence:
@@ -131,9 +146,10 @@ Use this list before non-trivial work:
 13a. **Do not keep patching a sealed Quest when an altitude reflection shows the
     lever is out of its scope**; capture the insight durably (finding / epic /
     system theory), then honestly EXHAUST and author the higher-altitude Quest/epic.
-14. **Do not hand off solved Quest work without git durability**; after Solver
-    audit passes, commit and push all Quest-scoped changes, excluding unrelated
-    dirty worktree entries.
+14. **Do not leave completed work uncommitted**; commit every finished, coherent
+    unit of work (a Quest terminal or an ad-hoc task), scoped to its own files and
+    excluding unrelated dirty worktree entries. For Quests this is the post-audit
+    commit-and-push handoff. See "Default Posture: Commit On Completion".
 15. **Do not hand off Quest source changes without subagent verification**;
     spawn a subagent verifier and record a Solver finding with evidence
     `subagent:<id>` before audit/git handoff.
@@ -158,6 +174,10 @@ reinvent one. Discovery surfaces:
   (see [operational-ground-truth.md](../operational-ground-truth.md)).
 
 ## Canonical Guardrail Command Map
+
+This table covers the guardrail-relevant subset. For the COMPLETE, generated list
+of every `solve.js` subcommand (with usage), see
+[`solve-commands.md`](solve-commands.md).
 
 | Abstract Rule / Constraint | Canonical CLI Guardrail Command | Enforced By File/Script |
 | --- | --- | --- |

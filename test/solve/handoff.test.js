@@ -229,10 +229,10 @@ tap.test('auto commit+push (R1)', async (t) => {
       const status = execFileSync('git', ['status', '--porcelain', '-uall'],
         {cwd: root, encoding: 'utf8'});
       t.match(status, /src\/unrelated\.js/, 'unrelated file is left uncommitted');
-      // The commit message carries the Co-authored-by trailer.
+      // The commit message carries the Co-Authored-By trailer.
       const msg = execFileSync('git', ['log', '-1', '--format=%B'],
         {cwd: root, encoding: 'utf8'});
-      t.match(msg, /Co-authored-by: Copilot/, 'includes the co-author trailer');
+      t.match(msg, /Co-Authored-By: Claude/, 'includes the co-author trailer');
       fs.rmSync(root, {recursive: true, force: true});
       t.end();
     });

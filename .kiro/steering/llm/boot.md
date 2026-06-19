@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: .kiro/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-19
 ---
 
 > **Manual pack - edit here directly.** Load order is owned by
@@ -49,9 +49,13 @@ node scripts/solve.js new --id <id> --statement "<sealed result>"
 node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
 ```
 
-`--yes` only auto-advances non-terminal gates (e.g. MAX_CYCLES, THEORY_REQUIRED);
-it does not override the core.md "Default Posture: Autonomy" stop-triggers
-(Authorization / Goalpost ambiguity / EXHAUSTED / Safety), which still pause the run.
+`--yes` confirms that the `agent` executor may make real edits — without it,
+`--executor agent` refuses to run (it never silently mutates the tree). `--yes`
+does **not** advance gates: surviving non-terminal gates (MAX_CYCLES,
+THEORY_REQUIRED, recoverable BLOCKED) across restarts is what `--keep-alive` does
+via the supervisor. Neither flag overrides the core.md "Default Posture: Autonomy"
+stop-triggers (Authorization / Goalpost ambiguity / EXHAUSTED / Safety), which
+still pause the run.
 
 For human-paced or exploratory work, drive it step by step instead:
 
@@ -88,6 +92,9 @@ To close or inspect:
 ```sh
 node scripts/solve.js report --id <id>
 ```
+
+Commit completed work by default — committing is durably authorized, so do not
+wait to be asked. See core.md "Default Posture: Commit On Completion".
 
 ## Conflict Rule And Escape Hatch
 
