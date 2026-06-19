@@ -267,6 +267,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   RECONCILE_FAILED_NOT_FOUND:
     'Reconciled SYNCING operation to FAILED - replica not found',
   RECONCILE_IN_PROGRESS: 'SYNCING operation still in progress',
+  LATE_DISPATCH_HONOR_FAILED:
+    'Failed to honor late dispatch delivery confirmation',
   SHUTDOWN: 'Shutting down RebalanceCoordinator',
   DUPLICATE_OPERATION: 'Duplicate operation detected, reusing existing',
   REUSED_IN_FLIGHT_OPERATION: 'Reusing in-flight operation for planned move',

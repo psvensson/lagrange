@@ -166,6 +166,7 @@ class RebalanceCoordinator extends EventEmitter {
       );
       this._boundOutcomeHandler = null;
     }
+    this.unbindLateDispatchDeliveryHonoredListener();
     if (this.cacheChangeListener &&
         typeof this.systemTableCache?.offCacheChange === LOCAL_STR_FUNCTION) {
       this.unbindSystemTableCacheListener();

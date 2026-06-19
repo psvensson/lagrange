@@ -189,6 +189,7 @@ const TRANSPORT_EVENT = Object.freeze({
   TIMEOUT: 'timeout',
   RESPONSE: 'response',
   SHUTDOWN: 'shutdown',
+  LATE_RESPONSE_HONORED: 'lateResponseHonored',
 });
 
 const TRANSPORT_SUBSYSTEM = Object.freeze({

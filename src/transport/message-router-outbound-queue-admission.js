@@ -102,6 +102,7 @@ function buildServiceResponseDisposition(options = {}) {
     retiredReason: normalizeIdentifier(options?.retiredReason) || null,
     deliverySource: normalizeIdentifier(options?.deliverySource) || null,
     targetNodeId: normalizeIdentifier(options?.targetNodeId) || null,
+    responseContext: normalizeIdentifier(options?.responseContext) || null,
   });
 }
 

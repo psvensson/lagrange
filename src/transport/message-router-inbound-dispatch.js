@@ -336,6 +336,20 @@ class MessageRouterInboundDispatch {
       return;
     }
     if (disposition.absorbed === true) {
+      // A non-error response that arrives after its waiter was retired still
+      // proves the peer received and handled the request. When the caller
+      // supplied an opaque responseContext, surface the late confirmation so the
+      // caller can stop re-driving a duplicate. The absorb disposition, log, and
+      // counters are unchanged for callers with no listener.
+      if (disposition.responseContext && !error) {
+        this.emit(TRANSPORT_EVENT.LATE_RESPONSE_HONORED, {
+          messageId,
+          deliverySource: disposition.deliverySource,
+          targetNodeId: disposition.targetNodeId,
+          responseContext: disposition.responseContext,
+          retiredReason: disposition.retiredReason,
+        });
+      }
       this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
         messageId,
         ignoredRetiredPending: true,

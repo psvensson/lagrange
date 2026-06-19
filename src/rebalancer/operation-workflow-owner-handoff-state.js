@@ -241,6 +241,7 @@ function withOwnerHandoffState(Base) {
         timeoutMs: this.replicaOperationDispatchTimeoutMs,
         deliverySource:
           OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+        responseContext: operation.operationId,
       };
       if (
         isPriorityControlPlanePartition({
@@ -297,6 +298,61 @@ function withOwnerHandoffState(Base) {
           return false;
         }
         throw error;
+      }
+    }
+
+    /**
+     * Honor a late dispatch SERVICE_RESPONSE whose pending waiter was already
+     * retired (deferred / ack-timeout) so the coordinator stops re-driving a
+     * duplicate dispatch. The late response only confirms the target received
+     * and enqueued the dispatch, so this replaces the tight handoff retry with
+     * the slower-cadence follow-up the successful-wake path arms; actual
+     * completion still arrives through the normal async executor-outcome and
+     * reconcile paths. Scoped to coordinator-created remote handoff deliveries
+     * that carry the operation id as their response context.
+     *
+     * @param {Object|null} event
+     * @return {Promise<void>}
+     */
+    async onLateDispatchDeliveryHonored(event) {
+      if (
+        this.isShuttingDown ||
+        event?.deliverySource !==
+          OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF
+      ) {
+        return;
+      }
+      const operationId = event?.responseContext || null;
+      if (
+        !operationId ||
+        !this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+      ) {
+        return;
+      }
+      try {
+        const operation =
+          await this.getDeferredDispatchRetryOperation(operationId);
+        if (!this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+          return;
+        }
+        if (!operation || this.repository.isOperationTerminal(operation)) {
+          this.clearCreatedOperationHandoffRetry(operationId);
+          return;
+        }
+        this.resetCreatedOperationHandoffRetryAttempts(operationId);
+        this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+          operation,
+          COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
+          {replaceExisting: true},
+        );
+      } catch (error) {
+        this.logger.debug(
+          REBALANCE_COORDINATOR_LOG_MSG.LATE_DISPATCH_HONOR_FAILED,
+          {
+            operationId,
+            error: error?.message || String(error),
+          },
+        );
       }
     }
 

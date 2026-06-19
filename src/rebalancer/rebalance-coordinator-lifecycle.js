@@ -38,6 +38,7 @@ const {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
   StartupRecoveryCoordinator,
+  TRANSPORT_EVENT,
   assertCritical,
   createControlPlaneRuntimeBundle,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -258,6 +259,7 @@ class RebalanceCoordinatorLifecycle {
       options.executorOutcomeEmitter ||
       new ExecutorOutcomeEmitter({logger: this.logger});
     this._boundOutcomeHandler = null;
+    this._boundLateDispatchDeliveryHonoredHandler = null;
     this.cacheChangeListener = null;
     this._boundTerminalOperationIntentPruner = null;
 
@@ -529,6 +531,7 @@ class RebalanceCoordinatorLifecycle {
       OUTCOME_EVENT_NAME,
       this._boundOutcomeHandler,
     );
+    this.bindLateDispatchDeliveryHonoredListener();
     this.bindSystemTableCacheListener();
     this.bindTerminalOperationIntentPruner();
 
@@ -543,6 +546,51 @@ class RebalanceCoordinatorLifecycle {
     }
 
     this.initialized = true;
+  }
+
+  /**
+   * Subscribe to transport late-response-honored events. When a
+   * coordinator-created remote handoff whose pending waiter was already retired
+   * receives a late delivery confirmation, the workflow owner stops re-driving a
+   * duplicate dispatch. The owner filters the event and reconciles its operation.
+   * @private
+   */
+  bindLateDispatchDeliveryHonoredListener() {
+    if (
+      this._boundLateDispatchDeliveryHonoredHandler ||
+      !this.messageRouter ||
+      typeof this.messageRouter.on !== LOCAL_STR_FUNCTION
+    ) {
+      return;
+    }
+    this._boundLateDispatchDeliveryHonoredHandler = (event) => {
+      if (this.isShuttingDown || !this.workflowOwner) {
+        return;
+      }
+      void this.workflowOwner.onLateDispatchDeliveryHonored(event);
+    };
+    this.messageRouter.on(
+      TRANSPORT_EVENT.LATE_RESPONSE_HONORED,
+      this._boundLateDispatchDeliveryHonoredHandler,
+    );
+  }
+
+  /**
+   * Remove the transport late-response-honored listener.
+   * @private
+   */
+  unbindLateDispatchDeliveryHonoredListener() {
+    if (
+      this._boundLateDispatchDeliveryHonoredHandler &&
+      this.messageRouter &&
+      typeof this.messageRouter.removeListener === LOCAL_STR_FUNCTION
+    ) {
+      this.messageRouter.removeListener(
+        TRANSPORT_EVENT.LATE_RESPONSE_HONORED,
+        this._boundLateDispatchDeliveryHonoredHandler,
+      );
+    }
+    this._boundLateDispatchDeliveryHonoredHandler = null;
   }
 
   /**

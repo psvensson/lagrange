@@ -157,6 +157,7 @@ class MessageRouterPendingResponseLedger {
           RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
         deliverySource: retiredPendingResponse.deliverySource || null,
         targetNodeId: retiredPendingResponse.targetNodeId || null,
+        responseContext: retiredPendingResponse.responseContext || null,
       });
     }
     return buildServiceResponseDisposition({
@@ -223,6 +224,7 @@ class MessageRouterPendingResponseLedger {
           RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
       deliverySource: normalizeIdentifier(pending?.deliverySource) || null,
       targetNodeId: normalizeIdentifier(pending?.targetNodeId) || null,
+      responseContext: normalizeIdentifier(pending?.responseContext) || null,
       expiresAtMs: effectiveNowMs + this.getRetiredPendingResponseGraceMs(),
     });
   }
@@ -261,6 +263,7 @@ class MessageRouterPendingResponseLedger {
         timeoutId: null,
         targetNodeId,
         deliverySource: normalizeIdentifier(options?.deliverySource) || null,
+        responseContext: normalizeIdentifier(options?.responseContext) || null,
       });
     });
   }

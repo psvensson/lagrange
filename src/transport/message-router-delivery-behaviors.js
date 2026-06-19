@@ -263,6 +263,7 @@ export async function deliverRemote(
   }
   const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
     deliverySource: resolveDeliverySource(targetAddress, payload, options),
+    responseContext: options.responseContext,
   });
   let earlyResponseError = null;
   responsePromise.catch((error) => {

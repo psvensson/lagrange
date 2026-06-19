@@ -60,6 +60,7 @@ import {
   TIME_MS,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
+import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -273,6 +274,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   RESERVATION_REASON,
   RESERVATION_STATUS,
   ReplicaOperationField,
+  TRANSPORT_EVENT,
   ReplicaOperationRepository,
   SERVICE_TYPE,
   STRING,
