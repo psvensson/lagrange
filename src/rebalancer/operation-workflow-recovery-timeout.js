@@ -287,44 +287,55 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   /**
-   * Leadership-handoff-durable safety net for the SYNCING->ACTIVE advance.
+   * Level-triggered operation-liveness reconciler — the holistic safety net for
+   * the whole ORPHANED-OPERATION class, not one shape of it.
    *
-   * The normal advance is driven by an in-memory executor-outcome event on the
-   * operation's owner. When owner/leadership churn drops that event the row is
-   * orphaned at SYNCING forever: nothing else re-drives it (handleRecovery is
-   * never wired post-startup, and the timeout path only acts past the step
-   * timeout). Here every periodic sweep re-drives owned SYNCING rows whose
-   * replica is observed ACTIVE with a plain replica-status reconcile. Scoped to
-   * SYNCING (never pre-sync), so a legitimately in-flight PENDING/SENDING/
-   * CREATING op is never touched. A still-syncing replica is left for the normal
-   * timeout path. The authoritative re-read under the operation lock is the
-   * source of truth: if the replica has since diverged to a terminal failure,
-   * the standard recovery lifecycle retires the row (exactly as handleRecovery
-   * would) — that is the correct outcome, not a regression.
+   * Operation progress is normally EDGE-triggered (an in-memory executor-outcome
+   * event + dispatch-pending re-entry triggers on the owner). Those edges are
+   * LOST across owner/leadership churn, and each ad-hoc re-drive path is gated on
+   * a narrow phase/step predicate (phase===DISPATCH_PENDING, step===SYNCING, ...),
+   * so an op stuck in any off-predicate state is orphaned forever — the recovery
+   * reconcile never fires. We kept discovering this one shape at a time
+   * (phantom-SYNCING; then the persisted-not-dispatched terminal-phase zombie).
    *
-   * Uses its own authoritative-preferred discovery (mirroring handleRecovery)
-   * rather than the surrounding timeout sweep's cache-bounded observation, so an
-   * orphaned row that is invisible to the local cache boundary is still found.
+   * Instead of another per-shape sibling, this drives the existing level-triggered
+   * reconcile-to-truth core (reconcileOperationLifecycle) for EVERY locally-owned
+   * non-terminal op that ground truth says is actionable, on the coordinator's
+   * periodic timer — independent of which edge was supposed to fire. It uses the
+   * NON-DESTRUCTIVE PROGRESS cause (never RECOVERY), so the pre-sync FAIL semantics
+   * that make startup handleRecovery destructive can never fire here. It is bounded
+   * to be a SAFETY NET, not a competitor to the edge path:
+   *   - locally-owned + single-flight (re-reads under the op lock → idempotent, no
+   *     double-dispatch, preserves the single-writer guarantee);
+   *   - self-throttled to the empty-scan backoff cadence (no SQL hammering);
+   *   - its own authoritative-preferred discovery, so an orphan invisible to the
+   *     cache-bounded checkTimeouts sweep is still found;
+   *   - acts ONLY on an op whose replica has reached an actionable terminal/active
+   *     truth the row has not applied (prompt — e.g. phantom-SYNCING), OR that is
+   *     STALE past its step timeout (the edge path is demonstrably not driving it —
+   *     e.g. a never-dispatched surplus REMOVE). A genuinely in-flight op that is
+   *     still progressing within its step budget is left untouched.
+   * Quorum/remove-safety is enforced inside reconcileOperationLifecycle (drain
+   * snapshot + evaluateRemoveSafety) before any action, so this inherits it.
    *
-   * Runs on the coordinator's periodic timer (not inside the cache-bounded
-   * checkTimeouts sweep), self-throttled to the empty-scan backoff cadence so
-   * its authoritative read does not hammer SQL.
+   * Scope: the orphaned-EXISTING-op class. It does NOT manufacture ops the planner
+   * never created, nor fix transport/2PC dispatch failures — those are distinct.
    *
    * @return {Promise<void>}
    */
-  async reconcileCompletedSyncingOperations() {
+  async reconcileOrphanedOperations() {
     if (this.isShuttingDown || !this.isInitialized) {
       return;
     }
     const now = this.resolveTimeoutCheckNowMs();
-    const lastReconcileAtMs = this.lastOrphanedSyncingReconcileAtMs ?? NUM.ZERO;
+    const lastReconcileAtMs = this.lastOrphanedOperationReconcileAtMs ?? NUM.ZERO;
     if (
       lastReconcileAtMs > NUM.ZERO &&
       now - lastReconcileAtMs < this.incompleteOperationQueryEmptyBackoffMs
     ) {
       return;
     }
-    this.lastOrphanedSyncingReconcileAtMs = now;
+    this.lastOrphanedOperationReconcileAtMs = now;
 
     const cachedIncompleteOps =
       this.repository.hasReplicaOperationCacheObservationBoundary() ?
@@ -339,42 +350,82 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     const incompleteOps = Array.isArray(observation?.operations) ?
       observation.operations :
       [];
-    const syncingOps = incompleteOps.filter((op) =>
+    const ownedOps = incompleteOps.filter((op) =>
       op &&
-      op.workflowStep === WORKFLOW_STEP.SYNCING &&
       !this.repository.isOperationTerminal(op) &&
       this.repository.isOperationLocallyOwned(op),
     );
-    if (syncingOps.length === NUM.ZERO) {
+    if (ownedOps.length === NUM.ZERO) {
       return;
     }
     await Promise.all(
-      syncingOps.map(async (op) => {
-        // Act solely on rows whose replica is observed ACTIVE. A still-syncing
-        // replica is left untouched for the normal timeout path. (If the
-        // authoritative re-read under the lock finds the replica has since
-        // failed, reconcileSyncingOperation retires the row via the standard
-        // recovery lifecycle — the correct outcome for a failed replica.)
-        let actualStatus = null;
-        try {
-          actualStatus = await this.getReconciledReplicaStatus(
-            op.replicaId,
-            op.partitionId,
-            op.targetNodeId,
-          );
-        } catch {
-          return;
-        }
-        if (actualStatus !== ReplicaStatus.ACTIVE) {
+      ownedOps.map(async (op) => {
+        if (!(await this.shouldReconcileOrphanedOperation(op, now))) {
           return;
         }
         await this.operationWorkflowRunExclusive(
           this.getOperationOwnerSingleFlightKey(op.operationId),
-          () => this.reconcileSyncingOperation(op),
+          () =>
+            this.reconcileOperationLifecycle(op, {
+              cause: OPERATION_WORKFLOW_OWNER_LITERAL.PROGRESS,
+              now,
+            }),
         ).catch((error) =>
-          this.handleReplicaOperationReconcileError(op, error, 'syncing_redrive'),
+          this.handleReplicaOperationReconcileError(op, error, 'orphan_redrive'),
         );
       }),
+    );
+  }
+
+  /**
+   * Gate for the level-triggered orphan reconciler: act ONLY on an op that is
+   * either (a) behind an actionable replica truth (the replica reached
+   * ACTIVE/REMOVED/FAILED but the row has not applied it — drive it promptly,
+   * e.g. phantom-SYNCING), or (b) STALE past its current step timeout (the edge
+   * path is demonstrably not progressing it — e.g. a never-dispatched surplus
+   * REMOVE). A genuinely in-flight op still within its step budget is skipped so
+   * the reconciler never races the edge path or fails healthy work.
+   *
+   * @param {Object} op
+   * @param {number} now
+   * @return {Promise<boolean>}
+   */
+  async shouldReconcileOrphanedOperation(op, now) {
+    // Cheap, synchronous staleness check FIRST: a stale op is re-driven
+    // regardless of replica status, so it needs no authoritative read. This
+    // keeps the per-op authoritative read off the hot path for the common
+    // stale case (matters on the CPU-starved seed). Anchored on the step-entry
+    // timestamp (operation-step-age.js), so same-step dispatch-retry re-stamping
+    // can't keep a wedged op looking fresh (CL-044).
+    const stepEntry = resolveOperationCurrentStepEntry(op);
+    const stepStartedAtMs = Number(stepEntry?.timestamp);
+    if (Number.isFinite(stepStartedAtMs)) {
+      const stepTimeoutMs = this.getTimeoutForStep(op.workflowStep, op);
+      if (
+        Number.isFinite(stepTimeoutMs) &&
+        stepTimeoutMs > NUM.ZERO &&
+        now - stepStartedAtMs >= stepTimeoutMs
+      ) {
+        return true;
+      }
+    }
+    // Otherwise act only when the replica has reached an actionable truth the
+    // operation row has not yet applied (prompt advance-to-truth, e.g. a
+    // SYNCING row whose replica is already ACTIVE).
+    let actualStatus = null;
+    try {
+      actualStatus = await this.getReconciledReplicaStatus(
+        op.replicaId,
+        op.partitionId,
+        op.targetNodeId,
+      );
+    } catch {
+      return false;
+    }
+    return (
+      actualStatus === ReplicaStatus.ACTIVE ||
+      actualStatus === ReplicaStatus.REMOVED ||
+      actualStatus === ReplicaStatus.FAILED
     );
   }
 

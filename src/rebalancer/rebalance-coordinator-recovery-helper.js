@@ -21,11 +21,11 @@ function checkTimeouts(coordinator) {
   return coordinator.workflowOwner.checkTimeouts();
 }
 
-function reconcileCompletedSyncingOperations(coordinator) {
+function reconcileOrphanedOperations(coordinator) {
   if (!coordinator.workflowOwner) {
     return;
   }
-  return coordinator.workflowOwner.reconcileCompletedSyncingOperations();
+  return coordinator.workflowOwner.reconcileOrphanedOperations();
 }
 
 function getTimeoutForStep(coordinator, step, operation = null) {
@@ -226,7 +226,7 @@ function getConcurrentRemoveCount(coordinator, options = {}) {
 
 export {
   checkTimeouts,
-  reconcileCompletedSyncingOperations,
+  reconcileOrphanedOperations,
   getTimeoutForStep,
   reconcileTimeoutOperation,
   reconcileOperationProgress,

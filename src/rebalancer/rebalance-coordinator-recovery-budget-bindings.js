@@ -1,6 +1,6 @@
 import {
   checkTimeouts,
-  reconcileCompletedSyncingOperations,
+  reconcileOrphanedOperations,
   getTimeoutForStep,
   reconcileTimeoutOperation,
   reconcileOperationProgress,
@@ -59,8 +59,8 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
     return checkTimeouts(this);
   }
 
-  async reconcileCompletedSyncingOperations() {
-    return reconcileCompletedSyncingOperations(this);
+  async reconcileOrphanedOperations() {
+    return reconcileOrphanedOperations(this);
   }
 
   getTimeoutForStep(step, operation = null) {

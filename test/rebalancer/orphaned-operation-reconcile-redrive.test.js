@@ -140,7 +140,7 @@ test('orphan-reconcile re-drives an orphaned completed SYNCING op to ACTIVE', as
   const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow});
   coordinator.initialize();
   try {
-    await coordinator.reconcileCompletedSyncingOperations();
+    await coordinator.reconcileOrphanedOperations();
     const after = getOp('op-orphan-1');
     t.equal(after.status, ReplicaStatus.ACTIVE,
       'orphaned SYNCING op is advanced to ACTIVE by the periodic sweep');
@@ -178,7 +178,7 @@ test('orphan-reconcile leaves a still-syncing op untouched (no premature advance
   const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow});
   coordinator.initialize();
   try {
-    await coordinator.reconcileCompletedSyncingOperations();
+    await coordinator.reconcileOrphanedOperations();
     const after = getOp('op-inprogress-1');
     t.equal(after.status, ReplicaStatus.SYNCING,
       'a genuinely in-progress SYNCING op is NOT advanced (non-destructive)');
@@ -220,12 +220,95 @@ test('orphan-reconcile retires a SYNCING op whose replica diverged to FAILED und
   const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow});
   coordinator.initialize();
   try {
-    await coordinator.reconcileCompletedSyncingOperations();
+    await coordinator.reconcileOrphanedOperations();
     const after = getOp('op-diverge-1');
     t.ok(statusReads >= 2, 'both the gate read and the under-lock re-read fired');
     t.equal(after.status, ReplicaStatus.FAILED,
       'a replica that diverged to FAILED is retired (FAILED), not advanced to ' +
       'ACTIVE — the standard recovery lifecycle outcome');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+// ---- Gate unit tests: shouldReconcileOrphanedOperation decides what the
+// level-triggered reconciler acts on. This is the falsifier for generalizing
+// beyond SYNCING (the rank1 stuck-drain shape) WITHOUT racing healthy work. ----
+
+test('gate: reconciler ACTS on an op whose replica reached actionable truth (ACTIVE)', async (t) => {
+  const now = Date.now();
+  const {coordinator} = buildCoordinator({
+    operationRow: {
+      operation_id: 'g1', type: OperationType.ADD, partition_id: 'latency_groups-p1',
+      replica_id: 'g1r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
+      status: ReplicaStatus.SYNCING, workflow_step: 'SYNCING',
+      created_at: now, updated_at: now, completed_at: null, error_message: null,
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+    },
+    serviceRow: {
+      service_id: 'g1r', replica_id: 'g1r', partition_id: 'latency_groups-p1',
+      node_id: 'test-node-1', status: ReplicaStatus.ACTIVE,
+    },
+  });
+  coordinator.initialize();
+  try {
+    const op = {operationId: 'g1', replicaId: 'g1r', partitionId: 'latency_groups-p1',
+      targetNodeId: 'test-node-1', workflowStep: 'SYNCING',
+      stepsHistory: [{step: 'SYNCING', timestamp: now}]};
+    t.equal(await coordinator.workflowOwner.shouldReconcileOrphanedOperation(op, now), true,
+      'replica ACTIVE but row still SYNCING -> act (prompt advance-to-truth)');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('gate: reconciler ACTS on a STALE never-dispatched surplus REMOVE (rank1 shape)', async (t) => {
+  const now = Date.now();
+  const stepStart = now - (10 * 60 * 1000); // 10 min ago >> pendingTimeoutMs (30s)
+  const {coordinator} = buildCoordinator({
+    operationRow: {
+      operation_id: 'g2', type: OperationType.REMOVE, partition_id: 'latency_groups-p1',
+      replica_id: 'g2r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
+      status: ReplicaStatus.PENDING, workflow_step: 'PENDING',
+      created_at: stepStart, updated_at: now, completed_at: null, error_message: null,
+      steps_history: JSON.stringify([{step: 'PENDING', timestamp: stepStart}]),
+    },
+    serviceRow: null, // replica never dispatched -> no service row -> non-actionable status
+  });
+  coordinator.initialize();
+  try {
+    const op = {operationId: 'g2', type: OperationType.REMOVE, replicaId: 'g2r',
+      partitionId: 'latency_groups-p1', targetNodeId: 'test-node-1', workflowStep: 'PENDING',
+      stepsHistory: [{step: 'PENDING', timestamp: stepStart}]};
+    t.equal(await coordinator.workflowOwner.shouldReconcileOrphanedOperation(op, now), true,
+      'a REMOVE stuck PENDING past its step timeout is re-driven (the orphaned-drain class)');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('gate: reconciler SKIPS a genuinely in-flight op still within its step budget (safety)', async (t) => {
+  const now = Date.now();
+  const {coordinator} = buildCoordinator({
+    operationRow: {
+      operation_id: 'g3', type: OperationType.ADD, partition_id: 'latency_groups-p1',
+      replica_id: 'g3r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
+      status: ReplicaStatus.CREATING, workflow_step: 'CREATING',
+      created_at: now, updated_at: now, completed_at: null, error_message: null,
+      steps_history: JSON.stringify([{step: 'CREATING', timestamp: now}]),
+    },
+    serviceRow: {
+      service_id: 'g3r', replica_id: 'g3r', partition_id: 'latency_groups-p1',
+      node_id: 'test-node-1', status: ReplicaStatus.CREATING, // still progressing
+    },
+  });
+  coordinator.initialize();
+  try {
+    const op = {operationId: 'g3', type: OperationType.ADD, replicaId: 'g3r',
+      partitionId: 'latency_groups-p1', targetNodeId: 'test-node-1', workflowStep: 'CREATING',
+      stepsHistory: [{step: 'CREATING', timestamp: now}]};
+    t.equal(await coordinator.workflowOwner.shouldReconcileOrphanedOperation(op, now), false,
+      'a fresh CREATING op with a still-creating replica is NOT touched (no race with edge path)');
   } finally {
     await coordinator.shutdown();
   }

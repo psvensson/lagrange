@@ -283,6 +283,44 @@ diff (rank2), the 1767× shed count (rank4), and the gate-run-3 tail are taken f
 confirm before fixing. Cross-item interaction (does fixing rank2 re-expose rank1 as the binding tail?)
 was flagged, not modeled. No peel-until-dry this run (the next, larger iteration).
 
+## Census results run 3 (2026-06-19, workflow wf_3560afb0; 60 agents, 10 lenses, 48 cand → 44 refuted → 4 survived)
+Full data: test-output/latent-blocker-census-run3.json. Run AFTER the phantom-SYNCING churn-root fix landed
+(374083dc) — gate stat-gate-20260619T094114Z confirms replica_operations_in_flight GONE (effInFlight 2→0,
+quiescence stableElapsedMs 0→41193), 1/3, new dominant = convergence_timeout x2. So this census peels the layer
+BENEATH convergence_timeout. Cluster SAFE every run (all CONVERGED missing=0, 0 corrupt/breach/exit/blind/stale).
+The emergent symptom across all survivors: **a surplus voter never drains back to target=3 within the 120s budget**
+(maxOverTargetMs run1=161291 / run3=89489 > 120000). Ranked frontier (masking DAG: convergence_timeout gate masks
+→ rank4 oracle classifier masks → rank1 product zombie; parallel chain rank2 → rank3):
+- **rank1 (BINDING, peel0, conf0.72, product-bug, med risk, autonomously tractable) = pr-terminal-persisted-zombie-
+  no-redrive.** STRIKINGLY PARALLEL to the phantom-SYNCING bug just fixed: a surplus REPLACE/REMOVE op whose
+  actuationState=persisted_not_dispatched but whose witness workflowProgressPhaseId=TERMINAL is NEVER re-driven,
+  because every dispatch-pending re-entry/drain/remote-retry path AND-gates on workflowProgressPhaseId===
+  DISPATCH_PENDING (operation-workflow-recovery-reconcile-dispatch-pending.js:418-425/:601-605/:674-677;
+  operation-workflow-owner.js:212-219) → phase=terminal yields NOT_DISPATCH_PENDING → SKIP forever. Split-context
+  root: IN_FLIGHT_OPERATION actuation rule (priority-recovery-snapshot-actuation.js:61-96) fires before
+  TERMINAL_OPERATION while the latest context's terminal workflowStep makes the phase TERMINAL
+  (priority-recovery-snapshot-observation.js:143-144). Confirmed VERBATIM in BOTH failing dominantWitnesses (run1
+  replica_operations-p1 c884353d deadline ~229s past; run3 sql_write_operations-p1 994e41e5 ~210s past). Distinct
+  from 374083dc (which is scoped SYNCING && !terminal). FIX = coordinator-timer reconcile sibling to
+  reconcileCompletedSyncingOperations: find persisted_not_dispatched + terminal-phase + past-deadline ops →
+  re-dispatch or retire-and-reissue (the proven pattern). Falsify below-gate via unit on
+  resolvePriorityRecoveryDispatchPendingReentryState / buildPriorityRecoveryDispatchPendingReentryEvidence (both
+  exported).
+- **rank2 (peel0, conf0.62, product-bug) = rebalancer-surplus-remove-deferred-behind-adds-circular** (move-planner):
+  a surplus REMOVE is never kept because a redundant ADD is concurrent. Second entry point to the same over-target.
+- **rank3 (peel1, conf0.62, product-bug) = dp-surplus-remove-replace-transport-and-2pc-failure-loop**: a
+  dispatched surplus REMOVE/REPLACE dies on coordinator-handoff transport (ROUTER_CONNECTION_CLOSED to reconnecting
+  peers) / 2PC with no re-target.
+- **rank4 (peel1, conf0.74, ORACLE-strictness) = pr-spread-satisfied-in-flight-masks-stuck-surplus**: the
+  priority-recovery classifier signs off (closure_satisfied_*, gap=0) so priority_recovery_* is NOT the dominant
+  reason — this classification layer MASKS the product bug beneath from the dominantReason tally.
+RECOMMENDED NEXT: land rank1 (lowest peel, highest-confidence product bug, proven pattern, below-gate-falsifiable),
+add the rank4 staleness guard so the classifier stops masking recurrence, then N>=8 gate to separate residual
+rank2/rank3 transport/planner settle-time from the now-fixed product layer. COVERAGE GAPS (seed next peel):
+raft-leader-churn-resets-quiet-window (cited maskedBy, unverified); readiness_probe_timeout undecomposed;
+product-vs-settle split unresolved at N=2; the intra-row context divergence is one inference deep (needs a DT6/
+playback single-op context-history trace); closure_satisfied_STALE(run1) vs FRESH(run3) publication diff unexplained.
+
 ## Census results run 2 (2026-06-19, workflow wf_55267f58; 34 agents, 26 cand → 15 confirmed → 7 ranked, 4 NEW)
 Full data: test-output/latent-blocker-census-run2.json. Every gate failure is CLASS-2 liveness/settle at the
 step-8 recovery barrier (BEFORE the step-9 consistency check); cluster SAFE every run. THE 4-LAYER PEEL:
