@@ -250,3 +250,20 @@ per-poll quiescence reset-history instrumentation (78148877, observability). Dia
 1/3, best 2/3 on the lucky 180s-window diagnostic). HONEST FRONTIER: remaining fixes are human-gated
 (CL-001 B4 blast radius) or architectural (the cutover). Stopping deep-autonomous-patching here is the
 correctness-over-speed call; the rubber-ducks independently flagged both roots as human-in-the-loop.
+
+## CL-001 OWNER-FACE FIX GATE 2026-06-19 (N=3 061302Z, srcFP 0a73265417858fcb = 4dc9d9e4): 0/3 — but INCONCLUSIVE for CL-001 + CLASS 2 confirmed binding
+run1 FAIL 349s replica_operations_in_flight ("did not quiesce within 300000ms"); run2 FAIL 409s
+convergence_timeout (over-target 153350ms); run3 FAIL 412s pending_acks_present (over-target 154729ms).
+3/3 CONVERGED missing=0, 0 corrupt/breach. **publication_epochs_disagree ABSENT from the tally.** KEY
+INSIGHT: all 3 failed at the POST-RESTART RECOVERY BARRIER (scenario step 8, waitForPostRestartRecovery
+Barrier — quiescence/over-target), which is BEFORE the final consistency check (step 9) where
+epochs_disagree is evaluated. So this gate does NOT validate the CL-001 owner-face fix (runs never
+reached step 9); the below-gate OWNER FACE falsifier remains the load-bearing proof. It DOES prove
+**CLASS 2 (over-target/quiescence settle) gates EARLIER than CLASS 1** — until the cluster quiesces
+within the recovery-barrier budget, runs never reach the publication check. So CLASS 2 is the immediate
+priority. Over-target 153-155s is within historical range (122-159s) = NOT a regression from the owner
+fix (which only adds a cooldown-gated owner-RPC AFTER missing=0/steady, not during the churny over-target
+window). CLASS 2 root (prior investigation): readiness-cache repair storm → seed load → raft heartbeat
+starvation → leader churn → 15s quiet window never closes → over-target > 120s. NEXT = CLASS 2 decision
+(human product-bar): is the 120s budget right vs the system's real ~150s settle, OR confirm the raft
+re-election is spurious (autonomously-fixable) vs genuine-starvation (load-bound/high-blast-radius)?
