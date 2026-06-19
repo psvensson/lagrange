@@ -1224,7 +1224,13 @@ function buildPostRebalanceReplicaOperationDrainDiagnostics(
     if (!inFlight) {
       continue;
     }
-    const stale = isReplicaOperationStale(normalizedOperation, {nowMs});
+    // Census run2 rank3: this is the QUIESCENCE oracle's staleness classification, so cap
+    // the SYNCING stale timeout for ALL partitions below the wait budget (the coordinator's
+    // own retry budget is unaffected — it never passes this flag).
+    const stale = isReplicaOperationStale(normalizedOperation, {
+      nowMs,
+      capSyncingStaleTimeoutForAllPartitions: true,
+    });
     const additionalDiscountReason =
       stale ?
         null :

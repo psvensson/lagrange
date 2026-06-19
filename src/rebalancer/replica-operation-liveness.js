@@ -556,9 +556,19 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
   }
   const normalizedTimeoutMs = Math.floor(timeoutMs);
   const partitionId = String(options.partitionId || '').trim();
+  // Census run2 rank3: the quiescence oracle (which passes
+  // capSyncingStaleTimeoutForAllPartitions) must cap the SYNCING stale-classification
+  // timeout for EVERY partition, not just priority control-plane ones. The binding
+  // phantom-SYNCING ops are on NON-priority partitions (latency_groups, storage_reservations)
+  // whose generic SYNCING timeout (300s) EQUALS the quiescence wait budget, so a wedged
+  // op (replica creation already complete, SYNCING->ACTIVE advance orphaned by leadership
+  // churn) is counted effectiveInFlight for the whole window and the 15s quiet window never
+  // closes. The cap is scoped to the ORACLE call site ONLY — the coordinator's own
+  // staleness/reaper calls do not pass the flag, so its real retry budget is unchanged.
   if (
     workflowStep === WORKFLOW_STEP.SYNCING &&
-    isPriorityControlPlanePartition({partitionId})
+    (isPriorityControlPlanePartition({partitionId}) ||
+      options.capSyncingStaleTimeoutForAllPartitions === true)
   ) {
     return Math.min(
       normalizedTimeoutMs,

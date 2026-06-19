@@ -484,6 +484,67 @@ test(
 );
 
 test(
+  'replica-operation-liveness caps SYNCING stale timeout for ALL partitions under the ' +
+  'quiescence-oracle flag (census run2 rank3: the phantom-SYNCING binding blocker is on ' +
+  'NON-priority partitions whose 300s timeout equals the quiescence wait budget)',
+  async (t) => {
+    const nowMs = 200000;
+    // A non-priority partition (latency_groups-p1) SYNCING for 90s: past the 60s cap
+    // but well under the generic 300s timeout. This is exactly the run1 phantom op the
+    // quiescence oracle counts as effectiveInFlight forever.
+    const ordinarySyncing90s = {
+      operation_id: 'op-latency-syncing',
+      type: 'REPLACE',
+      partition_id: 'latency_groups-p1',
+      entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
+      source_node_id: 'node-source',
+      source_replica_id: 'latency_groups-p1-r5',
+      target_node_id: 'node-target',
+      replica_id: 'latency_groups-p1-r6',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      updated_at: nowMs - 90000,
+    };
+    const ordinarySyncing30s = {
+      ...ordinarySyncing90s,
+      operation_id: 'op-latency-syncing-young',
+      updated_at: nowMs - 30000,
+    };
+    const record90s = normalizeReplicaOperationRecord(ordinarySyncing90s, {nowMs});
+    const record30s = normalizeReplicaOperationRecord(ordinarySyncing30s, {nowMs});
+
+    // Coordinator path (no oracle flag): the generic 300s retry budget is preserved —
+    // the coordinator still gets the full window to complete/retry the real sync.
+    t.equal(
+      isReplicaOperationStale(record90s, {nowMs}),
+      false,
+      'without the oracle flag a non-priority SYNCING row keeps its 300s coordinator timeout',
+    );
+    // Quiescence-oracle path: the 60s SYNCING cap now applies to ALL partitions, so a
+    // 90s-wedged non-priority op is classified stale and stops blocking the quiet window.
+    t.equal(
+      isReplicaOperationStale(record90s, {
+        nowMs,
+        capSyncingStaleTimeoutForAllPartitions: true,
+      }),
+      true,
+      'under the oracle flag a 90s non-priority SYNCING row is stale (was false: the 300s ' +
+      'timeout equalled the quiescence wait budget so it never cleared in-window)',
+    );
+    // A genuinely young SYNCING op (30s) is NOT prematurely classified stale even with the cap.
+    t.equal(
+      isReplicaOperationStale(record30s, {
+        nowMs,
+        capSyncingStaleTimeoutForAllPartitions: true,
+      }),
+      false,
+      'a 30s SYNCING row is still in-progress under the 60s cap (no premature staleness)',
+    );
+  },
+);
+
+test(
   'normalizeReplicaOperationRecord infers REMOVE type for failed source-removal rows without canonical columns',
   async (t) => {
     const record = normalizeReplicaOperationRecord({
