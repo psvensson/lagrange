@@ -21,6 +21,15 @@ const EMPTY_REPAIR_ROWS = Object.freeze([]);
 const DEFAULT_REPAIR_COOLDOWN_MS = 5000;
 const DEFAULT_REPAIR_FAILURE_COOLDOWN_MS = 30000;
 const DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS = 15000;
+// A "fresh on ineligible" caller (allowAuthoritativeRefresh + requireFreshOnIneligible)
+// is permitted to bypass the normal 5-15s cooldown so routing/admission can force a
+// fresh authoritative read. But the bypass must still honor a SMALL floor: evidence
+// authoritatively repaired within this window is already fresh, so re-reading inside it
+// only adds load with no freshness benefit. Without a floor, a query/rebalance retry
+// loop issues a full cross-node read+repair on every attempt (observed: 9 same-target
+// repairs in 4s, ~384/run on the seed → event-loop starvation). The floor collapses the
+// burst while keeping force-fresh responsiveness far below the normal cooldown.
+const DEFAULT_REPAIR_BYPASS_FLOOR_MS = 1000;
 const DEFAULT_REPAIR_QUERY_TIMEOUT_MS = 1500;
 const DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS = 30000;
 const REPAIR_STAGE = Object.freeze({
@@ -204,6 +213,11 @@ class AuthoritativeNodeEvidenceReconciler {
       normalizePositiveInteger(
         options.authoritativeReadinessRepairNoChangeCooldownMs,
         DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS,
+      );
+    this.authoritativeReadinessRepairBypassFloorMs =
+      normalizePositiveInteger(
+        options.authoritativeReadinessRepairBypassFloorMs,
+        DEFAULT_REPAIR_BYPASS_FLOOR_MS,
       );
     this.authoritativeReadinessRepairQueryTimeoutMs =
       normalizePositiveInteger(
@@ -395,14 +409,23 @@ class AuthoritativeNodeEvidenceReconciler {
           this.lastRepairCooldownMsByKey.get(repairKey) ||
           this.authoritativeReadinessRepairCooldownMs;
         const bypassCooldown = this.shouldBypassCooldown(options);
-        if (!bypassCooldown && (now - lastRepairAt) < cooldownMs) {
+        // A bypass caller still honors a small floor instead of skipping the
+        // interval check outright — the prior repair within the floor already
+        // pulled authoritative rows, so re-reading inside it adds load without
+        // improving freshness. Math.min keeps the floor from ever exceeding the
+        // normal cooldown.
+        const effectiveCooldownMs = bypassCooldown ?
+          Math.min(cooldownMs, this.authoritativeReadinessRepairBypassFloorMs) :
+          cooldownMs;
+        if ((now - lastRepairAt) < effectiveCooldownMs) {
           this.recordRepair({
             nodeId,
             repairKey,
             stage: REPAIR_STAGE.COOLDOWN_SKIPPED,
             decisionDimension: this.resolveDecisionDimension(options),
-            cooldownMs,
+            cooldownMs: effectiveCooldownMs,
             lastRepairAtMs: lastRepairAt,
+            bypassFloored: bypassCooldown,
           });
           return false;
         }

@@ -359,3 +359,101 @@ test('AuthoritativeNodeEvidenceReconciler repairs partition owner rows ' +
     'authoritative partition rows should refresh cached owner metadata',
   );
 });
+
+function createClockedReconcilerWithSnapshotCounter({cache, clock}) {
+  let snapshotReadCount = 0;
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: TEST_SEED_NODE_ID,
+    systemTableCache: cache,
+  });
+  const reconciler = new AuthoritativeNodeEvidenceReconciler({
+    nodeId: TEST_SEED_NODE_ID,
+    now: () => clock.value,
+    authoritativeReadinessRepairBypassFloorMs: 1000,
+    authoritativeReadinessRepairLane: TEST_AUTHORITATIVE_REPAIR_LANE,
+    cacheMutationTarget: cache,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return TEST_AUTHORITATIVE_READ_FAILURE;
+      },
+    },
+    controlPlaneSystemTableGateway: gateway,
+    getAuthoritativeControlPlaneView() {
+      return {
+        async readNodeSnapshot() {
+          snapshotReadCount += 1;
+          return {
+            tables: {
+              nodes: {success: true, rows: [], source: 'owner_rpc_lane'},
+              services: {success: true, rows: [], source: 'owner_rpc_lane'},
+              partitions: {success: true, rows: [], source: 'owner_rpc_lane'},
+            },
+          };
+        },
+      };
+    },
+    logger: {info() {}, warn() {}},
+    systemTableCache: cache,
+  });
+  return {reconciler, getSnapshotReadCount: () => snapshotReadCount};
+}
+
+const FRESH_ON_INELIGIBLE_OPTIONS = Object.freeze({
+  allowAuthoritativeRefresh: true,
+  requireFreshOnIneligible: true,
+});
+
+test('AuthoritativeNodeEvidenceReconciler floors cooldown-bypass repairs so a ' +
+  'fresh-on-ineligible retry burst collapses instead of starving the node', async (t) => {
+  const nodeId = 'node-bypass-floor';
+  const cache = createCacheWithNodeEvidence(nodeId);
+  const clock = {value: 10000};
+  const {reconciler, getSnapshotReadCount} =
+    createClockedReconcilerWithSnapshotCounter({nodeId, cache, clock});
+
+  // First fresh-on-ineligible repair always executes an authoritative read.
+  await reconciler.ensureNodeEvidence(nodeId, FRESH_ON_INELIGIBLE_OPTIONS);
+  t.equal(getSnapshotReadCount(), 1, 'first bypass repair performs the read');
+
+  // A second bypass repair within the 1000ms floor adds load with no freshness
+  // benefit — it must be floored out (skipped), NOT re-issued.
+  clock.value = 10500;
+  await reconciler.ensureNodeEvidence(nodeId, FRESH_ON_INELIGIBLE_OPTIONS);
+  t.equal(
+    getSnapshotReadCount(),
+    1,
+    'bypass repair within the floor window is skipped (no second read)',
+  );
+
+  // Once the floor elapses, a bypass caller is served a fresh read again — the
+  // floor bounds load without blocking force-fresh responsiveness for 5-15s.
+  clock.value = 11200;
+  await reconciler.ensureNodeEvidence(nodeId, FRESH_ON_INELIGIBLE_OPTIONS);
+  t.equal(
+    getSnapshotReadCount(),
+    2,
+    'bypass repair past the floor window performs a fresh read',
+  );
+});
+
+test('AuthoritativeNodeEvidenceReconciler keeps the full cooldown for ' +
+  'non-bypass callers (bypass floor does not weaken normal throttling)', async (t) => {
+  const nodeId = 'node-non-bypass-cooldown';
+  const cache = createCacheWithNodeEvidence(nodeId);
+  const clock = {value: 10000};
+  const {reconciler, getSnapshotReadCount} =
+    createClockedReconcilerWithSnapshotCounter({nodeId, cache, clock});
+
+  await reconciler.ensureNodeEvidence(nodeId);
+  t.equal(getSnapshotReadCount(), 1, 'first non-bypass repair performs the read');
+
+  // 2s later — well past the 1000ms bypass floor but inside the normal no-change
+  // cooldown. A non-bypass caller must still be throttled (no second read).
+  clock.value = 12000;
+  await reconciler.ensureNodeEvidence(nodeId);
+  t.equal(
+    getSnapshotReadCount(),
+    1,
+    'non-bypass repair inside the normal cooldown is still skipped',
+  );
+});
