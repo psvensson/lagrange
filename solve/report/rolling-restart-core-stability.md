@@ -18,18 +18,18 @@
 - Frontier: rolling-restart-core-stability-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: topology_gap
-- Movement: solved: publication_epochs_disagree -> PASS
-- Latest evidence: test-output/reports/stat-gate-20260618T095532Z-run5.report.json
+- Dominant reason: leadership_unstable
+- Mechanism: transition_gap
+- Movement: narrowed: operation_drain_stalled -> leadership_unstable
+- Latest evidence: test-output/reports/stat-gate-20260619T112313Z-run2.report.json
 - Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
 - Next move: continue supervised step for rolling-restart-core-stability-main
-- No longer current: publication_epochs_disagree
+- No longer current: operation_drain_stalled
 
 ## Continuation
-- Status: blocked-scope
+- Status: blocked-unrecorded-evidence
 - Next action: reduce change scope for rolling-restart-core-stability-main (50 changed files exceed the limit) before the next attempt
-- Blocker: scope pressure terminal: 50 changed files
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id rolling-restart-core-stability --frontier rolling-restart-core-stability-main --evidence test-output/reports/stat-gate-20260619T112313Z-run3.report.json
 
 ## Scope Pressure
 - Changed files: 50
@@ -54,7 +54,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 300 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 100 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -411,6 +411,13 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T091351Z-run3.report.json. Metric: 100 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: unknown. Dominant reason: publication_epochs_disagree. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
 - **rolling-restart-core-stability-main**: FULL-STACK GATE RESULT (stat-gate-20260618T091351Z, N=3 clean docker, srcFingerprint 952af223): passRate=0.667 (2/3 scenario PASS), convergeRate=1 (3/3 missing=0), nodeExit=0, corrupt=0, oracleBlind=0, stale=0. MAJOR movement: passRate 0/3 -> 2/3 across this session (was ~17% scenario-PASS at start). Runs 1+2 PASS with reason=none (clean recovery); run 3 converges but fails on publication_epochs_disagree. The EADDRINUSE death, the SYNC-to-down-node head-of-line livelock, and the updatedAt-churn staleness defeat are all resolved — recovery now completes within deadline for 2/3 runs. REMAINING binding blocker = publication_epochs_disagree (rejoined node observed epoch ahead of owner committed epoch; the epoch lineage of CL-001/CL-039), a DIFFERENT frontier from the recovery-completion path just fixed. doneWhen (3 consecutive PASS) not yet met; need to close the publication-epoch-disagreement tail. [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T095532Z-run5.report.json. Metric: 101 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T095532Z-run5.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260618T204012Z-run3.report.json. Metric: 300 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: quiescence_candidate. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260618T204012Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T061302Z-run3.report.json. Metric: 101 -> 206. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: pending_acks_present. Owner: topology_publication_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T061302Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T075627Z-run3.report.json. Metric: 206 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T075627Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T094114Z-run3.report.json. Metric: 300 -> 200. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T094114Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T112313Z-run1.report.json. Metric: 200 -> 100. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: operation_drain_stalled. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T112313Z-run1.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T112313Z-run2.report.json. Metric: 100 -> 100. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T112313Z-run2.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260619T112313Z-run3.report.json. Metric: 100 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260619T112313Z-run3.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -727,6 +734,12 @@
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260618T073037Z-run1.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260618T091351Z-run3.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260618T095532Z-run5.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260618T204012Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260619T061302Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260619T075627Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260619T094114Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260619T112313Z-run1.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260619T112313Z-run2.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
