@@ -282,3 +282,37 @@ Only rank1's CDC read-path was independently re-verified in source this run; the
 diff (rank2), the 1767× shed count (rank4), and the gate-run-3 tail are taken from verdict evidence —
 confirm before fixing. Cross-item interaction (does fixing rank2 re-expose rank1 as the binding tail?)
 was flagged, not modeled. No peel-until-dry this run (the next, larger iteration).
+
+## Census results run 2 (2026-06-19, workflow wf_55267f58; 34 agents, 26 cand → 15 confirmed → 7 ranked, 4 NEW)
+Full data: test-output/latent-blocker-census-run2.json. Every gate failure is CLASS-2 liveness/settle at the
+step-8 recovery barrier (BEFORE the step-9 consistency check); cluster SAFE every run. THE 4-LAYER PEEL:
+- **L2 BINDING (run1 confirmed: leaderQuietElapsedMs=156635 yet stableElapsedMs=0): rank1 PHANTOM SYNCING
+  (NEW).** effectiveInFlightCount=2 SYNCING replica_operations rows (latency_groups-p1, storage_reservations-p1)
+  whose replica creation DEMONSTRABLY COMPLETED (ReplicaStatus.ACTIVE, peers 3/3, "Replica creation completed")
+  but whose SYNCING→ACTIVE advance was ORPHANED by leadership churn — the reconcile "Reconciled SYNCING
+  operation to ACTIVE" never fires (0×). The quiescence oracle (post-rebalance-closure-contract.js:1182) counts
+  the frozen row as effectiveInFlight FOREVER (no replica-readiness fidelity check) → 15s window never closes →
+  replica_operations_in_flight. Kept PERMANENT by **rank3 (NEW): the SYNCING stale-discount timeout (300000ms,
+  rebalancer-constants.js:78) EQUALS the quiescence wait budget** for non-priority partitions (only priority gets
+  the 60s cap, replica-operation-liveness.js:63) → the stale valve can't fire in-window.
+- **L3 MULTIPLIER: rank2 raft no-CheckQuorum (NEW root beneath census-run1 rank1).** The busy seed (leads 30-34
+  partitions) genuinely heartbeat-starves under load → followers' timers fire → term INFLATES (sql_write_operations-p1
+  1→3→18→...→34; replica_operations-p1→38) but NO follower ever wins (starved leader has the only current log,
+  re-wins). liferaft has NO pre-vote / CheckQuorum / leader-lease (grep-confirmed, wrapper AND upstream) so a
+  CPU-starved-but-CONNECTED leader can't suppress doomed term-inflating elections. Each loss setLeader(false)
+  (unified-rebalancer-lifecycle-base.js:486) hard-cancels the scheduler → abandons over-target drain → reinforcing.
+  This RESOLVES the spurious-vs-genuine question: GENUINE starvation, but a REAL fixable design-gap amplifies it.
+- **L4 LOAD ROOT: rank4 (known) readiness-cache write/revert divergence storm** + cooldown-bypass + cluster-wide
+  publication-invalidation blast radius. **rank7 "49s sync hog" REFUTED** (loop logged 5-22 lines/sec through the
+  alleged block; watchdog measures timer-lateness/cgroup CPU tax; load is diffuse).
+- **L0 ORACLE-LABEL HEAD: rank5 (known) classifier tax** — publication_missing_active_node (x16) + floorless
+  count==1 nodeSlotUnavailable + priority_partitions_not_spread all RELABEL the same CLASS-2 settle. REFUTED masks:
+  leaderSignature-artifact, "444× single-rejoiner repair storm" framing, "50× re-elections" count.
+- rank6 (known) OTSD-3 flat-ack-retry to critical -p1 (downstream of rank2; defer). SAFETY caveat: never
+  terminal-fail ops on critical -p1.
+HIGHEST-LEVERAGE NEXT (all below-gate-falsifiable, low/med risk, NO human/high-blast-radius needed):
+land rank1+rank3 oracle-fidelity discount (SYNC_COMPLETE_AWAITING_ADVANCE in resolveAdditionalReplicaOperation
+DiscountReason @ post-rebalance-closure-contract.js:1121 + cap SYNCING stale-classification < wait budget for ALL
+partitions) → on run1 removes the SOLE binding blocker (effectiveInFlightCount 2→0). PAIR with rank2
+CheckQuorum/heartbeat-recency guard in src/raft/liferaft.js timeout() (the source fix; VirtualTick-falsifiable via
+dt6-real-raft-network.test.js). rank5 classifier tiebreak de-noises the corpus.
