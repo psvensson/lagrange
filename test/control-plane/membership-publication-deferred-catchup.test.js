@@ -239,6 +239,57 @@ test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through th
   t.equal(remaining[0].publication_epoch, 40, 'the surviving row is epoch 40');
 });
 
+// A node that resolves as the publications WRITE-LEADER (Tier-0 raft-live via
+// canWriteSystemTableLocally=true) drives the OWNER path of the periodic driver,
+// NOT the follower catch-up branch. assertSingleMembershipPartition and the
+// readiness-trace fields are out of scope here, so they are stubbed; the planning
+// snapshot is injected to put the owner on the no-deficit (would-skip) branch.
+function makeLeaderDriverCoordinator({cache, cdcIntegrationService, now, planningSnapshot}) {
+  const coordinator = makeFollowerDriverCoordinator({cache, cdcIntegrationService, now});
+  coordinator.assertSingleMembershipPartition = () => {};
+  coordinator._buildPublicationReadinessTraceFields = () => ({});
+  coordinator.readPublicationPlanningSnapshot = async () => planningSnapshot;
+  return coordinator;
+}
+
+test('CL-001 variant D OWNER FACE (2026-06-19): a rejoined publications WRITE-LEADER ' +
+  'that believes it is steady at a stale epoch re-validates against authority before ' +
+  'skipping on no-deficit — the owner path had NO catch-up, so a frozen owner served ' +
+  'its own stale epoch forever (RED on revert)', async (t) => {
+  const cache = new SystemTableCache();
+  // The owner rejoined and its own publications cache is frozen at epoch 19 while the
+  // cluster advanced to 40 under a different owner-incarnation. Its owner-stream shows
+  // desired=committed=observed=19 (it BELIEVES it is steady), so missing=0.
+  cache.applySystemTableChange(
+    PUBLICATIONS, 'UPSERT', publicationRow(19, 1000), {causeId: 'seed-stale'});
+  const service = makeAuthorityService(cache, [publicationRow(40, 2000)]);
+  // Tier-0 raft-live leadership → the owner driver takes the LEADER path.
+  service.canWriteSystemTableLocally = () => true;
+  // The owner's own planning snapshot shows NO published deficit at the stale epoch —
+  // exactly the freeze: it thinks it is fully published and steady, so it would SKIP.
+  const planningSnapshot = {
+    latestPublishedPublicationRow: publicationRow(19, 1000),
+    latestPublicationRow: publicationRow(19, 1000),
+    nodeRows: [],
+    readinessByNodeId: {},
+  };
+  const coordinator = makeLeaderDriverCoordinator(
+    {cache, cdcIntegrationService: service, now: () => 5000, planningSnapshot});
+
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 19,
+    'the owner starts frozen at a stale epoch 19 (believes it is steady)');
+
+  const drove = await coordinator.driveOwnerMembershipReconcile();
+  t.equal(drove, false,
+    'the owner sees no published deficit, so it does not reconcile this tick');
+
+  t.equal(coordinator.getLatestPublicationRowSync().publicationEpoch, 40,
+    'before trusting no-deficit, the owner re-validated against authority (owner-RPC) ' +
+    'and its frozen cache converged to the committed epoch 40 (RED on revert: the owner ' +
+    'path skipped without ever catching up, serving epoch 19 to the consistency probe ' +
+    'forever as publication_epochs_disagree)');
+});
+
 test('CL-001 variant D: deferral stays safe when no CDC catch-up is available',
   async (t) => {
     const coordinator = makeDeferringCoordinator({

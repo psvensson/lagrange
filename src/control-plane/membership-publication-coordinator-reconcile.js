@@ -618,6 +618,20 @@ class MembershipPublicationCoordinatorReconcile extends
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === NUM.ZERO
       ) {
+        // CL-001 OWNER FACE (2026-06-19): the follower branches above catch up from
+        // authority, but the owner path did NOT — so a rejoined node that re-acquired
+        // publications leadership with a STALE cache reads its own frozen epoch, sees
+        // missing=0, and SKIPs here forever (desired=committed=observed all equal-but-
+        // stale: it BELIEVES it is steady). It then serves that stale epoch to the
+        // consistency probe as `publication_epochs_disagree`. Before trusting no-deficit,
+        // re-validate the local view against authority. refreshDeferredPublicationsCache
+        // FromAuthority routes through the REAL partition leader (preferOwnerRpcRead,
+        // belief-independent) and only HYDRATES the local cache — it never writes/
+        // promotes/trims, so the B4 single-writer gate is intact; any genuine deficit it
+        // reveals is reconciled on a LATER tick AFTER leadership is re-resolved from the
+        // freshened cache (a node that only wrongly believed it led steps back to the
+        // follower path). Cooldown-gated, best-effort (never throws).
+        await this.refreshDeferredPublicationsCacheFromAuthority();
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,
