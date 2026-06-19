@@ -263,27 +263,13 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             this.resolveTimeoutCheckNowMs(),
           );
         },
-      ).catch((error) => {
-        if (
-          this.deferTransitionRetry(operation.operationId, error, {
-            boundary: 'timeout_reconcile',
-            workflowStep: operation?.workflowStep || null,
-            partitionId: operation?.partitionId || null,
-            updatedAt: operation?.updatedAt,
-            createdAt: operation?.createdAt,
-          })
-        ) {
-          return;
-        }
-        this.logger.error(
-          REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED,
-          {
-            operationId: operation.operationId,
-            error: error.message,
-            nodeId: this.nodeId,
-          },
-        );
-      });
+      ).catch((error) =>
+        this.handleReplicaOperationReconcileError(
+          operation,
+          error,
+          'timeout_reconcile',
+        ),
+      );
       timeoutReconcileTasks.push(reconcileTask);
     }
 
@@ -297,6 +283,126 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
         {error: error.message},
       );
+    });
+  }
+
+  /**
+   * Leadership-handoff-durable safety net for the SYNCING->ACTIVE advance.
+   *
+   * The normal advance is driven by an in-memory executor-outcome event on the
+   * operation's owner. When owner/leadership churn drops that event the row is
+   * orphaned at SYNCING forever: nothing else re-drives it (handleRecovery is
+   * never wired post-startup, and the timeout path only acts past the step
+   * timeout). Here every periodic sweep re-drives owned SYNCING rows whose
+   * replica is observed ACTIVE with a plain replica-status reconcile. Scoped to
+   * SYNCING (never pre-sync), so a legitimately in-flight PENDING/SENDING/
+   * CREATING op is never touched. A still-syncing replica is left for the normal
+   * timeout path. The authoritative re-read under the operation lock is the
+   * source of truth: if the replica has since diverged to a terminal failure,
+   * the standard recovery lifecycle retires the row (exactly as handleRecovery
+   * would) — that is the correct outcome, not a regression.
+   *
+   * Uses its own authoritative-preferred discovery (mirroring handleRecovery)
+   * rather than the surrounding timeout sweep's cache-bounded observation, so an
+   * orphaned row that is invisible to the local cache boundary is still found.
+   *
+   * Runs on the coordinator's periodic timer (not inside the cache-bounded
+   * checkTimeouts sweep), self-throttled to the empty-scan backoff cadence so
+   * its authoritative read does not hammer SQL.
+   *
+   * @return {Promise<void>}
+   */
+  async reconcileCompletedSyncingOperations() {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return;
+    }
+    const now = this.resolveTimeoutCheckNowMs();
+    const lastReconcileAtMs = this.lastOrphanedSyncingReconcileAtMs ?? NUM.ZERO;
+    if (
+      lastReconcileAtMs > NUM.ZERO &&
+      now - lastReconcileAtMs < this.incompleteOperationQueryEmptyBackoffMs
+    ) {
+      return;
+    }
+    this.lastOrphanedSyncingReconcileAtMs = now;
+
+    const cachedIncompleteOps =
+      this.repository.hasReplicaOperationCacheObservationBoundary() ?
+        await this.repository.queryCachedIncompleteOperations() :
+        [];
+    const observation =
+      await this.repository.getIncompleteOperationVisibilityObservation({
+        cachedOperations: cachedIncompleteOps,
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
+      });
+    const incompleteOps = Array.isArray(observation?.operations) ?
+      observation.operations :
+      [];
+    const syncingOps = incompleteOps.filter((op) =>
+      op &&
+      op.workflowStep === WORKFLOW_STEP.SYNCING &&
+      !this.repository.isOperationTerminal(op) &&
+      this.repository.isOperationLocallyOwned(op),
+    );
+    if (syncingOps.length === NUM.ZERO) {
+      return;
+    }
+    await Promise.all(
+      syncingOps.map(async (op) => {
+        // Act solely on rows whose replica is observed ACTIVE. A still-syncing
+        // replica is left untouched for the normal timeout path. (If the
+        // authoritative re-read under the lock finds the replica has since
+        // failed, reconcileSyncingOperation retires the row via the standard
+        // recovery lifecycle — the correct outcome for a failed replica.)
+        let actualStatus = null;
+        try {
+          actualStatus = await this.getReconciledReplicaStatus(
+            op.replicaId,
+            op.partitionId,
+            op.targetNodeId,
+          );
+        } catch {
+          return;
+        }
+        if (actualStatus !== ReplicaStatus.ACTIVE) {
+          return;
+        }
+        await this.operationWorkflowRunExclusive(
+          this.getOperationOwnerSingleFlightKey(op.operationId),
+          () => this.reconcileSyncingOperation(op),
+        ).catch((error) =>
+          this.handleReplicaOperationReconcileError(op, error, 'syncing_redrive'),
+        );
+      }),
+    );
+  }
+
+  /**
+   * Shared error handling for a single replica-operation reconcile task: defer
+   * transient control-plane errors via the retry grace, otherwise log.
+   *
+   * @param {Object} operation
+   * @param {Error} error
+   * @param {string} boundary
+   * @return {void}
+   */
+  handleReplicaOperationReconcileError(operation, error, boundary) {
+    if (
+      this.deferTransitionRetry(operation.operationId, error, {
+        boundary,
+        workflowStep: operation?.workflowStep || null,
+        partitionId: operation?.partitionId || null,
+        updatedAt: operation?.updatedAt,
+        createdAt: operation?.createdAt,
+      })
+    ) {
+      return;
+    }
+    this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
+      operationId: operation.operationId,
+      error: error.message,
+      nodeId: this.nodeId,
     });
   }
 

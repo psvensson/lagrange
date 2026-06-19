@@ -560,6 +560,7 @@ class RebalanceCoordinatorLifecycle {
       }
       this.timeoutCheckInFlight = true;
       void this.checkTimeouts()
+        .then(() => this.reconcileCompletedSyncingOperations())
         .catch((error) => {
           this.logQueryOperationsFailure(error);
         })
