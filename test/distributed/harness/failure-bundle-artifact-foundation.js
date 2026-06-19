@@ -659,9 +659,30 @@ export function buildTopReasonCounts(reasonCounts, limit = 5) {
     .slice(ZERO, limit);
 }
 
+// Census run2 rank5: nodeSlotUnavailable is a pure harness construct (zero src/ references;
+// load-generator.js maps both SLOT_SATURATED and SLOT_STALLED onto it) and is never a real
+// cluster blocker, yet with a floorless top-count pick a single nodeSlotUnavailable=1 over a
+// HEALTHY cluster won dominantReason and RELABELLED a CLASS-2 recovery-settle failure as a
+// load/placement problem. It is treated as non-binding: reportable only when NO real reason is
+// present. NOTE scoped to nodeSlotUnavailable ONLY — the other LOAD_WAIT reasons (e.g.
+// nodeAdmissionBlocked) are legitimate dominant reasons in genuine load-pressure scenarios.
+const NON_BINDING_DOMINANT_REASONS = new Set([
+  LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+]);
+
 export function buildDominantReason(reasonCounts) {
-  const topReasons = buildTopReasonCounts(reasonCounts, 1);
-  return topReasons.length > ZERO ? topReasons[ZERO].reason : null;
+  // Sorted by count desc; find the highest-count BINDING (non-load-wait) reason first, so a
+  // real settle/recovery reason is never relabelled by a load-wait artifact regardless of
+  // count. Fall back to the top reason only when every reason is a non-binding artifact, so a
+  // diagnostic label is never lost.
+  const topReasons = buildTopReasonCounts(reasonCounts, Number.MAX_SAFE_INTEGER);
+  if (topReasons.length === ZERO) {
+    return null;
+  }
+  const bindingReason = topReasons.find(
+    (entry) => !NON_BINDING_DOMINANT_REASONS.has(entry.reason),
+  );
+  return (bindingReason || topReasons[ZERO]).reason;
 }
 
 export function mergeReasonCounts(...entries) {
