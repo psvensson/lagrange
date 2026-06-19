@@ -131,6 +131,10 @@ const {
   cloneDiagnostics,
   buildPublicationConvergenceFromState,
 } = ASSERTIONS_CONVERGENCE_WAIT;
+
+// Bound the per-poll publication-epoch timeline retained on a final consistency
+// failure (~250ms poll over a 15s window ≈ 60 polls; keep the full window).
+const MAX_CONSISTENCY_POLL_HISTORY = 80;
 /**
  * Assert all reachable nodes agree on cluster state: active
  * nodes, partition assignments, and leader identities.
@@ -248,11 +252,39 @@ async function assertConsistency(nodes, options = {}) {
     maxPartitionSkew,
   });
   if (mismatch) {
-    throw createConsistencyMismatchError(mismatch.message, {
+    const mismatchError = createConsistencyMismatchError(mismatch.message, {
       nodeStates,
       mismatch,
     });
+    // Verdict-neutral instrumentation: snapshot each node's live publication
+    // epoch + published-active-set size for this poll so the convergence wait
+    // loop can show whether a lagging node's epoch ADVANCES across polls
+    // (transient in-flight skew = oracle-fidelity) or stays PINNED (a genuinely
+    // frozen node = product bug). Pure observation — pass/fail is unchanged.
+    mismatchError.epochObservations =
+      summarizeConsistencyEpochObservations(comparisonRecords);
+    throw mismatchError;
   }
+}
+
+/**
+ * Compact per-node publication-epoch snapshot for one consistency poll.
+ * @param {Array<Object>} comparisonRecords
+ * @returns {Array<Object>}
+ */
+function summarizeConsistencyEpochObservations(comparisonRecords) {
+  if (!Array.isArray(comparisonRecords)) {
+    return [];
+  }
+  return comparisonRecords.map((record) => ({
+    nodeId: record?.nodeId ?? null,
+    publicationEpoch: Number.isInteger(record?.publicationEpoch) ?
+      record.publicationEpoch :
+      null,
+    publishedActiveNodeCount: Array.isArray(record?.publishedActiveNodeIds) ?
+      record.publishedActiveNodeIds.length :
+      null,
+  }));
 }
 
 /**
@@ -280,6 +312,8 @@ async function waitForConsistencyConvergence(nodes, options = {}) {
   const deadline = Date.now() + Math.max(0, timeoutMs);
   const forceRepairThreshold = Date.now() + Math.max(0, forceRepairAfterMs);
   let lastError = null;
+  const startedAtMs = Date.now();
+  const pollHistory = [];
 
   while (Date.now() <= deadline) {
     const forceRepair = Date.now() >= forceRepairThreshold;
@@ -297,8 +331,30 @@ async function waitForConsistencyConvergence(nodes, options = {}) {
       return;
     } catch (error) {
       lastError = error;
+      // Verdict-neutral: accumulate the per-poll publication-epoch timeline so
+      // the failure report shows whether a lagging node closed the gap across
+      // polls (oracle-fidelity) or stayed pinned (frozen-node product bug).
+      if (Array.isArray(error?.epochObservations)) {
+        pollHistory.push({
+          elapsedMs: Date.now() - startedAtMs,
+          forceRepair,
+          observations: error.epochObservations,
+        });
+        while (pollHistory.length > MAX_CONSISTENCY_POLL_HISTORY) {
+          pollHistory.shift();
+        }
+      }
     }
     await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  if (lastError && pollHistory.length > 0) {
+    lastError.diagnostics = {
+      ...(lastError.diagnostics && typeof lastError.diagnostics === 'object' ?
+        lastError.diagnostics :
+        {}),
+      consistencyPollHistory: pollHistory,
+    };
   }
 
   throw (
