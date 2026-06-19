@@ -2,9 +2,6 @@ import BaseLifeRaft from '@markwylde/liferaft';
 import {VirtualTick} from './virtual-tick.js';
 
 const NUMERIC_ONE = 1;
-// Census run2 rank2: a FOLLOWER tolerates leader silence for this many max-election-windows
-// before challenging a still-known leader (the heartbeat-recency promotion grace).
-const PROMOTION_GRACE_ELECTION_WINDOW_MULTIPLIER = 2;
 
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_OBJECT = 'object';
@@ -321,13 +318,6 @@ function patchIncomingDataListener(raft) {
       }
     }
 
-    // Census run2 rank2 (heartbeat-recency / CheckQuorum-lite): record the wall/virtual
-    // time of valid LEADER contact (any packet whose SENDER is a leader — the same signal
-    // the base uses to re-arm the election timer). promote() consults this to avoid a
-    // doomed term-inflating election while a CONNECTED-but-slow leader is still reachable.
-    if (packet?.state === BaseLifeRaft.LEADER) {
-      raft._lastLeaderContactAtMs = resolveLifeRaftNowMs(raft);
-    }
     const result = await originalListener(packet, write);
     const committedIndexAfter = getCommittedIndex(raft);
 
@@ -349,28 +339,10 @@ function patchIncomingDataListener(raft) {
   raft.on(RAFT_EVENT.DATA, patchedListener);
 }
 
-// Census run2 rank2: resolve "now" from the injected deterministic timeSource when present
-// (so the heartbeat-recency guard advances on the virtual clock in DT4/DT6), else wall time.
-// Production (no timeSource) is unchanged.
-function resolveLifeRaftNowMs(raft) {
-  const timeSource = raft && raft._timeSource;
-  if (timeSource && typeof timeSource.now === 'function') {
-    const now = Number(timeSource.now());
-    if (Number.isFinite(now)) {
-      return now;
-    }
-  }
-  return Date.now();
-}
-
 class LifeRaft extends BaseLifeRaft {
   constructor(address, options = {}) {
     super(address, options);
     patchIncomingDataListener(this);
-    // Census run2 rank2 (heartbeat-recency promotion guard) state. _timeSource mirrors the
-    // DT4 timeSource (set below) so the guard is deterministic under VirtualTick.
-    this._timeSource = (options && options.timeSource) || null;
-    this._lastLeaderContactAtMs = null;
     // DT5 election-jitter seam (OPT-IN): base liferaft's timeout() draws the
     // randomized election delay from Math.random. When a randomSource is provided,
     // timeout() (overridden below) draws from it instead, so a seed fully
@@ -411,52 +383,6 @@ class LifeRaft extends BaseLifeRaft {
         (times.max - times.min + NUMERIC_ONE) +
       times.min,
     );
-  }
-
-  // Census run2 rank2: bound on how long a FOLLOWER tolerates leader silence before it
-  // challenges a still-known leader. ~2x the max election window: a transient slow/late
-  // heartbeat from a CPU-starved-but-CONNECTED leader (the post-restart load case) no longer
-  // triggers a doomed term-inflating election, while a genuinely dead leader (silent past the
-  // lease) is still replaced with bounded extra latency.
-  _promotionGraceLeaseMs() {
-    const max = Number(this.election && this.election.max);
-    return Number.isFinite(max) && max > NUMERIC_ZERO ?
-      max * PROMOTION_GRACE_ELECTION_WINDOW_MULTIPLIER :
-      NUMERIC_ZERO;
-  }
-
-  // True when the election timer fired but we still have RECENT contact from a known leader.
-  // Only a FOLLOWER with a current (non-self) leader defers; a candidate retry, a leaderless
-  // node, or a node whose leader contact has aged past the lease proceeds to promote — so
-  // liveness is preserved and the guard is strictly MORE conservative about electing (it can
-  // never cause two leaders). Self-limiting: _lastLeaderContactAtMs is fixed until the next
-  // real leader packet, so as time advances the lease is guaranteed to expire.
-  _shouldDeferPromotionForRecentLeaderContact() {
-    if (this.state !== BaseLifeRaft.FOLLOWER) {
-      return false;
-    }
-    if (!this.leader || this.leader === this.address) {
-      return false;
-    }
-    if (!Number.isFinite(this._lastLeaderContactAtMs)) {
-      return false;
-    }
-    const graceMs = this._promotionGraceLeaseMs();
-    if (graceMs <= NUMERIC_ZERO) {
-      return false;
-    }
-    return resolveLifeRaftNowMs(this) - this._lastLeaderContactAtMs < graceMs;
-  }
-
-  async promote(...args) {
-    if (this._shouldDeferPromotionForRecentLeaderContact()) {
-      // Re-arm the election timer instead of inflating the term. The next firing
-      // re-checks the lease; once leader contact ages past it, promotion proceeds.
-      this.emit('promotion deferred');
-      this.heartbeat(this.timeout());
-      return this;
-    }
-    return super.promote(...args);
   }
 }
 
