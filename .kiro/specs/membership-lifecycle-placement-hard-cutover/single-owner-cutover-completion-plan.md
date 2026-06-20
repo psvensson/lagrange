@@ -95,6 +95,26 @@ Raft commit* (one committed membership row under a fenced term), NOT from the
 model. The model is the argument for *why the structural cutover beats more gate
 patches*, not a claim that Phase 2 is a single-knob change.
 
+## Execution status (2026-06-20)
+
+- **Phase 0 — DONE (shadow, default-off).** `src/control-plane/membership-owner-shadow.js`
+  (`computeShadowActiveMemberSet`, `buildMembershipOwnerDivergence`,
+  `isMembershipOwnerShadowEnabled`), wired into
+  `membership-publication-candidate-derivation.js` as the diagnostics-only
+  `membershipOwnerDivergence` field behind `LAGRANGE_MEMBERSHIP_OWNER_SHADOW`.
+  Commit `5ac87f34`. Subagent-verified SOUND. The divergence MAP itself still
+  needs a gate run with the flag on to populate (the probe is built; the data is
+  not yet collected).
+- **Phase 1 — FIRST CUT DONE (shadow).** Executable lifecycle machine in
+  `membership-lifecycle-controller.js` (`applyMemberTransition`,
+  `advanceMemberForIntent`, per-member state). Two known pre-flip gaps documented
+  in code: REMOVAL must become multi-step (PUBLISHED_ACTIVE→DRAINING→REMOVED);
+  `computeActiveMemberSet` is the minimal rule, not yet reconciled to every
+  overlay (that reconciliation is driven by the Phase 0 divergence map).
+- **Phases 2–5 — NOT STARTED (gated).** Require N≥8 rolling-restart validation
+  and the populated divergence map; Phase 3/4 are hard-to-reverse deletions.
+  Not safe to execute without the green gate the plan mandates.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
