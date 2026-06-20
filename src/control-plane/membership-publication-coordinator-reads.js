@@ -54,6 +54,11 @@ const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
 const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER = 'L';
 const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER = 'F';
+const MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION = 'transition';
+const MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT = 'snapshot';
+// v4 quiescence anchor: re-emit a stable (deduped) state at least this often so
+// the last log entry reflects the true final state, not just the last change.
+const MEMBERSHIP_OWNER_DIVERGENCE_SNAPSHOT_INTERVAL_MS = 30000;
 
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
@@ -86,6 +91,7 @@ class MembershipPublicationCoordinatorReads {
     // lazily on first emit to group one coordinator instance's emits.
     this._membershipOwnerDivergenceLastState = null;
     this._membershipOwnerDivergenceInstanceEpoch = null;
+    this._membershipOwnerDivergenceLastSnapshotMs = null;
     this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.workflowCoordinator =
       options.workflowCoordinator ||
@@ -527,20 +533,21 @@ class MembershipPublicationCoordinatorReads {
   }
 
   // Phase 0: surface the single-owner divergence into per-node logs. Emits on
-  // every state TRANSITION — including the settle-to-agree transition — so the
-  // LAST emit per instance reveals whether the owner rule converged to the
-  // projection at quiescence (the deduped-disagree-only emit could not show
-  // settle). Deduped against the previous state so a stable state logs once.
-  // `instanceEpoch` groups emits from one coordinator instance, so a node's
-  // restarts (which reset this dedup) can be told apart in the per-node log.
+  // every state TRANSITION (including settle-to-agree) AND, to close the
+  // transition+dedup quiescence blind spot (v4), a throttled non-deduped
+  // SNAPSHOT so a stable final state keeps re-emitting — the LAST emit per
+  // instance then reliably reflects the quiescent state even when nothing has
+  // changed. `instanceEpoch` groups one coordinator instance's emits (restarts
+  // reset the dedup). `emitKind` distinguishes transition vs snapshot.
   // No-op when the shadow flag is off (divergence is null). Never throws.
   _emitMembershipOwnerDivergence(divergence) {
     if (!divergence) {
       return;
     }
     try {
+      const nowMs = this.now();
       if (this._membershipOwnerDivergenceInstanceEpoch === null) {
-        this._membershipOwnerDivergenceInstanceEpoch = this.now();
+        this._membershipOwnerDivergenceInstanceEpoch = nowMs;
       }
       // Phase 0 v3 (authority scoping): tag each emit with whether THIS node is
       // the control_plane_publications write-leader. Only the write-leader's
@@ -564,14 +571,23 @@ class MembershipPublicationCoordinatorReads {
       // Include role in the dedup key so a leadership transition re-emits and the
       // leader-tagged timeline stays complete.
       const state = `${role}|${divergenceState}`;
-      if (state === this._membershipOwnerDivergenceLastState) {
+      const transitioned = state !== this._membershipOwnerDivergenceLastState;
+      const snapshotDue =
+        this._membershipOwnerDivergenceLastSnapshotMs === null ||
+        (nowMs - this._membershipOwnerDivergenceLastSnapshotMs) >=
+          MEMBERSHIP_OWNER_DIVERGENCE_SNAPSHOT_INTERVAL_MS;
+      if (!transitioned && !snapshotDue) {
         return;
       }
       this._membershipOwnerDivergenceLastState = state;
+      this._membershipOwnerDivergenceLastSnapshotMs = nowMs;
       this.logger?.info?.(MEMBERSHIP_OWNER_DIVERGENCE_MSG, {
         nodeId: this.nodeId,
         instanceEpoch: this._membershipOwnerDivergenceInstanceEpoch,
         isWriteLeader,
+        emitKind: transitioned ?
+          MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION :
+          MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT,
         agree: divergence.agree,
         onlyInProjection: divergence.onlyInProjection,
         onlyInShadow: divergence.onlyInShadow,
