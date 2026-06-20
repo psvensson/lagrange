@@ -1,0 +1,271 @@
+{
+  "description": "Converged-state fixtures extracted from real rolling-restart gate reports (postRebalanceClosure publicationConvergence). Used to assert the single-owner rule reproduces the authoritative published set.",
+  "fixtures": [
+    {
+      "source": "stat-gate-20260620T005922Z-run1.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "serving",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "serving",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "joining",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "serving"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": false
+    },
+    {
+      "source": "stat-gate-20260620T005922Z-run1.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "joining",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "unreachable"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T005922Z-run3.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "joining",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "unreachable"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T005922Z-run3.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "joining",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "unreachable",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "serving"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T005922Z-run6.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "serving",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "serving",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "serving"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": false
+    },
+    {
+      "source": "stat-gate-20260620T005922Z-run6.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "unreachable",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "joining"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T032205Z-run5.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "joining"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run1.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "serving",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "unreachable",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "joining"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run2.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "joining",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "serving",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "serving"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": false
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run5.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "joining",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "serving",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "joining"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": false
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run6.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "joining",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "serving"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run7.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "serving",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "joining",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "serving",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "joining"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": false
+    },
+    {
+      "source": "stat-gate-20260620T094529Z-run8.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "joining",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "unreachable",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "unreachable",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "unreachable"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    },
+    {
+      "source": "stat-gate-20260620T141052Z-run2.report.json",
+      "authoritativePublishedActiveNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "memberStatesByNodeId": {
+        "11601fe0-72d6-5853-8590-ec2881853e72": "unreachable",
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "joining",
+        "7493b0ab-a054-5fad-a91b-5e331db29304": "unreachable",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a": "serving",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "unreachable"
+      },
+      "readinessExcludedNodeIds": [],
+      "membershipFreezeActive": true
+    }
+  ]
+}
