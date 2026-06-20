@@ -50,6 +50,7 @@ import {
 // full-logs). Emitted only when the shadow owner rule disagrees with the
 // projection-derived published set, and only once per distinct signature.
 const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
+const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
 
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
@@ -76,10 +77,12 @@ class MembershipPublicationCoordinatorReads {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
-    // Phase 0 divergence probe: dedup signatures already emitted so the
-    // single-owner shadow diff is logged once per distinct divergence state
-    // (bounded volume, non-perturbing) rather than on every derivation tick.
-    this._membershipOwnerDivergenceSeen = new Set();
+    // Phase 0 divergence probe: track the last emitted state so the single-owner
+    // shadow diff logs once per distinct state TRANSITION (bounded, non-perturbing)
+    // and the last emit reveals the quiescent state. instanceEpoch is stamped
+    // lazily on first emit to group one coordinator instance's emits.
+    this._membershipOwnerDivergenceLastState = null;
+    this._membershipOwnerDivergenceInstanceEpoch = null;
     this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.workflowCoordinator =
       options.workflowCoordinator ||
@@ -511,29 +514,43 @@ class MembershipPublicationCoordinatorReads {
     const candidate = deriveMembershipPublicationCandidate({
       ...options,
       planningSnapshot,
+      // Phase 1 reconciliation: feed the owner rule this node's identity so the
+      // shadow set can include self-knowledge (the node is alive and computing
+      // the candidate), matching the projection's self-node fast path.
+      localNodeId: this.nodeId,
     });
     this._emitMembershipOwnerDivergence(candidate?.membershipOwnerDivergence);
     return candidate;
   }
 
-  // Phase 0: surface the single-owner divergence into per-node logs, deduped by
-  // signature so a stable divergence state logs once. No-op when the shadow flag
-  // is off (divergence is null) or when the owner rule agrees with the
-  // projection. Never throws — diagnostics must not perturb the publication path.
+  // Phase 0: surface the single-owner divergence into per-node logs. Emits on
+  // every state TRANSITION — including the settle-to-agree transition — so the
+  // LAST emit per instance reveals whether the owner rule converged to the
+  // projection at quiescence (the deduped-disagree-only emit could not show
+  // settle). Deduped against the previous state so a stable state logs once.
+  // `instanceEpoch` groups emits from one coordinator instance, so a node's
+  // restarts (which reset this dedup) can be told apart in the per-node log.
+  // No-op when the shadow flag is off (divergence is null). Never throws.
   _emitMembershipOwnerDivergence(divergence) {
-    if (!divergence || divergence.agree !== false) {
+    if (!divergence) {
       return;
     }
     try {
-      const signature =
+      if (this._membershipOwnerDivergenceInstanceEpoch === null) {
+        this._membershipOwnerDivergenceInstanceEpoch = this.now();
+      }
+      const state = divergence.agree === true ?
+        MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE :
         `${divergence.onlyInProjection.join(',')}|` +
-        `${divergence.onlyInShadow.join(',')}`;
-      if (this._membershipOwnerDivergenceSeen.has(signature)) {
+          `${divergence.onlyInShadow.join(',')}`;
+      if (state === this._membershipOwnerDivergenceLastState) {
         return;
       }
-      this._membershipOwnerDivergenceSeen.add(signature);
+      this._membershipOwnerDivergenceLastState = state;
       this.logger?.info?.(MEMBERSHIP_OWNER_DIVERGENCE_MSG, {
         nodeId: this.nodeId,
+        instanceEpoch: this._membershipOwnerDivergenceInstanceEpoch,
+        agree: divergence.agree,
         onlyInProjection: divergence.onlyInProjection,
         onlyInShadow: divergence.onlyInShadow,
         projectionCount: divergence.projectionCount,

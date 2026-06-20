@@ -72,6 +72,25 @@ test('computeShadowActiveMemberSet: excludes draining/retired members even in ba
   t.end();
 });
 
+test('computeShadowActiveMemberSet: includes local node (self-knowledge) even without readiness', (t) => {
+  const result = computeShadowActiveMemberSet({
+    publishedBaselineNodeIds: ['node-a'],
+    localNodeId: 'node-self',
+  });
+  t.same(result, ['node-a', 'node-self']);
+  t.end();
+});
+
+test('computeShadowActiveMemberSet: local node still excluded if draining', (t) => {
+  const result = computeShadowActiveMemberSet({
+    publishedBaselineNodeIds: ['node-a'],
+    localNodeId: 'node-self',
+    memberStatesByNodeId: {'node-self': 'draining'},
+  });
+  t.same(result, ['node-a']);
+  t.end();
+});
+
 test('buildMembershipOwnerDivergence: agree when identical', (t) => {
   const diff = buildMembershipOwnerDivergence({
     projectionNodeIds: ['node-a', 'node-b'],

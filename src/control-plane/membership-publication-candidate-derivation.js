@@ -402,6 +402,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         readinessByNodeId,
         memberStatesByNodeId:
           planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
+        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
       }),
     }) :
     null;

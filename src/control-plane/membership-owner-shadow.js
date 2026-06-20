@@ -81,9 +81,16 @@ function computeShadowActiveMemberSet(options = {}) {
   const readinessPromotableNodeIds = Object.keys(readinessByNodeId).filter(
     (nodeId) => isReadinessPromotable(readinessByNodeId[nodeId] || null),
   );
+  // Phase 1 reconciliation (self-node fast path): the node computing the
+  // candidate is alive and executing — the strongest possible membership signal,
+  // which the projection captures trivially and the readiness-only rule misses
+  // during early formation (the dominant onlyInProjection=[self] divergence).
+  // Recovery-eligible nodes are already covered by isReadinessPromotable.
+  const localNodeId = String(options.localNodeId || '').trim();
   const candidateNodeIds = normalizeNodeIdList([
     ...publishedBaselineNodeIds,
     ...readinessPromotableNodeIds,
+    ...(localNodeId ? [localNodeId] : []),
   ]);
   return candidateNodeIds.filter((nodeId) =>
     !MEMBERSHIP_OWNER_INACTIVE_MEMBER_STATES.has(memberStatesByNodeId[nodeId]),
