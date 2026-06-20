@@ -104,6 +104,41 @@ measure RAW settle at each `--cpus` to BUILD the table:
    scale → pass-rate should be **invariant across CPU**. That invariance is the
    falsifiable proof the factor tracks hardware. SAFE must hold every run.
 
+## Validation RESULTS (2026-06-20)
+
+- **cpus=1.0, factor 1.0 (nominal):** CONVERGED, missing=0, 0 corrupt/breach/exit,
+  wall 598s. (Reference machine at default cpus behaves identically to today.)
+- **cpus=0.5, factor 2.16 (calibrated):** CONVERGED, missing=0, 0 corrupt/breach/exit,
+  wall 1113s, budget scaled (perNodeConvergence 120s→259s, no-progress 150s→324s).
+  The constrained run PASSES + stays SAFE because its budget scaled with the
+  hardware. Total wall ratio 1.86× (diluted by the fixed-wall load phase; the work
+  tail tracks the ~2.17× probe prediction).
+- **Contrast (cpus=0.5 WITHOUT calibration, nominal budget):** also reached
+  stat-gate CONVERGED (missing=0) + SAFE, wall 489s, but scenario verdict
+  BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked — a budget-bound block).
+- **HONEST READING (N=1 is not a rate verdict — the gate's own header says single-run
+  pass/fail is meaningless for this ~50%-flaky convergence):**
+  - All three runs reached missing=0 (publication converged). The strict scenario
+    verdict was PASS only at cpus=1.0; BOTH cpus=0.5 runs fell short of a clean PASS.
+  - The budget scaling demonstrably TOOK EFFECT: the calibrated 0.5 run used its
+    larger budget (wall 1113s, not cut), vs the no-cal run terminating at 489s.
+  - The verdict shifted (no-cal = BLOCK_TOPOLOGY_CONVERGENCE [budget-bound] →
+    cal = BLOCK_EVIDENCE_INCOMPLETE [non-measuring / metrics-missing]). This is
+    WEAKLY consistent with calibration clearing the budget-bound block, but is ONE
+    sample and NOT conclusive — and cpus=0.5 may sit near/below the convergence
+    floor (super-linear churn), where the failure is not purely budget-bound and
+    calibration cannot rescue it.
+  - **NOT ESTABLISHED:** that calibration raises the PASS RATE on constrained
+    hardware. That needs N≥8 with/without at a constraint where cpus=1.0 reliably
+    PASSES (cpus=0.75 is the better discriminator than 0.5 — milder slowdown, faster
+    runs, less likely below the floor). Multi-hour; deferred as a user decision per
+    the "don't default to N=8" guidance.
+- **WHAT IS PROVEN:** the mechanism is correct, verified, and non-invasive; budgets
+  + frozen-cut scale by the measured factor; SAFE held on every run (0 corrupt/
+  breach/exit across all 4 docker runs); factor 1.0 on the reference machine is
+  byte-identical to today. The mechanism is sound; its rate-level *benefit* on slow
+  hardware is plausible but not yet statistically demonstrated.
+
 ## Falsifiable success criterion
 
 Gate pass-rate is statistically indistinguishable at `cpus=0.5` and `cpus=2.0` once
