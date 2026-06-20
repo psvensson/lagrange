@@ -126,7 +126,21 @@ patches*, not a claim that Phase 2 is a single-knob change.
   -radius action), so it must be run with explicit operator authorization:
   `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE=true LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true bash scripts/rolling-restart-stat-gate.sh 8`
   Go/no-go: missing=0, corrupt=0, publication_epochs_disagree=0 across N=8.
-- **Phases 3–5 — NOT STARTED (gated on a green flip).** Hard-to-reverse deletions.
+- **Phase 2 FLIP GATE: GREEN (N=8, report stat-gate-20260620T183307Z).** With both
+  flip flags live in the node containers: **8/8 CONVERGED, missing=0 on all 8,
+  CORRUPT=0, NODE_EXIT=0, publication_epochs_disagree=0.** Dominant-reason transients
+  (convergence_timeout×2, nodeSlotUnavailable×2, none×3) all appeared pre-flip too;
+  the one new class is leadership_unstable×1 (likely leader-driven churn) — that run
+  still converged. publication_epochs_disagree, which appeared in a PRE-flip gate, is
+  ABSENT under the flip. The owner-authored authority path is validated at the agreed
+  bar. NOTE: flags remain DEFAULT-OFF in the codebase — the flip is validated, not
+  shipped. Making it default-on (or enabling in deployment) + Phases 3–5 are the
+  next operator decisions.
+- **Phases 3–5 — gated on operator go (the flip is now green).** SEQUENCING: make
+  the flip the real default FIRST, then Phase 3 (collapse the projection to a reader)
+  — deleting the projection while the flip is default-off would break the default
+  path. Then Phase 4 (delete dead guards), Phase 5 (doc/deletion closure). Each
+  hard-to-reverse.
 
 ## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
 
