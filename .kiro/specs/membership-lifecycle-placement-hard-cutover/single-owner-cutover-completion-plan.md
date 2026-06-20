@@ -216,6 +216,40 @@ Only then is "leader agrees at quiescence" a clean, gate-able signal. This is th
 last instrumentation step before Phase 2 is decidable; after it, hold leader
 agreement at quiescence across N≥8 = the green light for the authority flip.
 
+## Phase 0 v4 — quiescence-anchored snapshot (N=3, 2026-06-20, report stat-gate-20260620T145335Z)
+
+Change: throttled non-deduped SNAPSHOT (≥30s) alongside the transition emit, so a
+stable state stays visible. Gate: **3/3 CONVERGED, missing=0, 0 corrupt**
+(12/12 across all four gates — shadow machinery provably behavior-neutral).
+
+v4 leader quiescence:
+- run2: leader **5/6 snapshots agree**, last snapshot agree=True 7s before end →
+  converged-to-agree (clean).
+- run1: leader 4/7 agree, ended disagree at a 0s-gap teardown (the run's
+  `convergence_timeout` case — cut mid-settle).
+- run3: leader-tagged emits **stop 7.4 min before log end** (0 leader snapshots in
+  the tail) — the probe goes dark at quiescence.
+
+**Root obstacle (the spiral's bottom).** The divergence probe rides the
+EVENT-TRIGGERED candidate derivation (`deriveClusterMembershipCandidate`), which
+stops being called once membership is stable. So at true quiescence there is
+nothing to sample — exactly when we most need the reading. Four probe iterations
+have each revealed the next plumbing layer rather than a clean flip signal; the
+instrument is fighting the same derivation complexity the cutover exists to remove.
+
+**Strategic fork (do NOT just keep iterating the live probe).**
+- **v5 (more of the same):** move the divergence sample onto the UNCONDITIONAL
+  owner-membership driver tick (5s liveness interval) so it fires at quiescence.
+  Closes this gap but stays on the live-probe treadmill.
+- **PIVOT (recommended):** stop chasing the live derivation path. Write a
+  DETERMINISTIC owner-rule equivalence test: feed `computeShadowActiveMemberSet`
+  the authoritative inputs at known converged states (from real report fixtures)
+  and assert it reproduces the expected authoritative published set. This answers
+  the flip's actual safety question ("does the owner rule reproduce the
+  authoritative set?") without the quiescence-observability problem, and matches
+  the repo's deterministic-first / gate-last doctrine. The live probe stays as
+  corroborating evidence, not the gate.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
