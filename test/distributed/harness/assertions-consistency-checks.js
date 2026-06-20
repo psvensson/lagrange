@@ -263,6 +263,11 @@ async function assertConsistency(nodes, options = {}) {
     // frozen node = product bug). Pure observation — pass/fail is unchanged.
     mismatchError.epochObservations =
       summarizeConsistencyEpochObservations(comparisonRecords);
+    mismatchError.consistencyMismatchReason = mismatch.reasonCode || null;
+    mismatchError.consistencyMismatchNodes = {
+      reference: mismatch.referenceNodeId || null,
+      other: mismatch.otherNodeId || null,
+    };
     throw mismatchError;
   }
 }
@@ -338,6 +343,8 @@ async function waitForConsistencyConvergence(nodes, options = {}) {
         pollHistory.push({
           elapsedMs: Date.now() - startedAtMs,
           forceRepair,
+          reasonCode: error.consistencyMismatchReason || null,
+          mismatchNodes: error.consistencyMismatchNodes || null,
           observations: error.epochObservations,
         });
         while (pollHistory.length > MAX_CONSISTENCY_POLL_HISTORY) {
