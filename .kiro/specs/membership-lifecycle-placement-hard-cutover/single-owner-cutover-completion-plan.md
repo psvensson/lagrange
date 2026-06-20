@@ -151,6 +151,40 @@ knowledge, recovery-eligible, and transport-retention into the machine
 (port) vs race-papering (drop). Re-run the gate after each to watch the
 divergence shrink.
 
+## Phase 0/1 second gate — refined probe + self-knowledge port (N=3, 2026-06-20, report stat-gate-20260620T132934Z)
+
+Changes since gate 1: (a) probe emits on every state TRANSITION incl.
+settle-to-agree + an `instanceEpoch` marker; (b) owner rule now includes the
+local node id (self-knowledge port). Gate outcome: **3/3 CONVERGED, missing=0,
+0 corrupt, dominant reason "none" all 3** (cleaner than gate 1) — changes remain
+behavior-neutral.
+
+Results:
+- **Probe refinement works.** 180/50/88 `agree:true` settle emits per run; the
+  last emit per node now reveals the quiescent state (impossible before).
+- **Self-knowledge port works.** The gate-1 dominant signature
+  `onlyInProjection:[self]` is essentially gone at quiescence; residual divergence
+  is now almost entirely `onlyInShadow`.
+- **Quiescent residual = follower-side `onlyInShadow:[self/peer]`.** One node
+  (35a891b8) converges to owner==projection AGREEMENT in all 3 runs; the others
+  end with their own LOCAL candidate excluding themselves (and sometimes peers)
+  while the owner rule includes them — even though the cluster converged globally
+  (missing=0, so the AUTHORITATIVE published set includes everyone).
+
+**Key methodological finding (drives the next refinement).** The probe compares
+the owner rule against the node-LOCAL `publishedActiveNodeIds` candidate, which
+`deriveMembershipPublicationCandidate` computes on EVERY node as a planning
+artifact — but only the write-leader's result becomes authoritative. So
+follower-side `onlyInShadow:[self]` is largely benign local-planning lag (the
+follower's stale local view excludes itself; the owner's self-aware rule is
+locally more correct), NOT a disagreement about the authoritative set. The flip
+only changes what the WRITE-LEADER computes. **Next probe refinement (Phase 0 v3):
+scope the divergence comparison to the write-leader (tag emits with
+`isControlPlanePublicationsWriteLeader`, or compare against the authoritative
+leader-written published row), so the go/no-go signal reflects what the authority
+flip actually changes rather than over-counting benign follower lag.** Only after
+that is the divergence metric trustworthy enough to gate Phase 2.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
