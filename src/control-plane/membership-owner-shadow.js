@@ -24,6 +24,10 @@ import {
 } from './membership-lifecycle-constants.js';
 
 const MEMBERSHIP_OWNER_SHADOW_ENV = 'LAGRANGE_MEMBERSHIP_OWNER_SHADOW';
+// Phase 2 flip flag (default OFF): when on, the owner rule AUTHORS the published
+// active-member set instead of the projection. Separate from the shadow-probe flag
+// so the probe can run without changing behavior, and from the leader-driven flag.
+const MEMBERSHIP_OWNER_AUTHORITATIVE_ENV = 'LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE';
 const MEMBERSHIP_OWNER_SHADOW_TRUE = 'true';
 
 // Member states that exclude a node from the active-member set regardless of
@@ -59,6 +63,12 @@ function normalizeMemberStatesByNodeId(memberStatesByNodeId = {}) {
 
 function isMembershipOwnerShadowEnabled(env = process.env) {
   return env?.[MEMBERSHIP_OWNER_SHADOW_ENV] === MEMBERSHIP_OWNER_SHADOW_TRUE;
+}
+
+// Phase 2: when true, the owner rule authors the published active-member set.
+// Default OFF — flipping this is the authority cutover, gated on N≥8 validation.
+function isMembershipOwnerAuthoritative(env = process.env) {
+  return env?.[MEMBERSHIP_OWNER_AUTHORITATIVE_ENV] === MEMBERSHIP_OWNER_SHADOW_TRUE;
 }
 
 // The minimal-input single-owner rule (Phase 1, first cut). Deliberately simpler
@@ -143,8 +153,10 @@ function buildMembershipOwnerDivergence(options = {}) {
 }
 
 export {
+  MEMBERSHIP_OWNER_AUTHORITATIVE_ENV,
   MEMBERSHIP_OWNER_SHADOW_ENV,
   buildMembershipOwnerDivergence,
   computeShadowActiveMemberSet,
+  isMembershipOwnerAuthoritative,
   isMembershipOwnerShadowEnabled,
 };

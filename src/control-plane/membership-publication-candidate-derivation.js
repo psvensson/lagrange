@@ -18,6 +18,7 @@ import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
   buildMembershipOwnerDivergence,
   computeShadowActiveMemberSet,
+  isMembershipOwnerAuthoritative,
   isMembershipOwnerShadowEnabled,
 } from './membership-owner-shadow.js';
 import {
@@ -368,14 +369,44 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     publicationWideningProjection === true &&
     publicationWideningHasNodeRowEvidence !== true &&
     recoveryEligiblePublicationRepairEvidence !== true;
+  // Single-owner rule output, computed once from the same minimal inputs the
+  // divergence probe uses. Built whenever the probe OR the authoritative flip is
+  // enabled; reused below for both the divergence diagnostics and (Phase 2 flip)
+  // as the authored published set.
+  const membershipOwnerAuthoritativeEnabled = isMembershipOwnerAuthoritative();
+  const membershipOwnerShadowEnabled = isMembershipOwnerShadowEnabled();
+  const membershipOwnerActiveMemberSet =
+    membershipOwnerAuthoritativeEnabled || membershipOwnerShadowEnabled ?
+      computeShadowActiveMemberSet({
+        publishedBaselineNodeIds,
+        readinessByNodeId,
+        memberStatesByNodeId:
+          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
+        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
+        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
+      }) :
+      null;
+  // Phase 2 flip (default-OFF): when the owner rule is authoritative and the
+  // caller did not request an explicit set, the owner-authored set drives the
+  // publication target via the existing EXPLICIT_PUBLICATION decision (highest
+  // priority), so publishedActiveNodeIds and every downstream artifact derive
+  // from it consistently. Explicit caller requests still win; an empty owner set
+  // falls through to the projection path.
+  const ownerAuthoredExplicitPublishedNodeIds =
+    membershipOwnerAuthoritativeEnabled &&
+      Array.isArray(membershipOwnerActiveMemberSet) &&
+      membershipOwnerActiveMemberSet.length > NUM.ZERO ?
+      membershipOwnerActiveMemberSet :
+      null;
   const publicationTargetSnapshot = buildMembershipPublicationTargetSnapshot(
     {
       explicitPublishedNodeIds:
         Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
           planningSnapshot.publishedActiveNodeIds :
-          retainPublishedDurableTarget === true ?
-            publishedBaselineNodeIds :
-            [],
+          ownerAuthoredExplicitPublishedNodeIds ??
+            (retainPublishedDurableTarget === true ?
+              publishedBaselineNodeIds :
+              []),
       publishedBaselineNodeIds,
       projectedServingNodeIds: publicationProjectedServingNodeIds,
       recoveryActiveNodeIds:
@@ -390,23 +421,17 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
     publicationTargetSnapshot.nodeIds,
   );
-  // Phase 0 single-owner divergence probe (default-OFF, diagnostics-only): the
-  // minimal-input owner candidate computed from the SAME inputs the projection
-  // saw, so the diff against the projection-derived published set is measurable
-  // before any authority flip. Never alters the published set.
-  const membershipOwnerDivergence = isMembershipOwnerShadowEnabled() ?
-    buildMembershipOwnerDivergence({
-      projectionNodeIds: publishedActiveNodeIds,
-      shadowNodeIds: computeShadowActiveMemberSet({
-        publishedBaselineNodeIds,
-        readinessByNodeId,
-        memberStatesByNodeId:
-          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
-        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
-        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
-      }),
-    }) :
-    null;
+  // Phase 0 single-owner divergence probe (default-OFF, diagnostics-only):
+  // diff the owner-authored set (computed once above) against the
+  // projection-derived published set. When the authoritative flip is on,
+  // publishedActiveNodeIds already IS the owner set, so the diff trivially agrees.
+  const membershipOwnerDivergence =
+    membershipOwnerShadowEnabled && membershipOwnerActiveMemberSet ?
+      buildMembershipOwnerDivergence({
+        projectionNodeIds: publishedActiveNodeIds,
+        shadowNodeIds: membershipOwnerActiveMemberSet,
+      }) :
+      null;
   const publicationRecoveryCohortSnapshot =
     buildMembershipPublicationRecoveryCohortSnapshot(
       {
