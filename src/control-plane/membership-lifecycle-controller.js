@@ -8,6 +8,7 @@ import {
 import {TYPEOF} from '../constants/index.js';
 import {
   buildMembershipLifecycleSummary,
+  isValidMembershipLifecycleTransition,
   MEMBERSHIP_MEMBER_STATE,
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
@@ -48,6 +49,29 @@ export const MEMBERSHIP_LIFECYCLE_INTENT = Object.freeze({
   RESTART_REENTRY: LOCAL_STR_RESTART_REENTRY,
   DRAIN: LOCAL_STR_DRAIN,
   REMOVAL: LOCAL_STR_REMOVAL,
+});
+
+// Phase 1 executable machine: the single lifecycle state each intent drives a
+// member toward. Transitions are validated against
+// MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS; an intent whose mapped step is not a
+// legal transition from the member's current state is recorded as rejected
+// rather than silently applied. RESTART_REENTRY models a node that was published
+// before the restart, so a fresh controller seeds PUBLISHED_ACTIVE before the
+// re-entry step (the durable-rejoin premise).
+const MEMBERSHIP_INTENT_TARGET_LIFECYCLE_STATE = Object.freeze({
+  [MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION]:
+    MEMBERSHIP_LIFECYCLE_STATE.ADMITTED,
+  [MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY]:
+    MEMBERSHIP_LIFECYCLE_STATE.PROVISIONING,
+  [MEMBERSHIP_LIFECYCLE_INTENT.DRAIN]: MEMBERSHIP_LIFECYCLE_STATE.DRAINING,
+  [MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL]: MEMBERSHIP_LIFECYCLE_STATE.REMOVED,
+});
+
+const MEMBERSHIP_TRANSITION_OUTCOME = Object.freeze({
+  APPLIED: 'applied',
+  NOOP: 'noop',
+  INVALID_TRANSITION: 'invalid_transition',
+  UNKNOWN_INTENT: 'unknown_intent',
 });
 
 function normalizeString(value, fallback = LOCAL_STR_EMPTY) {
@@ -249,6 +273,103 @@ export class MembershipLifecycleController {
           null,
     };
     this.intentHistory = [];
+    // Phase 1 executable machine state: per-node lifecycle state + an append-only
+    // transition log. Shadow-only; no consumer reads this yet.
+    this.memberLifecycleStates = new Map();
+    this.memberTransitionHistory = [];
+  }
+
+  getMemberLifecycleState(nodeId) {
+    const normalizedNodeId = normalizeString(nodeId);
+    return this.memberLifecycleStates.get(normalizedNodeId) ||
+      MEMBERSHIP_LIFECYCLE_STATE.ABSENT;
+  }
+
+  snapshotMemberLifecycleStates() {
+    return Object.fromEntries(this.memberLifecycleStates.entries());
+  }
+
+  // Apply one validated lifecycle transition for a member. Returns a typed
+  // outcome and never throws; an illegal step is rejected, not forced.
+  applyMemberTransition(nodeId, toState) {
+    const normalizedNodeId = normalizeString(nodeId);
+    if (!normalizedNodeId || !toState) {
+      return {
+        applied: false,
+        outcome: MEMBERSHIP_TRANSITION_OUTCOME.UNKNOWN_INTENT,
+        nodeId: normalizedNodeId,
+        fromState: null,
+        toState: toState || null,
+      };
+    }
+    const fromState = this.getMemberLifecycleState(normalizedNodeId);
+    if (fromState === toState) {
+      return {
+        applied: false,
+        outcome: MEMBERSHIP_TRANSITION_OUTCOME.NOOP,
+        nodeId: normalizedNodeId,
+        fromState,
+        toState,
+      };
+    }
+    if (!isValidMembershipLifecycleTransition(fromState, toState)) {
+      return {
+        applied: false,
+        outcome: MEMBERSHIP_TRANSITION_OUTCOME.INVALID_TRANSITION,
+        nodeId: normalizedNodeId,
+        fromState,
+        toState,
+      };
+    }
+    this.memberLifecycleStates.set(normalizedNodeId, toState);
+    const record = {
+      nodeId: normalizedNodeId,
+      fromState,
+      toState,
+      at: this.now(),
+    };
+    this.memberTransitionHistory.push(record);
+    return {
+      applied: true,
+      outcome: MEMBERSHIP_TRANSITION_OUTCOME.APPLIED,
+      ...record,
+    };
+  }
+
+  // Drive a member toward the state mapped from an intent. RESTART_REENTRY on a
+  // member with no recorded state seeds PUBLISHED_ACTIVE first (the node was
+  // published before the restart) so the re-entry step is a legal transition.
+  advanceMemberForIntent(intent = {}) {
+    const intentType = normalizeString(intent.intentType);
+    const nodeId = normalizeString(intent.nodeId);
+    const toState = MEMBERSHIP_INTENT_TARGET_LIFECYCLE_STATE[intentType];
+    // Guard nodeId before any state mutation so an empty id cannot seed a junk
+    // key into the shadow map.
+    if (!toState || !nodeId) {
+      return {
+        applied: false,
+        outcome: MEMBERSHIP_TRANSITION_OUTCOME.UNKNOWN_INTENT,
+        nodeId,
+        fromState: nodeId ? this.getMemberLifecycleState(nodeId) : null,
+        toState: null,
+      };
+    }
+    // NOTE (Phase 1 first-cut gap): REMOVAL maps directly to REMOVED, which is
+    // not a legal step from PUBLISHED_ACTIVE (the table routes removal through
+    // DRAINING). A published-active node's REMOVAL is therefore recorded as
+    // invalid_transition today. Inert while the machine drives nothing; must be
+    // made multi-step (PUBLISHED_ACTIVE -> DRAINING -> REMOVED) before the
+    // authority flip (Phase 2).
+    if (
+      intentType === MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY &&
+      this.getMemberLifecycleState(nodeId) === MEMBERSHIP_LIFECYCLE_STATE.ABSENT
+    ) {
+      this.memberLifecycleStates.set(
+        nodeId,
+        MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+      );
+    }
+    return this.applyMemberTransition(nodeId, toState);
   }
 
   async submitJoinIntent(options = {}) {
@@ -261,6 +382,7 @@ export class MembershipLifecycleController {
       requestedAt: options.requestedAt ?? this.now(),
     });
     this.intentHistory.push(intent);
+    this.advanceMemberForIntent(intent);
     if (this.delegates.onJoinIntent) {
       return this.delegates.onJoinIntent({intent, controller: this});
     }
@@ -274,6 +396,7 @@ export class MembershipLifecycleController {
       requestedAt: options.requestedAt ?? this.now(),
     });
     this.intentHistory.push(intent);
+    this.advanceMemberForIntent(intent);
     if (this.delegates.onDrainIntent) {
       return this.delegates.onDrainIntent({intent, controller: this});
     }
@@ -287,6 +410,7 @@ export class MembershipLifecycleController {
       requestedAt: options.requestedAt ?? this.now(),
     });
     this.intentHistory.push(intent);
+    this.advanceMemberForIntent(intent);
     if (this.delegates.onRemovalIntent) {
       return this.delegates.onRemovalIntent({intent, controller: this});
     }

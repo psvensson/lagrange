@@ -16,6 +16,11 @@ import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merg
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
 import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
+  buildMembershipOwnerDivergence,
+  computeShadowActiveMemberSet,
+  isMembershipOwnerShadowEnabled,
+} from './membership-owner-shadow.js';
+import {
   buildMembershipEpochFence,
   buildMembershipEpochSnapshot,
 } from './membership-epoch-contract.js';
@@ -385,6 +390,21 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
     publicationTargetSnapshot.nodeIds,
   );
+  // Phase 0 single-owner divergence probe (default-OFF, diagnostics-only): the
+  // minimal-input owner candidate computed from the SAME inputs the projection
+  // saw, so the diff against the projection-derived published set is measurable
+  // before any authority flip. Never alters the published set.
+  const membershipOwnerDivergence = isMembershipOwnerShadowEnabled() ?
+    buildMembershipOwnerDivergence({
+      projectionNodeIds: publishedActiveNodeIds,
+      shadowNodeIds: computeShadowActiveMemberSet({
+        publishedBaselineNodeIds,
+        readinessByNodeId,
+        memberStatesByNodeId:
+          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
+      }),
+    }) :
+    null;
   const publicationRecoveryCohortSnapshot =
     buildMembershipPublicationRecoveryCohortSnapshot(
       {
@@ -661,6 +681,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     priorityRecoveryClosureWitness,
     priorityRecoveryDecisionSnapshots,
     projectionDiagnostics,
+    membershipOwnerDivergence,
     reasonCode,
     changed,
     priorityPartitionSummaryChanged,
