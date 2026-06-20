@@ -403,6 +403,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         memberStatesByNodeId:
           planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
         localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
+        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
       }),
     }) :
     null;

@@ -78,8 +78,10 @@ function computeShadowActiveMemberSet(options = {}) {
   const memberStatesByNodeId = normalizeMemberStatesByNodeId(
     options.memberStatesByNodeId,
   );
+  const isPromotable = (nodeId) =>
+    isReadinessPromotable(readinessByNodeId[nodeId] || null);
   const readinessPromotableNodeIds = Object.keys(readinessByNodeId).filter(
-    (nodeId) => isReadinessPromotable(readinessByNodeId[nodeId] || null),
+    isPromotable,
   );
   // Phase 1 reconciliation (self-node fast path): the node computing the
   // candidate is alive and executing — the strongest possible membership signal,
@@ -87,8 +89,20 @@ function computeShadowActiveMemberSet(options = {}) {
   // during early formation (the dominant onlyInProjection=[self] divergence).
   // Recovery-eligible nodes are already covered by isReadinessPromotable.
   const localNodeId = String(options.localNodeId || '').trim();
+  // Freeze-gated baseline retention (matches the projection's safety semantics):
+  // - Under freeze (broad suspicion) RETAIN the full published baseline so a
+  //   suspicion storm cannot trim a quorum.
+  // - Outside freeze, a baseline node is retained only while it stays
+  //   readiness-promotable; a no-longer-promotable baseline node is TRIMMED
+  //   (departed member), matching the projection's non-frozen steady trim.
+  // `isReadinessPromotable(null)` is true, so a baseline node with no readiness
+  // entry is retained — same default the projection uses.
+  const membershipFreezeActive = options.membershipFreezeActive === true;
+  const baselineRetainedNodeIds = membershipFreezeActive ?
+    publishedBaselineNodeIds :
+    publishedBaselineNodeIds.filter(isPromotable);
   const candidateNodeIds = normalizeNodeIdList([
-    ...publishedBaselineNodeIds,
+    ...baselineRetainedNodeIds,
     ...readinessPromotableNodeIds,
     ...(localNodeId ? [localNodeId] : []),
   ]);

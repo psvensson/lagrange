@@ -11,6 +11,9 @@
 import {readFileSync} from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {computeShadowActiveMemberSet} from '../../src/control-plane/membership-owner-shadow.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION as DIM,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const FIXTURES = JSON.parse(
   readFileSync(
@@ -20,13 +23,15 @@ const FIXTURES = JSON.parse(
 
 const PROMOTABLE = Object.freeze({
   dimensions: {
-    cluster_member_healthy: true,
-    control_plane_writable: true,
-    repair_eligible: true,
-    serve_eligible: true,
+    [DIM.CLUSTER_MEMBER_HEALTHY]: true,
+    [DIM.CONTROL_PLANE_WRITABLE]: true,
+    [DIM.REPAIR_ELIGIBLE]: true,
+    [DIM.SERVE_ELIGIBLE]: true,
   },
 });
-const UNPROMOTABLE = Object.freeze({dimensions: {cluster_member_healthy: false}});
+const UNPROMOTABLE = Object.freeze({
+  dimensions: {[DIM.CLUSTER_MEMBER_HEALTHY]: false},
+});
 
 function readinessFor(nodeIds, excludedNodeIds) {
   const excluded = new Set(excludedNodeIds);
@@ -46,6 +51,7 @@ test('equivalence: owner rule reproduces the authoritative published set on ever
         readinessByNodeId: readiness,
         memberStatesByNodeId: fx.memberStatesByNodeId,
         localNodeId,
+        membershipFreezeActive: fx.membershipFreezeActive,
       });
       t.same(
         got,
@@ -71,10 +77,11 @@ test('equivalence holds under the safety-freeze + unreachable fixtures (baseline
       readinessByNodeId: readinessFor(auth, fx.readinessExcludedNodeIds),
       memberStatesByNodeId: fx.memberStatesByNodeId,
       localNodeId: auth[0],
+      membershipFreezeActive: true,
     });
-    // The owner rule retains published-baseline nodes (incl. transiently
-    // unreachable ones) — exactly the projection's freeze-retention behavior —
-    // so it does NOT trim a quorum under broad suspicion.
+    // Under freeze the owner rule retains published-baseline nodes (incl.
+    // transiently unreachable ones) — exactly the projection's freeze-retention
+    // behavior — so it does NOT trim a quorum under broad suspicion.
     t.same(got, auth, `${fx.source}: owner retains the frozen published set`);
   }
   t.end();
@@ -110,21 +117,43 @@ test('self-knowledge: an alive write-leader not yet in the published baseline is
   t.end();
 });
 
-test('known Phase 1 gap (documented): the owner rule does NOT trim an unreachable baseline node outside freeze', (t) => {
-  // When the authoritative projection TRIMS an unreachable node (non-freeze), the
-  // owner rule currently retains it via the baseline — the residual onlyInShadow
-  // direction. This is the remaining Phase 1 reconciliation item (port the
-  // non-freeze trim semantics); asserted here so the gap is explicit, not silent.
+test('non-freeze trim (Phase 1 residual now closed): a no-longer-promotable baseline node is dropped', (t) => {
+  // Outside freeze, the projection trims a departed (non-promotable) baseline
+  // node; the owner rule now matches that (the residual onlyInShadow direction).
   const got = computeShadowActiveMemberSet({
     publishedBaselineNodeIds: ['a', 'b', 'gone'],
-    readinessByNodeId: {
-      a: PROMOTABLE,
-      b: PROMOTABLE,
-      gone: UNPROMOTABLE,
-    },
+    readinessByNodeId: {a: PROMOTABLE, b: PROMOTABLE, gone: UNPROMOTABLE},
     memberStatesByNodeId: {gone: 'unreachable'},
     localNodeId: 'a',
+    membershipFreezeActive: false,
   });
-  t.ok(got.includes('gone'), 'unreachable baseline node is currently retained (known gap)');
+  t.notOk(got.includes('gone'), 'non-promotable baseline node trimmed outside freeze');
+  t.same(got, ['a', 'b']);
+  t.end();
+});
+
+test('freeze still retains a non-promotable baseline node (safety preserved)', (t) => {
+  // The same node under freeze must be RETAINED — trimming under broad suspicion
+  // is the quorum-loss hazard the freeze gate exists to prevent.
+  const got = computeShadowActiveMemberSet({
+    publishedBaselineNodeIds: ['a', 'b', 'gone'],
+    readinessByNodeId: {a: PROMOTABLE, b: PROMOTABLE, gone: UNPROMOTABLE},
+    memberStatesByNodeId: {gone: 'unreachable'},
+    localNodeId: 'a',
+    membershipFreezeActive: true,
+  });
+  t.ok(got.includes('gone'), 'frozen baseline node retained');
+  t.same(got, ['a', 'b', 'gone']);
+  t.end();
+});
+
+test('a baseline node with no readiness entry stays promotable-by-default (matches projection)', (t) => {
+  const got = computeShadowActiveMemberSet({
+    publishedBaselineNodeIds: ['a', 'b'],
+    readinessByNodeId: {}, // no entries at all
+    localNodeId: 'a',
+    membershipFreezeActive: false,
+  });
+  t.same(got, ['a', 'b'], 'missing readiness entry is treated as promotable');
   t.end();
 });
