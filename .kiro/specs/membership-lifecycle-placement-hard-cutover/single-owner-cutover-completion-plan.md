@@ -136,11 +136,30 @@ patches*, not a claim that Phase 2 is a single-knob change.
   bar. NOTE: flags remain DEFAULT-OFF in the codebase — the flip is validated, not
   shipped. Making it default-on (or enabling in deployment) + Phases 3–5 are the
   next operator decisions.
-- **Phases 3–5 — gated on operator go (the flip is now green).** SEQUENCING: make
-  the flip the real default FIRST, then Phase 3 (collapse the projection to a reader)
-  — deleting the projection while the flip is default-off would break the default
-  path. Then Phase 4 (delete dead guards), Phase 5 (doc/deletion closure). Each
-  hard-to-reverse.
+- **DEFAULT-ON ATTEMPT REVERTED — CRITICAL FINDING (commit a40069f3).** Making the
+  flip the default broke **~45 coordinator unit tests**. The minimal owner rule
+  reproduces CONVERGED steady-state (equivalence on 14 fixtures + N=8 gate 8/8) but
+  NOT the projection's TRANSIENT orchestration:
+  - recovery-cohort promotion (recovery-eligible joiners/learners, repair cohort,
+    "process-dead recovery-only nodes must not enter the ack set"),
+  - required-ACK derivation (widen requires full-membership ack; trim only serving;
+    carry-forward completed acks; deferred nodes excluded),
+  - epoch monotonicity / stability ("transient projection regressions must NOT
+    reopen the epoch with a narrower set"; reuse epoch on metadata-only change),
+  - trim/widen target selection (durable baseline vs settled serving projection),
+  - priority-spread coupling.
+  Several are real safety/correctness properties, not stale expectations. The N=8
+  gate measures END-STATE convergence; these unit tests measure the intermediate
+  published-set decisions — deterministic-first caught what the gate could not.
+- **REVISED STATUS: the flip is a validated OPT-IN for steady-state convergence, NOT
+  a drop-in default.** Phase 2 is NOT complete. Before the flip can be default / the
+  projection can be deleted, the owner-authoring path must reproduce the ~45
+  behaviors above (the failing-test list is the precise worklist). This is
+  substantial: the projection does far more than compute a steady-state set
+  (recovery protocol, ACK orchestration, epoch management, priority spread) — the
+  cutover must port that orchestration, not just the set computation.
+- **Phases 3–5 — BLOCKED on the above.** Hard-to-reverse deletions; do not start
+  until the owner path is a true drop-in (the ~45 tests green with the flip on).
 
 ## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
 
