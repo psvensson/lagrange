@@ -116,9 +116,17 @@ patches*, not a claim that Phase 2 is a single-knob change.
   90/90 assertions; subagent confirmed the freeze safety boundary has no
   quorum-loss path. The remaining known item (REMOVAL multi-step in the lifecycle
   machine) is internal to the not-yet-wired machine and not on the owner-set path.
-- **Phases 2–5 — NOT STARTED (gated).** Require N≥8 rolling-restart validation
-  and the populated divergence map; Phase 3/4 are hard-to-reverse deletions.
-  Not safe to execute without the green gate the plan mandates.
+- **Phase 2 — WIRING LANDED, default-OFF (commit 01bb265c); flip NOT yet enabled.**
+  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` routes the owner-authored set through
+  the EXPLICIT_PUBLICATION decision so publishedActiveNodeIds + all downstream
+  derive from it consistently. Flip test + 139/139 owner suite green; default-off
+  coordinator suite unchanged. PENDING: the N=8 validation gate with
+  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE=true LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true`
+  — the launch is blocked by the harness auto-approval classifier (highest-blast
+  -radius action), so it must be run with explicit operator authorization:
+  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE=true LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true bash scripts/rolling-restart-stat-gate.sh 8`
+  Go/no-go: missing=0, corrupt=0, publication_epochs_disagree=0 across N=8.
+- **Phases 3–5 — NOT STARTED (gated on a green flip).** Hard-to-reverse deletions.
 
 ## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
 
