@@ -185,6 +185,37 @@ leader-written published row), so the go/no-go signal reflects what the authorit
 flip actually changes rather than over-counting benign follower lag.** Only after
 that is the divergence metric trustworthy enough to gate Phase 2.
 
+## Phase 0 v3 — authority-scoped divergence (N=3, 2026-06-20, report stat-gate-20260620T141052Z)
+
+Change: each emit tagged with `isWriteLeader` (resolved by the probe via
+`isControlPlanePublicationsWriteLeader`, fail-safe, flag-independent), role folded
+into the dedup key. Gate: **3/3 CONVERGED, missing=0, 0 corrupt** (now 9/9 runs
+clean across all three gates — the shadow machinery is provably behavior-neutral).
+
+Authority-scoped verdict (final write-leader's owner-vs-authoritative state):
+- run1: final leader 7493b0ab → **agree** ✓
+- run3: final leader 7493b0ab → **agree** ✓
+- run2: last leader-tagged emit (11601fe0 @14:21:27) → disagree `[self,35a891b8]`,
+  BUT it was flapping agree↔disagree during catch-up and then went SILENT for the
+  final ~6 min (log ran to 14:27:48) amid heavy leadership churn. The cluster
+  converged (missing=0) in that window.
+
+**Decisive finding — the transition+dedup probe has a quiescence blind spot.** A
+stable final state does not re-emit (dedup), and per-instance dedup + leadership
+churn make "last emit" an unreliable proxy for "final state." So run2's
+steady-state verdict is genuinely UNDETERMINABLE from this instrument — not shown
+to be a real disagreement, not shown to be benign. v3 still sharpened the signal
+massively: 2/3 runs cleanly show the authoritative writer agreeing, and the
+residual is concentrated at one node-pair during one run's final restart, not
+pervasive.
+
+**Next instrument (Phase 0 v4) — quiescence-anchored sample.** Emit the
+write-leader's divergence state UNCONDITIONALLY at the convergence/quiescence
+point (or a periodic non-deduped snapshot), so a stable final state is visible.
+Only then is "leader agrees at quiescence" a clean, gate-able signal. This is the
+last instrumentation step before Phase 2 is decidable; after it, hold leader
+agreement at quiescence across N≥8 = the green light for the authority flip.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
