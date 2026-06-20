@@ -158,8 +158,28 @@ patches*, not a claim that Phase 2 is a single-knob change.
   substantial: the projection does far more than compute a steady-state set
   (recovery protocol, ACK orchestration, epoch management, priority spread) — the
   cutover must port that orchestration, not just the set computation.
-- **Phases 3–5 — BLOCKED on the above.** Hard-to-reverse deletions; do not start
-  until the owner path is a true drop-in (the ~45 tests green with the flip on).
+- **OPTION-3 REWIRE — DECISIVE (commit b982f006).** Root cause of the ~45 breaks:
+  the flip injected the owner set as `explicitPublishedNodeIds`, which made
+  EXPLICIT_PUBLICATION win and BYPASSED the trim/widen/recovery/ACK/epoch
+  orchestration. Fix: inject the owner set at `projectedServingNodeIds` (the
+  orchestration's INPUT) instead, so the machinery runs OVER the owner's serving
+  view. Result: **flag-ON coordinator failures 45 → 7.** Confirms the right model
+  is "owner authors the serving set; the existing pipeline orchestrates publication
+  from it" — NOT "owner authors the final published set."
+- **RESIDUAL WORKLIST (7 tests, flag-on) — bounded + themed:**
+  - Trim-epoch/ACK reconciliation (5): trim opens new epoch; next publication uses
+    the settled serving projection; trim ack from serving members only;
+    carry-forward completed acks for retained; settled trim replaces stale recovery
+    cohort.
+  - Recovery-only visibility (2): recovery-only node stays visible in the observed
+    projection; process-dead recovery joiners deferred from acks.
+  - (Plus the 3 known pre-existing owner-key retry failures — not flip-related.)
+  Likely cause: only `projectedServingNodeIds` is swapped, while `observedActiveNodeIds`
+  and recovery diagnostics remain projection-derived → trim/recovery mismatches.
+  Next step is to reconcile those sibling inputs (observed/recovery views) with the
+  owner serving set, one theme at a time, re-running the suite.
+- **Phases 3–5 — still BLOCKED** until the 7 residuals are green with the flip on
+  (then the owner path is a true drop-in and the projection can be collapsed).
 
 ## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
 
