@@ -36,6 +36,7 @@ test('emit: a stable state logs once, then dedups', (t) => {
   t.equal(infoCalls[0].ctx.agree, false);
   t.same(infoCalls[0].ctx.onlyInProjection, ['b']);
   t.ok(Number.isFinite(infoCalls[0].ctx.instanceEpoch), 'carries instance marker');
+  t.equal(infoCalls[0].ctx.isWriteLeader, false, 'tags write-leader role (false without cache)');
   t.end();
 });
 

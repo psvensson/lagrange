@@ -4,6 +4,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
 import {
@@ -51,6 +52,8 @@ import {
 // projection-derived published set, and only once per distinct signature.
 const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
+const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER = 'L';
+const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER = 'F';
 
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
@@ -539,10 +542,28 @@ class MembershipPublicationCoordinatorReads {
       if (this._membershipOwnerDivergenceInstanceEpoch === null) {
         this._membershipOwnerDivergenceInstanceEpoch = this.now();
       }
-      const state = divergence.agree === true ?
+      // Phase 0 v3 (authority scoping): tag each emit with whether THIS node is
+      // the control_plane_publications write-leader. Only the write-leader's
+      // local candidate becomes the authoritative published set, so leader-tagged
+      // divergence is the owner-vs-authoritative signal that gates the Phase 2
+      // flip; follower-tagged divergence is benign local-planning lag. Resolved
+      // by the probe itself (fail-safe false), independent of the leader-driven
+      // feature flag.
+      const isWriteLeader = isControlPlanePublicationsWriteLeader(
+        this.systemTableCache,
+        this.nodeId,
+        this.cdcIntegrationService,
+      ) === true;
+      const role = isWriteLeader ?
+        MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER :
+        MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER;
+      const divergenceState = divergence.agree === true ?
         MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE :
         `${divergence.onlyInProjection.join(',')}|` +
           `${divergence.onlyInShadow.join(',')}`;
+      // Include role in the dedup key so a leadership transition re-emits and the
+      // leader-tagged timeline stays complete.
+      const state = `${role}|${divergenceState}`;
       if (state === this._membershipOwnerDivergenceLastState) {
         return;
       }
@@ -550,6 +571,7 @@ class MembershipPublicationCoordinatorReads {
       this.logger?.info?.(MEMBERSHIP_OWNER_DIVERGENCE_MSG, {
         nodeId: this.nodeId,
         instanceEpoch: this._membershipOwnerDivergenceInstanceEpoch,
+        isWriteLeader,
         agree: divergence.agree,
         onlyInProjection: divergence.onlyInProjection,
         onlyInShadow: divergence.onlyInShadow,
