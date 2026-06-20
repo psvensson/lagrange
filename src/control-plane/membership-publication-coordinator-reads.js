@@ -46,6 +46,11 @@ import {
   shouldMergePlanningEvidenceRows,
 } from './membership-publication-planning-evidence.js';
 
+// Phase 0 single-owner divergence probe log tag (greppable in per-node
+// full-logs). Emitted only when the shadow owner rule disagrees with the
+// projection-derived published set, and only once per distinct signature.
+const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
+
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
@@ -71,6 +76,10 @@ class MembershipPublicationCoordinatorReads {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
+    // Phase 0 divergence probe: dedup signatures already emitted so the
+    // single-owner shadow diff is logged once per distinct divergence state
+    // (bounded volume, non-perturbing) rather than on every derivation tick.
+    this._membershipOwnerDivergenceSeen = new Set();
     this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.workflowCoordinator =
       options.workflowCoordinator ||
@@ -499,10 +508,41 @@ class MembershipPublicationCoordinatorReads {
       options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
         options.planningSnapshot :
         await this.readPublicationPlanningSnapshot(options);
-    return deriveMembershipPublicationCandidate({
+    const candidate = deriveMembershipPublicationCandidate({
       ...options,
       planningSnapshot,
     });
+    this._emitMembershipOwnerDivergence(candidate?.membershipOwnerDivergence);
+    return candidate;
+  }
+
+  // Phase 0: surface the single-owner divergence into per-node logs, deduped by
+  // signature so a stable divergence state logs once. No-op when the shadow flag
+  // is off (divergence is null) or when the owner rule agrees with the
+  // projection. Never throws — diagnostics must not perturb the publication path.
+  _emitMembershipOwnerDivergence(divergence) {
+    if (!divergence || divergence.agree !== false) {
+      return;
+    }
+    try {
+      const signature =
+        `${divergence.onlyInProjection.join(',')}|` +
+        `${divergence.onlyInShadow.join(',')}`;
+      if (this._membershipOwnerDivergenceSeen.has(signature)) {
+        return;
+      }
+      this._membershipOwnerDivergenceSeen.add(signature);
+      this.logger?.info?.(MEMBERSHIP_OWNER_DIVERGENCE_MSG, {
+        nodeId: this.nodeId,
+        onlyInProjection: divergence.onlyInProjection,
+        onlyInShadow: divergence.onlyInShadow,
+        projectionCount: divergence.projectionCount,
+        shadowCount: divergence.shadowCount,
+        divergenceCount: divergence.divergenceCount,
+      });
+    } catch {
+      // diagnostics-only; never disturb the publication path
+    }
   }
 }
 
