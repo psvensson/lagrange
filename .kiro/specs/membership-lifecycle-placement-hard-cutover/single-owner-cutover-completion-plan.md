@@ -105,12 +105,17 @@ patches*, not a claim that Phase 2 is a single-knob change.
   Commit `5ac87f34`. Subagent-verified SOUND. The divergence MAP itself still
   needs a gate run with the flag on to populate (the probe is built; the data is
   not yet collected).
-- **Phase 1 — FIRST CUT DONE (shadow).** Executable lifecycle machine in
-  `membership-lifecycle-controller.js` (`applyMemberTransition`,
-  `advanceMemberForIntent`, per-member state). Two known pre-flip gaps documented
-  in code: REMOVAL must become multi-step (PUBLISHED_ACTIVE→DRAINING→REMOVED);
-  `computeActiveMemberSet` is the minimal rule, not yet reconciled to every
-  overlay (that reconciliation is driven by the Phase 0 divergence map).
+- **Phase 1 — DONE + subagent-verified SOUND (shadow).** Executable lifecycle
+  machine in `membership-lifecycle-controller.js`. Owner rule
+  `computeShadowActiveMemberSet` reconciled to the load-bearing overlays:
+  self-knowledge (self-node fast path), recovery-eligible (already via
+  `isReadinessPromotable`), and freeze-gated trim (under freeze retain the full
+  baseline; outside freeze trim a no-longer-promotable baseline node).
+  DETERMINISTIC EQUIVALENCE PROVEN: the owner rule reproduces the authoritative
+  published set on all 14 real converged fixtures (incl. freeze+unreachable),
+  90/90 assertions; subagent confirmed the freeze safety boundary has no
+  quorum-loss path. The remaining known item (REMOVAL multi-step in the lifecycle
+  machine) is internal to the not-yet-wired machine and not on the owner-set path.
 - **Phases 2–5 — NOT STARTED (gated).** Require N≥8 rolling-restart validation
   and the populated divergence map; Phase 3/4 are hard-to-reverse deletions.
   Not safe to execute without the green gate the plan mandates.
@@ -279,6 +284,49 @@ baseline node. Next Phase 1 step is bounded and concrete (port non-freeze trim),
 after which Phase 2 (authority flip) becomes a flag-gated N≥8 validation rather than
 an open question. The live probe remains as corroborating evidence; this
 deterministic test is the gate.
+
+## Phase 2 flip-execution design (STAGED — requires explicit go + N≥8; do NOT enable autonomously)
+
+Deliberately NOT yet wired: `publishedActiveNodeIds` (the projection-derived set
+at `candidate-derivation.js:393`) feeds ~15 downstream computations (recovery
+cohort, priority-partition summary, member states, recovery-protocol snapshot,
+the `changed` flag, the returned candidate). Replacing it is the flip; a
+half-wired default-off version (swap line 393, leave downstream on the projection
+set) is a latent landmine. So the flip is specified here for review, not landed.
+
+**The flip (exact change).**
+1. New flag `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` (default OFF), separate from
+   the shadow-probe and leader-driven flags.
+2. In `deriveMembershipPublicationCandidate`, when the flag is on, set the
+   published candidate from `computeShadowActiveMemberSet(...)` (the same inputs
+   the probe already feeds it) INSTEAD of `publicationTargetSnapshot.nodeIds`, and
+   recompute every downstream artifact (recovery cohort, priority summary, member
+   states, recovery-protocol snapshot, `changed`) from the owner-authored set so
+   the candidate is internally consistent. No downstream may keep reading the
+   projection-derived set.
+3. Authoring is leader-scoped: only the control_plane_publications write-leader's
+   candidate is written (existing leader gate / `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN`);
+   followers still derive locally but do not write. Safety remains the Raft term
+   fence on the write path (B3 SQL-fallback fence must stay).
+
+**Validation protocol (the go/no-go).**
+- Deterministic gate (primary): the equivalence test must stay green, extended
+  with trim fixtures, before enabling.
+- Distributed gate: enable the flag, run rolling-restart at **N≥8**; require
+  `missing=0`, `corrupt=0`, `publication_epochs_disagree=0`, and the shadow
+  divergence probe (kept on) showing leader-tagged agree at quiescence. The N is
+  the user's bar; the project's history says convergence rate is noisy, so an
+  ambiguous gate means DIAGNOSE, not retry.
+- Backout: disable `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` → instantly reverts
+  to the projection-authored set. Fully reversible.
+
+**Why this is the atomic reconcile.** Per `CoupledAdmission.tla`, the flip must
+change the authoritative set in one gated step, not per-knob patches. The owner
+rule is proven (deterministic equivalence on real converged states) to reproduce
+the authoritative set, so the flip's risk is downstream-consistency + distributed
+timing — exactly what the N≥8 gate measures. After a green flip, Phase 3 (collapse
+the projection to a reader) and Phase 4 (delete the dead guards) follow, each
+gated.
 
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
