@@ -217,6 +217,42 @@ knowledge, recovery-eligible, and transport-retention into the machine
 (port) vs race-papering (drop). Re-run the gate after each to watch the
 divergence shrink.
 
+## ⚠ STRATEGIC FINDING — the "replace the projection" premise is REFUTED (2026-06-20)
+
+Working the 7 option-3 residuals surfaced the deciding evidence. The canonical trim
+test ("trims stale published members after recovery projection settles") trims
+node4/node5, which have NO node-row / endpoint / service / readiness at all — the
+projection trims them via **presence evidence**. The minimal owner rule
+(`computeShadowActiveMemberSet`), whose only inputs are published-baseline +
+readiness, treats a missing readiness entry as promotable and therefore **RETAINS**
+departed nodes. It structurally lacks the evidence the projection uses to trim.
+
+Tested the alternative (Path-Y: keep the projection's evidence-based serving set, add
+ONLY the owner's self-correction): flag-on coordinator failures went 7 → 0 — but only
+because the self-correction is a **near-no-op** in the unit scenarios. I.e. the only
+way to make the flip pass is to NOT replace the projection.
+
+**Conclusion (walks back the original lever #1):** the projection's complexity is
+mostly ESSENTIAL evidence integration (presence→trim, recovery cohort, ACK
+orchestration), not accidental. A minimal single-owner rule cannot replace it without
+re-deriving all of it (= rewriting the projection, no net simplification, high risk).
+Therefore:
+- **Phase 3 (collapse/delete the 7-source projection) is NOT viable.** The projection
+  is doing necessary work.
+- **Lever #2 (delete the readiness guards) is largely NOT viable** — those guards
+  (heartbeat/lease grace, transport-retention, recovery-eligible, freeze) ARE the
+  evidence integration, not race-papering.
+- The achievable win shrinks to **single-ownership routing** (one authored path +
+  the self-knowledge correction) + **collapsing consumers to read one published
+  artifact** — real but far smaller than the LOC-collapse the analysis projected.
+- **Lever #3 (rebalancer reconcile-table consolidation) is independent** of this and
+  is NOT refuted by this finding.
+
+What was genuinely won: the Phase 0 divergence probe (a real diagnostic), the
+equivalence test + fixtures (owner==projection at converged states), the flip wiring
+(opt-in, N=8 convergence-green), and — most valuably — **proof that "delete the
+projection" is a dead end before sinking a multi-session rewrite into it.**
+
 ## Phase 0/1 second gate — refined probe + self-knowledge port (N=3, 2026-06-20, report stat-gate-20260620T132934Z)
 
 Changes since gate 1: (a) probe emits on every state TRANSITION incl.
