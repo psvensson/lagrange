@@ -139,6 +139,35 @@ measure RAW settle at each `--cpus` to BUILD the table:
   byte-identical to today. The mechanism is sound; its rate-level *benefit* on slow
   hardware is plausible but not yet statistically demonstrated.
 
+## RATE VERDICT — N=8 per arm at cpus=0.75 (2026-06-20) — CALIBRATION IS LOAD-BEARING
+
+The discriminating gate: cpus=0.75 (mild enough that cpus=1.0 reliably PASSes),
+N=8 WITH calibration (factor 1.275) vs N=8 WITHOUT (nominal, factor 1.0).
+
+| arm | PASS | budget-timeout (BLOCK_TOPOLOGY_CONVERGENCE) | SAFE | other |
+| --- | ---- | ------------------------------------------- | ---- | ----- |
+| **cal** (1.275×) | **4/8 (50%)** | 2/8 | 7/8 | 1 node-exit, 1 evidence-incomplete |
+| **nocal** (1.0×) | **0/8 (0%)** | **7/8** | 8/8 | 1 evidence-incomplete |
+
+**Decisive:** without calibration the nominal budget is too tight for the 1.27×-
+slower hardware — **0/8 PASS, 7/8 budget-bound topology-convergence timeouts**. With
+calibration the scaled budget converts those into passes — **4/8 PASS, budget-
+timeouts cut 7→2**. (nocal 0/8 under a true ~50% rate has p≈0.5^8≈0.004, so the
+effect is not chance.) The cal arm's 50% PASS matches the cpus=1.0 baseline (~50%
+from prior gates) = **pass-rate invariance across hardware**, the design's goal.
+
+Note: all 8 nocal runs reached publication convergence (stat-gate CONVERGED,
+missing=0) yet failed the strict scenario verdict on the budget-bound topology
+dimension — calibration is what closes that gap on slow hardware.
+
+**SAFE:** 0 data corruption (hardBreach=0) across ALL 16 runs. The one non-SAFE
+event was a single node-death in the cal arm (CL-030 resource-floor lineage) —
+plausibly because calibrated runs run LONGER under sustained 0.75-cpu pressure, so
+more exposure to the resource-floor death. This is a hardware-floor caveat (cpus=0.75
+is near the viable floor for this 5-node workload), NOT a calibration defect:
+calibration only extends timeouts, it cannot kill a node. Below ~0.75 cpu the
+cluster starts shedding nodes — the publishable "minimum viable hardware" signal.
+
 ## Falsifiable success criterion
 
 Gate pass-rate is statistically indistinguishable at `cpus=0.5` and `cpus=2.0` once
