@@ -452,3 +452,37 @@ PRE-RUN STATE (this session, both committed on main):
   a deliverLocal-bypass / address-mismatch self-send bug with a clean low-risk fix, or a deep transport bug (then
   consolidate). SESSION WINS SO FAR: 3 verified fixes (97f55323, 40928ba2, f4e920d6) moved passRate ~17-33%->50%,
   eliminated publication-epoch head + cleared operation-drain-transport head. doneWhen still false.
+
+- iter12 2026-06-20T~06:4xZ: N=8 CONFIRMATION GATE 032205Z (srcFP 10757a8f, 3-fix HEAD): 8/8 CONVERGED cluster SAFE,
+  passRate 2/8 (runs 1,8). Combined w/ N=6 = 5/14 (~36%) at HEAD. KEY: publication_epochs_disagree 0/8 AND
+  replica_operations_in_flight 0/8 — BOTH this-session-target heads absent. Frontier now DIFFUSE/multi-headed, NONE
+  dominant: convergence_timeout x2, leadership_unstable x1, nodeSlotUnavailable x1, observer_authority_visibility_lag
+  x1, quiescence_candidate x1. = the coupled-system state (point-fixes bounce; real lever = structural membership-
+  single-owner cutover OR raft churn damp — high-blast-radius/user-deferred per altitude epic + BISECT VERDICT).
+  The 4th head (source-removal self-dispatch no_handler) is intermittent (2/6 N6, 0/8 N8 ~14%) so fixing it alone
+  won't move the rate much. CHEAP DECISIVE TEST NEXT: try to reproduce the deliverLocal-self-handler-miss paradox
+  DETERMINISTICALLY in isolation (register handler -> deliver to self). If reproducible = unit-debuggable; if not =
+  gate-environment-only (restart timing) -> next-session instrumented gate. SESSION VERDICT forming: the clear
+  tractable point-fixes are LARGELY EXHAUSTED (cleared 2 heads, passRate up); remainder = diffuse coupled root.
+
+- iter13 2026-06-20T~06:5xZ: DETERMINISTIC REPRO of the self-dispatch paradox = NEGATIVE. In isolation
+  (new MessageRouter, register handler at nodeA/service/replica-handler, deliver to self w/ targetNodeId=nodeA)
+  the handler IS invoked in-process (invoked:true, removed:true, delivered). So the gate paradox is
+  ENVIRONMENT-SPECIFIC (rolling-restart timing/restart state), NOT a static bug -> needs runtime instrumentation
+  in the gate (log handlers.get key + getRegisteredAddresses at the failing self-send) to pin; intermittent (~14%)
+  so deferred to next session w/ poor same-session EV.
+  ====== SESSION-END VERDICT (autonomous run 3, ~6.9h elapsed) ======
+  TRACTABLE POINT-FIX WORK = EXHAUSTED this session. Delivered: 4 below-gate fixes (97f55323 SELF transport,
+  40928ba2 B-INCOMING transport, f4e920d6 leader-pin catch-up + d1de030f/4c0e67dc instrumentation), cleared 2
+  frontier heads (publication-epoch consistency GATE-CONFIRMED 0; operation-drain transport), passRate ~17-33% ->
+  ~36-50% (5/14 at HEAD across N6+N8), cluster SAFE every run (0 corrupt/breach/exit across 22 runs at HEAD).
+  REMAINING frontier = DIFFUSE coupled root (6 rotating heads, none dominant: convergence_timeout, leadership_unstable,
+  quiescence_candidate, nodeSlotUnavailable, observer_authority_visibility_lag, + intermittent replica_operations_in_flight).
+  Per memory + 2 prior autonomous runs + the BISECT VERDICT + altitude epic: this is the coupled churn/settle root
+  where point-fixes BOUNCE; the real lever is the STRUCTURAL membership-single-owner cutover OR raft churn damp
+  (raft pre-vote) OR recovery-gate Option-2 — all HIGH-BLAST-RADIUS / USER-GATED (cluster SAFE property has held
+  every run; autonomously attempting a structural cutover risks that). STOP = EXHAUSTED (no honest tractable
+  autonomous move w/o high-blast-radius risk). Did NOT force high-blast-radius work autonomously (memory says
+  user-gated + safety). NEXT-SESSION tractable candidates (need a gate cycle each): (1) instrument the self-dispatch
+  no_handler in-gate -> source-removal in-process bypass; (2) observer_authority_visibility_lag (analogous to the
+  epochs_disagree oracle-vs-product question — instrument-first). Structural lever = user decision.
