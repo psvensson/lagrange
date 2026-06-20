@@ -115,6 +115,42 @@ patches*, not a claim that Phase 2 is a single-knob change.
   and the populated divergence map; Phase 3/4 are hard-to-reverse deletions.
   Not safe to execute without the green gate the plan mandates.
 
+## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
+
+Gate outcome: **3/3 CONVERGED, missing=0, 0 corrupt/stale/node-exit**, ~484s/run.
+Probe active (`LAGRANGE_MEMBERSHIP_OWNER_SHADOW=true`), 59/56/47 deduped
+divergence signatures per run. The minimal owner rule and the projection DO
+diverge, bidirectionally:
+
+- **onlyInProjection (projection includes a node the owner rule drops) — 24 sigs.**
+  The very FIRST emit on every node is `onlyInProjection:[<self>]` — the
+  projection trivially includes the node's own id while the minimal
+  readiness-promotable rule has not yet promoted it. This directly implicates the
+  **self-node cluster-member fast path** (inventory guard #10/#14): self-knowledge
+  is legitimate and MUST be ported into the machine, not deleted. Larger
+  onlyInProjection sets ({self, peer}) during catch-up implicate the
+  recovery-eligible / transport-retention overlays (guards #3, #7).
+- **onlyInShadow (owner rule includes a node the projection trimmed) — 35 sigs.**
+  The minimal rule keeps nodes the projection excluded — consistent with the
+  projection applying a suspicion/freeze trim or readiness-lag exclusion the
+  readiness rule does not replicate. Either the trim is the SAFETY freeze (port
+  it) or it was papering a race (owner rule is legitimately simpler). Phase 1
+  must classify each.
+
+**Measurement limitation (next instrumentation step, NOT a result):** the emit is
+deduped per coordinator instance, and rolling restart gives late-restarted nodes
+fresh instances, so late emits (within ~1–8s of run end) cannot be cleanly
+attributed to steady-state disagreement vs a late node's catch-up. A clean
+"converges to agreement at quiescence" verdict needs the probe to also record the
+final/quiescent state (or carry an instance+epoch marker). Do this refinement
+before reading too much into the late-emit timing.
+
+**Phase 1 reconciliation worklist (driven by this map):** port self-node
+knowledge, recovery-eligible, and transport-retention into the machine
+(onlyInProjection direction); classify each onlyInShadow trim as safety-freeze
+(port) vs race-papering (drop). Re-run the gate after each to watch the
+divergence shrink.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
