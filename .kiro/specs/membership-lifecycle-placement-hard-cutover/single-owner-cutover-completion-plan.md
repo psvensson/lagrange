@@ -250,6 +250,36 @@ instrument is fighting the same derivation complexity the cutover exists to remo
   the repo's deterministic-first / gate-last doctrine. The live probe stays as
   corroborating evidence, not the gate.
 
+## Phase 0 PIVOT — deterministic owner-rule equivalence test (2026-06-20, off the gate treadmill)
+
+Decisive result that the four live gates could not produce. Extracted 14
+converged-state fixtures from real gate reports (postRebalanceClosure
+publicationConvergence), then asserted the minimal owner rule
+(`computeShadowActiveMemberSet`) against the AUTHORITATIVE published set.
+`test/control-plane/membership-owner-equivalence.test.js`, 86/86 assertions, <1s,
+no gate. Commit `1ccc6f08`.
+
+- **Equivalence holds: the owner rule reproduces the authoritative published set on
+  all 14 converged fixtures, from every node's perspective** — including
+  non-trivial **freeze + unreachable** states. The owner's baseline-retention
+  equals the projection's freeze-retention, so it never trims a quorum under broad
+  suspicion (the safety invariant from the readiness inventory is preserved by
+  construction, not by a separate guard).
+- Discrimination verified: a draining node is dropped even from the baseline;
+  self-knowledge includes an alive leader not yet in the baseline.
+- **One residual, now asserted explicitly (not silent):** outside freeze, the owner
+  rule does not yet trim an unreachable baseline node (the `onlyInShadow` direction
+  the gates showed). That is the remaining Phase 1 reconciliation item — port the
+  non-freeze trim semantics — and it is the ONLY known owner-vs-authoritative gap.
+
+**Status: the flip's steady-state safety question is answered for converged
+states.** The owner rule reproduces the authoritative set wherever the cluster is
+converged or frozen; the lone open item is non-freeze trim of a genuinely-departed
+baseline node. Next Phase 1 step is bounded and concrete (port non-freeze trim),
+after which Phase 2 (authority flip) becomes a flag-gated N≥8 validation rather than
+an open question. The live probe remains as corroborating evidence; this
+deterministic test is the gate.
+
 ## Sequence (delegation-first, then deletion — the repo's own doctrine)
 
 ### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
