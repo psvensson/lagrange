@@ -355,12 +355,23 @@ async function executeAuthoritativeOwnerRpcRead(
       options?.queryOptions?.allowReadinessAuthoritativeRefresh !== false,
   };
 
+  // Default owner-RPC reads route to "an owner" replica (preferLeader=false),
+  // which can be served by the caller's OWN local replica. A caller that must
+  // escape a self-stale replica (the variant-D publications catch-up) sets
+  // preferOwnerRpcReadLeader so the read is pinned to the partition leader,
+  // which holds the authoritative epoch. The routing readiness dimension is
+  // CONTROL_PLANE_RECOVERY_ELIGIBLE, so a recovery-pending leader still serves.
+  const preferLeader =
+    options?.preferOwnerRpcReadLeader === true ?
+      true :
+      AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
+
   const queryResult = await queryExecutor.executeOnPartition(
     partitionId,
     statement,
     params,
     true,
-    AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER,
+    preferLeader,
     false,
     executionOptions,
   );
@@ -378,7 +389,7 @@ async function executeAuthoritativeOwnerRpcRead(
         statement,
         params,
         true,
-        AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER,
+        preferLeader,
         false,
         executionOptions,
       );

@@ -133,9 +133,14 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
 
   await coordinator.reconcileClusterMembership();
   t.equal(seen.length, 1, 'the first defer triggers a catch-up');
-  t.same(seen[0], {tables: [PUBLICATIONS], preferOwnerRpcRead: true},
-    'the catch-up is scoped to control_plane_publications only and routes through ' +
-    'the authoritative owner (preferOwnerRpcRead) rather than the local replica');
+  t.same(seen[0], {
+    tables: [PUBLICATIONS],
+    preferOwnerRpcRead: true,
+    preferOwnerRpcReadLeader: true,
+  },
+  'the catch-up is scoped to control_plane_publications only and routes through ' +
+    'the authoritative owner pinned to the LEADER (preferOwnerRpcRead + ' +
+    'preferOwnerRpcReadLeader) rather than a stale local replica');
 
   clock += 4000; // still within the 5000ms cooldown
   await coordinator.reconcileClusterMembership();

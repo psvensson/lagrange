@@ -84,7 +84,15 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   // not require — so a partitioned node still fails soft), which also enables
   // the owner-read anti-entropy sweep. See CL-001 "VARIANT D DEEPER LAYER".
   const readOptions = options.preferOwnerRpcRead === true ?
-    {preferOwnerRpcRead: true} :
+    {
+      preferOwnerRpcRead: true,
+      // A caller (the variant-D publications catch-up) may additionally pin the
+      // owner-RPC read to the partition LEADER so it cannot be served by this
+      // node's own stale local replica.
+      ...(options.preferOwnerRpcReadLeader === true ?
+        {preferOwnerRpcReadLeader: true} :
+        {}),
+    } :
     {};
   const summary = {
     tablesAttempted: 0,

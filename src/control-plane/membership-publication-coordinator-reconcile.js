@@ -285,6 +285,13 @@ class MembershipPublicationCoordinatorReconcile extends
         // recurrence). Local fallback is preserved (prefer, not require), so a
         // partitioned node still fails soft. See CL-001 "VARIANT D DEEPER LAYER".
         preferOwnerRpcRead: true,
+        // preferOwnerRpcRead alone routes to "an owner" replica with
+        // preferLeader=false, so the frozen node still self-serves its own stale
+        // local publications replica and never advances. Pin the read to the
+        // publications LEADER, which holds the authoritative epoch (it serves on
+        // the CONTROL_PLANE_RECOVERY_ELIGIBLE dimension even while recovery is
+        // pending). This is the variant-D frozen-follower fix.
+        preferOwnerRpcReadLeader: true,
       });
     } catch (error) {
       this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {
