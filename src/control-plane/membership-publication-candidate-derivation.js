@@ -287,9 +287,32 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   });
   const initialProjectionDiagnostics =
     buildProjectionDiagnosticsSummary(activeNodeViews, helperFns);
-  const projectedServingNodeIds = helperFns.normalizeNodeIdList(
+  // Single-owner rule output, computed once from the same minimal inputs the
+  // divergence probe uses (built when the probe OR the flip is enabled).
+  const membershipOwnerAuthoritativeEnabled = isMembershipOwnerAuthoritative();
+  const membershipOwnerShadowEnabled = isMembershipOwnerShadowEnabled();
+  const membershipOwnerActiveMemberSet =
+    membershipOwnerAuthoritativeEnabled || membershipOwnerShadowEnabled ?
+      computeShadowActiveMemberSet({
+        publishedBaselineNodeIds,
+        readinessByNodeId,
+        memberStatesByNodeId:
+          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
+        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
+        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
+      }) :
+      null;
+  const projectionProjectedServingNodeIds = helperFns.normalizeNodeIdList(
     activeNodeViews.projectedServingNodeIds || activeNodeViews.projectedActiveNodeIds,
   );
+  // Phase 2 flip (default-OFF): the owner rule authors the SERVING set that the
+  // existing publication orchestration (trim/widen/recovery/ACK/epoch) consumes —
+  // swapping the set-authority while PRESERVING the orchestration, rather than
+  // bypassing it via an explicit published-set override.
+  const projectedServingNodeIds =
+    membershipOwnerAuthoritativeEnabled && membershipOwnerActiveMemberSet ?
+      membershipOwnerActiveMemberSet :
+      projectionProjectedServingNodeIds;
   const locallyEligibleNodeIds = helperFns.normalizeNodeIdList(
     activeNodeViews.locallyEligibleNodeIds || projectedServingNodeIds,
   );
@@ -369,44 +392,14 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     publicationWideningProjection === true &&
     publicationWideningHasNodeRowEvidence !== true &&
     recoveryEligiblePublicationRepairEvidence !== true;
-  // Single-owner rule output, computed once from the same minimal inputs the
-  // divergence probe uses. Built whenever the probe OR the authoritative flip is
-  // enabled; reused below for both the divergence diagnostics and (Phase 2 flip)
-  // as the authored published set.
-  const membershipOwnerAuthoritativeEnabled = isMembershipOwnerAuthoritative();
-  const membershipOwnerShadowEnabled = isMembershipOwnerShadowEnabled();
-  const membershipOwnerActiveMemberSet =
-    membershipOwnerAuthoritativeEnabled || membershipOwnerShadowEnabled ?
-      computeShadowActiveMemberSet({
-        publishedBaselineNodeIds,
-        readinessByNodeId,
-        memberStatesByNodeId:
-          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
-        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
-        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
-      }) :
-      null;
-  // Phase 2 flip (default-OFF): when the owner rule is authoritative and the
-  // caller did not request an explicit set, the owner-authored set drives the
-  // publication target via the existing EXPLICIT_PUBLICATION decision (highest
-  // priority), so publishedActiveNodeIds and every downstream artifact derive
-  // from it consistently. Explicit caller requests still win; an empty owner set
-  // falls through to the projection path.
-  const ownerAuthoredExplicitPublishedNodeIds =
-    membershipOwnerAuthoritativeEnabled &&
-      Array.isArray(membershipOwnerActiveMemberSet) &&
-      membershipOwnerActiveMemberSet.length > NUM.ZERO ?
-      membershipOwnerActiveMemberSet :
-      null;
   const publicationTargetSnapshot = buildMembershipPublicationTargetSnapshot(
     {
       explicitPublishedNodeIds:
         Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
           planningSnapshot.publishedActiveNodeIds :
-          ownerAuthoredExplicitPublishedNodeIds ??
-            (retainPublishedDurableTarget === true ?
-              publishedBaselineNodeIds :
-              []),
+          retainPublishedDurableTarget === true ?
+            publishedBaselineNodeIds :
+            [],
       publishedBaselineNodeIds,
       projectedServingNodeIds: publicationProjectedServingNodeIds,
       recoveryActiveNodeIds:
