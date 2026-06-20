@@ -1,0 +1,21 @@
+{
+  "workloadVersion": 1,
+  "referenceMedianMs": 84.37279699999999,
+  "referenceSamples": [
+    86.32611200000008,
+    84.09137500000008,
+    84.47460500000011,
+    84.00421800000004,
+    84.24821999999995,
+    84.521072,
+    84.37279699999999
+  ],
+  "cpuScalingTable": {
+    "0.5": 2.17,
+    "0.75": 1.27,
+    "1.0": 1.0,
+    "2.0": 1.0
+  },
+  "cpuScalingMethod": "in-container probe (distributed-db:test, --entrypoint node, --cpus=N) median / cpus=1.0 median; single-threaded hot-path mirror so cpus>=1 shows no speedup, matching the node event-loop. LOWER BOUND on the real settle multiplier: pure work-mix scaling does NOT capture super-linear raft-election churn under event-loop starvation at low cpus (CL-033/039) — confirm/raise via the pass-rate-invariance validation gate.",
+  "capturedNote": "reference host (this machine); hostFactor 1.0 by definition. cpuScalingTable triangulated 2026-06-20."
+}

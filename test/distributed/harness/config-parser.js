@@ -23,6 +23,10 @@ import {
   resolvePostgresBaselineBenchmarkConfig,
   shouldValidatePostgresBaselineBenchmarkBudgets,
 } from './postgres-baseline-config.js';
+import {
+  applyMachineCalibration,
+  resolveMachineFactorFromEnv,
+} from './convergence-budget-calibration.js';
 
 const ZERO = 0;
 
@@ -135,14 +139,18 @@ function mergeWithDefaults(partial = {}) {
       scenarioDefault: TIMEOUTS.SCENARIO_DEFAULT,
       ...partial.timeouts,
     },
-    convergence: {
+    // Work-bound convergence budgets are scaled by the measured machine factor
+    // (LAGRANGE_MACHINE_FACTOR, absent -> 1.0 -> today's behaviour) so the gate is
+    // portable across hardware; quietWindowMs / sampleIntervalMs stay fixed. See
+    // convergence-budget-calibration.js.
+    convergence: applyMachineCalibration({
       targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
       settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
       quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
       maxSustainedOverTargetMs: CONVERGENCE_DEFAULTS.maxSustainedOverTargetMs,
       sampleIntervalMs: CONVERGENCE_DEFAULTS.sampleIntervalMs,
       ...partial.convergence,
-    },
+    }, resolveMachineFactorFromEnv()),
     resourceLimits: {
       memory: RESOURCE_DEFAULTS.memory,
       cpus: RESOURCE_DEFAULTS.cpus,

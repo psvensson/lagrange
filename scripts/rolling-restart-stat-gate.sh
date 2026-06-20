@@ -110,18 +110,46 @@ fi
 # are never cut. Set NO_PROGRESS_MAX_ELAPSED_MS=0 to disable (full budgets,
 # pre-change behavior).
 NO_PROGRESS_MAX_ELAPSED_MS="${NO_PROGRESS_MAX_ELAPSED_MS:-150000}"
+# CPUS overlays the per-node container cpu limit (resourceLimits.cpus) for
+# hardware-triangulation runs; empty = use the config's value.
+CPUS="${CPUS:-}"
+
+# --- Machine calibration: scale work-bound convergence budgets to this host/cpus.
+# Runs the hot-path probe ONCE (factor is a property of the machine, constant
+# across the gate's runs) and exports LAGRANGE_MACHINE_FACTOR, which the harness
+# reads at scenario-config time (convergence-budget-calibration.js + the
+# rolling-restart scenario's work-bound timeouts). CALIBRATE=0 or a pre-set
+# LAGRANGE_MACHINE_FACTOR skips the probe. cpuScaling comes from the stored
+# triangulation table; an empty table (pre-triangulation) yields factor ~1.0, so
+# triangulation runs measure RAW settle to BUILD the table. Computed BEFORE the
+# config overlay so the shell's own no-progress frozen-cut scales too.
+EFFECTIVE_CPUS="${CPUS:-$(jq -r '.resourceLimits.cpus // "1.0"' "${CONFIG}" 2>/dev/null || echo 1.0)}"
+if [ "${CALIBRATE:-1}" != "0" ] && [ -z "${LAGRANGE_MACHINE_FACTOR:-}" ]; then
+  CAL_ENV="$(node scripts/calibrate-machine.js --cpus "${EFFECTIVE_CPUS}" --emit-env 2>/dev/null || true)"
+  if [ -n "${CAL_ENV}" ]; then export "${CAL_ENV?}"; fi
+fi
+MACHINE_FACTOR="${LAGRANGE_MACHINE_FACTOR:-1.0}"
+
+# The TIME-based no-progress frozen-cut is itself work-bound, so scale it by the
+# machine factor (a slow box must not be cut off before its scaled work budget).
+NO_PROGRESS_EFFECTIVE_MS="${NO_PROGRESS_MAX_ELAPSED_MS}"
+if [ "${NO_PROGRESS_MAX_ELAPSED_MS}" != "0" ]; then
+  NO_PROGRESS_EFFECTIVE_MS="$(node -e "process.stdout.write(String(Math.round(${NO_PROGRESS_MAX_ELAPSED_MS} * ${MACHINE_FACTOR})))" 2>/dev/null || echo "${NO_PROGRESS_MAX_ELAPSED_MS}")"
+fi
+
 EFFECTIVE_CONFIG="${CONFIG}"
 TMP_CONFIG=""
-if [ "${NO_PROGRESS_MAX_ELAPSED_MS}" != "0" ]; then
+if [ "${NO_PROGRESS_EFFECTIVE_MS}" != "0" ] || [ -n "${CPUS}" ]; then
   TMP_CONFIG="$(mktemp --suffix=.stat-gate-config.json)"
-  jq --argjson ms "${NO_PROGRESS_MAX_ELAPSED_MS}" \
-    '.timeouts = (.timeouts // {}) + {activeWaitNoProgressMaxElapsedMs: $ms}' \
-    "${CONFIG}" > "${TMP_CONFIG}"
+  jq --argjson ms "${NO_PROGRESS_EFFECTIVE_MS}" --arg cpus "${CPUS}" '
+    (if $ms != 0 then .timeouts = (.timeouts // {}) + {activeWaitNoProgressMaxElapsedMs: $ms} else . end)
+    | (if $cpus != "" then .resourceLimits = (.resourceLimits // {}) + {cpus: $cpus} else . end)
+  ' "${CONFIG}" > "${TMP_CONFIG}"
   EFFECTIVE_CONFIG="${TMP_CONFIG}"
 fi
 trap '[ -n "${TMP_CONFIG}" ] && rm -f "${TMP_CONFIG}"; rm -f "${TMP_NDJSON}"' EXIT
 
-echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS} srcFingerprint=${SRC_FP} debugLogs=${DEBUG_LOGS:-0} noProgressMaxElapsedMs=${NO_PROGRESS_MAX_ELAPSED_MS}"
+echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS} srcFingerprint=${SRC_FP} debugLogs=${DEBUG_LOGS:-0} noProgressMaxElapsedMs=${NO_PROGRESS_EFFECTIVE_MS}(base ${NO_PROGRESS_MAX_ELAPSED_MS}) cpus=${EFFECTIVE_CPUS} machineFactor=${MACHINE_FACTOR}"
 
 stale_runs=0
 for i in $(seq 1 "${N}"); do

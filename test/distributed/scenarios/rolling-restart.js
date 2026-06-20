@@ -15,6 +15,10 @@ import {
 } from '../harness/constants.js';
 import {resolveScenarioOptions} from '../harness/scenario-config.js';
 import {
+  resolveMachineFactorFromEnv,
+  scaleWorkBoundTimeout,
+} from '../harness/convergence-budget-calibration.js';
+import {
   BENCHMARK_WORKLOAD_PROFILE,
   TABLE_BOOTSTRAP_VISIBILITY_STATE,
   createPartitioningBenchmarkLoadNodePlan,
@@ -373,8 +377,33 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
   };
 }
 
+// Work-bound timeouts that scale with the machine factor: each is a "max wall time
+// to WAIT for the cluster to finish work" deadline. Deliberate delays/soaks
+// (preRestartSettleMs, interRestartDelayMs, postRestartLoadSoakMs), stability
+// windows (postRestartQuietWindowMs), poll cadences, and attempt counts are NOT
+// here — scaling them would waste time or weaken a proof, not track hardware. See
+// .kiro/epics/hardware-relative-convergence-budget.md.
+const WORK_BOUND_SCENARIO_TIMEOUT_FIELDS = Object.freeze([
+  'preLoadReadinessTimeoutMs',
+  'perRestartActiveTimeoutMs',
+  'perNodeConvergenceTimeoutMs',
+  'postRestartActiveTimeoutMs',
+  'postRestartControlPlaneQuiescenceNoProgressTimeoutMs',
+  'postRestartConsistencyTimeoutMs',
+  'acknowledgedWriteVisibilityTimeoutMs',
+]);
+
+function scaleWorkBoundScenarioTimeouts(config, machineFactor) {
+  const scaled = {...config};
+  for (const field of WORK_BOUND_SCENARIO_TIMEOUT_FIELDS) {
+    scaled[field] = scaleWorkBoundTimeout(scaled[field], machineFactor);
+  }
+  scaled.machineFactor = machineFactor;
+  return scaled;
+}
+
 function resolveRollingRestartScenarioConfig(options = {}) {
-  return Object.freeze({
+  const resolved = {
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 30),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '300s'),
     queryTimeoutMs: normalizeFiniteNumber(options.queryTimeoutMs, 10000),
@@ -454,7 +483,9 @@ function resolveRollingRestartScenarioConfig(options = {}) {
         options.acknowledgedWriteVisibilityPollIntervalMs,
         ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS,
       ),
-  });
+  };
+  return Object.freeze(
+    scaleWorkBoundScenarioTimeouts(resolved, resolveMachineFactorFromEnv()));
 }
 
 function buildConvergenceOptions(perNodeConvergenceTimeoutMs) {
@@ -803,4 +834,9 @@ async function run(cluster, options = {}) {
   }
 }
 
-export {run, assertAcknowledgedWritesVisibleOnReachableNodes};
+export {
+  run,
+  assertAcknowledgedWritesVisibleOnReachableNodes,
+  resolveRollingRestartScenarioConfig,
+  buildConvergenceOptions,
+};
