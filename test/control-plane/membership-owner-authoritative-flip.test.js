@@ -70,7 +70,7 @@ function withFlag(value, fn) {
   }
 }
 
-test('flag OFF: published set is projection-authored (excludes the not-yet-published leader)', (t) => {
+test('default (env unset): published set is projection-authored (flip is default-off)', (t) => {
   const candidate = withFlag(undefined, () =>
     deriveMembershipPublicationCandidate(scenario()),
   );
@@ -79,7 +79,7 @@ test('flag OFF: published set is projection-authored (excludes the not-yet-publi
   t.end();
 });
 
-test('flag ON: owner rule authors the published set (self-knowledge includes the leader)', (t) => {
+test('flag ON (=true): owner rule authors the published set (self-knowledge includes the leader)', (t) => {
   const candidate = withFlag('true', () =>
     deriveMembershipPublicationCandidate(scenario()),
   );

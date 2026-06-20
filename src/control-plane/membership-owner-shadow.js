@@ -66,7 +66,12 @@ function isMembershipOwnerShadowEnabled(env = process.env) {
 }
 
 // Phase 2: when true, the owner rule authors the published active-member set.
-// Default OFF — flipping this is the authority cutover, gated on N≥8 validation.
+// DEFAULT-OFF (opt-in). N=8 validated convergence (stat-gate-20260620T183307Z:
+// 8/8 converged), BUT default-on revealed the owner rule does not yet reproduce
+// the projection's transient recovery-cohort / ACK-set / epoch-monotonicity /
+// trim-widen / priority-spread semantics (~45 coordinator unit tests). It is a
+// validated OPT-IN for steady-state convergence, NOT a drop-in default — must
+// stay off until those behaviors are ported. See the plan's Phase 2 notes.
 function isMembershipOwnerAuthoritative(env = process.env) {
   return env?.[MEMBERSHIP_OWNER_AUTHORITATIVE_ENV] === MEMBERSHIP_OWNER_SHADOW_TRUE;
 }
