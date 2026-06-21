@@ -97,13 +97,26 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      of the messageRouter envelope; adversarially reviewed, two real bugs fixed
      (throwing-transport no longer erases a probe via allSettled + safe direct
      probe; stop→start no longer leaks a timer via a generation token).
-   - **3c (NEXT).** The production transport ADAPTER binding the prober interface to
-     `messageRouter.pingNode` / `deliver(${nodeId}/service/swim-relay)`, the node-
-     lifecycle wiring (instantiate detector+prober when the flag is on; register the
-     relay handler; member source = published active set), and the divergence
-     EMISSION next to `computeShadowActiveMemberSet`. Validated on the
-     virtual-network harness (the only piece whose correctness depends on the real
-     deliver envelope shape).
+   - **3c-i (DONE).** Production transport ADAPTER `buildSwimMessageRouterTransport`
+     binding the prober interface to `messageRouter.pingNode` /
+     `deliver(${nodeId}/service/swim-relay)`. `deliver` resolves (never throws) on
+     transport faults, so the mapping is explicit: acked+boolean `reachable`→that
+     bool; no_handler/timeout/closed/throw→null. Validated against REAL in-process
+     MessageRouters (`membership-swim-transport-adapter.test.js`, 7/7): direct
+     reachable/partitioned, indirect via relay, and the no-relay-helper→null case —
+     pinning the load-bearing envelope mapping (the biggest 3c risk) before any
+     lifecycle wiring.
+   - **3c-ii (NEXT).** Node-lifecycle wiring: instantiate detector+prober when the
+     flag is on at the HeartbeatService site (`control-plane-setup.js:400/534`,
+     stop at `bootstrap-service-seed-delegates.js:389`); register the relay handler;
+     `getMembers` = `resolvePublishedActiveNodeIds` / `getLatestPublishedMembershipRow`
+     (the published view read API — NOT `resolveActiveNodeViews`). Then the
+     divergence EMISSION on the COORDINATOR side (inject the prober/verdict-provider
+     into `MembershipPublicationCoordinatorReads`; after the existing shadow
+     `_emitMembershipOwnerDivergence`, emit a sibling
+     `buildMembershipOwnerDivergence(projection vs computeSwimActiveMemberSet)` — the
+     pure derivation stays untouched). Validate on a 3-node in-process harness with
+     detector/prober on a VirtualTimeSource, stepping `probeOnce()`.
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,

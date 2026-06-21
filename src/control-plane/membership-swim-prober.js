@@ -47,6 +47,57 @@ function buildSwimRelayHandler({messageRouter, pingTimeoutMs = null} = {}) {
 }
 
 /**
+ * Production transport adapter binding the prober's injected interface to a real
+ * messageRouter. directProbe → pingNode; indirectProbe → deliver to the helper's
+ * swim-relay handler. `deliver` RESOLVES (does not throw) on transport faults, so
+ * the mapping is explicit:
+ * - acked + boolean reachable  -> that boolean (the helper's verdict),
+ * - anything else (no_handler => acknowledged:true but no `reachable`; timeout /
+ *   connection-closed => acknowledged:false; enqueue throw) -> null (the helper did
+ *   not produce a verdict), which the detector treats as a missed nack, NOT as the
+ *   target being unreachable.
+ * @param {Object} deps - {messageRouter, pingTimeoutMs}
+ * @return {{directProbe: Function, indirectProbe: Function}}
+ */
+function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} = {}) {
+  return {
+    async directProbe(targetNodeId, timeoutMs) {
+      if (!messageRouter) {
+        return false;
+      }
+      const result = await messageRouter.pingNode(
+        targetNodeId,
+        timeoutMs ?? pingTimeoutMs,
+      );
+      return result === true;
+    },
+    async indirectProbe(helperNodeId, targetNodeId, timeoutMs) {
+      if (!messageRouter) {
+        return null;
+      }
+      let resolved;
+      try {
+        resolved = await messageRouter.deliver(
+          buildSwimRelayAddress(helperNodeId),
+          {type: SWIM_PROBE_MESSAGE_TYPE, targetNodeId},
+          {timeoutMs: timeoutMs ?? pingTimeoutMs},
+        );
+      } catch (_error) {
+        return null;
+      }
+      if (
+        resolved &&
+        resolved.acknowledged === true &&
+        typeof resolved.reachable === 'boolean'
+      ) {
+        return resolved.reachable;
+      }
+      return null;
+    },
+  };
+}
+
+/**
  * SWIM active-probe loop. Feeds outcomes to a MembershipSwimDetector.
  */
 class MembershipSwimProber {
@@ -241,6 +292,7 @@ class MembershipSwimProber {
 export {
   MembershipSwimProber,
   buildSwimRelayHandler,
+  buildSwimMessageRouterTransport,
   buildSwimRelayAddress,
   SWIM_RELAY_SERVICE,
   SWIM_PROBE_MESSAGE_TYPE,
