@@ -88,9 +88,22 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
    and emit via `buildMembershipOwnerDivergence`) folds into increment 3 — it only
    carries signal once the probe loop feeds real outcomes; emitting an unprobed
    verdict now would be a meaningless diff.
-3. **Probe loop + indirect ping-req transport.** The outbound probe cadence + the
-   `swim-relay` handler; feeds increment 1's `recordProbeResult`. Deterministic on
-   the virtual network.
+3. **Probe loop + indirect ping-req transport.**
+   - **3a (DONE).** `membership-swim-prober.js` — `MembershipSwimProber` (round-robin
+     over a seeded shuffle, direct→indirect fallback, Lifeguard-dynamic interval,
+     missed-nack signalling) + `buildSwimRelayHandler` (the indirect ping-req
+     responder). Transport is an INJECTED interface ({directProbe, indirectProbe})
+     so the orchestration is fully deterministic/unit-tested (26 tests) independent
+     of the messageRouter envelope; adversarially reviewed, two real bugs fixed
+     (throwing-transport no longer erases a probe via allSettled + safe direct
+     probe; stop→start no longer leaks a timer via a generation token).
+   - **3c (NEXT).** The production transport ADAPTER binding the prober interface to
+     `messageRouter.pingNode` / `deliver(${nodeId}/service/swim-relay)`, the node-
+     lifecycle wiring (instantiate detector+prober when the flag is on; register the
+     relay handler; member source = published active set), and the divergence
+     EMISSION next to `computeShadowActiveMemberSet`. Validated on the
+     virtual-network harness (the only piece whose correctness depends on the real
+     deliver envelope shape).
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
