@@ -118,12 +118,21 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      `startOwnerMembershipDriver`; `stopOwnerMembershipDriver` stops it; prober timer
      unref'd. Default path byte-identical (null-guarded); bootstrap smoke 129/129,
      SWIM suite 294/294.
-3b. **SWIM dissemination (NEW — REQUIRED before 4; flag-on gate finding below).**
-   Piggyback alive/suspect/dead + incarnation on probe/ack traffic (infection-style),
-   feeding `recordSuspect`/`recordAlive`/`recordSelfSuspected`; add the buddy-system
-   (tell the suspected node first so it refutes in time). Fix the divergence metric to
-   compare like-for-like (the SWIM set vs the projection set from the SAME baseline).
-   Re-gate flag-on and require `onlyInProjection`≈0 at steady state before 4.
+3b. **SWIM dissemination (the half the gate proved missing).**
+   - **3b-i (DONE).** Detector dissemination buffer + `drainGossip`/`applyGossip`;
+     every state transition enqueues an update (retransmit budget `ceil(mult·log10(n+1))`,
+     fades out); `applyGossip` routes through incarnation precedence, a self-suspicion
+     gossip triggers refutation (incarnation bump + queued alive), a `dead` gossip is
+     applied conservatively as a suspicion. Canonical refutation loop unit-tested
+     (`membership-swim-gossip.test.js`).
+   - **3b-ii (DONE).** Carry gossip on the live probe: the direct probe is now a
+     `swim-ping` SERVICE exchange piggybacking gossip both ways (`buildSwimPingHandler`
+     applies + replies with `drainGossip`); the runtime registers the swim-ping handler;
+     a two-runtime test confirms gossip propagates over real transport.
+   - **3b-iii (IN PROGRESS).** Re-gate flag-on; require `onlyInProjection`≈0 at steady
+     state. Still TODO: fix the divergence metric (compare the SWIM set vs the projection
+     set from the SAME baseline so `onlyInShadow` noise doesn't mask the signal) +
+     buddy-system (prioritize telling the suspected node first).
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
