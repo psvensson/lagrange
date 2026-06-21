@@ -129,10 +129,13 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      `swim-ping` SERVICE exchange piggybacking gossip both ways (`buildSwimPingHandler`
      applies + replies with `drainGossip`); the runtime registers the swim-ping handler;
      a two-runtime test confirms gossip propagates over real transport.
-   - **3b-iii (IN PROGRESS).** Re-gate flag-on; require `onlyInProjection`≈0 at steady
-     state. Still TODO: fix the divergence metric (compare the SWIM set vs the projection
-     set from the SAME baseline so `onlyInShadow` noise doesn't mask the signal) +
-     buddy-system (prioritize telling the suspected node first).
+   - **3b-iii (re-gating).** First re-gate (post-3b-ii) showed dissemination cut
+     false-positive deaths (`onlyInProjection` run1 304→217, run2 475→158), residual
+     formation-concentrated + decaying to ~1-3/min. Buddy-system landed
+     (`drainGossip(max, priorityNodeId)` + prober passes the target) to speed
+     refutation. Confirming gate in flight. Note: `onlyInProjection` is ALREADY the
+     clean false-positive signal (the `onlyInShadow` baseline⊋active artifact only
+     affects `agree`), so no metric change is needed to read it.
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
