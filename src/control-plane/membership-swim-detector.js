@@ -50,6 +50,8 @@ const SWIM_DETECTOR_DEFAULTS = Object.freeze({
   suspicionMaxTimeoutMult: 6, // Max = mult * Min
   confirmationsToMin: 3, // K: independent confirmations to collapse Max -> Min
   indirectProbeCount: 3, // k: indirect ping-req fanout (probe loop, increment 3)
+  gossipRetransmitMult: 4, // λ: an update is gossiped ceil(mult*log10(n+1)) times
+  gossipMaxPiggyback: 6, // max updates carried per probe/ack (SWIM dissemination)
 });
 
 const HEALTH_DELTA_SUCCESS = -1;
@@ -94,10 +96,14 @@ class MembershipSwimDetector {
     this._randomSource = resolveRandomSource(options);
     this._config = {...SWIM_DETECTOR_DEFAULTS, ...(options.config || {})};
     this._localNodeId = normalizeNodeId(options.localNodeId) || null;
-    // nodeId -> {state, incarnation, suspectRaisedAtMs, suspicionDeadlineMs, confirmers:Set}
+    // nodeId -> {nodeId, state, incarnation, suspectRaisedAtMs, suspicionDeadlineMs, confirmers:Set}
     this._members = new Map();
     this._localHealthMultiplier = LHM_MIN;
     this._selfIncarnation = LHM_MIN;
+    // Dissemination buffer (SWIM infection-style gossip): nodeId -> {state,
+    // incarnation, retransmits}. Each membership state change enqueues an update
+    // that drainGossip() piggybacks on outgoing probes a bounded number of times.
+    this._gossip = new Map();
   }
 
   _now(nowMs) {
@@ -112,6 +118,7 @@ class MembershipSwimDetector {
     let entry = this._members.get(normalized);
     if (!entry) {
       entry = {
+        nodeId: normalized,
         state: SWIM_MEMBER_STATE.ALIVE,
         incarnation: LHM_MIN,
         suspectRaisedAtMs: null,
@@ -121,6 +128,25 @@ class MembershipSwimDetector {
       this._members.set(normalized, entry);
     }
     return entry;
+  }
+
+  _gossipRetransmitBudget() {
+    const n = Math.max(1, this.knownMemberCount());
+    return Math.max(1, Math.ceil(this._config.gossipRetransmitMult * Math.log10(n + 1)));
+  }
+
+  // Enqueue (or supersede) a membership update for infection-style dissemination,
+  // resetting its retransmit budget so the freshest state propagates.
+  _enqueueGossipUpdate(nodeId, state, incarnation) {
+    const normalized = normalizeNodeId(nodeId);
+    if (!normalized) {
+      return;
+    }
+    this._gossip.set(normalized, {
+      state,
+      incarnation: isFiniteIncarnation(incarnation) ? incarnation : LHM_MIN,
+      retransmits: this._gossipRetransmitBudget(),
+    });
   }
 
   /** Lifeguard Local Health Multiplier (saturating counter in [0, S-1]). */
@@ -192,6 +218,11 @@ class MembershipSwimDetector {
       entry.suspectRaisedAtMs = now;
       entry.confirmers = new Set([confirmer]);
       this._recomputeSuspicionDeadline(entry);
+      this._enqueueGossipUpdate(
+        entry.nodeId,
+        SWIM_MEMBER_STATE.SUSPECT,
+        entry.incarnation,
+      );
       return;
     }
     if (!entry.confirmers.has(confirmer)) {
@@ -219,6 +250,11 @@ class MembershipSwimDetector {
         entry.suspectRaisedAtMs = null;
         entry.suspicionDeadlineMs = null;
         entry.confirmers = new Set();
+        this._enqueueGossipUpdate(
+          entry.nodeId,
+          SWIM_MEMBER_STATE.ALIVE,
+          entry.incarnation,
+        );
       }
       return;
     }
@@ -268,6 +304,11 @@ class MembershipSwimDetector {
     entry.suspectRaisedAtMs = null;
     entry.suspicionDeadlineMs = null;
     entry.confirmers = new Set();
+    this._enqueueGossipUpdate(
+      entry.nodeId,
+      SWIM_MEMBER_STATE.ALIVE,
+      entry.incarnation,
+    );
   }
 
   /**
@@ -281,6 +322,15 @@ class MembershipSwimDetector {
     if (isFiniteIncarnation(incarnation) && incarnation >= this._selfIncarnation) {
       this._selfIncarnation = incarnation + 1;
       this._applyHealthDelta(HEALTH_DELTA_FAILURE);
+      // Gossip the refuting Alive at the bumped incarnation so peers that suspect
+      // us learn the higher incarnation and clear their suspicion (SWIM refutation).
+      if (this._localNodeId) {
+        this._enqueueGossipUpdate(
+          this._localNodeId,
+          SWIM_MEMBER_STATE.ALIVE,
+          this._selfIncarnation,
+        );
+      }
     }
     return this._selfIncarnation;
   }
@@ -308,8 +358,90 @@ class MembershipSwimDetector {
       ) {
         entry.state = SWIM_MEMBER_STATE.DEAD;
         entry.suspicionDeadlineMs = null;
+        // Conservatively gossip a SUSPECT (not DEAD): a locally-timed-out node may
+        // still be alive-but-unreachable-from-here, so let each peer's own timer +
+        // refutation decide rather than propagating a possibly-false death.
+        this._enqueueGossipUpdate(
+          entry.nodeId,
+          SWIM_MEMBER_STATE.SUSPECT,
+          entry.incarnation,
+        );
       }
     }
+  }
+
+  /**
+   * Drain up to `max` pending dissemination updates to piggyback on an outgoing
+   * probe/ack. Freshest-first (fewest retransmits used). Decrements each drained
+   * update's retransmit budget and drops it at zero (infection-style fade-out).
+   * @param {number} [max]
+   * @return {Array<{nodeId, state, incarnation}>}
+   */
+  drainGossip(max) {
+    const limit = Number.isFinite(max) ?
+      Math.max(0, Math.floor(max)) :
+      this._config.gossipMaxPiggyback;
+    if (limit === 0) {
+      return [];
+    }
+    const ordered = [...this._gossip.entries()]
+      .filter(([, update]) => update.retransmits > 0)
+      .sort((a, b) => a[1].retransmits - b[1].retransmits)
+      .slice(0, limit);
+    const result = [];
+    for (const [nodeId, update] of ordered) {
+      result.push({nodeId, state: update.state, incarnation: update.incarnation});
+      update.retransmits -= 1;
+      if (update.retransmits <= 0) {
+        this._gossip.delete(nodeId);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Apply gossiped membership updates received on a probe/ack. Routes each through
+   * the incarnation-precedence handlers; an update about THIS node that suspects it
+   * triggers a self-refutation (incarnation bump). Conservatively, a `dead` gossip
+   * is applied as a suspicion (local timer + refutation confirm), avoiding
+   * cluster-wide amplification of a possibly-false death.
+   * @param {Array<{nodeId, state, incarnation}>} updates
+   * @param {string} [fromNodeId]
+   */
+  applyGossip(updates, fromNodeId) {
+    if (!Array.isArray(updates)) {
+      return;
+    }
+    for (const update of updates) {
+      const nodeId = normalizeNodeId(update?.nodeId);
+      if (!nodeId) {
+        continue;
+      }
+      const incarnation = update?.incarnation;
+      const state = update?.state;
+      if (nodeId === this._localNodeId) {
+        if (
+          state === SWIM_MEMBER_STATE.SUSPECT ||
+          state === SWIM_MEMBER_STATE.DEAD
+        ) {
+          this.recordSelfSuspected(incarnation);
+        }
+        continue;
+      }
+      if (state === SWIM_MEMBER_STATE.ALIVE) {
+        this.recordAlive(nodeId, incarnation);
+      } else if (
+        state === SWIM_MEMBER_STATE.SUSPECT ||
+        state === SWIM_MEMBER_STATE.DEAD
+      ) {
+        this.recordSuspect(nodeId, fromNodeId, incarnation);
+      }
+    }
+  }
+
+  /** Number of pending dissemination updates (test/diagnostic). */
+  pendingGossipCount() {
+    return this._gossip.size;
   }
 
   /** Current verdict for a single node (defaults to alive if untracked). */
