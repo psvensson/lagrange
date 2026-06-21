@@ -188,3 +188,16 @@ allowlist and *zero current violators*.
   (the architecture is correct now but unprotected). Lever #2 (FD consolidation of the
   transport-liveness gates) remains the larger, genuine "replace-with-named-protocol"
   payoff. Lever #3 is dropped.
+- **§5 step 1 LANDED (commit `289115c9`):** `membership-layer-boundary.guard.test.js`
+  (GREEN, 0 violators, falsifier-RED per evasion) + `membership-layer-ownership-contract.md`.
+- **Finding 3 — Lever #2 (FD consolidation) premise also largely refuted** (scoping doc
+  `failure-detector-consolidation-scope.md`, subagent-verified). The control-plane FD is
+  ALREADY one owner (`resolveProjectedActiveNodeSelection`); the ~15 guards are in-pipeline
+  helpers; the freeze is a named suspicion-quorum clamp. The residual ~9–10 scattered
+  transport-liveness probes are mostly **local real-time operational gates**, not a clean
+  fold. Lever #2 therefore reduces to (a) naming/doc (low value) or (b) a **SWIM/Lifeguard/
+  φ-accrual protocol replacement** — a behavior-change *upgrade*, operator-gated on §6
+  (strong-vs-weak, adopt-vs-specify, appetite), NOT a cleanup. **Net: all three rev-2
+  levers shrank on contact; the membership architecture is already substantially correct +
+  consolidated + now guarded. The only remaining large investment is the optional protocol
+  upgrade.**

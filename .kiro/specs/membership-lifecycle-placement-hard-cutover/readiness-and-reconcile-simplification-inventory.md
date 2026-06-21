@@ -15,6 +15,20 @@ Line numbers are approximate (verify at edit time); the structure is the deliver
 
 ## LEVER #2 — Readiness guards = an ad-hoc failure detector (control-plane)
 
+> **Scoping update (2026-06-21) — see `failure-detector-consolidation-scope.md`.** The
+> "scattered, no named owner" premise was checked against the source + adversarially
+> verified and **largely refuted**: the control-plane FD is ALREADY one function with one
+> owner (`resolveProjectedActiveNodeSelection`, `active-node-projection.js:457`); the ~15
+> guards below are its **in-pipeline helpers** (class A), and `control-plane-readiness-*`
+> is **upstream evidence feeding it**. The genuinely-scattered residual is ~9–10
+> independent transport-liveness probes (rebalancer ×5 + lease-service/node-readiness/
+> replica-transition/query-routing/bootstrap) — but those are mostly **local real-time
+> operational gates**, NOT a clean fold (routing them through the slower installed view
+> could regress correctness). Lever #2 reduces to: (a) naming/doc of the already-
+> consolidated FD (low value), or (b) a SWIM/Lifeguard/φ-accrual **protocol replacement**
+> (a behavior-change upgrade, operator-gated per plan §6) — not the cleanup the table below
+> implies. The table is retained as the FD-evidence map.
+
 ### 12 readiness dimensions
 `control-plane-readiness-constants.js:7–18`
 PROCESS_ALIVE, CLUSTER_MEMBER_HEALTHY, ROUTING_READY, LOAD_READY,
