@@ -142,8 +142,15 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
    readiness/liveness gate AND the transport-evidence exclusion (the latter is required
    to reach the rejoiner failure mode — can't-reach-peer ⇒ no transport evidence ⇒ trim);
    never relaxes status/member-state; `dead`/`suspect` never trims. Adversarially
-   reviewed SAFE TO GATE. Validating: N=8 gate with both flags vs the ~0–0.5 no-consume
-   baseline. Original design note follows:
+   reviewed SAFE TO GATE.
+   MATCHED N=8 VERDICT (2026-06-21, same fingerprint cc7073044f): CONSUMPTION HELPS.
+   Consume-on scenario-PASS 5/8=0.625 (8/8 converged, 0 node-exit) vs flags-off
+   1/8=0.125 (5/8 converged, 3 node-exit) — ~5x pass rate and node-exits eliminated, on
+   identical code. Baseline failures include readiness_probe_timeout on the rejoiner (the
+   false-trim victim) + 3 node deaths; consume-on's only non-passes are residual
+   post-convergence quiescence heads. Caveat: one N=8 pair (a second matched pair makes it
+   promotion-grade). Recommendation: strong evidence to move toward enabling both flags
+   (operator call). Original design note follows:
    The 3b gates leave a ~1-2/min transient false-SWIM-dead residual at steady state, so
    consumption must be safe against it. In `isCanonicallyActiveNode`
    (active-node-projection.js:385): use SWIM `alive` to **protect** a node the
