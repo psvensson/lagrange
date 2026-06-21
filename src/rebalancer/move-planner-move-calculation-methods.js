@@ -647,6 +647,36 @@ class MovePlannerMoveCalculationMethods {
       moves.push(...candidateRemoves.map(toExecutableRemove));
     }
 
+    // Reconcile spread-vs-count: a count-increasing ADD that was NOT
+    // consumed into a count-neutral REPLACE (replaceMoves empty — e.g. the
+    // count-reducing REMOVE was skipped because its source replica already
+    // has a surplus-drain in flight) must not fire when the partition is
+    // already at/over its replica-count target. Otherwise the spread
+    // objective re-creates surplus that fights the pending count-reducing
+    // REMOVE, keeping the partition permanently over target (the run4
+    // over-target loop). Spread is still served by count-neutral REPLACEs;
+    // genuine under-target ADDs (active < target) are unaffected.
+    if (
+      addMoves.length > NUM.ZERO &&
+      replaceMoves.length === NUM.ZERO &&
+      activePlacementReplicas.length >= targetReplicaCount
+    ) {
+      const retainedAddMoves = addMoves.filter(
+        (move) => move.reason !== MOVE_REASON.INCREASE_REPLICA_COUNT,
+      );
+      const deferredAddCount = addMoves.length - retainedAddMoves.length;
+      if (deferredAddCount > NUM.ZERO) {
+        this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
+          entityId: this.entityId,
+          activePlacementReplicaCount: activePlacementReplicas.length,
+          targetReplicaCount,
+          deferredAddCount,
+        });
+        addMoves.length = NUM.ZERO;
+        addMoves.push(...retainedAddMoves);
+      }
+    }
+
     // Add the ADD moves to the moves array
     moves.push(...addMoves);
 

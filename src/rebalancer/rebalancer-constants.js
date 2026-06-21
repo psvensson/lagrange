@@ -164,6 +164,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   SKIP_ADD_TRANSITIONAL: 'Skipping ADD for node with transitional replica',
   DEFER_ADD_DEGRADED:
     'Deferring ADD moves while degraded placement is already at target replica count',
+  DEFER_ADD_OVER_TARGET:
+    'Deferring spread-driven count-increasing ADD while already at/over target replica count (no count-neutral REPLACE pairing)',
   DEFER_REMOVE_DETAIL: 'Deferring REMOVE until ADDs complete',
   DEFER_REMOVE: 'Deferring REMOVE moves until ADD moves complete',
   INCLUDE_CRITICAL_REMOVE: 'Including critical REMOVE moves alongside ADD moves',
