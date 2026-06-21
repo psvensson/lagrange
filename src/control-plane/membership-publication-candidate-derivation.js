@@ -425,6 +425,18 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         shadowNodeIds: membershipOwnerActiveMemberSet,
       }) :
       null;
+  // FD-upgrade (cutover §5 step 3): expose the minimal inputs the SWIM detector's
+  // active-set rule needs so the coordinator can emit a SWIM-vs-projection
+  // divergence alongside the shadow one, WITHOUT threading a service handle into
+  // this pure function (it gets data only; the verdict is read coordinator-side).
+  // Data-only packaging of already-computed values — no behavior change.
+  const membershipSwimInputs = {
+    projectionNodeIds: publishedActiveNodeIds,
+    publishedBaselineNodeIds,
+    memberStatesByNodeId:
+      planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId || null,
+    membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
+  };
   const publicationRecoveryCohortSnapshot =
     buildMembershipPublicationRecoveryCohortSnapshot(
       {
@@ -702,6 +714,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     priorityRecoveryDecisionSnapshots,
     projectionDiagnostics,
     membershipOwnerDivergence,
+    membershipSwimInputs,
     reasonCode,
     changed,
     priorityPartitionSummaryChanged,

@@ -4,6 +4,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
 import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
@@ -51,6 +52,10 @@ import {
 // full-logs). Emitted only when the shadow owner rule disagrees with the
 // projection-derived published set, and only once per distinct signature.
 const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
+// FD-upgrade (cutover §5 step 3): sibling of the owner-divergence probe that diffs
+// the SWIM detector's active set against the projection's published set. Emitted
+// only when a SWIM runtime is wired in (default-off flag); diagnostics-only.
+const MEMBERSHIP_SWIM_DIVERGENCE_MSG = 'MEMBERSHIP_SWIM_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
 const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER = 'L';
 const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER = 'F';
@@ -92,6 +97,12 @@ class MembershipPublicationCoordinatorReads {
     this._membershipOwnerDivergenceLastState = null;
     this._membershipOwnerDivergenceInstanceEpoch = null;
     this._membershipOwnerDivergenceLastSnapshotMs = null;
+    // FD-upgrade SWIM divergence probe: the runtime is null unless the bootstrap
+    // wired it in behind LAGRANGE_MEMBERSHIP_SWIM_DETECTOR (default-off), so this
+    // whole probe is inert on the default path.
+    this.membershipSwimRuntime = options.membershipSwimRuntime || null;
+    this._membershipSwimDivergenceLastState = null;
+    this._membershipSwimDivergenceLastSnapshotMs = null;
     this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.workflowCoordinator =
       options.workflowCoordinator ||
@@ -529,7 +540,60 @@ class MembershipPublicationCoordinatorReads {
       localNodeId: this.nodeId,
     });
     this._emitMembershipOwnerDivergence(candidate?.membershipOwnerDivergence);
+    this._emitMembershipSwimDivergence(candidate?.membershipSwimInputs);
     return candidate;
+  }
+
+  // FD-upgrade (cutover §5 step 3): diff the SWIM detector's active set against the
+  // projection's published set, the SWIM analog of the owner-divergence probe. Reads
+  // the live verdict from the wired-in runtime and the projection inputs the pure
+  // derivation exposed. Inert (returns early) unless a runtime is wired in behind
+  // the default-off flag. Diagnostics-only; never disturbs the publication path.
+  _emitMembershipSwimDivergence(swimInputs) {
+    if (!this.membershipSwimRuntime || !swimInputs) {
+      return;
+    }
+    try {
+      const swimActiveNodeIds = this.membershipSwimRuntime.activeMemberSet({
+        publishedBaselineNodeIds: swimInputs.publishedBaselineNodeIds,
+        memberStatesByNodeId: swimInputs.memberStatesByNodeId,
+        membershipFreezeActive: swimInputs.membershipFreezeActive,
+      });
+      const divergence = buildMembershipOwnerDivergence({
+        projectionNodeIds: swimInputs.projectionNodeIds,
+        shadowNodeIds: swimActiveNodeIds,
+      });
+      const nowMs = this.now();
+      const divergenceState = divergence.agree === true ?
+        MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE :
+        `${divergence.onlyInProjection.join(',')}|` +
+          `${divergence.onlyInShadow.join(',')}`;
+      const transitioned =
+        divergenceState !== this._membershipSwimDivergenceLastState;
+      const snapshotDue =
+        this._membershipSwimDivergenceLastSnapshotMs === null ||
+        (nowMs - this._membershipSwimDivergenceLastSnapshotMs) >=
+          MEMBERSHIP_OWNER_DIVERGENCE_SNAPSHOT_INTERVAL_MS;
+      if (!transitioned && !snapshotDue) {
+        return;
+      }
+      this._membershipSwimDivergenceLastState = divergenceState;
+      this._membershipSwimDivergenceLastSnapshotMs = nowMs;
+      this.logger?.info?.(MEMBERSHIP_SWIM_DIVERGENCE_MSG, {
+        nodeId: this.nodeId,
+        emitKind: transitioned ?
+          MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION :
+          MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT,
+        agree: divergence.agree,
+        onlyInProjection: divergence.onlyInProjection,
+        onlyInShadow: divergence.onlyInShadow,
+        projectionCount: divergence.projectionCount,
+        shadowCount: divergence.shadowCount,
+        divergenceCount: divergence.divergenceCount,
+      });
+    } catch {
+      // diagnostics-only; never disturb the publication path
+    }
   }
 
   // Phase 0: surface the single-owner divergence into per-node logs. Emits on
