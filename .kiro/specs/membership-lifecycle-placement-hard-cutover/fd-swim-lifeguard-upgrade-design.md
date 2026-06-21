@@ -106,17 +106,18 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      reachable/partitioned, indirect via relay, and the no-relay-helper→null case —
      pinning the load-bearing envelope mapping (the biggest 3c risk) before any
      lifecycle wiring.
-   - **3c-ii (NEXT).** Node-lifecycle wiring: instantiate detector+prober when the
-     flag is on at the HeartbeatService site (`control-plane-setup.js:400/534`,
-     stop at `bootstrap-service-seed-delegates.js:389`); register the relay handler;
-     `getMembers` = `resolvePublishedActiveNodeIds` / `getLatestPublishedMembershipRow`
-     (the published view read API — NOT `resolveActiveNodeViews`). Then the
-     divergence EMISSION on the COORDINATOR side (inject the prober/verdict-provider
-     into `MembershipPublicationCoordinatorReads`; after the existing shadow
-     `_emitMembershipOwnerDivergence`, emit a sibling
-     `buildMembershipOwnerDivergence(projection vs computeSwimActiveMemberSet)` — the
-     pure derivation stays untouched). Validate on a 3-node in-process harness with
-     detector/prober on a VirtualTimeSource, stepping `probeOnce()`.
+   - **3c-ii (DONE).** `MembershipSwimRuntime` (`membership-swim-runtime.js`) composes
+     detector+prober+transport+relay into one lifecycle object, end-to-end validated
+     on a 3-node in-process harness (`membership-swim-runtime.test.js`: partition →
+     suspect → dead → trim; freeze retains). Coordinator-side divergence emission
+     (3c-ii-C): the pure derivation exposes `membershipSwimInputs`; the coordinator
+     emits a sibling `MEMBERSHIP_SWIM_DIVERGENCE` after the shadow one (unit-tested
+     with a fake runtime). Lifecycle wiring (3c-ii-B): `control-plane-setup` builds
+     the runtime flag-gated (getMembers = `resolvePublishedActiveNodeIds` over the
+     published rows), passes it to the coordinator, starts it after
+     `startOwnerMembershipDriver`; `stopOwnerMembershipDriver` stops it; prober timer
+     unref'd. Default path byte-identical (null-guarded); bootstrap smoke 129/129,
+     SWIM suite 294/294.
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
