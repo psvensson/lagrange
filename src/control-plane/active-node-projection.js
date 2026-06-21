@@ -452,7 +452,15 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
       readinessProjection.projectedByRuntimeAuthority === true);
   const projectedByLivenessFallback =
     allowLivenessFallbackProjection === true;
-  if (!projectedByAuthorityConvergence && !projectedByLivenessFallback) {
+  // A SWIM `alive` verdict (attested by peers via gossip/indirect probe) IS liveness
+  // evidence and supersedes THIS node's local transport-evidence check — this is what
+  // lets a rejoiner that cannot yet reach a peer keep it (the false-positive-trim fix).
+  // Still asymmetric (only `alive` relaxes) and still after the status/member-state gate.
+  if (
+    !projectedByAuthorityConvergence &&
+    !projectedByLivenessFallback &&
+    !swimProtected
+  ) {
     if (hasCanonicalWebSocketEndpoints(nodeEndpointRows) &&
         !hasCanonicalWebSocketEndpoint(
           normalizedNode.nodeId,

@@ -94,6 +94,32 @@ test('protection does NOT override status: a draining node stays trimmed', (t) =
   t.end();
 });
 
+test('SWIM alive bypasses the transport-evidence exclusion (the rejoiner case)', (t) => {
+  // Canonical WS endpoints exist for A, so the transport-evidence block is active; the
+  // rejoiner has no endpoint/service/transport evidence for peer-B (it cannot reach it).
+  const opts = {
+    nodeEndpointRows: [
+      {node_id: 'A', transport_type: 'websocket', status: 'active', address: 'ws://127.0.0.1:8080'},
+    ],
+    serviceRows: [],
+  };
+  t.equal(
+    isCanonicallyActiveNode(TRIMMABLE_HEALTHY_NODE, opts),
+    false,
+    'trimmed without consumption (no local transport evidence for the peer)',
+  );
+  t.equal(
+    isCanonicallyActiveNode(TRIMMABLE_HEALTHY_NODE, {
+      ...opts,
+      membershipSwimConsumeEnabled: true,
+      swimVerdictByNodeId: {'peer-B': 'alive'},
+    }),
+    true,
+    'SWIM alive (peer-attested) supersedes the local transport-evidence check',
+  );
+  t.end();
+});
+
 test('projection retains a SWIM-alive node it would otherwise trim (and only it)', (t) => {
   const nodeRows = [
     {node_id: 'A', status: 'active', connection_state: 'ready'},
