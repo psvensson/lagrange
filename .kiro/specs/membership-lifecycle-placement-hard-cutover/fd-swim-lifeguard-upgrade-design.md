@@ -118,8 +118,37 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      `startOwnerMembershipDriver`; `stopOwnerMembershipDriver` stops it; prober timer
      unref'd. Default path byte-identical (null-guarded); bootstrap smoke 129/129,
      SWIM suite 294/294.
+3b. **SWIM dissemination (NEW — REQUIRED before 4; flag-on gate finding below).**
+   Piggyback alive/suspect/dead + incarnation on probe/ack traffic (infection-style),
+   feeding `recordSuspect`/`recordAlive`/`recordSelfSuspected`; add the buddy-system
+   (tell the suspected node first so it refutes in time). Fix the divergence metric to
+   compare like-for-like (the SWIM set vs the projection set from the SAME baseline).
+   Re-gate flag-on and require `onlyInProjection`≈0 at steady state before 4.
 4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
    `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
    re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
    N≥8 gate validated.
 5. **Retire the dormant `failure-detector.js`** once SWIM owns suspicion.
+
+## Flag-on gate finding (2026-06-21, stat-gate-20260621T103108Z, N=2) — DISSEMINATION GAP, increment 4 BLOCKED
+
+First flag-on diagnostic gate (`LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=true`, N=2):
+- **Wiring validated + no regression:** the detector ran live, emitted
+  `MEMBERSHIP_SWIM_DIVERGENCE` (599 / 865 emits), and BOTH runs CONVERGED (missing=0,
+  0 corrupt, 0 node-exit). The observational wiring does not harm convergence (expected —
+  nothing consumes the verdict yet).
+- **RED for increment 4:** SWIM marks genuinely-active nodes DEAD (`onlyInProjection`
+  non-empty) **intermittently throughout the run**, not just formation/teardown (run1's
+  steady window 10:35–10:39 had ~34 such emits; the rejoiner marked two healthy peers
+  dead). Consuming this verdict now would cause harmful false trims / flapping.
+- **ROOT (code-confirmed):** the SWIM **dissemination** half is NOT wired —
+  `recordSuspect`/`recordAlive`/`recordSelfSuspected` are never called outside tests; the
+  prober feeds only `recordProbeResult`/`recordMissedNack`/`tick`. So each node is a
+  PURELY LOCAL timeout detector with no refutation propagation — a peer one node
+  transiently fails to probe is marked dead and cannot refute (no gossip carries its
+  incarnation bump). Lifeguard's anti-false-positive guarantees REQUIRE dissemination.
+- **Metric caveat:** `onlyInShadow` is mostly an artifact of comparing the SWIM set
+  (from `publishedBaselineNodeIds`) against `publishedActiveNodeIds` (baseline⊋active);
+  `onlyInProjection` is the real false-positive signal.
+- **Lesson (recurs, cf. §7):** the cheap fixture equivalence test passed (it injects
+  verdicts directly) but the live probe/gossip dynamics revealed the missing half.
