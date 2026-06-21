@@ -40,6 +40,7 @@ const {
   assertRaftProviderContract,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
+  getTrafficReadinessSnapshot,
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
@@ -433,13 +434,53 @@ class PartitionServiceCoreBase extends EventEmitter {
       );
     });
   }
+  /**
+   * Resolve whether this partition's rebalancer should hold leadership.
+   *
+   * Policy: background-work readiness gates rebalancer-leadership
+   * ACQUISITION; raft leadership gates RETENTION. Once a rebalancer has
+   * acquired leadership while the node was ready, a transient node-wide
+   * readiness dip (e.g. the shared metadata-publication readiness state
+   * re-entering a degraded phase during control-plane recovery) must NOT
+   * demote it while this partition still holds raft leadership. Without
+   * this hysteresis every partition's rebalancer flaps in lockstep with
+   * the single shared readiness object each time it oscillates, which
+   * resets the post-restart quiescence window and stalls convergence. A
+   * draining/shutting-down node still demotes (drain is terminal).
+   *
+   * @return {boolean} Desired rebalancer leadership state.
+   * @private
+   */
+  resolveRebalancerLeadership() {
+    if (!this.isLeader) {
+      return false;
+    }
+    if (this.isBackgroundWorkReady()) {
+      return true;
+    }
+    const rebalancer = this.rebalancer;
+    if (
+      !rebalancer ||
+      rebalancer.isLeader !== true ||
+      rebalancer.isShuttingDown === true
+    ) {
+      return false;
+    }
+    const snapshot = getTrafficReadinessSnapshot(
+      this.metadataPublicationReadinessState,
+    );
+    if (snapshot && snapshot.draining === true) {
+      return false;
+    }
+    return true;
+  }
   updateRebalancerLeadership() {
     if (!this.rebalancer) {
       this.maybeInitializeRebalancer();
       return;
     }
     if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.rebalancer.setLeader(this.isBackgroundWorkReady() && this.isLeader);
+      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
     }
   }
   cancelLeaderOwnedActivation() {

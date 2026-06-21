@@ -155,7 +155,7 @@ class PartitionServiceRebalancerMethods {
       if (
         typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION
       ) {
-        this.rebalancer.setLeader(backgroundReady && this.isLeader);
+        this.rebalancer.setLeader(this.resolveRebalancerLeadership());
       }
       return;
     }
@@ -235,7 +235,7 @@ class PartitionServiceRebalancerMethods {
       rebalanceCoordinator,
     });
     this.rebalancer.initialize();
-    this.rebalancer.setLeader(this.isBackgroundWorkReady() && this.isLeader);
+    this.rebalancer.setLeader(this.resolveRebalancerLeadership());
   }
 }
 

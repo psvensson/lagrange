@@ -555,23 +555,30 @@ test('dependency sync — null coordinator does not clear ' +
 
 // ── 4. Leader/background readiness gate ────────────────────────────
 //
-// Lock the behavior that rebalancer leadership is gated on BOTH
-// isLeader AND isBackgroundWorkReady.
+// Lock the behavior that background-work readiness gates rebalancer
+// leadership ACQUISITION, while raft leadership gates RETENTION: an
+// already-active rebalancer leader is RETAINED across a transient
+// (non-draining) readiness dip while it still holds raft leadership.
+// (Retention hysteresis prevents the lockstep rebalancer-leadership flap
+// that resets the post-restart quiescence window — see
+// partition-rebalancer-leadership-readiness-hysteresis.test.js.)
 
-test('leader gate — rebalancer setLeader receives false when ' +
-  'background work is not ready', async (t) => {
+test('leader gate — active rebalancer leader is RETAINED when ' +
+  'background work transiently reports not-ready', async (t) => {
   const ps = createPartitionService();
   wireAllDependencies(ps);
 
   t.ok(ps.rebalancer, 'rebalancer created');
+  t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
 
-  // Switch to not-ready state
+  // Switch to a transient (non-draining) not-ready state; raft leadership
+  // is unchanged, so an already-active rebalancer leader retains.
   const notReadyState = createMockReadinessState(false);
   ps.metadataPublicationReadinessState = notReadyState;
   ps.updateRebalancerLeadership();
 
-  t.equal(ps.rebalancer.isLeader, false,
-    'rebalancer leadership is false when background not ready');
+  t.equal(ps.rebalancer.isLeader, true,
+    'rebalancer leadership retained across a transient readiness dip');
   await shutdownPartitionService(ps);
 });
 
