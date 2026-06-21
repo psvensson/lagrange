@@ -143,3 +143,48 @@ agreement.
   implementation is the real test of a simplification thesis. Here it converted a
   doomed "delete the projection" effort into the correct "name + replace the layers"
   plan — before a multi-session rewrite was sunk into it.
+
+## 8. Implementation-contact findings on rev-2's near-term levers (2026-06-21)
+
+Before coding either rev-2 near-term lever, both premises were checked against the
+source (grep + two independent multi-file audits, owner-authority read directly).
+**Both near-term levers turned out smaller than the inventory framed — the same
+"is this complexity essential / already-handled?" failure mode as §7.** The genuine
+remaining win is §5 **step 1** (name layers + structural guard), now with a precise
+allowlist and *zero current violators*.
+
+- **Finding 1 — Lever #3 (triad consolidation) premise refuted.** The 8 "exact triad"
+  tables are NOT 8 copies of a shared classifier. The *availability* half (produces
+  `…_UNAVAILABLE`) is **already one parametric function** —
+  `selectOperationWorkflowVariant(value, variants, fallback)`
+  (`operation-workflow-owner-evidence.js:69`), applied uniformly to all ~20 evidence
+  fields. The *classification* half (`operation-workflow-owner-ports.js`) is genuinely
+  idiosyncratic: each is a one-line ternary over a **different** input — `context.cause`
+  (timeout/history :304/:310), `retryScheduled` (retry budget/deadline :424–429),
+  authority state (wake :462), or a hardcoded constant (lease `CURRENT` :380, command
+  `IDLE` :361/:467). Several never emit their third value in production. **6 enum values
+  are 1:1 with externally-observed reason codes** → must be preserved verbatim. A
+  "parametric evaluator" here is a forced, lossy wrapper over 8 distinct predicates +
+  8 label-triples, removing zero behavioral redundancy. **Not a real lever.**
+- **Finding 2 — Lever #1 (consumer collapse) is essentially already done.** Audited 21
+  consumer files (rebalancer + admin + diagnostics + bootstrap). **Genuine ad-hoc
+  membership-truth re-derivers: 0.** Membership reads already route through the
+  published-view read API (`resolvePublishedActiveNodeIds` /
+  `getLatestPublishedMembershipRow`) or the legitimate full projection
+  (`resolveActiveNodeViews` — only ~5 src call sites: planning-evidence,
+  candidate-derivation, admin snapshot, bootstrap-cluster-view-owner, membership-owner-shadow,
+  all of which genuinely need the FD/readiness overlay). The 3 sites flagged "ad-hoc"
+  are **transport-liveness gates** (FD evidence by design: critical-topology cache
+  enumeration, priority-readiness connected-node lag detection, remove-safety `pingNode`)
+  — these are the scattered FD evidence Lever #2/§5-step-3 targets, NOT membership reads
+  to collapse. `resolveOperationWorkflowOwnerAuthorityState`
+  (`operation-workflow-owner-ports.js:243`) is operation-ownership (owner from operation
+  metadata vs local `nodeId`), not membership. The "~11 consumers re-derive membership"
+  premise does not hold.
+- **Implication for the work order.** §5 step 1's **structural guard is the real,
+  safe, additive next increment** — and the audit just supplied its allowlist (the ~5
+  legit `resolveActiveNodeViews` callers; everyone else reads the published view) and
+  confirmed **0 current violators**, so it lands GREEN and *prevents future regression*
+  (the architecture is correct now but unprotected). Lever #2 (FD consolidation of the
+  transport-liveness gates) remains the larger, genuine "replace-with-named-protocol"
+  payoff. Lever #3 is dropped.

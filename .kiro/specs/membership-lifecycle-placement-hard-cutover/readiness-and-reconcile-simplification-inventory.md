@@ -131,16 +131,33 @@ lives in this seam.
 
 ---
 
-## Suggested order (revised)
-1. **Lever #3 triad consolidation FIRST** — independent, highest-confidence, genuine
-   redundancy: build one parametric `freshness/availability` evaluator, replace the
-   8 exact-triad tables, normalize the 4 near-variants. No membership dependency.
-2. **Lever #1 consumer-collapse** — make operation owners + the ~11 membership
-   consumers READ the installed view; this shrinks the authority/lease/owner tables
-   and removes re-derivation (see cutover plan §5 step 2).
-3. **Lever #2 FD consolidation** — fold the ~10 membership-derived guards into one
-   named failure detector (SWIM/Lifeguard/φ-accrual), re-home the freeze gate as its
-   suspicion-quorum rule (cutover plan §5 step 3). This is REPLACE, not delete.
+## Suggested order (revised twice — see cutover plan §8, 2026-06-21)
+
+**Implementation-contact update (2026-06-21): the original order's first two items
+were checked against the source and both shrank. See cutover plan §8 for the audit.**
+
+- ~~**Lever #3 triad consolidation FIRST**~~ — **DROPPED.** The availability half is
+  already one parametric function (`selectOperationWorkflowVariant`,
+  `operation-workflow-owner-evidence.js:69`); the classification half is 8 idiosyncratic
+  one-line ternaries over different inputs; 6 enum values are 1:1 reason codes that must
+  be preserved. No genuine redundancy to consolidate — a parametric evaluator would be a
+  forced, lossy wrapper. Not a real lever.
+- ~~**Lever #1 consumer-collapse (~11 consumers)**~~ — **ESSENTIALLY ALREADY DONE.**
+  21-file audit found **0** genuine ad-hoc membership-truth re-derivers; reads already
+  route through the published-view API or the legitimate projection (~5 callers). The
+  "re-derivers" are transport-liveness FD gates (→ Lever #2), not membership reads.
+
+**Actual order now:**
+1. **§5 step 1 — name the layers + structural guard (NEXT, safe, additive).** Codify the
+   FD/agreement/dissemination boundary; add a structural test pinning the ~5 legitimate
+   `resolveActiveNodeViews` callers (allowlist), so new code must read the published view
+   instead of re-deriving. Audit confirmed **0 current violators** → lands GREEN, locks in
+   the already-correct architecture, prevents regression.
+2. **Lever #2 FD consolidation** — fold the ~10 membership-derived guards + the
+   transport-liveness gates (critical-topology, priority-readiness connected-nodes,
+   remove-safety `pingNode`) into one named failure detector (SWIM/Lifeguard/φ-accrual),
+   re-home the freeze gate as its suspicion-quorum rule (cutover plan §5 step 3). This is
+   the larger, genuine REPLACE-with-named-protocol payoff, not delete.
 
 ## Verification status
 Inventory file:lines + counts subagent-verified against HEAD (2026-06-20),
