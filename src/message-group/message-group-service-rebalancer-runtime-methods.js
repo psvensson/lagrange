@@ -80,7 +80,7 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
         this.rebalancer.messageRouter = this.transport;
         this.rebalancer.sqlQueryEngine =
           this.cdcIntegrationService?.sqlQueryEngine || null;
-        this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
+        this.rebalancer.setLeader(this.resolveRebalancerLeadership());
         return;
       }
       if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {
@@ -107,7 +107,7 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
         rebalanceCoordinator: this.rebalanceCoordinator,
       });
       this.rebalancer.initialize();
-      this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
+      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
     }
 
     /**
@@ -116,9 +116,7 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
      */
     updateRebalancerLeadership() {
       if (this.rebalancer) {
-        this.rebalancer.setLeader(
-          this.isBackgroundWorkReady() && this.isLeaderReplica(),
-        );
+        this.rebalancer.setLeader(this.resolveRebalancerLeadership());
         return;
       }
       this.maybeInitializeRebalancer();

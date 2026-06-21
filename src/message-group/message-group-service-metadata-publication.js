@@ -6,6 +6,7 @@
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  getTrafficReadinessSnapshot,
   isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
   isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
 } from '../bootstrap/traffic-readiness-utils.js';
@@ -43,6 +44,45 @@ function assignMetadataPublication(serviceClass) {
       return isBackgroundWorkLifecycleReady(
         this.metadataPublicationReadinessState,
       );
+    },
+    /**
+     * Resolve whether this message group's rebalancer should hold
+     * leadership.
+     *
+     * Policy (mirrors PartitionService): background-work readiness gates
+     * rebalancer-leadership ACQUISITION; raft leadership (leader replica)
+     * gates RETENTION. Once a rebalancer has acquired leadership while the
+     * node was ready, a transient node-wide readiness dip (the shared
+     * metadata-publication readiness state re-entering a degraded phase
+     * during control-plane recovery) must NOT demote it while this group
+     * still holds raft leadership — otherwise every group's rebalancer
+     * flaps in lockstep with the single shared readiness object. A
+     * draining/shutting-down node still demotes (drain is terminal).
+     *
+     * @return {boolean} Desired rebalancer leadership state.
+     */
+    resolveRebalancerLeadership() {
+      if (!this.isLeaderReplica()) {
+        return false;
+      }
+      if (this.isBackgroundWorkReady()) {
+        return true;
+      }
+      const rebalancer = this.rebalancer;
+      if (
+        !rebalancer ||
+        rebalancer.isLeader !== true ||
+        rebalancer.isShuttingDown === true
+      ) {
+        return false;
+      }
+      const snapshot = getTrafficReadinessSnapshot(
+        this.metadataPublicationReadinessState,
+      );
+      if (snapshot && snapshot.draining === true) {
+        return false;
+      }
+      return true;
     },
     handleMetadataPublicationReadinessTransition() {
       this.maybeInitializeRebalancer();
