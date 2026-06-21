@@ -1,0 +1,317 @@
+// SWIM + Lifeguard failure detector — pure state machine (cutover plan §5 step 3,
+// increment 1). This module is the failure-detector LAYER only: it tracks per-node
+// liveness verdicts (alive/suspect/dead) from probe outcomes and gossiped
+// suspect/alive messages, with Lifeguard local-health awareness. It performs NO
+// transport and NO database writes — the caller feeds it probe outcomes and reads
+// its verdict. The agreement layer (Raft-installed control_plane_publications +
+// epoch) is untouched; see fd-swim-lifeguard-upgrade-design.md.
+//
+// Sources: SWIM (Das–Gupta–Motivala, DSN 2002, §3–§4); Lifeguard
+// (Dadgar–Phillips–Currey, arXiv:1707.00788 §IV); hashicorp/memberlist LAN
+// defaults (config.go / awareness.go / suspicion.go / state.go).
+//
+// Determinism: time comes only from the injected timeSource, randomness only from
+// the injected randomSource (used by the future probe loop, increment 3). Every
+// other computation — LHM deltas, incarnation precedence, suspicion decay — is
+// pure, so the detector replays exactly on the VirtualTimeSource + SeededRandomSource
+// substrate given an ordered message/outcome sequence.
+
+import {resolveTimeSource} from '../time/time-source.js';
+import {resolveRandomSource} from '../random/random-source.js';
+
+const MEMBERSHIP_SWIM_DETECTOR_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_DETECTOR';
+const ENV_TRUE = 'true';
+
+/**
+ * Default-off feature flag (mirrors the membership-owner-shadow.js pattern).
+ * @param {Object} [env=process.env]
+ * @return {boolean}
+ */
+function isMembershipSwimDetectorEnabled(env = process.env) {
+  return env?.[MEMBERSHIP_SWIM_DETECTOR_ENV] === ENV_TRUE;
+}
+
+const SWIM_MEMBER_STATE = Object.freeze({
+  ALIVE: 'alive',
+  SUSPECT: 'suspect',
+  DEAD: 'dead',
+});
+
+// memberlist LAN defaults + Lifeguard parameters.
+const SWIM_DETECTOR_DEFAULTS = Object.freeze({
+  baseProbeIntervalMs: 1000, // T
+  baseProbeTimeoutMs: 500, // < T, ~99p RTT
+  awarenessMax: 8, // S: LHM is a saturating counter in [0, S-1]
+  suspicionMult: 4, // Min suspicion-timeout coefficient
+  suspicionMaxTimeoutMult: 6, // Max = mult * Min
+  confirmationsToMin: 3, // K: independent confirmations to collapse Max -> Min
+  indirectProbeCount: 3, // k: indirect ping-req fanout (probe loop, increment 3)
+});
+
+const HEALTH_DELTA_SUCCESS = -1;
+const HEALTH_DELTA_FAILURE = 1;
+const LHM_MIN = 0;
+const SELF_CONFIRMER = 'self';
+// A gossiped suspect with no resolvable source is still an independent
+// confirmation, but must NOT collapse onto the first-hand SELF_CONFIRMER key
+// (which would undercount independent confirmations / lengthen the timeout).
+const UNKNOWN_CONFIRMER = 'unknown-source';
+
+function normalizeNodeId(value) {
+  return String(value || '').trim();
+}
+
+function isFiniteIncarnation(value) {
+  return Number.isFinite(value);
+}
+
+/**
+ * SWIM + Lifeguard per-node liveness state machine with a Local Health Multiplier.
+ */
+class MembershipSwimDetector {
+  constructor(options = {}) {
+    this._timeSource = resolveTimeSource(options);
+    this._randomSource = resolveRandomSource(options);
+    this._config = {...SWIM_DETECTOR_DEFAULTS, ...(options.config || {})};
+    this._localNodeId = normalizeNodeId(options.localNodeId) || null;
+    // nodeId -> {state, incarnation, suspectRaisedAtMs, suspicionDeadlineMs, confirmers:Set}
+    this._members = new Map();
+    this._localHealthMultiplier = LHM_MIN;
+    this._selfIncarnation = LHM_MIN;
+  }
+
+  _now(nowMs) {
+    return isFiniteIncarnation(nowMs) ? nowMs : this._timeSource.now();
+  }
+
+  _member(nodeId) {
+    const normalized = normalizeNodeId(nodeId);
+    if (!normalized) {
+      return null;
+    }
+    let entry = this._members.get(normalized);
+    if (!entry) {
+      entry = {
+        state: SWIM_MEMBER_STATE.ALIVE,
+        incarnation: LHM_MIN,
+        suspectRaisedAtMs: null,
+        suspicionDeadlineMs: null,
+        confirmers: new Set(),
+      };
+      this._members.set(normalized, entry);
+    }
+    return entry;
+  }
+
+  /** Lifeguard Local Health Multiplier (saturating counter in [0, S-1]). */
+  localHealthMultiplier() {
+    return this._localHealthMultiplier;
+  }
+
+  _applyHealthDelta(delta) {
+    const max = this._config.awarenessMax - 1;
+    const next = this._localHealthMultiplier + delta;
+    this._localHealthMultiplier = Math.min(Math.max(next, LHM_MIN), max);
+  }
+
+  /** Probe interval scaled by local health: base * (LHM + 1). */
+  scaledProbeIntervalMs() {
+    return this._config.baseProbeIntervalMs * (this._localHealthMultiplier + 1);
+  }
+
+  /** Probe timeout scaled by local health: base * (LHM + 1). */
+  scaledProbeTimeoutMs() {
+    return this._config.baseProbeTimeoutMs * (this._localHealthMultiplier + 1);
+  }
+
+  /** Number of members the detector currently tracks (for suspicion scaling). */
+  knownMemberCount() {
+    return this._members.size;
+  }
+
+  // memberlist: nodeScale = max(1, log10(max(1, n))).
+  _nodeScale() {
+    const n = Math.max(1, this.knownMemberCount());
+    return Math.max(1, Math.log10(n));
+  }
+
+  _suspicionMinMs() {
+    return (
+      this._config.suspicionMult * this._nodeScale() * this.scaledProbeIntervalMs()
+    );
+  }
+
+  _suspicionMaxMs() {
+    return this._config.suspicionMaxTimeoutMult * this._suspicionMinMs();
+  }
+
+  // Lifeguard LHA-Suspicion: start at Max, decay toward Min as independent
+  // confirmations (C) accrue, via log(C+1)/log(K+1).
+  _suspicionTimeoutMs(independentConfirmations) {
+    const min = this._suspicionMinMs();
+    const max = this._suspicionMaxMs();
+    const k = this._config.confirmationsToMin;
+    const c = Math.max(LHM_MIN, independentConfirmations);
+    const fraction = Math.min(1, Math.log(c + 1) / Math.log(k + 1));
+    return Math.max(min, max - (max - min) * fraction);
+  }
+
+  _recomputeSuspicionDeadline(entry) {
+    const independentConfirmations = Math.max(LHM_MIN, entry.confirmers.size - 1);
+    entry.suspicionDeadlineMs =
+      entry.suspectRaisedAtMs + this._suspicionTimeoutMs(independentConfirmations);
+  }
+
+  _raiseSuspicion(entry, confirmer, nowMs) {
+    if (entry.state === SWIM_MEMBER_STATE.DEAD) {
+      return;
+    }
+    const now = this._now(nowMs);
+    if (entry.state !== SWIM_MEMBER_STATE.SUSPECT) {
+      entry.state = SWIM_MEMBER_STATE.SUSPECT;
+      entry.suspectRaisedAtMs = now;
+      entry.confirmers = new Set([confirmer]);
+      this._recomputeSuspicionDeadline(entry);
+      return;
+    }
+    if (!entry.confirmers.has(confirmer)) {
+      entry.confirmers.add(confirmer);
+      this._recomputeSuspicionDeadline(entry);
+    }
+  }
+
+  /**
+   * First-hand probe outcome for a peer. ok=true is alive evidence (refutes a
+   * local suspicion); ok=false drives local health up and starts suspicion.
+   * @param {string} nodeId
+   * @param {boolean} ok
+   * @param {number} [nowMs]
+   */
+  recordProbeResult(nodeId, ok, nowMs) {
+    const entry = this._member(nodeId);
+    if (!entry) {
+      return;
+    }
+    if (ok) {
+      this._applyHealthDelta(HEALTH_DELTA_SUCCESS);
+      if (entry.state === SWIM_MEMBER_STATE.SUSPECT) {
+        entry.state = SWIM_MEMBER_STATE.ALIVE;
+        entry.suspectRaisedAtMs = null;
+        entry.suspicionDeadlineMs = null;
+        entry.confirmers = new Set();
+      }
+      return;
+    }
+    this._applyHealthDelta(HEALTH_DELTA_FAILURE);
+    this._raiseSuspicion(entry, SELF_CONFIRMER, nowMs);
+  }
+
+  /**
+   * Gossiped Suspect(nodeId, incarnation) from another member. Suspect overrides
+   * Alive/Suspect at equal-or-higher incarnation (SWIM §4.2 precedence).
+   * @param {string} nodeId
+   * @param {string} fromNodeId
+   * @param {number} incarnation
+   * @param {number} [nowMs]
+   */
+  recordSuspect(nodeId, fromNodeId, incarnation, nowMs) {
+    const entry = this._member(nodeId);
+    if (!entry || entry.state === SWIM_MEMBER_STATE.DEAD) {
+      return;
+    }
+    // SWIM messages always carry an incarnation; a malformed suspect without one
+    // must be dropped, not allowed to bypass precedence and override any Alive.
+    if (!isFiniteIncarnation(incarnation) || incarnation < entry.incarnation) {
+      return;
+    }
+    entry.incarnation = incarnation;
+    const confirmer = normalizeNodeId(fromNodeId) || UNKNOWN_CONFIRMER;
+    this._raiseSuspicion(entry, confirmer, nowMs);
+  }
+
+  /**
+   * Gossiped Alive(nodeId, incarnation) — a refutation. Alive overrides
+   * Suspect/Alive only at a strictly higher incarnation (SWIM §4.2).
+   * @param {string} nodeId
+   * @param {number} incarnation
+   */
+  recordAlive(nodeId, incarnation) {
+    const entry = this._member(nodeId);
+    if (!entry || !isFiniteIncarnation(incarnation)) {
+      return;
+    }
+    if (incarnation <= entry.incarnation) {
+      return;
+    }
+    entry.incarnation = incarnation;
+    entry.state = SWIM_MEMBER_STATE.ALIVE;
+    entry.suspectRaisedAtMs = null;
+    entry.suspicionDeadlineMs = null;
+    entry.confirmers = new Set();
+  }
+
+  /**
+   * This node was suspected by a peer. Bump our own incarnation to refute and
+   * drive local health up (refuting self is a degradation signal). Returns the
+   * incarnation the caller should gossip in the refuting Alive message.
+   * @param {number} incarnation - the incarnation the suspicion was about.
+   * @return {number} the new self incarnation to advertise.
+   */
+  recordSelfSuspected(incarnation) {
+    if (isFiniteIncarnation(incarnation) && incarnation >= this._selfIncarnation) {
+      this._selfIncarnation = incarnation + 1;
+      this._applyHealthDelta(HEALTH_DELTA_FAILURE);
+    }
+    return this._selfIncarnation;
+  }
+
+  selfIncarnation() {
+    return this._selfIncarnation;
+  }
+
+  /** A missed indirect-probe nack is a local-health signal (Lifeguard §IV-A). */
+  recordMissedNack() {
+    this._applyHealthDelta(HEALTH_DELTA_FAILURE);
+  }
+
+  /**
+   * Advance suspicion timers: any SUSPECT member past its deadline becomes DEAD.
+   * @param {number} [nowMs]
+   */
+  tick(nowMs) {
+    const now = this._now(nowMs);
+    for (const entry of this._members.values()) {
+      if (
+        entry.state === SWIM_MEMBER_STATE.SUSPECT &&
+        isFiniteIncarnation(entry.suspicionDeadlineMs) &&
+        now >= entry.suspicionDeadlineMs
+      ) {
+        entry.state = SWIM_MEMBER_STATE.DEAD;
+        entry.suspicionDeadlineMs = null;
+      }
+    }
+  }
+
+  /** Current verdict for a single node (defaults to alive if untracked). */
+  verdictFor(nodeId) {
+    const entry = this._members.get(normalizeNodeId(nodeId));
+    return entry ? entry.state : SWIM_MEMBER_STATE.ALIVE;
+  }
+
+  /** Snapshot of every tracked node's verdict: { nodeId: 'alive'|'suspect'|'dead' }. */
+  verdictByNodeId() {
+    const result = {};
+    for (const [nodeId, entry] of this._members.entries()) {
+      result[nodeId] = entry.state;
+    }
+    return result;
+  }
+}
+
+export {
+  MembershipSwimDetector,
+  MEMBERSHIP_SWIM_DETECTOR_ENV,
+  SWIM_MEMBER_STATE,
+  SWIM_DETECTOR_DEFAULTS,
+  isMembershipSwimDetectorEnabled,
+};
