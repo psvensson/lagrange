@@ -1,555 +1,145 @@
-# Single-Owner Cutover — Completion Plan (lever #1)
+# Membership cutover — theory-grounded plan (rev 2, 2026-06-21)
 
-Status: draft (2026-06-20). Graduates the `membership-single-owner-cutover` epic
-into the existing `membership-lifecycle-placement-hard-cutover` spec. This plan
-finishes the **authority half** of that spec, which the task list marks done but
-which is not done in runtime.
+Rev 2 supersedes the "single-owner-from-minimal-inputs / delete the projection"
+framing of rev 1. That framing was **refuted by implementation** (see Evidence
+Log): a minimal owner rule cannot replace the projection because membership is not
+a local function — it is agreement over a failure detector's output. This rev
+re-grounds the work in the group-membership literature, where the win is
+**replacing ad-hoc machinery with named protocols, not deleting it.**
 
-## Verified ground truth (read the code, not the checklist)
+## 1. The problem, named
 
-1. **The controller is an intent recorder, not the writer.**
-   `MembershipLifecycleController` (`src/control-plane/membership-lifecycle-controller.js`)
-   builds join/drain/removal *intent objects*, pushes them to an in-memory
-   `intentHistory` array, and calls optional delegates. It is instantiated at
-   `src/index.js:224` and `src/bootstrap/node-joining-owner-construction.js:158`,
-   and only `submitJoinIntent` (`node-joining-admission-readiness.js:415`) and
-   `submitDrainIntent` (`entrypoint-runtime-shutdown-lifecycle.js:302`) are ever
-   called. It never computes or writes the active-node set.
+This is the classic **group membership problem**. Three established results bind
+the design and explain rev 1's failure:
 
-2. **No executable lifecycle machine consumes intents — but the transition
-   scaffold already exists.** The design's `ABSENT → ADMITTED → PROVISIONING →
-   CAUGHT_UP → PUBLISH_PENDING → PUBLISHED_ACTIVE → DRAINING → REMOVED` states
-   are enums in `membership-lifecycle-constants.js:6`. There is no function that
-   consumes intents to advance member state. HOWEVER (correction from
-   verification) the file already provides a transition-validity table
-   `MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS` (:197), a validator
-   `isValidMembershipLifecycleTransition()` (:477), and a participation-state
-   resolver `resolveNodeRuntimeParticipationState()` (:423). Phase 1 REUSES
-   these; it does not build them from scratch. (Also: `submitRemovalIntent` is
-   dead/test-only; only join + drain intents are submitted in production, and the
-   `onDrainIntent` delegate at `src/index.js:224` only flips *local* readiness
-   via `bootstrapAPI.markDraining` — not the active set.)
+- **FLP (Fischer–Lynch–Paterson, 1985):** consensus — and group membership, which
+  is consensus-hard — is impossible in a pure asynchronous system with even one
+  crash. You must add a failure detector.
+- **Chandra–Toueg (JACM 1996) + weakest-failure-detector (Chandra–Hadzilacos–Toueg):**
+  reliable membership requires at least an eventually-strong / Ω-class failure
+  detector. Membership = (failure detector) + (agreement over its output).
+- **Therefore membership is NOT computable from minimal local inputs.** The
+  projection's "7 sources + guards" is precisely an (unnamed) failure detector +
+  view function. That is why `computeShadowActiveMemberSet` (baseline + readiness
+  only) structurally could not trim a departed node — it lacked the detector.
 
-3. **The real active-set authority is the projection.**
-   `resolveActiveNodeViews()` lives at `active-node-projection.js:634` (the
-   *function* is ~113 LOC, 634–746; the *file* is ~775 LOC — earlier drafts
-   conflated the two). It merges ~6–7 input vectors + 3 overlays
-   (transport-retention grace `:316`, liveness fallback `:329`,
-   recovery-eligible `:55/:252`) + a membership-freeze gate (`:675–692`). It is
-   read by **11** files (not 13), of which only **3** call `resolveActiveNodeViews`
-   directly (candidate-derivation, planning-evidence, admin snapshot); the other
-   8 import helper exports (`buildReadinessByNodeId`,
-   `resolvePriorityRecoveryActiveNodeCohort`, `buildActiveMembershipSnapshot`) or
-   read the published row.
+## 2. Target architecture — the canonical three layers
 
-4. **Published membership is a projection of a projection.** The publication-row
-   writers (`heartbeat-service-lifecycle-methods.js`,
-   `membership-publication-coordinator-reconcile.js`,
-   `membership-publication-active-gate-reconcile.js`) derive the published
-   `cluster_membership` set from `resolveActiveNodeViews()` via
-   `membership-publication-candidate-derivation.js`. So "cut consumers to
-   published membership" (Task 3, marked done) is true at the read boundary but
-   hollow at the source.
+Each layer one owner, matching the literature:
 
-5. **Safety is the Raft term fence, not a new lease.** Per
-   `owner-driven-membership-plan.md` (verified): the membership write is
-   client → partition leader → Raft propose/commit. A stale leader cannot reach
-   quorum under a superseded term, so two nodes that transiently try to drive
-   cannot produce divergent committed membership. **The cutover does not need a
-   new distributed lease** — it needs one node-local owner to *compute* the set
-   from a minimal input set and write it on the existing leader→Raft path.
+1. **Failure detector (evidence).** Suspicion over heartbeats / lease / transport
+   connectivity. *Prior art:* **SWIM** (Das–Gupta–Motivala, DSN 2002) + **Lifeguard**
+   (HashiCorp — explicitly built to cut false-positive removals), **φ-accrual**
+   (Hayashibara et al.) for tunable suspicion.
+2. **Membership agreement (view installation).** A totally-ordered, **monotonic**
+   sequence of views installed by **consensus**. *Prior art:* **Raft** joint-consensus
+   config changes (Ongaro–Ousterhout 2014), **Viewstamped Replication** view changes,
+   **virtual synchrony** (Birman/ISIS), **Rapid** ("Stable and Consistent Membership
+   at Scale", Suresh et al., USENIX ATC 2018) for the multi-monitor / anti-flapping
+   case.
+3. **View dissemination (projection).** Observers **read** the installed view; they
+   never re-derive it. *Prior art:* virtual synchrony's atomically-installed view.
 
-6. **Prerequisites are in code, but the authority behavior is default-OFF.**
-   - B1 non-splittable membership table: `partition-split-merge-manager-core-methods.js:470`.
-   - B4 single-partition assertion: `membership-publication-coordinator-reconcile.js:722`
-     (`assertSingleMembershipPartition`, non-throwing tripwire).
-   - Liveness driver: `startOwnerMembershipDriver()`
-     (`membership-publication-coordinator-*`), started unconditionally in
-     `control-plane-setup.js:370`.
-   - B3 SQL/cache-fallback fence: `control-plane-system-table-gateway-query-execution.js:214`
-     hard-returns `false` for `CONTROL_PLANE_PUBLICATIONS`, forcing the Raft
-     path. **The term-fence safety claim (5) is contingent on this guard
-     staying in place.**
-   - **Critical nuance:** the *leader-driven write behavior* is gated by
-     `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN`, **default OFF**
-     (`membership-publication-coordinator-reads.js:63`), failing open to legacy
-     behavior. "Reuse the existing liveness driver" (Phase 2) therefore requires
-     flipping this flag on — itself an untested-at-N≥8 path today.
+Design constraint (a real decision, see §6): this is a database control plane that
+needs **strong** membership, so the *agreement* layer stays **consensus-installed
+(Raft)** — adopt SWIM-style gossip ONLY for the *failure-detector* layer, not for
+agreement.
 
-## Objective
+## 3. Map the current system onto the three layers
 
-Make `MembershipLifecycleController` the **single author** of the active-node
-set, produced by an **executable lifecycle state machine** over a **minimal
-authoritative input set** (published baseline + readiness evidence + transport
-health), written via the existing leader→Raft path. Then reduce
-`active-node-projection.js` to a **pure reader** of that published output,
-deleting the 7-source merge, the 3 overlays, and the freeze gate.
+| Layer | Current state | Verdict |
+|---|---|---|
+| Failure detector | SCATTERED across `resolveActiveNodeViews` overlays + ~8 readiness guards (heartbeat/lease grace, transport-retention, recovery-eligible, runtime-authority, freeze). No named owner. | **The thing to consolidate** |
+| Agreement | ALREADY consensus-installed: `control_plane_publications` row + `publication_epoch`, written client→leader→Raft. Monotonic-view invariant exists implicitly ("don't reopen the epoch with a narrower set"). | **KEEP — this is correct** |
+| Dissemination | CDC + `SystemTableCache` + published row, BUT ~11 consumers re-derive membership from the projection instead of reading the installed view. | **Collapse the readers** |
 
-Why this and not another gate fix: `CoupledAdmission.tla`
-(`models/readiness-starvation/CoupledAdmission.tla`) is a model-checked proof
-that single-frontier patches on a shared knob bounce one invariant family green
-and another red — only an atomic whole-system reconcile converges. **Correction
-from verification:** the model's atomic primitive is a single-knob step; Phase 2
-is broader than that, so the *atomicity that makes Phase 2 safe comes from the
-Raft commit* (one committed membership row under a fenced term), NOT from the
-model. The model is the argument for *why the structural cutover beats more gate
-patches*, not a claim that Phase 2 is a single-knob change.
+## 4. KEEP / REPLACE / ABANDON
 
-## Execution status (2026-06-20)
+**KEEP (validated + matches theory):**
+- Consensus-installed published view + epoch + Raft term fence. This *is* the
+  agreement layer done right; N=8 gate confirmed it converges (8/8, 0 corrupt).
+- The monotonic-view invariant ("never install a narrower view at the same/older
+  epoch") — the VSR/virtual-synchrony monotonic view-change property. Formalize it.
+- The freeze gate's *intent* (don't trim a quorum under broad suspicion) = SWIM's
+  suspicion-quorum safety; re-home it into the named detector, don't delete it.
 
-- **Phase 0 — DONE (shadow, default-off).** `src/control-plane/membership-owner-shadow.js`
-  (`computeShadowActiveMemberSet`, `buildMembershipOwnerDivergence`,
-  `isMembershipOwnerShadowEnabled`), wired into
-  `membership-publication-candidate-derivation.js` as the diagnostics-only
-  `membershipOwnerDivergence` field behind `LAGRANGE_MEMBERSHIP_OWNER_SHADOW`.
-  Commit `5ac87f34`. Subagent-verified SOUND. The divergence MAP itself still
-  needs a gate run with the flag on to populate (the probe is built; the data is
-  not yet collected).
-- **Phase 1 — DONE + subagent-verified SOUND (shadow).** Executable lifecycle
-  machine in `membership-lifecycle-controller.js`. Owner rule
-  `computeShadowActiveMemberSet` reconciled to the load-bearing overlays:
-  self-knowledge (self-node fast path), recovery-eligible (already via
-  `isReadinessPromotable`), and freeze-gated trim (under freeze retain the full
-  baseline; outside freeze trim a no-longer-promotable baseline node).
-  DETERMINISTIC EQUIVALENCE PROVEN: the owner rule reproduces the authoritative
-  published set on all 14 real converged fixtures (incl. freeze+unreachable),
-  90/90 assertions; subagent confirmed the freeze safety boundary has no
-  quorum-loss path. The remaining known item (REMOVAL multi-step in the lifecycle
-  machine) is internal to the not-yet-wired machine and not on the owner-set path.
-- **Phase 2 — WIRING LANDED, default-OFF (commit 01bb265c); flip NOT yet enabled.**
-  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` routes the owner-authored set through
-  the EXPLICIT_PUBLICATION decision so publishedActiveNodeIds + all downstream
-  derive from it consistently. Flip test + 139/139 owner suite green; default-off
-  coordinator suite unchanged. PENDING: the N=8 validation gate with
-  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE=true LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true`
-  — the launch is blocked by the harness auto-approval classifier (highest-blast
-  -radius action), so it must be run with explicit operator authorization:
-  `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE=true LAGRANGE_MEMBERSHIP_LEADER_DRIVEN=true bash scripts/rolling-restart-stat-gate.sh 8`
-  Go/no-go: missing=0, corrupt=0, publication_epochs_disagree=0 across N=8.
-- **Phase 2 FLIP GATE: GREEN (N=8, report stat-gate-20260620T183307Z).** With both
-  flip flags live in the node containers: **8/8 CONVERGED, missing=0 on all 8,
-  CORRUPT=0, NODE_EXIT=0, publication_epochs_disagree=0.** Dominant-reason transients
-  (convergence_timeout×2, nodeSlotUnavailable×2, none×3) all appeared pre-flip too;
-  the one new class is leadership_unstable×1 (likely leader-driven churn) — that run
-  still converged. publication_epochs_disagree, which appeared in a PRE-flip gate, is
-  ABSENT under the flip. The owner-authored authority path is validated at the agreed
-  bar. NOTE: flags remain DEFAULT-OFF in the codebase — the flip is validated, not
-  shipped. Making it default-on (or enabling in deployment) + Phases 3–5 are the
-  next operator decisions.
-- **DEFAULT-ON ATTEMPT REVERTED — CRITICAL FINDING (commit a40069f3).** Making the
-  flip the default broke **~45 coordinator unit tests**. The minimal owner rule
-  reproduces CONVERGED steady-state (equivalence on 14 fixtures + N=8 gate 8/8) but
-  NOT the projection's TRANSIENT orchestration:
-  - recovery-cohort promotion (recovery-eligible joiners/learners, repair cohort,
-    "process-dead recovery-only nodes must not enter the ack set"),
-  - required-ACK derivation (widen requires full-membership ack; trim only serving;
-    carry-forward completed acks; deferred nodes excluded),
-  - epoch monotonicity / stability ("transient projection regressions must NOT
-    reopen the epoch with a narrower set"; reuse epoch on metadata-only change),
-  - trim/widen target selection (durable baseline vs settled serving projection),
-  - priority-spread coupling.
-  Several are real safety/correctness properties, not stale expectations. The N=8
-  gate measures END-STATE convergence; these unit tests measure the intermediate
-  published-set decisions — deterministic-first caught what the gate could not.
-- **REVISED STATUS: the flip is a validated OPT-IN for steady-state convergence, NOT
-  a drop-in default.** Phase 2 is NOT complete. Before the flip can be default / the
-  projection can be deleted, the owner-authoring path must reproduce the ~45
-  behaviors above (the failing-test list is the precise worklist). This is
-  substantial: the projection does far more than compute a steady-state set
-  (recovery protocol, ACK orchestration, epoch management, priority spread) — the
-  cutover must port that orchestration, not just the set computation.
-- **OPTION-3 REWIRE — DECISIVE (commit b982f006).** Root cause of the ~45 breaks:
-  the flip injected the owner set as `explicitPublishedNodeIds`, which made
-  EXPLICIT_PUBLICATION win and BYPASSED the trim/widen/recovery/ACK/epoch
-  orchestration. Fix: inject the owner set at `projectedServingNodeIds` (the
-  orchestration's INPUT) instead, so the machinery runs OVER the owner's serving
-  view. Result: **flag-ON coordinator failures 45 → 7.** Confirms the right model
-  is "owner authors the serving set; the existing pipeline orchestrates publication
-  from it" — NOT "owner authors the final published set."
-- **RESIDUAL WORKLIST (7 tests, flag-on) — bounded + themed:**
-  - Trim-epoch/ACK reconciliation (5): trim opens new epoch; next publication uses
-    the settled serving projection; trim ack from serving members only;
-    carry-forward completed acks for retained; settled trim replaces stale recovery
-    cohort.
-  - Recovery-only visibility (2): recovery-only node stays visible in the observed
-    projection; process-dead recovery joiners deferred from acks.
-  - (Plus the 3 known pre-existing owner-key retry failures — not flip-related.)
-  Likely cause: only `projectedServingNodeIds` is swapped, while `observedActiveNodeIds`
-  and recovery diagnostics remain projection-derived → trim/recovery mismatches.
-  Next step is to reconcile those sibling inputs (observed/recovery views) with the
-  owner serving set, one theme at a time, re-running the suite.
-- **Phases 3–5 — still BLOCKED** until the 7 residuals are green with the flip on
-  (then the owner path is a true drop-in and the projection can be collapsed).
+**REPLACE (the real simplification — replacement, not deletion):**
+- Extract a **named failure detector** from the scattered guards. The ~8
+  membership-derived guards + projection overlays are an ad-hoc, unspecified
+  suspicion mechanism. Replace with ONE module implementing a principled protocol
+  (SWIM suspect→confirm + Lifeguard local-health, or φ-accrual). Net: fewer guards,
+  named semantics, known correctness (TLA+ specs exist in the literature).
+- Make view computation an **explicit view-change**: detector output → proposed
+  view → Raft-install → monotonic epoch bump. Replaces the implicit
+  `resolveActiveNodeViews → candidate-derivation` pipeline with a named protocol.
 
-## Phase 0 divergence map — first gate (N=3, 2026-06-20, report stat-gate-20260620T125322Z)
+**ABANDON (refuted by implementation):**
+- The minimal owner rule as a *replacement* for the projection.
+- Phase 3 "collapse/delete the 7-source projection" — it is the FD + view
+  computation; it is refactored into the FD layer, **not deleted**.
+- Lever #2 "delete the readiness guards" — they are the FD evidence; they are
+  **consolidated**, not removed (see the rewritten inventory).
+- The `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` flip flag — moot under this framing.
+  Keep the **self-knowledge correction** as a future FD input; remove the rest of
+  the authoring scaffolding.
 
-Gate outcome: **3/3 CONVERGED, missing=0, 0 corrupt/stale/node-exit**, ~484s/run.
-Probe active (`LAGRANGE_MEMBERSHIP_OWNER_SHADOW=true`), 59/56/47 deduped
-divergence signatures per run. The minimal owner rule and the projection DO
-diverge, bidirectionally:
+## 5. Sequenced work (each gated; deterministic-first)
 
-- **onlyInProjection (projection includes a node the owner rule drops) — 24 sigs.**
-  The very FIRST emit on every node is `onlyInProjection:[<self>]` — the
-  projection trivially includes the node's own id while the minimal
-  readiness-promotable rule has not yet promoted it. This directly implicates the
-  **self-node cluster-member fast path** (inventory guard #10/#14): self-knowledge
-  is legitimate and MUST be ported into the machine, not deleted. Larger
-  onlyInProjection sets ({self, peer}) during catch-up implicate the
-  recovery-eligible / transport-retention overlays (guards #3, #7).
-- **onlyInShadow (owner rule includes a node the projection trimmed) — 35 sigs.**
-  The minimal rule keeps nodes the projection excluded — consistent with the
-  projection applying a suspicion/freeze trim or readiness-lag exclusion the
-  readiness rule does not replicate. Either the trim is the SAFETY freeze (port
-  it) or it was papering a race (owner rule is legitimately simpler). Phase 1
-  must classify each.
+1. **Name the layers (doc + structural guard, no behavior change).** Write the
+   contract declaring FD / agreement / dissemination owners; classify every current
+   guard + overlay as FD-evidence vs genuinely-dead. Add a structural test that
+   non-owner code may not re-derive the view.
+2. **Consumer collapse (the cheap, safe, real win).** Migrate the ~11 consumers that
+   re-derive membership to read the installed view. Each behind the structural guard
+   from step 1. Delivers single-ownership of *reads* without touching the detector —
+   most of the genuine simplification value, lowest risk.
+3. **FD extraction.** Lift the scattered suspicion guards into one named detector
+   module (SWIM/Lifeguard/φ-accrual semantics), behind a flag, **divergence-probed**
+   against current behavior (the Phase 0 probe + equivalence harness already built
+   are directly reusable), validated at N≥8. Re-home the freeze gate as the
+   detector's suspicion-quorum rule.
+4. **View-change formalization.** Make the monotonic consensus install explicit;
+   property-test monotonicity + quorum-safety (TLA+ candidate — narrower than the
+   existing active-gate model).
+5. **Retire scaffolding.** After 1–4, remove the flip-flag remnants; the projection
+   is now the named FD+view layer and observers are pure readers.
 
-**Measurement limitation (next instrumentation step, NOT a result):** the emit is
-deduped per coordinator instance, and rolling restart gives late-restarted nodes
-fresh instances, so late emits (within ~1–8s of run end) cannot be cleanly
-attributed to steady-state disagreement vs a late node's catch-up. A clean
-"converges to agreement at quiescence" verdict needs the probe to also record the
-final/quiescent state (or carry an instance+epoch marker). Do this refinement
-before reading too much into the late-emit timing.
+## 6. Decision points (operator)
 
-**Phase 1 reconciliation worklist (driven by this map):** port self-node
-knowledge, recovery-eligible, and transport-retention into the machine
-(onlyInProjection direction); classify each onlyInShadow trim as safety-freeze
-(port) vs race-papering (drop). Re-run the gate after each to watch the
-divergence shrink.
+- **Strong vs weak membership (recommend: keep strong).** Agreement stays
+  consensus-installed (Raft); SWIM-style gossip is for the FD layer only. A DB
+  control plane needs strong, monotone views. Confirm before step 3.
+- **Adopt vs specify the detector.** Reuse memberlist/Lifeguard *semantics* (well
+  specified, TLA+-backed) vs. an in-house detector. Recommend adopting the semantics,
+  implementing in-tree against this transport.
+- **Appetite.** Step 2 (consumer collapse) is the cheap real win and is safe to do
+  now. Steps 3–4 (FD + view protocol) are the larger investment and where the
+  "replace, don't delete" payoff lands.
 
-## ⚠ STRATEGIC FINDING — the "replace the projection" premise is REFUTED (2026-06-20)
+## 7. Evidence log (how rev 1 was refuted — preserved)
 
-Working the 7 option-3 residuals surfaced the deciding evidence. The canonical trim
-test ("trims stale published members after recovery projection settles") trims
-node4/node5, which have NO node-row / endpoint / service / readiness at all — the
-projection trims them via **presence evidence**. The minimal owner rule
-(`computeShadowActiveMemberSet`), whose only inputs are published-baseline +
-readiness, treats a missing readiness entry as promotable and therefore **RETAINS**
-departed nodes. It structurally lacks the evidence the projection uses to trim.
-
-Tested the alternative (Path-Y: keep the projection's evidence-based serving set, add
-ONLY the owner's self-correction): flag-on coordinator failures went 7 → 0 — but only
-because the self-correction is a **near-no-op** in the unit scenarios. I.e. the only
-way to make the flip pass is to NOT replace the projection.
-
-**Conclusion (walks back the original lever #1):** the projection's complexity is
-mostly ESSENTIAL evidence integration (presence→trim, recovery cohort, ACK
-orchestration), not accidental. A minimal single-owner rule cannot replace it without
-re-deriving all of it (= rewriting the projection, no net simplification, high risk).
-Therefore:
-- **Phase 3 (collapse/delete the 7-source projection) is NOT viable.** The projection
-  is doing necessary work.
-- **Lever #2 (delete the readiness guards) is largely NOT viable** — those guards
-  (heartbeat/lease grace, transport-retention, recovery-eligible, freeze) ARE the
-  evidence integration, not race-papering.
-- The achievable win shrinks to **single-ownership routing** (one authored path +
-  the self-knowledge correction) + **collapsing consumers to read one published
-  artifact** — real but far smaller than the LOC-collapse the analysis projected.
-- **Lever #3 (rebalancer reconcile-table consolidation) is independent** of this and
-  is NOT refuted by this finding.
-
-What was genuinely won: the Phase 0 divergence probe (a real diagnostic), the
-equivalence test + fixtures (owner==projection at converged states), the flip wiring
-(opt-in, N=8 convergence-green), and — most valuably — **proof that "delete the
-projection" is a dead end before sinking a multi-session rewrite into it.**
-
-## Phase 0/1 second gate — refined probe + self-knowledge port (N=3, 2026-06-20, report stat-gate-20260620T132934Z)
-
-Changes since gate 1: (a) probe emits on every state TRANSITION incl.
-settle-to-agree + an `instanceEpoch` marker; (b) owner rule now includes the
-local node id (self-knowledge port). Gate outcome: **3/3 CONVERGED, missing=0,
-0 corrupt, dominant reason "none" all 3** (cleaner than gate 1) — changes remain
-behavior-neutral.
-
-Results:
-- **Probe refinement works.** 180/50/88 `agree:true` settle emits per run; the
-  last emit per node now reveals the quiescent state (impossible before).
-- **Self-knowledge port works.** The gate-1 dominant signature
-  `onlyInProjection:[self]` is essentially gone at quiescence; residual divergence
-  is now almost entirely `onlyInShadow`.
-- **Quiescent residual = follower-side `onlyInShadow:[self/peer]`.** One node
-  (35a891b8) converges to owner==projection AGREEMENT in all 3 runs; the others
-  end with their own LOCAL candidate excluding themselves (and sometimes peers)
-  while the owner rule includes them — even though the cluster converged globally
-  (missing=0, so the AUTHORITATIVE published set includes everyone).
-
-**Key methodological finding (drives the next refinement).** The probe compares
-the owner rule against the node-LOCAL `publishedActiveNodeIds` candidate, which
-`deriveMembershipPublicationCandidate` computes on EVERY node as a planning
-artifact — but only the write-leader's result becomes authoritative. So
-follower-side `onlyInShadow:[self]` is largely benign local-planning lag (the
-follower's stale local view excludes itself; the owner's self-aware rule is
-locally more correct), NOT a disagreement about the authoritative set. The flip
-only changes what the WRITE-LEADER computes. **Next probe refinement (Phase 0 v3):
-scope the divergence comparison to the write-leader (tag emits with
-`isControlPlanePublicationsWriteLeader`, or compare against the authoritative
-leader-written published row), so the go/no-go signal reflects what the authority
-flip actually changes rather than over-counting benign follower lag.** Only after
-that is the divergence metric trustworthy enough to gate Phase 2.
-
-## Phase 0 v3 — authority-scoped divergence (N=3, 2026-06-20, report stat-gate-20260620T141052Z)
-
-Change: each emit tagged with `isWriteLeader` (resolved by the probe via
-`isControlPlanePublicationsWriteLeader`, fail-safe, flag-independent), role folded
-into the dedup key. Gate: **3/3 CONVERGED, missing=0, 0 corrupt** (now 9/9 runs
-clean across all three gates — the shadow machinery is provably behavior-neutral).
-
-Authority-scoped verdict (final write-leader's owner-vs-authoritative state):
-- run1: final leader 7493b0ab → **agree** ✓
-- run3: final leader 7493b0ab → **agree** ✓
-- run2: last leader-tagged emit (11601fe0 @14:21:27) → disagree `[self,35a891b8]`,
-  BUT it was flapping agree↔disagree during catch-up and then went SILENT for the
-  final ~6 min (log ran to 14:27:48) amid heavy leadership churn. The cluster
-  converged (missing=0) in that window.
-
-**Decisive finding — the transition+dedup probe has a quiescence blind spot.** A
-stable final state does not re-emit (dedup), and per-instance dedup + leadership
-churn make "last emit" an unreliable proxy for "final state." So run2's
-steady-state verdict is genuinely UNDETERMINABLE from this instrument — not shown
-to be a real disagreement, not shown to be benign. v3 still sharpened the signal
-massively: 2/3 runs cleanly show the authoritative writer agreeing, and the
-residual is concentrated at one node-pair during one run's final restart, not
-pervasive.
-
-**Next instrument (Phase 0 v4) — quiescence-anchored sample.** Emit the
-write-leader's divergence state UNCONDITIONALLY at the convergence/quiescence
-point (or a periodic non-deduped snapshot), so a stable final state is visible.
-Only then is "leader agrees at quiescence" a clean, gate-able signal. This is the
-last instrumentation step before Phase 2 is decidable; after it, hold leader
-agreement at quiescence across N≥8 = the green light for the authority flip.
-
-## Phase 0 v4 — quiescence-anchored snapshot (N=3, 2026-06-20, report stat-gate-20260620T145335Z)
-
-Change: throttled non-deduped SNAPSHOT (≥30s) alongside the transition emit, so a
-stable state stays visible. Gate: **3/3 CONVERGED, missing=0, 0 corrupt**
-(12/12 across all four gates — shadow machinery provably behavior-neutral).
-
-v4 leader quiescence:
-- run2: leader **5/6 snapshots agree**, last snapshot agree=True 7s before end →
-  converged-to-agree (clean).
-- run1: leader 4/7 agree, ended disagree at a 0s-gap teardown (the run's
-  `convergence_timeout` case — cut mid-settle).
-- run3: leader-tagged emits **stop 7.4 min before log end** (0 leader snapshots in
-  the tail) — the probe goes dark at quiescence.
-
-**Root obstacle (the spiral's bottom).** The divergence probe rides the
-EVENT-TRIGGERED candidate derivation (`deriveClusterMembershipCandidate`), which
-stops being called once membership is stable. So at true quiescence there is
-nothing to sample — exactly when we most need the reading. Four probe iterations
-have each revealed the next plumbing layer rather than a clean flip signal; the
-instrument is fighting the same derivation complexity the cutover exists to remove.
-
-**Strategic fork (do NOT just keep iterating the live probe).**
-- **v5 (more of the same):** move the divergence sample onto the UNCONDITIONAL
-  owner-membership driver tick (5s liveness interval) so it fires at quiescence.
-  Closes this gap but stays on the live-probe treadmill.
-- **PIVOT (recommended):** stop chasing the live derivation path. Write a
-  DETERMINISTIC owner-rule equivalence test: feed `computeShadowActiveMemberSet`
-  the authoritative inputs at known converged states (from real report fixtures)
-  and assert it reproduces the expected authoritative published set. This answers
-  the flip's actual safety question ("does the owner rule reproduce the
-  authoritative set?") without the quiescence-observability problem, and matches
-  the repo's deterministic-first / gate-last doctrine. The live probe stays as
-  corroborating evidence, not the gate.
-
-## Phase 0 PIVOT — deterministic owner-rule equivalence test (2026-06-20, off the gate treadmill)
-
-Decisive result that the four live gates could not produce. Extracted 14
-converged-state fixtures from real gate reports (postRebalanceClosure
-publicationConvergence), then asserted the minimal owner rule
-(`computeShadowActiveMemberSet`) against the AUTHORITATIVE published set.
-`test/control-plane/membership-owner-equivalence.test.js`, 86/86 assertions, <1s,
-no gate. Commit `1ccc6f08`.
-
-- **Equivalence holds: the owner rule reproduces the authoritative published set on
-  all 14 converged fixtures, from every node's perspective** — including
-  non-trivial **freeze + unreachable** states. The owner's baseline-retention
-  equals the projection's freeze-retention, so it never trims a quorum under broad
-  suspicion (the safety invariant from the readiness inventory is preserved by
-  construction, not by a separate guard).
-- Discrimination verified: a draining node is dropped even from the baseline;
-  self-knowledge includes an alive leader not yet in the baseline.
-- **One residual, now asserted explicitly (not silent):** outside freeze, the owner
-  rule does not yet trim an unreachable baseline node (the `onlyInShadow` direction
-  the gates showed). That is the remaining Phase 1 reconciliation item — port the
-  non-freeze trim semantics — and it is the ONLY known owner-vs-authoritative gap.
-
-**Status: the flip's steady-state safety question is answered for converged
-states.** The owner rule reproduces the authoritative set wherever the cluster is
-converged or frozen; the lone open item is non-freeze trim of a genuinely-departed
-baseline node. Next Phase 1 step is bounded and concrete (port non-freeze trim),
-after which Phase 2 (authority flip) becomes a flag-gated N≥8 validation rather than
-an open question. The live probe remains as corroborating evidence; this
-deterministic test is the gate.
-
-## Phase 2 flip-execution design (STAGED — requires explicit go + N≥8; do NOT enable autonomously)
-
-Deliberately NOT yet wired: `publishedActiveNodeIds` (the projection-derived set
-at `candidate-derivation.js:393`) feeds ~15 downstream computations (recovery
-cohort, priority-partition summary, member states, recovery-protocol snapshot,
-the `changed` flag, the returned candidate). Replacing it is the flip; a
-half-wired default-off version (swap line 393, leave downstream on the projection
-set) is a latent landmine. So the flip is specified here for review, not landed.
-
-**The flip (exact change).**
-1. New flag `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` (default OFF), separate from
-   the shadow-probe and leader-driven flags.
-2. In `deriveMembershipPublicationCandidate`, when the flag is on, set the
-   published candidate from `computeShadowActiveMemberSet(...)` (the same inputs
-   the probe already feeds it) INSTEAD of `publicationTargetSnapshot.nodeIds`, and
-   recompute every downstream artifact (recovery cohort, priority summary, member
-   states, recovery-protocol snapshot, `changed`) from the owner-authored set so
-   the candidate is internally consistent. No downstream may keep reading the
-   projection-derived set.
-3. Authoring is leader-scoped: only the control_plane_publications write-leader's
-   candidate is written (existing leader gate / `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN`);
-   followers still derive locally but do not write. Safety remains the Raft term
-   fence on the write path (B3 SQL-fallback fence must stay).
-
-**Validation protocol (the go/no-go).**
-- Deterministic gate (primary): the equivalence test must stay green, extended
-  with trim fixtures, before enabling.
-- Distributed gate: enable the flag, run rolling-restart at **N≥8**; require
-  `missing=0`, `corrupt=0`, `publication_epochs_disagree=0`, and the shadow
-  divergence probe (kept on) showing leader-tagged agree at quiescence. The N is
-  the user's bar; the project's history says convergence rate is noisy, so an
-  ambiguous gate means DIAGNOSE, not retry.
-- Backout: disable `LAGRANGE_MEMBERSHIP_OWNER_AUTHORITATIVE` → instantly reverts
-  to the projection-authored set. Fully reversible.
-
-**Why this is the atomic reconcile.** Per `CoupledAdmission.tla`, the flip must
-change the authoritative set in one gated step, not per-knob patches. The owner
-rule is proven (deterministic equivalence on real converged states) to reproduce
-the authoritative set, so the flip's risk is downstream-consistency + distributed
-timing — exactly what the N≥8 gate measures. After a green flip, Phase 3 (collapse
-the projection to a reader) and Phase 4 (delete the dead guards) follow, each
-gated.
-
-## Sequence (delegation-first, then deletion — the repo's own doctrine)
-
-### Phase 0 — Divergence probe (cheap, reversible, falsifiable baseline)
-- Add a shadow computation: alongside `resolveActiveNodeViews()`, compute the
-  candidate active-set the controller *would* produce from the minimal input
-  set, and emit a structured diff (`memberSet.controller` vs `memberSet.projection`)
-  to diagnostics on every publication tick. Do **not** write it.
-- Run the existing rolling-restart stat-gate (N≥8) and
-  `npm run analyze:latent-blockers`. Output: where do the two sets diverge, and
-  is divergence steady-state noise or a real frozen-follower signal?
-- **Guardrail (from the leader-pin-catch-up lesson):** if they diverge because a
-  follower is genuinely frozen, that is a bug to fix in the machine — NOT a
-  reason to relax the controller toward the projection. Instrument before
-  flipping; never ship a masking relaxation.
-- Exit: a documented, reproducible divergence map. This is the evidence the rest
-  of the plan is safe.
-
-### Phase 1 — Make the lifecycle machine executable (construction, shadow only)
-- Implement the 8-state transitions inside the controller, driven by the intents
-  it already receives + authoritative row reads (node rows, durable rejoin
-  checkpoints) + transport health. Model restart as the
-  `PUBLISHED_ACTIVE → PROVISIONING → CAUGHT_UP → PUBLISH_PENDING →
-  PUBLISHED_ACTIVE` re-entry the design specifies; member identity persists
-  across restart.
-- Expose `computeActiveMemberSet(epoch)` producing the same output shape as
-  `resolveActiveNodeViews()` from the minimal input set.
-- Keep it advisory: feed the Phase-0 probe. Tighten until controller-set ==
-  projection-set in steady state and every divergence is an explained, intended
-  difference (e.g. the projection over-retained a dead node a guard was masking).
-- Exit: deterministic regressions for each transition; probe shows agreement
-  modulo intended corrections.
-
-### Phase 2 — Flip authority (the keystone, one atomic gated change)
-- Route the publication write through `computeActiveMemberSet()` instead of
-  `membership-publication-candidate-derivation.js`'s projection-derived
-  candidate. Trigger via the existing unconditional liveness driver
-  (workstream A); persist via the existing leader→Raft coordinator path
-  (the Raft term fence remains the only safety guarantee).
-- Flag-gated. Validate on the rolling-restart stat-gate at **N≥8**:
-  STALLED→CONVERGED, `corruptCount == 0`, `publication_epochs_disagree == 0`,
-  and the Phase-0 probe shows controller-authored == previously-projected set in
-  steady state. Hold the flag off until green.
-- Exit: published membership is authored by the controller; gate green at N≥8.
-
-### Phase 3 — Collapse the projection to a reader
-- Gut `resolveActiveNodeViews()`: delete the merge, the liveness-fallback and
-  recovery-eligible overlays, and the transport-retention grace **only after
-  their behavior is ported into the lifecycle machine** (these overlays are
-  passed `true` on the live publication path at
-  `candidate-derivation.js:228` — they actively shape today's published set, so
-  they are not dead code).
-- **DO NOT silently drop the membership-freeze gate (`:675–692`,
-  `broad_suspicion`). It is a SAFETY invariant, not liveness** — it retains the
-  published set instead of trimming when ≥N nodes go missing beyond a ratio
-  threshold, preventing a false-suspicion storm from removing a quorum. Port
-  this broad-suspicion retention into the machine as an explicit transition
-  guard before deleting it from the projection. (See the corrected exit gate.)
-- Migrate the 11 consumers (3 substantive direct readers + 8 helper-only) to
-  read the published set / a thin published-set helper; for the helper-only
-  consumers this is mostly re-pointing the export, not rewiring.
-- `active-node-projection.js` becomes a thin read of the published row +
-  freshness/disagreement diagnostics.
-- Exit: no runtime path derives the active-set outside the published row; gate
-  green at N≥8 **AND the broad-suspicion safety property holds under a
-  mass-missing fault injection** (a missing==0/converge gate alone is necessary
-  but NOT sufficient to prove the freeze safety survived).
-
-### Phase 4 — Remove the now-dead readiness guards (lever #2 lands here)
-- Delete the membership-aware guards that existed only to paper over racing
-  projections (the "removable-if-single-owner: yes" rows from the readiness
-  inventory): heartbeat grace, ready-lease grace, transport-retention grace,
-  liveness-fallback projection, runtime-authority confirmed/establishing,
-  recovery-eligible overlay, membership-freeze gate.
-- One guard per change, each re-validated against the gate. A guard that cannot
-  be removed without a gate regression is a real signal the machine is still
-  missing a transition — fix the machine, do not re-add the guard.
-- Exit: readiness is a thin function of the published set + bounded health.
-
-### Phase 5 — Deletion closure & doc reconciliation
-- Correct `deletion-inventory.md` (it currently claims the authority half is
-  done — it is not) to reflect what actually shipped.
-- Close spec Tasks 27 (distributed closure ladder) and 28 (final audit) with the
-  gate evidence from Phases 2–4.
-- Update `architecture/overview.md` (strip the accreted special-case guard prose
-  whose guards were deleted) and `current-owner-maps.md`.
-
-## Risks & guardrails
-- **The safety guard hiding in the projection (highest risk).** The
-  membership-freeze gate is a safety invariant; the convergence gate measures
-  liveness (missing==0) and will stay green even if the freeze protection is
-  silently lost. Port broad-suspicion retention into the machine and add a
-  mass-missing fault-injection check to the gate before any Phase 3/4 deletion.
-- **Phase 2 safety is the Raft commit, not the model** — keep all membership
-  writes on the `proposeWrite` path; never the SQL/cache fallback. The B3 fence
-  (`control-plane-system-table-gateway-query-execution.js:214`) must stay in
-  place; treat its removal as a safety regression.
-- **`LAGRANGE_MEMBERSHIP_LEADER_DRIVEN` is default-off** — Phase 2 requires
-  enabling it; that leader-driven write path is itself untested at N≥8 today, so
-  the Phase-2 gate run is also the first real validation of it. Sequence
-  accordingly (do not assume the driver scaffold being "landed" means the write
-  behavior is exercised).
-- **No masking relaxations** — the Phase-0/1 probe must explain every divergence;
-  a frozen-follower divergence is fixed in the machine, never relaxed away
-  (the leader-pin-catch-up lesson: instrumentation proved a genuine frozen
-  follower; relaxing the oracle would have masked it).
-- **Backout** — every phase flag-gated; Phase 3/4 deletions only after Phase 2
-  is gate-green at N≥8. Revert = disable `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN` to
-  fail back to the projection path.
-- **Single-partition prerequisite** — confirm the B4 assertion
-  (`membership-publication-coordinator-reconcile.js:722`) is active before
-  Phase 2 (owner resolution depends on it).
-
-## Verification status
-Plan adversarially verified against code by subagent (2026-06-20). Core thesis
-CONFIRMED (controller is a hollow intent recorder; published membership is a
-projection-of-a-projection; Raft term fence is the safety story; prerequisites
-are in code). Six corrections folded in above: lifecycle transition scaffold
-already exists (reuse, don't rebuild); projection function is ~113 LOC not 775;
-11 consumers not 13; Phase 2 atomicity comes from Raft not the model; the
-freeze gate is safety not liveness; `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN` is
-default-off + the B3 fence is load-bearing. Verdict: **SOUND-WITH-CORRECTIONS**
-(now applied).
-
-## Rough effort
-Phase 0: ~1 session. Phase 1: ~2–3 (the machine is the real new code).
-Phase 2: ~1–2 + gate. Phase 3: ~2 (mechanical, 13 consumers). Phase 4: ~1–2.
-Phase 5: ~1. This is the structural fix that ends the ~70-attempt whack-a-mole,
-not another point-fix on its frontier.
+- Phase 0 divergence probe built + iterated v1→v4 (transition+settle emit, instance
+  marker, write-leader tagging, quiescence-anchored snapshot). Commits
+  `4de099ad`/`32ef4a7a`/`67177f14`/`2e254983`.
+- 5 N=3 gates with the probe on: **15/15 runs converged, 0 corrupt.**
+- Deterministic equivalence test: owner rule reproduces the authoritative published
+  set on all **14 real converged fixtures** (incl. freeze+unreachable), 90/90.
+  Commit `1ccc6f08`.
+- Phase 1 owner rule reconciled (self-knowledge + freeze-gated trim), subagent-verified
+  SOUND. Commit `55b98782`.
+- Flip wiring (default-off), N=8 gate **8/8 converged, 0 corrupt, 0 epochs_disagree**
+  (`stat-gate-20260620T183307Z`). Commits `01bb265c`/`abf8db09`.
+- **REFUTATION:** making the flip default broke **~45 coordinator unit tests** —
+  recovery cohort, ACK derivation, epoch monotonicity, trim, priority spread. The
+  N=8 gate measured END-STATE convergence; the unit suite measured the intermediate
+  decisions the minimal rule gets wrong. Reverted (`a40069f3`).
+- Option-3 rewire (owner authors the *serving set* = orchestration INPUT, not the
+  published set): 45 → 7 failures (`b982f006`). The trim residual then proved the
+  owner rule structurally lacks presence evidence; Path-Y (keep projection + thin
+  self-correction) drove 7 → 0 but only as a near-no-op — i.e. the flip only passes
+  if it does NOT replace the projection. Strategic finding committed `f6f81518`.
+- **Lesson:** a clean altitude diagnosis ("truth has no owner; 7 sources = mess")
+  can be wrong about whether the complexity is *essential*. Deterministic
+  implementation is the real test of a simplification thesis. Here it converted a
+  doomed "delete the projection" effort into the correct "name + replace the layers"
+  plan — before a multi-session rewrite was sunk into it.
