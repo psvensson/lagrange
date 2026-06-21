@@ -166,6 +166,11 @@ class MembershipSwimProber {
         () => this._scheduleNext(generation),
       );
     }, intervalMs);
+    // Don't let the probe cadence keep the process alive at shutdown (matches the
+    // owner-membership driver). No-op for the virtual clock's numeric handles.
+    if (typeof this._timer?.unref === 'function') {
+      this._timer.unref();
+    }
   }
 
   _eligibleMembers() {

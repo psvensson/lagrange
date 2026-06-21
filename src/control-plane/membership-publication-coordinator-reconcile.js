@@ -799,6 +799,11 @@ class MembershipPublicationCoordinatorReconcile extends
       clearIntervalFn(this.ownerMembershipDriverTimer);
       this.ownerMembershipDriverTimer = null;
     }
+    // Stop the SWIM probe loop alongside the owner driver (inert if no runtime
+    // was wired in behind the default-off flag).
+    if (typeof this.membershipSwimRuntime?.stop === TYPEOF.FUNCTION) {
+      this.membershipSwimRuntime.stop();
+    }
   }
 }
 

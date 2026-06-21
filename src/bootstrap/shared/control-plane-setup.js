@@ -58,8 +58,11 @@ import {
 import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
-import {SUBSYSTEM} from '../../constants/index.js';
+import {SUBSYSTEM, TABLES} from '../../constants/index.js';
 import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
+import {isMembershipSwimDetectorEnabled} from '../../control-plane/membership-swim-detector.js';
+import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
+import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
 
 /**
  * Subsystem identifier for logging.
@@ -347,12 +350,34 @@ class ControlPlaneSetup {
         controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs,
       });
+    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime. Built ONLY
+    // when LAGRANGE_MEMBERSHIP_SWIM_DETECTOR is on (default-off => null => the whole
+    // probe is inert and the default path is byte-identical). It probes the published
+    // active set over the real transport and the coordinator emits its divergence vs
+    // the projection. Uses real time/random (no options) in production.
+    const membershipSwimRuntime = isMembershipSwimDetectorEnabled() ?
+      new MembershipSwimRuntime({
+        nodeId,
+        messageRouter,
+        logger,
+        getMembers: () => {
+          try {
+            const publicationRows =
+              systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+            return resolvePublishedActiveNodeIds({publicationRows}) || [];
+          } catch {
+            return [];
+          }
+        },
+      }) :
+      null;
     const membershipPublicationService =
       new MembershipPublicationCoordinator({
         nodeId,
         systemTableCache,
         cdcIntegrationService,
         controlPlaneReadinessService,
+        membershipSwimRuntime,
         replicaOperationRepository:
           rebalanceCoordinator?.repository || null,
         membershipPublicationRuntimeOwner,
@@ -378,6 +403,12 @@ class ControlPlaneSetup {
       flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
     });
     membershipPublicationService.startOwnerMembershipDriver();
+    // Start the SWIM probe loop independent of the leader-driven flag (inert when no
+    // runtime was built behind the default-off detector flag). Stopped by the
+    // coordinator's stopOwnerMembershipDriver.
+    if (membershipSwimRuntime) {
+      membershipSwimRuntime.start();
+    }
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
     }
