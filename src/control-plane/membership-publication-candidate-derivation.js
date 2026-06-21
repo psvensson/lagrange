@@ -284,6 +284,14 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     readinessByNodeId,
     allowControlPlaneRecoveryEligibleProjection: allowRecoveryEligibleProjection,
     allowLivenessFallbackProjection: allowPrioritySpreadLivenessFallbackProjection,
+    // Increment 4: asymmetric SWIM consumption. Off unless the coordinator passed a
+    // consume flag + verdict (default-off); a no-op at quiescence (all alive).
+    membershipSwimConsumeEnabled: options.membershipSwimConsumeEnabled === true,
+    swimVerdictByNodeId:
+      options.swimVerdictByNodeId &&
+      typeof options.swimVerdictByNodeId === TYPEOF.OBJECT ?
+        options.swimVerdictByNodeId :
+        null,
   });
   const initialProjectionDiagnostics =
     buildProjectionDiagnosticsSummary(activeNodeViews, helperFns);

@@ -382,6 +382,24 @@ function resolveTransportAliveRetentionMissReason(
   return 'grace_conditions_met_but_excluded';
 }
 
+const SWIM_VERDICT_ALIVE = 'alive';
+
+// Increment 4 asymmetric consumption: a SWIM `alive` verdict PROTECTS a node from a
+// false readiness/liveness-grace trim (the Lifeguard benefit). It deliberately does NOT
+// relax the status / member-state checks, so draining/retired/genuinely-down nodes are
+// still trimmed; and SWIM `dead`/`suspect` has NO effect (the existing timeout path
+// still removes dead nodes). Off unless options.membershipSwimConsumeEnabled === true.
+function isSwimAliveProtected(nodeId, options = {}) {
+  if (options.membershipSwimConsumeEnabled !== true) {
+    return false;
+  }
+  const verdicts = options.swimVerdictByNodeId;
+  if (!verdicts || typeof verdicts !== TYPEOF.OBJECT) {
+    return false;
+  }
+  return verdicts[nodeId] === SWIM_VERDICT_ALIVE;
+}
+
 function isCanonicallyActiveNode(nodeRow, options = {}) {
   const normalizedNode = normalizeNodeRow(nodeRow);
   if (!normalizedNode.nodeId) {
@@ -412,14 +430,15 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
       readinessProjection,
       options,
     );
+  const swimProtected = isSwimAliveProtected(normalizedNode.nodeId, options);
   if (readinessProjection.hasReadinessEvidence) {
     if (readinessProjection.projectionEligible !== true &&
-        !allowLivenessFallbackProjection) {
+        !allowLivenessFallbackProjection && !swimProtected) {
       return false;
     }
   } else {
     if ((!hasReadyConnection || !hasFreshLiveness) &&
-        !allowLivenessFallbackProjection) {
+        !allowLivenessFallbackProjection && !swimProtected) {
       return false;
     }
   }
@@ -502,6 +521,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
         readinessProjection,
         options,
       );
+    const swimProtected = isSwimAliveProtected(nodeId, options);
     const runtimeTransportEvidence = hasRuntimeTransportEvidence(nodeId, {
       ...options,
       readinessByNodeId,
@@ -509,7 +529,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
     if (nodeRow) {
       if (readinessProjection.hasReadinessEvidence &&
           readinessProjection.projectionEligible !== true &&
-          !allowLivenessFallbackProjection) {
+          !allowLivenessFallbackProjection && !swimProtected) {
         readinessExcludedNodeIds.add(nodeId);
         if (readinessProjection.clusterMemberHealthyMissing) {
           clusterMemberUnhealthyExcludedNodeIds.add(nodeId);

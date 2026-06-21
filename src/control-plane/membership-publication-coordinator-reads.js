@@ -5,6 +5,7 @@ import {
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
+import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
 import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
@@ -531,6 +532,16 @@ class MembershipPublicationCoordinatorReads {
       options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
         options.planningSnapshot :
         await this.readPublicationPlanningSnapshot(options);
+    // Increment 4: feed the SWIM verdict into the projection when consumption is
+    // enabled (and a runtime is wired). Asymmetric: `alive` protects a node from a
+    // false readiness-grace trim; off/no-runtime => unchanged behavior.
+    const membershipSwimConsumeEnabled =
+      this.membershipSwimRuntime !== null && isMembershipSwimConsumeEnabled();
+    const swimVerdictByNodeId =
+      membershipSwimConsumeEnabled &&
+      typeof this.membershipSwimRuntime.verdictByNodeId === TYPEOF.FUNCTION ?
+        this.membershipSwimRuntime.verdictByNodeId() :
+        null;
     const candidate = deriveMembershipPublicationCandidate({
       ...options,
       planningSnapshot,
@@ -538,6 +549,8 @@ class MembershipPublicationCoordinatorReads {
       // shadow set can include self-knowledge (the node is alive and computing
       // the candidate), matching the projection's self-node fast path.
       localNodeId: this.nodeId,
+      membershipSwimConsumeEnabled,
+      swimVerdictByNodeId,
     });
     this._emitMembershipOwnerDivergence(candidate?.membershipOwnerDivergence);
     this._emitMembershipSwimDivergence(candidate?.membershipSwimInputs);

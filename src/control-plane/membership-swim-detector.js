@@ -24,6 +24,11 @@ import {
 } from './membership-lifecycle-constants.js';
 
 const MEMBERSHIP_SWIM_DETECTOR_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_DETECTOR';
+// Increment 4: when on (AND the detector is on), the projection CONSUMES the SWIM
+// verdict — asymmetrically: a SWIM `alive` PROTECTS a node from a false readiness/
+// liveness-grace trim (the Lifeguard benefit); SWIM `dead`/`suspect` never triggers a
+// trim (the existing timeout path still removes genuinely-dead nodes). Default-off.
+const MEMBERSHIP_SWIM_CONSUME_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_CONSUME';
 const ENV_TRUE = 'true';
 
 /**
@@ -33,6 +38,15 @@ const ENV_TRUE = 'true';
  */
 function isMembershipSwimDetectorEnabled(env = process.env) {
   return env?.[MEMBERSHIP_SWIM_DETECTOR_ENV] === ENV_TRUE;
+}
+
+/**
+ * Default-off: consume the SWIM verdict in the projection (asymmetric protection).
+ * @param {Object} [env=process.env]
+ * @return {boolean}
+ */
+function isMembershipSwimConsumeEnabled(env = process.env) {
+  return env?.[MEMBERSHIP_SWIM_CONSUME_ENV] === ENV_TRUE;
 }
 
 const SWIM_MEMBER_STATE = Object.freeze({
@@ -520,8 +534,10 @@ function computeSwimActiveMemberSet(options = {}) {
 export {
   MembershipSwimDetector,
   MEMBERSHIP_SWIM_DETECTOR_ENV,
+  MEMBERSHIP_SWIM_CONSUME_ENV,
   SWIM_MEMBER_STATE,
   SWIM_DETECTOR_DEFAULTS,
   isMembershipSwimDetectorEnabled,
+  isMembershipSwimConsumeEnabled,
   computeSwimActiveMemberSet,
 };
