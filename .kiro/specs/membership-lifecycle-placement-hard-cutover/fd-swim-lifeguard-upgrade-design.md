@@ -136,10 +136,17 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      refutation. Confirming gate in flight. Note: `onlyInProjection` is ALREADY the
      clean false-positive signal (the `onlyInShadow` baseline⊋active artifact only
      affects `agree`), so no metric change is needed to read it.
-4. **Consume the verdict (behavior change, operator-gated, N≥8).** Inside
-   `isCanonicallyActiveNode`, let the SWIM verdict supply the liveness conjunct;
-   re-home the freeze gate as the named suspicion-quorum rule. Divergence-probed,
-   N≥8 gate validated.
+4. **Consume the verdict — ASYMMETRICALLY (behavior change, operator-gated, N≥8).**
+   The 3b gates leave a ~1-2/min transient false-SWIM-dead residual at steady state, so
+   consumption must be safe against it. In `isCanonicallyActiveNode`
+   (active-node-projection.js:385): use SWIM `alive` to **protect** a node the
+   heartbeat/lease grace would falsely trim (the Lifeguard benefit — the actual fix for
+   the rejoiner-trims-healthy-peers failure), but do NOT let SWIM `dead`/`suspect`
+   **trigger** a trim (the existing grace/timeout path still trims genuinely-dead nodes).
+   A transient false SWIM-dead is then a no-op, not a harmful trim/flap. Keep the freeze
+   suspicion-quorum clamp. Flag-gated, divergence-probed, N≥8 gate. CAVEAT: during the
+   formation window the rejoiner's own SWIM can be wrong until gossip catches it up, so
+   verify at N≥8 that asymmetric consumption helps-or-is-neutral, never harms.
 5. **Retire the dormant `failure-detector.js`** once SWIM owns suspicion.
 
 ## Flag-on gate finding (2026-06-21, stat-gate-20260621T103108Z, N=2) — DISSEMINATION GAP, increment 4 BLOCKED
