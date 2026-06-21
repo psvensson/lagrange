@@ -598,6 +598,30 @@ function logSystemTableWriteFailure(service, logMessage, details, error) {
       error?.cacheWaitTimedOut === true ||
       isCacheVisibilityTimeoutError(error),
   };
+  // Surface the distributed-write-coordinator's failed-participant detail on the
+  // failure log itself. The coordinator already computes participantFailures /
+  // firstFailedParticipant (distributed-write-coordinator.js) and
+  // buildSystemTableMutationError copies them onto the error, but they were
+  // dropped here — leaving DISTRIBUTED_PARTICIPANT_FAILURE rows (e.g. the wedged
+  // membership-publication UPSERT) without the node/address whose ack is missing,
+  // which is exactly what the lever-1 (ghost retirement) vs lever-2 (quorum
+  // tolerance) decision needs. Additive: only attached when present.
+  if (
+    error?.firstFailedParticipant &&
+    typeof error.firstFailedParticipant === TYPEOF.OBJECT
+  ) {
+    payload.firstFailedParticipant = error.firstFailedParticipant;
+  }
+  if (Array.isArray(error?.participantFailures)) {
+    payload.participantFailureCount = error.participantFailures.length;
+    payload.failedParticipantNodeIds = error.participantFailures
+      .map((entry) =>
+        entry && typeof entry === TYPEOF.OBJECT ?
+          entry.participantNodeId || null :
+          null,
+      )
+      .filter((value) => typeof value === TYPEOF.STRING);
+  }
   if (isRetryableControlPlaneError(error)) {
     service.logger.warn(logMessage, payload);
     return;
