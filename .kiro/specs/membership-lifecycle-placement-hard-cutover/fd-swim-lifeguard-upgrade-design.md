@@ -136,7 +136,14 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
      refutation. Confirming gate in flight. Note: `onlyInProjection` is ALREADY the
      clean false-positive signal (the `onlyInShadow` baseline⊋active artifact only
      affects `agree`), so no metric change is needed to read it.
-4. **Consume the verdict — ASYMMETRICALLY (behavior change, operator-gated, N≥8).**
+4. **Consume the verdict — ASYMMETRICALLY (BUILT; N≥8 gate in flight).** Done behind
+   `LAGRANGE_MEMBERSHIP_SWIM_CONSUME` (default-off; needs both it + the detector flag).
+   `isSwimAliveProtected` in active-node-projection.js: SWIM `alive` relaxes the
+   readiness/liveness gate AND the transport-evidence exclusion (the latter is required
+   to reach the rejoiner failure mode — can't-reach-peer ⇒ no transport evidence ⇒ trim);
+   never relaxes status/member-state; `dead`/`suspect` never trims. Adversarially
+   reviewed SAFE TO GATE. Validating: N=8 gate with both flags vs the ~0–0.5 no-consume
+   baseline. Original design note follows:
    The 3b gates leave a ~1-2/min transient false-SWIM-dead residual at steady state, so
    consumption must be safe against it. In `isCanonicallyActiveNode`
    (active-node-projection.js:385): use SWIM `alive` to **protect** a node the
