@@ -327,10 +327,12 @@ class MembershipSwimProber {
     }
     const timeoutMs = this._detector.scaledProbeTimeoutMs();
     // Carry a batch of gossip + our current incarnation on the direct probe.
+    // Buddy-system: prioritize any update ABOUT the target so it hears (and can
+    // refute) an accusation about itself at first contact.
     const request = {
       from: this._localNodeId,
       incarnation: this._detector.selfIncarnation(),
-      updates: this._detector.drainGossip(),
+      updates: this._detector.drainGossip(undefined, targetNodeId),
     };
     // A throwing transport must record a MISS, never silently erase the probe.
     let ok = await this._safeDirectProbe(targetNodeId, request, timeoutMs);

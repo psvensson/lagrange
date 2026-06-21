@@ -374,19 +374,35 @@ class MembershipSwimDetector {
    * Drain up to `max` pending dissemination updates to piggyback on an outgoing
    * probe/ack. Freshest-first (fewest retransmits used). Decrements each drained
    * update's retransmit budget and drops it at zero (infection-style fade-out).
+   *
+   * Buddy-system (Lifeguard §IV-D): when `priorityNodeId` is given (the probe target),
+   * an update ABOUT that node is placed FIRST, so a node always hears accusations about
+   * itself at the first contact and can refute before its suspicion timer fires.
    * @param {number} [max]
+   * @param {string} [priorityNodeId]
    * @return {Array<{nodeId, state, incarnation}>}
    */
-  drainGossip(max) {
+  drainGossip(max, priorityNodeId) {
     const limit = Number.isFinite(max) ?
       Math.max(0, Math.floor(max)) :
       this._config.gossipMaxPiggyback;
     if (limit === 0) {
       return [];
     }
+    const priority = normalizeNodeId(priorityNodeId);
     const ordered = [...this._gossip.entries()]
       .filter(([, update]) => update.retransmits > 0)
-      .sort((a, b) => a[1].retransmits - b[1].retransmits)
+      .sort((a, b) => {
+        if (priority) {
+          if (a[0] === priority && b[0] !== priority) {
+            return -1;
+          }
+          if (b[0] === priority && a[0] !== priority) {
+            return 1;
+          }
+        }
+        return a[1].retransmits - b[1].retransmits;
+      })
       .slice(0, limit);
     const result = [];
     for (const [nodeId, update] of ordered) {

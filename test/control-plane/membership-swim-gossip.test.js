@@ -93,6 +93,21 @@ test('applyGossip self-suspicion bumps own incarnation and enqueues a refuting a
   t.end();
 });
 
+test('buddy-system: an update about the probe target is gossiped to it first', (t) => {
+  const d = detector('A');
+  // Enqueue suspicions about several nodes; B is the one we are about to probe.
+  d.recordSuspect('C', 'X', 0);
+  d.recordSuspect('D', 'X', 0);
+  d.recordSuspect('B', 'X', 0);
+  d.recordSuspect('E', 'X', 0);
+  // Without priority, freshest-first would not guarantee B first; with the target
+  // priority, the accusation about B must lead so B can refute at first contact.
+  const drained = d.drainGossip(1, 'B');
+  t.equal(drained.length, 1, 'capped at 1');
+  t.equal(drained[0].nodeId, 'B', 'the suspect-about-target leads the batch');
+  t.end();
+});
+
 test('end-to-end refutation loop: a false suspicion is healed via gossip (the fix)', (t) => {
   // A cannot reach B and suspects it; B learns of the suspicion via gossip, bumps
   // its incarnation, and its refuting alive propagates back to A, clearing the
