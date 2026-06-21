@@ -18,6 +18,10 @@
 
 import {resolveTimeSource} from '../time/time-source.js';
 import {resolveRandomSource} from '../random/random-source.js';
+import {
+  MEMBERSHIP_MEMBER_STATE,
+  normalizeMembershipMemberState,
+} from './membership-lifecycle-constants.js';
 
 const MEMBERSHIP_SWIM_DETECTOR_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_DETECTOR';
 const ENV_TRUE = 'true';
@@ -57,8 +61,24 @@ const SELF_CONFIRMER = 'self';
 // (which would undercount independent confirmations / lengthen the timeout).
 const UNKNOWN_CONFIRMER = 'unknown-source';
 
+// Member states that exclude a node from the active set regardless of liveness
+// (a draining or retired node is leaving, not serving) — matches the shadow rule's
+// MEMBERSHIP_OWNER_INACTIVE_MEMBER_STATES so the two rules trim the same departures.
+const SWIM_INACTIVE_MEMBER_STATES = Object.freeze(new Set([
+  MEMBERSHIP_MEMBER_STATE.DRAINING,
+  MEMBERSHIP_MEMBER_STATE.RETIRED,
+]));
+
 function normalizeNodeId(value) {
   return String(value || '').trim();
+}
+
+function normalizeNodeIdList(values) {
+  return [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map(normalizeNodeId)
+      .filter(Boolean),
+  )].sort();
 }
 
 function isFiniteIncarnation(value) {
@@ -308,10 +328,52 @@ class MembershipSwimDetector {
   }
 }
 
+/**
+ * Derive the active-member set from the published baseline + SWIM verdicts. This is
+ * the FD-layer's OUTPUT contract — the parallel of computeShadowActiveMemberSet, with
+ * the SWIM `dead` verdict as the trim signal instead of "not readiness-promotable":
+ *
+ * - Under membership freeze (broad suspicion) RETAIN the full published baseline —
+ *   the suspicion-quorum safety clamp (a suspicion storm must not trim a quorum).
+ * - Outside freeze, a baseline node is trimmed only on a CONFIRMED `dead` verdict.
+ *   `suspect` is NOT a trim — strong membership removes only on confirmation, and the
+ *   freeze clamp guards mass suspicion. An untracked node defaults to retained (the
+ *   same default the shadow rule uses for a node with no readiness entry).
+ * - A node whose member state says it is leaving (draining/retired) is excluded.
+ *
+ * @param {Object} [options]
+ * @return {string[]} sorted active-member node ids.
+ */
+function computeSwimActiveMemberSet(options = {}) {
+  const baseline = normalizeNodeIdList(options.publishedBaselineNodeIds);
+  const verdicts = options.swimVerdictByNodeId &&
+    typeof options.swimVerdictByNodeId === 'object' ?
+    options.swimVerdictByNodeId :
+    {};
+  const memberStates = options.memberStatesByNodeId &&
+    typeof options.memberStatesByNodeId === 'object' ?
+    options.memberStatesByNodeId :
+    {};
+  const membershipFreezeActive = options.membershipFreezeActive === true;
+  const retained = membershipFreezeActive ?
+    baseline :
+    baseline.filter(
+      (nodeId) =>
+        (verdicts[nodeId] || SWIM_MEMBER_STATE.ALIVE) !== SWIM_MEMBER_STATE.DEAD,
+    );
+  return retained.filter(
+    (nodeId) =>
+      !SWIM_INACTIVE_MEMBER_STATES.has(
+        normalizeMembershipMemberState(memberStates[nodeId]),
+      ),
+  );
+}
+
 export {
   MembershipSwimDetector,
   MEMBERSHIP_SWIM_DETECTOR_ENV,
   SWIM_MEMBER_STATE,
   SWIM_DETECTOR_DEFAULTS,
   isMembershipSwimDetectorEnabled,
+  computeSwimActiveMemberSet,
 };

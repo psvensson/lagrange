@@ -77,12 +77,17 @@ both-parties-healthy FP class (our worst) ~1.9% of SWIM baseline.
    `scaledProbeTimeoutMs()`. No transport, no DB writes — fed outcomes by the
    caller. Default-off flag `LAGRANGE_MEMBERSHIP_SWIM_DETECTOR`. Unit-tested on
    `VirtualTimeSource` + `SeededRandomSource`.
-2. **Divergence-only wiring.** When the flag is on, compute the SWIM verdict set
-   alongside the projection in `membership-publication-candidate-derivation.js`
-   (next to `computeShadowActiveMemberSet`) and emit via the existing
-   `buildMembershipOwnerDivergence` path. Production behavior unchanged. Add the
-   SWIM rule to `membership-owner-equivalence.test.js` (must reproduce the
-   authoritative set at quiescence on all 14 fixtures).
+2. **SWIM active-set rule + equivalence (DONE).** `computeSwimActiveMemberSet`
+   (the FD-layer output contract: freeze→retain baseline; else trim only on a
+   CONFIRMED `dead` verdict — `suspect` is not a trim; minus draining/retired) +
+   `test/control-plane/membership-swim-equivalence.test.js` driving the REAL
+   detector on the virtual clock over the 14 converged fixtures (incl.
+   freeze+unreachable: the freeze clamp overrides even a CONFIRMED-dead verdict).
+   The *production* divergence EMISSION (compute the SWIM set next to
+   `computeShadowActiveMemberSet` in `membership-publication-candidate-derivation.js`
+   and emit via `buildMembershipOwnerDivergence`) folds into increment 3 — it only
+   carries signal once the probe loop feeds real outcomes; emitting an unprobed
+   verdict now would be a meaningless diff.
 3. **Probe loop + indirect ping-req transport.** The outbound probe cadence + the
    `swim-relay` handler; feeds increment 1's `recordProbeResult`. Deterministic on
    the virtual network.
