@@ -16,15 +16,16 @@ const TRIMMABLE_HEALTHY_NODE = Object.freeze({
   connection_state: 'connecting',
 });
 
-test('consume flag is default-off and exact-match only', (t) => {
-  t.equal(isMembershipSwimConsumeEnabled({}), false);
+test('consume flag is default-on (opt-out via =false)', (t) => {
+  t.equal(isMembershipSwimConsumeEnabled({}), true, 'absent => on (default-on)');
+  t.equal(
+    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'false'}),
+    false,
+    'explicit false => off',
+  );
   t.equal(
     isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'true'}),
     true,
-  );
-  t.equal(
-    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: '1'}),
-    false,
   );
   t.end();
 });

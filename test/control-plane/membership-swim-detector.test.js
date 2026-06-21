@@ -17,12 +17,12 @@ function buildDetector(options = {}) {
   });
 }
 
-test('flag is default-off and only true on the exact env value', (t) => {
-  t.equal(isMembershipSwimDetectorEnabled({}), false, 'absent => off');
+test('detector flag is default-on (opt-out via =false)', (t) => {
+  t.equal(isMembershipSwimDetectorEnabled({}), true, 'absent => on (default-on)');
   t.equal(
     isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'false'}),
     false,
-    'false => off',
+    'explicit false => off',
   );
   t.equal(
     isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'true'}),

@@ -29,24 +29,28 @@ const MEMBERSHIP_SWIM_DETECTOR_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_DETECTOR';
 // liveness-grace trim (the Lifeguard benefit); SWIM `dead`/`suspect` never triggers a
 // trim (the existing timeout path still removes genuinely-dead nodes). Default-off.
 const MEMBERSHIP_SWIM_CONSUME_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_CONSUME';
-const ENV_TRUE = 'true';
+const ENV_FALSE = 'false';
 
 /**
- * Default-off feature flag (mirrors the membership-owner-shadow.js pattern).
+ * Failure-detector enablement. DEFAULT-ON (opt-out via the env set to 'false') as of
+ * 2026-06-21: a matched N=8 gate showed SWIM consumption ~5x'd the rolling-restart
+ * scenario-PASS rate (5/8 vs 1/8) and eliminated node exits (0 vs 3) on identical code.
+ * Set LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=false to disable.
  * @param {Object} [env=process.env]
  * @return {boolean}
  */
 function isMembershipSwimDetectorEnabled(env = process.env) {
-  return env?.[MEMBERSHIP_SWIM_DETECTOR_ENV] === ENV_TRUE;
+  return env?.[MEMBERSHIP_SWIM_DETECTOR_ENV] !== ENV_FALSE;
 }
 
 /**
- * Default-off: consume the SWIM verdict in the projection (asymmetric protection).
+ * Consume the SWIM verdict in the projection (asymmetric protection). DEFAULT-ON
+ * (opt-out via the env set to 'false'); inert unless the detector is also enabled.
  * @param {Object} [env=process.env]
  * @return {boolean}
  */
 function isMembershipSwimConsumeEnabled(env = process.env) {
-  return env?.[MEMBERSHIP_SWIM_CONSUME_ENV] === ENV_TRUE;
+  return env?.[MEMBERSHIP_SWIM_CONSUME_ENV] !== ENV_FALSE;
 }
 
 const SWIM_MEMBER_STATE = Object.freeze({
