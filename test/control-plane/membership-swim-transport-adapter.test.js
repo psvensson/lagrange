@@ -10,7 +10,9 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {
   buildSwimMessageRouterTransport,
   buildSwimRelayHandler,
+  buildSwimPingHandler,
   buildSwimRelayAddress,
+  buildSwimPingAddress,
 } from '../../src/control-plane/membership-swim-prober.js';
 
 function initEnv() {
@@ -64,9 +66,12 @@ test('SWIM transport adapter maps real ping/relay round-trips to direct/indirect
     await rc.initialize({startServer: true});
     await rd.initialize({startServer: true});
 
-    // C and B run the relay; D intentionally has NO relay handler (null case).
+    // C and B run the relay (indirect) + swim-ping (direct) handlers; D intentionally
+    // has NEITHER (the null cases).
     rc.register(buildSwimRelayAddress(C), buildSwimRelayHandler({messageRouter: rc}));
     rb.register(buildSwimRelayAddress(B), buildSwimRelayHandler({messageRouter: rb}));
+    rb.register(buildSwimPingAddress(B), buildSwimPingHandler({}));
+    rc.register(buildSwimPingAddress(C), buildSwimPingHandler({}));
 
     // Mesh: A->B, A->C, A->D, and C->B so C can ping B on A's behalf.
     await ra.connectToNode(B, `ws://127.0.0.1:${pb}`);
@@ -88,7 +93,9 @@ test('SWIM transport adapter maps real ping/relay round-trips to direct/indirect
       pingTimeoutMs: 200,
     });
 
-    t.equal(await transport.directProbe(B, 200), true, 'directProbe(B) true while B up');
+    const req = {from: A, incarnation: 0, updates: []};
+    const directUp = await transport.directProbe(B, req, 200);
+    t.equal(directUp?.alive, true, 'directProbe(B) returns alive response while B up');
     t.equal(
       await transport.indirectProbe(C, B, 200),
       true,
@@ -98,6 +105,11 @@ test('SWIM transport adapter maps real ping/relay round-trips to direct/indirect
       await transport.indirectProbe(D, B, 200),
       null,
       'indirectProbe via a helper with no relay handler => null (no verdict)',
+    );
+    t.equal(
+      await transport.directProbe(D, req, 200),
+      null,
+      'directProbe to a node with no swim-ping handler => null',
     );
 
     // Partition B.
@@ -111,9 +123,9 @@ test('SWIM transport adapter maps real ping/relay round-trips to direct/indirect
     t.ok(bGone, 'B disconnected after shutdown');
 
     t.equal(
-      await transport.directProbe(B, 200),
-      false,
-      'directProbe(B) false after partition',
+      await transport.directProbe(B, req, 200),
+      null,
+      'directProbe(B) null after partition',
     );
     t.equal(
       await transport.indirectProbe(C, B, 200),

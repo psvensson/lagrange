@@ -14,8 +14,10 @@ import {
 import {
   MembershipSwimProber,
   buildSwimRelayHandler,
+  buildSwimPingHandler,
   buildSwimMessageRouterTransport,
   buildSwimRelayAddress,
+  buildSwimPingAddress,
 } from './membership-swim-prober.js';
 
 class MembershipSwimRuntime {
@@ -48,20 +50,26 @@ class MembershipSwimRuntime {
       messageRouter: this._messageRouter,
       pingTimeoutMs,
     });
+    this._pingHandler = buildSwimPingHandler({detector: this._detector});
     this._relayAddress = this._nodeId ? buildSwimRelayAddress(this._nodeId) : null;
-    this._relayRegistered = false;
+    this._pingAddress = this._nodeId ? buildSwimPingAddress(this._nodeId) : null;
+    this._handlersRegistered = false;
   }
 
-  /** Register the indirect-probe relay handler and start the probe loop. */
+  /** Register the direct-probe + indirect-relay handlers and start the probe loop. */
   start() {
     if (
-      !this._relayRegistered &&
-      this._relayAddress &&
+      !this._handlersRegistered &&
       this._messageRouter &&
       typeof this._messageRouter.register === 'function'
     ) {
-      this._messageRouter.register(this._relayAddress, this._relayHandler);
-      this._relayRegistered = true;
+      if (this._pingAddress) {
+        this._messageRouter.register(this._pingAddress, this._pingHandler);
+      }
+      if (this._relayAddress) {
+        this._messageRouter.register(this._relayAddress, this._relayHandler);
+      }
+      this._handlersRegistered = true;
     }
     this._prober.start();
   }

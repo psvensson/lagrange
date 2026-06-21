@@ -13,7 +13,9 @@ import {SeededRandomSource} from '../../src/random/random-source.js';
 import {MembershipSwimRuntime} from '../../src/control-plane/membership-swim-runtime.js';
 import {
   buildSwimRelayHandler,
+  buildSwimPingHandler,
   buildSwimRelayAddress,
+  buildSwimPingAddress,
 } from '../../src/control-plane/membership-swim-prober.js';
 import {SWIM_MEMBER_STATE} from '../../src/control-plane/membership-swim-detector.js';
 
@@ -66,7 +68,9 @@ test('SWIM runtime drives a partitioned peer alive->suspect->dead end to end', a
     await rb.initialize({startServer: true});
     await rc.initialize({startServer: true});
 
-    // B and C are probe targets/helpers -> they answer relay + ping.
+    // B and C are probe targets/helpers -> they answer the direct swim-ping + relay.
+    rb.register(buildSwimPingAddress(B), buildSwimPingHandler({}));
+    rc.register(buildSwimPingAddress(C), buildSwimPingHandler({}));
     rb.register(buildSwimRelayAddress(B), buildSwimRelayHandler({messageRouter: rb}));
     rc.register(buildSwimRelayAddress(C), buildSwimRelayHandler({messageRouter: rc}));
 
@@ -187,6 +191,67 @@ test('runtime.start registers the relay handler and toggles running state', asyn
   } finally {
     await ra.shutdown();
     await rc.shutdown();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('gossip propagates between two runtimes over real transport', async (t) => {
+  initEnv();
+  const [A, B] = ['swim-gossip-A', 'swim-gossip-B'];
+  const [pa, pb] = [21871, 21872];
+  const ra = makeRouter(A, pa);
+  const rb = makeRouter(B, pb);
+  try {
+    await ra.initialize({startServer: true});
+    await rb.initialize({startServer: true});
+    await ra.connectToNode(B, `ws://127.0.0.1:${pb}`);
+    await waitFor(
+      () =>
+        ra.getConnectionState(B) === 'connected' &&
+        rb.getConnectionState(A) === 'connected',
+    );
+
+    const runtimeA = new MembershipSwimRuntime({
+      nodeId: A,
+      messageRouter: ra,
+      timeSource: new VirtualTimeSource({startMs: 0}),
+      randomSource: new SeededRandomSource({seed: 2}),
+      getMembers: () => [B],
+      pingTimeoutMs: 200,
+    });
+    const runtimeB = new MembershipSwimRuntime({
+      nodeId: B,
+      messageRouter: rb,
+      timeSource: new VirtualTimeSource({startMs: 0}),
+      randomSource: new SeededRandomSource({seed: 2}),
+      getMembers: () => [A],
+      pingTimeoutMs: 200,
+    });
+    runtimeA.start(); // registers A's swim-ping handler
+    runtimeB.start(); // registers B's swim-ping handler
+
+    // A learns (from elsewhere) that a phantom node C is suspect; this must
+    // disseminate to B when A next probes B.
+    runtimeA.detector().recordSuspect('swim-gossip-C', 'X', 0);
+    t.equal(
+      runtimeB.detector().verdictFor('swim-gossip-C'),
+      SWIM_MEMBER_STATE.ALIVE,
+      'B has not heard about C yet',
+    );
+
+    await runtimeA.probeOnce(); // swim-ping to B carries the suspect(C) gossip
+
+    t.equal(
+      runtimeB.detector().verdictFor('swim-gossip-C'),
+      SWIM_MEMBER_STATE.SUSPECT,
+      'B received the suspect(C) gossip over the real probe exchange',
+    );
+    runtimeA.stop();
+    runtimeB.stop();
+  } finally {
+    await ra.shutdown();
+    await rb.shutdown();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }

@@ -19,14 +19,18 @@ function buildDetector() {
   });
 }
 
-// transport whose outcomes are scripted by predicate functions.
+// transport whose outcomes are scripted by predicate functions. directProbe maps a
+// truthy predicate to a swim-ping response and a falsy one to null (unreachable); a
+// predicate that throws propagates (the prober must record a MISS, not erase it).
 function fakeTransport({direct = () => true, indirect = () => true} = {}) {
   const calls = {direct: [], indirect: []};
   return {
     calls,
     async directProbe(nodeId) {
       calls.direct.push(nodeId);
-      return direct(nodeId);
+      return direct(nodeId) ?
+        {alive: true, incarnation: 0, updates: []} :
+        null;
     },
     async indirectProbe(helperNodeId, targetNodeId) {
       calls.indirect.push({helperNodeId, targetNodeId});

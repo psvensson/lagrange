@@ -18,7 +18,9 @@ import {resolveRandomSource} from '../random/random-source.js';
 import {SWIM_DETECTOR_DEFAULTS} from './membership-swim-detector.js';
 
 const SWIM_RELAY_SERVICE = 'swim-relay';
+const SWIM_PING_SERVICE = 'swim-ping';
 const SWIM_PROBE_MESSAGE_TYPE = 'swim_indirect_probe';
+const SWIM_PING_MESSAGE_TYPE = 'swim_direct_probe';
 
 function normalizeNodeId(value) {
   return String(value || '').trim();
@@ -27,6 +29,37 @@ function normalizeNodeId(value) {
 /** Unified service address for the indirect-probe relay handler. */
 function buildSwimRelayAddress(nodeId) {
   return `${normalizeNodeId(nodeId)}/service/${SWIM_RELAY_SERVICE}`;
+}
+
+/** Unified service address for the direct-probe (gossip-carrying) handler. */
+function buildSwimPingAddress(nodeId) {
+  return `${normalizeNodeId(nodeId)}/service/${SWIM_PING_SERVICE}`;
+}
+
+/**
+ * Handler for a direct probe (swim-ping). The target applies the prober's piggybacked
+ * gossip + records the prober alive, and replies alive with its own incarnation and a
+ * fresh batch of gossip. This is the regular bidirectional dissemination channel.
+ * @param {Object} deps - {detector}
+ * @return {Function} async (envelope) => {acknowledged, alive, incarnation, updates}
+ */
+function buildSwimPingHandler({detector} = {}) {
+  return async (envelope) => {
+    const payload = envelope?.payload || {};
+    if (detector) {
+      detector.applyGossip(payload.updates, payload.from);
+      const fromNodeId = normalizeNodeId(payload.from);
+      if (fromNodeId && Number.isFinite(payload.incarnation)) {
+        detector.recordAlive(fromNodeId, payload.incarnation);
+      }
+    }
+    return {
+      acknowledged: true,
+      alive: true,
+      incarnation: detector ? detector.selfIncarnation() : 0,
+      updates: detector ? detector.drainGossip() : [],
+    };
+  };
 }
 
 /**
@@ -48,28 +81,44 @@ function buildSwimRelayHandler({messageRouter, pingTimeoutMs = null} = {}) {
 
 /**
  * Production transport adapter binding the prober's injected interface to a real
- * messageRouter. directProbe → pingNode; indirectProbe → deliver to the helper's
- * swim-relay handler. `deliver` RESOLVES (does not throw) on transport faults, so
- * the mapping is explicit:
- * - acked + boolean reachable  -> that boolean (the helper's verdict),
- * - anything else (no_handler => acknowledged:true but no `reachable`; timeout /
- *   connection-closed => acknowledged:false; enqueue throw) -> null (the helper did
- *   not produce a verdict), which the detector treats as a missed nack, NOT as the
- *   target being unreachable.
+ * messageRouter. directProbe → deliver a swim-ping (carrying the prober's gossip) to
+ * the target's swim-ping handler, returning the target's {alive, incarnation, updates}
+ * response (or null if unreachable). indirectProbe → deliver to the helper's swim-relay
+ * handler (reachability only). `deliver` RESOLVES (does not throw) on transport faults,
+ * so the mapping is explicit: acked+alive => the response; anything else (no_handler,
+ * timeout, connection-closed, throw) => null (target produced no verdict).
  * @param {Object} deps - {messageRouter, pingTimeoutMs}
  * @return {{directProbe: Function, indirectProbe: Function}}
  */
 function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} = {}) {
   return {
-    async directProbe(targetNodeId, timeoutMs) {
+    async directProbe(targetNodeId, request, timeoutMs) {
       if (!messageRouter) {
-        return false;
+        return null;
       }
-      const result = await messageRouter.pingNode(
-        targetNodeId,
-        timeoutMs ?? pingTimeoutMs,
-      );
-      return result === true;
+      let resolved;
+      try {
+        resolved = await messageRouter.deliver(
+          buildSwimPingAddress(targetNodeId),
+          {
+            type: SWIM_PING_MESSAGE_TYPE,
+            from: request?.from ?? null,
+            incarnation: request?.incarnation ?? 0,
+            updates: Array.isArray(request?.updates) ? request.updates : [],
+          },
+          {timeoutMs: timeoutMs ?? pingTimeoutMs},
+        );
+      } catch (_error) {
+        return null;
+      }
+      if (resolved && resolved.acknowledged === true && resolved.alive === true) {
+        return {
+          alive: true,
+          incarnation: resolved.incarnation,
+          updates: Array.isArray(resolved.updates) ? resolved.updates : [],
+        };
+      }
+      return null;
     },
     async indirectProbe(helperNodeId, targetNodeId, timeoutMs) {
       if (!messageRouter) {
@@ -108,7 +157,8 @@ class MembershipSwimProber {
     this._localNodeId = normalizeNodeId(options.localNodeId) || null;
     this._getMembers =
       typeof options.getMembers === 'function' ? options.getMembers : () => [];
-    // transport: {directProbe(nodeId, timeoutMs)->Promise<boolean>,
+    // transport: {directProbe(nodeId, request, timeoutMs)
+    //               ->Promise<{alive, incarnation, updates}|null>  (null = unreachable),
     //             indirectProbe(helperNodeId, targetNodeId, timeoutMs)
     //               ->Promise<boolean|null>}  (null = helper did not respond)
     this._transport = options.transport || null;
@@ -276,8 +326,14 @@ class MembershipSwimProber {
       return;
     }
     const timeoutMs = this._detector.scaledProbeTimeoutMs();
+    // Carry a batch of gossip + our current incarnation on the direct probe.
+    const request = {
+      from: this._localNodeId,
+      incarnation: this._detector.selfIncarnation(),
+      updates: this._detector.drainGossip(),
+    };
     // A throwing transport must record a MISS, never silently erase the probe.
-    let ok = await this._safeDirectProbe(targetNodeId, timeoutMs);
+    let ok = await this._safeDirectProbe(targetNodeId, request, timeoutMs);
     if (!ok) {
       ok = await this._indirectProbe(targetNodeId, timeoutMs);
     }
@@ -285,20 +341,34 @@ class MembershipSwimProber {
     this._detector.tick();
   }
 
-  async _safeDirectProbe(targetNodeId, timeoutMs) {
+  async _safeDirectProbe(targetNodeId, request, timeoutMs) {
+    let response;
     try {
-      return (await this._transport.directProbe(targetNodeId, timeoutMs)) === true;
+      response = await this._transport.directProbe(targetNodeId, request, timeoutMs);
     } catch (_error) {
       return false;
     }
+    if (!response || response.alive !== true) {
+      return false;
+    }
+    // First-hand alive at the target's incarnation + apply its piggybacked gossip.
+    if (Number.isFinite(response.incarnation)) {
+      this._detector.recordAlive(targetNodeId, response.incarnation);
+    }
+    this._detector.applyGossip(response.updates, targetNodeId);
+    return true;
   }
 }
 
 export {
   MembershipSwimProber,
   buildSwimRelayHandler,
+  buildSwimPingHandler,
   buildSwimMessageRouterTransport,
   buildSwimRelayAddress,
+  buildSwimPingAddress,
   SWIM_RELAY_SERVICE,
+  SWIM_PING_SERVICE,
   SWIM_PROBE_MESSAGE_TYPE,
+  SWIM_PING_MESSAGE_TYPE,
 };
