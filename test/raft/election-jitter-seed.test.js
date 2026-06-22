@@ -63,3 +63,56 @@ t.test('without a randomSource, timeout() uses base Math.random (in range)',
       t.ok(value >= 150 && value <= 300, 'base timeout() still within window');
     }
   });
+
+// Teardown-race guard: an election Tick that fires after end() has nulled
+// `this.election` must NOT throw `Cannot read properties of null (reading
+// 'max')`. That async TypeError was surfacing as an unhandledRejection that
+// crashed integration scenarios (move-replica-handoff) and left the Tick armed.
+t.test('timeout() tolerates a nulled election config (post-end Tick race)',
+  async (t) => {
+    // Base path (no randomSource).
+    const base = makeNode({timeSource: new VirtualTimeSource()});
+    base.election = null;
+    t.doesNotThrow(() => base.timeout(),
+      'base timeout() does not deref a null election');
+    t.equal(typeof base.timeout(), 'number',
+      'base timeout() returns a benign numeric delay');
+
+    // DT5 seeded path.
+    const seeded = makeNode({
+      timeSource: new VirtualTimeSource(),
+      randomSource: new SeededRandomSource({seed: 1}),
+    });
+    seeded.election = null;
+    t.doesNotThrow(() => seeded.timeout(),
+      'seeded timeout() does not deref a null election');
+    t.equal(typeof seeded.timeout(), 'number',
+      'seeded timeout() returns a benign numeric delay');
+  });
+
+// Root-cause guard: a packet still in flight after end() must be dropped by the
+// patched data listener, not dispatched into base heartbeat()/change()/timeout()
+// against the nulled raft.timers/election (the post-end unhandledRejection that
+// crashed + hung move-replica-handoff / node-joining-rebalance).
+t.test('patched data listener drops packets after end() (no post-end deref)',
+  async (t) => {
+    const node = makeNode({timeSource: new VirtualTimeSource()});
+    const listener = node.listeners('data').find((l) => l.__lagrangePatched);
+    t.ok(listener, 'the lagrange-patched data listener is installed');
+
+    node.end();
+    t.equal(node.timers, null, 'precondition: end() nulled raft.timers');
+
+    // heartbeat() can be re-entered mid-flight after end() nulled timers.
+    t.doesNotThrow(() => node.heartbeat(),
+      'heartbeat() no-ops once timers are gone (no null deref)');
+
+    // Pre-fix this APPEND drove base heartbeat() into null timers and rejected.
+    let rejected = null;
+    await listener({type: 'append', data: [], term: 1, address: 'peer'},
+      () => {}).catch((error) => {
+      rejected = error;
+    });
+    t.equal(rejected, null,
+      'late packet is dropped without an unhandledRejection');
+  });

@@ -53,6 +53,11 @@ const NUMERIC_ZERO = 0;
 // broken).
 const CATCHUP_BATCH_SIZE = 64;
 const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
+// Benign election delay returned by timeout() when `this.election` is missing
+// (i.e. the node is mid/post-end()). Mirrors base liferaft's default election
+// ceiling so any in-flight scheduling stays in-range; the in-flight end() clears
+// the Tick immediately after, so this value is never actually awaited to fire.
+const DEFAULT_ELECTION_TIMEOUT_MS = 300;
 const RAFT_STATE_CHANGE_EVENT = 'state change';
 
 function resolveFollowerLastIndex(packet) {
@@ -264,6 +269,18 @@ function patchIncomingDataListener(raft) {
   };
 
   const patchedListener = async (packet, write = () => {}) => {
+    // Teardown-race guard. base liferaft's end() (index.js) sets state=STOPPED
+    // and nulls raft.timers/election/Log/beat. A packet still in flight on the
+    // transport can reach this listener afterwards; the base handler would then
+    // call heartbeat()/change()/timeout() against that nulled state and throw
+    // `Cannot read properties of null` (reading 'active'/'max'/...). Because the
+    // listener runs detached on the transport, that TypeError surfaces as an
+    // unhandledRejection — crashing the process and leaking any re-armed Tick
+    // (the move-replica-handoff / node-joining-rebalance hangs). Drop the late
+    // packet via the established write() ignore-path instead of dispatching it.
+    if (raft.state === BaseLifeRaft.STOPPED || !raft.timers) {
+      return write();
+    }
     const committedIndexBefore = getCommittedIndex(raft);
 
     // CL-041: serialize vote processing so concurrent same-term votes cannot both pass the
@@ -374,15 +391,45 @@ class LifeRaft extends BaseLifeRaft {
    * @return {number} milliseconds in [election.min, election.max].
    */
   timeout() {
+    // Teardown-race guard. Base liferaft arms an election Tick at construction
+    // and clears it in end(). If that timer fires once more inside the end()
+    // window, `this.election` has already been nulled — so both this override
+    // and base timeout() would dereference `times.max` and throw. Because the
+    // Tick invokes timeout() asynchronously, that TypeError surfaces as an
+    // unhandledRejection (crashing the test process) while the still-armed Tick
+    // leaks the event loop and hangs it. Return a benign in-range delay instead;
+    // the in-flight end() clears the Tick right after, so it never fires.
+    const times = this.election;
+    if (!times) {
+      return DEFAULT_ELECTION_TIMEOUT_MS;
+    }
     if (!this._electionRandomSource) {
       return super.timeout();
     }
-    const times = this.election;
     return Math.floor(
       this._electionRandomSource.random() *
         (times.max - times.min + NUMERIC_ONE) +
       times.min,
     );
+  }
+
+  /**
+   * (Re)arm the heartbeat/election Tick. Teardown-race guard: base liferaft's
+   * heartbeat() dereferences `this.timers.active(...)`, but end() nulls
+   * `this.timers`. A packet in flight when end() runs can re-enter the base
+   * change()/append handler (index.js:202) AFTER timers are gone — even past
+   * patchedListener's entry guard, since end() can land mid-`await`. Dereffing
+   * null timers there throws `reading 'active'` as a detached unhandledRejection
+   * (crash) and never clears the Tick (hang). No timers => the node has ended,
+   * so there is nothing to schedule; no-op and return this (base's contract).
+   * @param {number=} duration
+   * @return {LifeRaft} this
+   */
+  heartbeat(duration) {
+    if (!this.timers) {
+      return this;
+    }
+    return super.heartbeat(duration);
   }
 }
 
