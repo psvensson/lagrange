@@ -16,6 +16,11 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'cdc/cdc-integration-service-cache-visibility-wait.js': 1,
   'control-plane/control-plane-system-table-gateway-cache-reconciliation.js': 2,
   'message-group/cdc-handler.js': 1,
+  // Documented local-only-truth seed writes (CL-016 priority local-commit
+  // fallback; CL-035 seed raft_role at voter-ready). Both are superseded by
+  // the durable write's CDC round-trip (newer updated_at wins in the cache
+  // merge) — same sanctioned-exception class as the bootstrap hydration sites.
+  'node/replica-handler-create-methods.js': 2,
 });
 
 /**
