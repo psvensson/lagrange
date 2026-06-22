@@ -59,6 +59,6 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 25. [GOV-0001] Roadmap corrections discovered during implementation should land with the Quest changes that discovered them. Do not leave truth repair as chat-only memory. _(see roadmap.md:128)_
 26. [GOV-0002] Do not use roadmap state to claim Quest closure. Closure requires Solver terminal evidence. _(see roadmap.md:131)_
 27. [GOV-0012] The Quest must cite or encode enough scope context to prevent local invention. _(see roadmap.md:76)_
-28. [GOV-0013] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
+28. [GOV-0013] The row must be in scope for this repository under the repo-root edition-matrix.md. _(see roadmap.md:106)_
 29. [GOV-0015] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
 30. [GOV-0026] Each auto-commit refuses when audit does not pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries a Co-Authored-By: trailer for the agent that drove the loop. _(see workflow-guidelines/solver-quests.md:163)_

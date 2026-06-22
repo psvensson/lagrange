@@ -75,7 +75,7 @@ condition says why no local runtime patch should continue in that Quest.
 Retryable or backpressure first frontiers cannot become bounded non-frontiers
 through prose-only proof.
 
-## 11. Sharpen Work Before Changing Code
+## 11a. Sharpen Work Before Changing Code
 
 Implementation work should be as explicit and bounded as the runtime design.
 

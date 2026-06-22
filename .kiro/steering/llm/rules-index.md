@@ -141,7 +141,7 @@ Total rules: 281
 | ARCH-0075 | must | architecture | Completion of a phase must reduce temporary machinery, not strand it. |
 | ARCH-0076 | must | architecture | Pressure must become admission, defer, reject, or coalescing signals. |
 | GOV-0012 | must | governance | The Quest must cite or encode enough scope context to prevent local invention. |
-| GOV-0013 | must | governance | The row must be in scope for this repository under ../../edition-matrix.md. |
+| GOV-0013 | must | governance | The row must be in scope for this repository under the repo-root edition-matrix.md. |
 | GOV-0014 | must | governance | Broad rows must gain a linked spec or architecture document before active implementation … |
 | GOV-0015 | must | governance | The Quest must name the roadmap row, approved maintenance scope, or explicit user request… |
 | STYLE-0010 | must | style | All code must be written with ESLint rules in mind from the start. |

@@ -30,6 +30,8 @@ canonical first-read glossary; `boot.md` points here.
 | Finding | A durable recorded result: tested hypothesis, ruled-out approach, or decision. |
 | Theory | A testable causal explanation (system- or frontier-level) selected to break a stall. |
 | Park / parked | A frontier set aside with no honest remaining local move; the scheduler redirects elsewhere. |
+| Rung | A position on the strategy ladder for an attempt (`observe`, `local-fix`, `widen-scope`, `model`, `change-approach`, `park`); a stalled frontier climbs rungs. |
+| Dossier | The pinned-frontier attempt bundle `solve.js step` prints (rung, metric, evidence) and that a delegated worker is handed. |
 | Owner / owner boundary | The single component that owns a semantic decision or resource; others observe (cache), they do not re-derive it. |
 | Proof ladder | A compact sequence of 3-5 executable commands that demonstrates a claim. |
 | Subagent | A spawned worker that produces verification or research; recorded as evidence `subagent:<id>`. |
@@ -103,7 +105,11 @@ files (then isolate via worktrees or order the writes). Parallelism applies to t
 work, never to the proof: the subagent-verify-before-handoff gate, measured theory
 promotion, and one-Quest-per-commit stay serial and intact.
 
-## Source Authority Precedence
+## Pack vs Source Precedence
+
+This section governs the **pack-vs-source** axis (which copy of a rule is
+authoritative). For the separate **execution-time** precedence among instructions
+(user/safety > Quest canon > domain packs), see boot.md "Authority Order".
 
 Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Each
 generated domain pack is a priority-ranked SUBSET (capped per `maxRules`), not the
@@ -141,9 +147,9 @@ Use this list before non-trivial work:
     caches observe.
 12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
     proof pass.
-13. **Do not keep patching a parked frontier**; record findings and redirect to
+13a. **Do not keep patching a parked frontier**; record findings and redirect to
     another frontier or end EXHAUSTED.
-13a. **Do not keep patching a sealed Quest when an altitude reflection shows the
+13b. **Do not keep patching a sealed Quest when an altitude reflection shows the
     lever is out of its scope**; capture the insight durably (finding / epic /
     system theory), then honestly EXHAUST and author the higher-altitude Quest/epic.
 14. **Do not leave completed work uncommitted**; commit every finished, coherent

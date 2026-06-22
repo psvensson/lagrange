@@ -124,7 +124,7 @@
     "exportedRuleCount": 281,
     "aliasRuleCount": 4,
     "masterRuleCount": 277,
-    "estimatedAllRulesTokens": 10479
+    "estimatedAllRulesTokens": 10481
   },
   "rules": [
     {
@@ -1253,7 +1253,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 85,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -1268,7 +1268,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 96,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -1922,7 +1922,7 @@
         {
           "file": "doctrine/single-path.md",
           "line": 55,
-          "section": "Doctrine — Single Path > 11. One Contract Shape Per Concern"
+          "section": "Doctrine — Single Path > 11b. One Contract Shape Per Concern"
         }
       ]
     },
@@ -2316,7 +2316,7 @@
       "tags": [
         "governance"
       ],
-      "rule": "The row must be in scope for this repository under ../../edition-matrix.md.",
+      "rule": "The row must be in scope for this repository under the repo-root edition-matrix.md.",
       "score": 208,
       "sources": [
         {
@@ -3164,7 +3164,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 99,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -3179,7 +3179,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 109,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -3936,7 +3936,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 89,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -4087,7 +4087,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 82,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -4102,7 +4102,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 86,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -4117,7 +4117,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 87,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -4342,7 +4342,7 @@
         {
           "file": "doctrine/decision-experiments.md",
           "line": 80,
-          "section": "Doctrine — Decisions And Experiments > 11. Sharpen Work Before Changing Code"
+          "section": "Doctrine — Decisions And Experiments > 11a. Sharpen Work Before Changing Code"
         }
       ]
     },
@@ -4719,5 +4719,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-19T10:11:10.911Z"
+  "generatedAt": "2026-06-22T10:12:35.480Z"
 }

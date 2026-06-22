@@ -103,7 +103,7 @@ operator flows, and control surfaces.
 
 Before implementation tasks begin from a roadmap row:
 
-1. The row must be in scope for this repository under `../../edition-matrix.md`.
+1. The row must be in scope for this repository under the repo-root `edition-matrix.md`.
 2. Broad rows must gain a linked spec or architecture document before active
    implementation starts.
 3. A row may move to active implementation only when the intended behavior is

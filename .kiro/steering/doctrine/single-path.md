@@ -40,7 +40,7 @@ runtime dissemination owner.
 If runtime correctness still depends on a phase-owned subscriber, retry loop,
 cache patch, or bridge, the design is incomplete.
 
-## 11. One Contract Shape Per Concern
+## 11b. One Contract Shape Per Concern
 
 When the same concern appears as several near-synonymous caches, helpers,
 snapshots, or output shapes, the design has already started to drift.
