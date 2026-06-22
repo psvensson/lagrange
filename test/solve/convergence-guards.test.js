@@ -297,8 +297,15 @@ tap.test('rr-G harnessNotMeasuringStatus: self-heals on mis-recorded legacy samp
 
 tap.test('golden replay: the real rolling-restart log trips coupled oscillation', (t) => {
   const here = path.dirname(fileURLToPath(import.meta.url));
+  // Frozen golden slice captured from the live quest log at commit 37035625 (the
+  // commit that last authored this test), when the rolling-restart quest was in a
+  // genuine coupled-oscillation state. The live log
+  // (solve/log/rolling-restart-core-stability.ndjson) keeps evolving as the quest
+  // progresses — and the coupling has since been RESOLVED — so this replay reads
+  // the frozen fixture to validate the detector against a real coupled history
+  // deterministically, instead of asserting the live quest is currently broken.
   const logPath = path.resolve(
-    here, '../../solve/log/rolling-restart-core-stability.ndjson');
+    here, 'fixtures/golden-coupled-oscillation-log.ndjson');
   const log = fs.readFileSync(logPath, 'utf8')
     .split('\n')
     .filter((line) => line.trim().length > 0)
