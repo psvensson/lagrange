@@ -723,6 +723,10 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
       REPLAY_TEST_132033Z_REPLAY_READY_DISTINCT_NODE_COUNT,
       readyReplicaCount: REPLAY_TEST_132033Z_REPLAY_READY_REPLICA_COUNT,
       spreadGap: REPLAY_TEST_132033Z_REPLAY_SPREAD_GAP,
+      // CL-021 witness pass-through (source commit 89147e21): per-row
+      // exclusion attribution now survives summary normalization; this
+      // snapshot has no excluded replicas so every partition reports {}.
+      exclusionReasonCounts: {},
     }));
   }
 

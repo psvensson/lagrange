@@ -693,6 +693,9 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
             recoveryEligibleIncludedNodeIds: ['node-b'],
             readinessExcludedNodeIds: ['node-c'],
             clusterMemberUnhealthyExcludedNodeIds: ['node-c'],
+            // CL-001 variant-C trim attribution (source commit 462663ca): no
+            // already-published node was trimmed here, so the list is empty.
+            retentionGraceMisses: [],
           },
         },
         projectionDiagnostics: {
@@ -706,6 +709,9 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
           recoveryEligibleIncludedNodeIds: ['node-b'],
           readinessExcludedNodeIds: ['node-c'],
           clusterMemberUnhealthyExcludedNodeIds: ['node-c'],
+          // CL-001 variant-C trim attribution (source commit 462663ca): no
+          // already-published node was trimmed here, so the list is empty.
+          retentionGraceMisses: [],
         },
       },
       'coverage probe should retain current publication convergence details for failing snapshots',

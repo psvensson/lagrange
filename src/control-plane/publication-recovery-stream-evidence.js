@@ -310,6 +310,8 @@ function resolvePendingAckEvidenceState(options = {}) {
     Number(options.pendingAckCount) :
     NUM.ZERO;
   const hasCountOnlyDebt =
+    options.pendingAckEvidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
     explicitPendingAckNodeIds.length === NUM.ZERO &&
     pendingAckCount > NUM.ZERO;
 

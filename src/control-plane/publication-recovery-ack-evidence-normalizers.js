@@ -147,6 +147,8 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
     Array.isArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === NUM.ZERO;
   const hasCountOnlyDebt =
+    options.pendingAckEvidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
     explicitPendingAckNodeIds.length === NUM.ZERO &&
     Math.max(
       normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
@@ -183,7 +185,9 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
       Math.max(
         pendingAckNodeIds.length,
         normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
-        Number.isFinite(Number(options.pendingAckCount)) ? Number(options.pendingAckCount) : NUM.ZERO,
+        Number.isFinite(Number(options.pendingAckCount)) ?
+          Number(options.pendingAckCount) :
+          NUM.ZERO,
       );
   const pendingAckCountByState = Object.freeze({
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:

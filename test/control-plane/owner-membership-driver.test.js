@@ -27,6 +27,11 @@ function leaderCache(leaderNodeId) {
 const traceStubs = () => ({
   _emitConvergenceDecisionTrace: () => {},
   _buildPublicationReadinessTraceFields: () => ({}),
+  // CL-001 variant D: every driver path (follower skip + owner no-deficit) now
+  // hydrates the local cache from authority via this real prototype method. The
+  // mock `this` does not exercise that read; stub it as a best-effort no-op so
+  // the gating/lifecycle behaviour under test stays isolated.
+  refreshDeferredPublicationsCacheFromAuthority: async () => {},
 });
 
 t.test('drive: no-op when this node is NOT the publications leader', async (t) => {

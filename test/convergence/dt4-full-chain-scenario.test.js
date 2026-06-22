@@ -77,6 +77,10 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
     reconcileActiveGateMembershipPublication: async () => {},
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
+    // CL-001 variant D: the follower-skip and owner no-deficit paths hydrate the
+    // local cache from authority via this real prototype method; stub it as a
+    // best-effort no-op so the leadership-gate behaviour stays isolated.
+    refreshDeferredPublicationsCacheFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
   };
 
@@ -145,6 +149,10 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
     reconcileActiveGateMembershipPublication: async () => {},
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
+    // CL-001 variant D: the follower-skip and owner no-deficit paths hydrate the
+    // local cache from authority via this real prototype method; stub it as a
+    // best-effort no-op so the leadership-gate behaviour stays isolated.
+    refreshDeferredPublicationsCacheFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
   };
 

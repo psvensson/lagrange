@@ -597,6 +597,42 @@ function selectPublicationActiveGateHandoffContract(value = null) {
   return selectPublicationActiveGateHandoffCandidateWithRetry(value, value);
 }
 
+// The flattened/projected `selectedHandoffContract` preserves the owner-reconcile
+// debt signal but is NOT run through the contract builder, so it lacks the derived
+// `reasonCode` and the catch-up fence. Overlay those two derived fields from the
+// rebuilt normalized contract when (and only when) the selected contract does not
+// already carry them; everything the selected contract provides wins. This keeps
+// the deferred owner-reconcile outcome's reasonCode (owner_reconcile_pending) and
+// the catch-up fence intact on the debt path. (Regression from 8f5bc72a.)
+function enrichSelectedOwnerReconcileHandoffContract(
+  selectedHandoffContract,
+  normalizedHandoffContract,
+) {
+  const selectedReasonCode = selectedHandoffContract?.reasonCode;
+  const normalizedReasonCode = normalizedHandoffContract?.reasonCode;
+  const needsReasonCode =
+    !(typeof selectedReasonCode === 'string' && selectedReasonCode.length > NUM.ZERO) &&
+    typeof normalizedReasonCode === 'string' &&
+    normalizedReasonCode.length > NUM.ZERO;
+  const fenceField =
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE;
+  const needsFence =
+    !isPublicationActiveGateHandoffRecord(selectedHandoffContract?.[fenceField]) &&
+    isPublicationActiveGateHandoffRecord(
+      normalizedHandoffContract?.[fenceField],
+    );
+  if (!needsReasonCode && !needsFence) {
+    return selectedHandoffContract;
+  }
+  return Object.freeze({
+    ...selectedHandoffContract,
+    ...(needsReasonCode ? {reasonCode: normalizedReasonCode} : {}),
+    ...(needsFence ?
+      {[fenceField]: normalizedHandoffContract[fenceField]} :
+      {}),
+  });
+}
+
 function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
   const selectedHandoffContract = selectPublicationActiveGateHandoffContract(
     value,
@@ -625,8 +661,23 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
   const handoffContract = normalizePublicationActiveGateHandoffContract(
     selectedHandoffContract,
   );
-  const targetHandoffContract =
-    hasSelectedOwnerReconcileDebt ? selectedHandoffContract : handoffContract;
+  // When the flattened selected contract carries owner-reconcile debt we keep it
+  // as the base (it preserves the selected pendingReconcile signal that drove the
+  // debt detection), but the raw selected contract from the cohort/progress
+  // projection does NOT carry the derived `reasonCode` or the catch-up fence —
+  // only the rebuilt normalized contract does. Overlay those derived fields from
+  // the normalized contract (without clobbering any value the selected contract
+  // already provides) so downstream consumers — the deferred-outcome reasonCode
+  // (owner_reconcile_pending) and the owner driver's activeGateCatchupFence read
+  // in driveOwnerMembershipReconcile — still see the full reconcile cohort.
+  // (Regression from 8f5bc72a, which routed around
+  // normalizePublicationActiveGateHandoffContract for the debt path.)
+  const targetHandoffContract = hasSelectedOwnerReconcileDebt ?
+    enrichSelectedOwnerReconcileHandoffContract(
+      selectedHandoffContract,
+      handoffContract,
+    ) :
+    handoffContract;
   if (
     !targetHandoffContract ||
     (targetHandoffContract.nextAction !==

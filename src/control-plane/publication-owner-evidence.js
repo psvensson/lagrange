@@ -213,7 +213,14 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
     Number(options.pendingAckCount) :
     NUM.ZERO;
+  // Count-only debt only applies when the CALLER explicitly declares the
+  // COUNT_ONLY evidence state. An empty pending-ack list with a stale positive
+  // count (no declared state) must defer to the authoritative empty list — that
+  // is the published-empty-pending-ACK contract. (54db83b9 introduced this flag
+  // unconditionally, over-firing for the no-declared-state path.)
   const hasCountOnlyDebt =
+    options.pendingAckEvidenceState ===
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
     explicitPendingAckNodeIds.length === NUM.ZERO &&
     pendingAckCount > NUM.ZERO;
 

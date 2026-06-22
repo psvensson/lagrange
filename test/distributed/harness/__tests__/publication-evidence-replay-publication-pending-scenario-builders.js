@@ -381,6 +381,9 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
       REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_HIGH,
       readyReplicaCount: REPLAY_TEST_140646Z_READY_REPLICA_COUNT_HIGH,
       spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_LOW,
+      // CL-021 witness pass-through (source commit 89147e21): no replica
+      // excluded for this partition, so the attribution map is empty.
+      exclusionReasonCounts: {},
     };
   }
 
@@ -393,6 +396,9 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
       REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_LOW,
       readyReplicaCount: REPLAY_TEST_140646Z_READY_REPLICA_COUNT_LOW,
       spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH,
+      // CL-021 witness pass-through (source commit 89147e21): no replica
+      // excluded for this partition, so the attribution map is empty.
+      exclusionReasonCounts: {},
     };
   }
 
@@ -734,12 +740,23 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     const readyReplicaCount =
       REPLAY_TEST_145246Z_READY_REPLICA_COUNT +
       (highReadyPartitionIds.has(partitionId) ? NUM.ONE : NUM.ZERO);
+    // CL-021 witness pass-through (source commit 89147e21): per-row exclusion
+    // attribution. Only the replica_operations partition has an excluded
+    // replica here — the baseline replica is SYNCING (see
+    // build145246ZServiceRows) — which source attributes as `status_syncing`
+    // (membership-publication-priority-partition-summary.js:266). Every other
+    // partition has no excluded replica, so the attribution map is empty.
+    const exclusionReasonCounts =
+      partitionId === REPLAY_TEST_145246Z_REPLICA_OPERATIONS_PARTITION_ID ?
+        {[`status_${REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING}`]: NUM.ONE} :
+        {};
     return {
       partitionId,
       requiredDistinctNodeCount: replayRequiredDistinctNodeCount,
       readyDistinctNodeCount,
       readyReplicaCount,
       spreadGap: replayRequiredDistinctNodeCount - readyDistinctNodeCount,
+      exclusionReasonCounts,
     };
   }
 
