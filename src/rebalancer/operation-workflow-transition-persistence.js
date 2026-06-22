@@ -152,6 +152,9 @@ class OperationWorkflowTransitionPersistence
           }
           projectedOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
             previousStep;
+          this.repository.applyLocalPriorityOperationProgressRow(
+            projectedOperation,
+          );
           commitProjectedState(operation);
           return operation;
         }

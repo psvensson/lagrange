@@ -21,6 +21,12 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   // the durable write's CDC round-trip (newer updated_at wins in the cache
   // merge) — same sanctioned-exception class as the bootstrap hydration sites.
   'node/replica-handler-create-methods.js': 2,
+  // replica_operations-row analog of CL-016/CL-035: seed the owner's locally-
+  // decided operation workflow_step into the local cache when the durable
+  // priority control-plane write defers under formation pressure (the write
+  // routes through the partition being spread). Owner-local + priority-scoped,
+  // superseded by the durable write's CDC round-trip — same exception class.
+  'rebalancer/replica-operation-repository-row-methods.js': 1,
 });
 
 /**

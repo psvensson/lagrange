@@ -683,6 +683,7 @@ class OperationWorkflowTransitionOrchestration
       return false;
     }
 
+    this.repository.applyLocalPriorityOperationProgressRow(projectedOperation);
     this.repository.recordOwnerPersistedTransitionVisibilityWitness(
       projectedOperation,
     );

@@ -1,5 +1,12 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
+// Sanctioned local-only-truth seed literal for the priority control-plane
+// operation-row analog of CL-016/CL-035. See applyLocalPriorityOperationProgressRow.
+const PRIORITY_LOCAL_PROGRESS_LITERAL = Object.freeze({
+  UPSERT: 'UPSERT',
+  CAUSE_PREFIX: 'priority-local-progress:',
+});
+
 function assignReplicaOperationRepositoryRowMethods(
   ReplicaOperationRepository,
   options = {},
@@ -164,6 +171,47 @@ function assignReplicaOperationRepositoryRowMethods(
    */
   isOperationLocallyOwned(operation) {
     return this.resolveOperationOwnerNodeId(operation) === this.nodeId;
+  }
+  /**
+   * Seed the owner's locally-decided operation-row truth into the LOCAL cache
+   * when the durable replica_operations write defers under formation/recovery
+   * pressure (the write routes through the very control-plane partition being
+   * spread, so it cannot land within budget). Without this, the durable
+   * workflow_step the system cache projects — and that every other reader and
+   * downstream gate observes — stalls at the pre-deferral step forever even
+   * though the owner has locally advanced the operation, deadlocking control-
+   * plane spread during 2-node+ formation.
+   *
+   * This is the replica_operations-row analog of the sanctioned SERVICES-row
+   * seeds CL-016 (priority local-commit fallback) and CL-035 (raft_role seed):
+   * scoped to owner-local priority control-plane partitions and superseded
+   * later by the durable write's CDC round-trip (newer updated_at wins in the
+   * cache merge). The durable distributed write is NOT short-circuited — it
+   * still retries and, once the partition reaches quorum, becomes the
+   * authoritative cluster-wide truth.
+   *
+   * @param {object} operation - Projected operation snapshot to seed.
+   * @return {boolean} Whether the local row was applied.
+   */
+  applyLocalPriorityOperationProgressRow(operation) {
+    if (
+      !operation ||
+      !operation.operationId ||
+      !operation.partitionId ||
+      !this.systemTableCache ||
+      typeof this.systemTableCache.applySystemTableChange !== TYPEOF.FUNCTION ||
+      !isPriorityControlPlanePartition({partitionId: operation.partitionId}) ||
+      !this.isOperationLocallyOwned(operation)
+    ) {
+      return false;
+    }
+    this.systemTableCache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      PRIORITY_LOCAL_PROGRESS_LITERAL.UPSERT,
+      this.buildReplicaOperationRow(operation),
+      {causeId: `${PRIORITY_LOCAL_PROGRESS_LITERAL.CAUSE_PREFIX}${operation.operationId}`},
+    );
+    return true;
   }
   /**
    * Extract the source replica ID for a REPLACE operation.
