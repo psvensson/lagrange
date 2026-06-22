@@ -372,6 +372,13 @@ class CDCRoutedMutationReadiness {
       return Math.max(NUM.ZERO, queryExecutionDeadlineMs - Date.now());
     };
     const waitForRetryBudget = async (delayMs) => {
+      // Teardown stop: once the service is shutting down, abandon the retry
+      // budget instead of re-arming. The unbudgeted path below otherwise sleeps
+      // and returns true forever, holding the event loop open while the routed
+      // write keeps failing on a torn-down sqlQueryEngine.
+      if (this.isShuttingDown === true) {
+        return false;
+      }
       const normalizedDelayMs =
         Number.isFinite(delayMs) && delayMs > NUM.ZERO ?
           Math.floor(delayMs) :

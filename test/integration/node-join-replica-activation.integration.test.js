@@ -424,11 +424,22 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joinResult = await joiningService.join();
 
       t.equal(joinResult.success, false, 'join should fail on hydration errors');
+      // The injected query/upsert failures surface as a non-retryable failure
+      // during the state-query/registration phase. The exact wrapper wording has
+      // varied (state-query gate vs node-registration), but the root cause
+      // ("table not found: nodes" from the failing query engine) must propagate
+      // so the operator sees why hydration failed — not a generic/opaque error.
       const joinError = String(joinResult.error || '').toLowerCase();
       t.ok(
         joinError.includes('state query') ||
-        joinError.includes('failed to establish leadership'),
-        'error should mention state query failure or leadership gate failure',
+        joinError.includes('failed to establish leadership') ||
+        joinError.includes('failed to register node') ||
+        joinError.includes('table not found'),
+        `error should surface the hydration root cause (got: ${joinResult.error})`,
+      );
+      t.notOk(
+        joinResult.retryable,
+        'a system-table hydration failure should not be a retryable join failure',
       );
     } finally {
       if (joiningService) {

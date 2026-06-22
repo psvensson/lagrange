@@ -624,6 +624,13 @@ class SeedCleanupHandler {
   }
 
   async shutdownSqlQueryEngine(d) {
+    const cdcIntegrationService = d.getCdcIntegrationService?.() || null;
+    // Mark the CDC service shutting down before nulling the engine so its
+    // routed-mutation retry-budget loop stops re-arming instead of retrying the
+    // engine-less write forever and holding the event loop open after teardown.
+    if (typeof cdcIntegrationService?.markShuttingDown === LOCAL_STR_FUNCTION) {
+      cdcIntegrationService.markShuttingDown();
+    }
     const sqlQueryEngine =
       d.getSqlQueryEngine?.() ||
       d.getCdcIntegrationService?.()?.sqlQueryEngine ||
@@ -631,7 +638,6 @@ class SeedCleanupHandler {
     if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === LOCAL_STR_FUNCTION) {
       await sqlQueryEngine.shutdown();
     }
-    const cdcIntegrationService = d.getCdcIntegrationService?.() || null;
     if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {
       cdcIntegrationService.sqlQueryEngine = null;
     }

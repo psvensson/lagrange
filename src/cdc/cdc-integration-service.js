@@ -117,6 +117,9 @@ class CDCIntegrationService extends EventEmitter {
         AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS;
     this.inFlightMutationsByKey = new Map();
     this.initialized = false;
+    // Set on teardown so the routed-mutation retry-budget loop stops re-arming
+    // instead of retrying writes forever once sqlQueryEngine is being nulled.
+    this.isShuttingDown = false;
   }
 }
 

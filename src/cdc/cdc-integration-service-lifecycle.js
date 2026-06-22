@@ -137,6 +137,15 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
+   * Mark the service as shutting down. The routed-mutation retry-budget loop
+   * checks this and stops re-arming instead of retrying control-plane writes
+   * forever once the sqlQueryEngine is being torn down on teardown. Idempotent.
+   */
+  markShuttingDown() {
+    this.isShuttingDown = true;
+  }
+
+  /**
    * Create SQL-routed write strategy.
    * @return {Object}
    * @private

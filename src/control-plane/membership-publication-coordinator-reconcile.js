@@ -804,6 +804,16 @@ class MembershipPublicationCoordinatorReconcile extends
     if (typeof this.membershipSwimRuntime?.stop === TYPEOF.FUNCTION) {
       this.membershipSwimRuntime.stop();
     }
+    // Clearing the 5s interval alone does not stop the reconcile queue: it
+    // self-perpetuates via its own retry-drain (OwnerKeyReconcileQueue
+    // _scheduleRetryDrain), and an in-flight persistPublicationRow keeps
+    // re-driving a ref'd retryable-control-plane-write backoff timer that holds
+    // the event loop open long after teardown. Shut the queue down so drain()
+    // bails (stopped=true) and pending retry timers are cleared. This method is
+    // teardown-only (seed stopAndClearControlPlaneServices + JoinCleanupHandler).
+    if (typeof this.reconcileQueue?.shutdown === TYPEOF.FUNCTION) {
+      this.reconcileQueue.shutdown();
+    }
   }
 }
 

@@ -690,6 +690,12 @@ class JoinCleanupHandler {
 
   async shutdownCdcSqlQueryEngine() {
     const cdcIntegrationService = this.delegates.getCdcIntegrationService();
+    // Mark the CDC service shutting down before the engine is nulled so its
+    // routed-mutation retry-budget loop stops re-arming instead of retrying the
+    // (now engine-less) write forever and holding the event loop open.
+    if (typeof cdcIntegrationService?.markShuttingDown === LOCAL_STR_FUNCTION) {
+      cdcIntegrationService.markShuttingDown();
+    }
     // Resolve via the robust getSqlQueryEngine delegate first: on the joining
     // node cdcIntegrationService.sqlQueryEngine is often null, so the narrow
     // lookup skipped shutdown and left the engine's query retry loops (and other
