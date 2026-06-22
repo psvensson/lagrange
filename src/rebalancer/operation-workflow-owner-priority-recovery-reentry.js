@@ -251,7 +251,15 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
     remoteOwnerAvailable:
       typeof ownerNodeId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
       ownerNodeId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
-      ownerNodeId !== owner.nodeId,
+      ownerNodeId !== owner.nodeId &&
+      // A remote owner that is no longer repair-eligible (not routable) must not
+      // be woken: dispatching its REPLICA_OPERATION_DISPATCH replays a source
+      // removal against an unavailable owner instead of letting the drain settle
+      // the released operation locally.
+      !(
+        typeof owner.isPriorityRecoveryDrainOwnerUnavailable === 'function' &&
+        owner.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation)
+      ),
     ownerLaneHeld:
       Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
   });

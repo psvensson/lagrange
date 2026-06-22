@@ -72,6 +72,12 @@ function hostTimeoutDetector(net, nodeId, operation) {
       timeoutProto.isPriorityRecoveryOperationDrainStepStale,
     resolvePriorityRecoveryOperationDrainStepAgeMs:
       timeoutProto.resolvePriorityRecoveryOperationDrainStepAgeMs,
+    // CL-044 (955fc84c) made the age computation prefer the time-in-current-step
+    // anchor, so the real predicate now delegates to resolveOperationStepEnteredAtMs;
+    // wire it so the hosted detector runs the real production math (this operation
+    // carries no steps_history, so it correctly falls back to updatedAt).
+    resolveOperationStepEnteredAtMs:
+      timeoutProto.resolveOperationStepEnteredAtMs,
     normalizeOperationDrainEpochMillis:
       timeoutProto.normalizeOperationDrainEpochMillis,
   };

@@ -206,11 +206,40 @@ function createTimeoutTestCoordinator(options = {}) {
   };
 
   // Set an operation's updated_at to an ABSOLUTE value (DT6 virtual-clock fixtures).
+  // CL-044 (955fc84c) made the real timeout/staleness math prefer the time-in-current-step
+  // anchor (the steps_history entry for the current workflow_step) over updated_at, so the
+  // virtual-clock anchor must also re-stamp that step-history timestamp — the row's
+  // steps_history is still stamped with wall-clock Date.now() at creation (replica-status.js
+  // createOperation), which would otherwise keep the operation perpetually "fresh" on the
+  // virtual clock and never time out.
   const setOperationUpdatedAt = (operationId, updatedAtMs) => {
     const op = trackedOperations.get(operationId);
-    if (op) {
-      op.updated_at = updatedAtMs;
+    if (!op) {
+      return;
     }
+    op.updated_at = updatedAtMs;
+    if (typeof op.steps_history !== 'string' || op.steps_history.length === 0) {
+      return;
+    }
+    let history;
+    try {
+      history = JSON.parse(op.steps_history);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(history)) {
+      return;
+    }
+    // Re-anchor the newest entry for the current workflow step (mirrors
+    // resolveOperationCurrentStepEntry, which the production timeout anchor reads).
+    for (let index = history.length - 1; index >= 0; index--) {
+      const entry = history[index];
+      if (entry && entry.step === op.workflow_step) {
+        entry.timestamp = updatedAtMs;
+        break;
+      }
+    }
+    op.steps_history = JSON.stringify(history);
   };
 
   const getTrackedOperation = (operationId) => {
