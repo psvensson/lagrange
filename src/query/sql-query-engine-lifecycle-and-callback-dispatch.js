@@ -222,6 +222,14 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    * @return {Promise<void>}
    */
   async shutdown() {
+    // Abort in-flight query retry loops so they stop re-arming backoff timers
+    // (otherwise a query retrying a torn-down cluster keeps the loop alive).
+    if (
+      this.queryExecutor &&
+      typeof this.queryExecutor.markShuttingDown === LOCAL_STR_FUNCTION
+    ) {
+      this.queryExecutor.markShuttingDown();
+    }
     if (
       this.transactionCoordinator &&
       typeof this.transactionCoordinator.stopRecoverySweep === LOCAL_STR_FUNCTION

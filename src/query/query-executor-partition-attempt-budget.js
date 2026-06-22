@@ -236,6 +236,15 @@ function createPartitionAttemptBudget({
     return routerOptions;
   };
   const waitForRetryBudget = async (retryDelayMs) => {
+    // Stop retrying once the owning engine is shutting down. Without this, a
+    // query whose reads keep returning a retryable "source unavailable" (the
+    // cluster is being torn down) re-arms its backoff delay forever via the
+    // unbudgeted (remainingBudgetMs === null) path below, leaking the timer and
+    // keeping the event loop alive after teardown.
+    if (typeof executor.isShuttingDownRequested === 'function' &&
+        executor.isShuttingDownRequested()) {
+      return false;
+    }
     const normalizedRetryDelayMs =
       Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO ?
         Math.floor(retryDelayMs) :

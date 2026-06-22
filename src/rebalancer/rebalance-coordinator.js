@@ -156,6 +156,12 @@ class RebalanceCoordinator extends EventEmitter {
 
     this.isShuttingDown = true;
     this.initialized = false;
+    // Stop the repository's authoritative read-retry / operation-persist-retry
+    // loops from re-arming their backoff timers after teardown.
+    if (this.repository &&
+        typeof this.repository.markShuttingDown === LOCAL_STR_FUNCTION) {
+      this.repository.markShuttingDown();
+    }
     this.stopTimeoutChecking();
 
     // Unsubscribe from executor outcome events.

@@ -76,6 +76,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
           retryAttempt += NUM.ONE;
         }
+        // Stop re-arming the backoff once the owning coordinator is shutting
+        // down (otherwise this retry timer keeps the event loop alive).
+        if (typeof this.isShuttingDownRequested === TYPEOF.FUNCTION &&
+            this.isShuttingDownRequested()) {
+          return result;
+        }
         const waitMs = Math.min(
           this.resolveOperationMutationRetryDelayMs(result),
           remainingMs,
@@ -134,6 +140,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
           retryAttempt += NUM.ONE;
+        }
+        // Stop re-arming the backoff once the owning coordinator is shutting
+        // down (otherwise this retry timer keeps the event loop alive).
+        if (typeof this.isShuttingDownRequested === TYPEOF.FUNCTION &&
+            this.isShuttingDownRequested()) {
+          return result;
         }
         const waitMs = Math.min(
           this.resolveOperationMutationRetryDelayMs(result),

@@ -598,6 +598,18 @@ class JoinCleanupHandler {
       partitionServices: partitionServices.size,
     });
     this.delegates.stopJoiningLifecycleOwners();
+    // Stop the always-on owner-driven membership reconcile interval before the
+    // rebalance coordinator (which owns the shared readiness service that holds
+    // the coordinator) is nulled below. Otherwise its 5s tick keeps arming a
+    // ref'd 15s reconcile-timeout timer that hangs the event loop after teardown.
+    const membershipPublicationService =
+      this.delegates.getRebalanceCoordinator()?.controlPlaneReadinessService
+        ?.membershipPublicationService || null;
+    if (membershipPublicationService &&
+      typeof membershipPublicationService.stopOwnerMembershipDriver ===
+        LOCAL_STR_FUNCTION) {
+      membershipPublicationService.stopOwnerMembershipDriver();
+    }
     await this.shutdownRebalanceCoordinator(logger);
     const latencyTopology = this.delegates.getLatencyTopology();
     await LatencyTopologySetup.stop(latencyTopology);
@@ -678,7 +690,15 @@ class JoinCleanupHandler {
 
   async shutdownCdcSqlQueryEngine() {
     const cdcIntegrationService = this.delegates.getCdcIntegrationService();
-    const sqlQueryEngine = cdcIntegrationService?.sqlQueryEngine || null;
+    // Resolve via the robust getSqlQueryEngine delegate first: on the joining
+    // node cdcIntegrationService.sqlQueryEngine is often null, so the narrow
+    // lookup skipped shutdown and left the engine's query retry loops (and other
+    // background loops) re-arming forever after teardown.
+    const sqlQueryEngine =
+      (typeof this.delegates.getSqlQueryEngine === LOCAL_STR_FUNCTION ?
+        this.delegates.getSqlQueryEngine() : null) ||
+      cdcIntegrationService?.sqlQueryEngine ||
+      null;
     if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === LOCAL_STR_FUNCTION) {
       await sqlQueryEngine.shutdown();
     }

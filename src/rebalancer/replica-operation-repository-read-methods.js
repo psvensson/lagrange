@@ -116,6 +116,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         if (remainingMs <= NUM.ZERO) {
           return result;
         }
+        // Stop re-arming the backoff once the owning coordinator is shutting
+        // down (otherwise this retry timer keeps the event loop alive).
+        if (typeof this.isShuttingDownRequested === 'function' &&
+            this.isShuttingDownRequested()) {
+          return result;
+        }
 
         await this.waitForReplicaOperationReadRetry(
           Math.min(this.getRetryableReplicaOperationReadRetryDelayMs(result), remainingMs),

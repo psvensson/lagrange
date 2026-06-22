@@ -385,6 +385,22 @@ function buildCleanupDelegates(service) {
       self.cdcIntegrationService = null;
     },
     stopAndClearControlPlaneServices: () => {
+      // Stop the always-on owner-driven membership reconcile interval. It is
+      // started unconditionally at control-plane setup and otherwise never
+      // stopped, so each 5s tick keeps arming a ref'd 15s reconcile-timeout
+      // timer that holds the event loop open long after teardown (the dominant
+      // post-teardown hang across the integration suite). The coordinator is
+      // shared; reach it via heartbeat or the rebalance coordinator readiness.
+      const membershipPublicationService =
+        self.heartbeatService?.membershipPublicationService ||
+        self.rebalanceCoordinator?.controlPlaneReadinessService
+          ?.membershipPublicationService ||
+        null;
+      if (membershipPublicationService &&
+        typeof membershipPublicationService.stopOwnerMembershipDriver ===
+          'function') {
+        membershipPublicationService.stopOwnerMembershipDriver();
+      }
       if (self.heartbeatService) {
         self.heartbeatService.stop();
         self.heartbeatService = null;

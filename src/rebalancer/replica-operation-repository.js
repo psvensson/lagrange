@@ -540,6 +540,23 @@ class ReplicaOperationRepository {
       options.authoritativeVisibilityRetryDelayMs >= NUM.ZERO ?
         Math.floor(options.authoritativeVisibilityRetryDelayMs) :
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
+    this._shuttingDown = false;
+  }
+  /**
+   * Signal that the owning rebalance coordinator is shutting down. The
+   * authoritative read-retry and operation-persist-retry loops check this and
+   * stop re-arming their backoff delays; otherwise an operation whose reads/
+   * writes keep failing retryably against a torn-down cluster re-arms a ref'd
+   * timer indefinitely and keeps the event loop alive after teardown.
+   */
+  markShuttingDown() {
+    this._shuttingDown = true;
+  }
+  /**
+   * @return {boolean} true once the owning coordinator has begun shutting down.
+   */
+  isShuttingDownRequested() {
+    return this._shuttingDown === true;
   }
   /**
    * Synchronize mutable runtime dependencies after construction.
