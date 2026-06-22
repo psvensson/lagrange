@@ -100,7 +100,10 @@ class PartitionServiceLearnerPromotionMethods {
       scheduleReason ===
       PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY
     ) {
-      if (this.isPriorityRecoveryPendingForLearnerPromotion()) {
+      if (
+        this.isPriorityRecoveryPendingForLearnerPromotion() ||
+        this.isPriorityControlPlaneFormationLearnerPromotion()
+      ) {
         return Math.min(
           this.learnerPromotionDelayMs,
           this.learnerPromotionPriorityRecoveryDelayMs,
@@ -109,6 +112,31 @@ class PartitionServiceLearnerPromotionMethods {
       return this.learnerPromotionDelayMs;
     }
     return this.learnerCatchUpCheckIntervalMs;
+  }
+  /**
+   * Fresh-formation analog of isPriorityRecoveryPendingForLearnerPromotion.
+   *
+   * The 30s INITIAL_DELAY stability budget is only survivable when the fast
+   * priority-recovery path fires, and that path keys on a
+   * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING readiness reason that is present
+   * during restart recovery but NOT during initial multi-node formation. During
+   * formation a critical control-plane learner joining the existing group must
+   * reach voter-ready inside the replica-handler activation gate
+   * (syncTimeoutMs, ~10s); a 30s promotion delay is structurally too late
+   * (30s >> 10s), so the learner never promotes, the partition never reaches
+   * quorum, and 7-node formation deadlocks. Use the same fast delay the
+   * recovery path already deems safe for these exact partitions. The promotion
+   * itself still passes the quorum-membership safety gate in
+   * checkLearnerPromotion (odd-voter + target-count), so this only moves the
+   * first promotion check earlier, it does not relax any safety invariant.
+   *
+   * @return {boolean}
+   */
+  isPriorityControlPlaneFormationLearnerPromotion() {
+    return (
+      this.isJoiningExistingGroup === true &&
+      isPriorityControlPlanePartition({partitionId: this.partitionId})
+    );
   }
   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
     const readinessService = this.controlPlaneReadinessService;
