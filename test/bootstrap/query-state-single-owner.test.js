@@ -12,9 +12,15 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, '../..');
 
 test('Node join query-state has a single runtime owner', async (t) => {
+  // src/bootstrap/node-joining-service.js was decomposed into semantic mixin
+  // modules in commit 2f5a7cea ("refactor(quality): decompose
+  // node-joining-service"); it is now a re-export barrel and the
+  // phaseQuerySystemState() owner method lives on the
+  // node-joining-cdc-subscription-and-backfill mixin in the NodeJoiningService
+  // composition chain. Assert against the module that defines the method.
   const nodeJoiningPath = path.join(
     repoRoot,
-    'src/bootstrap/node-joining-service.js',
+    'src/bootstrap/node-joining-cdc-subscription-and-backfill.js',
   );
   const legacyPhasePath = path.join(
     repoRoot,

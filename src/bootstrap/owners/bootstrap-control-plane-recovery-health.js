@@ -334,4 +334,7 @@ function assignBootstrapControlPlaneRecoveryHealthMethods(ownerClass) {
   );
 }
 
-export {assignBootstrapControlPlaneRecoveryHealthMethods};
+export {
+  assignBootstrapControlPlaneRecoveryHealthMethods,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+};

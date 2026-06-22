@@ -4,6 +4,9 @@ import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
 import {
   isPriorityControlPlanePartition,
 } from './system-partition-classification.js';
+import {
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+} from './owners/bootstrap-control-plane-recovery-health.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -14,9 +17,16 @@ const LOCAL_STR_1Y6VT = 'Lifecycle traffic readiness';
 const LOCAL_STR_1LT6Z = 'Lifecycle metadata publication readiness';
 const LOCAL_STR_GMYW4 = 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
 
+// The diagnostics-unavailable variant (added with the progress-contract
+// refactor, fc01198b) is the same tolerance class as
+// PRIORITY_CONTROL_PLANE_RECOVERY_PENDING: when seed-contact startup authority
+// is available, both must allow metadata-publication readiness during the
+// CONTROL_READY/DEGRADED phase. See BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS and
+// BOOTSTRAP_JOIN_NON_BLOCKING_REASONS, which already pair the two variants.
 const METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS = Object.freeze([
   LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
 ]);
 
 const TRAFFIC_READINESS_WAIT_DEFAULT = Object.freeze({
@@ -175,7 +185,7 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
     snapshot.reasons.length === NUM.ONE &&
     snapshot.reasons[NUM.ZERO] ===
       LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
-  
+
   let baseDelay = delayMs;
   if (stableWindowPending &&
       Number.isFinite(snapshot?.stableWindowMs) &&

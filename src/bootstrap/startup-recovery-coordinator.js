@@ -434,10 +434,23 @@ class StartupRecoveryCoordinator {
       startupAuthority?.state === STARTUP_AUTHORITY_STATE.AUTHORITY_UNAVAILABLE;
     const startupAuthorityBlocked =
       startupAuthority?.state === STARTUP_AUTHORITY_STATE.BLOCKED;
+    const startupAuthorityUnobserved =
+      startupAuthority?.state ===
+        STARTUP_AUTHORITY_STATE.OBSERVATION_UNAVAILABLE;
     const startupAuthorityBlocksRecovery =
       startupAuthorityUnavailable || startupAuthorityBlocked;
+    // The seed-direct INIT-bypass call site (seed-partitions-phase
+    // waitForPartitionLeadership) drives the coordinator with no observed
+    // startup authority — the seed IS its own authority during direct-write
+    // bootstrap, so the snapshot normalizes to OBSERVATION_UNAVAILABLE /
+    // authorityAvailable:false. The bypass must remain reachable there: gate
+    // only on an authority that is positively available OR merely unobserved,
+    // and keep blocking on an explicitly AUTHORITY_UNAVAILABLE / BLOCKED
+    // authority. (Restores the pre-b1acc899 "!unavailable && !blocked"
+    // semantics for the bypass while preserving its safety boundary.)
     const startupAuthorityAvailableForBootstrapInit =
-      startupAuthority?.authorityAvailable === true &&
+      (startupAuthority?.authorityAvailable === true ||
+        startupAuthorityUnobserved) &&
       !startupAuthorityBlocksRecovery;
     const backgroundWorkReady = managed ?
       isBackgroundWorkReadySnapshot(snapshot, {partitionId}) :

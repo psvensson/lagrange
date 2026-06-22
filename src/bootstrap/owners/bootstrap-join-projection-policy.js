@@ -10,11 +10,22 @@ import {canBypassBootstrapInitPriorityReasons} from '../startup-recovery-coordin
 import {
   isUsableStartupAuthoritySnapshot,
 } from './bootstrap-startup-authority-evidence.js';
+import {
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+} from './bootstrap-control-plane-recovery-health.js';
 import {BOOTSTRAP_READINESS_OWNER_LITERAL} from './bootstrap-readiness-owner-literals.js';
 
+// The priority-control-plane recovery dependency surfaces two interchangeable
+// reason variants: PRIORITY_CONTROL_PLANE_RECOVERY_PENDING and the
+// diagnostics-unavailable variant introduced with the progress-contract
+// refactor (fc01198b). Both belong to the same tolerance class — the
+// INIT-phase bypass set (BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS) and the
+// progress-contract evaluator already treat them equivalently — so the
+// CONTROL_READY/DEGRADED join projection must tolerate both as well.
 const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
   LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
 ]);
 const BOOTSTRAP_JOIN_NON_BLOCKING_REASON_SET = new Set(

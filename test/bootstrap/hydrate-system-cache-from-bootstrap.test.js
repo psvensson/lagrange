@@ -246,10 +246,21 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
 
       t.equal(systemTableCache.getEpoch(), 7,
         'bootstrap hydration should apply the published topology epoch to the cache watermark');
-      t.same(
+      // The owner-published topology metadata must survive into the joining
+      // service. Since commit e2797b6c (control-plane snapshot revision
+      // tracking, refined in 6daa7f3a) the retained metadata is enriched with
+      // control-plane revision fields (snapshotRevision*, snapshotResumeToken,
+      // snapshotObservedAt*), so assert the published fields are retained as a
+      // subset plus the derived revision metadata is present.
+      t.match(
         joiningService.bootstrapTopologySnapshotMeta,
         joiningService.bootstrapResponse.topologySnapshotMeta,
         'joining service should retain the published topology snapshot metadata',
+      );
+      t.equal(
+        joiningService.bootstrapTopologySnapshotMeta.snapshotRevision,
+        7,
+        'retained metadata should carry the derived control-plane snapshot revision',
       );
     });
 
