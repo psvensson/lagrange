@@ -342,6 +342,12 @@ function buildCleanupDelegates(service) {
     getSystemTableWriter: () => self.systemTableWriter,
     getRebalanceCoordinator: () =>
       self.rebalanceCoordinator,
+    // Cleanup must be able to find the SQL query engine to shut it down (which
+    // stops its query retry loops re-arming after teardown). The cleanup bundle
+    // previously lacked these getters, so shutdownSqlQueryEngine found nothing
+    // on the seed and the engine's executor was never marked shutting-down.
+    getSqlQueryEngine: () => self.sqlQueryEngine,
+    getCdcIntegrationService: () => self.cdcIntegrationService,
     getLatencyTopology: () => self.latencyTopology,
 
     setPhase: (v) => {
