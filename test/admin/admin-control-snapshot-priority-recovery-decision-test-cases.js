@@ -112,7 +112,7 @@ export function registerAdminControlSnapshotPriorityRecoveryDecisionTests({
           priority_operation_serial_wait: [],
           eligible_but_no_operation_created: ['orders-p1'],
           operation_created_but_no_step_transitions: ['users-p1'],
-          learner_active_but_never_promotable: [],
+          learner_active_but_never_promotable: ['users-p1'],
           publication_recovery_eligible_but_coordinator_excludes_node: ['users-p1'],
         },
         'decision snapshots should expose deterministic blocker classes by partition',
@@ -150,6 +150,7 @@ export function registerAdminControlSnapshotPriorityRecoveryDecisionTests({
         usersSnapshot.blockerReasons,
         [
           'operation_created_but_no_step_transitions',
+          'learner_active_but_never_promotable',
           'publication_recovery_eligible_but_coordinator_excludes_node',
         ],
         'users partition should include coordinator, learner, and publication blockers',
