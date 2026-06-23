@@ -29,8 +29,19 @@ const {
   isCoordinatorOwnedOperationType,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
+  OperationType,
   readAuthoritativeControlPlaneRows,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+// Lever-(a) extension (default-off). When LAGRANGE_PR_DRAIN_LOCAL_PROGRESS=true, the
+// owner-local deferred-progress fallback also covers the surplus-DRAIN transitions
+// (REPLACE source-removal at ACTIVE, and the REMOVED terminal), not just CREATING — the
+// rolling-restart gate witness showed surplus-drain ops stuck there under write_backlog
+// with no local-commit fallback, so the over-target voter never drains in budget.
+const PRIORITY_DRAIN_LOCAL_PROGRESS_FLAG = 'LAGRANGE_PR_DRAIN_LOCAL_PROGRESS';
+function isPriorityDrainLocalProgressEnabled() {
+  return process.env[PRIORITY_DRAIN_LOCAL_PROGRESS_FLAG] === 'true';
+}
 
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
   TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
@@ -647,10 +658,48 @@ class OperationWorkflowTransitionOrchestration
    * @private
    */
   shouldUsePriorityDispatchDeferredLocalProgress(operation, step, errorLike) {
-    return (
+    if (!isRetryableControlPlaneError(errorLike)) {
+      return false;
+    }
+    if (
       step === WORKFLOW_STEP.CREATING &&
-      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step) &&
-      isRetryableControlPlaneError(errorLike)
+      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step)
+    ) {
+      return true;
+    }
+    return this.isPriorityDrainDeferredLocalProgressStep(operation, step);
+  }
+
+  /**
+   * Lever-(a) extension (default-off LAGRANGE_PR_DRAIN_LOCAL_PROGRESS). The surplus-drain
+   * transitions where the rolling-restart gate witness showed ops stuck under
+   * write_backlog with no local-commit fallback: the REPLACE source-removal (workflowStep
+   * ACTIVE) and the drain terminal (REMOVED). Scoped to priority control-plane partitions
+   * (the same scope the CREATING budget gate uses), so the owner can advance the drain
+   * locally and re-arm the durable write, draining the over-target voter within budget.
+   *
+   * @param {Object|null} operation
+   * @param {string} step
+   * @return {boolean}
+   * @private
+   */
+  isPriorityDrainDeferredLocalProgressStep(operation, step) {
+    if (!isPriorityDrainLocalProgressEnabled()) {
+      return false;
+    }
+    const partitionId = String(operation?.partitionId || '').trim();
+    if (
+      partitionId.length === NUM.ZERO ||
+      !isPriorityControlPlanePartition({partitionId})
+    ) {
+      return false;
+    }
+    if (step === WORKFLOW_STEP.REMOVED) {
+      return true;
+    }
+    return (
+      step === WORKFLOW_STEP.ACTIVE &&
+      operation?.type === OperationType.REPLACE
     );
   }
 
