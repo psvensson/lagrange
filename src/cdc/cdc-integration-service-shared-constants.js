@@ -86,6 +86,7 @@ const AUTHORITATIVE_READ_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
   QUERY_TRANSPORT_PREFLIGHT: 'query_transport_preflight',
   OWNER_RPC_LANE: 'owner_rpc_lane',
+  LOCAL_CDC_CACHE: 'local_cdc_cache',
 });
 
 export {

@@ -45,9 +45,19 @@ const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
   OWNER_RPC_LANE: 'owner_rpc_lane',
   SQL_QUERY_ENGINE: 'sql_query_engine',
+  LOCAL_CDC_CACHE: 'local_cdc_cache',
   MIXED: 'mixed',
   UNAVAILABLE: 'unavailable',
 });
+
+// Default-off flag: when the authoritative read path has no local partition
+// replica and the owner-RPC/SQL-fallback cannot reach an overloaded owner
+// during formation/recovery, eventually-consistent snapshot readers may serve
+// from the EXISTING local CDC systemTableCache (replicated to every node) via a
+// caller-supplied predicate — reusing the existing cache, NOT adding a new one.
+// The fallback itself lives in the authoritative read flow (single convergence
+// point); readers opt in by passing `cacheFallbackPredicate`. Default-off flag
+// LAGRANGE_CACHE_READ_FALLBACK. This source label surfaces such reads.
 
 const AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY = 'local_leader';
 const AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS = 1500;
@@ -63,6 +73,9 @@ function normalizeReadSource(source) {
   }
   if (normalized === LOCAL_STR_SQL_QUERY_ENGINE) {
     return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE;
+  }
+  if (normalized === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_CDC_CACHE) {
+    return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_CDC_CACHE;
   }
   return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
 }
@@ -511,6 +524,7 @@ class AuthoritativeControlPlaneView {
             allowSqlFallback:
               authoritativeReadModeContract.allowSqlFallback &&
               pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
+            cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
             queryOptions,
           },
         );
@@ -536,6 +550,7 @@ class AuthoritativeControlPlaneView {
               confirmEmptyLocalReadWithOwnerRpc: false,
               allowSqlFallback:
                 authoritativeReadModeContract.allowSqlFallback,
+              cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
               queryOptions: {
                 ...queryOptions,
                 sessionId: `${queryOptions.sessionId}:owner-rpc-recovery`,
@@ -609,37 +624,55 @@ class AuthoritativeControlPlaneView {
    */
   async readNodeSnapshot(nodeId, options = {}) {
     const normalizedNodeId = String(nodeId || '');
-    const readOptions = {
+    const matchesNodeId = (row) =>
+      row?.[COLUMN.NODE_ID] === normalizedNodeId ||
+      row?.node_id === normalizedNodeId;
+    const baseReadOptions = {
       ...options,
       replicaFallbackConsistency:
         options?.replicaFallbackConsistency ||
         LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+    };
+    // Node-scoped reads are eventually-consistent readiness snapshots; opt them
+    // into the central local-CDC-cache fallback (gated/default-off) so a joiner
+    // with no local replica reads from the existing cache instead of routing to
+    // the overloaded owner. The predicate mirrors the SQL WHERE node_id = ?.
+    const nodeScopedReadOptions = {
+      ...baseReadOptions,
+      cacheFallbackPredicate: matchesNodeId,
     };
     const [nodeRead, serviceRead] = await Promise.all([
       this.readRows(
         TABLES.NODES,
         `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
         [normalizedNodeId],
-        readOptions,
+        nodeScopedReadOptions,
       ),
       this.readRows(
         TABLES.SERVICES,
         `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.NODE_ID} = ?`,
         [normalizedNodeId],
-        readOptions,
+        nodeScopedReadOptions,
       ),
     ]);
     const nodeRows = nodeRead.rows;
     const serviceRows = serviceRead.rows;
+    const snapshotPartitionIds = collectNodeSnapshotPartitionIds(serviceRows);
     const partitionReadQuery = buildNodeSnapshotPartitionReadQuery(
-      collectNodeSnapshotPartitionIds(serviceRows),
+      snapshotPartitionIds,
     );
+    const snapshotPartitionIdSet = new Set(snapshotPartitionIds);
     const partitionRead = partitionReadQuery ?
       await this.readRows(
         TABLES.PARTITIONS,
         partitionReadQuery.sql,
         partitionReadQuery.params,
-        readOptions,
+        {
+          ...baseReadOptions,
+          cacheFallbackPredicate: (row) => snapshotPartitionIdSet.has(
+            row?.[COLUMN.PARTITION_ID] ?? row?.partition_id,
+          ),
+        },
       ) :
       Object.freeze({
         success: true,
