@@ -408,6 +408,45 @@ once #4 un-masks. See task #10 (now re-prioritized) + #11.
 the flag, the directed-DT-repro validation plan, and how the 3 built levers compose). A fresh agent
 can start there directly.
 
+## 🔬 INVESTIGATION 2026-06-23 (subagent, file:line + failure-bundle) — the residual binder is a REDUNDANT NO-OP REPLACE, not a genuine write-wedge. READ FIRST.
+
+Deep trace of run2's binding op (`7bad1358`, REPLACE on `control_plane_publications-p1`) REFRAMES it:
+- **It is redundant.** A sibling REPLACE `418f3a09` on the SAME partition already reached terminal and
+  satisfied 3-node spread (`spreadGap: 0`, `removeSafetyState: converged`) BEFORE `7bad1358` was created.
+  `failure-bundle.json` `witnessIds: [418f3a09, 7bad1358, …]` confirms two co-located REPLACE contexts.
+- **The "phase=terminal + steps planned" witness is a SELECTOR-SPLIT artifact**, not a real terminal:
+  `priority-recovery-dispatch-snapshot.js:346-352` derives `workflowProgressPhaseId` from the MAX-timestamp
+  context (the terminal sibling `418f3a09`) while `actuationState`/`operatorId` are pinned to the PENDING
+  `7bad1358`. The witness step list defaults un-tracked steps to `planned` (`topology-operator-witness.js:204-222`).
+- **Why it can't dispatch:** the op's owner-node IS its `targetNodeId` (`replica-operation-repository-row-methods.js:131-166`,
+  `isPriorityReplace`→targetNodeId), so dispatch is a remote wake to `35a891b8` (`operation-workflow-owner-handoff-state.js:206-302`,
+  `deliverySource: coordinator_created_remote_handoff`). That target is `connecting`/`reconnecting` ~40/41 samples →
+  `ROUTER_CONNECTION_CLOSED`/"Message not acknowledged" → deferred forever at 1s cadence
+  (`operation-workflow-dispatch-rearm-evidence.js:742-816`). **No abandon fires**: `shouldStop`
+  (`dispatch-rearm-evidence.js:673-718`) needs `stepTimedOut`, but `stepTimeoutMs=0` (no per-step deadline) → spins
+  indefinitely. The 506 `coordinator_created_remote_handoff` are cluster-wide defer churn (only **2** for this op);
+  108 are on `sql_write_operations-p1`.
+- **B4 note:** `control_plane_publications` is single-Raft-leader-writer; the spread-satisfied classification
+  (`priority-recovery-completion.js:162-211`, `priority-recovery-snapshot-closure.js:405-407`) already SIGNS the op
+  off as done (reporting) but **never RETIRES the un-dispatched `replica_operations` record** → it lingers.
+
+### Ranked lever (subagent recommendation) — RETIRE the no-op first
+1. **(c) RETIRE the redundant un-dispatched REPLACE — RECOMMENDED, smallest, B4-safe.** When an authoritative
+   sibling has already satisfied spread+remove-safety (spreadGap=0, removeSafetyState=converged) and this op is
+   `persisted_not_dispatched`/PENDING, retire (mark terminal/cancel) the record instead of dispatching it. The op
+   record is a `replica_operations` row (NOT the B4-fenced control_plane_publications table), and retiring a
+   never-dispatched op needs no control_plane_publications write → B4-safe. Extend the existing spread-satisfied
+   classification from a reporting short-circuit to record-level retirement. **B4 caveat: retirement must be driven
+   by the proper authority (write-leader / owner), not an arbitrary owner-local terminal mark.** Deterministically
+   testable below the gate (two-context priority-recovery snapshot fixture: one terminal, one PENDING, spreadGap=0).
+   ⚠️ Research existing supersession machinery first (`buildPriorityRecoverySupersededOperationIdSet`,
+   `priority-recovery-superseded-target.js`) — extend, don't rebuild.
+2. **(b) Wedged-remote-handoff abandon (B4-safe, broader class).** `shouldStop` is inert at `stepTimeoutMs=0`; add an
+   N-timeouts / age-past-threshold abandon to `buildCoordinatorCreatedRemoteHandoffTimeoutDecision` so a handoff
+   spinning on a `connecting` target is re-planned/abandoned. Stops the spin for the general case; pairs with (c).
+3. **(a) Structural Option B (largest, defer).** For LEGITIMATE priority REPLACEs the owner=target must become a
+   routable connected voter before it can own dispatch — formation-ordering change, high effort. Defer behind (c)+(b).
+
 ## 🎯 GATE VERDICT 2026-06-23 (`stat-gate-20260623T131412Z`, all 3 levers, N=3) — convergence ADVANCED; residual = the STRUCTURAL publication remote-handoff write-wedge. READ FIRST.
 
 With the zombie-redrive blind-spot fix (`c1f6d34f`) on top of census-#4 + drain-extension:
