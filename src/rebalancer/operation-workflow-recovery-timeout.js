@@ -197,6 +197,17 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       }
       const operationDrainSnapshot =
         await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
+      // Lever (c): retire a redundant un-dispatched REPLACE BEFORE the wake branch
+      // — otherwise the perpetual WAKE_REMOTE_OWNER of its unreachable remote owner
+      // short-circuits the loop and the no-op zombie never retires. Flag-off → no-op.
+      if (
+        await this.retireRedundantPriorityReplaceFromDrainSnapshot(
+          operation,
+          operationDrainSnapshot,
+        )
+      ) {
+        continue;
+      }
       if (
         await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
           operation,

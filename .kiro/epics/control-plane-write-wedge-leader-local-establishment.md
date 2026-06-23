@@ -512,6 +512,52 @@ are exhausted for THIS op. NEXT lever choices:
    the REPLACE target-creation never dispatches under write_backlog (is it awaiting a quorum write that
    can't reach the seed?). Deterministic-first before building.
 
+## ✅ REDUNDANT-REPLACE RETIREMENT LANDED 2026-06-23 (default-off `LAGRANGE_PR_REDUNDANT_REPLACE_RETIRE`) — lever (c), the scoped NEXT LEVER, BUILT + unit/subagent-verified. Gate-validation pending.
+
+The redundant-REPLACE retirement (the mechanism pinned in the two investigation blocks above)
+is implemented, flag-gated default-off, mirroring the other convergence levers.
+
+- **Seam (as scoped):** in `checkTimeouts` (`operation-workflow-recovery-timeout.js`), a new
+  `retireRedundantPriorityReplaceFromDrainSnapshot(operation, drainSnapshot)` call is gated
+  **BEFORE** the `wakePriorityRecoveryRemoteOwnerFromDrainSnapshot` branch — so the perpetual
+  `WAKE_REMOTE_OWNER` of the unreachable owner no longer short-circuits the loop before the no-op
+  zombie can retire.
+- **Lever code:** `operation-workflow-recovery-drain.js` — flag constant
+  `PRIORITY_RECOVERY_REDUNDANT_REPLACE_RETIRE_FLAG` + getter, wall-clock stall floor
+  `PRIORITY_RECOVERY_REDUNDANT_REPLACE_RETIRE_MIN_STALL_MS = 45s` (handles the stepTimeoutMs=0
+  no-deadline case), and methods `retireRedundantPriorityReplaceFromDrainSnapshot` /
+  `isRedundantPriorityReplaceRetireStale` / `isRedundantPriorityReplaceSpreadConvergedIndependently`
+  / `executeRedundantPriorityReplaceRetire`. New error literal
+  `PRIORITY_RECOVERY_REDUNDANT_REPLACE_RETIRED` in `operation-workflow-owner-shared.js`.
+- **Safety gates (all must hold to retire):** REPLACE + priority-control-plane partition +
+  pre-sync step (un-dispatched) + non-terminal + `drainSnapshot.ownerAction === WAKE_REMOTE_OWNER`
+  + target NOT MATERIALIZED + wedged past the 45s stall floor + **`completion.state === CONVERGED`**
+  (the load-bearing gate — planner-ready spread from materialized replicas INDEPENDENT of this op's
+  un-materialized target, strictly stronger than the `blocked !== true` that would also accept the
+  in-flight-counted `SPREAD_SATISFIED_IN_FLIGHT`) + the op is NOT itself a counted
+  `satisfyingOperationIds` member (belt). Retirement runs under the op single-flight lock with an
+  AUTHORITATIVE re-read + full re-confirmation before `failOperation` (idempotent, no double-retire).
+- **B4-safe:** `failOperation` writes ONLY the op's own `replica_operations` row — never the
+  Raft-leader-fenced `control_plane_publications` table (subagent-confirmed: the only other side
+  effects are a STORAGE_RESERVATIONS release for storage-increasing ops and an OPERATION_FAILED
+  read/replan event). So retiring a never-dispatched op needs no membership-projection write.
+- **Validation:** new directed below-gate falsifier
+  `test/rebalancer/priority-recovery-redundant-replace-retire.test.js` (9 tests / 22 assertions:
+  flag-on retires; flag-off byte-identical; SPREAD_SATISFIED_IN_FLIGHT NEVER retired; op-is-satisfier
+  NEVER retired; MATERIALIZED target NEVER retired; non-WAKE_REMOTE_OWNER NEVER retired; fresh op
+  NEVER retired; terminal-on-re-read aborts; non-REPLACE NEVER retired). Adjacent recovery/timeout/
+  drain suites 595/595 + 301/301 green (flag-off → no regression). **Subagent-verified TRUSTED**
+  (claims A–F all HOLD; CRITICAL engagement check confirmed: a `persisted_not_dispatched` record's
+  `workflowStep` IS pre-sync PENDING/SENDING — the "phase=terminal" witness was a selector-split
+  artifact that does NOT reach `operation.workflowStep`, so the lever DOES engage on the residual op).
+- **Efficacy rests on the next gate.** This composes beneath the structural publication
+  remote-handoff write-wedge (frontier above): for a LEGITIMATE (non-redundant) REPLACE whose write
+  can't land, retirement correctly does NOT fire — that case still needs Option B (routable local
+  replica) or publication-handoff hardening. Retirement only clears the REDUNDANT no-op zombies that
+  hold quiesce open. **NEXT: N=3 gate with all built levers + `LAGRANGE_PR_REDUNDANT_REPLACE_RETIRE`**
+  — grep `retire_redundant_replace` engagement + watch `priority_recovery_workflow_progress_event_driven`
+  / scenario-PASS.
+
 ## ✅ ZOMBIE-REDRIVE stepTimeoutMs=0 BLIND SPOT FIXED 2026-06-23 (commit `c1f6d34f`) — why the lever engaged 0×, now reachable
 
 The census-#4 gate (`stat-gate-20260623T121834Z`, all 3 levers on) un-masked the binding op but it
