@@ -512,6 +512,36 @@ are exhausted for THIS op. NEXT lever choices:
    the REPLACE target-creation never dispatches under write_backlog (is it awaiting a quorum write that
    can't reach the seed?). Deterministic-first before building.
 
+## 🎯 GATE VERDICT 2026-06-23 (`stat-gate-20260623T142955Z`, all 4 levers incl. redundant-replace-retire, N=3) — lever ENGAGES + SAFE, but NOT the PASS lever; binding root = structural `priority_control_plane_spread_pending` / write-backlog (Option B). READ FIRST.
+
+First gate where a built lever actually fired: **`retire_redundant_replace` engaged (run1 29×, run2 15×, run3 0×)** — run1's `control_plane_publications-p1` witness shows the retired ops as `status=removed`. Result:
+- **3/3 CONVERGED, missing=0, SAFE every run** (CORRUPT/ORACLE_BLIND/NODE_EXIT/stale=0). No regression: the
+  `priority_recovery_readyz_closed_during_priority_recovery` invariant appears in BOTH this gate (runs 1–2)
+  and the prior 131412Z gate (run3) — a pre-existing variable residual, NOT introduced by retirement.
+- **Scenario-PASS still 0/3** (`priority_recovery_progress_blocked`, dominant `priority_recovery_workflow_progress_event_driven` ×3).
+- **Why retirement didn't move PASS — CHURN, not a bug:** run1 shows **2837** `control_plane_publications-p1`
+  log mentions while the partition stays `operation_stalled`. The planner keeps RE-CREATING priority
+  REPLACEs on the spread-pending partitions faster than retirement clears the redundant ones, because the
+  underlying condition persists: the active gate sees `priority_control_plane_spread_pending` /
+  `priority_partitions_not_spread` (best `active=4/5`, run3 `active=0/5`) even though publication is PUBLISHED
+  (epoch 15, missing=0) and the priority-recovery view reports `prioritySpread=ready#gap=0`. Retirement
+  treats the SYMPTOM (no-op zombies); the disease is spread ESTABLISHMENT — the priority-partition writes
+  can't durably land/spread off the starved seed (`write_backlog`, `handoffOutcome=write_deferred#reason=owner_reconcile_pending`).
+- **Lever (c) verdict: a validated SAFE default-off building block that correctly engages and composes —
+  but EXHAUSTED as a PASS lever.** It cleans redundant zombies; it cannot make a spread establish.
+
+**FRONTIER (unchanged, now empirically reconfirmed): the structural publication/priority-partition
+write-establishment wedge.** The active-gate-vs-priority-recovery spread DISAGREEMENT
+(`priority_control_plane_spread_pending` while `prioritySpread=ready#gap=0`) is the coupling to chase —
+this is the [[circular-dependency-class-formation-vs-steady-state]] / Option B territory. NEXT (one of):
+1. **Resolve the spread DISAGREEMENT first (deterministic-first, cheaper than Option B).** Read why the
+   active/publication gate computes `priority_control_plane_spread_pending` while priority-recovery reports
+   `gap=0`. If the gate's spread predicate is stricter/staler than the recovery one, that mismatch is the
+   PASS blocker and may be a calibration/projection bug, not a structural one. START HERE.
+2. **Option B structural** (large blast radius): make the REPLACE target a routable active-replica of the
+   control-plane partitions fast, so the durable write spreads off the seed. Defer behind #1.
+- DO NOT run another gate until a NEW lever is built — N=3 is too noisy and this gate already named the layer.
+
 ## ✅ REDUNDANT-REPLACE RETIREMENT LANDED 2026-06-23 (default-off `LAGRANGE_PR_REDUNDANT_REPLACE_RETIRE`) — lever (c), the scoped NEXT LEVER, BUILT + unit/subagent-verified. Gate-validation pending.
 
 The redundant-REPLACE retirement (the mechanism pinned in the two investigation blocks above)
