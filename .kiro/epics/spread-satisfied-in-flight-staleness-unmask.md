@@ -1,14 +1,39 @@
 ---
 id: spread-satisfied-in-flight-staleness-unmask
 roadmapRow: RM-0.1-fs-rolling-restart
-status: discussing
-graduatesTo: topology-convergence-hardening
+status: landed-default-off
+graduatesTo: control-plane-write-wedge-leader-local-establishment
 links:
   quests: [rolling-restart-core-stability]
   censusSurvivor: pr-spread-satisfied-in-flight-masks-stuck-surplus
 ---
 
 # Census #4 — un-mask `spread_satisfied_in_flight`, the consistent binding mask of the rolling-restart `convergence_timeout`
+
+> **GATE VERDICT (2026-06-23, `stat-gate-20260623T121834Z`, N=3, composed with all 3 levers): GUARD WORKS + MASK REMOVED + DEEPER LAYER EXPOSED.**
+> SAFE every run (CORRUPT 0 / ORACLE_BLIND 0 / NODE_EXIT 0 / stale 0 — hard invariant held). convergeRate 2/3
+> (run1 CONVERGED, run2 CONVERGED, run3 SLOW missing=1). The `spread_satisfied_in_flight` / `convergence_timeout`
+> binding mask is GONE from the dominant tally; replaced by honest reasons (publication_missing_active_node,
+> priority_recovery_workflow_progress_event_driven, quiescence_candidate). **The guard ENGAGED**: run3's
+> priority-recovery dominantWitness now reads `semanticStateId: operation_stalled` (stepAge **271965ms**, terminal
+> phase) exactly where it was consistently `spread_satisfied_in_flight` before (+4 `operation_stalled` log hits in
+> today's runs). Run3's actual binding cause = `publication_missing_active_node` (node `11601fe0`, partition
+> `sql_write_operations-p1`, `recoveryProtocolState: publication_pending`) = the control-plane WRITE path =
+> the already-tracked **L-write / control-plane-write-wedge** shared root. **NEXT FRONTIER graduates to
+> [`control-plane-write-wedge-leader-local-establishment.md`](control-plane-write-wedge-leader-local-establishment.md)**;
+> this census-#4 lever is DONE (un-mask achieved; flag stays default-off, safe, validated).
+>
+> **Two follow-ups surfaced (NOT regressions — record for the write-wedge work):**
+> 1. **CONVERGED-masks-stalled-terminal-op sibling.** run3's witness has `completionState: converged` while
+>    semantic=`operation_stalled` — because `planner.ready===true` short-circuits `buildPriorityRecoveryCompletion`
+>    to CONVERGED *before* the stall guard, and CONVERGED is itself in both drain-completion sets. So the
+>    COMPLETION-side un-mask does not reach the planner-ready case (the SEMANTIC side does, hence the honest
+>    witness). Whether a planner-ready partition with a 272s-stalled terminal op should re-drive (zombie-redrive
+>    territory) or is genuinely converged-with-stale-row is the open question — likely the latter (spread achieved),
+>    making the publication_missing_active_node the real bind, not the terminal op.
+> 2. **`spread_satisfied_in_flight_stalled` completion reasonCode had 0 log hits** in the sparse playback bundle —
+>    expected (it's a data field, may not be log-emitted; absence proves nothing in the sparse bundle). The
+>    semantic `operation_stalled` IS observable in the witness/logs, which is the engagement proof.
 
 > **GUARD LANDED (commit `59034031`, 2026-06-23) — default-off, below-gate-validated; GATE is the one remaining step.**
 > The multi-site staleness guard is built exactly as planned below. Flag:
