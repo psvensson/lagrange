@@ -220,3 +220,32 @@ handoff for the genuinely-stuck case), with **R2** as a planner-side complement.
   a coupled remove-safety defer cluster; mechanism pinned (cooperative local-timer handoff +
   lagging-row proof + no progress-or-evict watchdog). Ranked levers R1/R2/R3 scoped with
   file:line. Recommend R1 first (below-gate DT repro), then R3.
+- 2026-06-23 — **R1 LANDED `467af1fe`** (default-off `LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF`).
+  Broadened `isCompletedReplacementElectionSafeForPriorityRecovery`
+  (`priority-publication-leader-safety.js`): a completed leader-election ACK for the EXACT
+  voter-ready replacement now authorizes source removal in lieu of the lagging
+  source-leadership-release rows (`raft_role`/`leader_node_id`/`completedLeaderHandoffEvidence`),
+  un-wedging mechanism **B** for the starved rejoiner. Flag-off is byte-identical to before.
+  - **Below-gate DT repro** `test/rebalancer/r1-leader-election-ack-proof-starved-rejoiner.test.js`:
+    drives the REAL snapshot builder + fast-path with starved-rejoiner rows (source still LEADER,
+    no handoff evidence, replacement election ACKed). Asserts rows-alone never authorize
+    (REQUEST_SOURCE_LEADER_HANDOFF wedge); flag-on authorizes; flag-off / no-ack / wrong-replica /
+    non-voter-ready all defer. **Red-on-revert confirmed** (only the flag-on falsifier flips).
+  - **Safety subagent-verified SAFE** (no constructible unsafe state): the upstream quorum-count
+    guard (`operation-workflow-remove-safety-evaluator.js:461-471`, removing replica excluded,
+    gated on `!priorityRecoveryCompletionSafe`) runs BEFORE the only caller of the leader gate
+    (`:496`), so R1 governs leadership SUCCESSION only and can never drop the voter floor; worst
+    case = transient normal re-election. Two standing caveats: (1) safety reduces to
+    `minReplicaCount` being a true Raft-quorum floor (pre-existing, R1 inherits the same floor);
+    (2) an `executeOperation`-level e2e was attempted but the hand-built op never routed through
+    `evaluateRemoveSafety` (the coordinator gates the remove-safety eval behind reaching the
+    source-removal step, which needs more handoff lifecycle than is warranted below the gate) —
+    so the count-guard ordering is covered by static trace + existing `minReplicaCount` deferral
+    tests, NOT a new e2e. The misleading e2e was REMOVED rather than shipped.
+  - **NEXT (gate-last)**: validate at the gate with BOTH `LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF=true`
+    AND the un-mask `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true` (so the dominant reason is honest).
+    Run `npm run analyze:latent-blockers` first; `npm run gate -- 3` from `/home/peter/projects/something`.
+    Success = scenario-PASS rises AND `replace_remove_safety_blocked` removals-from-`7493b0ab` drop;
+    SAFE every run is hard. If R1 alone doesn't move PASS (transfers genuinely stuck, not just
+    unobserved), proceed to **R3** (drive/escalate the handoff) — R1 is the observe-lag half, R3 the
+    genuinely-stuck half; they compose.
