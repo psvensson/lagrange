@@ -345,6 +345,20 @@ hardening` epic, not this L-write epic.
   backpressure root (the op is dispatched/persisted but its writes can't drain — pendingWrites
   growing). The rank-1 fix stays committed default-off as a building block for step 2.
   Belongs to `rolling-restart-core-stability` / `topology-convergence-hardening`.
+- **Census #4 deep-dive (2026-06-23): it is a multi-site PEEL, not the closer.**
+  `spread_satisfied_in_flight` is signed off independently by THREE classifiers — semantic-state
+  (`priority-recovery-snapshot-ingress.js:322-327` `resolvePriorityRecoverySemanticState`),
+  completion-state (`priority-recovery-completion.js:177`), and the drain-completion short-circuit
+  set (`operation-workflow-recovery-reconcile-dispatch-pending.js:111`) — so a staleness guard must
+  thread a stall signal (use `resolvePriorityRecoveryWorkflowStepAgeMs >= fixed-threshold`;
+  `stepTimeoutMs=0` ⇒ no per-step deadline; flag-gate) through all three. Even done it only renames
+  `convergence_timeout → operation_stalled` + un-masks for re-drive; the op STILL can't drain under
+  `write_backlog`, so **#4 does NOT PASS — it peels to the write_backlog root.** THE BINDING PASS
+  LEVER is the **`write_backlog` / surplus-drain distributed-write-backpressure** itself (task #11):
+  diagnose why the surplus-drain priority-partition writes won't drain; candidate = census survivor
+  #3 (bound/re-plan/abandon the surplus drain cleanly — it's over-provision) OR make the quiescence
+  oracle tolerate a stable over-target surplus. FIRST read the convergence/quiescence assertion to
+  learn whether PASS REQUIRES exactly-target (i.e. whether abandoning the surplus could ever PASS).
 
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
