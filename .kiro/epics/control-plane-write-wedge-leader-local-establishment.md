@@ -359,6 +359,17 @@ hardening` epic, not this L-write epic.
   #3 (bound/re-plan/abandon the surplus drain cleanly — it's over-provision) OR make the quiescence
   oracle tolerate a stable over-target surplus. FIRST read the convergence/quiescence assertion to
   learn whether PASS REQUIRES exactly-target (i.e. whether abandoning the surplus could ever PASS).
+- **DECIDED + BUILT (2026-06-23): the surplus MUST drain (can't abandon) → lever-(a) extension.**
+  The oracle tolerates over-target only ≤`MAX_SUSTAINED_OVER_TARGET_MS=120000`
+  (`test/distributed/harness/constants.js:79`), so PASS requires the surplus to actually DRAIN —
+  abandoning it can't PASS. The drain op can't advance because its source-removal/terminal writes
+  are write-backlogged, and lever (a)'s deferred-local-progress only covered CREATING. **Extension
+  LANDED** (commit bb2a6ca2, default-off `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS`): cover the surplus-drain
+  ACTIVE(+REPLACE source-removal) + REMOVED transitions. Subagent-verified it genuinely drains the
+  voter (the real REMOVE_REPLICA is dispatched off the LOCAL cache-resident ACTIVE op-row, so
+  local-committing ACTIVE keeps the removal alive) — NOT a false-drained mask. Harness
+  `priority-dispatch-deferred-local-progress-drain-coverage.test.js` 10/10; 823/825 transition
+  suites; flag-off byte-identical. **Gate-validating now** (drain + zombie-redrive flags, N=3).
 
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
