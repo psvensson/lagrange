@@ -117,22 +117,38 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
 
 ## Open questions (block a sealed doneWhen)
 
-- **Membership safety fence (CRITICAL).** Which of `{nodes, node_endpoints, services,
-  replica_operations}` are safe to owner-local-seed? The `nodes` **ACTIVE membership**
-  row is exactly the "active-membership truth has no owner / single-writer tripwire /
-  Raft-term fence" surface ([[membership-single-owner-cutover-plan]],
-  [`membership-single-owner-cutover.md`](membership-single-owner-cutover.md);
-  `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN`). A joiner durably self-asserting its own ACTIVE
-  membership locally may violate that fence even though it "owns" its node row. Likely
-  safe: `node_endpoints`, `service_endpoints`, the joiner's own `services` replica rows,
-  and self-owned `replica_operations` progress. Likely UNSAFE without the cutover:
-  `nodes` ACTIVE/voter status. **Classify per-table before building.**
-- Does every target table have the LWW (`updated_at`) + tombstone merge the
-  self-supersession guarantee needs? (`replica_operations` does; verify the others —
-  `system-table-cache.js` merge `:646-657`.)
-- Is the joiner genuinely `isOperationLocallyOwned` for the rows it would seed, AND is it
-  the one re-driving the authoritative distributed write to quorum? If not, there is no
-  correction path — do not seed.
+- **Membership safety fence — RESOLVED 2026-06-23 (subagent classification, file:line).**
+  All three join-time tables — `nodes` (incl. status/voter fields), `node_endpoints`,
+  `services`/`service_endpoints` — are **SAFE** to owner-local-seed **without** the
+  membership single-owner cutover. The B4 / `LAGRANGE_MEMBERSHIP_LEADER_DRIVEN` fence
+  guards **`control_plane_publications`** (the membership *projection*, single Raft-leader
+  writer at `membership-publication-coordinator-reconcile.js:57-63`), **not** the raw
+  `nodes`/`services` rows. A local cache seed via `createBootstrapCacheHydrationApplier`
+  emits **no outbound CDC** (`bootstrap-cache-hydration-applier.js:10-14` → in-process
+  listeners only), and cross-node active-membership truth is computed by the publication
+  leader from durable rows (`resolveActiveNodeViews()`), with raw `nodes.status` only one
+  subordinate local-fallback input and voter role deriving from Raft `getTrackedReplicaRole`
+  — so a joiner **cannot leak voter/active status** by seeding its own row. Extra belt:
+  the join `nodes` seed sets `ready_lease_expires_at: null`
+  (`node-registration-owner.js:104`), so even the local projection won't treat the seeded
+  node as ready (`isNodeRecordReady` requires a live lease, `node-readiness-policy.js:160-168`).
+  The fence is real but **orthogonal**. (The earlier "`nodes` likely UNSAFE" guess is retracted.)
+- **LWW/tombstone merge — RESOLVED (same pass).** The cache merge (`applySystemTableChange`)
+  applies the tombstone fence + LWW (`isStaleForExistingRecord`, in
+  `system-table-cache-row-merge.js:33-69` — relocated from the cited `system-table-cache.js:646-657`,
+  which is only the tombstone half) **generically for all tables** — no per-table exclusion.
+  **Caveat to honor when building:** the join row-builder sets only `created_at`, not
+  `updated_at`/`updated_at_hlc` (`node-registration-owner-row-builder.js:33-34`); LWW falls
+  back to `created_at`. **The deferred seed MUST stamp `updated_at`/HLC** so the later
+  durable CDC row deterministically wins the supersession on equal-ms ties.
+- **NEW CRITICAL (now the gating question before building).** Seed-and-proceed is only safe
+  if **something re-drives the joiner's own `nodes`/`node_endpoints`/`service_endpoints`
+  durable write to quorum after the join phase returns** — otherwise the row is locally-only
+  forever and the self-supersession guarantee is vacuous (unsafe). For `replica_operations`,
+  lever (a) is safe because the owner's workflow keeps retrying. For the membership tables we
+  must confirm an existing background re-drive (membership reconcile loop / anti-entropy /
+  publication runtime owner reconcile) OR add one. **Classify: does a post-join reconciler
+  already re-assert these rows? Do not ship seed-and-proceed without a confirmed re-drive.**
 - Separate co-blocker, NOT L-write: mgmjf also fails non-deterministically at
   `connecting_websocket` with `Self-connection failed: WebSocket connection timeout after
   5000ms` (the self-connect 5s budget exceeded under event-loop saturation). L-write will
@@ -141,10 +157,17 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
 
 ## Validation plan (deterministic-first, gate-last)
 
-1. **Reproduce deterministically first** — use the 2-node load-root repro
-   ([[load-root-2node-deterministic-repro]]) where a single forming node's own priority
-   `replica_operations` write can't land. The fix must drain `inFlightReplicaOperations`
-   → 0 there before any gate.
+1. **Reproduce deterministically first.** ⚠️ The 2-node `node-join-convergence-slo` repro
+   is **CONTAMINATED — do not rely on it** (re-verified 2026-06-23): its failure is
+   `sqlQueryEngine not provided` (transient seed pre-hydration / shutdown noise — both
+   seed AND joiner self-wire the engine; the prior "joiner-left-null wiring gap" framing is
+   REFUTED), NOT the membership write-wedge. **Build a fresh directed deterministic test
+   instead**: a focused unit/integration test that injects a retryable
+   `DISTRIBUTED_PARTICIPANT_FAILURE`/timeout on `upsertJoinNode/Endpoint`
+   (`membership-publication-runtime-owner.js:136-155`) and asserts (a) the local cache row
+   is seeded with a stamped `updated_at`/HLC, (b) the join phase proceeds without consuming
+   the full `joinAdmissionWriteRetryTimeoutMs` budget, (c) a later durable row supersedes the
+   seed via LWW. This avoids the contaminated test and directly exercises the L-write seam.
 2. **mgmjf** — `npx tap test/integration/message-group-multi-join-formation.integration.test.js`
    from `/home/peter/projects/something` (NOT the /media path — it breaks `npx tap` in
    this shell). Run from that dir. Watch `querying_state` phase duration + whether the
@@ -179,3 +202,18 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
   pattern to extend. L-hydrate (67f5a10c) shipped as a gate-validated read-path building
   block but is not this lever. Recommended: Option A first, classify the membership
   fence per-table before building.
+- 2026-06-23 (cont.) — **Membership fence CLEARED for all three join-time tables**
+  (`nodes`/`node_endpoints`/`services`), subagent-classified with file:line: the fence
+  protects `control_plane_publications`, not raw rows, and a local seed emits no outbound
+  CDC, so Option A can proceed without the cutover. LWW/tombstone confirmed generic; the
+  seed MUST stamp `updated_at`/HLC. **`node-join-convergence-slo` confirmed CONTAMINATED**
+  (the `sqlQueryEngine` errors are transient, not a wiring gap — both seed+joiner self-wire;
+  prior wiring-gap framing REFUTED) → validation step 1 switched to a fresh directed
+  deterministic test. **New gating question before building:** confirm a post-join
+  background re-drive re-asserts the joiner's membership rows to durable quorum (else
+  seed-and-proceed has no correction path = unsafe). **Implementation design fork** at
+  `node-registration-owner.js:87-105` (NODES upsert awaited, throws on failure; seeds cache
+  only on success): (b) keep a SHORT retry budget, and on retryable defer/timeout seed the
+  cache + continue the durable write in the background instead of throwing/blocking the full
+  ~20s budget — preferred (safety-preserving, L-hydrate analog); (a) don't await visibility
+  at all — lower latency, higher risk. Resolve the re-drive question first.
