@@ -512,6 +512,54 @@ are exhausted for THIS op. NEXT lever choices:
    the REPLACE target-creation never dispatches under write_backlog (is it awaiting a quorum write that
    can't reach the seed?). Deterministic-first before building.
 
+## 🧭 ROOT REFRAMED 2026-06-23 (subagent file:line trace of the spread DISAGREEMENT) — the binder is NOT a write-wedge / not redundant zombies; it is a GENUINE under-spread MASKED by an optimistic recovery sign-off. The frontier LEAVES this epic. READ FIRST.
+
+The active-gate-vs-priority-recovery spread disagreement (gate says `priority_control_plane_spread_pending`,
+recovery says `gap=0`) was traced. **Verdict: the active gate is CORRECT; the recovery `gap=0` is the
+optimistic/wrong view.** Mechanism (file:line):
+- **Strict/correct (active gate):** `buildDerivedPriorityPartitionSummary`
+  (`membership-publication-priority-partition-summary.js:255-284,370-371`) counts a node into
+  `readyDistinctNodeCount` ONLY when its replica row is `status=ACTIVE` + non-empty `raftRole` + address +
+  (if LEARNER) promotable; needs ≥3 distinct such nodes. New REPLACE replicas that haven't reached
+  voter-ready are EXCLUDED → `spreadGap>0` → `prioritySpreadPending=true`.
+- **Optimistic/wrong (priority-recovery):** `isPriorityRecoverySpreadSatisfyingOperationContext`
+  (`priority-recovery-snapshot-ingress.js:62-86`, esp. **lines 79-80**) certifies a partition as
+  spread-satisfied as soon as a REPLACE op is in its REMOVE-dispatch phase on an eligible target —
+  **BEFORE the new replica becomes ACTIVE/voter-ready** — yielding `spread_satisfied_in_flight`/`gap=0`.
+  That optimism freezes into the closure witness (`priority-recovery-snapshot-active-gate.js:380-491`),
+  which `buildPrioritySpreadDecision` then PREFERS over the live replica rows
+  (`publication-recovery-priority-spread.js:211-216`) — and the witness can be `SATISFIED_STALE_PUBLICATION`
+  (the `publication_converged_priority_spread_pending` class, the CL-003 witness in our bundles).
+- **The real PASS blocker:** the REPLACE-created learner/replica **never reaches voter-ready
+  (ACTIVE+raft_role+promotable) within the ~60s budget under load** — CL-003 (`closure-ledger/CL-003.md`,
+  status `guarded`, FALSIFICATION block already pinned exactly this: spread move IS planned/created, summary
+  gap=0, but the learner fails voter-ready promotion and the CREATE wedges) → the learner-promotion /
+  raft-append-starvation family (CL-009/CL-021). The optimistic sign-off MASKS this real blocker.
+
+**Implication for THIS epic:** the L-write owner-local-seed + re-drive + redundant-replace-retire levers are
+ALL exhausted — they address write-landing / zombie cleanup, but the binder is voter-ready PROMOTION, a
+different subsystem. **The frontier leaves `control-plane-write-wedge-leader-local-establishment`.**
+
+**CAVEAT on lever (c) (redundant-replace-retire):** its safety gate is `completion.state===CONVERGED`,
+which derives from `planner.ready`/`planner.spreadGap===0`. Per this trace `buildPriorityRecoveryPlannerEntry`
+(`priority-recovery-snapshot-ingress.js:478-487`) DEFAULTS `spreadGap:0,ready:true` for a partition ABSENT
+from `blockedPartitions` — so CONVERGED can be optimistic if the summary is stale. The gate stayed SAFE
+(missing=0, 0 breach) and the planner re-created any prematurely-retired op, so no observed harm; but the
+lever should be considered to inherit the same optimism it cannot see past. Keep default-off.
+
+### NEXT (two levers, deterministic-first):
+1. **Un-mask (cheap, like census #4):** tighten `isPriorityRecoverySpreadSatisfyingOperationContext`
+   (`priority-recovery-snapshot-ingress.js:79-80`) so a REPLACE in REMOVE-dispatch phase does NOT certify
+   spread until the new replica is ACTIVE/voter-ready. This makes the recovery view honest → the gate's
+   dominant reason flips from `priority_recovery_workflow_progress_event_driven` to the TRUE
+   voter-ready-promotion failure. Flag-gated default-off; directed DT repro below the gate. Low blast radius.
+2. **Fix the root (larger, different epic):** why the REPLACE learner replica fails voter-ready promotion
+   within budget under load — CL-009/CL-021 raft-append-starvation / learner-promotion. This is the actual
+   PASS lever and belongs to a learner-promotion epic, not here.
+
+➡️ This belongs to the `rolling-restart-core-stability` quest under a learner-voter-ready-promotion epic.
+Recommend: do #1 first (un-mask, confirm the honest reason below the gate), THEN scope #2.
+
 ## 🎯 GATE VERDICT 2026-06-23 (`stat-gate-20260623T142955Z`, all 4 levers incl. redundant-replace-retire, N=3) — lever ENGAGES + SAFE, but NOT the PASS lever; binding root = structural `priority_control_plane_spread_pending` / write-backlog (Option B). READ FIRST.
 
 First gate where a built lever actually fired: **`retire_redundant_replace` engaged (run1 29×, run2 15×, run3 0×)** — run1's `control_plane_publications-p1` witness shows the retired ops as `status=removed`. Result:
