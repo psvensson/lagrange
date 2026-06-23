@@ -221,6 +221,20 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 
 ## Decision log
 
+- 2026-06-23 (C-2 LANDED, flag-off) — Implemented **C-2 incumbency stickiness** (commit 8fa06823,
+  default-off `LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS`). Reserves current healthy+feasible incumbents
+  into the target cohort for control-plane-priority partitions via the CL-038 placement-owner reservation
+  seam (`placement-owner-evidence.js` `resolveIncumbentRetentionNodeIds` + `placement-owner-decision.js`
+  reservation; gated at `move-planner-placement-tail-methods.js`). Below-gate DT repro
+  `test/rebalancer/c2-priority-incumbent-stickiness.test.js` (14/14, red-on-revert) covers at-target
+  retention, infeasible-incumbent replacement, over-target leader retention, under-target recovery. Flag
+  byte-identical when off; full rebalancer suite 5079/5079. **Adversarial subagent verification caught a
+  real over-target bug** (rank-ordered incumbent slice could evict a high-load leader → re-election,
+  breaking CL-038) — FIXED by reserving the leader BEFORE other incumbents in the slice budget, then
+  re-verified. Gate-validation (N=3, flag-on) IN PROGRESS; success = `leadership_unstable` drops + PASS
+  rises WITHOUT `convergence_timeout` bouncing up, cluster SAFE 3/3. Note the coupled-invariant risk: C-2
+  is the Head-A end only; if PASS doesn't rise because `convergence_timeout` (Head B) dominates, that
+  confirms W-1 is needed next (not a C-2 failure).
 - 2026-06-23 (latest) — **Head-A open question RESOLVED → verdict (B); C-2 lever CONFIRMED.** The +309s
   `sql_write_operations-p1` leader flip is a FOLLOWER-add-driven re-election: 7493b0ab kept its leader
   replica (never evicted); the surplus ADDs grew the raft group 3→5, raising `majority()`
