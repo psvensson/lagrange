@@ -1,9 +1,15 @@
 ---
 id: control-plane-write-wedge-leader-local-establishment
-roadmapRow: null
-status: discussing
-graduatesTo: null
+roadmapRow: RM-0.1-fs-rolling-restart
+status: exhausted-pivoted
+graduatesTo: slow-rejoiner-progress-or-evict
 ---
+
+> ⛳ **PIVOTED 2026-06-23 → [`slow-rejoiner-progress-or-evict.md`](slow-rejoiner-progress-or-evict.md).**
+> This epic's lever family (owner-local write establishment) is EXHAUSTED: 6 SAFE default-off
+> levers built, none is the scenario-PASS lever. The consolidated root (see "ROOT CONSOLIDATED"
+> block below) is the slow rejoiner `7493b0ab` un-drainable via a coupled remove-safety defer
+> cluster — a membership/recovery-ownership problem. **Fresh agents: start at the new epic.**
 
 # L-write: owner-local durable establishment of control-plane writes during formation/recovery
 
