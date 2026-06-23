@@ -20,6 +20,13 @@ convergence Quests to the active closure-ledger records they must close, so
 
 ## Active work (the live frontier)
 
+> **CURRENT live sub-frontier (2026-06-23):**
+> [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) — after the
+> slow-rejoiner remove-safety wedge was resolved (R1+R3 promoted default-ON, gate
+> `stat-gate-20260623T164130Z` SAFE 3/3), rolling-restart scenario-PASS peeled to two coupled heads:
+> `leadership_unstable` (rebalancer-leadership lockstep flap) + `convergence_timeout` (control-plane
+> write/establishment readiness-budget burn). START THERE for the next push.
+
 Quests (see `npm run overview` / `solve trace`):
 
 - `rolling-restart-core-stability` — the binding goal: 3 consecutive harness runs

@@ -1,8 +1,8 @@
 ---
 id: slow-rejoiner-progress-or-evict
 roadmapRow: RM-0.1-fs-rolling-restart
-status: discussing
-graduatesTo: null
+status: resolved
+graduatesTo: convergence-timeout-leadership-settle
 links:
   quests: [rolling-restart-core-stability]
   upstreamEpic: control-plane-write-wedge-leader-local-establishment
@@ -10,6 +10,13 @@ links:
 ---
 
 # Slow-rejoiner progress-or-evict — break the coupled remove-safety deadlock that keeps rolling-restart scenario-PASS at 0
+
+> **RESOLVED 2026-06-23.** R1 (`467af1fe`) + R3 (`ba82160d`) landed, gate-validated
+> (`stat-gate-20260623T164130Z`: SAFE 3/3, remove-safety residual witnesses 3→0), and PROMOTED
+> default-ON (`a71e0b32`). The remove-safety wedge this epic targeted is GONE. scenario-PASS did
+> NOT reach 3/3 — it PEELED to a DIFFERENT layer (`leadership_unstable` + `convergence_timeout`),
+> the successor frontier → [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md).
+> The mechanism analysis below remains valid history; the levers (R1/R2/R3) are done/superseded.
 
 > **FRESH-AGENT START HERE.** This epic is self-contained. Read
 > [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
