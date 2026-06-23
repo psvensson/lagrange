@@ -408,6 +408,41 @@ once #4 un-masks. See task #10 (now re-prioritized) + #11.
 the flag, the directed-DT-repro validation plan, and how the 3 built levers compose). A fresh agent
 can start there directly.
 
+## 🎯 GATE VERDICT 2026-06-23 (`stat-gate-20260623T131412Z`, all 3 levers, N=3) — convergence ADVANCED; residual = the STRUCTURAL publication remote-handoff write-wedge. READ FIRST.
+
+With the zombie-redrive blind-spot fix (`c1f6d34f`) on top of census-#4 + drain-extension:
+- **3/3 CONVERGED, missing=0 every run** (convergeRate 2/3→3/3; suggestive at N=3, not proven) and
+  **`publication_missing_active_node` is GONE** (was the previous gate's run3 binder on
+  `sql_write_operations-p1`). SAFE every run (CORRUPT/ORACLE_BLIND/NODE_EXIT/stale = 0).
+- **Scenario-PASS still 0/3** (`topology_progress_blocked`) — the consistent fact across both gates.
+  Residual dominant reasons: `priority_recovery_workflow_progress_event_driven` ×2, `…_retry_scheduled` ×1.
+
+**The residual binding op (run2 witness) is now sharply localized and is NOT a re-drive-gap:**
+a `REPLACE` op on **`control_plane_publications-p1`** (B4-fenced membership-projection table),
+`persisted_not_dispatched` + `phase=terminal` + `stepAgeMs=188060` + `transportPressureState=write_backlog`,
+target node `35a891b8`. Its step list shows `terminal` current while `dispatch_pending`/`target_creation`/
+`target_sync`/`source_removal` are ALL still `planned` — the split-context zombie (terminal phase, work
+never dispatched). Run2 logs: **506 `coordinator_created_remote_handoff` + 15 `ROUTER_MESSAGE_TIMEOUT`**.
+So a remote handoff IS active and repeatedly timing out. The zombie-redrive correctly BACKS OFF
+(`hasActiveCreatedOperationHandoffRetry !== true`, dispatch-pending.js:465) because a handoff is in flight —
+re-arming would not help: **the remote write to the single-leader-fenced `control_plane_publications`
+partition can't land while it routes to the starved seed under write_backlog.**
+
+**FRONTIER (sharpened): the structural publication remote-handoff write-wedge.** This is Option B
+territory (make the target a routable local replica so the publication write doesn't funnel to the seed)
+and/or harden the publication-coordinator remote-handoff retry under write_backlog. **Option A
+(owner-local-seed) does NOT apply** — `control_plane_publications` is B4-fenced (single Raft-leader writer);
+seeding it locally would violate the membership single-owner fence. The re-drive + owner-local-seed levers
+are exhausted for THIS op. NEXT lever choices:
+1. **Option B structural** (epic body): joiner/target reaches routable active-replica status for the
+   control-plane partitions fast, so writes spread off the seed. Larger blast radius (placement/readiness).
+2. **Wedged-handoff detection** (smaller): detect a remote handoff retry that has exceeded a threshold
+   without progress (the 15 ROUTER_MESSAGE_TIMEOUTs) and force a re-plan/re-route — but re-routing still
+   hits the seed as the only routable replica, so this likely only helps if paired with (1).
+3. **First read the publication-coordinator remote-handoff path** (`membership-publication-*`) to see why
+   the REPLACE target-creation never dispatches under write_backlog (is it awaiting a quorum write that
+   can't reach the seed?). Deterministic-first before building.
+
 ## ✅ ZOMBIE-REDRIVE stepTimeoutMs=0 BLIND SPOT FIXED 2026-06-23 (commit `c1f6d34f`) — why the lever engaged 0×, now reachable
 
 The census-#4 gate (`stat-gate-20260623T121834Z`, all 3 levers on) un-masked the binding op but it
