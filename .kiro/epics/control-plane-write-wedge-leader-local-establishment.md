@@ -274,6 +274,18 @@ The joiner's membership write flows:
   seed shape matches the proven success-path seed; one pre-promotion hardening recorded above).
   REMAINING for full lever: node_endpoints (forced immediate re-upsert) + service_endpoints
   (new heartbeat re-drive) deferred-seed, then mgmjf + gate validation.
+- 2026-06-23 (increment 2a LANDED, default-off) — Extended the deferred-seed to the
+  **node_endpoints** write (`registerNodeEndpoint` now returns the row + logs on a retryable
+  defer instead of throwing; the caller already seeds NODE_ENDPOINTS from the return). KEY
+  re-drive correction: `node_endpoints` is re-driven on the heartbeat's FIRST beat, not after
+  5 min — `shouldUpsertEndpointRow` (`heartbeat-service-write-coalescing.js`) returns true when
+  `lastEndpointUpsertAt` is unset, so the first ~5s heartbeat durably upserts it (the earlier
+  "~5min local-only" worry applies only to subsequent refreshes). So node_endpoints is as safe
+  as nodes with no heartbeat change. Test added (flag-on node_endpoints defer → seed+proceed);
+  79/79 green. STILL REMAINING: `service_endpoints` — the heartbeat does NOT touch it, so its
+  deferred-seed REQUIRES adding a new refresh-gated SERVICE_ENDPOINTS re-drive to the 5s
+  heartbeat `sendHeartbeat` loop first (the join reconciler drives service-lifecycle owners,
+  not membership rows, so it is not a usable hook). Then mgmjf (N≥2) + rolling-restart gate.
 - 2026-06-23 (cont.) — **Membership fence CLEARED for all three join-time tables**
   (`nodes`/`node_endpoints`/`services`), subagent-classified with file:line: the fence
   protects `control_plane_publications`, not raw rows, and a local seed emits no outbound

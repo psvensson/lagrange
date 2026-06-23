@@ -39,6 +39,7 @@ import {
   JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS,
   JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG,
   JOIN_DEFERRED_SEED_AWAIT_MS,
+  LOG_JOIN_DEFERRED_MEMBERSHIP_SEED,
   LOCAL_STR_1S6CG,
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
@@ -160,14 +161,40 @@ class NodeRegistrationOwnerPublicationMethods {
       [COLUMN.UPDATED_AT]: now,
     };
 
-    const endpointResult = await this.upsertSystemTableRowWithRetry(
-      TABLES.NODE_ENDPOINTS,
-      endpointData,
-      {
-        admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
-      },
-    );
+    // L-write deferred-seed (default-off): short awaited budget; on a retryable
+    // defer the caller seeds NODE_ENDPOINTS from the returned row and the heartbeat
+    // re-drives it durably on its first beat (lastEndpointUpsertAt unset -> the
+    // endpoint upsert fires), superseding the provisional seed. Permanent error throws.
+    let endpointResult = null;
+    try {
+      endpointResult = await this.upsertSystemTableRowWithRetry(
+        TABLES.NODE_ENDPOINTS,
+        endpointData,
+        {
+          admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
+          ...this.getJoinDeferredSeedTimeoutOptions(),
+        },
+      );
+    } catch (endpointWriteError) {
+      if (!this.shouldDeferredSeedJoinMembershipWrite(endpointWriteError)) {
+        throw endpointWriteError;
+      }
+      logger.warn(LOG_JOIN_DEFERRED_MEMBERSHIP_SEED, {
+        nodeId: this.nodeId,
+        tableName: TABLES.NODE_ENDPOINTS,
+        error: endpointWriteError?.message,
+      });
+      return endpointData;
+    }
     if (!endpointResult?.success) {
+      if (this.shouldDeferredSeedJoinMembershipWrite(endpointResult)) {
+        logger.warn(LOG_JOIN_DEFERRED_MEMBERSHIP_SEED, {
+          nodeId: this.nodeId,
+          tableName: TABLES.NODE_ENDPOINTS,
+          error: endpointResult?.error,
+        });
+        return endpointData;
+      }
       throw new Error(
         `Failed to register endpoint: ${endpointResult?.error}`,
       );

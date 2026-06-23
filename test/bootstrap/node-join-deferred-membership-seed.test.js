@@ -107,6 +107,69 @@ test('L-write: flag-on retryable defer seeds the owner-local nodes row and proce
     );
   });
 
+test('L-write: flag-on retryable node_endpoints defer seeds the endpoint and proceeds',
+  async (t) => {
+    const previous = process.env[FLAG];
+    process.env[FLAG] = 'true';
+    t.teardown(() => {
+      if (previous === undefined) {
+        delete process.env[FLAG];
+      } else {
+        process.env[FLAG] = previous;
+      }
+    });
+
+    let nowMs = 0;
+    let endpointWriteAttempts = 0;
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-endpoint-defer',
+      nodeAddress: 'ws://localhost:9104',
+      seedNodeAddress: 'ws://seed:8000',
+    });
+    service.config.joinDeferredSeedAwaitMs = 100;
+    service.now = () => nowMs;
+    service.sleep = async (delayMs) => {
+      nowMs += delayMs;
+    };
+    installBudgetService(service);
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName) => {
+        if (tableName === TABLES.NODE_ENDPOINTS) {
+          endpointWriteAttempts += 1;
+          // The node_endpoints durable write never lands in-window.
+          throw buildParticipantFailure();
+        }
+        // NODES + SERVICE_ENDPOINTS land durably.
+        return {success: true};
+      },
+    };
+
+    await t.resolves(
+      service.registerNodeInCluster(),
+      'a retryable node_endpoints defer must not fail the join when the flag is on',
+    );
+
+    t.ok(
+      endpointWriteAttempts >= 1,
+      'the durable node_endpoints write should have been attempted before deferring',
+    );
+    t.equal(
+      service.getRegisteredJoinNodeId(),
+      'test-node-endpoint-defer',
+      'nodes membership should be durable since only the endpoint write deferred',
+    );
+    t.equal(
+      service.hasPublishedLocalServiceEndpoints(),
+      true,
+      'meta service endpoint publication should proceed past the deferred endpoint',
+    );
+  });
+
 test('L-write: flag-on still fails narrowly on a non-retryable (permanent) nodes-write error',
   async (t) => {
     const previous = process.env[FLAG];
