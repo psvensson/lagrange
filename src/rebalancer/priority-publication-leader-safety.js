@@ -14,6 +14,41 @@ const {
   decidePriorityPublicationFollowerSourceRemovalSafety,
 } = SHARED;
 
+// R1 (epic slow-rejoiner-progress-or-evict, "proof-not-rows"): default-off flag that
+// authorizes a priority-partition source-leader removal on a completed leader-election
+// ACK for the EXACT voter-ready replacement, WITHOUT also requiring the source-leadership-
+// release rows (raft_role / partition leader_node_id) to have caught up.
+//
+// Why it is needed: the source-leader handoff is a COOPERATIVE local-timer raft step the
+// old leader must execute itself (STEP_DOWN_REPLICA → startElectionTimer). On a CPU-starved
+// / quiesced rejoiner those timers don't fire in budget, so the source never releases
+// leadership in the persisted rows and no completedLeaderHandoffEvidence is ever recorded —
+// sourceLeadershipReleaseConfirmed/Fresh stay false forever and the surplus-drain REPLACE
+// defers in WAIT_REPLACEMENT_LEADER_OWNERSHIP indefinitely (control plane never quiesces;
+// scenario never PASSes). Meanwhile the REPLACEMENT — a healthy node — can independently ACK
+// its own leader-election request. That ACK is a fresh successor signal independent of the
+// lagging source rows.
+//
+// Why it is SAFE (subagent-verified 2026-06-23): quorum COUNT is enforced INDEPENDENTLY
+// upstream of this gate (operation-workflow-remove-safety-evaluator.js:461-471 rejects the
+// removal when projectedVoterReadyCount < minReplicaCount, gated on !priorityRecoveryCompletionSafe
+// and computed with the removing source already excluded), and the bypass still requires the
+// replacement to be voter-ready (isPriorityActiveReplaceTopologyVoterEvidenceSufficient). So
+// the worst case if the source is STILL the live leader and the replacement merely accepted
+// (not yet won) its election is a brief NORMAL raft re-election among the remaining
+// voter-ready replicas — a transient liveness dip — NEVER a quorum or voter-ready-spread loss.
+// This is a deliberate trade (accept a bounded transient re-election to un-wedge the starved
+// rejoiner) vs the conservative default that refuses removal until the source-release rows
+// confirm; hence default-off until gate-validated. The bypass keys strictly on the EXACT
+// replacement replica's completed election (never any-replica, never a no-ack case).
+const PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG =
+  'LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF';
+function isPriorityRecoveryLeaderElectionAckProofEnabled() {
+  return (
+    process.env[PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG] === 'true'
+  );
+}
+
 class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
     operation,
@@ -447,10 +482,19 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       replacementElectionCompletionReady &&
       (options.priorityRecoveryCompletionSafe === true ||
         replacementElectionCompletedForCurrentReplica);
+    // R1 (default-off): when the EXACT replacement replica's leader election has completed,
+    // that ACK is itself proof of leadership succession — accept it in lieu of the lagging
+    // source-leadership-release rows so a surplus-drain REPLACE off a starved rejoiner can
+    // make progress. Off → identical to the prior strict requirement (rows must confirm).
+    const electionAckLeadershipProofEnabled =
+      isPriorityRecoveryLeaderElectionAckProofEnabled();
+    const sourceLeadershipSuccessionProven =
+      (sourceLeadershipReleaseConfirmed && sourceLeadershipReleaseFresh) ||
+      (electionAckLeadershipProofEnabled &&
+        replacementElectionCompletedForCurrentReplica);
     return (
       replacementElectionAuthorizesRemoval &&
-      sourceLeadershipReleaseConfirmed &&
-      sourceLeadershipReleaseFresh &&
+      sourceLeadershipSuccessionProven &&
       safetySnapshot?.replacementLeaderOwnershipObserved !== true &&
       this.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
         options.operation || null,
