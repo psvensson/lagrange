@@ -10,6 +10,30 @@ links:
 
 # Census #4 — un-mask `spread_satisfied_in_flight`, the consistent binding mask of the rolling-restart `convergence_timeout`
 
+> **GUARD LANDED (commit `59034031`, 2026-06-23) — default-off, below-gate-validated; GATE is the one remaining step.**
+> The multi-site staleness guard is built exactly as planned below. Flag:
+> `LAGRANGE_PR_SPREAD_STALL_GUARD` (default-off, byte-identical when off). Threshold:
+> `PRIORITY_RECOVERY_SPREAD_SATISFIED_STALL_THRESHOLD_MS = 45000` (below the 120s over-target oracle;
+> fixed wall because `stepTimeoutMs=0` in the witnesses). The signal is computed ONCE in
+> `buildPriorityRecoveryPartitionAssessment` (the only site with both `nowMs` and the op contexts) and
+> threaded to (1) the semantic classifier → `OPERATION_STALLED` and (2) the assessment → completion
+> classifier → `BLOCKED` (the SAME pairing the existing `operation_no_transitions` case produces, so it
+> reuses all downstream handling; `BLOCKED` is in neither drain-completion set → re-drives). Files:
+> `priority-recovery-diagnostics-constants.js` (const+flag), `priority-recovery-snapshot-observation.js`
+> (`resolvePriorityRecoverySpreadSatisfiedInFlightStalled`, pure), `priority-recovery-snapshot-closure.js`
+> (thread), `priority-recovery-snapshot-ingress.js` (semantic), `priority-recovery-completion.js` (completion).
+> Unit falsifier: `test/control-plane/priority-recovery-spread-satisfied-stall-guard.test.js` (18/18; flag-off
+> signed-off, flag-on+stale→stalled/blocked, flag-on+fresh→signed-off). Subagent-verified (flag-off identity,
+> re-drive reachability, threshold, pairing pre-existence; no issues). 723/1 priority-recovery + 276/276
+> re-drive suites green.
+>
+> **REMAINING (the one hard rule was: gate LAST, once):** `LAGRANGE_PR_SPREAD_STALL_GUARD=true npm run gate -- 3`
+> (run `npm run analyze:latent-blockers` first). Success = SAFE every run (0 corrupt/blind/exit — hard
+> invariant) AND `convergence_timeout` materially down or replaced by an honest reason + the guard engaged
+> (grep witness/logs). Compose with the built flags (`LAGRANGE_PR_ZOMBIE_REDRIVE`,
+> `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS`) if the un-masked op needs them to drain. Watch for the deeper layer
+> the un-mask may expose (e.g. `write_backlog` when pressure is present) — that's progress, not regression.
+
 > **START-HERE handoff for a fresh agent.** Everything to begin is below; file:line verified
 > at HEAD `99033274` (2026-06-23) but POSITIONAL — re-grep before trusting. Read
 > [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md) first
