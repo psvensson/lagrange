@@ -408,6 +408,38 @@ once #4 un-masks. See task #10 (now re-prioritized) + #11.
 the flag, the directed-DT-repro validation plan, and how the 3 built levers compose). A fresh agent
 can start there directly.
 
+## ✅ ZOMBIE-REDRIVE stepTimeoutMs=0 BLIND SPOT FIXED 2026-06-23 (commit `c1f6d34f`) — why the lever engaged 0×, now reachable
+
+The census-#4 gate (`stat-gate-20260623T121834Z`, all 3 levers on) un-masked the binding op but it
+still didn't drain: run3 bound on `publication_missing_active_node` (`sql_write_operations-p1`, node
+`11601fe0`) with the priority-recovery witness `actuationState: persisted_not_dispatched`,
+`workflowProgressPhaseId: terminal`, `semanticStateId: operation_stalled` (census-#4 guard fired),
+`stepAgeMs: 271965`, `stepTimeoutMs: 0`. This is EXACTLY the rank-1 zombie the zombie-redrive lever
+(`LAGRANGE_PR_ZOMBIE_REDRIVE`, `54843bb4`) targets — yet it engaged **0×** across both 06-23 gates.
+
+**Mechanistic root (subagent-traced):** `staleTerminalDispatchable` gated on
+`actuation.timeoutReconcileDue === true`, but `timeoutReconcileDue` requires `stepTimeoutMs > 0`
+(`priority-recovery-snapshot-observation.js:288-292`). Priority-recovery ops routinely have NO
+per-step deadline (the resolver returns null → `stepTimeoutMs` omitted from the snapshot), so
+`timeoutReconcileDue` is permanently false → the terminal zombie was never re-driven. Same
+stepTimeoutMs=0 trap census-#4 had to design around.
+
+**Fix:** `staleTerminalDispatchable` now uses `isPriorityRecoveryStaleTerminalReconcileDue(actuation)`
+= `timeoutReconcileDue` OR (no per-step deadline AND `stepAgeMs >= 45s` fixed wall). Open per-step
+deadlines are NOT pre-empted (owner wait window preserved). Under the same flag (first conjunct →
+flag-off byte-identical); post-match ARM_NOW path unchanged. Subagent verdict: fixing this gate is
+**SUFFICIENT** for the witnessed op to re-drive (op is in candidate set, reentry invoked
+unconditionally, ownerAdvance true, drain doesn't interfere, no completion=converged exclusion).
+**Efficacy (does ARM actually drain the surplus/un-wedge the publication) rests on the next gate** —
+the persisted_not_dispatched op may still need its WRITE to land under `write_backlog` (this composes
+with lever-(a) drain-extension + the structural Option B). 15/15 falsifier + 294/294 reentry suites.
+
+➡️ **NEXT: re-run the N=3 gate with all built levers** (`LAGRANGE_PR_SPREAD_STALL_GUARD` +
+`LAGRANGE_PR_ZOMBIE_REDRIVE` + `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS`) to test whether the now-reachable
+zombie-redrive actually drains the run3-class op (grep `stale_terminal_redrive` engagement + watch
+`publication_missing_active_node`). If the op re-drives but still can't persist, the binding layer is
+the `write_backlog` distributed-write-backpressure root (Option A/B below).
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
