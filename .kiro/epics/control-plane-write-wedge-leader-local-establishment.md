@@ -402,6 +402,12 @@ as THE binding lever**, validated below the gate via a directed DT repro. The 3 
 (L-write, zombie-redrive, drain-extension) remain SAFE default-off building blocks that compose
 once #4 un-masks. See task #10 (now re-prioritized) + #11.
 
+➡️ **FRESH-AGENT START-HERE handoff:**
+[`.kiro/epics/spread-satisfied-in-flight-staleness-unmask.md`](spread-satisfied-in-flight-staleness-unmask.md)
+— self-contained scope for census #4 (exact 3 classifier seams + file:line, the staleness signal,
+the flag, the directed-DT-repro validation plan, and how the 3 built levers compose). A fresh agent
+can start there directly.
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
