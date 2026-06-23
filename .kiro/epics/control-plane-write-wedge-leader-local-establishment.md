@@ -560,6 +560,18 @@ lever should be considered to inherit the same optimism it cannot see past. Keep
 ➡️ This belongs to the `rolling-restart-core-stability` quest under a learner-voter-ready-promotion epic.
 Recommend: do #1 first (un-mask, confirm the honest reason below the gate), THEN scope #2.
 
+### ✅ UN-MASK (#1) LANDED 2026-06-23 (commit `e975054c`, default-off `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY`)
+`isPriorityRecoverySpreadSatisfyingOperationContext` (`priority-recovery-snapshot-ingress.js:62-108`): flag-on, a
+REPLACE in REMOVE-dispatch phase only certifies spread when its target is observed `ACTIVE_OPERATIONAL`
+(voter-ready). Flag-off byte-identical. Subagent-verified TRUSTED: the un-mask only changes outcomes when
+`plannerReady===false` (strict spread genuinely unmet) — it cannot manufacture a blocker on a truly-spread
+partition and only DELAYS certification until voter-ready (no liveness wedge); composes cleanly with the
+census-#4 stall guard; serial-wait caller unaffected. Directed test
+`test/control-plane/priority-recovery-spread-require-voter-ready.test.js` 6/6 (15 assertions); adjacent
+priority-recovery/spread suites 501/501 (3 skip) green. **Gate deferred:** the un-mask alone won't make PASS
+(it relabels the blocker honest), so validate it together with the root fix (#2) in ONE gate rather than a
+redundant intermediate run. **NEXT = scope/build #2 (learner voter-ready promotion under load, CL-009/CL-021).**
+
 ## 🎯 GATE VERDICT 2026-06-23 (`stat-gate-20260623T142955Z`, all 4 levers incl. redundant-replace-retire, N=3) — lever ENGAGES + SAFE, but NOT the PASS lever; binding root = structural `priority_control_plane_spread_pending` / write-backlog (Option B). READ FIRST.
 
 First gate where a built lever actually fired: **`retire_redundant_replace` engaged (run1 29×, run2 15×, run3 0×)** — run1's `control_plane_publications-p1` witness shows the retired ops as `status=removed`. Result:
