@@ -242,10 +242,30 @@ handoff for the genuinely-stuck case), with **R2** as a planner-side complement.
     source-removal step, which needs more handoff lifecycle than is warranted below the gate) —
     so the count-guard ordering is covered by static trace + existing `minReplicaCount` deferral
     tests, NOT a new e2e. The misleading e2e was REMOVED rather than shipped.
-  - **NEXT (gate-last)**: validate at the gate with BOTH `LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF=true`
-    AND the un-mask `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true` (so the dominant reason is honest).
-    Run `npm run analyze:latent-blockers` first; `npm run gate -- 3` from `/home/peter/projects/something`.
-    Success = scenario-PASS rises AND `replace_remove_safety_blocked` removals-from-`7493b0ab` drop;
-    SAFE every run is hard. If R1 alone doesn't move PASS (transfers genuinely stuck, not just
-    unobserved), proceed to **R3** (drive/escalate the handoff) — R1 is the observe-lag half, R3 the
-    genuinely-stuck half; they compose.
+- 2026-06-23 — **R3 LANDED `ba82160d`** (default-off `LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION`).
+  The "drive the handoff / progress-or-evict" lever for mechanism **A/C**: when a source-leader
+  handoff has been non-progressing for ≥30s (anchored on the FIRST attempt, set-if-absent, 2-min
+  TTL — `priority-publication-safety-topology.js`), the snapshot ESCALATES from re-asking the
+  starved source to step down to driving the voter-ready REPLACEMENT's leader election
+  (`priority-publication-leader-safety.js`: `escalateReplacementLeaderElection` guards the
+  REQUEST_SOURCE_LEADER_HANDOFF return and enables REQUEST_REPLACEMENT_LEADER_ELECTION), routing
+  through the existing dispatch so a real successor can win.
+  - **Below-gate DT repro** `test/rebalancer/r3-handoff-escalate-replacement-election.test.js`
+    (drives REAL snapshot builder + stall recorder/reader; red-on-revert confirmed).
+  - **Safety subagent-verified SAFE** (no UNSAFE finding): R3 NEVER authorizes a removal — only
+    redirects which handoff message is dispatched; the removal still gates on the full
+    `sourceRemovalLeadershipSafe` proof + upstream quorum-count floor; escalation requires a
+    voter-ready replacement; driving a campaign while the old leader is live is a normal raft
+    op (transient re-election at worst, never two committed leaders). Flag-off is a strict
+    zero-footprint no-op (the stall anchor is gated on the flag, not just the reader).
+    **Caveat C1 (paid attention to): R3 COMPOSES WITH R1, not independent** — R3 lets the
+    election ACK be produced while the source row still shows LEADER, which R1 then trusts as
+    succession proof; safe only under the upstream count floor + voter-ready check, so the two
+    flags are gate-validated JOINTLY (below). C3 (benign): a ~2-min-period source-handoff↔election
+    oscillation is possible on a very long wedge, self-terminating via the 120s recovery timeout.
+  - **NEXT (gate-last)**: validate at the gate with R1 + R3 + un-mask jointly:
+    `LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF=true LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION=true
+    LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true npm run gate -- 3` from `/home/peter/projects/something`
+    (`npm run analyze:latent-blockers` first). Success = scenario-PASS rises AND
+    `replace_remove_safety_blocked` removals-from-`7493b0ab` drop; SAFE every run (0
+    corrupt/breach/exit/oracle-blind) is a hard, never-relaxed invariant.
