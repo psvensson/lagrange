@@ -371,6 +371,37 @@ hardening` epic, not this L-write epic.
   `priority-dispatch-deferred-local-progress-drain-coverage.test.js` 10/10; 823/825 transition
   suites; flag-off byte-identical. **Gate-validating now** (drain + zombie-redrive flags, N=3).
 
+## ⚠️ CORRECTION 2026-06-23 (2nd gate) — census #4 (spread_satisfied_in_flight) is THE consistent binding mask, NOT a peel. The built levers don't engage.
+
+Second gate (stat-gate-20260623T111430Z, flags `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS` +
+`LAGRANGE_PR_ZOMBIE_REDRIVE`, N=3): passRate **0/3** again; SAFE every run (no regression);
+convergence_timeout dropped ×3→×1 but that's **N=3 variance** (run1 convergence_timeout, run2
+nodeSlotUnavailable, run3 admin_reachability_refused), **NOT lever-attributable** — BOTH levers
+engaged **0 times** (across 6 runs / 2 gates now). 
+
+**The consistent binding factor across EVERY dominant convergence_timeout witness in both gates
+is `semanticStateId: spread_satisfied_in_flight`** (the census #4 mask), over a WAITING op
+(`nextRequiredAction: wait_for_operation_progress`, event-driven) — the specific sub-state VARIES
+(gate-1: terminal + write_backlog; gate-2 run1: dispatch_pending + pressure none, stepAge 0). 
+
+**This REFUTES my earlier "deprioritize #4 as a peel" call.** The levers (rank-1 zombie-redrive,
+drain-extension) engage 0× precisely because **#4 signs the op off as "satisfied" UPSTREAM of every
+re-drive path** — so they never get the chance to fire. #4 is the consistent MASK that (a) makes the
+closure time out (false sign-off on a still-waiting op) and (b) blocks all re-drive. Fix #4 FIRST;
+the other levers compose beneath it for the write_backlog/terminal sub-cases.
+
+**Meta-lesson (operational-ground-truth): the gate is too NOISY to validate a narrow-condition
+lever at N=3** (the binding reason varies run-to-run across the masked-blocker distribution; my
+levers' preconditions weren't met in 6 runs). The census epic's own doctrine applies: "the gate is
+the FINAL integration check, not the falsifier — confirm/kill candidates BELOW it." The proper
+validation for #4 (and the re-drive levers) is a **DIRECTED deterministic repro** (DT4/5/6 substrate)
+that FORCES `spread_satisfied_in_flight` over a stalled in-flight op — not the noisy gate.
+
+**Re-aimed: build census #4 (un-mask `spread_satisfied_in_flight` when the in-flight op is stale)
+as THE binding lever**, validated below the gate via a directed DT repro. The 3 built levers
+(L-write, zombie-redrive, drain-extension) remain SAFE default-off building blocks that compose
+once #4 un-masks. See task #10 (now re-prioritized) + #11.
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
