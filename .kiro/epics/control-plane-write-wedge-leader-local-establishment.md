@@ -202,6 +202,36 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
 4. **Subagent-verify** the change before reporting (especially the membership-fence
    safety argument).
 
+## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
+
+The joiner's membership write flows:
+`registerNodeInCluster` (`node-registration-owner.js:40`) → three awaited
+`upsertSystemTableRowWithRetry` calls (NODES `:87`; NODE_ENDPOINTS via `registerNodeEndpoint`
+`:128`; SERVICE_ENDPOINTS via `registerMetaServiceEndpoints` `:142`) →
+`membershipPublicationRuntimeOwner.upsertJoinNode/Endpoint/ServiceEndpoint`
+(`membership-publication-runtime-owner.js:136-155`) → `nodesOwner.upsertNode` → `upsertRow`
+→ `executeMutation` (`system-metadata-owner-base.js:411`) →
+`runRetryableControlPlaneWrite(() => gateway.upsertSystemTableRow(...), {timeoutMs})`.
+
+- **Awaited budget = `JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = 30·SECOND`**
+  (`node-registration-owner-constants.js:31`), threaded as `controlPlaneWriteRetryTimeoutMs`
+  via `getJoinTimeUpsertOptions`/`buildJoinMutationOptions`. Under saturation the retry loop
+  consumes this full budget (the observed ~20s `querying_state` balloon), then **THROWS**
+  `buildSystemMetadataMutationError` at `system-metadata-owner-base.js:435` (the deferred
+  branch surfaces as a THROW, not a `success:false` return; the `:95` success-check is
+  defensive). The error carries `retryable` / `code` / `retryAfterMs`
+  (re-propagated at `node-registration-owner.js:160-172`).
+- **Interception point for the build:** wrap each `upsertSystemTableRowWithRetry` call in
+  `registerNodeInCluster`. On a RETRYABLE error (`retryable !== false` AND a
+  `DISTRIBUTED_PARTICIPANT_FAILURE`/timeout code — NOT a hard/`retryable:false` error, which
+  must still throw): (1) seed the local cache row via `seedJoinTimeCacheRow` **with a stamped
+  `updated_at`/HLC** (extend the builder — currently `created_at`-only), (2) hand the durable
+  upsert to a background re-drive, (3) proceed. To kill the balloon, the AWAITED budget must
+  shrink (short await) with the long retry moved to background (the L-hydrate fire-and-forget
+  analog). Background re-drive: NODES via the existing 5s heartbeat (safe as-is);
+  NODE_ENDPOINTS needs a forced immediate re-upsert (else ~5min local-only); SERVICE_ENDPOINTS
+  needs a NEW refresh-gated heartbeat re-drive (no existing one — required before seeding it).
+
 ## Traps (paid for already — don't re-pay)
 
 - **Research existing first.** `deliverLocal` and `seedJoinTimeCacheRow` already exist;
