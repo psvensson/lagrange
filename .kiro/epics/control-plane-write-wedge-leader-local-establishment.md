@@ -246,6 +246,63 @@ repeat run + the latent-blocker analyzer before fully re-committing the lever. *
 the service_endpoints heartbeat re-drive (increment 2b) for mgmjf's sake — the data says it
 won't move mgmjf.**
 
+## CONFIRMATION PASS 2026-06-23 — re-grounding DECISIVELY confirmed; re-aimed lever ranked
+
+Ran the confirmation pass (the deterministic/mechanistic check before re-committing the lever):
+- **`npm run analyze:latent-blockers`** (N=**284 runs / 145 gates**, pass 0.31) — dominant blockers:
+  `publication_missing_active_node` ×18, `convergence_timeout` ×28, `replica_operations_in_flight`
+  ×12, `publication_epochs_disagree` ×16, `nodeSlotUnavailable` ×23, `priority_recovery_*`
+  (×7+8+5+2), `priority_partitions_not_spread`. The join membership-table registration writes
+  **do not appear as a blocker reason at all.** Cluster = **publication path
+  (`control_plane_publications`) + priority-partition/rebalancer path (`replica_operations`/`sql_*`)**.
+- **mgmjf N=2** (flag-on AND flag-off) — same wedge both runs: `control_plane_publications`
+  ×83/×45 + `replica_operations` ×33/×9 dominant; membership-table writes negligible (0/2).
+
+Verdict: **L-write (join membership deferred-seed) is confirmed NOT the lever** for mgmjf or the
+rolling-restart corpus. Increments 1+2a stay as a safe default-off building block. The re-aimed
+lever is the **surplus-drain priority-recovery op never draining → `convergence_timeout`**.
+
+### Ranked lever (from the pre-computed census `test-output/latent-blocker-census-run3.json`, 48→4 survivors)
+All 4 survivors are facets of the surplus-voter-never-drains wedge. Two peel-0 product-bugs, both
+**verified LIVE at HEAD**:
+1. **`pr-terminal-persisted-zombie-no-redrive`** (rank 1, product-bug, fixRisk med). Actuation
+   `IN_FLIGHT_OPERATION` (`priority-recovery-snapshot-actuation.js:62`) fires BEFORE
+   `TERMINAL_OPERATION` (`:87`) → split-context witness: one context drives
+   `actuation.state=persisted_not_dispatched` while the latest context's terminal workflowStep
+   resolves phase=TERMINAL (`priority-recovery-snapshot-observation.js:143-144`). Every re-drive
+   predicate AND-gates on `actuation.workflowProgressPhaseId===DISPATCH_PENDING`
+   (`operation-workflow-recovery-reconcile-dispatch-pending.js:418-425`) → `dispatchPending=false`
+   → `resolvePriorityRecoveryDispatchPendingReentryState` (`:437`) → NOT_DISPATCH_PENDING → SKIP →
+   op never re-armed (~229s past deadline). **Fix:** treat `persisted_not_dispatched` + terminal
+   phase + passed `deadlineMs` as reconcilable stale — a coordinator-timer reconcile that
+   re-dispatches/retires-and-reissues (the fix-sketch's `reconcileCompletedSyncingOperations`
+   sibling name is STALE — find the current timeout-reconcile hook in
+   `operation-workflow-recovery-timeout.js`), or let the dispatchPending predicate accept
+   TERMINAL phase when `actuation.state=persisted_not_dispatched`.
+2. **`rebalancer-surplus-remove-deferred-behind-adds-circular`** (peel-0, product-bug). Move-planner
+   drops the SPREAD_REPLICAS surplus REMOVE whenever any ADD move is present (`addMoves>0` filter
+   ~`:655-661`), so during ADD-heavy recovery the surplus voter never drains. **Fix:** promote the
+   surplus REMOVE to 'critical' (survives the filter) when over-target beyond a threshold.
+   (#3 `dp-surplus-remove-replace-transport-and-2pc-failure-loop`, #4 oracle-strictness
+   `pr-spread-satisfied-in-flight-masks-stuck-surplus` are peel-1 layers.)
+
+### Diagnostic tension to resolve FIRST (don't skip)
+The newer 2026-06-20 N=8 memory ([[rolling-restart-donewhen-real-blocker]]) diagnoses the SAME
+surplus-drain stall as the **LOAD / distributed-write-backpressure root**: the surplus REMOVE's
+terminal `replica_operations` row write FAILS `DISTRIBUTED_PARTICIPANT_FAILURE` under rejoiner load
+(the durable write can't land), and claims "REMOVEs actually COMPLETE" — which partially conflicts
+with the census's "zombie never re-driven (gating bug)". These may be sequential layers (write
+fails under load AND re-drive is gated out) or competing diagnoses. **Resolve empirically before a
+fix:** (a) build the census-designed deterministic falsifier (unit on
+`resolvePriorityRecoveryDispatchPendingReentryState` / `buildPriorityRecoveryDispatchPendingReentryEvidence`
+with `actuation.state=persisted_not_dispatched` + `workflowProgressPhaseId=terminal` + passed
+deadline; assert it currently resolves NOT_DISPATCH_PENDING = bug reproduced) — harness to reuse:
+`test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js` (real snapshot
+builders), and (b) the census flags run3 as PREDATING current HEAD — consider re-running the
+census fan-out (`.kiro/epics/latent-convergence-blocker-census.md`) to refresh the frontier.
+NOTE: this lever belongs to the `rolling-restart-core-stability` quest / `topology-convergence-
+hardening` epic, not this L-write epic.
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
