@@ -123,22 +123,36 @@ test('CL-043 NO false positive: election completed for a DIFFERENT replica only 
   t.end();
 });
 
-test('CL-043 SAFETY preserved: source leadership NOT released → not SAFE even with election ' +
-  'evidence (never remove a source still holding leadership)', (t) => {
-  const safety = makeSafety();
-  t.equal(
-    safety.isCompletedReplacementElectionSafeForPriorityRecovery(
-      wedgeSnapshot({
-        completedLeaderHandoffEvidence: null,
-        sourceLeadershipReleaseObserved: false,
-        handoffRequestRetrySuppressed: false,
-      }),
-      {replica_id: REPLACEMENT_REPLICA_ID, raft_role: 'follower'},
-      options(),
-    ),
-    false,
-    'source has not released leadership → removal not authorized',
-  );
+test('CL-043 SAFETY preserved with R1 DISABLED: source leadership NOT released → not SAFE even ' +
+  'with election evidence (the conservative pre-R1 behavior, via the =false escape hatch)', (t) => {
+  // R1 (LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF) is now default-ON and deliberately authorizes
+  // removal on a completed election ACK even when the source-release rows still lag (a starved
+  // rejoiner never releases leadership in the rows). This test pins the DISABLED behavior: with
+  // R1 off, a source that has not released leadership is never removed on election evidence alone.
+  const prior = process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
+  process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = 'false';
+  try {
+    const safety = makeSafety();
+    t.equal(
+      safety.isCompletedReplacementElectionSafeForPriorityRecovery(
+        wedgeSnapshot({
+          completedLeaderHandoffEvidence: null,
+          sourceLeadershipReleaseObserved: false,
+          handoffRequestRetrySuppressed: false,
+        }),
+        {replica_id: REPLACEMENT_REPLICA_ID, raft_role: 'follower'},
+        options(),
+      ),
+      false,
+      'R1 disabled: source has not released leadership → removal not authorized',
+    );
+  } finally {
+    if (prior === undefined) {
+      delete process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
+    } else {
+      process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = prior;
+    }
+  }
   t.end();
 });
 

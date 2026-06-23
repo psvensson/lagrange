@@ -155,14 +155,19 @@ test('R3 FALSIFIER: a STALLED source handoff (>=30s) with the flag ON escalates 
   t.end();
 });
 
-test('R3 FALSIFIER (flag OFF, the default): the same stalled handoff does NOT escalate — it ' +
-  'keeps re-asking the source (unchanged behavior)', (t) => {
-  const safety = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
-  const snapshot = withFlag(undefined, () => buildSnapshot(safety));
+test('R3 PROMOTED default-ON: with no flag set (the new default) the stalled handoff escalates; ' +
+  'the escape hatch (=false) restores re-asking the source', (t) => {
+  const safetyDefault = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
   t.equal(
-    snapshot.state,
+    withFlag(undefined, () => buildSnapshot(safetyDefault)).state,
+    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
+    'default (no env) is now ON post-promotion — the stalled handoff escalates',
+  );
+  const safetyDisabled = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
+  t.equal(
+    withFlag('false', () => buildSnapshot(safetyDisabled)).state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
-    'flag-off is a pure no-op: stall is never even read',
+    'explicit =false disables R3: keep re-asking the source (escape hatch)',
   );
   t.end();
 });
@@ -225,17 +230,17 @@ test('R3 stall anchor: records the first source-leader handoff attempt and measu
   t.end();
 });
 
-test('R3 stall anchor: flag-OFF recorder is a no-op (zero footprint — no map entry written)', (t) => {
+test('R3 stall anchor: the =false escape hatch makes the recorder a no-op (zero footprint)', (t) => {
   const owner = Object.create(PriorityPublicationSafetyTopology.prototype);
   const operation = {operationId: 'op-r3-off'};
-  withFlag(undefined, () => {
+  withFlag('false', () => {
     owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, {
       messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
       requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
     });
   });
   t.equal(owner.getPriorityPublicationSourceLeaderHandoffRequestedAtMap().size, 0,
-    'nothing is recorded while the flag is off — no unread/unreaped entries accumulate');
+    'nothing is recorded when explicitly disabled — no unread/unreaped entries accumulate');
   t.end();
 });
 

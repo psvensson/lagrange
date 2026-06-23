@@ -282,6 +282,17 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
 
   test('RebalanceCoordinator - completed leader handoff evidence waits for sql_transactions replacement leader ownership',
     async (t) => {
+      // This test documents the CONSERVATIVE wait/reissue-source-handoff sequence, which is the
+      // behavior when R1 (election-ack leadership proof) and R3 (handoff escalation) are DISABLED.
+      // Both are now default-ON (gate stat-gate-20260623T164130Z); with R1 on the completed
+      // election ACK would authorize removal at the "renewed handoff" step instead of waiting, so
+      // pin the disabled (escape-hatch) path here. The promoted default-on behavior is covered by
+      // test/rebalancer/r1-leader-election-ack-proof-starved-rejoiner.test.js and the gate.
+      const priorAck = process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
+      const priorEsc =
+        process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION;
+      process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = 'false';
+      process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION = 'false';
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
       ConfigurationManager.getInstance().initialize({});
@@ -570,6 +581,17 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         await coordinator.shutdown();
         ConfigurationManager.resetInstance();
         LoggingService.resetInstance();
+        if (priorAck === undefined) {
+          delete process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
+        } else {
+          process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = priorAck;
+        }
+        if (priorEsc === undefined) {
+          delete process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION;
+        } else {
+          process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION =
+            priorEsc;
+        }
       }
     });
 

@@ -184,20 +184,20 @@ test('R1 FALSIFIER: with the flag ON, the EXACT replacement\'s completed electio
   t.end();
 });
 
-test('R1 FALSIFIER (flag OFF, the default): the same completed election ACK does NOT ' +
-  'authorize removal — strict source-release rows still required → defers', (t) => {
+test('R1 PROMOTED default-ON: with no flag set (the new default) the completed election ACK ' +
+  'authorizes removal; the escape hatch (=false) restores the strict source-release behavior', (t) => {
   const safety = makeSafety();
   const snapshot = buildWedgeSnapshot(safety);
 
   t.equal(
     withFlag(undefined, () => evaluateFastPath(safety, snapshot)),
-    false,
-    'flag-off is a pure no-op: behavior is identical to before R1 (source rows must confirm)',
+    true,
+    'default (no env) is now ON post-promotion — the ACK authorizes removal',
   );
   t.equal(
     withFlag('false', () => evaluateFastPath(safety, snapshot)),
     false,
-    'explicit false is also inert',
+    'explicit =false disables R1: strict source-release rows required again (escape hatch)',
   );
   t.end();
 });

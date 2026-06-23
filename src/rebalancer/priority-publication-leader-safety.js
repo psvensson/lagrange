@@ -16,10 +16,12 @@ const {
 } = SHARED;
 
 // R3 (epic slow-rejoiner-progress-or-evict, "progress-or-evict / drive the handoff"):
-// default-off flag that, when a priority source-leader handoff has been non-progressing for a
-// sustained window (the saturated rejoiner never runs its cooperative local-timer STEP_DOWN),
-// ESCALATES from re-asking the starved source to step down to actively driving the voter-ready
-// REPLACEMENT's leader election instead. This is mechanism A/C: a SWIM-alive-but-quiesced
+// PROMOTED default-ON (gate `stat-gate-20260623T164130Z`: SAFE 3/3, no leadership-churn
+// regression — 8 target_leader_election events; escape hatch = set the flag to 'false').
+// When a priority source-leader handoff has been non-progressing for a sustained window (the
+// saturated rejoiner never runs its cooperative local-timer STEP_DOWN), ESCALATES from
+// re-asking the starved source to step down to actively driving the voter-ready REPLACEMENT's
+// leader election instead. This is mechanism A/C: a SWIM-alive-but-quiesced
 // rejoiner is neither pushed forward nor evicted, so the surplus-drain REPLACE re-dispatches the
 // same source STEP_DOWN forever (the dominant replace_remove_safety_blocked wedge). Driving the
 // healthy replacement's election lets a real successor win, after which removal becomes safe
@@ -43,10 +45,11 @@ const {
 const PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG =
   'LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION';
 function isPriorityRecoveryHandoffEscalateReplacementElectionEnabled() {
+  // Default-ON after gate validation; disable only with an explicit 'false'.
   return (
     process.env[
       PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG
-    ] === 'true'
+    ] !== 'false'
   );
 }
 // Sustained non-progress window before escalating a stuck source-leader handoff. Well above
@@ -55,10 +58,12 @@ function isPriorityRecoveryHandoffEscalateReplacementElectionEnabled() {
 const PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS =
   TIME_MS.SECOND * 30;
 
-// R1 (epic slow-rejoiner-progress-or-evict, "proof-not-rows"): default-off flag that
-// authorizes a priority-partition source-leader removal on a completed leader-election
-// ACK for the EXACT voter-ready replacement, WITHOUT also requiring the source-leadership-
-// release rows (raft_role / partition leader_node_id) to have caught up.
+// R1 (epic slow-rejoiner-progress-or-evict, "proof-not-rows"): PROMOTED default-ON
+// (gate `stat-gate-20260623T164130Z`: SAFE 3/3, priority-recovery remove-safety residual
+// witnesses 3→0; escape hatch = set the flag to 'false'). Authorizes a priority-partition
+// source-leader removal on a completed leader-election ACK for the EXACT voter-ready
+// replacement, WITHOUT also requiring the source-leadership-release rows (raft_role /
+// partition leader_node_id) to have caught up.
 //
 // Why it is needed: the source-leader handoff is a COOPERATIVE local-timer raft step the
 // old leader must execute itself (STEP_DOWN_REPLICA → startElectionTimer). On a CPU-starved
@@ -85,8 +90,9 @@ const PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS =
 const PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG =
   'LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF';
 function isPriorityRecoveryLeaderElectionAckProofEnabled() {
+  // Default-ON after gate validation; disable only with an explicit 'false'.
   return (
-    process.env[PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG] === 'true'
+    process.env[PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG] !== 'false'
   );
 }
 

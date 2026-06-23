@@ -380,12 +380,12 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   recordPriorityPublicationSourceLeaderHandoffRequested(operation, handoffRequest) {
-    // Only anchor when R3 is enabled: the reader is the sole consumer and is also flag-gated,
-    // so recording while the flag is off would accumulate map entries that are never read and
-    // therefore never reaped (the TTL self-clean happens on read). Gating here keeps flag-off
-    // a strict zero-footprint no-op.
+    // Only anchor when R3 is enabled (default-ON; disabled only with an explicit 'false'): the
+    // reader is the sole consumer and is also flag-gated, so recording while disabled would
+    // accumulate map entries that are never read and therefore never reaped (the TTL self-clean
+    // happens on read). Gating here keeps the disabled state a strict zero-footprint no-op.
     if (
-      process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION !== 'true'
+      process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION === 'false'
     ) {
       return;
     }
