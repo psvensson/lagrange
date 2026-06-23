@@ -1,0 +1,40 @@
+{
+  "id": "l-write-membership-deferred-seed",
+  "statement": "Joining nodes' deferred/timed-out membership-publication writes (nodes, node_endpoints, service_endpoints) seed their own row into the local system-table cache with a stamped updated_at/HLC and let the join querying_state phase proceed instead of blocking the full join-admission write-retry budget or throwing; each seeded row is re-driven to a durable quorum-committed write post-join (nodes via the existing 5s heartbeat; node_endpoints via a forced immediate re-upsert; service_endpoints via a new refresh-gated heartbeat re-drive) and supersedes the provisional local seed via LWW. doneWhen: (1) a directed deterministic test injects a retryable DISTRIBUTED_PARTICIPANT_FAILURE on upsertJoinNode/Endpoint and asserts seed+proceed+durable-supersession for all three tables; (2) mgmjf querying_state phase no longer balloons to ~20s per joiner; (3) the rolling-restart gate is SAFE every run (0 corrupt/breach/exit/oracle-blind) with convergence_timeout incidence reduced.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "l-write-membership-deferred-seed",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "l-write-membership-deferred-seed-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "l-write-membership-deferred-seed",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

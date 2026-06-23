@@ -30,11 +30,15 @@ import {
 } from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   './retryable-control-plane-write.js';
+import {isRetryableControlPlaneError} from
+  '../../control-plane/control-plane-error-classification.js';
 import {
   JOIN_ADMISSION_DELIVERY_PRIORITY,
   JOIN_ADMISSION_PHASE_SCOPE,
   JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS,
+  JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG,
+  JOIN_DEFERRED_SEED_AWAIT_MS,
   LOCAL_STR_1S6CG,
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
@@ -546,6 +550,9 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const mutationOptions = {
       ...joinTimeOptions,
+      ...(Number.isFinite(options.queryTimeoutMs) ?
+        {queryTimeoutMs: Math.floor(options.queryTimeoutMs)} :
+        {}),
       controlPlaneWriteRetryOnRetry:
         this.buildJoinAdmissionRetryLogger(
           tableName,
@@ -614,6 +621,39 @@ class NodeRegistrationOwnerPublicationMethods {
       return Math.floor(configured);
     }
     return JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS;
+  }
+
+  // L-write (default-off). Gated on LAGRANGE_JOIN_DEFERRED_SEED so the contract
+  // change (fail-narrowly -> seed-and-proceed) is opt-in until gate-validated.
+  isJoinDeferredMembershipSeedEnabled() {
+    return process.env[JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG] === 'true';
+  }
+
+  getJoinDeferredSeedAwaitMs() {
+    const configured =
+      this.delegates.getConfig?.()?.joinDeferredSeedAwaitMs;
+    if (Number.isFinite(configured) && configured >= NUM.ZERO) {
+      return Math.floor(configured);
+    }
+    return JOIN_DEFERRED_SEED_AWAIT_MS;
+  }
+
+  // When enabled, shrink the AWAITED budget so the join no longer blocks the full
+  // ~30s retry budget; the durable write is re-driven post-join (NODES: heartbeat).
+  getJoinDeferredSeedTimeoutOptions() {
+    if (!this.isJoinDeferredMembershipSeedEnabled()) {
+      return {};
+    }
+    return {queryTimeoutMs: this.getJoinDeferredSeedAwaitMs()};
+  }
+
+  // Seed-and-proceed only on a genuinely retryable defer (DISTRIBUTED_PARTICIPANT_
+  // FAILURE / timeout / pressure under saturation), classified by the SAME predicate
+  // the write-retry loop uses. A permanent error is not retryable -> still fail the
+  // join, because there is no correction path for a permanently-rejected row.
+  shouldDeferredSeedJoinMembershipWrite(error) {
+    return this.isJoinDeferredMembershipSeedEnabled() &&
+      isRetryableControlPlaneError(error);
   }
 
   async sleep(delayMs) {

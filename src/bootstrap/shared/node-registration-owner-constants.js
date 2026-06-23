@@ -29,6 +29,14 @@ const LOG_RESUMING_JOIN_ADMISSION_PROGRESS =
   'Resuming join admission from canonical membership progress';
 const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
+// L-write (default-off): when LAGRANGE_JOIN_DEFERRED_SEED=true, the join membership
+// write awaits only this short budget; on a retryable defer it seeds the owner-local
+// row and proceeds, leaving the durable write to be re-driven (NODES: heartbeat).
+const JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG = 'LAGRANGE_JOIN_DEFERRED_SEED';
+const JOIN_DEFERRED_SEED_AWAIT_MS = TIME_MS.SECOND * NUM.THREE;
+const LOG_JOIN_DEFERRED_MEMBERSHIP_SEED =
+  'Join admission membership write deferred under saturation; seeded ' +
+  'owner-local row and proceeding (durable write re-driven post-join)';
 const JOIN_ADMISSION_PUBLICATION = Object.freeze({
   META_SERVICE_ENDPOINT:
     'built-in meta service endpoint publication',
@@ -68,6 +76,9 @@ export {
   JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_RESOLUTION_SOURCE,
   JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS,
+  JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG,
+  JOIN_DEFERRED_SEED_AWAIT_MS,
+  LOG_JOIN_DEFERRED_MEMBERSHIP_SEED,
   LOCAL_STR_1PE7K,
   LOCAL_STR_1S6CG,
   LOCAL_STR_1YR7Z,

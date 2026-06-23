@@ -168,6 +168,17 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
     the gateway has no cache-only write path, so a real re-drive MUST go through the gateway, not
     the seed. The membership-publication-coordinator reconcile (5s) re-drives
     `control_plane_publications` only — NOT these three raw tables.
+- **PRE-FLAG-PROMOTION HARDENING (from increment-1 subagent verify).** The deferred NODES
+  seed currently uses the proven success-path row shape (created_at-only ordering). Subagent
+  flagged that supersession then relies on wall-clock `updated_at` ordering and is sensitive
+  to owner-clock *negative* skew (bounded, self-correcting via the 5s heartbeat re-stamp — not
+  a permanent pin, but a convergence-latency risk). Before flipping the flag on by default,
+  stamp the provisional seed with a deliberately-LOW ordering key (low `updated_at`, or an old
+  `updated_at_hlc`) so the first authoritative durable row wins immediately regardless of skew.
+  Keep `last_heartbeat = now` (local liveness) — only the LWW ordering key should be lowered.
+  Audit nodes-row consumers for a low `updated_at` before applying. (Also: `isRetryableControl
+  PlaneError` includes the very broad `'closed'` fragment — same predicate the retry loop uses,
+  so no new risk, but note the wide net.)
 - Separate co-blocker, NOT L-write: mgmjf also fails non-deterministically at
   `connecting_websocket` with `Self-connection failed: WebSocket connection timeout after
   5000ms` (the self-connect 5s budget exceeded under event-loop saturation). L-write will
@@ -251,6 +262,18 @@ The joiner's membership write flows:
   pattern to extend. L-hydrate (67f5a10c) shipped as a gate-validated read-path building
   block but is not this lever. Recommended: Option A first, classify the membership
   fence per-table before building.
+- 2026-06-23 (increment 1 LANDED, default-off) — Flag-gated `LAGRANGE_JOIN_DEFERRED_SEED`
+  deferred-seed for the **NODES** write shipped: short awaited budget
+  (`joinDeferredSeedAwaitMs`, default 3s) + seed-owner-local-and-proceed on a retryable defer
+  (gated by the SAME `isRetryableControlPlaneError` the retry loop uses), durable write
+  re-driven by the 5s heartbeat. `node-registration-owner.js` + `…-publication-methods.js`
+  + new constants; directed deterministic test `test/bootstrap/node-join-deferred-membership-
+  seed.test.js` (flag-on retryable→seed+proceed; flag-on permanent→still fails; flag-off→
+  fail-narrowly preserved). 75/75 (new + register-node) green; 40/40 related; cache-write
+  guardrail 2/2. Subagent verdict TRUSTED-WITH-CAVEATS (4 cluster-safety invariants hold;
+  seed shape matches the proven success-path seed; one pre-promotion hardening recorded above).
+  REMAINING for full lever: node_endpoints (forced immediate re-upsert) + service_endpoints
+  (new heartbeat re-drive) deferred-seed, then mgmjf + gate validation.
 - 2026-06-23 (cont.) — **Membership fence CLEARED for all three join-time tables**
   (`nodes`/`node_endpoints`/`services`), subagent-classified with file:line: the fence
   protects `control_plane_publications`, not raw rows, and a local seed emits no outbound
