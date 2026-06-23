@@ -263,7 +263,22 @@ handoff for the genuinely-stuck case), with **R2** as a planner-side complement.
     succession proof; safe only under the upstream count floor + voter-ready check, so the two
     flags are gate-validated JOINTLY (below). C3 (benign): a ~2-min-period source-handoff↔election
     oscillation is possible on a very long wedge, self-terminating via the 120s recovery timeout.
-  - **NEXT (gate-last)**: validate at the gate with R1 + R3 + un-mask jointly:
+  - **GATE VERDICT `stat-gate-20260623T164130Z` (R1+R3+un-mask, N=3) — WEDGE ELIMINATED, SAFE,
+    PASS PEELED.** 3/3 CONVERGED, missing=0, **0 CORRUPT / 0 ORACLE_BLIND / 0 NODE_EXIT / 0
+    stale** (the hard SAFE invariant held with both new levers on). The priority-recovery
+    remove-safety residual is **GONE**: `analyze:priority-recovery-residuals` → `witnessCount:0`
+    in all 3 runs (baseline 142955Z had witnessCount 3 / the `replace_remove_safety_blocked`
+    cluster), and the baseline dominant reason `priority_recovery_workflow_progress_event_driven`
+    no longer appears. R3 engaged minimally (8 `target_leader_election` + 8 `STEP_DOWN` in run 3
+    — no election storm, **no leadership-churn regression** from R3). **But scenario-PASS is still
+    0/3**: the dominant reason PEELED to `convergence_timeout` (2/3) + `leadership_unstable` (1/3)
+    — a deeper, previously-MASKED layer (these dominate 22/8 historical gates, long pre-dating R3;
+    not an R1/R3 artifact). Wall p50/p95 633/633 (run2 outlier 929s ↔ slow convergence). **R1+R3
+    are VALIDATED for their target (the slow-rejoiner remove-safety wedge is resolved) and safe to
+    promote**; the rolling-restart PASS blocker is now a SEPARATE frontier (`convergence_timeout`/
+    `leadership_unstable` — general convergence latency / leadership settling), not this epic's
+    remove-safety scope → candidate EXHAUST-and-pivot to a convergence-latency frontier.
+  - ~~**NEXT (gate-last)**: validate at the gate with R1 + R3 + un-mask jointly:~~ (done — see verdict above)
     `LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF=true LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION=true
     LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true npm run gate -- 3` from `/home/peter/projects/something`
     (`npm run analyze:latent-blockers` first). Success = scenario-PASS rises AND
