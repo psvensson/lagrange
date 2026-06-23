@@ -91,13 +91,17 @@ throttled surplus drain, sustaining over-replication.
   "defer add when at/over target" DEADLOCKS the spread-floor remove guard (`move-planner-move-calculation-methods.js:545`)
   → neither add nor remove → `convergence_timeout`.
 
-**THE precise open question (next session's focused dig, picks the lever):** is the `leader_node_id` flip
-triggered by displacing the LEADER replica (→ extend CL-038 leader-retention to cover node_not_in_target
-migration, not just surplus drain) OR by a FOLLOWER membership-change triggering a raft re-election (→
-lever must throttle/serialize critical-system membership changes during recovery, or add incumbency
-stickiness so a merely-lower-load returned node doesn't trigger migration at all)? Resolve by tracing,
-for the +309s `sql_write_operations-p1` flip in run1, whether the displaced replica at +237/+249s was the
-leader's or a follower's, and whether the new leader was elected on a membership change.
+**Open question RESOLVED 2026-06-23 → verdict (B), lever confirmed.** Trace of the +309s
+`sql_write_operations-p1` flip (run1): **7493b0ab KEPT its leader replica (r2 `active` the whole run,
+never removed); the flip was a FOLLOWER-add-driven re-election.** The surplus ADDs r7/r8 grew the group
+3→5; liferaft applies join/leave incrementally with NO term bump (`@markwylde/liferaft/index.js:824-883`,
+via `partition-service-raft-peer-cache-reconciliation.js:141` `joinPeer`), BUT `majority()`
+(`liferaft/index.js:443`) rises with peer count and the two fresh followers don't heartbeat reliably, so
+the sitting leader loses its hold → heartbeat-timeout election picks 8be8d30f. **Therefore the lever is
+NOT leader-retention extension and NOT drain/replace-ordering** (no leader replica was evicted) — it is
+**prevent the unnecessary load-driven migration ADD itself** (the 3→5 over-replication). That is
+incumbency stickiness (C-2 form (a) below), which also avoids the remove-floor deadlock because retaining
+healthy incumbents yields NO adds AND NO removes → a stable cohort.
 
 > ~~Node-wide bootstrap readiness oscillates `join_ready↔degraded` on `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`~~
 > ~~and is ANDed into every partition's rebalancer leadership through `resolveRebalancerLeadership()`~~
@@ -130,19 +134,27 @@ control-plane write/establishment path fast/leader-local AND debounce the readin
 > lever flag-gated default-off. Subagent-verify safety (never split-brain rebalancer leadership;
 > never drop a real raft leader; never relax a write-quorum).
 
-1. **Lever C-2 — stop load-driven critical-system replica MIGRATION onto returned nodes (Head A, REPLACES the dead C-1).**
-   Root is `move-planner.js:650 calculatePartitionPlacement` ranking by SUITABILITY/load only
-   (`placement-owner-decision.js:182-190`) with no incumbency bias, so returned low-load nodes displace
-   incumbents → migration → leader-map churn. **First resolve the open question above** (leader-replica
-   displacement vs follower-membership-change election). Then the candidate lever (flag-gated default-off):
-   either (a) extend CL-038 placement-owner retention to also retain CURRENT critical-system incumbents
-   during the recovery window (incumbency stickiness — a merely-lower-load returned node must NOT trigger
-   migration; a GONE/infeasible node still gets replaced, so recovery is never stalled), or (b)
-   serialize/throttle critical-system membership changes while non-quiescent so at most one leader-map
-   change is in flight. Falsifier: a MovePlanner DT repro where a returned low-load node is feasible and
-   the partition is AT target — assert no `increase_replica_count` ADD that would over-replicate +
-   displace an incumbent (flag-on) vs the migration (flag-off). Does NOT touch raft quorum.
+1. **Lever C-2 — incumbency stickiness: stop load-driven critical-system replica MIGRATION (Head A; CONFIRMED form, REPLACES dead C-1).**
+   Root: `move-planner.js:650 calculatePartitionPlacement` → `targetNodes = placementOwnerDecision.intent.targetNodeIds`
+   ranked by SUITABILITY/load only (`placement-owner-decision.js:182-190`); the ONLY floors are CL-038
+   leader-retention + in-flight transition reservations (`:208-267`) — **no incumbency bias**, so returned
+   low-load nodes displace healthy incumbents → migration → 3→5 over-replication → quorum-raise re-election
+   (verdict B). **Confirmed lever (flag-gated default-off, form (a)):** add an incumbent-retention
+   reservation to the placement-owner decision for control-plane-priority partitions — reserve the CURRENT
+   healthy+feasible incumbent nodes (those in `currentReplicas` whose node is still feasible) into
+   `targetNodes` ahead of marginally-lower-load returned candidates, during the non-quiescent window.
+   Reuse the exact reservation seam CL-038 used (`placement-owner-decision.js:208-267`,
+   `buildPlacementOwnerReservationResult`); a GONE/infeasible incumbent is NOT floored back (it stays out
+   of `rankedNodeIds` → still replaced → recovery never stalls; same safety pattern as CL-038's
+   capacity-denied-leader test). SAFE: retaining healthy incumbents yields NO adds AND NO removes → no
+   remove-floor deadlock; never drops quorum; only trades marginal load-balance for stability on
+   critical-system partitions (the correct trade post-restart). Falsifier (DT repro, clone
+   `cl-038-surplus-drain-retains-leader-node.test.js`): 3 healthy incumbents AT target + 2 feasible
+   lower-load returned nodes, control-plane-priority partition → assert flag-on retains the 3 incumbents
+   in `targetNodes` (no `increase_replica_count` migration ADD) vs flag-off migrates; plus a safety
+   sub-test that an INFEASIBLE incumbent is still replaced. Does NOT touch raft.
    ~~C-1 (resolveRebalancerLeadership debounce) — DEAD: already landed e9f1c8bb, wrong signal.~~
+   ~~form (b) serialize membership changes — unnecessary; (a) prevents the over-replication at the source.~~
 
 2. **Lever W-1 — leader-local control-plane establishment write (Head B, the architectural lever).**
    Reuse the bootstrap-direct-write analog: let the establishment owner persist its
@@ -161,11 +173,10 @@ control-plane write/establishment path fast/leader-local AND debounce the readin
    budget-scaled gate to separate calibration from mechanism. Cheap, do FIRST to avoid chasing a
    calibration artifact.
 
-Recommended sequencing (UPDATED 2026-06-23): **resolve the Head-A open question first** (one cheap
-evidence trace — leader-replica displacement vs follower-membership-change election), which picks the
-**C-2** form; then **B-1** (cheap calibration probe) before spending the expensive establishment-write
-**W-1**. C-1 is dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A↔B
-coupling from both ends.
+Recommended sequencing (UPDATED 2026-06-23, open question RESOLVED): **implement C-2 incumbency
+stickiness** (confirmed form (a); DT repro red-on-revert + subagent-verify safety, flag default-off),
+then **B-1** (cheap calibration probe) before spending the expensive establishment-write **W-1**. C-1 is
+dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A↔B coupling from both ends.
 
 ## Existing work to build ON (don't rebuild)
 
@@ -210,6 +221,15 @@ coupling from both ends.
 
 ## Decision log
 
+- 2026-06-23 (latest) — **Head-A open question RESOLVED → verdict (B); C-2 lever CONFIRMED.** The +309s
+  `sql_write_operations-p1` leader flip is a FOLLOWER-add-driven re-election: 7493b0ab kept its leader
+  replica (never evicted); the surplus ADDs grew the raft group 3→5, raising `majority()`
+  (`@markwylde/liferaft/index.js:443`) while fresh followers couldn't heartbeat → heartbeat-timeout
+  election. So the fix is NOT leader-retention/drain-ordering — it is **incumbency stickiness** preventing
+  the load-driven migration ADD (form (a)): reserve healthy+feasible current incumbents into `targetNodes`
+  for control-plane-priority partitions via the CL-038 reservation seam (`placement-owner-decision.js:208-267`),
+  infeasible incumbents still replaced. SAFE (no adds+no removes when retained → no remove-floor deadlock,
+  no quorum drop). Next: implement C-2 flag-off + DT repro (clone `cl-038-surplus-drain-retains-leader-node.test.js`).
 - 2026-06-23 (later) — **Head A REFRAMED + two levers REFUTED with evidence** (4 subagent traces +
   classifier + placement-owner code). (1) C-1 (`resolveRebalancerLeadership` debounce) is DEAD: the
   hysteresis already landed e9f1c8bb (default-ON) and was present in the churning 164130Z gate; the
