@@ -226,6 +226,15 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       request[ReplicaOperationField.REASON] = handoffRequest.requestReason;
     }
 
+    // R3 (slow-rejoiner-progress-or-evict): anchor the first source-leader handoff ATTEMPT
+    // (independent of whether the saturated source ever responds) so the safety snapshot can
+    // detect a sustained non-progressing source handoff and escalate to driving the
+    // replacement election instead of re-asking the starved source to step down.
+    this.recordPriorityPublicationSourceLeaderHandoffRequested(
+      operation,
+      handoffRequest,
+    );
+
     try {
       const response = await this.messageRouter.deliver(target, request, {
         targetNodeId: handoffRequest.dispatchNodeId,

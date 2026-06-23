@@ -1,5 +1,6 @@
 import {PriorityPublicationSafetyRows} from './priority-publication-safety-rows.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
+import {TIME_MS} from '../constants/time.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -13,6 +14,46 @@ const {
   TYPEOF,
   decidePriorityPublicationFollowerSourceRemovalSafety,
 } = SHARED;
+
+// R3 (epic slow-rejoiner-progress-or-evict, "progress-or-evict / drive the handoff"):
+// default-off flag that, when a priority source-leader handoff has been non-progressing for a
+// sustained window (the saturated rejoiner never runs its cooperative local-timer STEP_DOWN),
+// ESCALATES from re-asking the starved source to step down to actively driving the voter-ready
+// REPLACEMENT's leader election instead. This is mechanism A/C: a SWIM-alive-but-quiesced
+// rejoiner is neither pushed forward nor evicted, so the surplus-drain REPLACE re-dispatches the
+// same source STEP_DOWN forever (the dominant replace_remove_safety_blocked wedge). Driving the
+// healthy replacement's election lets a real successor win, after which removal becomes safe
+// (via the natural leader_node_id row update, or immediately under R1's election-ack proof).
+//
+// SAFE: R3 NEVER authorizes a removal — it only changes WHICH handoff message is dispatched
+// (replacement leader-election vs source step-down). The source removal still gates on the full
+// sourceRemovalLeadershipSafe proof in a later evaluation (and the independent upstream
+// quorum-count floor). Driving an election on a voter-ready replacement is a normal raft
+// operation raft is designed to tolerate: if the source is in fact still a live healthy leader
+// the replacement's campaign simply loses (a transient extra election), never a quorum loss.
+// The escalation requires the replacement to be a voter-ready follower, so it can never elect a
+// non-voter-ready node.
+//
+// COMPOSES WITH R1 (not independent): R3 newly lets a completed replacement-election ACK be
+// produced WHILE the source row still shows LEADER (pre-R3 the replacement election only fired
+// after the source-handoff was satisfied). With R1 also on, that ACK is then trusted as
+// succession proof to authorize the removal. This is safe ONLY because the upstream quorum-COUNT
+// floor (operation-workflow-remove-safety-evaluator.js:461-471, removing source excluded) and
+// R1's voter-ready-replacement check both still hold — so gate-validate R1 and R3 JOINTLY.
+const PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG =
+  'LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION';
+function isPriorityRecoveryHandoffEscalateReplacementElectionEnabled() {
+  return (
+    process.env[
+      PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG
+    ] === 'true'
+  );
+}
+// Sustained non-progress window before escalating a stuck source-leader handoff. Well above
+// healthy handoff latency (sub-second), below the source-handoff stall TTL (2 min) and the
+// 120s over-target oracle, so only the genuinely-quiesced rejoiner regime escalates.
+const PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS =
+  TIME_MS.SECOND * 30;
 
 // R1 (epic slow-rejoiner-progress-or-evict, "proof-not-rows"): default-off flag that
 // authorizes a priority-partition source-leader removal on a completed leader-election
@@ -203,6 +244,40 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       this.normalizePriorityPublicationStatus(planningSnapshot);
     const replacementLeaderElectionNotFoundTerminal =
       options?.replacementLeaderElectionNotFoundTerminal === true;
+    // R3: escalate a sustained-non-progressing source-leader handoff to driving the
+    // voter-ready replacement's election. Only active when the source is still leader (not
+    // released), the replacement is a voter-ready follower available to win, and the
+    // replacement's leadership is not yet observed. Read the stall anchor only when the flag
+    // is on (avoids touching the map otherwise). The escalation suppresses the source-handoff
+    // re-ask and routes through the existing REQUEST_REPLACEMENT_LEADER_ELECTION dispatch; it
+    // never authorizes a removal.
+    const handoffEscalationEnabled =
+      isPriorityRecoveryHandoffEscalateReplacementElectionEnabled();
+    const sourceLeaderHandoffStallMs =
+      handoffEscalationEnabled &&
+      typeof this.getPriorityPublicationSourceLeaderHandoffStallMs ===
+        TYPEOF.FUNCTION ?
+        this.getPriorityPublicationSourceLeaderHandoffStallMs(operation) :
+        null;
+    const sourceLeaderHandoffStalled =
+      Number.isFinite(sourceLeaderHandoffStallMs) &&
+      sourceLeaderHandoffStallMs >=
+        PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS;
+    const replacementElectionTargetReady =
+      replacementRoleState ===
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
+      replacementReplicaId !== null &&
+      replacementNodeId !== null &&
+      this.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
+        operation,
+        replacementReplicaRow,
+      );
+    const escalateReplacementLeaderElection =
+      handoffEscalationEnabled &&
+      sourceLeaderHandoffStalled &&
+      sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
+      !replacementLeaderOwnershipObserved &&
+      replacementElectionTargetReady;
 
     if (
       operation?.type !== OperationType.REPLACE ||
@@ -307,7 +382,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
 
     if (
       sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
-      (!completedLeaderHandoffEvidence || !handoffRequestRetrySuppressed)
+      (!completedLeaderHandoffEvidence || !handoffRequestRetrySuppressed) &&
+      !escalateReplacementLeaderElection
     ) {
       return Object.freeze({
         state:
@@ -368,7 +444,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     }
 
     if (
-      sourceLeaderHandoffSatisfied &&
+      (sourceLeaderHandoffSatisfied || escalateReplacementLeaderElection) &&
       replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
       replacementReplicaId !== null &&
       replacementNodeId !== null &&
@@ -394,6 +470,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         replacementLeaderElectionEvidence,
         replacementLeaderElectionRetrySuppressed,
         replacementLeaderElectionNotFoundTerminal,
+        escalateReplacementLeaderElection,
+        sourceLeaderHandoffStalled,
         priorityRecoveryFollowerSourceRemovalSafe,
         publicationPartitionId,
         publicationStatus,
@@ -419,6 +497,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       handoffRequestRetrySuppressed,
       replacementLeaderElectionEvidence,
       replacementLeaderElectionRetrySuppressed,
+      escalateReplacementLeaderElection,
+      sourceLeaderHandoffStalled,
       priorityRecoveryFollowerSourceRemovalSafe,
       publicationPartitionId,
       publicationStatus,

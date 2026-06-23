@@ -1,5 +1,6 @@
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
+import {TIME_MS} from '../constants/time.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -22,6 +23,11 @@ const {
   isSystemTablePartition,
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
+
+// R3: TTL for the source-leader-handoff stall anchor (2 min) — above the escalation floor
+// and the evidence STALE_AFTER_MS so the anchor doesn't race the escalation window.
+const PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS =
+  TIME_MS.MINUTE * 2;
 
 class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecution {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
@@ -350,6 +356,91 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       return null;
     }
     return evidence;
+  }
+
+  // R3 (epic slow-rejoiner-progress-or-evict): tracks when the FIRST source-leader
+  // handoff (REPLACE_SOURCE_LEADER_HANDOFF STEP_DOWN) was dispatched for an operation, so
+  // the safety snapshot can detect a source-leader handoff that has been re-asked for a
+  // sustained window without progressing (the starved-rejoiner regime: the saturated source
+  // never runs its cooperative local-timer step-down, so completedLeaderHandoffEvidence is
+  // never recorded and the gate re-dispatches the same STEP_DOWN to the source forever). The
+  // anchor is the FIRST attempt (set-if-absent) so the stall age is honest. Self-cleans on
+  // read past the evidence STALE_AFTER_MS TTL, mirroring the evidence maps.
+  getPriorityPublicationSourceLeaderHandoffRequestedAtMap() {
+    if (
+      !(
+        this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId instanceof
+        Map
+      )
+    ) {
+      this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId =
+        new Map();
+    }
+    return this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId;
+  }
+
+  recordPriorityPublicationSourceLeaderHandoffRequested(operation, handoffRequest) {
+    // Only anchor when R3 is enabled: the reader is the sole consumer and is also flag-gated,
+    // so recording while the flag is off would accumulate map entries that are never read and
+    // therefore never reaped (the TTL self-clean happens on read). Gating here keeps flag-off
+    // a strict zero-footprint no-op.
+    if (
+      process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION !== 'true'
+    ) {
+      return;
+    }
+    if (
+      !operation ||
+      !handoffRequest ||
+      handoffRequest.messageType !==
+        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
+      handoffRequest.requestReason !==
+        ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
+    ) {
+      return;
+    }
+    const operationId =
+      typeof operation.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return;
+    }
+    const map = this.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
+    const existing = map.get(operationId);
+    if (Number.isFinite(existing)) {
+      return;
+    }
+    map.set(operationId, Date.now());
+  }
+
+  // Returns the elapsed ms since the first source-leader handoff for this operation, or null
+  // if none recorded / it has aged out. Used by the snapshot to decide R3 escalation.
+  getPriorityPublicationSourceLeaderHandoffStallMs(operation) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const map = this.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
+    const requestedAt = map.get(operationId);
+    if (!Number.isFinite(requestedAt)) {
+      return null;
+    }
+    const stallMs = Date.now() - requestedAt;
+    // Dedicated TTL well above the escalation floor (and the evidence STALE_AFTER_MS) so the
+    // stall anchor survives across the escalation window instead of racing it; past the TTL
+    // the operation has long since hit recovery timeout, so drop the anchor.
+    if (
+      stallMs < NUM.ZERO ||
+      stallMs > PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS
+    ) {
+      map.delete(operationId);
+      return null;
+    }
+    return stallMs;
   }
 
   recordPriorityPublicationLeaderHandoffEvidence(
