@@ -107,4 +107,49 @@ test('CL-014 wiring: signalReadyForReplicas runs catch-up hydration',
         t.ok(calls.includes('transport-gate'), 'readiness flow continued');
       },
     );
+
+    await t.test(
+      'LAGRANGE_JOIN_CATCHUP_COALESCE: catch-up is fire-and-forget, ' +
+        'never blocking the readiness flow',
+      async (t) => {
+        const previous = process.env.LAGRANGE_JOIN_CATCHUP_COALESCE;
+        process.env.LAGRANGE_JOIN_CATCHUP_COALESCE = 'true';
+        t.teardown(() => {
+          if (previous === undefined) {
+            delete process.env.LAGRANGE_JOIN_CATCHUP_COALESCE;
+          } else {
+            process.env.LAGRANGE_JOIN_CATCHUP_COALESCE = previous;
+          }
+        });
+
+        const calls = [];
+        let catchupStarted = false;
+        const target = createTarget({
+          calls,
+          cdcIntegrationService: {
+            // A catch-up that never settles must NOT stall readiness when the
+            // coalesce flag runs it in the background.
+            hydrateCdcPropagatedTablesFromAuthority: () => {
+              catchupStarted = true;
+              calls.push('catch-up');
+              return new Promise(() => {});
+            },
+          },
+        });
+
+        await target.signalReadyForReplicas().catch((error) => {
+          t.equal(
+            error.message,
+            STOP_SENTINEL,
+            'readiness reached the next gate without awaiting the catch-up',
+          );
+        });
+
+        t.ok(catchupStarted, 'background catch-up was started');
+        t.ok(
+          calls.includes('transport-gate'),
+          'readiness flow continued past a never-settling catch-up',
+        );
+      },
+    );
   });

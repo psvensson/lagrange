@@ -361,7 +361,18 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
           });
           await this.activateMessageGroupServiceRows();
-          this.startJoinOpportunisticBackfill();
+          // LAGRANGE_JOIN_CATCHUP_COALESCE: the pre-arm opportunistic backfill
+          // pulls the 12 non-blocking propagated tables BEFORE CDC subscriptions
+          // are confirmed, so it sits inside the very (snapshot, fan-out-target]
+          // window CL-014 must close and cannot be relied on for it — the
+          // post-arm background catch-up (signalReadyForReplicas) re-reads the
+          // full propagated set anyway. Skipping this redundant pre-arm pull
+          // removes ~12 distributed reads/joiner from the saturated seed during
+          // formation with no correctness loss (window-close still happens
+          // post-arm; these tables are non-blocking by construction).
+          if (process.env.LAGRANGE_JOIN_CATCHUP_COALESCE !== 'true') {
+            this.startJoinOpportunisticBackfill();
+          }
         },
       },
       {
