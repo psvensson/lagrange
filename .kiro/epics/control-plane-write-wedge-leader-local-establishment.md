@@ -213,6 +213,39 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
 4. **Subagent-verify** the change before reporting (especially the membership-fence
    safety argument).
 
+## ⚠️ RE-GROUNDING 2026-06-23 — mgmjf wedge is NOT the join membership writes (mechanistic, N=1)
+
+A mechanistic mgmjf run with `LAGRANGE_JOIN_DEFERRED_SEED=true` (increments 1+2a active)
+produced a decisive signal that **refutes the epic's core premise that the join
+`querying_state` membership writes (nodes/node_endpoints/service_endpoints) are the mgmjf
+wedge**:
+- **0** deferred-seed engagements (`"deferred under saturation"` log) and **0** membership-table
+  (nodes/node_endpoints/service_endpoints) write failures — the membership writes succeed
+  within the short budget; they do NOT defer or fail under mgmjf load.
+- All control-plane write failures were on the **priority partitions**: `control_plane_publications`
+  (×36, the dominant), `replica_operations` (×8), plus `sql_write_operations` /
+  `sql_transaction_participants` (rebalance-coordinator "Failed to persist operation",
+  ROUTER_MESSAGE_TIMEOUT / "Query timeout after 1ms" to the starved seed
+  `…440600/partition/…-r1`). This matches the load-root memory's list of 5 wedged priority
+  partitions — NOT the join registration writes.
+
+**Implication:** L-write increments 1+2a (membership-table deferred-seed) are CORRECT, SAFE,
+unit-verified, and committed (a legitimate building block that hardens the join membership-write
+path — likely relevant to the rolling-restart membership-publication wedge under rejoiner load),
+**but they do NOT address the mgmjf wedge.** The binding mgmjf write-wedge is the control-plane
+**priority-partition** writes — i.e. lever-(a) territory (`replica_operations`,
+`applyLocalPriorityOperationProgressRow`, commit 64a18b76) extended to the OTHER priority
+partitions — with the hard caveat that `control_plane_publications` is the **B4-fenced**
+single-leader membership-projection table and CANNOT be owner-local-seeded without violating the
+membership single-owner fence. So the real lever is closer to: extend lever (a)'s deferred-local
+progress to the non-fenced priority partitions (`sql_transactions`, `sql_transaction_participants`,
+`sql_write_operations`) and/or break the circular sub-quorum dependency that keeps those partition
+writes routing to the starved seed (the standing structural Option B / [[circular-dependency-class-formation-vs-steady-state]]).
+**Caveat:** N=1; the *which-tables-fail* signal is mechanistic and robust, but confirm with a
+repeat run + the latent-blocker analyzer before fully re-committing the lever. **Do NOT build
+the service_endpoints heartbeat re-drive (increment 2b) for mgmjf's sake — the data says it
+won't move mgmjf.**
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
