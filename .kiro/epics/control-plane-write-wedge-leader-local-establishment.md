@@ -321,10 +321,30 @@ hardening` epic, not this L-write epic.
   (`armCoordinatorCreatedOperation` re-reads authoritative state + SKIPs on a genuinely-
   terminal op; lifecycle dispatch step-sets are disjoint from terminal steps). Caveat:
   efficacy (does ARM_NOW actually drain the surplus voter) rests on the gate run.
-- **Gate validation IN PROGRESS:** `LAGRANGE_PR_ZOMBIE_REDRIVE=true npm run gate -- 3`
-  (flag auto-forwards to Docker nodes via cluster-class-lifecycle-base.js:367-373). Watching
-  convergence_timeout incidence + SAFE-every-run (0 corrupt/breach/exit/oracle-blind, hard
-  invariant). Expect possibly necessary-but-not-sufficient.
+- **Gate validation DONE — fix is SAFE but INEFFECTIVE; gate pinpointed the REAL binding
+  witness (stat-gate-20260623T100334Z, flag-on N=3).** passed=FALSE all 3 (dominantReason
+  `convergence_timeout`, verdictReason `topology_progress_blocked`), but SAFE every run
+  (CORRUPT/ORACLE_BLIND/NODE_EXIT/stale=0 — no regression) and convergeRate=1 (missing=0).
+  The rank-1 fix NEVER engaged (`stale_terminal_redrive`=0) — and the gate revealed WHY.
+- **BINDING WITNESS (all 3 runs):** the dominant stuck op is `spread_satisfied_in_flight`
+  every run (run1 control_plane_publications-p1, run2 replica_operations-p1 stepAge **180s**,
+  run3 sql_transaction_participants-p1 stepAge **92s**), under `transportPressureState:
+  write_backlog` (pendingWrites ~515, growing). Runs 1–2 ARE the exact rank-1 zombie state
+  (`actuationState=persisted_not_dispatched` + `phase=terminal`) — yet the fix didn't fire
+  because **`spread_satisfied_in_flight` is a DRAIN-COMPLETION state that signs the op off
+  UPSTREAM of the dispatch-pending reentry path** (it's in
+  `PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_COMPLETION_STATES`). So the MASK (census survivor
+  #4 `pr-spread-satisfied-in-flight-masks-stuck-surplus`) short-circuits before the gating fix
+  (#1) can run. The census `maskedBy` relationship is **empirically confirmed: #4 masks #1**,
+  over a `write_backlog` LOAD root.
+- **RE-AIMED LEVER (peel order):** (1) census #4 — add a staleness guard to
+  `spread_satisfied_in_flight` so a stalled surplus (stepAgeMs >> stepTimeoutMs; note
+  stepTimeoutMs=0 in runs 1/3 ⇒ guard must handle the no-deadline case) is promoted to a
+  stalled/unresolved state that stops the closure signing off AND routes to re-drive; THEN
+  (2) the rank-1 re-drive (now reachable) + (3) the `write_backlog` / distributed-write-
+  backpressure root (the op is dispatched/persisted but its writes can't drain — pendingWrites
+  growing). The rank-1 fix stays committed default-off as a building block for step 2.
+  Belongs to `rolling-restart-core-stability` / `topology-convergence-hardening`.
 
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
