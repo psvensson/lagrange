@@ -29,6 +29,7 @@ const {
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+  TIME_MS,
   TRANSITION_RETRY_DELAY_MS,
   normalizeNodeIdList,
 } = SHARED;
@@ -54,6 +55,36 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
 const PRIORITY_RECOVERY_ZOMBIE_REDRIVE_FLAG = 'LAGRANGE_PR_ZOMBIE_REDRIVE';
 function isPriorityRecoveryZombieRedriveEnabled() {
   return process.env[PRIORITY_RECOVERY_ZOMBIE_REDRIVE_FLAG] === 'true';
+}
+
+// Fixed stall wall for the NO-PER-STEP-DEADLINE case. `timeoutReconcileDue`
+// requires stepTimeoutMs>0 (priority-recovery-snapshot-observation.js:288-292), but
+// priority-recovery ops routinely run with no per-step deadline — the timeout
+// resolver returns null so `stepTimeoutMs` is OMITTED from the actuation snapshot
+// (observation.js:472-474 only spreads it when finite; absent ≡ no deadline). Such a
+// terminal zombie NEVER satisfied timeoutReconcileDue and was never re-driven (the
+// zombie-redrive lever engaged 0x across the 2026-06-23 gates for exactly this
+// reason; binding gate witness had no per-step deadline, stepAgeMs=271965).
+// Match the census #4 spread-stall wall (45s — below the 120s over-target oracle,
+// above normal in-flight latency). Only consulted when there is no per-step deadline.
+const PRIORITY_RECOVERY_TERMINAL_REDRIVE_NO_DEADLINE_STALL_MS =
+  TIME_MS.SECOND * 45;
+
+function isPriorityRecoveryStaleTerminalReconcileDue(actuation) {
+  if (actuation?.timeoutReconcileDue === true) {
+    return true;
+  }
+  const stepTimeoutMs = Number(actuation?.stepTimeoutMs);
+  if (Number.isFinite(stepTimeoutMs) && stepTimeoutMs > NUM.ZERO) {
+    // A per-step deadline exists but has not elapsed (else timeoutReconcileDue
+    // would be true) — the owner is still within its wait window; not stale yet.
+    return false;
+  }
+  const stepAgeMs = Number(actuation?.stepAgeMs);
+  return (
+    Number.isFinite(stepAgeMs) &&
+    stepAgeMs >= PRIORITY_RECOVERY_TERMINAL_REDRIVE_NO_DEADLINE_STALL_MS
+  );
 }
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD = Object.freeze({
@@ -459,7 +490,10 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL &&
       snapshot?.progress?.workflowProgressPhaseId ===
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL &&
-      snapshot?.actuation?.timeoutReconcileDue === true &&
+      // Stale enough to reconcile: per-step deadline elapsed OR (no per-step
+      // deadline ⇒ stepTimeoutMs absent/0) a fixed stall wall has passed. The bare
+      // timeoutReconcileDue check missed the no-deadline zombie entirely.
+      isPriorityRecoveryStaleTerminalReconcileDue(snapshot?.actuation) &&
       // Backoff: once a handoff retry is already in flight for this op, stop
       // re-matching every reconcile cycle (mirrors remoteRetryActive suppression).
       owner.hasActiveCreatedOperationHandoffRetry(operationId) !== true,

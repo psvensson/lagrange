@@ -72,7 +72,7 @@ function buildReentryOwnerStub() {
 // workflow-progress phase.
 function buildPersistedNotDispatchedSnapshot(
   workflowProgressPhaseId,
-  {timeoutReconcileDue = false} = {},
+  {timeoutReconcileDue = false, stepTimeoutMs, stepAgeMs} = {},
 ) {
   return {
     actuation: {
@@ -80,6 +80,8 @@ function buildPersistedNotDispatchedSnapshot(
       state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       workflowProgressPhaseId,
       timeoutReconcileDue,
+      ...(stepTimeoutMs !== undefined ? {stepTimeoutMs} : {}),
+      ...(stepAgeMs !== undefined ? {stepAgeMs} : {}),
     },
     progress: {
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
@@ -189,6 +191,113 @@ test('census rank-1 FIX safety (flag-on): a NOT-yet-reconcile-due TERMINAL op is
       resolvePriorityRecoveryDispatchPendingReentryState(evidence),
       NOT_DISPATCH_PENDING_STATE,
       'so a not-yet-stale terminal op is left on the default path (no premature re-drive)',
+    );
+    t.end();
+  });
+
+// --- stepTimeoutMs=0 blind-spot fix (2026-06-23 gate witness: the run3 zombie had
+// stepTimeoutMs=0 + stepAgeMs=271965, so timeoutReconcileDue was permanently false and
+// the lever engaged 0x). The fix adds a fixed 45s stall wall for the no-deadline case.
+const NO_DEADLINE_STALL_WALL_MS = 45000;
+const STALE_AGE_MS = NO_DEADLINE_STALL_WALL_MS + 15000;
+const FRESH_AGE_MS = 1000;
+
+test('census rank-1 FIX (flag-on, no per-step deadline): a stepTimeoutMs=0 terminal zombie stale past the wall is re-driven',
+  (t) => {
+    withZombieRedriveFlag(t, 'true');
+    const owner = buildReentryOwnerStub();
+    // The gate-witnessed shape: no per-step deadline (stepTimeoutMs=0) so
+    // timeoutReconcileDue is false, but the op has been stalled well past the wall.
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: false, stepTimeoutMs: 0, stepAgeMs: STALE_AGE_MS},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, true,
+      'a no-deadline (stepTimeoutMs=0) terminal zombie stale past the fixed wall is now flagged — the gate witness that previously engaged 0x');
+    t.equal(
+      resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+      STALE_TERMINAL_REDRIVE_STATE,
+      'so it resolves to STALE_TERMINAL_REDRIVE (-> ARM_NOW) instead of being stranded forever',
+    );
+    t.end();
+  });
+
+test('census rank-1 FIX safety (flag-on, no per-step deadline): a stepTimeoutMs=0 terminal op below the wall is left alone',
+  (t) => {
+    withZombieRedriveFlag(t, 'true');
+    const owner = buildReentryOwnerStub();
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: false, stepTimeoutMs: 0, stepAgeMs: FRESH_AGE_MS},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, false,
+      'a no-deadline terminal op still fresh (below the fixed wall) must NOT be treated as a zombie');
+    t.equal(
+      resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+      NOT_DISPATCH_PENDING_STATE,
+      'so a not-yet-stale no-deadline terminal op stays on the default path',
+    );
+    t.end();
+  });
+
+test('census rank-1 FIX safety (flag-on, per-step deadline NOT elapsed): the fixed wall must not override an open owner wait window',
+  (t) => {
+    withZombieRedriveFlag(t, 'true');
+    const owner = buildReentryOwnerStub();
+    // A real per-step deadline exists (stepTimeoutMs=600s) and has NOT elapsed
+    // (timeoutReconcileDue=false), even though stepAge already exceeds the fixed wall.
+    // The owner is legitimately within its wait window — must not be pre-empted.
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: false, stepTimeoutMs: 600000, stepAgeMs: STALE_AGE_MS},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, false,
+      'the fixed wall only applies when there is NO per-step deadline; an open deadline keeps the owner wait window intact');
+    t.end();
+  });
+
+test('census rank-1 (flag-off): the no-deadline stale terminal zombie stays stranded (byte-identical)',
+  (t) => {
+    withZombieRedriveFlag(t, undefined);
+    const owner = buildReentryOwnerStub();
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: false, stepTimeoutMs: 0, stepAgeMs: STALE_AGE_MS},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, false,
+      'flag-off: the no-deadline fixed-wall path is inert — default behavior preserved');
+    t.equal(
+      resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+      NOT_DISPATCH_PENDING_STATE,
+      'so the zombie stays NOT_DISPATCH_PENDING -> SKIP (unchanged default)',
     );
     t.end();
   });
