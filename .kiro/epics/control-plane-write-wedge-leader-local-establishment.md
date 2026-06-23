@@ -303,6 +303,29 @@ census fan-out (`.kiro/epics/latent-convergence-blocker-census.md`) to refresh t
 NOTE: this lever belongs to the `rolling-restart-core-stability` quest / `topology-convergence-
 hardening` epic, not this L-write epic.
 
+### UPDATE — falsifier + flag-gated fix LANDED (2026-06-23)
+- **Falsifier** `test/rebalancer/priority-recovery-terminal-persisted-zombie-redrive.test.js`
+  (commit fc2b28e9) empirically confirmed the gating bug LIVE at HEAD: the SAME
+  `persisted_not_dispatched` op re-enters under DISPATCH_PENDING but is stranded
+  (NOT_DISPATCH_PENDING → SKIP) under TERMINAL — phase is the sole discriminator.
+- **Census-vs-LOAD tension RESOLVED:** `persisted_not_dispatched` = the durable WRITE
+  succeeded but the DISPATCH never happened. So this is a DISTINCT bug from the 06-20
+  LOAD-write-failure mode; re-arming re-attempts the dispatch (not a failing write).
+  Likely necessary-but-not-sufficient (like lever a) — the dispatch can still time out
+  under load (mgmjf ROUTER_MESSAGE_TIMEOUT on `coordinator_created_remote_handoff`).
+- **Fix** (commit 54843bb4, default-off `LAGRANGE_PR_ZOMBIE_REDRIVE`): new evidence flag
+  `staleTerminalDispatchable` (persisted_not_dispatched + terminal phase + `timeoutReconcileDue`
+  + no-active-handoff-retry backoff) → state-table entry STALE_TERMINAL_REDRIVE (before the
+  NOT_DISPATCH_PENDING skip) → ARM_NOW. 8/8 falsifier + 386/386 reentry suites; flag-off
+  byte-identical. Subagent TRUSTED-WITH-CAVEATS: NO destructive double-execute
+  (`armCoordinatorCreatedOperation` re-reads authoritative state + SKIPs on a genuinely-
+  terminal op; lifecycle dispatch step-sets are disjoint from terminal steps). Caveat:
+  efficacy (does ARM_NOW actually drain the surplus voter) rests on the gate run.
+- **Gate validation IN PROGRESS:** `LAGRANGE_PR_ZOMBIE_REDRIVE=true npm run gate -- 3`
+  (flag auto-forwards to Docker nodes via cluster-class-lifecycle-base.js:367-373). Watching
+  convergence_timeout incidence + SAFE-every-run (0 corrupt/breach/exit/oracle-blind, hard
+  invariant). Expect possibly necessary-but-not-sufficient.
+
 ## Build seam — FULLY PINNED 2026-06-23 (all layers traced; next step is pure coding)
 
 The joiner's membership write flows:
