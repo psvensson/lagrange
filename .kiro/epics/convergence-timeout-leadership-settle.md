@@ -221,6 +221,27 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 
 ## Decision log
 
+- 2026-06-23 (C-2 GATE VERDICT — UNVALIDATED, did NOT engage) — N=3 flag-on gate
+  `stat-gate-20260623T183833Z`: SAFE 3/3 (0 corrupt/stale/oracle-blind/node-exit, missing=0), PASS rose
+  0/3→**1/3** (run3 clean; runs 1,2 `passed=false` dominant `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`),
+  and `leadership_unstable`+`convergence_timeout` absent from all 3 runs. **BUT a mechanistic subagent
+  trace REFUTES attributing any of this to C-2:** the over-replication signature C-2 targets is UNCHANGED
+  — all 5 critical-system priority partitions still over-replicate to 4–6 members vs target 3 in every new
+  run, `increase_replica_count` migration ADDs did NOT drop (new runs 16/82/40 vs baseline 75 — run2
+  EXCEEDS baseline), and raft leadership churn is flat (50–57 became-leader vs baseline 54). So C-2 left
+  NO behavioral trace; the `leadership_unstable` absence is N=3 VARIANCE (it was only 1/3 at baseline), not
+  C-2's effect. **Do NOT promote.** C-2 stays flag-off (committed, safe, unit-green) as an unvalidated
+  building block. The flag IS forwarded to node containers (`cluster-class-lifecycle-base.js:371`
+  `LAGRANGE_*` auto-forward), so the failure is NOT non-forwarding — it is that C-2 either (i) doesn't
+  reach/fire in the planner path at runtime, or (ii) fires but doesn't change `targetNodes` because the
+  REAL over-replication trigger differs from the load-only model my unit test assumed (likely SPREAD-driven
+  / latency-group diversity, or incumbents transiently absent from `currentReplicas` during the restart so
+  they aren't reservable). **NEXT for C-2 (before any re-gate):** add a positive engagement log when the
+  INCUMBENT_RETENTION reservation fires (it currently leaves no trace), then a directed DT repro that
+  models the REAL trigger (capture one over-replication event from 164130Z and reproduce it in-process),
+  confirm C-2 changes `targetNodes` there, and only then re-gate. **Head B is now the genuine dominant
+  blocker regardless** (`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` = the W-1/establishment-write root) — and
+  it dominates whether or not C-2 ever engages, so W-1 is the higher-value next lever.
 - 2026-06-23 (C-2 LANDED, flag-off) — Implemented **C-2 incumbency stickiness** (commit 8fa06823,
   default-off `LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS`). Reserves current healthy+feasible incumbents
   into the target cohort for control-plane-priority partitions via the CL-038 placement-owner reservation
