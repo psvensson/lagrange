@@ -1,3 +1,20 @@
+import {TIME_MS} from '../constants/index.js';
+
+// Census #4 staleness guard (default-off). When `spread_satisfied_in_flight`
+// signs an op off as "satisfied/in-flight" while its in-flight workflow step has
+// stalled past this threshold, the guard promotes the classifiers to the honest
+// `operation_stalled` / `blocked` pairing so the op routes to re-drive instead of
+// being abandoned over-target. Held BELOW the 120s over-target oracle
+// (MAX_SUSTAINED_OVER_TARGET_MS) and ABOVE normal in-flight step latency.
+// stepTimeoutMs is 0 in the witnessed ops (no per-step deadline) so this is a
+// fixed wall, not a `stepAgeMs >= stepTimeoutMs` comparison.
+const PRIORITY_RECOVERY_SPREAD_SATISFIED_STALL_THRESHOLD_MS = TIME_MS.SECOND * 45;
+const PRIORITY_RECOVERY_SPREAD_STALL_GUARD_FLAG =
+  'LAGRANGE_PR_SPREAD_STALL_GUARD';
+function isPriorityRecoverySpreadStallGuardEnabled() {
+  return process.env[PRIORITY_RECOVERY_SPREAD_STALL_GUARD_FLAG] === 'true';
+}
+
 const PRIORITY_RECOVERY_CORRELATION_KEY = Object.freeze({
   SEPARATOR: '|',
   EPOCH_UNKNOWN: 'epoch_unknown',
@@ -178,7 +195,10 @@ export {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON,
+  PRIORITY_RECOVERY_SPREAD_SATISFIED_STALL_THRESHOLD_MS,
+  PRIORITY_RECOVERY_SPREAD_STALL_GUARD_FLAG,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+  isPriorityRecoverySpreadStallGuardEnabled,
 };

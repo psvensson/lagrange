@@ -323,6 +323,12 @@ function resolvePriorityRecoverySemanticState(options = {}) {
     options.spreadCompletion?.satisfied === true &&
     options.hasActiveOperationContexts === true
   ) {
+    // Census #4 staleness guard (default-off): an in-flight op stalled past the
+    // threshold is not an honest "satisfied" state — promote to operation_stalled
+    // so it routes to re-drive (isPriorityRecoveryStaleOperationDecisionSnapshot).
+    if (options.operationStalled === true) {
+      return PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED;
+    }
     return PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
   }
   if (options.plannerReady === true) {
