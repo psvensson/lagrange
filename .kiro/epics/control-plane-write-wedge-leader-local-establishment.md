@@ -512,6 +512,39 @@ are exhausted for THIS op. NEXT lever choices:
    the REPLACE target-creation never dispatches under write_backlog (is it awaiting a quorum write that
    can't reach the seed?). Deterministic-first before building.
 
+## 🧭 ROOT CONSOLIDATED 2026-06-23 (run2 remove-safety witness distribution) — the PASS blocker is the SLOW REJOINER `7493b0ab` that can't progress, surfacing as a COUPLED CLUSTER of remove-safety defers. NOT a single lever. ALTITUDE checkpoint. READ FIRST.
+
+Drilling the run2 `replace_remove_safety_blocked` witnesses (56 total) shows the binder is NOT a single
+zombie/serialization/promotion bug — it is a **cluster of distinct remove-safety defers, ~19/21 of them
+removals from one node `7493b0ab` (the slow SWIM-protected rejoiner)**:
+- `Quorum check failed: concurrent partition operation <id> is active` ×20
+- `Quorum check failed: peer node <id> is uncontactable` ×8
+- `projected voter-ready spread would fall below the published requirement (2/3)` ×6
+- `recovery projection membership does not include projected voter-ready nodes` ×6
+- `source leader <part-r> replacement leader ownership pending before safe removal` ×12 (control_plane_publications,
+  sql_transaction_participants, sql_transactions) — the REPLACE moves the partition's RAFT LEADER off the slow
+  rejoiner, and leadership won't hand off to the replacement under load
+- `replacement replica <part-r> is not voter-ready` ×4
+
+**The unified mechanism = [[post-swim-quiescence-heads-unified-root]] / [[circular-dependency-class-formation-vs-steady-state]]:**
+the rejoiner `7493b0ab` survives (SWIM-protected) but can't make progress; the remove-safety gate CORRECTLY
+refuses to drain its replicas (doing so would drop voter-ready spread below 2/3, or remove a leader before
+handoff, or remove against an uncontactable peer) — but the node never becomes healthy enough to complete the
+handoff/promotion that would let it be drained. A coupled circular dependency, NOT a bug a surgical lever fixes.
+Each earlier "lever" diagnosis this session (learner-promotion → source-removal-serialization → leader-ownership-
+handoff) was ONE facet of this cluster; the subagent passes kept refining into the same coupled root.
+
+**ALTITUDE VERDICT (operational-ground-truth coupled-invariant rule): STOP single-frontier patching.** The 5
+default-off levers built/confirmed this campaign (L-write seed, zombie-redrive, drain-extension, census-#4
+stall-guard, redundant-replace-retire, spread-voter-ready un-mask) are all SAFE building blocks but none is the
+PASS lever, because the PASS bar requires the slow rejoiner to either PROGRESS or be SAFELY DRAINED — a
+membership/recovery-ownership problem, not a rebalancer-op problem. **The architectural lever is the one already
+scoped in memory: finish the membership single-owner cutover ([[membership-single-owner-cutover-plan]]) +
+SWIM-rejoiner-recovery so a stuck rejoiner is deterministically driven to progress-or-eviction** — that is what
+breaks the coupling. This belongs to `rolling-restart-core-stability` / the membership cutover spec, NOT this
+L-write epic. **Recommend: pause new levers; pivot to the rejoiner progress-or-evict architectural work, or
+EXHAUST this epic and open a `slow-rejoiner-progress-or-evict` epic.**
+
 ## 🧭 ROOT REFRAMED 2026-06-23 (subagent file:line trace of the spread DISAGREEMENT) — the binder is NOT a write-wedge / not redundant zombies; it is a GENUINE under-spread MASKED by an optimistic recovery sign-off. The frontier LEAVES this epic. READ FIRST.
 
 The active-gate-vs-priority-recovery spread disagreement (gate says `priority_control_plane_spread_pending`,
