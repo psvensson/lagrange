@@ -141,14 +141,33 @@ hypothesis on the write path), then **B** if A is insufficient. They compose.
   `updated_at`/`updated_at_hlc` (`node-registration-owner-row-builder.js:33-34`); LWW falls
   back to `created_at`. **The deferred seed MUST stamp `updated_at`/HLC** so the later
   durable CDC row deterministically wins the supersession on equal-ms ties.
-- **NEW CRITICAL (now the gating question before building).** Seed-and-proceed is only safe
-  if **something re-drives the joiner's own `nodes`/`node_endpoints`/`service_endpoints`
-  durable write to quorum after the join phase returns** — otherwise the row is locally-only
-  forever and the self-supersession guarantee is vacuous (unsafe). For `replica_operations`,
-  lever (a) is safe because the owner's workflow keeps retrying. For the membership tables we
-  must confirm an existing background re-drive (membership reconcile loop / anti-entropy /
-  publication runtime owner reconcile) OR add one. **Classify: does a post-join reconciler
-  already re-assert these rows? Do not ship seed-and-proceed without a confirmed re-drive.**
+- **Post-join re-drive — RESOLVED 2026-06-23 (subagent, file:line). The build MUST add
+  re-drive for two of the three tables.** Verdict per table:
+  - **`nodes` — SAFE as-is.** The 5s `HeartbeatService` (`heartbeat-service.js:72-73`,
+    loop `heartbeat-service-lifecycle-methods.js:304`) sends `NODE_STATE_UPDATE` carrying the
+    full `nodeRow` (`node-joining-publication-activation.js:386-401`); the handler does a
+    durable `updateSystemTableRow(NODES)` and on `affectedRows===0` calls
+    `tryBootstrapMissingNodeStateUpdateRow` → durable `upsertSystemTableRow(NODES, baseRow)`
+    (`replica-dispatch-state-publication.js:212,421`). So a locally-seeded `nodes` row is
+    re-established durably within ~5s. (Falsifier to add: the upsert is gated on
+    `existing?.[NODE_ID]` falsy + valid node_address at `:404-413` — holds for a never-durably-
+    written joiner; guard a regression test.)
+  - **`node_endpoints` — PARTIAL.** Heartbeat re-UPSERTs the row durably
+    (`heartbeat-service-publication-methods.js:198-203`) but gated by `endpointRefreshIntervalMs`
+    = **300000ms / 5 min** (`heartbeat-service-constants.js:19`) unless the signature changes →
+    a seeded-only row can stay local-only ~5 min. **Build must force an immediate first durable
+    re-upsert when a row was seeded-not-durable.**
+  - **`service_endpoints` — NO re-drive (correctness hole).** The 3 meta rows are written once
+    at join (`meta-service-definition-registration.js:152`); the heartbeat loop never touches
+    `service_endpoints` and no periodic durable writer exists (the `endpoint-sync-*`/
+    `runtime-endpoint-writer` paths only READ or are event-driven). **Build MUST add a coalesced,
+    refresh-gated `upsertSystemTableRow(SERVICE_ENDPOINTS,…)` for the node's own meta endpoints —
+    smallest hook is the existing 5s heartbeat `sendHeartbeat` loop that already holds the gateway
+    and re-upserts `node_endpoints`.**
+  - Note: `seedJoinTimeCacheRow` is a pure LOCAL cache touch (`…publication-methods.js:588-608`);
+    the gateway has no cache-only write path, so a real re-drive MUST go through the gateway, not
+    the seed. The membership-publication-coordinator reconcile (5s) re-drives
+    `control_plane_publications` only — NOT these three raw tables.
 - Separate co-blocker, NOT L-write: mgmjf also fails non-deterministically at
   `connecting_websocket` with `Self-connection failed: WebSocket connection timeout after
   5000ms` (the self-connect 5s budget exceeded under event-loop saturation). L-write will
