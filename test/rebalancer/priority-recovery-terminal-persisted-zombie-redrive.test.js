@@ -37,6 +37,24 @@ import {
 // State-enum string values (the enum itself is module-internal).
 const REENTER_STATE = 'reenter';
 const NOT_DISPATCH_PENDING_STATE = 'not_dispatch_pending';
+const STALE_TERMINAL_REDRIVE_STATE = 'stale_terminal_redrive';
+const ZOMBIE_REDRIVE_FLAG = 'LAGRANGE_PR_ZOMBIE_REDRIVE';
+
+function withZombieRedriveFlag(t, value) {
+  const previous = process.env[ZOMBIE_REDRIVE_FLAG];
+  if (value === undefined) {
+    delete process.env[ZOMBIE_REDRIVE_FLAG];
+  } else {
+    process.env[ZOMBIE_REDRIVE_FLAG] = value;
+  }
+  t.teardown(() => {
+    if (previous === undefined) {
+      delete process.env[ZOMBIE_REDRIVE_FLAG];
+    } else {
+      process.env[ZOMBIE_REDRIVE_FLAG] = previous;
+    }
+  });
+}
 
 // Minimal owner whose evidence-helper predicates all resolve so that, for a
 // dispatch-pending op, the reentry state-table falls through to REENTER.
@@ -52,12 +70,16 @@ function buildReentryOwnerStub() {
 
 // A persisted-not-dispatched, owner-advancing snapshot, parameterized only by the
 // workflow-progress phase.
-function buildPersistedNotDispatchedSnapshot(workflowProgressPhaseId) {
+function buildPersistedNotDispatchedSnapshot(
+  workflowProgressPhaseId,
+  {timeoutReconcileDue = false} = {},
+) {
   return {
     actuation: {
       owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
       state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       workflowProgressPhaseId,
+      timeoutReconcileDue,
     },
     progress: {
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
@@ -95,11 +117,13 @@ test('census rank-1: a persisted_not_dispatched op with DISPATCH_PENDING phase r
     t.end();
   });
 
-test('census rank-1 FALSIFIER: the SAME persisted_not_dispatched op is stranded when phase=TERMINAL',
+test('census rank-1 FALSIFIER (flag-off): the SAME persisted_not_dispatched op is stranded when phase=TERMINAL',
   (t) => {
+    withZombieRedriveFlag(t, undefined);
     const owner = buildReentryOwnerStub();
     const snapshot = buildPersistedNotDispatchedSnapshot(
       PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: true},
     );
 
     const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
@@ -114,7 +138,57 @@ test('census rank-1 FALSIFIER: the SAME persisted_not_dispatched op is stranded 
     t.equal(
       resolvePriorityRecoveryDispatchPendingReentryState(evidence),
       NOT_DISPATCH_PENDING_STATE,
-      'so the persisted-but-never-dispatched op is classified NOT_DISPATCH_PENDING -> SKIP -> never re-armed (the zombie). The fix should make this reconcilable.',
+      'with the fix flag off the persisted-but-never-dispatched op stays NOT_DISPATCH_PENDING -> SKIP (the zombie, unchanged default behavior)',
+    );
+    t.end();
+  });
+
+test('census rank-1 FIX (flag-on): a reconcile-due TERMINAL persisted_not_dispatched op is re-driven',
+  (t) => {
+    withZombieRedriveFlag(t, 'true');
+    const owner = buildReentryOwnerStub();
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: true},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, true,
+      'flag-on: a reconcile-due persisted_not_dispatched + terminal-phase op is flagged stale-terminal-dispatchable');
+    t.equal(
+      resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+      STALE_TERMINAL_REDRIVE_STATE,
+      'so it resolves to STALE_TERMINAL_REDRIVE (-> ARM_NOW) instead of being stranded',
+    );
+    t.end();
+  });
+
+test('census rank-1 FIX safety (flag-on): a NOT-yet-reconcile-due TERMINAL op is left alone',
+  (t) => {
+    withZombieRedriveFlag(t, 'true');
+    const owner = buildReentryOwnerStub();
+    const snapshot = buildPersistedNotDispatchedSnapshot(
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+      {timeoutReconcileDue: false},
+    );
+
+    const evidence = buildPriorityRecoveryDispatchPendingReentryEvidence(
+      owner,
+      snapshot,
+      ZOMBIE_OPERATION,
+    );
+
+    t.equal(evidence.staleTerminalDispatchable, false,
+      'a fresh (not reconcile-due) terminal op must NOT be treated as a stale zombie');
+    t.equal(
+      resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+      NOT_DISPATCH_PENDING_STATE,
+      'so a not-yet-stale terminal op is left on the default path (no premature re-drive)',
     );
     t.end();
   });

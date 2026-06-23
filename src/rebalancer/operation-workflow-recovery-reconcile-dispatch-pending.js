@@ -36,6 +36,10 @@ const {
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
   NOT_OWNER_ADVANCE: 'not_owner_advance',
+  // Census rank-1 fix (default-off LAGRANGE_PR_ZOMBIE_REDRIVE): a persisted-but-never-
+  // dispatched op whose phase resolved TERMINAL (split-context) past its step deadline.
+  // Without this it falls through to NOT_DISPATCH_PENDING -> SKIP -> never re-armed.
+  STALE_TERMINAL_REDRIVE: 'stale_terminal_redrive',
   NOT_DISPATCH_PENDING: 'not_dispatch_pending',
   NOT_DISPATCH_RETRYABLE: 'not_dispatch_retryable',
   OWNER_LANE_RETRY_REQUIRED: 'owner_lane_retry_required',
@@ -43,6 +47,14 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   REMOTE_RETRY_ACTIVE: 'remote_retry_active',
   REENTER: 'reenter',
 });
+
+// Default-off flag for the census rank-1 zombie re-drive (un-strand a
+// persisted_not_dispatched + terminal-phase + reconcile-due op). Opt-in until
+// gate-validated, exactly like the other convergence levers.
+const PRIORITY_RECOVERY_ZOMBIE_REDRIVE_FLAG = 'LAGRANGE_PR_ZOMBIE_REDRIVE';
+function isPriorityRecoveryZombieRedriveEnabled() {
+  return process.env[PRIORITY_RECOVERY_ZOMBIE_REDRIVE_FLAG] === 'true';
+}
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD = Object.freeze({
   CONDITIONS: 'conditions',
@@ -65,6 +77,10 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION_BY_STATE =
   Object.freeze(new Map([
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.REENTER,
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.ARM_NOW,
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.STALE_TERMINAL_REDRIVE,
       PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.ARM_NOW,
     ],
     [
@@ -117,6 +133,14 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_OWNER_ADVANCE,
     matches: (evidence) => evidence.ownerAdvance !== true,
+  }),
+  // Census rank-1: catch the persisted-not-dispatched + terminal-phase + reconcile-due
+  // zombie BEFORE the NOT_DISPATCH_PENDING skip and route it to ARM_NOW. Owner-advance
+  // already holds here (NOT_OWNER_ADVANCE matched first otherwise).
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.STALE_TERMINAL_REDRIVE,
+    matches: (evidence) => evidence.staleTerminalDispatchable === true,
   }),
   Object.freeze({
     state:
@@ -423,6 +447,22 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
       snapshot?.progress?.workflowProgressPhaseId ===
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    // Census rank-1 (flag-gated): a re-driveable actuation state whose phase resolved
+    // TERMINAL (split-context) and whose step deadline has passed (timeoutReconcileDue).
+    // This is the zombie the DISPATCH_PENDING gate above silently drops.
+    staleTerminalDispatchable:
+      isPriorityRecoveryZombieRedriveEnabled() &&
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES.has(
+        snapshot?.actuation?.state,
+      ) &&
+      snapshot?.actuation?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL &&
+      snapshot?.progress?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL &&
+      snapshot?.actuation?.timeoutReconcileDue === true &&
+      // Backoff: once a handoff retry is already in flight for this op, stop
+      // re-matching every reconcile cycle (mirrors remoteRetryActive suppression).
+      owner.hasActiveCreatedOperationHandoffRetry(operationId) !== true,
     dispatchRetryable: owner.isDispatchRetryableWorkflowStep(operation),
     ownerLaneHeld: owner.isOperationOwnerLaneHeld(operationId),
     ownerLaneRetryAllowed: options.allowOwnerLaneRetry === true,
