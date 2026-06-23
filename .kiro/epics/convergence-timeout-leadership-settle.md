@@ -49,20 +49,61 @@ events run 3).
 
 ## Mechanism — TWO COUPLED SUB-HEADS (file:line, re-grep before trusting)
 
-### Head A — `leadership_unstable`: the rebalancer-leadership LOCKSTEP flap (mechanism C)
-Node-wide bootstrap readiness oscillates `join_ready↔degraded` on `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`
-and is ANDed into **every** partition's rebalancer leadership through one shared resolver:
-- `src/partition/partition-service-rebalancer-methods.js:158,238` →
-  `this.rebalancer.setLeader(this.resolveRebalancerLeadership())`.
-- `src/partition/partition-service-core-base.js:454-468` `resolveRebalancerLeadership()`:
-  returns `false` unless `isLeader`, `true` when `isBackgroundWorkReady()`, else a traffic-readiness
-  fallback. So when `isBackgroundWorkReady()` flips, ALL ~28 partitions' rebalancer leadership flips
-  in lockstep (the "187 LEADER_START/STOP on the rejoiner" symptom).
-- Classified by the harness oracle at
-  `test/distributed/harness/control-plane-quiescence-snapshot.js:30,599` (`LEADERSHIP_CHURN`→
-  `leadership_unstable`) — sustained LEADER_START/STOP churn never settles → quiescence never reached.
-This is exactly [[post-swim-quiescence-heads-unified-root]]'s lever 1 ("rebalancer re-introduction
-suppression") and mechanism **C** of the slow-rejoiner epic — which R1/R3 did NOT touch.
+### Head A — `leadership_unstable`: load-driven critical-system replica MIGRATION churns the raft leader map (REFRAMED 2026-06-23)
+
+> ⚠️ **The original framing below the rule was WRONG and is superseded.** It is kept struck-through
+> for provenance. The corrected mechanism (two independent gate-evidence traces + classifier +
+> placement-owner code all agree) is above the rule.
+
+**Corrected mechanism.** The classifier keys `leadership_unstable` PURELY on the raft per-partition
+`leader_node_id` signature, NOT on rebalancer `setLeader`:
+`control-plane-quiescence-snapshot.js:544` `leadershipStable = leaderCount>0 && leaderQuietElapsedMs >= stableWindowMs(15000)`;
+`leaderQuietElapsedMs` resets whenever the per-partition `leader_node_id` map changes. The churn that
+keeps resetting it: **the move planner MIGRATES critical-system partition replicas (`replica_operations-p1`,
+`sql_write_operations-p1`, `sql_transactions-p1`, `sql_transaction_participants-p1`,
+`control_plane_publications-p1`) onto freshly-returned nodes ~90–145s after they rejoin**, emitting
+`increase_replica_count` ADDs that push the partition to 4–5 members vs target 3, then tearing the
+surplus down (`spread_replicas`/`node_not_in_target`/`replica_failed`/`budget_exceeded`). Each
+add-then-(throttled-)remove migration round reshuffles the raft leader and resets the 15s quiet window.
+
+**Why the migration happens (root, file:line confirmed):** `calculatePartitionPlacement`
+(`move-planner.js:650`) sets `targetNodes = placementOwnerDecision.intent.targetNodeIds`, ranked PURELY
+by `SUITABILITY` (CPU/load) at `placement-owner-decision.js:182-190` — the ONLY floors are CL-038
+leader-retention + in-flight transition reservations (`placement-owner-decision.js:208-267`). There is
+**NO general incumbency bias**: a freshly-returned, now-low-load NON-leader node ranks high → enters the
+critical-system cohort → DISPLACES a current incumbent → migration. The slow rejoiner 7493b0ab is a
+healthy SURVIVOR throughout (re-introduction-loop framing REFUTED); leadership is raft-role churn on a
+near-stable membership set.
+
+**Amplifier (Y, a SEPARATE B-side lever — not Head A):** new replicas on restarted nodes can't establish
+their control-plane writes (write-wedge) → `replica_failed` → re-plan loop, converting one migration into
+repeated churn. `budget_exceeded` remove-skips (seen at currentCount:4 target:3) let adds outrun the
+throttled surplus drain, sustaining over-replication.
+
+**LEVERS REFUTED this session (do NOT retry):**
+- **C-1 (`resolveRebalancerLeadership` debounce) is DEAD.** The hysteresis already landed (commit
+  e9f1c8bb 2026-06-21, default-ON) and was PRESENT in the 164130Z gate that still churned. It governs
+  the rebalancer WORKER, which the classifier never observes. It cannot move this signal.
+- **Recency/settle-window ADD-defer (`LAGRANGE_PR_DEFER_REJOIN_RESPREAD_ADD`) is REFUTED.** The
+  over-replicating ADD fires ~90–145s post-return; by then lease/heartbeat/`created_at`/readiness have
+  ALL healed and are indistinguishable from a stable survivor, and there is NO persisted "returned-at"
+  anchor column on the nodes table — a self-lifting window has nothing to fire on. Also: a state-predicate
+  "defer add when at/over target" DEADLOCKS the spread-floor remove guard (`move-planner-move-calculation-methods.js:545`)
+  → neither add nor remove → `convergence_timeout`.
+
+**THE precise open question (next session's focused dig, picks the lever):** is the `leader_node_id` flip
+triggered by displacing the LEADER replica (→ extend CL-038 leader-retention to cover node_not_in_target
+migration, not just surplus drain) OR by a FOLLOWER membership-change triggering a raft re-election (→
+lever must throttle/serialize critical-system membership changes during recovery, or add incumbency
+stickiness so a merely-lower-load returned node doesn't trigger migration at all)? Resolve by tracing,
+for the +309s `sql_write_operations-p1` flip in run1, whether the displaced replica at +237/+249s was the
+leader's or a follower's, and whether the new leader was elected on a membership change.
+
+> ~~Node-wide bootstrap readiness oscillates `join_ready↔degraded` on `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`~~
+> ~~and is ANDed into every partition's rebalancer leadership through `resolveRebalancerLeadership()`~~
+> ~~(`partition-service-core-base.js:454`); when `isBackgroundWorkReady()` flips, all ~28 partitions'~~
+> ~~rebalancer leadership flips in lockstep.~~ — **SUPERSEDED: classifier keys on raft leader_node_id, not
+> rebalancer setLeader; see corrected mechanism above.**
 
 ### Head B — `convergence_timeout`: control-plane WRITE/establishment readiness-budget burn
 Restarted/rejoined nodes burn the full readiness budget waiting on `active_gate_snapshot_coverage`
@@ -89,13 +130,19 @@ control-plane write/establishment path fast/leader-local AND debounce the readin
 > lever flag-gated default-off. Subagent-verify safety (never split-brain rebalancer leadership;
 > never drop a real raft leader; never relax a write-quorum).
 
-1. **Lever C-1 — debounce/hysteresis the readiness→rebalancer-leadership AND (Head A, smallest).**
-   `partition-service-core-base.js:454-468` + `partition-service-rebalancer-methods.js:158,238`.
-   Stop a transient `isBackgroundWorkReady()` dip from instantly demoting all ~28 partitions'
-   rebalancer leadership — add hysteresis (require N consecutive not-ready samples / a settle window)
-   or decouple per-partition rebalancer leadership from the node-wide readiness flag. Falsifier: a
-   DT repro that flips `isBackgroundWorkReady()` once briefly and asserts rebalancer leadership does
-   NOT flip (flag-on) vs flips (flag-off). Addresses the churn directly; does not touch raft.
+1. **Lever C-2 — stop load-driven critical-system replica MIGRATION onto returned nodes (Head A, REPLACES the dead C-1).**
+   Root is `move-planner.js:650 calculatePartitionPlacement` ranking by SUITABILITY/load only
+   (`placement-owner-decision.js:182-190`) with no incumbency bias, so returned low-load nodes displace
+   incumbents → migration → leader-map churn. **First resolve the open question above** (leader-replica
+   displacement vs follower-membership-change election). Then the candidate lever (flag-gated default-off):
+   either (a) extend CL-038 placement-owner retention to also retain CURRENT critical-system incumbents
+   during the recovery window (incumbency stickiness — a merely-lower-load returned node must NOT trigger
+   migration; a GONE/infeasible node still gets replaced, so recovery is never stalled), or (b)
+   serialize/throttle critical-system membership changes while non-quiescent so at most one leader-map
+   change is in flight. Falsifier: a MovePlanner DT repro where a returned low-load node is feasible and
+   the partition is AT target — assert no `increase_replica_count` ADD that would over-replicate +
+   displace an incumbent (flag-on) vs the migration (flag-off). Does NOT touch raft quorum.
+   ~~C-1 (resolveRebalancerLeadership debounce) — DEAD: already landed e9f1c8bb, wrong signal.~~
 
 2. **Lever W-1 — leader-local control-plane establishment write (Head B, the architectural lever).**
    Reuse the bootstrap-direct-write analog: let the establishment owner persist its
@@ -114,9 +161,11 @@ control-plane write/establishment path fast/leader-local AND debounce the readin
    budget-scaled gate to separate calibration from mechanism. Cheap, do FIRST to avoid chasing a
    calibration artifact.
 
-Recommended sequencing: **B-1 first** (cheap — separate calibration from real wedge), then **C-1**
-(smallest real lever, kills the leadership flap), then **W-1** (the establishment-write root). They
-compose; C-1 + W-1 break the A↔B coupling from both ends.
+Recommended sequencing (UPDATED 2026-06-23): **resolve the Head-A open question first** (one cheap
+evidence trace — leader-replica displacement vs follower-membership-change election), which picks the
+**C-2** form; then **B-1** (cheap calibration probe) before spending the expensive establishment-write
+**W-1**. C-1 is dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A↔B
+coupling from both ends.
 
 ## Existing work to build ON (don't rebuild)
 
@@ -161,6 +210,20 @@ compose; C-1 + W-1 break the A↔B coupling from both ends.
 
 ## Decision log
 
+- 2026-06-23 (later) — **Head A REFRAMED + two levers REFUTED with evidence** (4 subagent traces +
+  classifier + placement-owner code). (1) C-1 (`resolveRebalancerLeadership` debounce) is DEAD: the
+  hysteresis already landed e9f1c8bb (default-ON) and was present in the churning 164130Z gate; the
+  classifier keys `leadership_unstable` on the raft `leader_node_id` map, not rebalancer `setLeader`.
+  (2) The recency/settle-window ADD-defer lever (`LAGRANGE_PR_DEFER_REJOIN_RESPREAD_ADD`) is REFUTED:
+  the over-replicating ADD fires ~90–145s post-return when all node-row liveness fields have healed and
+  no "returned-at" anchor exists; and a state-predicate variant deadlocks the spread-floor remove guard.
+  **Confirmed root:** load-only placement ranking (`placement-owner-decision.js:182-190`, no incumbency
+  bias) re-selects returned low-load nodes into the critical-system cohort → replica MIGRATION →
+  add-then-throttled-remove churns the raft leader map → resets the 15s quiet window. Replaced lever C-1
+  with **C-2** (incumbency stickiness / membership-change serialization). Precise open question pinned
+  (leader-replica displacement vs follower-membership-change election) as the next cheap dig that picks
+  the C-2 form. No code landed (correct per coupled-invariant discipline — the cleanest lever was
+  refuted; do not force a speculative patch).
 - 2026-06-23 — Opened as the SUCCESSOR frontier after `slow-rejoiner-progress-or-evict` resolved
   (R1+R3 landed + promoted default-ON; gate `stat-gate-20260623T164130Z` SAFE 3/3, remove-safety
   residual witnesses 3→0). PASS peeled to two coupled sub-heads: `leadership_unstable` (rebalancer-
