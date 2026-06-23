@@ -59,6 +59,23 @@ function buildPriorityRecoverySemanticPartitionSetMap() {
   return partitionIdsBySemanticState;
 }
 
+// Un-mask flag (default-off): require a REPLACE's new target replica to be
+// voter-ready (ACTIVE_OPERATIONAL) before it CERTIFIES priority spread. The
+// optimistic default certifies spread the moment a REPLACE reaches its
+// REMOVE-dispatch phase on an eligible target — BEFORE the new replica becomes
+// active/voter-ready — so a genuinely under-spread partition reads as
+// `spread_satisfied_in_flight`, masking the real blocker: the REPLACE-created
+// learner failing voter-ready promotion under load (CL-003 / CL-009 / CL-021).
+// With the flag on, REPLACE-remove-dispatch alone no longer certifies spread, so
+// the closure reports the honest under-spread/promotion blocker instead.
+const PRIORITY_RECOVERY_SPREAD_REQUIRE_VOTER_READY_FLAG =
+  'LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY';
+function isPriorityRecoverySpreadRequireVoterReadyEnabled() {
+  return (
+    process.env[PRIORITY_RECOVERY_SPREAD_REQUIRE_VOTER_READY_FLAG] === 'true'
+  );
+}
+
 function isPriorityRecoverySpreadSatisfyingOperationContext(
   operationContext,
   options = {},
@@ -76,13 +93,19 @@ function isPriorityRecoverySpreadSatisfyingOperationContext(
   if (!eligibleTargetNodeIds.has(targetNodeId)) {
     return false;
   }
+  const targetVoterReady =
+    operationContext?.targetVisibilityState ===
+    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
   if (isReplaceRemoveDispatchPhase(operationContext)) {
+    // Un-mask: a REPLACE in its REMOVE-dispatch phase only certifies spread once
+    // its new target replica is actually voter-ready. Flag-off → the optimistic
+    // legacy behavior (REMOVE-dispatch alone certifies) is preserved byte-identical.
+    if (isPriorityRecoverySpreadRequireVoterReadyEnabled()) {
+      return targetVoterReady;
+    }
     return true;
   }
-  return (
-    operationContext?.targetVisibilityState ===
-    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
-  );
+  return targetVoterReady;
 }
 
 function resolvePriorityRecoverySpreadSatisfyingReasonCode(
