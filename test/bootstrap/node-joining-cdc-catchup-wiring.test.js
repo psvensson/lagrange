@@ -1,9 +1,17 @@
 /**
  * CL-014 wiring guards (mutation-test-proven gap): signalReadyForReplicas
- * must run the CDC catch-up hydration after the subscription readiness gate
- * and before any further readiness gate, and the catch-up must never block
- * or fail readiness. A regression that silently unwires the catch-up would
- * reproduce the exact CONVERGED/STALLED startup race CL-014 closed.
+ * must run the CDC catch-up hydration after the subscription readiness gate,
+ * and the catch-up must never block or fail readiness. A regression that
+ * silently unwires the catch-up would reproduce the exact CONVERGED/STALLED
+ * startup race CL-014 closed.
+ *
+ * The catch-up runs FIRE-AND-FORGET (honoring CL-014's "readiness must never
+ * block on catch-up" contract): it is 19 sequential distributed full-table
+ * reads to the single authoritative seed, so awaiting it serialized ~28s/join
+ * into the join critical path and blew the join timeout by the ~5th joiner
+ * under N-node formation. Backgrounding keeps the heartbeat/READY advertisement
+ * off that read path; the live stream + steady-state owner-RPC repair close any
+ * residual window. Rolling-restart gate N=3 CONVERGED 3/3 (0 corrupt).
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -12,6 +20,13 @@ import {
 } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
 
 const STOP_SENTINEL = 'stop-before-heartbeat';
+
+// Flush pending microtasks (the backgrounded catch-up) so its observable
+// effects are settled before assertions. setImmediate runs after the microtask
+// queue drains.
+function flushBackground() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 function createTarget({cdcIntegrationService, calls}) {
   const target = Object.create(NodeJoiningReadySignalReadiness.prototype);
@@ -38,27 +53,44 @@ function createTarget({cdcIntegrationService, calls}) {
 test('CL-014 wiring: signalReadyForReplicas runs catch-up hydration',
   async (t) => {
     await t.test(
-      'catch-up runs between the CDC gate and the next readiness gate',
+      'catch-up is fire-and-forget after the CDC gate, never blocking ' +
+        'the readiness flow',
       async (t) => {
         const calls = [];
+        let catchupStarted = false;
         const target = createTarget({
           calls,
           cdcIntegrationService: {
-            hydrateCdcPropagatedTablesFromAuthority: async () => {
+            // A catch-up that never settles must NOT stall readiness — proves
+            // the call is genuinely backgrounded, not awaited.
+            hydrateCdcPropagatedTablesFromAuthority: () => {
+              catchupStarted = true;
               calls.push('catch-up');
-              return {tablesHydrated: 1, rowsApplied: 3, tablesFailed: []};
+              return new Promise(() => {});
             },
           },
         });
 
         await target.signalReadyForReplicas().catch((error) => {
-          t.equal(error.message, STOP_SENTINEL, 'stopped at the sentinel');
+          t.equal(
+            error.message,
+            STOP_SENTINEL,
+            'readiness reached the next gate without awaiting the catch-up',
+          );
         });
+        await flushBackground();
 
-        t.same(
-          calls,
-          ['cdc-gate', 'catch-up', 'transport-gate'],
-          'catch-up wired after the CDC gate, before further gates',
+        t.ok(catchupStarted, 'background catch-up was started');
+        // Wired after the CDC gate; the next readiness gate is NOT blocked by
+        // the (never-settling) catch-up.
+        t.ok(
+          calls.indexOf('cdc-gate') >= 0 &&
+            calls.indexOf('transport-gate') > calls.indexOf('cdc-gate'),
+          'catch-up scheduled after the CDC gate; transport gate still reached',
+        );
+        t.ok(
+          calls.indexOf('catch-up') > calls.indexOf('transport-gate'),
+          'catch-up did not run before the next gate (fire-and-forget)',
         );
       },
     );
@@ -83,6 +115,7 @@ test('CL-014 wiring: signalReadyForReplicas runs catch-up hydration',
             'flow reached the next gate despite the catch-up failure',
           );
         });
+        await flushBackground();
         t.ok(
           calls.some((entry) => entry.startsWith('warn:')),
           'failure surfaced as a warn',
@@ -100,56 +133,12 @@ test('CL-014 wiring: signalReadyForReplicas runs catch-up hydration',
         await target.signalReadyForReplicas().catch((error) => {
           t.equal(error.message, STOP_SENTINEL, 'flow continued');
         });
+        await flushBackground();
         t.ok(
           calls.some((entry) => entry.startsWith('warn:')),
           'skip surfaced as a warn',
         );
         t.ok(calls.includes('transport-gate'), 'readiness flow continued');
-      },
-    );
-
-    await t.test(
-      'LAGRANGE_JOIN_CATCHUP_COALESCE: catch-up is fire-and-forget, ' +
-        'never blocking the readiness flow',
-      async (t) => {
-        const previous = process.env.LAGRANGE_JOIN_CATCHUP_COALESCE;
-        process.env.LAGRANGE_JOIN_CATCHUP_COALESCE = 'true';
-        t.teardown(() => {
-          if (previous === undefined) {
-            delete process.env.LAGRANGE_JOIN_CATCHUP_COALESCE;
-          } else {
-            process.env.LAGRANGE_JOIN_CATCHUP_COALESCE = previous;
-          }
-        });
-
-        const calls = [];
-        let catchupStarted = false;
-        const target = createTarget({
-          calls,
-          cdcIntegrationService: {
-            // A catch-up that never settles must NOT stall readiness when the
-            // coalesce flag runs it in the background.
-            hydrateCdcPropagatedTablesFromAuthority: () => {
-              catchupStarted = true;
-              calls.push('catch-up');
-              return new Promise(() => {});
-            },
-          },
-        });
-
-        await target.signalReadyForReplicas().catch((error) => {
-          t.equal(
-            error.message,
-            STOP_SENTINEL,
-            'readiness reached the next gate without awaiting the catch-up',
-          );
-        });
-
-        t.ok(catchupStarted, 'background catch-up was started');
-        t.ok(
-          calls.includes('transport-gate'),
-          'readiness flow continued past a never-settling catch-up',
-        );
       },
     );
   });

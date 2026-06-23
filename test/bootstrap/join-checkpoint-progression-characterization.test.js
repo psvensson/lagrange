@@ -477,9 +477,12 @@ test('Join checkpoint progression - MEMBERSHIP_WRITTEN step runs plan phase 4',
       tracking.messageGroupRowsActivated,
       'MEMBERSHIP_WRITTEN checkpoint should activate message group rows',
     );
-    t.ok(
+    t.notOk(
       tracking.backfillStarted,
-      'MEMBERSHIP_WRITTEN checkpoint should start opportunistic backfill',
+      'MEMBERSHIP_WRITTEN checkpoint should NOT start the pre-arm opportunistic ' +
+        'backfill — it runs before CDC subscriptions are confirmed (inside the ' +
+        'window CL-014 must close) and is subsumed by the post-arm ' +
+        'fire-and-forget catch-up in signalReadyForReplicas',
     );
   });
 

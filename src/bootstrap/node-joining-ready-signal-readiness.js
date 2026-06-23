@@ -178,20 +178,16 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     // stream is armed, pull the current authoritative state once;
     // best-effort — readiness must never block on catch-up because the
     // live stream and the repair paths remain.
-    if (process.env.LAGRANGE_JOIN_CATCHUP_COALESCE === 'true') {
-      // Formation load reduction: the catch-up is 19 sequential distributed
-      // full-table reads to the (single) authoritative seed. Under N-node
-      // simultaneous formation that seed's event loop saturates, so awaiting
-      // it here serializes ~28s/join into the critical path and the serial
-      // sum blows the join timeout by the ~5th joiner (measured). Honor
-      // CL-014's own contract ("readiness must never block on catch-up") by
-      // running the post-arm window-close in the background — the live stream
-      // and steady-state repair paths remain, and the heartbeat/READY
-      // advertisement below no longer waits on it.
-      this.runBackgroundCdcCatchupAfterSubscription();
-    } else {
-      await this.hydrateCdcPropagatedTablesAfterSubscription();
-    }
+    //
+    // Run it FIRE-AND-FORGET (honoring that "never block readiness" contract):
+    // the catch-up is 19 sequential distributed full-table reads to the single
+    // authoritative seed, so awaiting it serialized ~28s/join into the join
+    // critical path and the serial sum blew the join timeout by the ~5th joiner
+    // under N-node formation (measured per-phase). Backgrounding it keeps the
+    // heartbeat/READY advertisement below off that read path; the live stream +
+    // steady-state owner-RPC repair close any residual window. Rolling-restart
+    // gate N=3 CONVERGED 3/3 (0 corrupt) with this behavior.
+    this.runBackgroundCdcCatchupAfterSubscription();
     try {
       await this.awaitLocalQueryTransportReadinessForReadySignal();
     } catch (error) {
@@ -355,11 +351,11 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     }
   }
   /**
-   * Run the CL-014 post-arm catch-up window-close without blocking readiness
-   * (LAGRANGE_JOIN_CATCHUP_COALESCE). Fire-and-forget by contract: the catch-up
-   * is best-effort and the live stream + repair paths remain, so a joining node
-   * does not serialize 19 distributed full-table reads to the saturated seed
-   * into its join critical path during formation. Errors are swallowed inside
+   * Run the CL-014 post-arm catch-up window-close without blocking readiness.
+   * Fire-and-forget by contract: the catch-up is best-effort and the live
+   * stream + repair paths remain, so a joining node does not serialize 19
+   * distributed full-table reads to the saturated seed into its join critical
+   * path during formation. Errors are swallowed inside
    * hydrateCdcPropagatedTablesAfterSubscription; the extra catch is defensive so
    * an unexpected synchronous throw can never surface as an unhandled rejection.
    * @return {void}
