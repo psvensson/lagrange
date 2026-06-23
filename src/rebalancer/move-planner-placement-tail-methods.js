@@ -60,6 +60,13 @@ import {
 import {
   buildPlacementOwnerDecision as buildPlacementOwnerPolicyDecision,
 } from './placement-owner-decision.js';
+// C-2 incumbency-stickiness lever (default-off; Head A of
+// convergence-timeout-leadership-settle). Only retains current healthy+feasible
+// incumbents for control-plane-priority partitions, so it cannot affect any other
+// entity even when enabled. See placement-owner-evidence.js for the mechanism.
+function isPriorityIncumbentStickinessEnabled() {
+  return process.env.LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS === 'true';
+}
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -216,6 +223,10 @@ class MovePlannerPlacementTailMethods {
     const currentReplicas = Array.isArray(options.currentReplicas) ?
       options.currentReplicas :
       this.getCurrentReplicas();
+    const retainHealthyIncumbents =
+      isPriorityIncumbentStickinessEnabled() &&
+      typeof this.isControlPlanePriorityPartition === 'function' &&
+      this.isControlPlanePriorityPartition() === true;
     return buildPlacementOwnerPolicyDecision({
       candidateNodes: Array.isArray(options.nodes) ? options.nodes : [],
       currentReplicas,
@@ -226,6 +237,7 @@ class MovePlannerPlacementTailMethods {
       includeGlobalSystemDeferral: options.includeGlobalSystemDeferral === true,
       placementPolicy: options.placementPolicy,
       scoreProfile: options.scoreProfile,
+      retainHealthyIncumbents,
     });
   }
 

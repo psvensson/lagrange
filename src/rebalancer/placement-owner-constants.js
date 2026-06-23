@@ -63,6 +63,7 @@ const PLACEMENT_OWNER_RESERVATION_REASON = Object.freeze({
   SAME_ENTITY_TRANSITION: 'same_entity_transition',
   GLOBAL_SYSTEM_TRANSITION_DEFERRED: 'global_system_transition_deferred',
   LEADER_RETENTION: 'leader_retention',
+  INCUMBENT_RETENTION: 'incumbent_retention',
 });
 
 const PLACEMENT_OWNER_INTENT_STATE = Object.freeze({

@@ -145,6 +145,35 @@ function resolveLeaderRetentionNodeId(currentReplicas, targetCount) {
   return leaderReplica ? leaderReplica.nodeId : PLACEMENT_OWNER_EMPTY_STRING;
 }
 
+// C-2 incumbency-stickiness lever (Head A of convergence-timeout-leadership-settle):
+// the leadership_unstable rolling-restart blocker is raft leader-map churn driven
+// by load-only placement re-selecting freshly-returned low-load nodes into a
+// control-plane-priority partition's cohort, displacing healthy incumbents. The
+// resulting 3->5 over-replication raises the raft majority while fresh followers
+// can't heartbeat, provoking a re-election that resets the 15s quiescence window.
+// When the caller opts in (flag-gated + control-plane-priority partition only),
+// reserve the CURRENT valid incumbent nodes so they are retained in the target
+// cohort ahead of marginally-lower-load returned candidates. Feasibility is
+// enforced downstream exactly like leader retention: the reservation only ever
+// keeps a node that survived the capacity/score filter (is in rankedNodeIds), so a
+// GONE/infeasible incumbent is never floored back in and still gets replaced — the
+// lever suppresses load-churn migration, never genuine recovery.
+function resolveIncumbentRetentionNodeIds(currentReplicas, retainHealthyIncumbents) {
+  if (retainHealthyIncumbents !== true) {
+    return [];
+  }
+  const seen = new Set();
+  const nodeIds = [];
+  for (const replica of currentReplicas) {
+    if (replica.valid !== true || seen.has(replica.nodeId)) {
+      continue;
+    }
+    seen.add(replica.nodeId);
+    nodeIds.push(replica.nodeId);
+  }
+  return nodeIds;
+}
+
 function normalizeCapacityDiagnostics(capacityDiagnostics, fallbackCount) {
   const diagnostics =
     capacityDiagnostics && typeof capacityDiagnostics === TYPEOF.OBJECT ?
@@ -276,6 +305,12 @@ function normalizePlacementOwnerEvidence(options = {}) {
     leaderRetentionNodeId: resolveLeaderRetentionNodeId(
       currentReplicas,
       normalizePositiveInteger(options.targetCount),
+    ),
+    incumbentRetentionNodeIds: Object.freeze(
+      resolveIncumbentRetentionNodeIds(
+        currentReplicas,
+        options.retainHealthyIncumbents === true,
+      ),
     ),
     forbiddenReinterpretations: PLACEMENT_OWNER_REINTERPRETATION,
   });

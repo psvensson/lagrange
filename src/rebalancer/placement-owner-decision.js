@@ -216,14 +216,33 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   // capacity-rejected leader is never floored back in.
   const transitionReserved = scoreResult.rankedNodeIds
     .filter((nodeId) => evidence.transitionReservations.has(nodeId));
+  // C-2 incumbency stickiness: retain current healthy+feasible incumbents (those
+  // still in rankedNodeIds) so load-only re-ranking cannot migrate a control-plane-
+  // priority partition's replicas off them. Precedence sits BELOW in-flight
+  // transitions (never evict a mid-establishment node) and SUPERSEDES the narrower
+  // CL-038 leader-only retention (the leader is itself an incumbent). Empty unless
+  // the caller opted in, so the flag-off path is byte-identical to prior behavior.
+  const incumbentRetentionNodeIdSet = new Set(evidence.incumbentRetentionNodeIds);
+  const incumbentReserved = scoreResult.rankedNodeIds
+    .filter((nodeId) =>
+      incumbentRetentionNodeIdSet.has(nodeId) &&
+      !evidence.transitionReservations.has(nodeId),
+    );
   const leaderReserved =
     evidence.leaderRetentionNodeId.length > NUM.ZERO &&
       scoreResult.rankedNodeIds.includes(evidence.leaderRetentionNodeId) &&
       !evidence.transitionReservations.has(evidence.leaderRetentionNodeId) ?
       [evidence.leaderRetentionNodeId] :
       [];
-  const reservedNodeIds = [...transitionReserved, ...leaderReserved]
-    .slice(NUM.ZERO, targetCount);
+  // Precedence within the targetCount slice budget: in-flight transitions first
+  // (never evict a mid-establishment node), then the raft LEADER (so the
+  // over-target surplus-drain case still retains the leader exactly like CL-038 —
+  // otherwise rank-ordered incumbents could slice a high-load leader out and force
+  // the re-election this lever exists to prevent), then the remaining incumbents
+  // by rank. Dedup preserves this order; the leader appears once.
+  const reservedNodeIds = [
+    ...new Set([...transitionReserved, ...leaderReserved, ...incumbentReserved]),
+  ].slice(NUM.ZERO, targetCount);
   const reservedNodeIdSet = new Set(reservedNodeIds);
   const deferredNodeIds = scoreResult.rankedNodeIds
     .filter((nodeId) =>
@@ -244,6 +263,11 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   if (evidence.leaderRetentionNodeId.length > NUM.ZERO &&
       reservedNodeIds.includes(evidence.leaderRetentionNodeId)) {
     reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.LEADER_RETENTION);
+  }
+  if (reservedNodeIds.some(
+    (nodeId) => incumbentRetentionNodeIdSet.has(nodeId),
+  )) {
+    reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.INCUMBENT_RETENTION);
   }
   if (deferredNodeIds.length > NUM.ZERO) {
     reasons.push(
