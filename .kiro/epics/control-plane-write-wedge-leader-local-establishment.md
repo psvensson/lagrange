@@ -430,6 +430,36 @@ Deep trace of run2's binding op (`7bad1358`, REPLACE on `control_plane_publicati
   (`priority-recovery-completion.js:162-211`, `priority-recovery-snapshot-closure.js:405-407`) already SIGNS the op
   off as done (reporting) but **never RETIRES the un-dispatched `replica_operations` record** → it lingers.
 
+### ⤷ MECHANISM FULLY PINNED 2026-06-23 (the lever is REDUNDANT-REPLACE RETIREMENT, not superseded-target)
+Traced why the existing retirement never fires for `7bad1358` (file:line):
+- The drain snapshot's `ownerAction` = `WAKE_REMOTE_OWNER` (owner-node = the op's `targetNodeId` `35a891b8`,
+  resolved by `replica-operation-repository-row-methods.js:131-166` `isPriorityReplace`→targetNodeId). The
+  timeout-reconcile loop (`operation-workflow-recovery-timeout.js:194-207`) calls
+  `wakePriorityRecoveryRemoteOwnerFromDrainSnapshot` FIRST and `continue`s when a wake retry is active
+  (`operation-workflow-recovery-drain.js:446-450 → return true`). **So the op perpetually tries to wake its
+  DISCONNECTED remote owner and NEVER reaches any retirement branch.** (`isOperationTerminal` is false — the
+  record is PENDING/persisted_not_dispatched — so the `:195` terminal-skip does not apply; phase=terminal is the
+  selector-split artifact, not the record status.)
+- The existing `SUPERSEDED_TARGET` retirement (`drain.js:94-142`) requires the target to be EXCLUDED from
+  eligibility (`RECOVERY_ELIGIBLE_EXCLUDED` blocker AND target ∉ eligibleNodeIds). `7bad1358`'s target is still
+  ELIGIBLE — just UNREACHABLE — so it is NOT a superseded target. The op is **redundant** (spread already
+  satisfied by sibling `418f3a09`), a distinct condition with no existing retirement path.
+
+**THE LEVER (precise, safety-sensitive — deserves its own focused cycle):** add a **redundant-REPLACE retirement**:
+when a priority REPLACE is un-dispatched (`persisted_not_dispatched`/PENDING), its partition spread is already
+satisfied (`spreadGap=0`) with remove-safety converged **by replicas independent of THIS op's target**, AND its
+remote owner is unreachable (`WAKE_REMOTE_OWNER` perpetually deferring / N wake failures), retire it
+(`failOperation`/cancel its own `replica_operations` row — B4-safe, no control_plane_publications write) INSTEAD
+of the `WAKE_REMOTE_OWNER` continue. Gate it in the timeout-reconcile loop BEFORE the wake branch
+(`operation-workflow-recovery-timeout.js:200-207`), flag-gated default-off.
+- **Safety bar (high):** must confirm the 3-distinct-node spread holds WITHOUT counting this op's target (else
+  retiring breaks spread). Reuse the completion/remove-safety contract (`removeSafetyState: converged`,
+  `spreadGap: 0` already in the witness) — do NOT recompute spread truth locally. Subagent-verify the predicate.
+- **Falsifier (below-gate):** two-context fixture — terminal sibling provides 3-node spread + a PENDING redundant
+  REPLACE whose target is eligible-but-unreachable; assert flag-on retires it (not WAKE_REMOTE_OWNER spin),
+  flag-off byte-identical, and a NON-redundant un-dispatched REPLACE (spreadGap>0) is NEVER retired.
+- Composes with (b) wedged-handoff abandon for the general unreachable-owner case.
+
 ### Ranked lever (subagent recommendation) — RETIRE the no-op first
 1. **(c) RETIRE the redundant un-dispatched REPLACE — RECOMMENDED, smallest, B4-safe.** When an authoritative
    sibling has already satisfied spread+remove-safety (spreadGap=0, removeSafetyState=converged) and this op is
