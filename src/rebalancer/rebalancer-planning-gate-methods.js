@@ -27,9 +27,33 @@ const {
   REBALANCER_LOG_MSG,
   TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
+  CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
+  ReplicaStatus,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = UNIFIED_REBALANCER_SHARED;
+
+// Physical occupancy statuses — a replica that is pending/creating/syncing/active
+// occupies a slot in the raft voter set (mirrors PLACEMENT_OCCUPIED_STATUSES in
+// the move planner). Used to detect genuine over-replication robustly across a
+// rolling-restart cascade (a transiently non-active copy still counts).
+const PHYSICAL_OCCUPIED_REPLICA_STATUSES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
+
+// Default-off lever. When LAGRANGE_PR_DRAIN_THROUGH_SETTLING=true, an
+// over-replicated priority partition whose only topology-settling blocker is its
+// OWN in-flight add-half is allowed to PLAN (so the surplus drain is computed)
+// instead of serializing the drain behind the over-replication's own add — the
+// ~186s over-count window that churns raft leadership (gate
+// stat-gate-20260624T134940Z). Execution still passes evaluateRemoveSafety, so
+// the voter floor is unchanged. Flag-off is byte-identical.
+function isDrainThroughSettlingEnabled() {
+  return process.env.LAGRANGE_PR_DRAIN_THROUGH_SETTLING === 'true';
+}
 
 const REBALANCER_PLANNING_GATE_METHODS = {
   scheduleNextCheck(overrideDelayMs = null) {
@@ -361,6 +385,80 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Object}
    * @private
    */
+  /**
+   * Count this entity's current replicas that physically occupy a raft slot
+   * (pending/creating/syncing/active). Over-target by this physical count means
+   * the partition is genuinely over-replicated (surplus needs draining), robust
+   * to a colocated copy transiently leaving ACTIVE during a restart cascade.
+   * @return {number}
+   * @private
+   */
+  countPhysicalOccupiedCurrentReplicas() {
+    if (typeof this.getCurrentReplicas !== TYPEOF.FUNCTION) {
+      return NUM.ZERO;
+    }
+    const currentReplicas = this.getCurrentReplicas();
+    return (Array.isArray(currentReplicas) ? currentReplicas : []).filter(
+      (replica) => {
+        const status = String(
+          replica?.status || ReplicaStatus.ACTIVE,
+        ).toLowerCase();
+        return PHYSICAL_OCCUPIED_REPLICA_STATUSES.has(status);
+      },
+    ).length;
+  },
+
+  /**
+   * True when the topology-settling blocker is the partition's OWN in-flight
+   * topology op (the over-replication add-half) AND this priority partition is
+   * over its replica-count target — i.e. completing the drain is what unblocks
+   * convergence, so planning must proceed rather than serialize behind the add.
+   * Only ever true under LAGRANGE_PR_DRAIN_THROUGH_SETTLING.
+   * @param {Object|null} topologySettlingBlocker
+   * @return {boolean}
+   * @private
+   */
+  isOverReplicatedOwnOperationDrainReady(topologySettlingBlocker) {
+    if (
+      !isDrainThroughSettlingEnabled() ||
+      !this.isControlPlanePriorityPartition() ||
+      topologySettlingBlocker?.reason !==
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+          .TOPOLOGY_OPERATIONS_IN_FLIGHT
+    ) {
+      return false;
+    }
+    const targetReplicaCount =
+      typeof this.getPriorityControlPlaneTargetReplicaCount === TYPEOF.FUNCTION ?
+        this.getPriorityControlPlaneTargetReplicaCount() :
+        NUM.ZERO;
+    if (
+      !Number.isFinite(targetReplicaCount) ||
+      targetReplicaCount <= NUM.ZERO ||
+      this.countPhysicalOccupiedCurrentReplicas() <= targetReplicaCount
+    ) {
+      return false;
+    }
+    const inFlightDetails = Array.isArray(
+      topologySettlingBlocker?.inFlightReplicaOperationDetails,
+    ) ?
+      topologySettlingBlocker.inFlightReplicaOperationDetails :
+      [];
+    if (inFlightDetails.length === NUM.ZERO) {
+      return false;
+    }
+    // Every in-flight settling op must be for THIS entity — never relax the gate
+    // when an UNRELATED partition's op is also transitional.
+    return inFlightDetails.every((detail) => {
+      const detailPartitionId = String(
+        detail?.partitionId ||
+          detail?.partition_id ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      return detailPartitionId === this.entityId;
+    });
+  },
+
   buildTopologySettlingPlanningGateSnapshot(topologySettlingBlocker) {
     const priorityRecoveryGateBypass =
       this.buildPriorityRecoveryPlanningGateBypassSnapshot();
@@ -372,10 +470,13 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         topologySettlingBlocker,
         priorityRecoveryGateBypass.operationCreationGate,
       );
+    const overReplicatedOwnDrainReady =
+      this.isOverReplicatedOwnOperationDrainReady(topologySettlingBlocker);
     const evidence = Object.freeze({
       blocked: !!topologySettlingBlocker,
       priorityRecoveryOperationCreationRequired,
       topologySettlingBlockedByOperationCreationTarget,
+      overReplicatedOwnDrainReady,
     });
     const planningState =
       TOPOLOGY_SETTLING_PLANNING_STATE_TABLE.find((entry) =>
@@ -409,6 +510,23 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         topologySettlingBlocker,
       );
     if (gateSnapshot.shouldDefer !== true) {
+      if (
+        gateSnapshot.planningState ===
+        TOPOLOGY_SETTLING_PLANNING_STATE.OVER_REPLICATED_OWN_DRAIN_READY
+      ) {
+        // Positive engagement signal: the drain-through-settling lever let an
+        // over-replicated partition plan its surplus drain instead of waiting
+        // behind its own in-flight add-half. Greppable in gate logs to confirm
+        // the lever actually FIRES before trusting a gate verdict.
+        this.logger.info(REBALANCER_LOG_MSG.ALLOW_TOPOLOGY_SETTLING_DRAIN, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          physicalReplicaCount: this.countPhysicalOccupiedCurrentReplicas(),
+          inFlightReplicaOperations:
+            topologySettlingBlocker.inFlightReplicaOperations || null,
+          drainThroughSettlingEngaged: true,
+        });
+      }
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
