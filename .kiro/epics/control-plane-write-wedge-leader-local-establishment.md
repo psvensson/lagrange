@@ -5,6 +5,63 @@ status: active
 graduatesTo: null
 ---
 
+> # 🚦 START HERE — RE-GROUNDED 2026-06-24 (supersedes the "extend lever (a)" aim below)
+>
+> The reactivation banner below aimed the lever at "extend the owner-local-seed primitive
+> (lever (a), `applyLocalPriorityOperationProgressRow`) to a WEDGED priority `replica_operations`
+> WRITE that won't drain." **Fresh-HEAD gate evidence REFUTES that premise** (two independent
+> reads — direct failure-bundle inspection + an adversarial verification subagent, both agree):
+>
+> Reading the freshest gate's actual failure-bundle (`stat-gate-20260623T183833Z`, the SAME gate
+> the reactivation banner cites — but it trusted the STALE `analyze:latent-blockers` peel-order,
+> not this bundle):
+> - **run1 binding witness** (`summary.failureClassification.signals`): `priorityRecoveryPartition=replica_operations-p1`,
+>   `priorityRecoverySemanticState=spread_satisfied_in_flight`, **`priorityRecoveryLatestStep=REMOVED`,
+>   `priorityRecoveryLatestStatus=removed`**. The op REACHED the REMOVED terminal transition — which
+>   `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS` (orchestration.js:686-704) ALREADY covers. **There is no
+>   uncovered write transition for lever (a) to absorb.**
+> - **run1 `priorityRecoveryObservation`**: `publicationStatus=PUBLISHED`, `prioritySpreadPending=false`,
+>   `priorityPartitionSummary.satisfied=true` (readyEligible 5 / required 3), `priorityRecoveryClosureState=closure_satisfied_fresh`,
+>   `pressureState=none`. **The control plane CONVERGES** — it just isn't queryable in time.
+> - **The actual scenario-failing assertion** (both runs' `summary.error`, throw at `rolling-restart.js:353-361`):
+>   a **30s acknowledged-write visibility query failing "SQL query engine not available"**
+>   (`admin-websocket-query-execution-methods.js:327-331`, thrown when `this.sqlQueryEngine` is null).
+>   `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` is a PARALLEL heuristic label off a benign event-driven
+>   wait (all three stability gates `closed`), NOT the throw.
+>
+> **ROOT (newly localized, under-explored):** the early admin runtime comes up DURING join with
+> `sqlQueryEngine: null` (`index.js:262/267` join, `:529/534` seed — the authoritative engine is built
+> from post-join artifacts at `index.js:384`). A still-joining node under write-backlog sits in that
+> null window for the WHOLE readiness budget, so a visibility query routed to it fails
+> `QUERY_ENGINE_UNAVAILABLE` for 30s. This is the literal scenario-failing assertion — which NO prior
+> lever (write-wedge / voter-ready / zombie-redrive / spread-unmask) ever targeted.
+>
+> **LEVER LANDED (commit `9ebbd678`, default-off `LAGRANGE_EARLY_ADMIN_SQL_ENGINE`):** build a
+> provisional cache-backed SQL engine for the early admin runtime (`startEarlyAdminSqlRuntime` in
+> `entrypoint-runtime-admin-composition.js`), from the node's already-wired single instances
+> (messageRouter/cache/partitionServices/owner — all populated by `initializeJoinInfrastructure()`
+> before `onLocalAdminRuntimeReady` fires at `node-joining-admission-readiness.js:189`). Superseded
+> post-join by the authoritative engine (`attachSqlEngineToAdminRuntime`) then disposed
+> (`shutdownEarlyAdminSqlRuntime` → detach + `engine.shutdown()`, per-engine teardown only).
+> Flag-off byte-identical. **Subagent-verified SAFE** (no shared-state teardown, no construction
+> throw-risk at callback time, read parity between writable-singleton and message-group read-only
+> caches, correct dispose ordering on success + join-failure/retry paths). Test
+> `test/entrypoint/early-admin-sql-engine.test.js` 12/12; startup/admin suites 45/45.
+> **GATE-VALIDATING NOW** (N=3 flag-on, ts `20260624T051927Z`). Flag auto-forwards to containers
+> (`test/distributed/harness/cluster-class-lifecycle-base.js:372`, `LAGRANGE_` prefix).
+>
+> **Expected outcome + honesty caveat:** this kills the opaque 30s `QUERY_ENGINE_UNAVAILABLE` (a
+> joining node answers reads from its hydrated cache, and an unreachable routed read throws a
+> *retryable* `DISTRIBUTED_PARTICIPANT_FAILURE` the test already tolerates). It may NOT flip PASS if
+> the underlying join-completion-under-load wedge persists — but it surfaces an HONEST distributed
+> reason instead of this misleading one (same "make-the-blocker-honest" value as
+> `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY`). If PASS still 0/3, the next honest blocker is the
+> spread/voter-ready promotion + the join-completion write-backlog (NOT the refuted write-wedge).
+> Don't re-aim at "extend lever (a)" — the op reached REMOVED.
+>
+> ---
+> <details><summary>Superseded 2026-06-24 REACTIVATION banner (provenance)</summary>
+
 > # 🚦 START HERE — REACTIVATED 2026-06-24 (this is the LIVE rolling-restart frontier)
 >
 > The frontier has come **full circle back to this epic.** The two heads it previously pivoted
@@ -60,6 +117,7 @@ graduatesTo: null
 > levers built, none the scenario-PASS lever; the consolidated root was the slow rejoiner `7493b0ab`
 > un-drainable via a coupled remove-safety defer cluster. That head is now RESOLVED (R1+R3), so this epic
 > is reactivated above.
+> </details>
 > </details>
 
 # L-write: owner-local durable establishment of control-plane writes during formation/recovery
