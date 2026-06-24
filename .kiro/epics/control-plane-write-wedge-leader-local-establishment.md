@@ -46,18 +46,25 @@ graduatesTo: null
 > Flag-off byte-identical. **Subagent-verified SAFE** (no shared-state teardown, no construction
 > throw-risk at callback time, read parity between writable-singleton and message-group read-only
 > caches, correct dispose ordering on success + join-failure/retry paths). Test
-> `test/entrypoint/early-admin-sql-engine.test.js` 12/12; startup/admin suites 45/45.
-> **GATE-VALIDATING NOW** (N=3 flag-on, ts `20260624T051927Z`). Flag auto-forwards to containers
-> (`test/distributed/harness/cluster-class-lifecycle-base.js:372`, `LAGRANGE_` prefix).
+> `test/entrypoint/early-admin-sql-engine.test.js`; startup/admin suites 45/45.
 >
-> **Expected outcome + honesty caveat:** this kills the opaque 30s `QUERY_ENGINE_UNAVAILABLE` (a
-> joining node answers reads from its hydrated cache, and an unreachable routed read throws a
-> *retryable* `DISTRIBUTED_PARTICIPANT_FAILURE` the test already tolerates). It may NOT flip PASS if
-> the underlying join-completion-under-load wedge persists — but it surfaces an HONEST distributed
-> reason instead of this misleading one (same "make-the-blocker-honest" value as
-> `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY`). If PASS still 0/3, the next honest blocker is the
-> spread/voter-ready promotion + the join-completion write-backlog (NOT the refuted write-wedge).
-> Don't re-aim at "extend lever (a)" — the op reached REMOVED.
+> **✅ GATE VERDICT — PROMOTED DEFAULT-ON (commit `f68d1625`; gate `stat-gate-20260624T051927Z`,
+> N=3 flag-on):** the dominant 30s `QUERY_ENGINE_UNAVAILABLE` visibility failure is **ELIMINATED**
+> (0 occurrences across all 3 runs; it was THE binding scenario-failing assertion in `183833Z`).
+> **run2 SCENARIO-PASSED — the FIRST scenario-PASS of this entire rolling-restart campaign** (every
+> prior gate was 0/3). **SAFE 3/3** (CORRUPT/ORACLE_BLIND/NODE_EXIT/stale=0), no regression. Flag now
+> defaults ON (`isEarlyAdminSqlEngineEnabled` = `!== 'false'`); set `LAGRANGE_EARLY_ADMIN_SQL_ENGINE=false`
+> to opt out. (Flag auto-forwards to containers — verified live in `ddb-test-reuse-5-5`.)
+>
+> **NEXT FRONTIER (the honest residual, re-aimed):** runs 1 & 3 now fail on **`operation_drain_stalled`**
+> (`rootCauseClass=topology`; signals `replica_operations_in_flight` + `critical_system_spread_open`
+> + `operation_drain_stalled`) — a control-plane **quiescence stall**: a surplus/critical-system
+> partition's drain doesn't settle within the 30s quiescence window. This is the genuine remaining
+> PASS blocker (the surplus-drain + voter-ready-spread family — see the "ROOT CONSOLIDATED" /
+> "ROOT REFRAMED" decision-log entries below, and `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY` e975054c).
+> NOT the refuted write-wedge, NOT the engine path. **Don't re-aim at "extend lever (a)" (op reached
+> REMOVED) or the early-admin engine (now landed).** Belongs to `rolling-restart-core-stability` /
+> topology-convergence-hardening; doneWhen needs 3 consecutive scenario-PASS (now 1/3).
 >
 > ---
 > <details><summary>Superseded 2026-06-24 REACTIVATION banner (provenance)</summary>
