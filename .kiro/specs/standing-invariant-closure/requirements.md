@@ -49,14 +49,25 @@ core (a declarative predicate folded over the event log):
    decide status; never closes. An Invariant is *a closure-ledger entry that never
    closes.*
 
-The Invariant registry is a **projection** over the existing event log + closure
-ledger — not a new store — exactly as `status` and `report` are derived today.
+**There is no new invariant registry.** The project already owns the declarative
+half: `architecture/contracts/invariants.json` (`invariant-registry-v1`) holds
+owner-scoped safety/liveness invariants (id, owner, boundary, kind, statement,
+`formalPredicate`, `modelRef`, `contractRef`), verified today against *formal models*
+via `npm run model:contracts` / `model:invariants`. This spec adds a **second
+verification tier — against live evidence** — by attaching a `liveEvidence` predicate
+to existing entries (cited by id) and deriving status as a **projection** over the
+event log, exactly as `status` and `report` are derived today.
 
 ## Glossary
 
-- **Invariant**: A sealed, standing assertion that a property holds, with a
-  declarative `holdsWhen` predicate, an anchoring decision (its ADR), and a derived
-  status. The standing dual of a Quest.
+- **Invariant**: An existing `architecture/contracts/invariants.json` entry, extended
+  with a live-evidence `holdsWhen` predicate so it becomes a standing assertion verified
+  against the running system, with a derived status. The standing dual of a Quest. The
+  entry's `contractRef` is its anchoring decision (its ADR).
+- **Tier 1 / Tier 2 verification**: Tier 1 (exists) verifies an invariant's
+  `formalPredicate` against formal models (Alloy/TLA+/statechart) via `model:contracts`.
+  Tier 2 (this spec) verifies its `liveEvidence.holdsWhen` against the event log. Same
+  id, complementary tiers.
 - **`holdsWhen`**: The Invariant's sealed predicate, evaluated as a fold over live
   evidence (the event log / a deterministic repro), reusing the `doneWhen` evaluator.
 - **Invariant status**: One of `UNGUARDED` (declared, no passing evidence yet),
@@ -104,8 +115,9 @@ both forbid a new authoritative store for derived state.
 1. Invariant status SHALL be computed as a fold over the existing Solver event log
    (and, where a predicate requires it, a deterministic repro), not read from a new
    authoritative store.
-2. THE only durable Invariant artifact SHALL be its sealed declaration (analogous
-   to `solve/quests/<id>.json`); status and history SHALL be derived.
+2. THE only durable Invariant declaration SHALL be its existing
+   `architecture/contracts/invariants.json` entry (plus the additive `liveEvidence`
+   block); status and history SHALL be derived, not stored on the entry.
 3. No runtime path SHALL treat a cached Invariant status as authoritative over the
    event-log-derived value.
 
@@ -195,6 +207,47 @@ land default-off and be falsifier-proven.
    Invariant to `BREACHED`; restoring it returns it to `HELD`.
 3. Generalization beyond the first invariant SHALL NOT proceed until the
    expressibility gate (Task WS0) has a written PASS.
+
+### Requirement 8: Extends The Architecture Invariant Registry, Not A Parallel One
+
+**User Story:** As a maintainer who has been burned by parallel authorities, I want
+the live tier to reuse the existing invariant registry, so there is one place an
+invariant is declared.
+
+**Rationale:** `architecture/contracts/invariants.json` already exists and is cited
+by id from contract records and Quest theory metadata. A second registry would
+collide with it (the membership-merge / avoid-secondary-store lesson).
+
+#### Acceptance Criteria
+
+1. A live-verified invariant SHALL be an existing `invariants.json` entry extended
+   with an additive `liveEvidence` block; THE system SHALL NOT introduce a separate
+   invariant registry.
+2. THE live tier SHALL reference invariants by their existing `id`; restoration
+   Quests SHALL link through the entry's existing `questRefs`.
+3. `npm run model:invariants` SHALL continue to validate the registry with the
+   `liveEvidence` block present (the block is additive and optional per entry).
+4. THE live-evidence tier SHALL be complementary to the formal-model gates
+   (`model:contracts` / `model:invariants`), not a replacement for them.
+
+### Requirement 9: Breach Means The Architecture Doc No Longer Reflects Reality
+
+**User Story:** As a maintainer, I want architecture docs to *always* reflect the
+current system, enforced mechanically rather than by vigilance.
+
+**Rationale:** `model:contracts` enforces doc↔model coherence; nothing enforces
+doc↔running-system coherence over time. A BREACHED live invariant is precisely that
+missing signal.
+
+#### Acceptance Criteria
+
+1. WHEN a live invariant is `BREACHED`, THE system SHALL treat it as evidence that
+   the architecture doc/contract no longer reflects the running system.
+2. THE restoration Quest SHALL resolve a breach by exactly one of: (a) restoring the
+   runtime so the invariant holds, or (b) amending the contract record,
+   `invariants.json` entry, and owner map so the docs match the changed reality.
+3. WHEN a breach is resolved by doc amendment (b), THE change SHALL keep the formal
+   tier (`model:contracts`) green so the model and doc stay aligned.
 
 ## Out Of Scope (this spec)
 

@@ -19,8 +19,12 @@ a cheap, re-entrant `holdsWhen` over live evidence, and that reverting its fix i
 
 - [ ] Choose a closed CL with a deterministic repro — **CL-041** (vote double-vote
       TOCTOU, `npm run repro -- CL-041`) or **CL-042** (empty-log-term masquerade).
-- [ ] Re-express its `doneWhen` as a candidate `holdsWhen` predicate over the event
-      log / repro. Classify its cost (cheap fold vs requires-harness-run).
+- [ ] Identify its invariant in `architecture/contracts/invariants.json` (e.g. a
+      raft election-safety / leader-completeness entry); if none exists, ADD the entry
+      (id + statement + `formalPredicate` + `contractRef`) — this also closes a real
+      registry gap. Confirm `npm run model:invariants` still validates.
+- [ ] Draft the additive `liveEvidence.holdsWhen` predicate over the event log / repro.
+      Classify its cost (cheap fold vs requires-harness-run).
 - [ ] **Falsifier:** on a throwaway branch, revert the original fix; confirm the
       candidate predicate FAILS (would-be BREACHED). Restore the fix; confirm it
       PASSES (would-be HELD). Record the round-trip evidence in this spec dir as
@@ -28,19 +32,21 @@ a cheap, re-entrant `holdsWhen` over live evidence, and that reverting its fix i
 - [ ] Record which trigger policy (§5) the predicate's cost permits.
 
 **doneWhen:** a written audit (`ws0-expressibility-audit.md`) shows, for a chosen
-closed CL, that a `holdsWhen` predicate exists, is classified cheap/expensive, and
-that a reverted fix demonstrably fails it while the restored fix passes it — proven
-against the existing repro. If no closed CL can be expressed as a re-entrant
-predicate, STOP and record why the standing-invariant form is not viable as designed.
+closed CL bound to an `invariants.json` entry, that a `liveEvidence.holdsWhen`
+predicate exists, is classified cheap/expensive, and that a reverted fix demonstrably
+fails it while the restored fix passes it — proven against the existing repro — with
+`npm run model:invariants` still green. If no closed CL can be expressed as a
+re-entrant predicate, STOP and record why the standing-invariant form is not viable.
 
 ## WS1 — Invariant declaration + status fold (Option C: detect & report only)
 
 Introduce the sealed `Invariant` declaration and the derived status projection. No
 auto-spawn, no triggers beyond explicit re-check. Read-only output.
 
-- [ ] Define the sealed declaration schema and `solve/invariants/<id>.json`
-      (shape per design §4). Author the WS0 invariant as the first instance.
-- [ ] Implement `holdsWhen` evaluation by **reusing the existing `doneWhen`
+- [ ] Add the additive `liveEvidence` block to the WS0 invariant's existing
+      `architecture/contracts/invariants.json` entry (shape per design §4) — NOT a new
+      registry. Extend the `model:invariants` validator to accept the optional block.
+- [ ] Implement `liveEvidence.holdsWhen` evaluation by **reusing the existing `doneWhen`
       evaluator** (Requirement 1.2) — no second evaluation path.
 - [ ] Implement status as a **fold over the Solver event log** (Requirement 2) —
       `UNGUARDED/HELD/BREACHED`. No new authoritative store.
@@ -89,11 +95,14 @@ reopen budget.
 
 ## WS4 — Generalize + validation hooks (after WS0–WS3 prove out)
 
-- [ ] Promote a second, structurally different invariant class (e.g. an owner-boundary
-      invariant: "membership active-set has one authority") to validate the
-      abstraction beyond raft-safety.
-- [ ] Promote selected closed CLs that express durable properties to standing
-      invariants (Requirement 4.3).
+- [ ] Add a `liveEvidence` tier to a second, structurally different existing registry
+      entry (e.g. `single-semantic-owner` or `published-subset-covered`) to validate
+      the abstraction beyond raft-safety.
+- [ ] Exercise the doc-amendment breach resolution (Requirement 9.2b): drive a breach
+      whose honest fix is to amend the contract/`invariants.json`/owner map, and confirm
+      the formal tier (`model:contracts`) stays green afterward.
+- [ ] Document the live-evidence tier as a binding/probe in the affected contract
+      records' `metrics` so the new capability is described alongside Tier-1 gates.
 - [ ] (Optional/out-of-spec) wire the EvoClaw/SWE-EVO external scoring and/or a
       memory-layer graft as separate, later efforts (epic-tracked, not gated here).
 

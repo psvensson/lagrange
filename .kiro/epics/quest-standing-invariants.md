@@ -187,3 +187,12 @@ report) and add the auto-link (A) once the predicate-expressibility question is 
 - 2026-06-23 — **Graduated to spec** `.kiro/specs/standing-invariant-closure/`
   (requirements.md + design.md + tasks.md). Operator bought the direction. Status → graduated.
   WS0 (expressibility hard gate on CL-041/042) is the next action and blocks all later phases.
+- 2026-06-24 — **Correction (operator: architecture docs must reflect current state).** The
+  project ALREADY owns the declarative registry: `architecture/contracts/invariants.json`
+  (`invariant-registry-v1`) + `system-contract-v1` records, verified against *formal models*
+  via `model:contracts`/`model:invariants`. The spec must NOT build a parallel
+  `solve/invariants/` store (collision / avoid-secondary-store). Reframed as a **second
+  verification tier**: an additive `liveEvidence` block on existing entries (cited by id),
+  verified against *live evidence*; a BREACH = "the architecture doc no longer reflects the
+  system," resolved by either fixing the runtime or amending the contract/registry/owner map.
+  Spec requirements/design/tasks revised accordingly (Reqs 8–9, design §2.5/§4/§7.5).

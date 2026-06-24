@@ -48,6 +48,33 @@ and *what the verdict does*.
 **An Invariant is a closure-ledger entry that never closes.** A CL today is a
 tombstone; its standing form stays live and is re-gated.
 
+## 2.5 This EXTENDS the existing architecture invariant registry (do not fork it)
+
+The project already owns the *declarative* half of this. `architecture/contracts/invariants.json`
+(`invariant-registry-v1`) is a machine-readable registry of owner-scoped safety/liveness
+invariants — each with `id`, `owner`, `boundary`, `kind`, `statement`, `formalPredicate`,
+`coupledWith`, `modelRef`, `contractRef`. The `system-contract-v1` records cite these by id and
+bind them to models, probes (`npm run model:contracts` / `model:invariants`), `questRefs`, and
+FMEA/STPA. There is **no parallel `solve/invariants/` registry** — that would collide with this
+one and violate the avoid-secondary-store / don't-build-parallel directives.
+
+What exists is **Tier 1 verification: against formal models** (Alloy SAT/UNSAT, TLA+, statecharts,
+decision tables, owner traces) — *does the abstraction satisfy the property*. What this spec adds
+is **Tier 2 verification: against live evidence** (the Solver event log / a deterministic repro) —
+*does the running system still satisfy the property, now and over time*. Same invariant `id`, two
+predicates:
+
+| | Tier 1 (exists) | Tier 2 (this spec) |
+|---|---|---|
+| Predicate | `formalPredicate` (TLA+/Alloy) | `liveEvidence.holdsWhen` (event-log fold) |
+| Verifies | model coherence | running-system conformance over time |
+| Gate | `npm run model:contracts` / `model:invariants` | event-log fold on a trigger |
+| Verdict | gate pass/fail (static) | HELD / BREACHED (standing) |
+
+Tier 2 is **complementary, not a replacement**: the formal gates still guard model↔doc coherence;
+the live tier guards doc↔running-system coherence. An invariant gains a Tier-2 predicate by adding
+a `liveEvidence` block to its existing `invariants.json` entry (see §4).
+
 ## 3. Invariant state machine
 
 ```
@@ -71,27 +98,37 @@ tombstone; its standing form stays live and is re-gated.
 
 ## 4. Data shape
 
-The only durable artifact is the sealed declaration (analogous to a Quest JSON):
+No new registry. A Tier-2 predicate is an **added `liveEvidence` block on the existing
+`architecture/contracts/invariants.json` entry**, cited by the entry's `id` (the same way
+contract records and Quest theory metadata already cite invariants by id):
 
 ```jsonc
-// solve/invariants/<id>.json   (sealed; status is NOT stored here)
+// architecture/contracts/invariants.json — an existing entry, with the NEW liveEvidence block
 {
-  "id": "INV-raft-election-safety",
-  "decision": "At most one leader per term (Raft Election Safety).",
-  "rationale": "CL-041 closed a vote double-vote TOCTOU; the property must not regress.",
-  "anchors": ["CL-041", "CL-042"],          // closed CLs / ADRs this guards
-  "holdsWhen": { /* sealed predicate, same grammar as doneWhen */ },
-  "evidence": { "kind": "repro", "ref": "npm run repro -- CL-041" },
-  "trigger": { "policy": "on-quest-closure", "scope": "owner:raft", "cost": "cheap" },
-  "restoration": { "autoSpawn": false }      // Option C first; flip on at WS3
+  "id": "single-semantic-owner",                 // existing id, owner, boundary, kind, statement,
+  "owner": "architecture_owner",                 // formalPredicate, modelRef, contractRef … unchanged
+  "boundary": "core_system_logic",
+  "kind": "safety",
+  "statement": "Every state transition … has exactly one semantic owner.",
+  "formalPredicate": "Cardinality(SemanticOwner(concern)) = 1",   // Tier 1 (model)
+  "modelRef": "architecture/models/alloy/core-system-logic.als",
+  "contractRef": "architecture/contracts/core-system-logic.md",
+
+  "liveEvidence": {                              // ← NEW (Tier 2): optional, additive
+    "holdsWhen": { /* predicate, same grammar as doneWhen, folded over the event log */ },
+    "evidence": { "kind": "repro", "ref": "npm run repro -- CL-041" },
+    "trigger": { "policy": "on-quest-closure", "scope": "owner:raft", "cost": "cheap" },
+    "restoration": { "autoSpawn": false }        // Option C first; flip on at WS3
+  }
 }
 ```
 
-Everything else — current status, breach history, linked restoration Quests — is a
-**fold over the Solver event log** (Requirement 2). The registry view
-(`status --invariants`) is derived exactly like `report` is today. No new
-authoritative store; this is the explicit guard against the active-node
-projection-of-a-projection antipattern and the avoid-secondary-caches directive.
+Status (`UNGUARDED/HELD/BREACHED`), breach history, and linked restoration Quests are NOT stored
+on the entry — they are a **fold over the Solver event log** (Requirement 2). Restoration Quests
+link through the entry's existing `questRefs`. `npm run model:invariants` continues to validate
+the registry; a new live-tier evaluator reads the `liveEvidence` block and folds the event log.
+This is the explicit guard against a second authoritative store, the projection-of-a-projection
+antipattern, and the avoid-secondary-caches directive.
 
 ## 5. Evaluation and the trigger policy
 
@@ -130,10 +167,32 @@ hand-run reflection into an evidence-gated Invariant that trips automatically. T
 two should be unified rather than run as two standing loops; tracked as an open
 question, resolved during WS1.
 
+## 7.5 Keeping architecture docs true to the running system
+
+Architecture docs and contracts are required to reflect the *current* state of the system. Today
+`model:contracts` enforces doc↔model coherence; nothing enforces doc↔running-system coherence over
+time, so a contract can stay green while the runtime has drifted out from under it. The Tier-2
+live evidence closes that loop: **a BREACHED invariant is a signal that the architecture doc/contract
+no longer reflects reality.** It has exactly two honest resolutions, and the restoration Quest
+chooses between them:
+
+- **the code regressed** → restore the invariant (fix the runtime), or
+- **the doc was aspirational / the boundary legitimately moved** → amend the contract record,
+  `invariants.json` entry, and owner map so the docs match reality again.
+
+Either way the doc is brought back into correspondence with the system, and the closure is recorded.
+This makes "architecture docs always reflect current state" a *checked* property rather than a hope.
+When the machinery lands, the live-evidence tier itself is documented as a new binding in the
+relevant contract records (a new probe under each contract's `metrics`), so the capability is
+described where the rest of the verification tiers are.
+
 ## 8. What this is NOT
 
-- Not a new event log or store — a projection over the existing one.
+- **Not a parallel invariant registry** — it extends `architecture/contracts/invariants.json` by
+  id, adding a `liveEvidence` tier. No `solve/invariants/` store.
+- Not a new event log or store — status is a projection over the existing event log.
 - Not a fork of the Solver — the restoration path is a normal Quest.
+- Not a replacement for the formal gates — Tier 2 is complementary to `model:contracts` Tier 1.
 - Not Option B (a "self-reopening Quest") — that muddies the SOLVED/EXHAUSTED
   terminal that every consumer of terminal state depends on. Invariant is a distinct
   primitive precisely to keep Quest terminals absorbing.
