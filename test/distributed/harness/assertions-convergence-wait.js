@@ -788,10 +788,11 @@ async function waitForConvergence(nodes, options = {}) {
     }
 
     if (noProgressTimeoutMs !== null) {
-      const progressToken = JSON.stringify({
-        leaderChanges,
+      // NOTE: leaderChanges + leaders are intentionally NOT part of the progress
+      // signal — leadership churn on an otherwise-frozen cluster previously kept
+      // resetting this timer and defeated the no-progress fast-fail.
+      const progressToken = buildConvergenceProgressToken({
         voterCounts: [...latestCounts.entries()].sort(),
-        leaders: [...latestLeaders.entries()].sort(),
         effectiveInFlightReplicaOperationCount,
         hasBlockingOverTarget,
         hasInFlightReplicaOperations,
@@ -1384,7 +1385,38 @@ async function runFinalAdjudication(nodes) {
   });
 }
 
+/**
+ * Build the no-progress detector's progress token.
+ *
+ * "Progress" means the cluster is advancing toward its SETTLED state — voters at
+ * target, no in-flight replica operations, no blocking over-target, CDC
+ * projection visible, the expected partitions present, and the snapshot revision
+ * advancing. Raft LEADER identity and the leader-change COUNT are deliberately
+ * EXCLUDED: a frozen cluster whose surplus voter never drains but whose leaders
+ * flap (re-elections) would otherwise keep mutating the token and reset the
+ * no-progress timer forever, so the convergence wait sat out its FULL budget
+ * (~105s of pure idle) instead of failing fast as "stalled"
+ * (gate stat-gate-20260624T134940Z run1: 4 incidental leader changes masked a
+ * genuinely idle cluster). Leadership churn is not convergence progress.
+ *
+ * @param {Object} fields
+ * @return {string}
+ */
+function buildConvergenceProgressToken(fields) {
+  return JSON.stringify({
+    voterCounts: fields.voterCounts,
+    effectiveInFlightReplicaOperationCount:
+      fields.effectiveInFlightReplicaOperationCount,
+    hasBlockingOverTarget: fields.hasBlockingOverTarget,
+    hasInFlightReplicaOperations: fields.hasInFlightReplicaOperations,
+    cdcProjectionVisibleSatisfied: fields.cdcProjectionVisibleSatisfied,
+    expectedPartitionIds: fields.expectedPartitionIds,
+    snapshotRevision: fields.snapshotRevision,
+  });
+}
+
 export const ASSERTIONS_CONVERGENCE_WAIT = {
+  buildConvergenceProgressToken,
   TIMEOUTS,
   SERVICES_QUERY,
   NODES_QUERY,
