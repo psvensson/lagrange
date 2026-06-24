@@ -28,14 +28,21 @@ const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
 const LOCAL_STR_11E2L = './query/sql-query-engine.js';
 const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
 
-// Default-off lever. When LAGRANGE_EARLY_ADMIN_SQL_ENGINE=true, a still-joining
-// (or still-bootstrapping) node builds a cache-backed SQL engine for the EARLY
-// admin runtime (the `onLocalAdminRuntimeReady` surface that currently comes up
-// with `sqlQueryEngine: null`), so admin SQL reads answer from the node's
-// hydrated cache instead of failing `QUERY_ENGINE_UNAVAILABLE` for the whole
-// readiness budget. The early engine is provisional: the authoritative engine
-// built after join/bootstrap replaces it on the admin runtime
-// (attachSqlEngineToAdminRuntime), after which the early one is shut down.
+// Default-ON (promoted, gate stat-gate-20260624T051927Z). A still-joining (or
+// still-bootstrapping) node builds a cache-backed SQL engine for the EARLY admin
+// runtime (the `onLocalAdminRuntimeReady` surface that previously came up with
+// `sqlQueryEngine: null`), so admin SQL reads answer from the node's hydrated
+// cache instead of failing `QUERY_ENGINE_UNAVAILABLE` for the whole readiness
+// budget. The early engine is provisional: the authoritative engine built after
+// join/bootstrap replaces it on the admin runtime (attachSqlEngineToAdminRuntime),
+// after which the early one is shut down. Set LAGRANGE_EARLY_ADMIN_SQL_ENGINE=false
+// to restore the legacy null-until-joined behaviour.
+//
+// Promotion evidence: the gate eliminated the dominant 30s `QUERY_ENGINE_UNAVAILABLE`
+// visibility-query failure (0 occurrences across 3 runs, was the binding blocker
+// in stat-gate-20260623T183833Z), produced the campaign's first scenario-PASS
+// (run2), and stayed SAFE 3/3 (0 corrupt/breach/exit/blind); the residual failures
+// peeled to honest `operation_drain_stalled` surplus-drain blockers, not this mode.
 const EARLY_ADMIN_SQL_ENGINE_FLAG = 'LAGRANGE_EARLY_ADMIN_SQL_ENGINE';
 
 /**
@@ -395,7 +402,7 @@ async function createSqlRuntimeComposition(options) {
  * @return {boolean}
  */
 function isEarlyAdminSqlEngineEnabled() {
-  return process.env[EARLY_ADMIN_SQL_ENGINE_FLAG] === 'true';
+  return process.env[EARLY_ADMIN_SQL_ENGINE_FLAG] !== 'false';
 }
 
 /**

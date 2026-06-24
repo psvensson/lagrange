@@ -53,18 +53,26 @@ const READY_RUNTIME = Object.freeze({
   owner: {logger: null},
 });
 
-test('flag default-off: isEarlyAdminSqlEngineEnabled() is false', (t) => {
-  withFlag(t, undefined);
-  t.equal(isEarlyAdminSqlEngineEnabled(), false);
-  t.end();
-});
-
-test('flag off: startEarlyAdminSqlRuntime returns null (legacy null engine preserved)',
-  async (t) => {
+test('flag default (unset): isEarlyAdminSqlEngineEnabled() is true (promoted default-on)',
+  (t) => {
     withFlag(t, undefined);
+    t.equal(isEarlyAdminSqlEngineEnabled(), true);
+    t.end();
+  });
+
+test('flag explicitly false: isEarlyAdminSqlEngineEnabled() is false (legacy opt-out)',
+  (t) => {
+    withFlag(t, 'false');
+    t.equal(isEarlyAdminSqlEngineEnabled(), false);
+    t.end();
+  });
+
+test('flag off (=false): startEarlyAdminSqlRuntime returns null (legacy null engine preserved)',
+  async (t) => {
+    withFlag(t, 'false');
     const result = await startEarlyAdminSqlRuntime(READY_RUNTIME);
     t.equal(result, null,
-      'no early engine is built when the lever is off — byte-identical path');
+      'no early engine is built when the lever is opted out — byte-identical path');
     t.end();
   });
 
