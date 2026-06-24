@@ -12,6 +12,31 @@ links:
 
 # Convergence-timeout + leadership-settle — the rolling-restart PASS blocker AFTER the slow-rejoiner remove-safety wedge was cleared
 
+> # 🚦 SESSION HANDOFF 2026-06-24 (END-OF-SESSION STATE — read this first)
+>
+> **LANDED + VALIDATED (default-ON):** (1) early-admin SQL engine (`f68d1625`) — eliminated the 30s
+> `QUERY_ENGINE_UNAVAILABLE` that was the ACTUAL scenario-failing assertion; gate `051927Z` produced the
+> campaign's **first scenario-PASS**, SAFE 3/3. (2) no-progress fast-fail harness fix (`7d68b9ba`) — frozen
+> clusters fail-fast at ~30s instead of polling 120s (leader flaps no longer count as progress); ~90s faster
+> failing gates.
+>
+> **DEFAULT-OFF building blocks (NONE is the PASS lever):** `LAGRANGE_PR_REPLACE_TARGET_FAST_PROMOTION`
+> (`1b68c565` — clears spread/drain stall but trades for over-target+leadership churn); `LAGRANGE_PR_DRAIN_LOCAL_PROGRESS`;
+> `LAGRANGE_PR_SUPPRESS_OVERTARGET_FOLLOWUP_ADD` (`41aae9fb` — **DID NOT ENGAGE** in gate `134940Z`,
+> green-by-construction guard; needs a `currentReplicas.length>=target` guard + engagement log); C-2
+> `LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS` (bypassed — over-replication comes from the priority-recovery
+> FOLLOW-UP, not `calculatePartitionPlacement`).
+>
+> **RESIDUAL FRONTIER:** `leadership_unstable` from **OVER-REPLICATION** — a returned node ranks top by
+> SUITABILITY (`move-planner.js:650`) and the priority-recovery follow-up emits a bare ADD onto it
+> (`unified-rebalancer-follow-up-move.js:403`), overshooting critical-system partitions 3→4 → raft leader churn →
+> 15s quiet window never closes → `convergence_timeout`. SAFE (pure liveness). **NOT a frame rewrite** (membership
+> single-owner cutover already DONE+REFUTED; joint consensus = wrong layer). Best gate PASS = 1/3 (within N=3
+> variance). **NEXT:** corrected over-replication suppression (real-state repro + engagement log) and/or
+> incumbency in the follow-up target selection. Full file:line trail + discipline lessons:
+> external memory `rolling-restart-handoff-20260624` + `gate-walltime-smoothness-audit`.
+>
+> ---
 > # 🚦 LIVE FRONTIER MOVED (2026-06-24) → [`control-plane-write-wedge-leader-local-establishment.md`](control-plane-write-wedge-leader-local-establishment.md)
 > Head A (`leadership_unstable`) is worked out here: it is raft leader-map churn from load-driven
 > critical-system replica migration; the C-2 lever (`LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS`, commit
