@@ -10,6 +10,7 @@ const {
   EntityType,
   LIFECYCLE_REASON,
   NUM,
+  OperationType,
   PARTITION_RAFT_ROLE,
   PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
@@ -43,6 +44,18 @@ const {
   normalizePublishedRaftRole,
   resolvePriorityRecoveryActiveNodeCohort,
 } = PARTITION_SERVICE_SHARED;
+
+// Default-off lever. When LAGRANGE_PR_REPLACE_TARGET_FAST_PROMOTION=true, a
+// learner that is the TARGET of an in-flight critical-system REPLACE takes the
+// same fast priority promotion delay the formation/recovery paths already use,
+// so it reaches voter-ready inside the ~30s quiescence window instead of the
+// slow learnerPromotionDelayMs. Without it, a rolling-restart REPLACE that
+// rebuilds a critical-system replica on a healthy STEADY-STATE member (neither
+// joining the group nor carrying PRIORITY_CONTROL_PLANE_RECOVERY_PENDING) falls
+// to the slow delay, never promotes in budget, and the partition stays at 2/3
+// voter-ready distinct nodes -> critical_system_spread_open -> operation_drain_stalled.
+const REPLACE_TARGET_FAST_PROMOTION_FLAG =
+  'LAGRANGE_PR_REPLACE_TARGET_FAST_PROMOTION';
 
 class PartitionServiceLearnerPromotionMethods {
   /**
@@ -102,7 +115,8 @@ class PartitionServiceLearnerPromotionMethods {
     ) {
       if (
         this.isPriorityRecoveryPendingForLearnerPromotion() ||
-        this.isPriorityControlPlaneFormationLearnerPromotion()
+        this.isPriorityControlPlaneFormationLearnerPromotion() ||
+        this.isPriorityControlPlaneReplaceTargetLearnerPromotion()
       ) {
         return Math.min(
           this.learnerPromotionDelayMs,
@@ -136,6 +150,52 @@ class PartitionServiceLearnerPromotionMethods {
     return (
       this.isJoiningExistingGroup === true &&
       isPriorityControlPlanePartition({partitionId: this.partitionId})
+    );
+  }
+  /**
+   * Rolling-restart analog of the formation/recovery fast-promotion paths
+   * (default-off LAGRANGE_PR_REPLACE_TARGET_FAST_PROMOTION).
+   *
+   * When a rolling-restart REPLACE rebuilds a critical-system partition replica
+   * on a node that is a healthy STEADY-STATE cluster member — not joining the
+   * group (isJoiningExistingGroup=false) and not carrying
+   * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING in its own readiness reasons — the
+   * other two fast-delay predicates both return false, so the new learner takes
+   * the slow learnerPromotionDelayMs and cannot reach voter-ready inside the
+   * ~30s quiescence no-progress window. The partition then holds at 2/3
+   * voter-ready distinct nodes and the quiescence oracle reports
+   * critical_system_spread_open / operation_drain_stalled forever (gate
+   * stat-gate-20260624T051927Z run1 witness).
+   *
+   * This recognizes that exact case: the local node is the target of an
+   * in-flight (non-terminal) REPLACE on this priority control-plane partition,
+   * so it takes the same fast delay. Promotion still passes the unchanged
+   * quorum-membership safety gate in checkLearnerPromotion (catch-up +
+   * odd-voter + target-count): here the partition has 2 voters and needs a 3rd,
+   * so promoting the caught-up learner goes 2->3 voters (odd, == target) — this
+   * only schedules the first promotion check earlier, it relaxes no invariant.
+   *
+   * @return {boolean}
+   */
+  isPriorityControlPlaneReplaceTargetLearnerPromotion() {
+    if (process.env[REPLACE_TARGET_FAST_PROMOTION_FLAG] !== 'true') {
+      return false;
+    }
+    if (!isPriorityControlPlanePartition({partitionId: this.partitionId})) {
+      return false;
+    }
+    const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
+    if (localNodeId.length === NUM.ZERO) {
+      return false;
+    }
+    const operationContexts =
+      this.getPriorityRecoveryOperationContextsForLearnerPromotion();
+    return operationContexts.some(
+      (operationContext) =>
+        operationContext &&
+        operationContext.type === OperationType.REPLACE &&
+        String(operationContext.targetNodeId || STRING.EMPTY).trim() ===
+          localNodeId,
     );
   }
   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
