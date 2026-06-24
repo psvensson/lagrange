@@ -36,6 +36,18 @@ const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
   TARGET_NODES: 'targetNodes',
 });
 
+// Default-off lever. When LAGRANGE_PR_SUPPRESS_OVERTARGET_FOLLOWUP_ADD=true, the
+// priority-recovery follow-up will NOT emit a bare additive ADD when the
+// partition's healthy (voter-ready) cohort is ALREADY at/above target and no
+// removable source exists to form a REPLACE. Without it, that case falls through
+// to an INCREASE_REPLICA_COUNT ADD onto a freshly-returned node (3->4
+// over-replication), which raises the raft majority and churns leadership
+// (leadership_unstable) without advancing recovery — the binding rolling-restart
+// PASS blocker once spread/drain are cleared (gate stat-gate-20260624T125429Z).
+function isSuppressOverTargetFollowUpAddEnabled() {
+  return process.env.LAGRANGE_PR_SUPPRESS_OVERTARGET_FOLLOWUP_ADD === 'true';
+}
+
 class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
   buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas = []) {
     return new Set(
@@ -401,6 +413,21 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     const shouldReplace =
       healthyReplicas.length >= targetReplicaCount && !!sourceReplica;
     if (!shouldReplace) {
+      // At/above target voter-ready healthy count with no removable source: a
+      // bare additive ADD would over-replicate (e.g. 3->4) and churn raft
+      // leadership without advancing recovery (the partition is already at
+      // target). Suppress it — the additive ADD is only correct for genuine
+      // under-replication (healthyReplicas < target). Flag-off preserves the
+      // prior unconditional ADD exactly.
+      if (
+        isSuppressOverTargetFollowUpAddEnabled() &&
+        healthyReplicas.length >= targetReplicaCount
+      ) {
+        return this.buildPriorityRecoveryFollowUpMoveOutcome(
+          PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.OVER_REPLICATION_SUPPRESSED,
+          PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.AT_TARGET_NO_REMOVABLE_SOURCE,
+        );
+      }
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
