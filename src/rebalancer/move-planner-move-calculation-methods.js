@@ -84,6 +84,22 @@ const PLACEMENT_OCCUPIED_STATUSES = new Set([
   ReplicaStatus.SYNCING,
   ReplicaStatus.ACTIVE,
 ]);
+
+// Default-off lever. When LAGRANGE_PR_COUNT_NEUTRAL_SPREAD_RESTORE=true, the
+// spread-vs-count reconciliation guard for a critical-system priority partition
+// (1) counts replicas by PHYSICAL occupancy (PENDING/CREATING/SYNCING/ACTIVE)
+// instead of ACTIVE-only, so a colocated copy transiently leaving ACTIVE during
+// a rolling-restart cascade does not drop the count below target and re-open the
+// bare-ADD floodgate, and (2) defers leftover over-target count-increasing ADDs
+// even when some count-neutral REPLACEs already paired this round. Without it, a
+// returning-node spread restoration over-replicates the partition (3->4->5->6),
+// raising the raft voter set far past the convergence budget and churning
+// leadership (the binding rolling-restart PASS blocker — gate
+// stat-gate-20260624T134940Z). Flag-off is byte-identical to the prior guard.
+function isCountNeutralSpreadRestoreEnabled() {
+  return process.env.LAGRANGE_PR_COUNT_NEUTRAL_SPREAD_RESTORE === 'true';
+}
+
 const CAPACITY_REJECTION_REASON = Object.freeze({
   ADMISSION_ERROR: 'admission_error',
 });
@@ -656,10 +672,22 @@ class MovePlannerMoveCalculationMethods {
     // REMOVE, keeping the partition permanently over target (the run4
     // over-target loop). Spread is still served by count-neutral REPLACEs;
     // genuine under-target ADDs (active < target) are unaffected.
+    const countNeutralSpreadRestore =
+      isCountNeutralSpreadRestoreEnabled() &&
+      this.isControlPlanePriorityPartition();
+    // Under the lever, measure over-target by physical occupancy (robust to a
+    // transiently non-active colocated copy) and defer leftover over-target ADDs
+    // even when some count-neutral REPLACEs paired this round. Flag-off keeps the
+    // prior ACTIVE-count + replaceMoves-empty preconditions exactly.
+    const overTargetReferenceCount = countNeutralSpreadRestore ?
+      placementReplicas.length :
+      activePlacementReplicas.length;
+    const deferLeftoverOverTargetAdds =
+      countNeutralSpreadRestore || replaceMoves.length === NUM.ZERO;
     if (
       addMoves.length > NUM.ZERO &&
-      replaceMoves.length === NUM.ZERO &&
-      activePlacementReplicas.length >= targetReplicaCount
+      deferLeftoverOverTargetAdds &&
+      overTargetReferenceCount >= targetReplicaCount
     ) {
       const retainedAddMoves = addMoves.filter(
         (move) => move.reason !== MOVE_REASON.INCREASE_REPLICA_COUNT,
@@ -669,8 +697,10 @@ class MovePlannerMoveCalculationMethods {
         this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
           entityId: this.entityId,
           activePlacementReplicaCount: activePlacementReplicas.length,
+          placementReplicaCount: placementReplicas.length,
           targetReplicaCount,
           deferredAddCount,
+          countNeutralSpreadRestoreEngaged: countNeutralSpreadRestore,
         });
         addMoves.length = NUM.ZERO;
         addMoves.push(...retainedAddMoves);
