@@ -1,9 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
-  INITIAL_PARTITION_IDS,
-  SYSTEM_TABLE_NAME,
-} from '../bootstrap/system-table-schemas-constants.js';
-import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
 } from '../control-plane/priority-recovery-operation-owner-observation.js';
 import {
@@ -140,19 +136,6 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_COMPLETION_STATES =
     new Set([
       PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
       PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-    ]),
-  );
-
-const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS =
-  Object.freeze(
-    new Set([
-      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
-      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
-      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
-      INITIAL_PARTITION_IDS[
-        SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS
-      ],
-      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
     ]),
   );
 
@@ -688,10 +671,6 @@ function buildPriorityRecoveryDispatchPendingDrainEvidence(decisionSnapshot) {
         PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
       decisionSnapshot?.progress?.waitMode ===
         PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-    priorityDrainPartition:
-      PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS.has(
-        decisionSnapshot?.partitionId,
-      ),
   });
 }
 
@@ -706,8 +685,13 @@ function shouldReconcilePriorityRecoveryDispatchPendingDrain(
     evidence.persistedNotDispatched === true &&
     evidence.dispatchPending === true &&
     evidence.ownerProgressRequested === true &&
-    evidence.workflowProgressBoundary === true &&
-    evidence.priorityDrainPartition === true
+    evidence.workflowProgressBoundary === true
+    // Partition scope is NOT re-checked here: it is owned solely by the inner drain
+    // candidate gate isPriorityRecoveryOperationDrainCandidate ->
+    // isPriorityControlPlanePartition (operation-workflow-recovery-timeout.js). A
+    // non-candidate partition reaching reconcile yields a NOOP drain snapshot and falls
+    // through to the owner-effect path, so a duplicate partition pre-filter here only
+    // risked drifting from that single authority.
   );
 }
 
