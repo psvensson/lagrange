@@ -66,8 +66,10 @@ import {
   reportStartupRuntimeHandoff,
   scheduleStartupLivenessPulse,
   shutdownAdminRuntimeComposition,
+  shutdownEarlyAdminSqlRuntime,
   startAdminRuntimeComposition,
   startDynamicConfigWiring,
+  startEarlyAdminSqlRuntime,
   startLogsTablePersistence,
   startRejoinHintsPersistence,
   resolveSystemCacheHandles,
@@ -220,6 +222,7 @@ async function startJoinNode(options) {
     nodeId,
   );
   let joinAdminRuntime = null;
+  let joinEarlySqlRuntime = null;
   let bootstrapAPI = null;
   const membershipLifecycleController = new MembershipLifecycleController({
     nodeId,
@@ -259,12 +262,13 @@ async function startJoinNode(options) {
       if (joinAdminRuntime) {
         return;
       }
+      joinEarlySqlRuntime = await startEarlyAdminSqlRuntime(runtime);
       joinAdminRuntime = await startAdminRuntimeComposition({
         nodeId: runtime.nodeId,
         systemTableCache: runtime.systemTableCache,
         cacheMutationTarget:
           runtime.cacheMutationTarget || runtime.systemTableCache,
-        sqlQueryEngine: null,
+        sqlQueryEngine: joinEarlySqlRuntime?.sqlQueryEngine || null,
         owner: runtime.owner,
         messageRouter: runtime.messageRouter,
         partitionServices: runtime.partitionServices,
@@ -311,6 +315,10 @@ async function startJoinNode(options) {
     await bootstrapAPI.shutdown();
     await shutdownAdminRuntimeComposition(joinAdminRuntime);
     joinAdminRuntime = null;
+    // The admin runtime referenced the provisional early engine; dispose it
+    // only after admin surfaces are torn down so nothing queries a dead engine.
+    await shutdownEarlyAdminSqlRuntime(joinEarlySqlRuntime);
+    joinEarlySqlRuntime = null;
     // Never abandon on a transient: when JOIN_NEVER_ABANDON_ON_RETRYABLE is set,
     // a retryable failure re-attempts forever (only a non-retryable failure
     // exits). Otherwise fall back to the bounded re-attempt count.
@@ -423,6 +431,10 @@ async function startJoinNode(options) {
     });
   } else {
     attachSqlEngineToAdminRuntime(joinAdminRuntime, sqlQueryEngine);
+    // The authoritative engine now owns admin; dispose the provisional early
+    // engine (if the lever seeded one) so it stops owning per-engine services.
+    await shutdownEarlyAdminSqlRuntime(joinEarlySqlRuntime);
+    joinEarlySqlRuntime = null;
   }
 
   const adminAPI = joinAdminRuntime.adminAPI;
@@ -513,6 +525,7 @@ async function startSeedNode(options) {
     nodeId,
   );
   let seedAdminRuntime = null;
+  let seedEarlySqlRuntime = null;
   const bootstrapService = new BootstrapService({
     nodeId,
     nodeAddress: seedNodeHttpAddress,
@@ -526,12 +539,13 @@ async function startSeedNode(options) {
       if (seedAdminRuntime) {
         return;
       }
+      seedEarlySqlRuntime = await startEarlyAdminSqlRuntime(runtime);
       seedAdminRuntime = await startAdminRuntimeComposition({
         nodeId: runtime.nodeId,
         systemTableCache: runtime.systemTableCache,
         cacheMutationTarget:
           runtime.cacheMutationTarget || runtime.systemTableCache,
-        sqlQueryEngine: null,
+        sqlQueryEngine: seedEarlySqlRuntime?.sqlQueryEngine || null,
         owner: runtime.owner,
         messageRouter: runtime.messageRouter,
         partitionServices: runtime.partitionServices,
@@ -643,6 +657,10 @@ async function startSeedNode(options) {
     });
   } else {
     attachSqlEngineToAdminRuntime(seedAdminRuntime, sqlQueryEngine);
+    // The authoritative engine now owns admin; dispose the provisional early
+    // engine (if the lever seeded one) so it stops owning per-engine services.
+    await shutdownEarlyAdminSqlRuntime(seedEarlySqlRuntime);
+    seedEarlySqlRuntime = null;
   }
   const adminAPI = seedAdminRuntime.adminAPI;
   const liveQueryWiring = seedAdminRuntime.liveQueryWiring;

@@ -19,11 +19,14 @@ export {
   createSqlCallbackWasmExecutor,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
+  isEarlyAdminSqlEngineEnabled,
   resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
   shutdownAdminRuntimeComposition,
+  shutdownEarlyAdminSqlRuntime,
   startAdminRuntimeComposition,
+  startEarlyAdminSqlRuntime,
 } from './entrypoint-runtime-admin-composition.js';
 
 export {

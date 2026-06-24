@@ -28,6 +28,16 @@ const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
 const LOCAL_STR_11E2L = './query/sql-query-engine.js';
 const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
 
+// Default-off lever. When LAGRANGE_EARLY_ADMIN_SQL_ENGINE=true, a still-joining
+// (or still-bootstrapping) node builds a cache-backed SQL engine for the EARLY
+// admin runtime (the `onLocalAdminRuntimeReady` surface that currently comes up
+// with `sqlQueryEngine: null`), so admin SQL reads answer from the node's
+// hydrated cache instead of failing `QUERY_ENGINE_UNAVAILABLE` for the whole
+// readiness budget. The early engine is provisional: the authoritative engine
+// built after join/bootstrap replaces it on the admin runtime
+// (attachSqlEngineToAdminRuntime), after which the early one is shut down.
+const EARLY_ADMIN_SQL_ENGINE_FLAG = 'LAGRANGE_EARLY_ADMIN_SQL_ENGINE';
+
 /**
  * Resolve the live control-plane readiness service from a startup owner.
  * @param {Object|null} owner
@@ -381,6 +391,85 @@ async function createSqlRuntimeComposition(options) {
 }
 
 /**
+ * Whether the early-admin SQL engine lever is enabled.
+ * @return {boolean}
+ */
+function isEarlyAdminSqlEngineEnabled() {
+  return process.env[EARLY_ADMIN_SQL_ENGINE_FLAG] === 'true';
+}
+
+/**
+ * Build a provisional SQL engine for the EARLY admin runtime from the join/
+ * bootstrap surface handed to `onLocalAdminRuntimeReady`. Returns null (no
+ * engine) when the lever is off or the runtime cannot yet support an engine,
+ * preserving the existing `sqlQueryEngine: null` behaviour exactly.
+ *
+ * The engine's inputs (messageRouter / systemTableCache / partitionServices /
+ * owner sub-services) are the node's stable single instances, already wired by
+ * `initializeJoinInfrastructure()` before this surface fires, so the engine
+ * reads the same cache the rest of the runtime later observes. It is built with
+ * the same inert flags as the authoritative path (no migration auto-wire, no
+ * auto-started distributed-transaction recovery). Its only background work is
+ * the per-engine migration-recovery trigger (`wireMigrationRecoveryOnLeaderElection`,
+ * a leader-election handler + empty-on-a-fresh-joiner recovery pass) and its own
+ * query/transaction sub-services — all per-engine and all released by
+ * `shutdownEarlyAdminSqlRuntime` (detach + `engine.shutdown()`), so none of it
+ * outlives the early engine or touches the authoritative engine's shared state.
+ *
+ * @param {Object|null} runtime - The onLocalAdminRuntimeReady surface.
+ * @return {Promise<{sqlQueryEngine: Object|null,
+ *   detachMigrationRecovery: Function}|null>}
+ */
+async function startEarlyAdminSqlRuntime(runtime) {
+  if (!isEarlyAdminSqlEngineEnabled()) {
+    return null;
+  }
+  if (!runtime || !runtime.messageRouter || !runtime.owner) {
+    return null;
+  }
+  return createSqlRuntimeComposition({
+    nodeId: runtime.nodeId,
+    systemTableCache: runtime.systemTableCache,
+    messageRouter: runtime.messageRouter,
+    owner: runtime.owner,
+    partitionServices: runtime.partitionServices,
+    logger: runtime.owner?.logger || null,
+  });
+}
+
+/**
+ * Dispose a provisional early-admin SQL runtime once the authoritative engine
+ * has replaced it on the admin runtime. Only the early engine's own per-engine
+ * sub-services are torn down (`shutdown()` touches queryExecutor /
+ * transactionCoordinator / tableCreationService only) — the shared cache,
+ * router, and owner services are left intact for the authoritative engine.
+ *
+ * @param {{sqlQueryEngine: Object|null,
+ *   detachMigrationRecovery: Function}|null} earlyRuntime
+ * @return {Promise<void>}
+ */
+async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {
+  if (!earlyRuntime) {
+    return;
+  }
+  if (typeof earlyRuntime.detachMigrationRecovery === LOCAL_STR_FUNCTION) {
+    try {
+      earlyRuntime.detachMigrationRecovery();
+    } catch {
+      // best-effort detach; a missing/late owner must not block startup
+    }
+  }
+  const engine = earlyRuntime.sqlQueryEngine;
+  if (engine && typeof engine.shutdown === LOCAL_STR_FUNCTION) {
+    try {
+      await engine.shutdown();
+    } catch {
+      // best-effort shutdown; the authoritative engine already owns admin
+    }
+  }
+}
+
+/**
  * Start admin plus live query startup composition.
  * @param {Object} options
  * @return {Promise<{adminAPI: Object, liveQueryWiring: Object, adminPort: number}>}
@@ -489,9 +578,12 @@ export {
   createSqlCallbackWasmExecutor,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
+  isEarlyAdminSqlEngineEnabled,
   resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
   shutdownAdminRuntimeComposition,
+  shutdownEarlyAdminSqlRuntime,
   startAdminRuntimeComposition,
+  startEarlyAdminSqlRuntime,
 };
