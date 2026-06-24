@@ -12,6 +12,17 @@ links:
 
 # Convergence-timeout + leadership-settle — the rolling-restart PASS blocker AFTER the slow-rejoiner remove-safety wedge was cleared
 
+> # 🚦 LIVE FRONTIER MOVED (2026-06-24) → [`control-plane-write-wedge-leader-local-establishment.md`](control-plane-write-wedge-leader-local-establishment.md)
+> Head A (`leadership_unstable`) is worked out here: it is raft leader-map churn from load-driven
+> critical-system replica migration; the C-2 lever (`LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS`, commit
+> 8fa06823) is landed **flag-off but UNVALIDATED** — the N=3 gate `stat-gate-20260623T183833Z` showed C-2
+> did NOT mechanistically engage (the `leadership_unstable` absence was variance). C-2 is a **parked
+> side-thread** (its salvage next-step is in this epic's decision-log: add a positive engagement log +
+> a directed DT repro of a REAL captured over-replication event, since the unit test was green-by-
+> construction for a load-only trigger the gate shows isn't the real one). **The dominant blocker peeled
+> to Head B = `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` (the W-1 establishment-write root), which dominates
+> regardless of C-2 → that epic is now the live START-HERE.** Read its top banner first.
+
 > **FRESH-AGENT START HERE.** This epic is self-contained. Read
 > [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify /

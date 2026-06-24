@@ -1,15 +1,66 @@
 ---
 id: control-plane-write-wedge-leader-local-establishment
 roadmapRow: RM-0.1-fs-rolling-restart
-status: exhausted-pivoted
-graduatesTo: slow-rejoiner-progress-or-evict
+status: active
+graduatesTo: null
 ---
 
+> # 🚦 START HERE — REACTIVATED 2026-06-24 (this is the LIVE rolling-restart frontier)
+>
+> The frontier has come **full circle back to this epic.** The two heads it previously pivoted
+> through are now cleared, so the control-plane WRITE-WEDGE is once again the genuine dominant
+> blocker:
+> - **slow-rejoiner remove-safety wedge** → RESOLVED (R1+R3 landed + promoted default-ON, gate
+>   `stat-gate-20260623T164130Z`). See [`slow-rejoiner-progress-or-evict.md`](slow-rejoiner-progress-or-evict.md).
+> - **`leadership_unstable` (Head A of [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md))**
+>   → diagnosed as raft leader-map churn from load-driven critical-system replica migration; the C-2
+>   incumbency-stickiness lever (`LAGRANGE_PR_PRIORITY_INCUMBENT_STICKINESS`, commit 8fa06823) is landed
+>   **flag-off but UNVALIDATED** (N=3 gate `stat-gate-20260623T183833Z` showed it did NOT mechanistically
+>   engage — the apparent `leadership_unstable` absence was N=3 variance). **Do NOT get pulled into C-2; it
+>   is a parked side-thread** with its own documented next step in that epic's decision-log.
+>
+> **CURRENT DOMINANT BLOCKER (gate `stat-gate-20260623T183833Z`, N=3, SAFE 3/3, PASS 1/3):**
+> `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` (runs 1,2). `npm run analyze:latent-blockers` peel-order puts
+> it at the latest centroid (0.755), with the deep root `replica_operations_in_flight` (×12) — i.e. an
+> `"inFlightReplicaOperations":1` priority `replica_operations` row that won't drain, burning the 120s
+> `joining:readiness-convergence` budget. **This is the W-1 write-wedge. It dominates regardless of C-2.**
+>
+> **CORRECTED TARGET (don't re-pay the refuted lever):** The tactical **Option A** membership-publication
+> deferred-seed (`LAGRANGE_JOIN_DEFERRED_SEED`, default-off, landed at
+> `node-registration-owner-publication-methods.js:653`) was already built AND **REFUTED** by a mechanistic
+> flag-on mgmjf run (0 membership-write engagements — see [[mgmjf-formation-rebalancer-churn]]). The real
+> wedge is the **priority-partition control-plane writes** (`control_plane_publications` + `replica_operations`),
+> NOT the join-membership rows. So the live lever is one of:
+>   1. **Extend the proven owner-local-seed primitive (lever (a), commit `64a18b76`,
+>      `applyLocalPriorityOperationProgressRow`) to the WEDGED priority `replica_operations` /
+>      `control_plane_publications` write** (the `inFlightReplicaOperations:1` row that won't drain) —
+>      the "A on the priority-partition path" lever. See "The mechanism to extend" + "Options" below.
+>   2. **Option B — structural:** make the joiner a routable local control-plane replica fast so writes/reads
+>      spread off the single-active-replica seed (`deliverLocal` exists at
+>      `message-router-delivery-pressure-routing.js:353` but never engages in formation). Deepest root,
+>      larger blast radius. [[mgmjf-formation-rebalancer-churn]] calls this the corrected STRUCTURAL lever.
+>
+> **FIRST CONCRETE STEP (deterministic-first, gate-last):** build a directed below-gate DT repro that
+> captures ONE wedged priority `replica_operations` write (the `inFlightReplicaOperations:1` that burns the
+> readiness budget) in-process — red without the lever — BEFORE touching code (substrate map:
+> `docs/deterministic-directed-testing-plan.md`; the wedge is raised at
+> `distributed-write-coordinator.js:288-313` `DISTRIBUTED_PARTICIPANT_FAILURE`; the drain is read by
+> `collectCanonicalInFlightReplicaOperationDetails`, `join-readiness-replica-operation-methods.js:34`).
+> Then implement lever 1 or 2 flag-off, **subagent-verify the write-quorum/owner-identity safety invariant**
+> (owner-identity + self-supersession + LWW/tombstone fence — see "The mechanism to extend"), then `npm run
+> analyze:latent-blockers` and an N=3 gate vs the `183833Z` baseline (success = `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`
+> drops + PASS rises, SAFE 3/3 hard-held). All file:line below verified at HEAD `67f5a10c` / re-verify at
+> `6ef60d36`+ — POSITIONAL, re-grep before trusting.
+>
+> ---
+> <details><summary>Superseded 2026-06-23 PIVOT banner (provenance)</summary>
+>
 > ⛳ **PIVOTED 2026-06-23 → [`slow-rejoiner-progress-or-evict.md`](slow-rejoiner-progress-or-evict.md).**
-> This epic's lever family (owner-local write establishment) is EXHAUSTED: 6 SAFE default-off
-> levers built, none is the scenario-PASS lever. The consolidated root (see "ROOT CONSOLIDATED"
-> block below) is the slow rejoiner `7493b0ab` un-drainable via a coupled remove-safety defer
-> cluster — a membership/recovery-ownership problem. **Fresh agents: start at the new epic.**
+> This epic's lever family (owner-local write establishment) was EXHAUSTED at the time: 6 SAFE default-off
+> levers built, none the scenario-PASS lever; the consolidated root was the slow rejoiner `7493b0ab`
+> un-drainable via a coupled remove-safety defer cluster. That head is now RESOLVED (R1+R3), so this epic
+> is reactivated above.
+> </details>
 
 # L-write: owner-local durable establishment of control-plane writes during formation/recovery
 
