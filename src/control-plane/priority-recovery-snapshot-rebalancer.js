@@ -17,6 +17,9 @@ import {
   resolveStepTimeoutMs,
 } from '../rebalancer/replica-operation-liveness.js';
 import {
+  memoizedParseStepsHistoryString,
+} from '../rebalancer/steps-history-parse-memo.js';
+import {
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_RAFT_ROLE_LEARNER,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT,
@@ -111,12 +114,7 @@ function parsePriorityRecoveryStepsHistory(stepsHistoryRaw) {
   ) {
     return [];
   }
-  try {
-    const parsed = JSON.parse(stepsHistoryRaw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return memoizedParseStepsHistoryString(stepsHistoryRaw);
 }
 
 function doesPriorityRecoveryServiceRowMatchOperationTarget(

@@ -15,6 +15,9 @@ import {REBALANCER_DEFAULT} from './rebalancer-constants.js';
 import {
   hasObservedCompletedReplicaOperation,
 } from './replica-operation-observed-completion.js';
+import {
+  memoizedParseStepsHistoryString,
+} from './steps-history-parse-memo.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ONE = 1;
@@ -107,12 +110,7 @@ function parseStepsHistory(stepsHistoryRaw) {
   if (typeof stepsHistoryRaw !== LOCAL_STR_STRING) {
     return [];
   }
-  try {
-    const parsed = JSON.parse(stepsHistoryRaw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_error) {
-    return [];
-  }
+  return memoizedParseStepsHistoryString(stepsHistoryRaw);
 }
 
 function inferPartitionIdFromReplicaId(replicaId) {
