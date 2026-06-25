@@ -1,95 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  MEMBERSHIP_OWNER_SHADOW_ENV,
   buildMembershipOwnerDivergence,
-  computeShadowActiveMemberSet,
-  isMembershipOwnerShadowEnabled,
 } from '../../src/control-plane/membership-owner-shadow.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 
-function promotableReadiness() {
-  return {
-    dimensions: {
-      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-    },
-  };
-}
-
-function unpromotableReadiness() {
-  return {
-    dimensions: {
-      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
-      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-    },
-  };
-}
-
-test('computeShadowActiveMemberSet: baseline carried forward, sorted unique', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-c', 'node-a', 'node-a'],
-  });
-  t.same(result, ['node-a', 'node-c']);
-  t.end();
-});
-
-test('computeShadowActiveMemberSet: unions readiness-promotable nodes', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-a'],
-    readinessByNodeId: {
-      'node-b': promotableReadiness(),
-    },
-  });
-  t.same(result, ['node-a', 'node-b']);
-  t.end();
-});
-
-test('computeShadowActiveMemberSet: excludes non-promotable readiness nodes', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-a'],
-    readinessByNodeId: {
-      'node-b': unpromotableReadiness(),
-    },
-  });
-  t.same(result, ['node-a']);
-  t.end();
-});
-
-test('computeShadowActiveMemberSet: excludes draining/retired members even in baseline', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-a', 'node-b'],
-    memberStatesByNodeId: {
-      'node-b': 'draining',
-    },
-  });
-  t.same(result, ['node-a']);
-  t.end();
-});
-
-test('computeShadowActiveMemberSet: includes local node (self-knowledge) even without readiness', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-a'],
-    localNodeId: 'node-self',
-  });
-  t.same(result, ['node-a', 'node-self']);
-  t.end();
-});
-
-test('computeShadowActiveMemberSet: local node still excluded if draining', (t) => {
-  const result = computeShadowActiveMemberSet({
-    publishedBaselineNodeIds: ['node-a'],
-    localNodeId: 'node-self',
-    memberStatesByNodeId: {'node-self': 'draining'},
-  });
-  t.same(result, ['node-a']);
-  t.end();
-});
+// The owner-shadow probe and authoritative flip (and their `computeShadowActiveMemberSet`
+// owner rule) were retired after the single-owner cutover thesis was refuted. The pure
+// `buildMembershipOwnerDivergence` diff is retained because the FD-upgrade SWIM
+// divergence probe reuses it; these tests pin that diff's contract.
 
 test('buildMembershipOwnerDivergence: agree when identical', (t) => {
   const diff = buildMembershipOwnerDivergence({
@@ -125,18 +42,5 @@ test('buildMembershipOwnerDivergence: onlyInShadow captures owner-included extra
   t.equal(diff.agree, false);
   t.same(diff.onlyInShadow, ['node-c']);
   t.same(diff.onlyInProjection, []);
-  t.end();
-});
-
-test('isMembershipOwnerShadowEnabled: default-off, opt-in by env', (t) => {
-  t.equal(isMembershipOwnerShadowEnabled({}), false);
-  t.equal(
-    isMembershipOwnerShadowEnabled({[MEMBERSHIP_OWNER_SHADOW_ENV]: 'false'}),
-    false,
-  );
-  t.equal(
-    isMembershipOwnerShadowEnabled({[MEMBERSHIP_OWNER_SHADOW_ENV]: 'true'}),
-    true,
-  );
   t.end();
 });

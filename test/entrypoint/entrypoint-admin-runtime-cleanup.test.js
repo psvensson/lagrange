@@ -48,7 +48,7 @@ test('join failure path releases early admin runtime before reattempt', (t) => {
     /await bootstrapAPI\.shutdown\(\);\s*await shutdownAdminRuntimeComposition\(joinAdminRuntime\);\s*joinAdminRuntime = null;/,
     'join failure branch should release early admin runtime before retry logic',
   );
-  // The provisional early SQL engine (LAGRANGE_EARLY_ADMIN_SQL_ENGINE) must also
+  // The provisional early SQL engine must also
   // be disposed on the failure path, AFTER the admin runtime that referenced it,
   // so a rejoin reattempt does not leak a per-engine sub-service set per attempt.
   t.match(

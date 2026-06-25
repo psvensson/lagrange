@@ -28,22 +28,20 @@ const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
 const LOCAL_STR_11E2L = './query/sql-query-engine.js';
 const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
 
-// Default-ON (promoted, gate stat-gate-20260624T051927Z). A still-joining (or
-// still-bootstrapping) node builds a cache-backed SQL engine for the EARLY admin
-// runtime (the `onLocalAdminRuntimeReady` surface that previously came up with
-// `sqlQueryEngine: null`), so admin SQL reads answer from the node's hydrated
-// cache instead of failing `QUERY_ENGINE_UNAVAILABLE` for the whole readiness
-// budget. The early engine is provisional: the authoritative engine built after
-// join/bootstrap replaces it on the admin runtime (attachSqlEngineToAdminRuntime),
-// after which the early one is shut down. Set LAGRANGE_EARLY_ADMIN_SQL_ENGINE=false
-// to restore the legacy null-until-joined behaviour.
+// A still-joining (or still-bootstrapping) node builds a cache-backed SQL engine
+// for the EARLY admin runtime (the `onLocalAdminRuntimeReady` surface that
+// previously came up with `sqlQueryEngine: null`), so admin SQL reads answer from
+// the node's hydrated cache instead of failing `QUERY_ENGINE_UNAVAILABLE` for the
+// whole readiness budget. The early engine is provisional: the authoritative
+// engine built after join/bootstrap replaces it on the admin runtime
+// (attachSqlEngineToAdminRuntime), after which the early one is shut down.
 //
-// Promotion evidence: the gate eliminated the dominant 30s `QUERY_ENGINE_UNAVAILABLE`
-// visibility-query failure (0 occurrences across 3 runs, was the binding blocker
-// in stat-gate-20260623T183833Z), produced the campaign's first scenario-PASS
-// (run2), and stayed SAFE 3/3 (0 corrupt/breach/exit/blind); the residual failures
-// peeled to honest `operation_drain_stalled` surplus-drain blockers, not this mode.
-const EARLY_ADMIN_SQL_ENGINE_FLAG = 'LAGRANGE_EARLY_ADMIN_SQL_ENGINE';
+// Promoted unconditional (gate stat-gate-20260624T051927Z): the gate eliminated
+// the dominant 30s `QUERY_ENGINE_UNAVAILABLE` visibility-query failure (0
+// occurrences across 3 runs, was the binding blocker in
+// stat-gate-20260623T183833Z), produced the campaign's first scenario-PASS (run2),
+// and stayed SAFE 3/3 (0 corrupt/breach/exit/blind); the residual failures peeled
+// to honest `operation_drain_stalled` surplus-drain blockers, not this mode.
 
 /**
  * Resolve the live control-plane readiness service from a startup owner.
@@ -398,18 +396,20 @@ async function createSqlRuntimeComposition(options) {
 }
 
 /**
- * Whether the early-admin SQL engine lever is enabled.
+ * The early-admin SQL engine is promoted unconditional. Retained as a trivial
+ * accessor (always true) for the runtime barrel re-export and external callers
+ * that probed the former lever; the wiring no longer branches on it.
  * @return {boolean}
  */
 function isEarlyAdminSqlEngineEnabled() {
-  return process.env[EARLY_ADMIN_SQL_ENGINE_FLAG] !== 'false';
+  return true;
 }
 
 /**
  * Build a provisional SQL engine for the EARLY admin runtime from the join/
  * bootstrap surface handed to `onLocalAdminRuntimeReady`. Returns null (no
- * engine) when the lever is off or the runtime cannot yet support an engine,
- * preserving the existing `sqlQueryEngine: null` behaviour exactly.
+ * engine) when the runtime cannot yet support an engine, preserving the existing
+ * `sqlQueryEngine: null` behaviour exactly in that case.
  *
  * The engine's inputs (messageRouter / systemTableCache / partitionServices /
  * owner sub-services) are the node's stable single instances, already wired by
@@ -428,9 +428,6 @@ function isEarlyAdminSqlEngineEnabled() {
  *   detachMigrationRecovery: Function}|null>}
  */
 async function startEarlyAdminSqlRuntime(runtime) {
-  if (!isEarlyAdminSqlEngineEnabled()) {
-    return null;
-  }
   if (!runtime || !runtime.messageRouter || !runtime.owner) {
     return null;
   }

@@ -30,8 +30,6 @@ const {
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
 } = SHARED;
 
-const FLAG = 'LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF';
-
 const STARVED_NODE = 'rejoiner-7493b0ab'; // slow/quiesced: local STEP_DOWN timer never fires
 const HEALTHY_NODE = 'node-healthy';
 const PARTITION_ID = 'replica_operations-p1'; // priority, non-publication: skip publication gates
@@ -128,24 +126,6 @@ function evaluateFastPath(safety, snapshot) {
   );
 }
 
-function withFlag(value, fn) {
-  const prior = process.env[FLAG];
-  if (value === undefined) {
-    delete process.env[FLAG];
-  } else {
-    process.env[FLAG] = value;
-  }
-  try {
-    return fn();
-  } finally {
-    if (prior === undefined) {
-      delete process.env[FLAG];
-    } else {
-      process.env[FLAG] = prior;
-    }
-  }
-}
-
 test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner — the snapshot ' +
   'wedges re-requesting the source-leader handoff (the 56x replace_remove_safety_blocked state)', (t) => {
   const safety = makeSafety();
@@ -170,44 +150,26 @@ test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner �
   t.end();
 });
 
-test('R1 FALSIFIER: with the flag ON, the EXACT replacement\'s completed election ACK ' +
+test('R1 PROMOTED (unconditional): the EXACT replacement\'s completed election ACK ' +
   'authorizes source removal despite the lagging source-leader rows', (t) => {
   const safety = makeSafety();
   const snapshot = buildWedgeSnapshot(safety);
 
   t.equal(
-    withFlag('true', () => evaluateFastPath(safety, snapshot)),
+    evaluateFastPath(safety, snapshot),
     true,
-    'flag-on: the completed election ACK is accepted as proof of succession → SAFE → the ' +
-      'drain progresses (red on revert: R1 bypass removed → false)',
+    'the completed election ACK is accepted as proof of succession → SAFE → the drain ' +
+      'progresses (R1 is now always active)',
   );
   t.end();
 });
 
-test('R1 PROMOTED default-ON: with no flag set (the new default) the completed election ACK ' +
-  'authorizes removal; the escape hatch (=false) restores the strict source-release behavior', (t) => {
-  const safety = makeSafety();
-  const snapshot = buildWedgeSnapshot(safety);
-
-  t.equal(
-    withFlag(undefined, () => evaluateFastPath(safety, snapshot)),
-    true,
-    'default (no env) is now ON post-promotion — the ACK authorizes removal',
-  );
-  t.equal(
-    withFlag('false', () => evaluateFastPath(safety, snapshot)),
-    false,
-    'explicit =false disables R1: strict source-release rows required again (escape hatch)',
-  );
-  t.end();
-});
-
-test('R1 SAFETY: a NO-ack case is NEVER authorized, even with the flag ON', (t) => {
+test('R1 SAFETY: a NO-ack case is NEVER authorized', (t) => {
   const safety = makeSafety({electionCompletedReplicaIds: []});
   const snapshot = buildWedgeSnapshot(safety);
 
   t.equal(
-    withFlag('true', () => evaluateFastPath(safety, snapshot)),
+    evaluateFastPath(safety, snapshot),
     false,
     'no completed election evidence → not authorized: R1 is evidence-gated, not a bypass ' +
       'of the safety check',
@@ -216,26 +178,26 @@ test('R1 SAFETY: a NO-ack case is NEVER authorized, even with the flag ON', (t) 
 });
 
 test('R1 SAFETY: an election completed for a DIFFERENT replica does NOT authorize removal ' +
-  '(requires the EXACT replacement), even with the flag ON', (t) => {
+  '(requires the EXACT replacement)', (t) => {
   const safety = makeSafety({electionCompletedReplicaIds: [OTHER_REPLICA_ID]});
   const snapshot = buildWedgeSnapshot(safety);
 
   t.equal(
-    withFlag('true', () => evaluateFastPath(safety, snapshot)),
+    evaluateFastPath(safety, snapshot),
     false,
     'completion evidence for another replica is not proof THIS replacement is the successor',
   );
   t.end();
 });
 
-test('R1 SAFETY: a replacement that is NOT voter-ready is NEVER authorized, even flag ON ' +
+test('R1 SAFETY: a replacement that is NOT voter-ready is NEVER authorized ' +
   '(preserves the voter-ready floor — the worst case must be a transient re-election, ' +
   'never a quorum/spread loss)', (t) => {
   const safety = makeSafety({voterEvidenceSufficient: false});
   const snapshot = buildWedgeSnapshot(safety);
 
   t.equal(
-    withFlag('true', () => evaluateFastPath(safety, snapshot)),
+    evaluateFastPath(safety, snapshot),
     false,
     'replacement not voter-ready → no genuine successor candidate → not authorized',
   );

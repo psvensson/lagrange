@@ -41,17 +41,11 @@ const {
 // after the source-handoff was satisfied). With R1 also on, that ACK is then trusted as
 // succession proof to authorize the removal. This is safe ONLY because the upstream quorum-COUNT
 // floor (operation-workflow-remove-safety-evaluator.js:461-471, removing source excluded) and
-// R1's voter-ready-replacement check both still hold — so gate-validate R1 and R3 JOINTLY.
-const PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG =
-  'LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION';
-function isPriorityRecoveryHandoffEscalateReplacementElectionEnabled() {
-  // Default-ON after gate validation; disable only with an explicit 'false'.
-  return (
-    process.env[
-      PRIORITY_RECOVERY_HANDOFF_ESCALATE_REPLACEMENT_ELECTION_FLAG
-    ] !== 'false'
-  );
-}
+// R1's voter-ready-replacement check both still hold.
+//
+// PROMOTED to unconditional (gate-validated, epic slow-rejoiner-progress-or-evict RESOLVED): the
+// escalation is now always active; the on/off switch has been removed while the upstream
+// quorum-count floor and the voter-ready-replacement check remain in force.
 // Sustained non-progress window before escalating a stuck source-leader handoff. Well above
 // healthy handoff latency (sub-second), below the source-handoff stall TTL (2 min) and the
 // 120s over-target oracle, so only the genuinely-quiesced rejoiner regime escalates.
@@ -85,16 +79,13 @@ const PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS =
 // voter-ready replicas — a transient liveness dip — NEVER a quorum or voter-ready-spread loss.
 // This is a deliberate trade (accept a bounded transient re-election to un-wedge the starved
 // rejoiner) vs the conservative default that refuses removal until the source-release rows
-// confirm; hence default-off until gate-validated. The bypass keys strictly on the EXACT
-// replacement replica's completed election (never any-replica, never a no-ack case).
-const PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG =
-  'LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF';
-function isPriorityRecoveryLeaderElectionAckProofEnabled() {
-  // Default-ON after gate validation; disable only with an explicit 'false'.
-  return (
-    process.env[PRIORITY_RECOVERY_LEADER_ELECTION_ACK_PROOF_FLAG] !== 'false'
-  );
-}
+// confirm. The bypass keys strictly on the EXACT replacement replica's completed election
+// (never any-replica, never a no-ack case).
+//
+// PROMOTED to unconditional (gate-validated, epic slow-rejoiner-progress-or-evict RESOLVED): the
+// election-ACK succession proof is now always active; the on/off switch has been removed while
+// the upstream quorum-count floor, the voter-ready-replacement check, and the EXACT-replacement
+// completed-election ACK itself all remain in force.
 
 class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
@@ -250,17 +241,13 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       this.normalizePriorityPublicationStatus(planningSnapshot);
     const replacementLeaderElectionNotFoundTerminal =
       options?.replacementLeaderElectionNotFoundTerminal === true;
-    // R3: escalate a sustained-non-progressing source-leader handoff to driving the
-    // voter-ready replacement's election. Only active when the source is still leader (not
-    // released), the replacement is a voter-ready follower available to win, and the
-    // replacement's leadership is not yet observed. Read the stall anchor only when the flag
-    // is on (avoids touching the map otherwise). The escalation suppresses the source-handoff
+    // R3 (now unconditional): escalate a sustained-non-progressing source-leader handoff to
+    // driving the voter-ready replacement's election. Only active when the source is still leader
+    // (not released), the replacement is a voter-ready follower available to win, and the
+    // replacement's leadership is not yet observed. The escalation suppresses the source-handoff
     // re-ask and routes through the existing REQUEST_REPLACEMENT_LEADER_ELECTION dispatch; it
     // never authorizes a removal.
-    const handoffEscalationEnabled =
-      isPriorityRecoveryHandoffEscalateReplacementElectionEnabled();
     const sourceLeaderHandoffStallMs =
-      handoffEscalationEnabled &&
       typeof this.getPriorityPublicationSourceLeaderHandoffStallMs ===
         TYPEOF.FUNCTION ?
         this.getPriorityPublicationSourceLeaderHandoffStallMs(operation) :
@@ -279,7 +266,6 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         replacementReplicaRow,
       );
     const escalateReplacementLeaderElection =
-      handoffEscalationEnabled &&
       sourceLeaderHandoffStalled &&
       sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
       !replacementLeaderOwnershipObserved &&
@@ -568,16 +554,14 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       replacementElectionCompletionReady &&
       (options.priorityRecoveryCompletionSafe === true ||
         replacementElectionCompletedForCurrentReplica);
-    // R1 (default-off): when the EXACT replacement replica's leader election has completed,
+    // R1 (now unconditional): when the EXACT replacement replica's leader election has completed,
     // that ACK is itself proof of leadership succession — accept it in lieu of the lagging
     // source-leadership-release rows so a surplus-drain REPLACE off a starved rejoiner can
-    // make progress. Off → identical to the prior strict requirement (rows must confirm).
-    const electionAckLeadershipProofEnabled =
-      isPriorityRecoveryLeaderElectionAckProofEnabled();
+    // make progress. The EXACT-replacement completed-election ACK is the safety proof and is
+    // required here; only the on/off switch has been removed.
     const sourceLeadershipSuccessionProven =
       (sourceLeadershipReleaseConfirmed && sourceLeadershipReleaseFresh) ||
-      (electionAckLeadershipProofEnabled &&
-        replacementElectionCompletedForCurrentReplica);
+      replacementElectionCompletedForCurrentReplica;
     return (
       replacementElectionAuthorizesRemoval &&
       sourceLeadershipSuccessionProven &&

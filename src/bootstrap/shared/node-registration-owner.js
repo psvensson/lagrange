@@ -20,7 +20,6 @@ import {
   LOCAL_STR_1PE7K,
   LOCAL_STR_RNTKK,
   LOCAL_STR_VWYJO,
-  LOG_JOIN_DEFERRED_MEMBERSHIP_SEED,
   LOG_NODE_REGISTER_ERROR_PREFIX,
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
@@ -85,70 +84,35 @@ class NodeRegistrationOwner {
         budgetRow = budgetResolution.budgetRow;
         resolution = budgetResolution.resolution;
 
-        // L-write deferred-seed (default-off): await only a short budget; on a
-        // retryable defer under saturation, seed the owner-local nodes row and
-        // proceed. The durable write is re-driven cluster-wide by the 5s heartbeat
-        // (NODE_STATE_UPDATE -> bootstrap-missing upsert), which supersedes this
-        // provisional local row via LWW. A hard (retryable===false) error still throws.
-        let nodeMembershipDeferredSeed = false;
-        let nodeUpsertResult = null;
-        try {
-          nodeUpsertResult = await this.upsertSystemTableRowWithRetry(
-            TABLES.NODES,
-            budgetRow,
-            {
-              admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_MEMBERSHIP,
-              ...this.getJoinDeferredSeedTimeoutOptions(),
-            },
+        const nodeUpsertResult = await this.upsertSystemTableRowWithRetry(
+          TABLES.NODES,
+          budgetRow,
+          {
+            admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_MEMBERSHIP,
+          },
+        );
+        if (nodeUpsertResult?.success !== true) {
+          throw new Error(
+            `Failed to register node: ${nodeUpsertResult?.error}`,
           );
-        } catch (nodeWriteError) {
-          if (!this.shouldDeferredSeedJoinMembershipWrite(nodeWriteError)) {
-            throw nodeWriteError;
-          }
-          // Same row shape as the success-path seed below (proven in production):
-          // created_at-only ordering, ready_lease null so the local projection never
-          // treats the seed as ready. Supersession relies on the durable/heartbeat
-          // row's later updated_at/HLC. PRE-FLAG-PROMOTION HARDENING: stamp a
-          // deliberately-low ordering key so the first authoritative durable row wins
-          // immediately even under owner-clock negative skew (see epic open questions).
-          this.seedJoinTimeCacheRow(TABLES.NODES, {
-            ...budgetRow,
-            [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-            [COLUMN.LAST_HEARTBEAT]: now,
-            [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-          });
-          nodeMembershipDeferredSeed = true;
-          logger.warn(LOG_JOIN_DEFERRED_MEMBERSHIP_SEED, {
-            nodeId: this.nodeId,
-            tableName: TABLES.NODES,
-            error: nodeWriteError?.message,
-          });
         }
 
-        if (!nodeMembershipDeferredSeed) {
-          if (nodeUpsertResult?.success !== true) {
-            throw new Error(
-              `Failed to register node: ${nodeUpsertResult?.error}`,
-            );
-          }
+        this.seedJoinTimeCacheRow(TABLES.NODES, {
+          ...budgetRow,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        });
 
-          this.seedJoinTimeCacheRow(TABLES.NODES, {
-            ...budgetRow,
-            [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-            [COLUMN.LAST_HEARTBEAT]: now,
-            [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-          });
-
-          logger.info(LOCAL_STR_1PE7K, {
-            nodeId: this.nodeId,
-            nodeAddress: this.nodeAddress,
-            cpuCores: budgetRow?.[COLUMN.CPU_CORES] || null,
-            memoryMb: budgetRow?.[COLUMN.MEMORY_MB] || null,
-            diskGb: budgetRow?.[COLUMN.DISK_GB] || null,
-            budgetBytes: resolution?.budgetBytes || null,
-            budgetSource: resolution?.source || null,
-          });
-        }
+        logger.info(LOCAL_STR_1PE7K, {
+          nodeId: this.nodeId,
+          nodeAddress: this.nodeAddress,
+          cpuCores: budgetRow?.[COLUMN.CPU_CORES] || null,
+          memoryMb: budgetRow?.[COLUMN.MEMORY_MB] || null,
+          diskGb: budgetRow?.[COLUMN.DISK_GB] || null,
+          budgetBytes: resolution?.budgetBytes || null,
+          budgetSource: resolution?.source || null,
+        });
       } else {
         this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
         logger.info(LOG_RESUMING_JOIN_ADMISSION_PROGRESS, {

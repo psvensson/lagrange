@@ -85,7 +85,6 @@ const LOCAL_STR_SEED = 'seed';
 const LOCAL_STR_PY3S1 = 'Configuration loaded';
 const LOCAL_STR_REATTEMPT_JOIN =
   'Re-attempting cluster join after retryable failure';
-const LOCAL_STR_UNBOUNDED = 'unbounded';
 const LOCAL_STR_DEBUG = 'debug';
 const LOCAL_STR_INFO = 'info';
 // A retryable join failure (e.g. transient transport/participant unavailability
@@ -98,13 +97,6 @@ const JOIN_REATTEMPT_MAX_ATTEMPTS =
     Math.floor(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) :
     4;
 const JOIN_REATTEMPT_BASE_DELAY_MS = 2000;
-// "Never break, only slow": when enabled, a retryable join failure NEVER exits
-// the node — it re-attempts indefinitely with exponential, capped backoff (slows
-// down so it does not hammer a saturated seed, but never abandons). Only a
-// non-retryable (fatal) failure exits. Default off until validated against the
-// statistical convergence gate.
-const JOIN_NEVER_ABANDON_ON_RETRYABLE =
-  process.env.LAGRANGE_JOIN_NEVER_ABANDON === 'true';
 const JOIN_REATTEMPT_MAX_DELAY_MS = 30000;
 const JOIN_REATTEMPT_BACKOFF_CAP_EXP = 10;
 
@@ -319,13 +311,11 @@ async function startJoinNode(options) {
     // only after admin surfaces are torn down so nothing queries a dead engine.
     await shutdownEarlyAdminSqlRuntime(joinEarlySqlRuntime);
     joinEarlySqlRuntime = null;
-    // Never abandon on a transient: when JOIN_NEVER_ABANDON_ON_RETRYABLE is set,
-    // a retryable failure re-attempts forever (only a non-retryable failure
-    // exits). Otherwise fall back to the bounded re-attempt count.
+    // A retryable join failure re-attempts up to the bounded re-attempt count;
+    // a non-retryable failure (or exhausted attempts) exits.
     const reattemptAllowed =
       joinResult.retryable === true &&
-      (JOIN_NEVER_ABANDON_ON_RETRYABLE ||
-        joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS);
+      joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS;
     if (reattemptAllowed) {
       // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
       // (does not hammer a saturated seed) but never gives up. Jittered to
@@ -346,9 +336,7 @@ async function startJoinNode(options) {
       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
         nodeId,
         attempt: joinAttempt + LOCAL_NUM_ONE,
-        maxAttempts: JOIN_NEVER_ABANDON_ON_RETRYABLE ?
-          LOCAL_STR_UNBOUNDED :
-          JOIN_REATTEMPT_MAX_ATTEMPTS,
+        maxAttempts: JOIN_REATTEMPT_MAX_ATTEMPTS,
         delayMs,
       });
       await new Promise((resolve) => setTimeout(resolve, delayMs));

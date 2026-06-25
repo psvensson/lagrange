@@ -16,12 +16,6 @@ import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merg
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
 import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
-  buildMembershipOwnerDivergence,
-  computeShadowActiveMemberSet,
-  isMembershipOwnerAuthoritative,
-  isMembershipOwnerShadowEnabled,
-} from './membership-owner-shadow.js';
-import {
   buildMembershipEpochFence,
   buildMembershipEpochSnapshot,
 } from './membership-epoch-contract.js';
@@ -295,32 +289,9 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   });
   const initialProjectionDiagnostics =
     buildProjectionDiagnosticsSummary(activeNodeViews, helperFns);
-  // Single-owner rule output, computed once from the same minimal inputs the
-  // divergence probe uses (built when the probe OR the flip is enabled).
-  const membershipOwnerAuthoritativeEnabled = isMembershipOwnerAuthoritative();
-  const membershipOwnerShadowEnabled = isMembershipOwnerShadowEnabled();
-  const membershipOwnerActiveMemberSet =
-    membershipOwnerAuthoritativeEnabled || membershipOwnerShadowEnabled ?
-      computeShadowActiveMemberSet({
-        publishedBaselineNodeIds,
-        readinessByNodeId,
-        memberStatesByNodeId:
-          planningSnapshot.membershipLifecycleSummary?.memberStatesByNodeId,
-        localNodeId: options.localNodeId ?? planningSnapshot.publisherNodeId,
-        membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
-      }) :
-      null;
-  const projectionProjectedServingNodeIds = helperFns.normalizeNodeIdList(
+  const projectedServingNodeIds = helperFns.normalizeNodeIdList(
     activeNodeViews.projectedServingNodeIds || activeNodeViews.projectedActiveNodeIds,
   );
-  // Phase 2 flip (default-OFF): the owner rule authors the SERVING set that the
-  // existing publication orchestration (trim/widen/recovery/ACK/epoch) consumes —
-  // swapping the set-authority while PRESERVING the orchestration, rather than
-  // bypassing it via an explicit published-set override.
-  const projectedServingNodeIds =
-    membershipOwnerAuthoritativeEnabled && membershipOwnerActiveMemberSet ?
-      membershipOwnerActiveMemberSet :
-      projectionProjectedServingNodeIds;
   const locallyEligibleNodeIds = helperFns.normalizeNodeIdList(
     activeNodeViews.locallyEligibleNodeIds || projectedServingNodeIds,
   );
@@ -422,21 +393,10 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
     publicationTargetSnapshot.nodeIds,
   );
-  // Phase 0 single-owner divergence probe (default-OFF, diagnostics-only):
-  // diff the owner-authored set (computed once above) against the
-  // projection-derived published set. When the authoritative flip is on,
-  // publishedActiveNodeIds already IS the owner set, so the diff trivially agrees.
-  const membershipOwnerDivergence =
-    membershipOwnerShadowEnabled && membershipOwnerActiveMemberSet ?
-      buildMembershipOwnerDivergence({
-        projectionNodeIds: publishedActiveNodeIds,
-        shadowNodeIds: membershipOwnerActiveMemberSet,
-      }) :
-      null;
   // FD-upgrade (cutover §5 step 3): expose the minimal inputs the SWIM detector's
   // active-set rule needs so the coordinator can emit a SWIM-vs-projection
-  // divergence alongside the shadow one, WITHOUT threading a service handle into
-  // this pure function (it gets data only; the verdict is read coordinator-side).
+  // divergence, WITHOUT threading a service handle into this pure function (it
+  // gets data only; the verdict is read coordinator-side).
   // Data-only packaging of already-computed values — no behavior change.
   const membershipSwimInputs = {
     projectionNodeIds: publishedActiveNodeIds,
@@ -721,7 +681,6 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     priorityRecoveryClosureWitness,
     priorityRecoveryDecisionSnapshots,
     projectionDiagnostics,
-    membershipOwnerDivergence,
     membershipSwimInputs,
     reasonCode,
     changed,

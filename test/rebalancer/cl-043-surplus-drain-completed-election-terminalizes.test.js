@@ -123,36 +123,27 @@ test('CL-043 NO false positive: election completed for a DIFFERENT replica only 
   t.end();
 });
 
-test('CL-043 SAFETY preserved with R1 DISABLED: source leadership NOT released → not SAFE even ' +
-  'with election evidence (the conservative pre-R1 behavior, via the =false escape hatch)', (t) => {
-  // R1 (LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF) is now default-ON and deliberately authorizes
-  // removal on a completed election ACK even when the source-release rows still lag (a starved
-  // rejoiner never releases leadership in the rows). This test pins the DISABLED behavior: with
-  // R1 off, a source that has not released leadership is never removed on election evidence alone.
-  const prior = process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
-  process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = 'false';
-  try {
-    const safety = makeSafety();
-    t.equal(
-      safety.isCompletedReplacementElectionSafeForPriorityRecovery(
-        wedgeSnapshot({
-          completedLeaderHandoffEvidence: null,
-          sourceLeadershipReleaseObserved: false,
-          handoffRequestRetrySuppressed: false,
-        }),
-        {replica_id: REPLACEMENT_REPLICA_ID, raft_role: 'follower'},
-        options(),
-      ),
-      false,
-      'R1 disabled: source has not released leadership → removal not authorized',
-    );
-  } finally {
-    if (prior === undefined) {
-      delete process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF;
-    } else {
-      process.env.LAGRANGE_PR_LEADER_ELECTION_ACK_PROOF = prior;
-    }
-  }
+test('CL-043 + R1 (now unconditional): even when the source-release rows STILL LAG (no handoff ' +
+  'evidence, leadership not row-observed), the EXACT replacement\'s completed election ACK ' +
+  'authorizes removal — the starved-rejoiner un-wedge', (t) => {
+  // R1 is now unconditional: a completed election ACK for the EXACT replacement is itself proof
+  // of leadership succession, accepted in lieu of the lagging source-release rows. This is the
+  // starved-rejoiner regime (the source never releases leadership in the rows). The upstream
+  // quorum-count floor and the voter-ready-replacement check still gate the removal.
+  const safety = makeSafety();
+  t.equal(
+    safety.isCompletedReplacementElectionSafeForPriorityRecovery(
+      wedgeSnapshot({
+        completedLeaderHandoffEvidence: null,
+        sourceLeadershipReleaseObserved: false,
+        handoffRequestRetrySuppressed: false,
+      }),
+      {replica_id: REPLACEMENT_REPLICA_ID, raft_role: 'follower'},
+      options(),
+    ),
+    true,
+    'R1 unconditional: the EXACT replacement election ACK proves succession despite lagging rows',
+  );
   t.end();
 });
 

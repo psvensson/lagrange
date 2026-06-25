@@ -29,7 +29,6 @@ const {
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
 } = SHARED;
 
-const FLAG = 'LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION';
 const ESCALATE_AFTER_MS = 30 * 1000;
 
 const STARVED_NODE = 'rejoiner-7493b0ab';
@@ -108,27 +107,9 @@ function buildSnapshot(safety) {
   );
 }
 
-function withFlag(value, fn) {
-  const prior = process.env[FLAG];
-  if (value === undefined) {
-    delete process.env[FLAG];
-  } else {
-    process.env[FLAG] = value;
-  }
-  try {
-    return fn();
-  } finally {
-    if (prior === undefined) {
-      delete process.env[FLAG];
-    } else {
-      process.env[FLAG] = prior;
-    }
-  }
-}
-
 test('R3: a FRESH (not-yet-stalled) source handoff re-asks the source — no escalation', (t) => {
   const safety = makeSafety({stallMs: 1000});
-  const snapshot = withFlag('true', () => buildSnapshot(safety));
+  const snapshot = buildSnapshot(safety);
   t.equal(
     snapshot.state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
@@ -139,36 +120,19 @@ test('R3: a FRESH (not-yet-stalled) source handoff re-asks the source — no esc
   t.end();
 });
 
-test('R3 FALSIFIER: a STALLED source handoff (>=30s) with the flag ON escalates to driving the ' +
+test('R3 PROMOTED (unconditional): a STALLED source handoff (>=30s) escalates to driving the ' +
   'voter-ready replacement leader election', (t) => {
   const safety = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
-  const snapshot = withFlag('true', () => buildSnapshot(safety));
+  const snapshot = buildSnapshot(safety);
   t.equal(
     snapshot.state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
-    'the stuck source handoff escalates to the replacement leader election (red on revert: ' +
-      'without R3 the source-still-leader state stays REQUEST_SOURCE_LEADER_HANDOFF forever)',
+    'the stuck source handoff escalates to the replacement leader election (without R3 the ' +
+      'source-still-leader state would stay REQUEST_SOURCE_LEADER_HANDOFF forever)',
   );
   t.equal(snapshot.escalateReplacementLeaderElection, true, 'escalation flag is set');
   t.equal(snapshot.replacementNodeId, HEALTHY_NODE,
     'the election is dispatched to the healthy replacement node, not the starved source');
-  t.end();
-});
-
-test('R3 PROMOTED default-ON: with no flag set (the new default) the stalled handoff escalates; ' +
-  'the escape hatch (=false) restores re-asking the source', (t) => {
-  const safetyDefault = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
-  t.equal(
-    withFlag(undefined, () => buildSnapshot(safetyDefault)).state,
-    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
-    'default (no env) is now ON post-promotion — the stalled handoff escalates',
-  );
-  const safetyDisabled = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
-  t.equal(
-    withFlag('false', () => buildSnapshot(safetyDisabled)).state,
-    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
-    'explicit =false disables R3: keep re-asking the source (escape hatch)',
-  );
   t.end();
 });
 
@@ -178,7 +142,7 @@ test('R3 SAFETY: escalation requires a VOTER-READY replacement — a non-voter-r
     stallMs: ESCALATE_AFTER_MS + 1000,
     voterEvidenceSufficient: false,
   });
-  const snapshot = withFlag('true', () => buildSnapshot(safety));
+  const snapshot = buildSnapshot(safety);
   t.equal(
     snapshot.state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
@@ -190,7 +154,7 @@ test('R3 SAFETY: escalation requires a VOTER-READY replacement — a non-voter-r
 test('R3 SAFETY: R3 NEVER produces SAFE — it only redirects the handoff, never authorizes a ' +
   'removal (the removal still gates on the full leadership-safe proof)', (t) => {
   const safety = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
-  const snapshot = withFlag('true', () => buildSnapshot(safety));
+  const snapshot = buildSnapshot(safety);
   t.not(
     snapshot.state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
@@ -202,58 +166,39 @@ test('R3 SAFETY: R3 NEVER produces SAFE — it only redirects the handoff, never
 });
 
 // The real stall recorder/reader pair (anchored on the FIRST attempt, set-if-absent, TTL-bounded).
-// The recorder is itself flag-gated (flag-off = zero-footprint no-op), so these set the flag.
 test('R3 stall anchor: records the first source-leader handoff attempt and measures elapsed stall', (t) => {
-  withFlag('true', () => {
-    const owner = Object.create(PriorityPublicationSafetyTopology.prototype);
-    const operation = {operationId: 'op-r3-1'};
-    const sourceHandoff = {
-      messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-      requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-    };
-
-    t.equal(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation), null,
-      'no anchor before any handoff is recorded');
-
-    owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, sourceHandoff);
-    const firstStall = owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation);
-    t.ok(Number.isFinite(firstStall) && firstStall >= 0 && firstStall < 5000,
-      'a fresh anchor reads a small non-negative stall');
-
-    // set-if-absent: back-date the anchor, then a second record must NOT reset it.
-    const map = owner.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
-    map.set(operation.operationId, Date.now() - (ESCALATE_AFTER_MS + 5000));
-    owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, sourceHandoff);
-    t.ok(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation) >= ESCALATE_AFTER_MS,
-      'the anchor stays on the FIRST attempt (set-if-absent) so the stall age is honest');
-  });
-  t.end();
-});
-
-test('R3 stall anchor: the =false escape hatch makes the recorder a no-op (zero footprint)', (t) => {
   const owner = Object.create(PriorityPublicationSafetyTopology.prototype);
-  const operation = {operationId: 'op-r3-off'};
-  withFlag('false', () => {
-    owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, {
-      messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-      requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-    });
-  });
-  t.equal(owner.getPriorityPublicationSourceLeaderHandoffRequestedAtMap().size, 0,
-    'nothing is recorded when explicitly disabled — no unread/unreaped entries accumulate');
+  const operation = {operationId: 'op-r3-1'};
+  const sourceHandoff = {
+    messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+    requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+  };
+
+  t.equal(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation), null,
+    'no anchor before any handoff is recorded');
+
+  owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, sourceHandoff);
+  const firstStall = owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation);
+  t.ok(Number.isFinite(firstStall) && firstStall >= 0 && firstStall < 5000,
+    'a fresh anchor reads a small non-negative stall');
+
+  // set-if-absent: back-date the anchor, then a second record must NOT reset it.
+  const map = owner.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
+  map.set(operation.operationId, Date.now() - (ESCALATE_AFTER_MS + 5000));
+  owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, sourceHandoff);
+  t.ok(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation) >= ESCALATE_AFTER_MS,
+    'the anchor stays on the FIRST attempt (set-if-absent) so the stall age is honest');
   t.end();
 });
 
 test('R3 stall anchor: a NON source-leader handoff (e.g. target election) is not anchored', (t) => {
-  withFlag('true', () => {
-    const owner = Object.create(PriorityPublicationSafetyTopology.prototype);
-    const operation = {operationId: 'op-r3-2'};
-    owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, {
-      messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-      requestReason: ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-    });
-    t.equal(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation), null,
-      'only the REPLACE_SOURCE_LEADER_HANDOFF reason anchors the stall');
+  const owner = Object.create(PriorityPublicationSafetyTopology.prototype);
+  const operation = {operationId: 'op-r3-2'};
+  owner.recordPriorityPublicationSourceLeaderHandoffRequested(operation, {
+    messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+    requestReason: ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
   });
+  t.equal(owner.getPriorityPublicationSourceLeaderHandoffStallMs(operation), null,
+    'only the REPLACE_SOURCE_LEADER_HANDOFF reason anchors the stall');
   t.end();
 });

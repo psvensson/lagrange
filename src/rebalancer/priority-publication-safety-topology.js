@@ -380,15 +380,9 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   recordPriorityPublicationSourceLeaderHandoffRequested(operation, handoffRequest) {
-    // Only anchor when R3 is enabled (default-ON; disabled only with an explicit 'false'): the
-    // reader is the sole consumer and is also flag-gated, so recording while disabled would
-    // accumulate map entries that are never read and therefore never reaped (the TTL self-clean
-    // happens on read). Gating here keeps the disabled state a strict zero-footprint no-op.
-    if (
-      process.env.LAGRANGE_PR_HANDOFF_ESCALATE_REPLACEMENT_ELECTION === 'false'
-    ) {
-      return;
-    }
+    // R3 is now unconditional: always anchor the first source-leader handoff so the snapshot can
+    // detect a sustained-non-progressing handoff. The reader (getPriorityPublicationSourceLeader
+    // HandoffStallMs) self-cleans the map entry on read past the TTL.
     if (
       !operation ||
       !handoffRequest ||

@@ -6,7 +6,6 @@ import {
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
 import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
-import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
 import {
@@ -49,17 +48,12 @@ import {
   shouldMergePlanningEvidenceRows,
 } from './membership-publication-planning-evidence.js';
 
-// Phase 0 single-owner divergence probe log tag (greppable in per-node
-// full-logs). Emitted only when the shadow owner rule disagrees with the
-// projection-derived published set, and only once per distinct signature.
-const MEMBERSHIP_OWNER_DIVERGENCE_MSG = 'MEMBERSHIP_OWNER_DIVERGENCE';
-// FD-upgrade (cutover §5 step 3): sibling of the owner-divergence probe that diffs
-// the SWIM detector's active set against the projection's published set. Emitted
-// only when a SWIM runtime is wired in (default-off flag); diagnostics-only.
+// FD-upgrade (cutover §5 step 3): SWIM divergence probe that diffs the SWIM
+// detector's active set against the projection's published set. Emitted only when
+// a SWIM runtime is wired in (default-off flag); diagnostics-only. The shared
+// divergence constants below (agree/kind/interval) back this probe.
 const MEMBERSHIP_SWIM_DIVERGENCE_MSG = 'MEMBERSHIP_SWIM_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
-const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER = 'L';
-const MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER = 'F';
 const MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION = 'transition';
 const MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT = 'snapshot';
 // v4 quiescence anchor: re-emit a stable (deduped) state at least this often so
@@ -91,13 +85,6 @@ class MembershipPublicationCoordinatorReads {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
-    // Phase 0 divergence probe: track the last emitted state so the single-owner
-    // shadow diff logs once per distinct state TRANSITION (bounded, non-perturbing)
-    // and the last emit reveals the quiescent state. instanceEpoch is stamped
-    // lazily on first emit to group one coordinator instance's emits.
-    this._membershipOwnerDivergenceLastState = null;
-    this._membershipOwnerDivergenceInstanceEpoch = null;
-    this._membershipOwnerDivergenceLastSnapshotMs = null;
     // FD-upgrade SWIM divergence probe: the runtime is null unless the bootstrap
     // wired it in behind LAGRANGE_MEMBERSHIP_SWIM_DETECTOR (default-off), so this
     // whole probe is inert on the default path.
@@ -552,7 +539,6 @@ class MembershipPublicationCoordinatorReads {
       membershipSwimConsumeEnabled,
       swimVerdictByNodeId,
     });
-    this._emitMembershipOwnerDivergence(candidate?.membershipOwnerDivergence);
     this._emitMembershipSwimDivergence(candidate?.membershipSwimInputs);
     return candidate;
   }
@@ -609,73 +595,6 @@ class MembershipPublicationCoordinatorReads {
     }
   }
 
-  // Phase 0: surface the single-owner divergence into per-node logs. Emits on
-  // every state TRANSITION (including settle-to-agree) AND, to close the
-  // transition+dedup quiescence blind spot (v4), a throttled non-deduped
-  // SNAPSHOT so a stable final state keeps re-emitting — the LAST emit per
-  // instance then reliably reflects the quiescent state even when nothing has
-  // changed. `instanceEpoch` groups one coordinator instance's emits (restarts
-  // reset the dedup). `emitKind` distinguishes transition vs snapshot.
-  // No-op when the shadow flag is off (divergence is null). Never throws.
-  _emitMembershipOwnerDivergence(divergence) {
-    if (!divergence) {
-      return;
-    }
-    try {
-      const nowMs = this.now();
-      if (this._membershipOwnerDivergenceInstanceEpoch === null) {
-        this._membershipOwnerDivergenceInstanceEpoch = nowMs;
-      }
-      // Phase 0 v3 (authority scoping): tag each emit with whether THIS node is
-      // the control_plane_publications write-leader. Only the write-leader's
-      // local candidate becomes the authoritative published set, so leader-tagged
-      // divergence is the owner-vs-authoritative signal that gates the Phase 2
-      // flip; follower-tagged divergence is benign local-planning lag. Resolved
-      // by the probe itself (fail-safe false), independent of the leader-driven
-      // feature flag.
-      const isWriteLeader = isControlPlanePublicationsWriteLeader(
-        this.systemTableCache,
-        this.nodeId,
-        this.cdcIntegrationService,
-      ) === true;
-      const role = isWriteLeader ?
-        MEMBERSHIP_OWNER_DIVERGENCE_ROLE_LEADER :
-        MEMBERSHIP_OWNER_DIVERGENCE_ROLE_FOLLOWER;
-      const divergenceState = divergence.agree === true ?
-        MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE :
-        `${divergence.onlyInProjection.join(',')}|` +
-          `${divergence.onlyInShadow.join(',')}`;
-      // Include role in the dedup key so a leadership transition re-emits and the
-      // leader-tagged timeline stays complete.
-      const state = `${role}|${divergenceState}`;
-      const transitioned = state !== this._membershipOwnerDivergenceLastState;
-      const snapshotDue =
-        this._membershipOwnerDivergenceLastSnapshotMs === null ||
-        (nowMs - this._membershipOwnerDivergenceLastSnapshotMs) >=
-          MEMBERSHIP_OWNER_DIVERGENCE_SNAPSHOT_INTERVAL_MS;
-      if (!transitioned && !snapshotDue) {
-        return;
-      }
-      this._membershipOwnerDivergenceLastState = state;
-      this._membershipOwnerDivergenceLastSnapshotMs = nowMs;
-      this.logger?.info?.(MEMBERSHIP_OWNER_DIVERGENCE_MSG, {
-        nodeId: this.nodeId,
-        instanceEpoch: this._membershipOwnerDivergenceInstanceEpoch,
-        isWriteLeader,
-        emitKind: transitioned ?
-          MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION :
-          MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT,
-        agree: divergence.agree,
-        onlyInProjection: divergence.onlyInProjection,
-        onlyInShadow: divergence.onlyInShadow,
-        projectionCount: divergence.projectionCount,
-        shadowCount: divergence.shadowCount,
-        divergenceCount: divergence.divergenceCount,
-      });
-    } catch {
-      // diagnostics-only; never disturb the publication path
-    }
-  }
 }
 
 export {MembershipPublicationCoordinatorReads};

@@ -30,16 +30,11 @@ import {
 } from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   './retryable-control-plane-write.js';
-import {isRetryableControlPlaneError} from
-  '../../control-plane/control-plane-error-classification.js';
 import {
   JOIN_ADMISSION_DELIVERY_PRIORITY,
   JOIN_ADMISSION_PHASE_SCOPE,
   JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS,
-  JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG,
-  JOIN_DEFERRED_SEED_AWAIT_MS,
-  LOG_JOIN_DEFERRED_MEMBERSHIP_SEED,
   LOCAL_STR_1S6CG,
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
@@ -161,40 +156,15 @@ class NodeRegistrationOwnerPublicationMethods {
       [COLUMN.UPDATED_AT]: now,
     };
 
-    // L-write deferred-seed (default-off): short awaited budget; on a retryable
-    // defer the caller seeds NODE_ENDPOINTS from the returned row and the heartbeat
-    // re-drives it durably on its first beat (lastEndpointUpsertAt unset -> the
-    // endpoint upsert fires), superseding the provisional seed. Permanent error throws.
-    let endpointResult = null;
-    try {
-      endpointResult = await this.upsertSystemTableRowWithRetry(
-        TABLES.NODE_ENDPOINTS,
-        endpointData,
-        {
-          admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
-          ...this.getJoinDeferredSeedTimeoutOptions(),
-        },
-      );
-    } catch (endpointWriteError) {
-      if (!this.shouldDeferredSeedJoinMembershipWrite(endpointWriteError)) {
-        throw endpointWriteError;
-      }
-      logger.warn(LOG_JOIN_DEFERRED_MEMBERSHIP_SEED, {
-        nodeId: this.nodeId,
-        tableName: TABLES.NODE_ENDPOINTS,
-        error: endpointWriteError?.message,
-      });
-      return endpointData;
-    }
+    // Bounded-await join membership write: full retry budget, fail on error.
+    const endpointResult = await this.upsertSystemTableRowWithRetry(
+      TABLES.NODE_ENDPOINTS,
+      endpointData,
+      {
+        admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
+      },
+    );
     if (!endpointResult?.success) {
-      if (this.shouldDeferredSeedJoinMembershipWrite(endpointResult)) {
-        logger.warn(LOG_JOIN_DEFERRED_MEMBERSHIP_SEED, {
-          nodeId: this.nodeId,
-          tableName: TABLES.NODE_ENDPOINTS,
-          error: endpointResult?.error,
-        });
-        return endpointData;
-      }
       throw new Error(
         `Failed to register endpoint: ${endpointResult?.error}`,
       );
@@ -648,39 +618,6 @@ class NodeRegistrationOwnerPublicationMethods {
       return Math.floor(configured);
     }
     return JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS;
-  }
-
-  // L-write (default-off). Gated on LAGRANGE_JOIN_DEFERRED_SEED so the contract
-  // change (fail-narrowly -> seed-and-proceed) is opt-in until gate-validated.
-  isJoinDeferredMembershipSeedEnabled() {
-    return process.env[JOIN_DEFERRED_MEMBERSHIP_SEED_FLAG] === 'true';
-  }
-
-  getJoinDeferredSeedAwaitMs() {
-    const configured =
-      this.delegates.getConfig?.()?.joinDeferredSeedAwaitMs;
-    if (Number.isFinite(configured) && configured >= NUM.ZERO) {
-      return Math.floor(configured);
-    }
-    return JOIN_DEFERRED_SEED_AWAIT_MS;
-  }
-
-  // When enabled, shrink the AWAITED budget so the join no longer blocks the full
-  // ~30s retry budget; the durable write is re-driven post-join (NODES: heartbeat).
-  getJoinDeferredSeedTimeoutOptions() {
-    if (!this.isJoinDeferredMembershipSeedEnabled()) {
-      return {};
-    }
-    return {queryTimeoutMs: this.getJoinDeferredSeedAwaitMs()};
-  }
-
-  // Seed-and-proceed only on a genuinely retryable defer (DISTRIBUTED_PARTICIPANT_
-  // FAILURE / timeout / pressure under saturation), classified by the SAME predicate
-  // the write-retry loop uses. A permanent error is not retryable -> still fail the
-  // join, because there is no correction path for a permanently-rejected row.
-  shouldDeferredSeedJoinMembershipWrite(error) {
-    return this.isJoinDeferredMembershipSeedEnabled() &&
-      isRetryableControlPlaneError(error);
   }
 
   async sleep(delayMs) {
