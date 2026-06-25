@@ -403,6 +403,27 @@ class SystemTableCache {
   }
 
   /**
+   * Read-isolation view of a stored row for the scan reads (getAll/filter).
+   * Default behavior CLONES (fastJsonClone) so the caller owns a mutable copy.
+   * Under the default-off lever LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ the row is
+   * instead deep-FROZEN and shared (isolation by immutability, amortized once per
+   * stored row vs. cloned every read) — the V8 profiler's #1 cluster-wide frame.
+   * The returned ARRAY (built by the callers below) stays mutable, so
+   * rows.sort()/filter()/push() are unaffected; only in-place row-field mutation
+   * throws (subagent-audited + full-suite-verified read-only consumers).
+   * @param {Object} record - Stored row.
+   * @return {Object} Frozen shared row (lever on) or a fresh clone (off).
+   * @private
+   */
+  readView(record) {
+    if (!isSharedRowReadEnabled()) {
+      return this.deepClone(record);
+    }
+    sharedRowReadEngagements += 1;
+    return deepFreeze(record);
+  }
+
+  /**
    * Filter records matching a predicate.
    * @param {string} tableName - Name of the system table.
    * @param {Function} predicate - Function that returns true for matching records.
@@ -415,7 +436,7 @@ class SystemTableCache {
 
     for (const record of table.values()) {
       if (predicate(record)) {
-        results.push(this.deepClone(record));
+        results.push(this.readView(record));
       }
     }
 
@@ -430,7 +451,7 @@ class SystemTableCache {
   getAll(tableName) {
     this.validateTableName(tableName);
     const table = this.tables.get(tableName);
-    return Array.from(table.values()).map((record) => this.deepClone(record));
+    return Array.from(table.values()).map((record) => this.readView(record));
   }
 
   /**
