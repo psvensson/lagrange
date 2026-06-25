@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from "./partition-service-shared.js";
+import {filterSharedRows} from "../cache/shared-row-read.js";
 
 const {
   ACTIVE_VOTER_ROLES,
@@ -197,7 +198,8 @@ class PartitionServiceLearnerPromotionMethods {
     ) {
       return [];
     }
-    const operationRows = this.systemTableCache.filter(
+    const operationRows = filterSharedRows(
+      this.systemTableCache,
       TABLES.REPLICA_OPERATIONS,
       (operationRow) => {
         if (!operationRow || operationRow.partition_id !== this.partitionId) {
@@ -225,15 +227,16 @@ class PartitionServiceLearnerPromotionMethods {
       );
   }
   getPartitionServiceRowsForPromotion() {
-    return this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION ?
-      this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
+    return filterSharedRows(
+      this.systemTableCache,
+      TABLES.SERVICES,
+      (serviceRow) => {
         return (
           serviceRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
             serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION
         );
-      }) :
-      [];
+      },
+    );
   }
   getReplicaServiceStatusForPromotion(serviceRow) {
     return serviceRow?.[COLUMN.STATUS] || ReplicaStatus.ACTIVE;

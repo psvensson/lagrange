@@ -3,6 +3,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} from './control-plane-readiness-service.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   MEMBERSHIP_PUBLICATION_READ_PROFILE,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -153,7 +154,7 @@ class MembershipPublicationCoordinatorPlanning extends
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
       typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
-        this.systemTableCache.getAll(TABLES.SERVICES) || [] :
+        readAllSharedRows(this.systemTableCache, TABLES.SERVICES) :
         [];
     const partitionRows = Array.isArray(options.partitionRows) ?
       options.partitionRows :
@@ -163,7 +164,7 @@ class MembershipPublicationCoordinatorPlanning extends
     const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
       options.replicaOperationRows :
       typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
-        this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [] :
+        readAllSharedRows(this.systemTableCache, TABLES.REPLICA_OPERATIONS) :
         [];
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :

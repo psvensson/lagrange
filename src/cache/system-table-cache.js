@@ -10,6 +10,7 @@ import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
+import {deepFreeze} from '../utils/deep-freeze.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -64,6 +65,34 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
  * CDC operation types.
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
+
+const SHARED_ROW_READ_FLAG = 'LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ';
+
+let sharedRowReadEngagements = 0;
+
+/**
+ * @return {boolean} True when the no-clone shared-row read lever is enabled.
+ */
+function isSharedRowReadEnabled() {
+  return process.env[SHARED_ROW_READ_FLAG] === 'true';
+}
+
+/**
+ * Engagement counter for the directed micro-repro: proves the no-clone shared
+ * read path FIRES (rows returned without a per-read clone) rather than
+ * silently delegating to the cloning path.
+ * @return {{engagements: number}}
+ */
+function getSharedRowReadStats() {
+  return {engagements: sharedRowReadEngagements};
+}
+
+/**
+ * Reset the shared-row read engagement counter. Test-only seam.
+ */
+function resetSharedRowReadStats() {
+  sharedRowReadEngagements = 0;
+}
 
 /**
  * SystemTableCache provides in-memory caching for system tables.
@@ -402,6 +431,52 @@ class SystemTableCache {
     this.validateTableName(tableName);
     const table = this.tables.get(tableName);
     return Array.from(table.values()).map((record) => this.deepClone(record));
+  }
+
+  /**
+   * Read isolation for a hot read-only path WITHOUT the per-read deep clone.
+   * Default-off lever LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ: when on, returns the
+   * STORED rows deep-frozen and shared (isolation by immutability, amortized
+   * freeze) instead of cloning every row every read; when off, delegates to the
+   * cloning getAll so behavior is byte-identical. Safe only for read-only
+   * consumers — subagent-audited for the priority-recovery snapshot path.
+   * @param {string} tableName - Name of the system table.
+   * @return {Array<Object>} Frozen shared rows (lever on) or fresh clones (off).
+   */
+  getAllShared(tableName) {
+    if (!isSharedRowReadEnabled()) {
+      return this.getAll(tableName);
+    }
+    this.validateTableName(tableName);
+    const table = this.tables.get(tableName);
+    return Array.from(table.values()).map((record) => {
+      sharedRowReadEngagements += 1;
+      return deepFreeze(record);
+    });
+  }
+
+  /**
+   * Filter records WITHOUT the per-read deep clone, returning frozen shared
+   * rows under the same default-off lever as {@link getAllShared}. Off-path is
+   * byte-identical to {@link filter}.
+   * @param {string} tableName - Name of the system table.
+   * @param {Function} predicate - Returns true for matching records.
+   * @return {Array<Object>} Frozen shared matches (lever on) or clones (off).
+   */
+  filterShared(tableName, predicate) {
+    if (!isSharedRowReadEnabled()) {
+      return this.filter(tableName, predicate);
+    }
+    this.validateTableName(tableName);
+    const table = this.tables.get(tableName);
+    const results = [];
+    for (const record of table.values()) {
+      if (predicate(record)) {
+        sharedRowReadEngagements += 1;
+        results.push(deepFreeze(record));
+      }
+    }
+    return results;
   }
 
   /**
@@ -973,4 +1048,11 @@ class SystemTableCache {
   }
 }
 
-export {SystemTableCache, SYSTEM_TABLES, CDC_OPERATIONS, PRIMARY_KEY_FIELDS};
+export {
+  SystemTableCache,
+  SYSTEM_TABLES,
+  CDC_OPERATIONS,
+  PRIMARY_KEY_FIELDS,
+  getSharedRowReadStats,
+  resetSharedRowReadStats,
+};

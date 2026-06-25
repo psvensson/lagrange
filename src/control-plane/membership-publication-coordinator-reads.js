@@ -4,6 +4,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
 import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
@@ -371,10 +372,10 @@ class MembershipPublicationCoordinatorReads {
     if (!normalizedNodeId) {
       return [];
     }
-    const cacheRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
-        this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [] :
-        [];
+    const cacheRows = readAllSharedRows(
+      this.systemTableCache,
+      TABLES.REPLICA_OPERATIONS,
+    );
     const dispatchRows = cacheRows.filter((row) => {
       const operation = normalizeReplicaOperationView(row);
       return (

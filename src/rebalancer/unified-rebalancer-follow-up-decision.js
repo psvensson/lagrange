@@ -1,6 +1,7 @@
 import {UnifiedRebalancerBudgetPlanning} from './unified-rebalancer-budget-planning.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 
 const {
   EntityType,
@@ -40,8 +41,10 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     ) {
       return Object.freeze([]);
     }
-    const replicaOperationRows =
-      this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
+    const replicaOperationRows = readAllSharedRows(
+      this.systemTableCache,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    );
     const nowMs = this.nowFn();
     const operationContexts = replicaOperationRows
       .filter((operation) => {

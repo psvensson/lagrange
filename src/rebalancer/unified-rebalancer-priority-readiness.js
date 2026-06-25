@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 
 const {
   LIFECYCLE_PHASE,
@@ -489,7 +490,10 @@ class UnifiedRebalancerPriorityReadinessMethods {
       });
     }
 
-    const rows = this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+    const rows = readAllSharedRows(
+      this.systemTableCache,
+      TABLES.REPLICA_OPERATIONS,
+    );
     const nowMs = Date.now();
     const details = [];
     const nonBlockingPriorityOperationIds =

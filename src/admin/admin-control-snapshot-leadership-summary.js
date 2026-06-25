@@ -12,6 +12,7 @@
  */
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   isReplicaOperationInFlight,
   isReplicaOperationStale,
@@ -491,7 +492,7 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
       typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
-        this.systemTableCache.getAll(TABLES.SERVICES) :
+        readAllSharedRows(this.systemTableCache, TABLES.SERVICES) :
         ADMIN_CACHE_DUMP.EMPTY;
     const isStartup =
       this.startupRecoveryCoordinator &&
