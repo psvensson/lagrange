@@ -450,6 +450,24 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   };
 }
 
+// Op-retire-on-timeline-REMOVED lever (default-off). A drain op's record-level
+// `workflowStep` column can lag behind its already-terminal timeline (write-through
+// lag, CL-016/CL-035 family): the row still reads `STOPPING` while the operation
+// timeline has reached `REMOVED/removed`. The classifier below consults the record
+// step first, so a stale non-terminal `false` short-circuits and the finished op is
+// wrongly counted active → `hasActiveOperationContexts` stays true → the partition
+// is pinned in `spread_satisfied_in_flight` and operation_drain never closes. When
+// enabled, a terminal timeline step is honored over a stale non-terminal record
+// step (scoped to removal-completing REMOVE/REPLACE ops; REPLACE still requires its
+// target to be ACTIVE_OPERATIONAL so a still-building replacement is never dropped).
+const PRIORITY_RECOVERY_OP_RETIRE_ON_TIMELINE_REMOVED_FLAG =
+  'LAGRANGE_PR_OP_RETIRE_ON_TIMELINE_REMOVED';
+function isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() {
+  return (
+    process.env[PRIORITY_RECOVERY_OP_RETIRE_ON_TIMELINE_REMOVED_FLAG] === 'true'
+  );
+}
+
 function resolvePriorityRecoveryOperationStepTerminalState(
   operationType,
   workflowStep,
@@ -482,14 +500,29 @@ function isPriorityRecoveryOperationContextTerminal(operationContext) {
       operationType,
       operationContext.workflowStep,
     );
-  if (typeof workflowStepTerminalState === TYPEOF.BOOLEAN) {
-    return workflowStepTerminalState;
+  if (workflowStepTerminalState === true) {
+    return true;
   }
   const latestTimelineStepTerminalState =
     resolvePriorityRecoveryOperationStepTerminalState(
       operationType,
       operationContext.latestTimelineStep,
     );
+  if (
+    isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() &&
+    workflowStepTerminalState === false &&
+    latestTimelineStepTerminalState === true &&
+    operationContext.latestTimelineInFlight !== true &&
+    operationType !== OperationType.ADD &&
+    (operationType !== OperationType.REPLACE ||
+      operationContext.targetVisibilityState ===
+        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL)
+  ) {
+    return true;
+  }
+  if (typeof workflowStepTerminalState === TYPEOF.BOOLEAN) {
+    return workflowStepTerminalState;
+  }
   if (typeof latestTimelineStepTerminalState === TYPEOF.BOOLEAN) {
     return latestTimelineStepTerminalState;
   }
