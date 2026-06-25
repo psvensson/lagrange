@@ -45,6 +45,7 @@ import {
   buildPublicationAckProjectionDiagnostics,
   buildPublicationAckTargetSnapshot,
   hasRecoveryEligiblePublicationRepairEvidence,
+  isMembershipCountNeutralSteadyTrimEnabled,
   resolveMembershipPublicationAcknowledgedNodeIds,
 } from './membership-publication-target-selection.js';
 
@@ -387,6 +388,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       priorityRecoverySpreadGapPending,
       observedRecoveryProjectionGap,
       membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
+      countNeutralSteadyTrimEnabled: isMembershipCountNeutralSteadyTrimEnabled(),
     },
     helperFns,
   );
