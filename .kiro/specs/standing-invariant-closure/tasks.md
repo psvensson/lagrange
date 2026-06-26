@@ -11,25 +11,31 @@ phase past WS0 starts until WS0 has a written PASS.
 
 ---
 
-## WS0 — Expressibility gate (HARD GATE, the falsifiable first increment)
+## WS0 — Expressibility gate (HARD GATE, the falsifiable first increment) — ✅ DONE, VERDICT: PASS
 
-Prove that an already-closed, deterministically-reproducible CL can be expressed as
-a cheap, re-entrant `holdsWhen` over live evidence, and that reverting its fix is
-*detectable*. This is done by hand/inspection — no new runtime wiring yet.
+**Outcome (2026-06-26):** see `ws0-expressibility-audit.md`. CL-041 (raft vote double-vote
+TOCTOU) is expressible as a **cheap** (~1 s) re-entrant live-evidence predicate
+(`npm run repro -- CL-041` exits 0). Added registry entry
+`raft-election-safety-one-vote-per-term` to `architecture/contracts/invariants.json` with an
+additive `liveEvidence` block (closed a real raft-invariant gap). Round-trip proven: HELD on
+fixed HEAD `f95e53c3` (exit 0), BREACHED on a faithful serialization-revert in an isolated
+worktree (exit 1). `npm run model:invariants` + `model:contract-records` green. **WS1 unblocked.**
 
-- [ ] Choose a closed CL with a deterministic repro — **CL-041** (vote double-vote
+Original checklist (completed):
+
+- [x] Choose a closed CL with a deterministic repro — **CL-041** (vote double-vote
       TOCTOU, `npm run repro -- CL-041`) or **CL-042** (empty-log-term masquerade).
-- [ ] Identify its invariant in `architecture/contracts/invariants.json` (e.g. a
+- [x] Identify its invariant in `architecture/contracts/invariants.json` (e.g. a
       raft election-safety / leader-completeness entry); if none exists, ADD the entry
       (id + statement + `formalPredicate` + `contractRef`) — this also closes a real
       registry gap. Confirm `npm run model:invariants` still validates.
-- [ ] Draft the additive `liveEvidence.holdsWhen` predicate over the event log / repro.
-      Classify its cost (cheap fold vs requires-harness-run).
-- [ ] **Falsifier:** on a throwaway branch, revert the original fix; confirm the
+- [x] Draft the additive `liveEvidence.holdsWhen` predicate over the event log / repro.
+      Classify its cost (cheap fold vs requires-harness-run). → **cheap**
+- [x] **Falsifier:** on a throwaway branch, revert the original fix; confirm the
       candidate predicate FAILS (would-be BREACHED). Restore the fix; confirm it
       PASSES (would-be HELD). Record the round-trip evidence in this spec dir as
       `ws0-expressibility-audit.md`.
-- [ ] Record which trigger policy (§5) the predicate's cost permits.
+- [x] Record which trigger policy (§5) the predicate's cost permits. → `on-quest-closure` ok (cheap)
 
 **doneWhen:** a written audit (`ws0-expressibility-audit.md`) shows, for a chosen
 closed CL bound to an `invariants.json` entry, that a `liveEvidence.holdsWhen`
@@ -122,3 +128,8 @@ boundary, the auto-spawn-budget interaction) are recorded there, not in this fil
 
 - 2026-06-23 — Spec created by graduating `quest-standing-invariants.md`. No phase
   started. WS0 is the next action and the hard gate for everything after it.
+- 2026-06-26 — **WS0 PASS** (`ws0-expressibility-audit.md`). Added registry entry
+  `raft-election-safety-one-vote-per-term` + `liveEvidence` block; CL-041 round-trip proven
+  (HELD exit 0 / BREACHED exit 1) in an isolated worktree; `model:invariants` green. WS1
+  unblocked (build the event-log fold + `status --invariants`, behind
+  `LAGRANGE_STANDING_INVARIANTS`).

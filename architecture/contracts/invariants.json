@@ -207,6 +207,26 @@
       "formalPredicate": "missingPublishedCount > 0 /\\ isPublicationOwner => scheduledReconcileObligationEnabled",
       "modelRef": "models/readiness-starvation/PublicationConvergence.tla",
       "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
+      "id": "raft-election-safety-one-vote-per-term",
+      "owner": "message_group_raft_owner",
+      "boundary": "leader_election",
+      "kind": "safety",
+      "statement": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "formalPredicate": "\\A f, term: Cardinality({ c : VoteGranted(f, c, term) }) \\leq 1",
+      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-041 deterministic repro asserts grantedTo.length == 1 (a follower with a log grants at most one vote in a term) and exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-041",
+          "test": "test/closure/CL-041.repro.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": false}
+      }
     }
   ]
 }
