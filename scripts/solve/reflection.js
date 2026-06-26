@@ -160,6 +160,6 @@ export function altitudeReflectionPrompt(quest, health, trigger) {
     'reasoned about, or is truth diffuse across many sources/files? (4) Given the answers, ' +
     'should this Quest continue, or honestly EXHAUST and pivot to a higher-altitude ' +
     'Quest/epic? You MUST land the answer durably — record a finding (with rulesOut), author ' +
-    'or update a .kiro/epics/ entry, or record a system theory; an altitude insight must not ' +
+    'or update a solve/epics/ entry, or record a system theory; an altitude insight must not ' +
     'evaporate in chat. No gate fires during this turn — it is pure reasoning.';
 }

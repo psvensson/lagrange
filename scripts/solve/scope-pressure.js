@@ -19,7 +19,6 @@ function ownerAreaForPath(filePath) {
   }
   if (segments[0] === 'scripts' && segments[1]) return `scripts/${segments[1]}`;
   if (segments[0] === 'docs') return 'docs';
-  if (segments[0] === '.kiro') return '.kiro';
   if (segments[0] === 'architecture') return 'architecture';
   if (segments[0] === 'solve') return 'solve';
   return segments[0] || 'unknown';

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Latent convergence-blocker census (Phase 0 + L5 of the
-// .kiro/epics/latent-convergence-blocker-census.md plan).
+// solve/epics/latent-convergence-blocker-census.md plan).
 //
 // THE PROBLEM: the rolling-restart gate is a serial, max-frequency oracle — each run
 // surfaces only the single highest-frequency dominant reason; every other real blocker
@@ -302,7 +302,7 @@ function summarizeLatentBlockers(runs) {
 async function buildGroundingPack(repoRoot) {
   const ledgerDir = path.join(
     repoRoot,
-    '.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger',
+    'solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger',
   );
   let closureRecords = [];
   try {
@@ -394,7 +394,7 @@ function renderDeepCensusBanner(deepCensus) {
     `    ${stamp}`,
     `    ${counts} (${freshness}).`,
     '    Ranked frontier + per-item falsifiers are already computed there +',
-    '    .kiro/epics/latent-convergence-blocker-census.md. This summary is only the',
+    '    solve/epics/latent-convergence-blocker-census.md. This summary is only the',
     '    cheap gate-corpus backbone; do not reconstruct the ranking from raw bundles.',
     '',
   ];
@@ -446,7 +446,7 @@ function renderText(summary, grounding, deepCensus) {
       lines.push('        before re-running the fan-out; only re-run to refresh the frontier.');
     } else {
       lines.push('  NEXT: feed this frontier to the L1-L4 agent fan-out + adversarial verify +');
-      lines.push('        peel-until-dry (see .kiro/epics/latent-convergence-blocker-census.md).');
+      lines.push('        peel-until-dry (see solve/epics/latent-convergence-blocker-census.md).');
     }
   }
   return lines.join(NEWLINE);
@@ -465,7 +465,7 @@ function renderMarkdown(summary, grounding, deepCensus) {
             ' (newer than the latest gate). ' :
             ' (PREDATES the latest gate — re-run the fan-out). ') +
           'Ranked frontier + falsifiers are already computed there + ' +
-          '`.kiro/epics/latent-convergence-blocker-census.md`.',
+          '`solve/epics/latent-convergence-blocker-census.md`.',
       '',
     ] :
     [];
@@ -508,7 +508,7 @@ function renderMarkdown(summary, grounding, deepCensus) {
       lines.push('- next: a FRESH deep census already exists — read it (banner above) before re-running the fan-out');
     } else {
       lines.push('- next: parallel L1–L4 fan-out + adversarial verify + peel-until-dry',
-        '  (`.kiro/epics/latent-convergence-blocker-census.md`).');
+        '  (`solve/epics/latent-convergence-blocker-census.md`).');
     }
   }
   return lines.join(NEWLINE);

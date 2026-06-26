@@ -40,11 +40,11 @@ const ARG = Object.freeze({
 });
 
 const DEFAULT_PATH = Object.freeze({
-  reportRoot: '.kiro/specs/raft-logic-migration/reports/stages',
+  reportRoot: 'solve/specs/raft-logic-migration/reports/stages',
   benchmarkSummary:
-    '.kiro/specs/raft-logic-migration/reports/benchmarks/latest-summary.json',
+    'solve/specs/raft-logic-migration/reports/benchmarks/latest-summary.json',
   rollbackSummary:
-    '.kiro/specs/raft-logic-migration/reports/rollback/latest-summary.json',
+    'solve/specs/raft-logic-migration/reports/rollback/latest-summary.json',
 });
 
 function parseArgs(argv) {

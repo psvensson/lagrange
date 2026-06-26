@@ -1,5 +1,5 @@
 // Tier-2 (live-evidence) verification for architecture invariants — the standing
-// dual of a Quest's doneWhen (spec: .kiro/specs/standing-invariant-closure/).
+// dual of a Quest's doneWhen (spec: solve/specs/standing-invariant-closure/).
 //
 // It reads architecture/contracts/invariants.json entries that carry a
 // `liveEvidence` block, evaluates each against live evidence (a deterministic
@@ -96,10 +96,10 @@ function restorationQuest(invariant) {
     class: 'process',
     links: {
       roadmapRow: null,
-      specRef: '.kiro/specs/standing-invariant-closure',
+      specRef: 'solve/specs/standing-invariant-closure',
       closesCL: [],
       parentQuest: null,
-      planDoc: '.kiro/specs/standing-invariant-closure/design.md',
+      planDoc: 'solve/specs/standing-invariant-closure/design.md',
       restoresInvariant: invariant.id,
     },
     doneWhen: {probe: 'invariantHeld', args: {id: invariant.id}},

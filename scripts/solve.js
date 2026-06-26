@@ -92,7 +92,7 @@ function questTemplate(id, statement) {
       closesCL: [],
       parentQuest: null,
       // planDoc: optional path to the epic/spec page carrying this Quest's intent
-      // and rationale (e.g. ".kiro/epics/<id>.md"). Narrative belongs there, not in
+      // and rationale (e.g. "solve/epics/<id>.md"). Narrative belongs there, not in
       // the Quest; this is just the pointer.
       planDoc: null,
     },
@@ -372,7 +372,7 @@ function cmdPromoteFinding(root, args) {
   const claim = finding.claim || '';
   const slug = typeof args.slug === 'string' ? slugify(args.slug) : slugify(claim);
   const baseName = `${isoDate()}-${id}-${slug}.md`;
-  const relFile = `findings/${baseName}`; // relative to .kiro/steering (sourceDir)
+  const relFile = `findings/${baseName}`; // relative to docs/steering (sourceDir)
   const absFile = path.join(root, FINDINGS_REL, baseName);
   if (fs.existsSync(absFile) && !args.force) {
     throw new Error(`promote-finding: ${absFile} already exists (use --force)`);

@@ -15,7 +15,7 @@ const LOCAL_STR_UTF8 = 'utf8';
 const SCRIPT_DEFAULT = Object.freeze({
   scenario: 'rolling-restart',
   raftProvider: 'liferaft',
-  reportRoot: '.kiro/specs/raft-logic-migration/reports/rollback',
+  reportRoot: 'solve/specs/raft-logic-migration/reports/rollback',
 });
 
 const DRILL_PROFILES = Object.freeze([

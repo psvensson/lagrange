@@ -6,7 +6,7 @@
 // the older inline `- Status:` / `## GATE VERDICT — <STATUS>` forms as a fallback.
 //
 // Records live under
-// .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-###.md
+// solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-###.md
 //
 // Usage:
 //   node scripts/closure-ledger-state.js              # board table to stdout
@@ -27,7 +27,7 @@ import {fileURLToPath} from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const LEDGER_BASE = path.join(
-  ROOT, '.kiro/specs/membership-lifecycle-placement-hard-cutover');
+  ROOT, 'solve/specs/membership-lifecycle-placement-hard-cutover');
 const LEDGER_DIR = path.join(LEDGER_BASE, 'closure-ledger');
 const INDEX_PATH = path.join(LEDGER_BASE, 'closure-ledger.md');
 const GENERATED_PATH = path.join(LEDGER_BASE, 'closure-ledger.generated.md');

@@ -28,13 +28,13 @@ tap.test('work overview projection', async (t) => {
   t.test('groups quests under specs/rows and splits open vs terminal', (t) => {
     const root = tmp();
     // An epic citing a roadmap row.
-    fs.mkdirSync(path.join(root, '.kiro/epics'), {recursive: true});
-    fs.writeFileSync(path.join(root, '.kiro/epics/widget.md'),
+    fs.mkdirSync(path.join(root, 'solve/epics'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'solve/epics/widget.md'),
       '---\nid: widget\nroadmapRow: row-7\nstatus: sharpening\ngraduatesTo: widget-spec\n---\n# Epic: Widget\n');
     // Two spec dirs; one will be matched by a quest's specRef, one stays empty.
-    fs.mkdirSync(path.join(root, '.kiro/specs/widget-spec'), {recursive: true});
-    fs.mkdirSync(path.join(root, '.kiro/specs/lonely-spec'), {recursive: true});
-    fs.mkdirSync(path.join(root, '.kiro/specs/archived'), {recursive: true}); // skipped
+    fs.mkdirSync(path.join(root, 'solve/specs/widget-spec'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'solve/specs/lonely-spec'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'solve/specs/archived'), {recursive: true}); // skipped
 
     // Open quest linked to spec + row; cites a closure record.
     saveQuest(root, quest('q-open', {specRef: 'widget-spec#T2', roadmapRow: 'row-7', closesCL: ['CL-009']}));

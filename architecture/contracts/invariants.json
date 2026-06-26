@@ -215,7 +215,7 @@
       "kind": "safety",
       "statement": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "formalPredicate": "\\A f, term: Cardinality({ c : VoteGranted(f, c, term) }) \\leq 1",
-      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md",
       "liveEvidence": {
         "tier": 2,
         "holdsWhen": "the CL-041 deterministic repro asserts grantedTo.length == 1 (a follower with a log grants at most one vote in a term) and exits 0",
@@ -235,7 +235,7 @@
       "kind": "safety",
       "statement": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "formalPredicate": "\\A i: committed(i) => \\A n, m: log[n][i] = log[m][i]",
-      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md",
       "liveEvidence": {
         "tier": 2,
         "holdsWhen": "the CL-040 deterministic repro asserts a follower does not stale-commit its own same-index entry on heal and exits 0",
@@ -255,7 +255,7 @@
       "kind": "liveness",
       "statement": "A surplus-drain REPLACE whose declared source replica is already removed terminalizes (reaches SAFE) instead of re-dispatching a source-leader handoff to a replica that no longer exists (CL-038).",
       "formalPredicate": "sourceReplicaRemoved => <>SAFE",
-      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-038.md",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-038.md",
       "liveEvidence": {
         "tier": 2,
         "holdsWhen": "the CL-038 deterministic repro asserts a source-removed REPLACE reaches SAFE (does not loop re-dispatching a dead handoff) and exits 0",

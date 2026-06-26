@@ -73,7 +73,7 @@ const LOCAL_STR_NEWLINE = '\n';
 const LOCAL_STR_JIY0E = ' to run the contained spike.';
 
 const REPORT_DEFAULT = Object.freeze({
-  REPORT_DIR: '.kiro/specs/raft-logic-investigation/reports',
+  REPORT_DIR: '_legacy_work/specs-archive/raft-logic-investigation/reports',
   IDLE_SOAK_MS: 2 * RAFT_LOGIC_SPIKE_TIME.MINUTE_MS,
   SAMPLE_INTERVAL_MS: 10 * RAFT_LOGIC_SPIKE_TIME.SECOND_MS,
   LOAD_WRITES: 20,

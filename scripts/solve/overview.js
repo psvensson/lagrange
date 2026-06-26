@@ -20,8 +20,8 @@ import {SOLVE_DATA_DIR} from './constants.js';
 import {parseClosureLedger, concernArea} from '../closure-ledger-state.js';
 import {buildPortfolio, loadAllQuests} from './portfolio.js';
 
-const EPICS_DIR = '.kiro/epics';
-const SPECS_DIR = '.kiro/specs';
+const EPICS_DIR = 'solve/epics';
+const SPECS_DIR = 'solve/specs';
 // Planning-tier scaffolding that is not itself an epic / spec.
 const EPIC_SKIP = new Set(['README.md', '_template.md']);
 const SPEC_SKIP = new Set(['archived']);
@@ -200,13 +200,13 @@ export function renderOverview(overview) {
         [r.id, r.epics.join(', ') || '—', r.quests.join(', ') || '—']))),
 
     `## 2 · Epics — ${epics.length}`,
-    '_Lightweight planning above specs (.kiro/epics/) — sharpen intent before a sealed doneWhen exists._',
+    '_Lightweight planning above specs (solve/epics/) — sharpen intent before a sealed doneWhen exists._',
     '',
     ...table(['id', 'status', 'roadmapRow', 'graduatesTo'],
       epics.map((e) => [e.id, e.status, e.roadmapRow || '—', e.graduatesTo || '—'])),
 
     `## 3 · Specs — ${specs.length} (${specsWithOpen} with open quests)`,
-    '_Detailed planning (.kiro/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._',
+    '_Detailed planning (solve/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._',
     '',
     ...table(['spec', 'quests (open/total)', 'quest ids'],
       specs.map((s) => [s.name, `${s.open}/${s.total}`, s.quests.map((q) => q.id).join(', ') || '—'])),

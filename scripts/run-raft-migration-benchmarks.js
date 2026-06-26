@@ -15,7 +15,7 @@ const LOCAL_STR_UTF8 = 'utf8';
 const SCRIPT_DEFAULT = Object.freeze({
   scenario: 'postgres-baseline-comparison',
   raftProvider: 'liferaft',
-  reportRootDir: '.kiro/specs/raft-logic-migration/reports/benchmarks',
+  reportRootDir: 'solve/specs/raft-logic-migration/reports/benchmarks',
   latestSummaryFilename: 'latest-summary.json',
 });
 
