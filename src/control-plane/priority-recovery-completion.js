@@ -28,8 +28,6 @@ const PRIORITY_RECOVERY_COMPLETION_STATE_IDS = Object.freeze([
 const PRIORITY_RECOVERY_COMPLETION_REASON = Object.freeze({
   TEMPORARY_OVER_TARGET_ALLOWED:
     'temporary_over_target_allowed_for_recovery_completion',
-  SPREAD_SATISFIED_IN_FLIGHT_STALLED:
-    'spread_satisfied_in_flight_stalled',
   OPERATION_VISIBILITY_DEFERRED:
     'operation_visibility_deferred',
   AUTHORITATIVE_OPERATION_READ_DEFERRED:
@@ -174,27 +172,6 @@ function buildPriorityRecoveryCompletion(options = {}) {
   }
 
   if (spreadCompletion?.satisfied === true) {
-    // Census #4 staleness guard (default-off): the satisfied-in-flight sign-off is
-    // dishonest when an in-flight op has stalled past the threshold (the
-    // assessment carries the precomputed signal). Return the blocked state so this
-    // op leaves the drain-completion short-circuit set
-    // (PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_COMPLETION_STATES) and re-drives —
-    // matching the existing operation_no_transitions stalled/blocked pairing.
-    // Flag-off => assessment.spreadSatisfiedInFlightStalled is false =>
-    // byte-identical.
-    if (assessment?.spreadSatisfiedInFlightStalled === true) {
-      return Object.freeze({
-        state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
-        reasonCode:
-          PRIORITY_RECOVERY_COMPLETION_REASON
-            .SPREAD_SATISFIED_IN_FLIGHT_STALLED,
-        retryAfterMs,
-        activeOperationCount,
-        temporaryOverflowVoterBudget: NUM.ZERO,
-        allowTemporaryOverflowPromotion: false,
-        blocked: true,
-      });
-    }
     return Object.freeze({
       state:
         PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,

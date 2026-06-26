@@ -189,9 +189,6 @@ const REBALANCER_LOG_MSG = Object.freeze({
   WAIT_TOPOLOGY_SETTLING:
     'Waiting for transitional cluster membership to settle before planning ' +
     'critical system rebalancing',
-  ALLOW_TOPOLOGY_SETTLING_DRAIN:
-    'Allowing over-replicated priority partition to plan its surplus drain ' +
-    'through topology settling (own in-flight add-half only)',
   REVALIDATE_TOPOLOGY_BLOCKER_FAILED:
     'Failed to revalidate topology-settling in-flight blocker',
   WAIT_LOCAL_SERVE_READINESS:

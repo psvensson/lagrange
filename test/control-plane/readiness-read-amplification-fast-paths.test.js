@@ -73,9 +73,6 @@ function createReadinessStub({storedSnapshot = null} = {}) {
       calls.fullBuild += 1;
       return Object.freeze({dimensions: {}, reasons: []});
     },
-    // WS4: the node-build path now records its duration via the store mixin (always
-    // present on the real prototype); this node-only stub provides a no-op.
-    recordReadinessBuildDurationMs: () => {},
   };
   installControlPlaneReadinessNodeMethods(stub);
   return {stub, calls};

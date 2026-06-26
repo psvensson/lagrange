@@ -292,52 +292,6 @@ async function executeAuthoritativeSystemTableRead(
     options,
   );
 
-  // Opt-in local CDC cache fallback (default-off flag). A read is eligible ONLY
-  // when the caller explicitly supplies a `cacheFallbackPredicate` AND does not
-  // require owner-RPC authority — so authority-sensitive readers
-  // (AUTHORITATIVE_REQUIRED, membership publication) are never downgraded; they
-  // simply never opt in. When this node hosts no local partition replica, an
-  // eligible read is served from the EXISTING systemTableCache (CDC projection,
-  // present on every node) instead of routing to the often-overloaded owner
-  // during formation/recovery — strictly better than the current outcome (a
-  // routed-read timeout returning no rows). Reuses the existing cache; adds no
-  // new cache. See AGENTS steering: no secondary/tertiary caches.
-  const cacheFallbackPredicate =
-    typeof options.cacheFallbackPredicate === TYPEOF.FUNCTION &&
-    !requireOwnerRpcRead &&
-    process.env.LAGRANGE_CACHE_READ_FALLBACK === 'true' ?
-      options.cacheFallbackPredicate :
-      null;
-  const buildLocalCdcCacheFallbackResult = () => {
-    if (!cacheFallbackPredicate) {
-      return null;
-    }
-    const systemTableCache = service?.systemTableCache || null;
-    if (
-      !systemTableCache ||
-      typeof systemTableCache.filter !== TYPEOF.FUNCTION
-    ) {
-      return null;
-    }
-    const cacheRows = systemTableCache.filter(tableName, cacheFallbackPredicate) || [];
-    return {
-      success: true,
-      rows: cacheRows,
-      localReadHit: false,
-      localReplicaFallbackHit: false,
-      usedSqlFallback: false,
-      source: AUTHORITATIVE_READ_SOURCE.LOCAL_CDC_CACHE,
-      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
-      systemTableDiagnostics: {
-        ...baseDiagnostics,
-        localReadHit: false,
-        localReplicaFallbackHit: false,
-        routedToNode: null,
-        source: AUTHORITATIVE_READ_SOURCE.LOCAL_CDC_CACHE,
-      },
-    };
-  };
-
   let localRead = {
     available: false,
     rows: [],
@@ -408,17 +362,6 @@ async function executeAuthoritativeSystemTableRead(
     !shouldConfirmEmptyLocalReadWithOwnerRpc
   ) {
     return buildLocalReadResult();
-  }
-
-  // No local partition replica: serve an opt-in eventually-consistent read from
-  // the local CDC cache instead of routing owner-RPC / distributed SQL to the
-  // overloaded owner. Only fires for callers that supplied a predicate and do
-  // not require owner-RPC authority (see buildLocalCdcCacheFallbackResult).
-  if (!localRead.available) {
-    const localCdcCacheFallback = buildLocalCdcCacheFallbackResult();
-    if (localCdcCacheFallback) {
-      return localCdcCacheFallback;
-    }
   }
 
   const localQueryTransportReadiness = getLocalQueryTransportReadiness(service);

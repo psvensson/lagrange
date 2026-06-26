@@ -267,46 +267,6 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    *   omitted = legacy behavior (stamped at store time).
    * @private
    */
-  // WS4: record the wall duration of the last FULL synchronous readiness build for
-  // a node. Allocation-light (a single numeric Map.set) so it is safe on the hot
-  // path. Read by getBoundedStaleReadinessSnapshot to decide whether the build is
-  // expensive enough that the hot path should serve a bounded-stale snapshot.
-  recordReadinessBuildDurationMs(nodeId, durationMs) {
-    if (!nodeId || !Number.isFinite(durationMs) || durationMs < NUM.ZERO) {
-      return;
-    }
-    this.lastReadinessBuildDurationMsByNodeId.set(nodeId, durationMs);
-  },
-
-  // WS4 (bound the readiness build): under recovery churn getFresherStoredReadiness-
-  // Snapshot MISSES every call, so the heavy planning-snapshot + evidence build
-  // reruns per routing call and can monopolize the event loop long enough to lose
-  // raft leadership (CL-033/CL-034/CL-001-B freeze->leadership spiral). When the last
-  // full build for this node exceeded sliceMs AND a stored snapshot is within
-  // maxStaleMs, serve that (bounded-stale) snapshot synchronously and let the
-  // background refresh rebuild — bounding the REPEATED rebuild without ever serving
-  // ancient data. The first (cold) build, and any node whose build is cheap, are
-  // unaffected. Returns null unless all conditions hold (caller still builds).
-  getBoundedStaleReadinessSnapshot(nodeId, nowMs, {sliceMs, maxStaleMs} = {}) {
-    if (!Number.isFinite(sliceMs) || !Number.isFinite(maxStaleMs)) {
-      return null;
-    }
-    const lastDurationMs = this.lastReadinessBuildDurationMsByNodeId.get(nodeId);
-    if (!Number.isFinite(lastDurationMs) || lastDurationMs < sliceMs) {
-      return null;
-    }
-    const storedSnapshot =
-      this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
-    const capturedAtMs = this.lastReadinessSnapshotAtMsByNodeId.get(nodeId);
-    if (!storedSnapshot || !Number.isFinite(capturedAtMs)) {
-      return null;
-    }
-    if (!Number.isFinite(nowMs) || nowMs - capturedAtMs > maxStaleMs) {
-      return null;
-    }
-    return storedSnapshot;
-  },
-
   storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs = null) {
     if (!nodeId || !snapshot) {
       return;

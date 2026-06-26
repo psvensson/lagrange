@@ -229,12 +229,10 @@ test(
   },
 );
 
-// ---- END-2: drain-planning continuity (gate stat-gate-20260624T134940Z) ----
+// ---- END-2: topology-settling defers an over-target partition's own drain ----
 // An over-replicated priority partition whose only topology-settling blocker is
-// its OWN in-flight add-half must not serialize its surplus drain behind that
-// add — that keeps the raft voter set over target ~186s across leader churn.
-// LAGRANGE_PR_DRAIN_THROUGH_SETTLING lets such a partition PLAN the drain.
-const DRAIN_THROUGH_SETTLING_FLAG = 'LAGRANGE_PR_DRAIN_THROUGH_SETTLING';
+// its OWN in-flight add-half DEFERS its surplus drain behind that add. This is
+// the unconditional production behavior.
 
 function buildOwnInFlightBlocker(partitionId) {
   return {
@@ -263,8 +261,7 @@ function createOverTargetRebalancer({replicaCount}) {
 }
 
 test(
-  'END-2 flag-off: an over-target partition with its own in-flight add-half ' +
-  'still DEFERS (byte-identical)',
+  'END-2: an over-target partition with its own in-flight add-half DEFERS',
   async (t) => {
     initEnv();
     const rebalancer = createOverTargetRebalancer({replicaCount: 4});
@@ -274,48 +271,21 @@ test(
       rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
 
     t.equal(snapshot.planningState, 'topology_settling_blocked',
-      'flag-off: classified as topology_settling_blocked');
+      'classified as topology_settling_blocked');
     t.equal(snapshot.shouldDefer, true,
-      'flag-off: drain is deferred behind the in-flight add (prior behavior)');
+      'drain is deferred behind the in-flight add');
   },
 );
 
 test(
-  'END-2 flag-on: over-target + own in-flight add-half ALLOWS planning the drain',
-  async (t) => {
-    initEnv();
-    const rebalancer = createOverTargetRebalancer({replicaCount: 4});
-    const blocker = buildOwnInFlightBlocker(TEST_PARTITION_ID);
-
-    process.env[DRAIN_THROUGH_SETTLING_FLAG] = 'true';
-    let snapshot;
-    try {
-      snapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
-    } finally {
-      delete process.env[DRAIN_THROUGH_SETTLING_FLAG];
-    }
-
-    t.equal(snapshot.planningState, 'over_replicated_own_drain_ready',
-      'flag-on: classified as over_replicated_own_drain_ready');
-    t.equal(snapshot.shouldDefer, false,
-      'flag-on: planning proceeds so the surplus drain can be computed');
-  },
-);
-
-test(
-  'END-2 flag-on safety: NOT over target -> still defers (no premature drain)',
+  'END-2: NOT over target -> still defers (no premature drain)',
   async (t) => {
     initEnv();
     const rebalancer = createOverTargetRebalancer({replicaCount: 3});
     const blocker = buildOwnInFlightBlocker(TEST_PARTITION_ID);
 
-    process.env[DRAIN_THROUGH_SETTLING_FLAG] = 'true';
-    let snapshot;
-    try {
-      snapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
-    } finally {
-      delete process.env[DRAIN_THROUGH_SETTLING_FLAG];
-    }
+    const snapshot =
+      rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
 
     t.equal(snapshot.shouldDefer, true,
       'at target (3/3): the in-flight op is not surplus -> still defers');
@@ -323,20 +293,15 @@ test(
 );
 
 test(
-  'END-2 flag-on safety: an UNRELATED partition in-flight -> still defers',
+  'END-2: an UNRELATED partition in-flight -> still defers',
   async (t) => {
     initEnv();
     const rebalancer = createOverTargetRebalancer({replicaCount: 4});
     // Blocker carries an in-flight op for a DIFFERENT partition.
     const blocker = buildOwnInFlightBlocker('replica_operations-p1');
 
-    process.env[DRAIN_THROUGH_SETTLING_FLAG] = 'true';
-    let snapshot;
-    try {
-      snapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
-    } finally {
-      delete process.env[DRAIN_THROUGH_SETTLING_FLAG];
-    }
+    const snapshot =
+      rebalancer.buildTopologySettlingPlanningGateSnapshot(blocker);
 
     t.equal(snapshot.shouldDefer, true,
       'unrelated partition transitional -> never relax the settling gate');

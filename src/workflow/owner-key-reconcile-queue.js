@@ -32,26 +32,6 @@ const LOCAL_STR_EMPTY = '';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_THOUSAND = 1000;
-// "Never break, only slow": when a reconcile drain keeps failing retryably
-// (e.g. a backpressured/saturated write participant), grow the retry interval
-// exponentially (capped) so we stop hammering the participant and let it drain,
-// rather than re-loading it every ~1s forever (the metastable retry-amplification
-// loop). Never gives up — only slows. Default off until validated against the
-// statistical convergence gate.
-const RECONCILE_BACKOFF_ENABLED =
-  process.env.LAGRANGE_RECONCILE_BACKOFF === 'true';
-const RECONCILE_BACKOFF_MAX_MS = 30000;
-const RECONCILE_BACKOFF_CAP_EXP = 6;
-function computeReconcileBackoffMs(baseRetryAfterMs, failureCount) {
-  if (!RECONCILE_BACKOFF_ENABLED) {
-    return baseRetryAfterMs;
-  }
-  const exp = Math.min(
-    Math.max(LOCAL_NUM_ZERO, (failureCount || LOCAL_NUM_ONE) - LOCAL_NUM_ONE),
-    RECONCILE_BACKOFF_CAP_EXP,
-  );
-  return Math.min(RECONCILE_BACKOFF_MAX_MS, baseRetryAfterMs * Math.pow(2, exp));
-}
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED =
@@ -518,9 +498,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       Number.isFinite(previousState?.failureCount) ?
         previousState.failureCount + LOCAL_NUM_ONE :
         LOCAL_NUM_ONE;
-    // Slow down (exponential, capped) when the same key keeps failing, so a
-    // backpressured participant can drain instead of being re-hammered.
-    const retryAfterMs = computeReconcileBackoffMs(baseRetryAfterMs, failureCount);
+    const retryAfterMs = baseRetryAfterMs;
     const errorCode = getRetryableDrainFailureCode(error);
     const retryState = {
       type: RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE,

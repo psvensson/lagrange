@@ -179,34 +179,6 @@ function resolvePriorityRecoveryWorkflowStepAgeMs(
   return null;
 }
 
-// Census #4 staleness signal (pure; flag-gating is the caller's job). True when at
-// least one in-flight operation context has a workflow step age at/above the stall
-// threshold — i.e. the partition is being signed off as `spread_satisfied_in_flight`
-// while an op it depends on has stopped making progress.
-function resolvePriorityRecoverySpreadSatisfiedInFlightStalled(
-  activeOperationContexts,
-  nowMs,
-  thresholdMs,
-) {
-  const contexts = Array.isArray(activeOperationContexts) ?
-    activeOperationContexts :
-    [];
-  if (contexts.length === NUM.ZERO) {
-    return false;
-  }
-  const thresholdMsValue = normalizePriorityRecoveryInteger(thresholdMs);
-  if (!Number.isFinite(thresholdMsValue) || thresholdMsValue <= NUM.ZERO) {
-    return false;
-  }
-  return contexts.some((operationContext) => {
-    const stepAgeMs = resolvePriorityRecoveryWorkflowStepAgeMs(
-      operationContext,
-      nowMs,
-    );
-    return Number.isFinite(stepAgeMs) && stepAgeMs >= thresholdMsValue;
-  });
-}
-
 function resolvePriorityRecoveryWorkflowStepTimeoutMs(
   operationContext,
   options = {},
@@ -612,7 +584,6 @@ export {
   resolvePriorityRecoveryWorkflowProgressPhaseId,
   resolvePriorityRecoveryWorkflowState,
   resolvePriorityRecoveryWorkflowStepAgeMs,
-  resolvePriorityRecoverySpreadSatisfiedInFlightStalled,
   resolvePriorityRecoveryWorkflowStepTimeoutMs,
   selectLatestPriorityRecoveryOperationContext,
 };

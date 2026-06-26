@@ -7,15 +7,6 @@ import {
   normalizeMembershipPublicationStringList,
 } from './membership-publication-normalizers.js';
 
-// Count-neutral steady-trim decouple (default-off). See buildMembershipPublicationTargetEvidence.
-const MEMBERSHIP_COUNT_NEUTRAL_STEADY_TRIM_FLAG =
-  'LAGRANGE_PR_COUNT_NEUTRAL_STEADY_TRIM';
-function isMembershipCountNeutralSteadyTrimEnabled() {
-  return (
-    process.env[MEMBERSHIP_COUNT_NEUTRAL_STEADY_TRIM_FLAG] === 'true'
-  );
-}
-
 const MEMBERSHIP_PUBLICATION_TARGET_STATE = Object.freeze({
   EXPLICIT_PUBLICATION: 'explicit_publication',
   OBSERVED_ACTIVE: 'observed_active',
@@ -115,39 +106,11 @@ function buildMembershipPublicationTargetEvidence(options = {}, helperFns = {}) 
     publishedBaselineNodeIds.some(
       (nodeId) => !projectedServingNodeIdSet.has(nodeId),
     );
-  // Count-neutral steady-trim decouple (default-off, options.countNeutralSteadyTrimEnabled).
-  // The steady-trim that drops a durably non-serving node from PUBLISHED membership is
-  // normally gated on a GLOBAL priorityRecoverySpreadGapPending flag. But a node that is
-  // already excluded from projectedServingNodeIds hosts no serving replica, so trimming it
-  // cannot reduce any partition's serving spread — the global gap should not hold a
-  // removal-only count-neutral trim over-target (gate run3: a non-serving node stayed
-  // published 135s → over-target budget blown). Fire ONLY when the projected target is a
-  // strict removal-only subset of the published baseline (no additions — the spread-gap
-  // flag's real job of WIDENING to re-admit recovery nodes stays gated), keeping the
-  // observedRecoveryProjectionGap + membershipFreeze guards intact. Removal durability is
-  // already enforced upstream: projectedServingNodeIds drops a published node only after it
-  // fails the transport-alive retention grace (active-node-projection), so the trimmed node
-  // is durably departed, not transiently absent mid-rejoin. Published membership feeds the
-  // raft voter set only indirectly (the services table is authoritative), so this only stops
-  // advertising a durably-departed node and cannot itself shrink quorum. Subagent-audited safe.
-  const publishedBaselineNodeIdSet = new Set(publishedBaselineNodeIds);
-  const projectedIsRemovalOnlySubset =
+  const canPublishSteadyTrim =
     publishedTrimDebt &&
-    projectedServingNodeIds.length < publishedBaselineNodeIds.length &&
-    projectedServingNodeIds.every((nodeId) =>
-      publishedBaselineNodeIdSet.has(nodeId),
-    );
-  const countNeutralSteadyTrim =
-    options.countNeutralSteadyTrimEnabled === true &&
-    projectedIsRemovalOnlySubset &&
+    options.priorityRecoverySpreadGapPending !== true &&
     options.observedRecoveryProjectionGap !== true &&
     options.membershipFreezeActive !== true;
-  const canPublishSteadyTrim =
-    (publishedTrimDebt &&
-      options.priorityRecoverySpreadGapPending !== true &&
-      options.observedRecoveryProjectionGap !== true &&
-      options.membershipFreezeActive !== true) ||
-    countNeutralSteadyTrim;
   return {
     decisions: Object.freeze({
       [MEMBERSHIP_PUBLICATION_TARGET_STATE.EXPLICIT_PUBLICATION]:
@@ -384,6 +347,5 @@ export {
   buildPublicationAckProjectionDiagnostics,
   buildPublicationAckTargetSnapshot,
   hasRecoveryEligiblePublicationRepairEvidence,
-  isMembershipCountNeutralSteadyTrimEnabled,
   resolveMembershipPublicationAcknowledgedNodeIds,
 };

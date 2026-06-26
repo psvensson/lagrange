@@ -181,10 +181,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE:
     'Priority recovery drain settled stale operation without ' +
     'source-retirement evidence',
-  PRIORITY_RECOVERY_REDUNDANT_REPLACE_RETIRED:
-    'Priority recovery retired a redundant un-dispatched REPLACE: ' +
-    'partition spread is already CONVERGED by independent replicas and ' +
-    'the un-materialized remote owner is unreachable',
   PRIORITY_SPREAD: 'priority spread',
   PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
   PROGRESS: 'progress',

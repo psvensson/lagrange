@@ -8,15 +8,6 @@ const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
 const LOCAL_STR_1506A = 'storageAccountingService';
 const LOCAL_STR_1UD6S = 'cdcGroupPropagationService';
 const LOCAL_STR_13YWM = 'membershipPublicationService';
-// WS4 bounded-build defaults: a full sync readiness build taking >= SLICE_MS is
-// "expensive" (the raft election timeout is 1-4.5s; repeated multi-hundred-ms builds
-// under churn accrete toward a leadership-losing freeze). MAX_STALE_MS bounds how
-// stale a served snapshot may be — well under the cluster stale-heartbeat window so
-// a served snapshot is never dangerously old.
-const READINESS_BUILD_BOUND_DEFAULT = Object.freeze({
-  SLICE_MS: 250,
-  MAX_STALE_MS: 2000,
-});
 
 const {
   AUTHORITATIVE_READINESS_REPAIR,
@@ -71,24 +62,6 @@ class ControlPlaneReadinessParticipationBase {
       options.clusterMemberStaleHeartbeatMaxAgeMs > NUM.ZERO ?
         Math.floor(options.clusterMemberStaleHeartbeatMaxAgeMs) :
         CONTROL_PLANE_READINESS_DEFAULT.CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS;
-    // WS4 (bound the readiness build): when ON, the hot-path sync build serves a
-    // bounded-stale stored snapshot (instead of rebuilding synchronously) for a node
-    // whose last full build took >= the slice budget, capping the per-call freeze
-    // under recovery churn. Default OFF (kill switch) until gate-validated; the
-    // slice/max-stale budgets are tunable via options for tests + tuning.
-    this.readinessBuildBoundEnabled =
-      options.readinessBuildBoundEnabled ??
-      process.env.LAGRANGE_READINESS_BUILD_BOUND === 'true';
-    this.readinessBuildSliceMs =
-      Number.isFinite(options.readinessBuildSliceMs) &&
-      options.readinessBuildSliceMs > NUM.ZERO ?
-        Math.floor(options.readinessBuildSliceMs) :
-        READINESS_BUILD_BOUND_DEFAULT.SLICE_MS;
-    this.readinessBuildMaxStaleMs =
-      Number.isFinite(options.readinessBuildMaxStaleMs) &&
-      options.readinessBuildMaxStaleMs > NUM.ZERO ?
-        Math.floor(options.readinessBuildMaxStaleMs) :
-        READINESS_BUILD_BOUND_DEFAULT.MAX_STALE_MS;
     this.authoritativeReadinessRepairCooldownMs =
       Number.isFinite(options.authoritativeReadinessRepairCooldownMs) &&
       options.authoritativeReadinessRepairCooldownMs > NUM.ZERO ?
@@ -166,11 +139,6 @@ class ControlPlaneReadinessParticipationBase {
     this.lastReadinessSnapshotByNodeId = new Map();
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
-    // WS4 (bound the readiness build): per-node duration (ms) of the last FULL
-    // synchronous readiness build, used to decide whether to serve a bounded-stale
-    // stored snapshot on the hot path instead of rebuilding synchronously under
-    // recovery churn. Allocation-light (one numeric Map.set per build).
-    this.lastReadinessBuildDurationMsByNodeId = new Map();
     this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
     this.membershipPublicationDiagnosticsMemo = null;
     this.lastActivePriorityRecoveryPlanningSnapshotByNodeId = new Map();

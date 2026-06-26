@@ -50,15 +50,6 @@ const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 
-// Default-off flag: when the authoritative read path has no local partition
-// replica and the owner-RPC/SQL-fallback cannot reach an overloaded owner
-// during formation/recovery, eventually-consistent snapshot readers may serve
-// from the EXISTING local CDC systemTableCache (replicated to every node) via a
-// caller-supplied predicate — reusing the existing cache, NOT adding a new one.
-// The fallback itself lives in the authoritative read flow (single convergence
-// point); readers opt in by passing `cacheFallbackPredicate`. Default-off flag
-// LAGRANGE_CACHE_READ_FALLBACK. This source label surfaces such reads.
-
 const AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY = 'local_leader';
 const AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS = 1500;
 

@@ -7,9 +7,7 @@ import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
-  PRIORITY_RECOVERY_SPREAD_SATISFIED_STALL_THRESHOLD_MS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
-  isPriorityRecoverySpreadStallGuardEnabled,
 } from './priority-recovery-diagnostics-constants.js';
 import {
   PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -23,7 +21,7 @@ import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerE
 import {buildPriorityRecoverySerialWaitOperationContexts, buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts} from './priority-recovery-snapshot-publication.js';
 import {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-active-gate.js';
 import {buildPriorityRecoveryOperationContextFromRecord, buildPriorityRecoveryReplicaOperationContexts, isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
-import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions, resolvePriorityRecoverySpreadSatisfiedInFlightStalled} from './priority-recovery-snapshot-observation.js';
+import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions} from './priority-recovery-snapshot-observation.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryAdmissionByPartitionId, buildPriorityRecoveryLearnerPromotionByPartitionId, buildPriorityRecoveryPublicationNodeDecisions} from './priority-recovery-snapshot-burndown.js';
 import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, buildPriorityRecoveryDecisionSnapshot, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap, recordPriorityRecoveryDecisionSnapshotSummary} from './priority-recovery-dispatch-snapshot.js';
 
@@ -332,33 +330,17 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
       PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
     );
   }
-  // Census #4 staleness guard (default-off): when we are about to sign the
-  // partition off as `spread_satisfied_in_flight` but one of its in-flight ops has
-  // stalled past the threshold, promote both classifiers to the honest
-  // operation_stalled/blocked pairing so the op re-drives instead of being
-  // abandoned over-target. Flag-off => always false => byte-identical.
-  const spreadSatisfiedInFlightStalled =
-    isPriorityRecoverySpreadStallGuardEnabled() &&
-    spreadCompletion.satisfied === true &&
-    hasActiveOperationContexts &&
-    resolvePriorityRecoverySpreadSatisfiedInFlightStalled(
-      activeOperationContexts,
-      options.nowMs,
-      PRIORITY_RECOVERY_SPREAD_SATISFIED_STALL_THRESHOLD_MS,
-    );
   const semanticState = resolvePriorityRecoverySemanticState({
     blockerReasons,
     plannerReady: planner.ready === true,
     hasActiveOperationContexts,
     spreadCompletion,
-    operationStalled: spreadSatisfiedInFlightStalled,
   });
   return {
     planner,
     spreadCompletion,
     blockerReasons,
     semanticState,
-    spreadSatisfiedInFlightStalled,
     activeOperationContexts,
     serialWaitOperationContexts,
     ineligibleNodeIds,

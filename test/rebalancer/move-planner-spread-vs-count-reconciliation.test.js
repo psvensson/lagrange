@@ -169,140 +169,8 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
     },
   );
 
-  // ---- Coupled-loop re-grounding (gate stat-gate-20260624T134940Z) ----
-  // The existing reconciliation guard only defers the bare ADD when
-  // replaceMoves.length === 0 AND active>=target. The rolling-restart
-  // cascade defeats BOTH preconditions, leaking a count-increasing ADD that
-  // over-replicates a critical-system partition (3->4->5->6) and churns raft
-  // leadership. The default-off LAGRANGE_PR_COUNT_NEUTRAL_SPREAD_RESTORE lever
-  // closes the two gaps: count by PHYSICAL occupancy (robust to a transiently
-  // creating/syncing colocated copy) and defer leftover over-target ADDs even
-  // when some REPLACEs paired this round.
-  const COUNT_NEUTRAL_FLAG = 'LAGRANGE_PR_COUNT_NEUTRAL_SPREAD_RESTORE';
-
   await t.test(
-    'flag-on: defers leftover over-target ADD even when a REPLACE paired ' +
-    'this round (replaceMoves.length > 0 leak)',
-    async (t) => {
-      // 3 active colocated on node-1 (target 3). One surplus copy (r2) has a
-      // surplus-drain already in flight, so only r1 survives as a REMOVE
-      // candidate -> 1 REPLACE (r1 -> node-2) + 1 leftover bare ADD (node-3).
-      const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      ];
-      const moveStateProvider = createMoveStateProvider({
-        currentReplicas,
-        pendingMoveReplicaIds: new Set(['r2']),
-      });
-      const planner = new MovePlanner({
-        entityId: PRIORITY_PARTITION_ID,
-        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-        moveStateProvider,
-      });
-
-      process.env[COUNT_NEUTRAL_FLAG] = 'true';
-      let moves;
-      try {
-        moves = planner.calculateMoves(currentReplicas, {
-          targetReplicaCount: 3,
-          targetNodes: ['node-1', 'node-2', 'node-3'],
-          degraded: false,
-        });
-      } finally {
-        delete process.env[COUNT_NEUTRAL_FLAG];
-      }
-
-      const overTargetAdds = moves.filter(
-        (move) =>
-          move.type === REBALANCER_MOVE_TYPE.ADD &&
-          move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
-      );
-      t.same(overTargetAdds, [],
-        'no count-increasing ADD leaks past the paired REPLACE (count-neutral)');
-    },
-  );
-
-  await t.test(
-    'flag-on: defers over-target ADD when a colocated copy is transiently ' +
-    'creating (active < target but physical occupancy >= target)',
-    async (t) => {
-      // 3 physical copies colocated on node-1, but r2 is CREATING (not yet
-      // ACTIVE) during the cascade. activePlacementReplicas = 2 < target 3, so
-      // the active-count guard misses it; physical occupancy = 3 >= target.
-      const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.CREATING},
-        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      ];
-      const planner = new MovePlanner({
-        entityId: PRIORITY_PARTITION_ID,
-        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-        moveStateProvider: createMoveStateProvider({currentReplicas}),
-      });
-
-      process.env[COUNT_NEUTRAL_FLAG] = 'true';
-      let moves;
-      try {
-        moves = planner.calculateMoves(currentReplicas, {
-          targetReplicaCount: 3,
-          targetNodes: ['node-1', 'node-2', 'node-3'],
-          degraded: false,
-        });
-      } finally {
-        delete process.env[COUNT_NEUTRAL_FLAG];
-      }
-
-      const overTargetAdds = moves.filter(
-        (move) =>
-          move.type === REBALANCER_MOVE_TYPE.ADD &&
-          move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
-      );
-      t.same(overTargetAdds, [],
-        'no count-increasing ADD while physically at target (transient ' +
-        'non-active colocated copy does not open the floodgate)');
-    },
-  );
-
-  await t.test(
-    'flag-on: genuine under-target ADD still planned (physical < target)',
-    async (t) => {
-      const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-      ];
-      const planner = new MovePlanner({
-        entityId: PRIORITY_PARTITION_ID,
-        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-        moveStateProvider: createMoveStateProvider({currentReplicas}),
-      });
-
-      process.env[COUNT_NEUTRAL_FLAG] = 'true';
-      let moves;
-      try {
-        moves = planner.calculateMoves(currentReplicas, {
-          targetReplicaCount: 3,
-          targetNodes: ['node-1', 'node-2', 'node-3'],
-          degraded: false,
-        });
-      } finally {
-        delete process.env[COUNT_NEUTRAL_FLAG];
-      }
-
-      t.equal(
-        moves.some(
-          (move) =>
-            move.type === REBALANCER_MOVE_TYPE.ADD &&
-            move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
-        ),
-        true,
-        'under-replication (physical 2 < target 3) still adds — liveness kept');
-    },
-  );
-
-  await t.test(
-    'flag-off byte-identical: the replaceMoves>0 leak still emits the bare ADD',
+    'the replaceMoves>0 leak still emits the bare ADD',
     async (t) => {
       const currentReplicas = [
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
@@ -331,7 +199,8 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
             move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
         ),
         true,
-        'flag-off preserves the prior (leaky) behavior exactly');
+        'the replaceMoves>0 leak still emits the bare ADD (count-neutral '
+        + 'reconciliation only defers when no REPLACE paired this round)');
     },
   );
 });

@@ -124,11 +124,6 @@ const TOPOLOGY_SETTLING_PLANNING_STATE = Object.freeze({
   CLEAR: 'clear',
   PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
     'priority_recovery_operation_creation_required',
-  // Default-off lever (LAGRANGE_PR_DRAIN_THROUGH_SETTLING): an over-replicated
-  // priority partition whose only topology-settling blocker is its OWN in-flight
-  // add-half must not serialize the drain of its surplus behind that add — that
-  // is what keeps the raft voter set over target for ~186s across leader churn.
-  OVER_REPLICATED_OWN_DRAIN_READY: 'over_replicated_own_drain_ready',
   TOPOLOGY_OPERATION_TARGET_IN_FLIGHT:
     'topology_operation_target_in_flight',
   TOPOLOGY_SETTLING_BLOCKED: 'topology_settling_blocked',
@@ -143,13 +138,6 @@ const TOPOLOGY_SETTLING_PLANNING_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: TOPOLOGY_SETTLING_PLANNING_STATE.CLEAR,
     matches: (evidence) => evidence.blocked !== true,
-  }),
-  // Flag-gated: the evidence field is only ever true when
-  // LAGRANGE_PR_DRAIN_THROUGH_SETTLING is on, so flag-off this entry never
-  // matches and the table is byte-identical to the prior behavior.
-  Object.freeze({
-    state: TOPOLOGY_SETTLING_PLANNING_STATE.OVER_REPLICATED_OWN_DRAIN_READY,
-    matches: (evidence) => evidence.overReplicatedOwnDrainReady === true,
   }),
   Object.freeze({
     state:
@@ -177,9 +165,6 @@ const TOPOLOGY_SETTLING_PLANNING_ACTION_BY_STATE = Object.freeze({
   [
   TOPOLOGY_SETTLING_PLANNING_STATE
     .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
-  ]: TOPOLOGY_SETTLING_PLANNING_ACTION.ALLOW_PLANNING,
-  [
-  TOPOLOGY_SETTLING_PLANNING_STATE.OVER_REPLICATED_OWN_DRAIN_READY
   ]: TOPOLOGY_SETTLING_PLANNING_ACTION.ALLOW_PLANNING,
   [
   TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_OPERATION_TARGET_IN_FLIGHT
