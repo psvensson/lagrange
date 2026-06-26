@@ -112,6 +112,24 @@ function createTimeoutTestCoordinator(options = {}) {
           };
         }
 
+        // Entity-scoped read (SELECT_OPERATIONS_BY_ENTITY): match production's
+        // entity filter so a per-partition observation does not leak ops from other
+        // partitions. Without this, the catch-all below returned ALL ops, which the
+        // per-entity in-flight ADD serializer (LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE)
+        // would wrongly read as a cross-partition conflict. Params: [entityType,
+        // entityId, partitionId]; these test rows carry only partition_id, so the
+        // partition fallback clause is the one that matches.
+        if (sql.includes('entity_type = ?') && sql.includes('entity_id = ?')) {
+          const [entityType, entityId, partitionId] = params;
+          const matching = allOps.filter((op) =>
+            (op.entity_type === entityType && op.entity_id === entityId) ||
+            ((op.entity_type === null ||
+              op.entity_type === undefined ||
+              op.entity_type === '') &&
+              op.partition_id === partitionId));
+          return {success: true, rows: matching};
+        }
+
         if (sql.includes('source_node_id = ?') &&
             sql.includes('workflow_step IN')) {
           const [

@@ -41,6 +41,22 @@ function isCriticalAddLaneDeferredCooldownEnabled() {
   );
 }
 
+// Default-off: in-flight-action memory for the per-entity add-like lane. Today
+// `findEntityAddLikeConflictingOperation` only treats a non-terminal REPLACE in its
+// source-removal phase as a conflict, so a partition that already has a non-terminal
+// ADD in flight still admits ADD N+1, N+2, ... — the `replica_operations` re-decision
+// storm (the planner re-deciding an ADD faster than the prior ADD can settle). This
+// finishes the lane to authority: serialize add-like creation to ONE non-terminal ADD
+// per entity, deferring the next ADD until it terminalizes (canonical `isOperationTerminal`).
+// Unlike the per-critical-partition time cooldown, this is a state-based gate covering
+// EVERY partition the single creation chokepoint flows through. It is the loop hysteresis
+// the metastable/control-theory literature prescribes (settle-time >= re-action interval),
+// applied globally — and it touches only ADD-side serialization, never the (refuted,
+// arithmetically-ambiguous) REMOVE-side quorum floor.
+function isEntityInFlightAddSerializeEnabled() {
+  return process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE === 'true';
+}
+
 const {
   NUM,
   OperationType,
@@ -257,13 +273,19 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
    * @private
    */
   findEntityAddLikeConflictingOperation(operations = []) {
+    const serializeInFlightAdd = isEntityInFlightAddSerializeEnabled();
     return (
       (Array.isArray(operations) ? operations : []).find((operation) => {
-        if (
-          !operation ||
-          this.isOperationTerminal(operation) ||
-          operation.type !== OperationType.REPLACE
-        ) {
+        if (!operation || this.isOperationTerminal(operation)) {
+          return false;
+        }
+        // In-flight-action memory (default-off): a non-terminal ADD already owns
+        // this entity's add lane — defer the next add-like op until it terminalizes,
+        // so the planner can't re-decide ADD N+1 while ADD N is still settling.
+        if (serializeInFlightAdd && operation.type === OperationType.ADD) {
+          return true;
+        }
+        if (operation.type !== OperationType.REPLACE) {
           return false;
         }
         return this.isReplaceRemoveDispatchPhase(operation);
