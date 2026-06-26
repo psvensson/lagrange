@@ -53,6 +53,7 @@ import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
+import {triggerOnQuestClosure, questScopes} from './invariant-liveness.js';
 import {pickFrontier} from './scheduler.js';
 import {
   validateAttempt,
@@ -572,6 +573,14 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
       evidenceIdentity: questDone.evidenceIdentity || null,
       evidenceFingerprint: questDone.evidenceFingerprint || null,
     });
+    // Standing-invariant on-quest-closure trigger (default-off, side-effect-only):
+    // re-verify invariants whose scope this quest touched. Wrapped so an invariant
+    // evaluation can never fail a quest closure.
+    try {
+      triggerOnQuestClosure(root, {scopes: questScopes(quest)});
+    } catch {
+      // invariant verification must never break the Solver loop
+    }
   }
   rebuildState(root, quest);
   return {done: true, evidence: questDone.evidence};

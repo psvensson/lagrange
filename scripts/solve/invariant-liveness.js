@@ -108,6 +108,67 @@ export function deriveStatus(root, invariant) {
   };
 }
 
+// Per-event trigger policies fire on a discrete event (not a cadence).
+const PER_EVENT_POLICIES = new Set(['on-quest-closure', 'on-touched-owner']);
+
+export function isPerEventPolicy(policy) {
+  return PER_EVENT_POLICIES.has(policy);
+}
+
+// Requirement 6.3: an expensive predicate may not bind to a per-event trigger —
+// it must run on a cadence. Returns a violation message, or null when allowed.
+export function triggerCostViolation(invariant) {
+  const trigger = invariant.liveEvidence?.trigger || {};
+  if (trigger.cost === 'expensive' && isPerEventPolicy(trigger.policy)) {
+    return `invariant ${invariant.id}: expensive predicate cannot use per-event ` +
+      `trigger ${trigger.policy} (use on-cadence)`;
+  }
+  return null;
+}
+
+// Scope tokens a closing quest exposes to the trigger. A quest opts a scope in via
+// its owner or an explicit `touchesInvariantScopes` list.
+export function questScopes(quest) {
+  if (!quest || typeof quest !== 'object') return [];
+  const scopes = [`quest:${quest.id}`];
+  if (quest.owner) scopes.push(`owner:${quest.owner}`);
+  if (Array.isArray(quest.touchesInvariantScopes)) {
+    scopes.push(...quest.touchesInvariantScopes);
+  }
+  return scopes;
+}
+
+function scopeMatches(invariant, scopes) {
+  const scope = invariant.liveEvidence?.trigger?.scope;
+  if (!scope || scope === '*') return true;
+  return Array.isArray(scopes) && scopes.includes(scope);
+}
+
+// on-quest-closure trigger: evaluate + record every matching invariant and return
+// the status transitions. Expensive per-event predicates are skipped (guarded);
+// inert when the flag is off. Never throws on a single invariant's failure.
+export function triggerOnQuestClosure(
+  root, {scopes = [], registry: registryPath} = {}, env = process.env) {
+  if (!isStandingInvariantsEnabled(env)) return {fired: false, transitions: []};
+  const {registry} = loadInvariantRegistry(registryPath);
+  const transitions = [];
+  for (const invariant of liveInvariants(registry)) {
+    const trigger = invariant.liveEvidence?.trigger || {};
+    if (trigger.policy !== 'on-quest-closure') continue;
+    if (triggerCostViolation(invariant)) continue;
+    if (!scopeMatches(invariant, scopes)) continue;
+    const before = deriveStatus(root, invariant).status;
+    try {
+      recordEvaluation(root, invariant, evaluateInvariant(invariant, {root}));
+    } catch {
+      continue;
+    }
+    const after = deriveStatus(root, invariant).status;
+    transitions.push({id: invariant.id, from: before, to: after});
+  }
+  return {fired: true, transitions};
+}
+
 // The `solve invariants` command body. Default: render derived status from the
 // event log. With `--evaluate`: run each invariant's predicate first, record the
 // verdict, then render. Flag off: inert.

@@ -23,6 +23,8 @@ const LIVE_EVIDENCE_KINDS = Object.freeze(['repro', 'command', 'probe']);
 const TRIGGER_POLICIES = Object.freeze([
   'on-quest-closure', 'on-touched-owner', 'on-cadence', 'on-explicit']);
 const TRIGGER_COSTS = Object.freeze(['cheap', 'expensive']);
+// Policies that fire on a discrete event rather than a cadence (Requirement 6.3).
+const PER_EVENT_POLICIES = new Set(['on-quest-closure', 'on-touched-owner']);
 const HELP_TEXT = [
   'Usage: npm run model:invariants -- [--json] [registry.json]',
   '',
@@ -138,6 +140,11 @@ function validateLiveEvidence(errors, label, entry, index) {
     validateEnum(errors, label, `${at}.trigger.policy`, trigger.policy,
       TRIGGER_POLICIES);
     validateEnum(errors, label, `${at}.trigger.cost`, trigger.cost, TRIGGER_COSTS);
+    // Requirement 6.3: an expensive predicate may not bind to a per-event trigger.
+    if (trigger.cost === 'expensive' && PER_EVENT_POLICIES.has(trigger.policy)) {
+      errors.push(`${label}: ${at}.trigger — an expensive predicate cannot use ` +
+        `per-event policy ${trigger.policy}; use on-cadence.`);
+    }
   }
   if (live.restoration !== undefined) {
     if (!isObjectRecord(live.restoration)) {

@@ -12,7 +12,11 @@ import {
   recordEvaluation,
   deriveStatus,
   runInvariantsCommand,
+  triggerCostViolation,
+  triggerOnQuestClosure,
+  questScopes,
 } from '../../scripts/solve/invariant-liveness.js';
+import {validateInvariantRegistry} from '../../scripts/check-invariants.js';
 
 // WS1 unit coverage for Tier-2 live-evidence verification of architecture
 // invariants (spec: .kiro/specs/standing-invariant-closure/). Covers the
@@ -120,5 +124,93 @@ t.test('runInvariantsCommand: flag off is inert (no writes), flag on evaluates +
   const derived = runInvariantsCommand(root, {registry: regPath}, env);
   t.equal(derived.invariants[0].status, STATUS.HELD, 'status persists via the fold');
   t.equal(derived.evaluated, false);
+  t.end();
+});
+
+// ---- WS2: trigger policy ----
+
+function writeTrigReg(root, {scope, cost = 'cheap', ref = 'node -e "process.exit(0)"'}) {
+  const regPath = path.join(root, 'trig-registry.json');
+  fs.writeFileSync(regPath, JSON.stringify({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'trig-x', owner: 'o', boundary: 'b', kind: 'safety',
+      statement: 's', formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'exits 0',
+        evidence: {kind: 'repro', ref},
+        trigger: {policy: 'on-quest-closure', scope, cost},
+      },
+    }],
+  }));
+  return regPath;
+}
+
+t.test('questScopes derives owner + explicit scopes from a quest', (t) => {
+  t.same(questScopes({id: 'q1', owner: 'raft', touchesInvariantScopes: ['owner:x']}),
+    ['quest:q1', 'owner:raft', 'owner:x']);
+  t.same(questScopes(null), []);
+  t.end();
+});
+
+t.test('on-quest-closure trigger fires for matching scope, records a transition', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const reg = writeTrigReg(root, {scope: 'owner:raft'});
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg}, env);
+  t.equal(out.fired, true);
+  t.same(out.transitions, [{id: 'trig-x', from: STATUS.UNGUARDED, to: STATUS.HELD}],
+    'UNGUARDED -> HELD recorded on closure');
+  t.end();
+});
+
+t.test('trigger skips when quest scope does not intersect the invariant scope', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const reg = writeTrigReg(root, {scope: 'owner:raft'});
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:other'], registry: reg}, env);
+  t.same(out.transitions, [], 'no transition for non-matching scope');
+  t.notOk(fs.existsSync(path.join(root, 'solve', 'log', 'invariant-trig-x.ndjson')),
+    'nothing recorded for non-matching scope');
+  t.end();
+});
+
+t.test('flag off => trigger does not fire', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const reg = writeTrigReg(root, {scope: 'owner:raft'});
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg}, {});
+  t.equal(out.fired, false);
+  t.same(out.transitions, []);
+  t.end();
+});
+
+t.test('cost guard (Req 6.3): expensive predicate cannot use a per-event trigger', (t) => {
+  // Runtime guard: an expensive per-event invariant is skipped by the trigger.
+  t.ok(triggerCostViolation({
+    id: 'x', liveEvidence: {trigger: {policy: 'on-quest-closure', cost: 'expensive'}},
+  }), 'expensive + on-quest-closure is a violation');
+  t.notOk(triggerCostViolation({
+    id: 'x', liveEvidence: {trigger: {policy: 'on-cadence', cost: 'expensive'}},
+  }), 'expensive + on-cadence is allowed');
+
+  // Declaration guard: the validator rejects it.
+  const errors = validateInvariantRegistry({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'bad', owner: 'o', boundary: 'b', kind: 'safety', statement: 's',
+      formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'h', evidence: {kind: 'repro', ref: 'r'},
+        trigger: {policy: 'on-quest-closure', cost: 'expensive'},
+      },
+    }],
+  });
+  t.ok(errors.some((e) => /expensive predicate cannot use/.test(e)),
+    'validator rejects expensive per-event trigger');
   t.end();
 });
