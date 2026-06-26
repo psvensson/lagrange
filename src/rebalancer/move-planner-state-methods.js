@@ -230,6 +230,27 @@ function createMovePlannerStateMethods(deps = {}) {
     }
 
     /**
+     * Read ALL non-terminal in-flight operations for this entity, INCLUDING
+     * REPLACEs in their remove-dispatch drain phase. Unlike
+     * getEntityTopologyBlockingInFlightOperations (which excludes drain-phase
+     * REPLACEs via isTopologyBlockingInFlightOperation), this is the set that
+     * holds the per-partition reconfiguration serialization lock for its whole
+     * lifetime — what a REPLACE-serialization cap must count, since the standoff
+     * is built by drain-phase REPLACEs the topology-blocking view cannot see.
+     * @return {Array<Object>}
+     * @private
+     */
+    getEntityInFlightOperations() {
+      if (
+        typeof this.moveStateProvider.getInFlightOperations ===
+        MOVE_PLANNER_LITERAL.FUNCTION
+      ) {
+        return this.moveStateProvider.getInFlightOperations();
+      }
+      return this.getEntityTopologyBlockingInFlightOperations();
+    }
+
+    /**
      * Read global topology-blocking in-flight operations when the provider
      * exposes them; otherwise fall back to the entity-local owner view.
      * @return {Array<Object>}

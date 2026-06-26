@@ -649,7 +649,44 @@ class MovePlannerMoveCalculationMethods {
           (left.sourceIsLeader ? NUM.ONE : NUM.ZERO) -
           (right.sourceIsLeader ? NUM.ONE : NUM.ZERO),
       );
-      const replaceCount = Math.min(addMoves.length, replaceCandidates.length);
+      const naturalReplaceCount = Math.min(
+        addMoves.length,
+        replaceCandidates.length,
+      );
+      // Serialize REPLACE on critical control-plane partitions to one in-flight
+      // at a time. The per-partition remove-safety lock (the concurrent-op check
+      // in operation-workflow-remove-safety-evaluator) already lets only ONE
+      // reconfiguration drain at a time on a critical partition; minting more
+      // REPLACEs — each a distinct source/target accumulated across ticks because
+      // a row-only surplus read does not see prior in-flight REPLACEs — only
+      // builds a mutual-defer standoff (observed: 4 concurrent REPLACEs on one
+      // critical partition thrashing ~114s, holding it over target until
+      // convergence times out). Bound minting by the all-phase in-flight REPLACE
+      // count (creation AND drain) so a fresh REPLACE waits for the prior one to
+      // drain, then re-evaluates next tick. The drain phase (replacement
+      // voter-ready, source removing) is the long window that builds the standoff
+      // and is EXCLUDED from the topology-blocking accounting set, so the count is
+      // read from getEntityInFlightOperations (all non-terminal, drain-inclusive),
+      // NOT inFlightAccounting (drain-excluded). Non-critical partitions and
+      // genuine provisioning (count-increasing ADD) are untouched.
+      const serializeCriticalReplace = this.isControlPlanePriorityPartition();
+      const inFlightReplaceCount = serializeCriticalReplace ?
+        this.getEntityInFlightOperations().filter(
+          (operation) =>
+            String(
+              operation?.type ||
+                operation?.operation_type ||
+                operation?.operationType ||
+                '',
+            ).toLowerCase() === MoveType.REPLACE,
+        ).length :
+        NUM.ZERO;
+      const replaceCount = serializeCriticalReplace ?
+        Math.min(
+          naturalReplaceCount,
+          Math.max(NUM.ZERO, NUM.ONE - inFlightReplaceCount),
+        ) :
+        naturalReplaceCount;
       const consumedRemoveReplicaIds = new Set();
       for (let i = NUM.ZERO; i < replaceCount; i++) {
         const addMove = addMoves.shift();
@@ -662,6 +699,35 @@ class MovePlannerMoveCalculationMethods {
           replicaId: removeMove.replicaId,
           reason: MOVE_REASON.REPLACE_REPLICA,
         });
+      }
+      // When the serialization cap held back spread-restoration REPLACEs, defer
+      // the unpaired spread ADDs too: emitting them as standalone
+      // count-increasing ADDs would re-create the surplus the serialized REPLACE
+      // is meant to resolve. Mirror the spread-vs-count reconcile guard below
+      // (only suppress when not under count target) so genuine deficit fill
+      // (active < target) is never blocked by an in-flight REPLACE.
+      if (
+        serializeCriticalReplace &&
+        replaceCount < naturalReplaceCount &&
+        inFlightAccounting.deficitEffectiveCount >= targetReplicaCount
+      ) {
+        const retainedAddMoves = addMoves.filter(
+          (move) => move.reason !== MOVE_REASON.INCREASE_REPLICA_COUNT,
+        );
+        const deferredAddCount = addMoves.length - retainedAddMoves.length;
+        if (deferredAddCount > NUM.ZERO) {
+          this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
+            entityId: this.entityId,
+            targetReplicaCount,
+            inFlightReplaceCount,
+            naturalReplaceCount,
+            replaceCount,
+            deferredAddCount,
+            replaceSerializationCap: true,
+          });
+          addMoves.length = NUM.ZERO;
+          addMoves.push(...retainedAddMoves);
+        }
       }
       if (!isDegradedPlacement) {
         moves.push(

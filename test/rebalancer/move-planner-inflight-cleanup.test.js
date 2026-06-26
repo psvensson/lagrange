@@ -498,6 +498,12 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
 
       const moves = planner.calculateMoves(currentReplicas, targetState);
 
+      // Critical control-plane partitions serialize REPLACE to one in-flight at a
+      // time (the per-partition reconfiguration lock lets only one drain anyway;
+      // minting the whole spread batch at once builds the mutual-defer standoff).
+      // So the planner schedules ONE REPLACE this tick — to the PREFERRED
+      // unoccupied target (node-3), NOT the globally-transitional node-2 — and
+      // re-evaluates the remaining spread move next tick once this one drains.
       t.same(
         moves,
         [
@@ -508,15 +514,8 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
             replicaId: 'replica_operations-p1-r1',
             reason: MOVE_REASON.REPLACE_REPLICA,
           },
-          {
-            type: REBALANCER_MOVE_TYPE.REPLACE,
-            nodeId: AVAILABLE_TARGET_NODE_ID_B,
-            sourceNodeId: SOURCE_NODE_ID,
-            replicaId: 'replica_operations-p1-r2',
-            reason: MOVE_REASON.REPLACE_REPLICA,
-          },
         ],
-        'planner should schedule the remaining spread moves instead of targeting the globally occupied node',
+        'planner schedules one serialized REPLACE to the preferred unoccupied target, not the globally occupied node',
       );
     },
   );
