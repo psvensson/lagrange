@@ -106,23 +106,45 @@ export function unexpectedNodeExit(data, scenario) {
   return {present: true, count: exits.length, nodes};
 }
 
+function safeMtimeMs(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch (_error) {
+    return 0;
+  }
+}
+
 // Most-recent-first, de-duplicated by run timestamp so re-read/identical reports do
 // not inflate the "consecutive distinct runs" count.
-function listRuns(dir, scenario) {
+//
+// BOUNDED ON PURPOSE: gate reports embed run playback and can be 100s of MB each (the
+// directory routinely holds GBs of them). The probe only ever consumes the newest
+// `limit` runs (the latest drives the metric; `done`/streak read the top `consecutive`),
+// so parsing every report at once just to sort by timestamp would OOM for no gain. We
+// order candidate files by mtime — a free, reliable proxy for run recency — then parse
+// lazily one at a time, stopping as soon as we have `limit` distinct-timestamp covering
+// runs. The materialized set is then re-sorted by the authoritative in-report timestamp
+// so `runs[0]` is exactly the latest even if mtime and logical timestamp disagree.
+function listRuns(dir, scenario, limit = DEFAULT_CONSECUTIVE) {
   if (!fs.existsSync(dir)) return [];
-  const seen = new Set();
-  return fs.readdirSync(dir)
+  const files = fs.readdirSync(dir)
     .filter((f) => f.endsWith(REPORT_EXT))
-    .map((f) => ({file: path.join(dir, f), data: safeRead(path.join(dir, f))}))
-    .filter((r) => r.data && reportCoversScenario(r.data, scenario))
-    .sort((a, b) => String(b.data.timestamp || '')
-      .localeCompare(String(a.data.timestamp || '')))
-    .filter((r) => {
-      const key = r.data.timestamp || r.file;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    .map((f) => path.join(dir, f))
+    .map((file) => ({file, mtimeMs: safeMtimeMs(file)}))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const runs = [];
+  const seen = new Set();
+  for (const {file} of files) {
+    if (runs.length >= limit) break;
+    const data = safeRead(file);
+    if (!data || !reportCoversScenario(data, scenario)) continue;
+    const key = data.timestamp || file;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    runs.push({file, data});
+  }
+  return runs.sort((a, b) => String(b.data.timestamp || '')
+    .localeCompare(String(a.data.timestamp || '')));
 }
 
 function verdictReasonOf(data, scenario) {
@@ -247,7 +269,7 @@ export const scenarioHarnessProbe = {
     const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
     const metricKind = args.metric === METRIC_FAILED ? METRIC_FAILED :
       args.metric === METRIC_DISTANCE ? METRIC_DISTANCE : METRIC_PRIORITY;
-    const runs = listRuns(dir, scenario);
+    const runs = listRuns(dir, scenario, consecutive);
     if (runs.length === 0) {
       return {
         metric: null,
