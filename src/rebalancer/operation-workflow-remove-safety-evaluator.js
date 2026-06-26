@@ -17,39 +17,135 @@ const {
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
   ' operation visibility is deferred for safe removal';
 
+// Scopes for the single authoritative post-removal quorum predicate. Each names a
+// distinct floor that the remove-safety evaluation enforces at a different call site —
+// they are NOT three copies of one floor (see projectQuorumAfterRemoval).
+const QUORUM_PROJECTION_SCOPE = Object.freeze({
+  // Voter-ready ROW count vs minReplicaCount, on the non-completion-safe path.
+  SIMPLE_FLOOR: 'simple-floor',
+  // Voter-ready count vs minReplicaCount on the completion-safe (R1) path, where the
+  // OPTIMISTIC recovery-projection node-union may raise the count (the documented
+  // over-removal seam — recoveryProjectionNodeIds can include catch-up learners).
+  COMPLETION_SAFE_FLOOR: 'completion-safe-floor',
+  // Distinct-NODE spread vs the published requiredDistinctNodeCount.
+  PUBLISHED_SPREAD: 'published-spread',
+});
+
 /**
- * Resolve the effective post-removal voter-ready count for priority recovery.
+ * One authoritative projection of the post-removal quorum, shared by the three floor
+ * sites in this module. Pure and synchronous — the caller resolves the async planning
+ * snapshot (see resolvePriorityRecoveryQuorumProjection) and passes its
+ * recoveryProjectionNodeIds in. It does NOT collapse the three floors into one uniform
+ * rule: the `scope` parameter is the explicit encoding of today's asymmetry (the
+ * completion-safe path counts the optimistic node-union; the others do not), so the
+ * asymmetry lives in one function instead of three drifting call sites. The structured
+ * result exposes BOTH the strict `projectedVoterReadyCount` and the optimistic
+ * `effectiveProjectedVoterReadyCount`, so a future over-removal fix has a single place to
+ * branch on `completionSafe && effectiveProjectedVoterReadyCount > projectedVoterReadyCount`.
+ * This is a behavior-PRESERVING consolidation; it changes no accept/defer decision.
+ * @param {Object} input
+ * @returns {Object}
+ */
+function projectQuorumAfterRemoval(input) {
+  const projectedVoterReadyRows = Array.isArray(input.projectedVoterReadyRows) ?
+    input.projectedVoterReadyRows :
+    [];
+  const projectedVoterReadyCount = projectedVoterReadyRows.length;
+  const recoveryProjectionNodeIds = Array.isArray(input.recoveryProjectionNodeIds) ?
+    input.recoveryProjectionNodeIds :
+    null;
+  const effectiveProjectedVoterReadyCount =
+    input.completionSafe === true && recoveryProjectionNodeIds ?
+      Math.max(projectedVoterReadyCount, recoveryProjectionNodeIds.length) :
+      projectedVoterReadyCount;
+  const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
+
+  let floorSatisfied = true;
+  let reason = null;
+  if (input.scope === QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR) {
+    floorSatisfied = projectedVoterReadyCount >= input.minReplicaCount;
+    if (!floorSatisfied) {
+      reason = {kind: 'below-min', got: projectedVoterReadyCount, need: input.minReplicaCount};
+    }
+  } else if (input.scope === QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR) {
+    floorSatisfied = effectiveProjectedVoterReadyCount >= input.minReplicaCount;
+    if (!floorSatisfied) {
+      reason = {kind: 'below-min', got: effectiveProjectedVoterReadyCount, need: input.minReplicaCount};
+    }
+  } else if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
+    const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
+      projectedVoterReadyRows,
+    ).length;
+    floorSatisfied =
+      !Number.isFinite(requiredDistinctNodeCount) ||
+      requiredDistinctNodeCount <= NUM.ONE ||
+      projectedDistinctNodeCount >= requiredDistinctNodeCount;
+    if (!floorSatisfied) {
+      reason = {kind: 'below-spread', got: projectedDistinctNodeCount, need: requiredDistinctNodeCount};
+    }
+    return Object.freeze({
+      projectedVoterReadyCount,
+      effectiveProjectedVoterReadyCount,
+      projectedDistinctNodeCount,
+      requiredDistinctNodeCount,
+      completionSafe: input.completionSafe === true,
+      floorSatisfied,
+      reason,
+    });
+  }
+
+  return Object.freeze({
+    projectedVoterReadyCount,
+    effectiveProjectedVoterReadyCount,
+    minReplicaCount: input.minReplicaCount,
+    completionSafe: input.completionSafe === true,
+    floorSatisfied,
+    reason,
+  });
+}
+
+/**
+ * Async wrapper for the completion-safe floor: resolves the priority-recovery planning
+ * snapshot, derives the optimistic recovery-projection node-union, and runs the pure
+ * predicate. Equivalent to the former resolvePriorityRecoveryProjectedVoterReadyCount
+ * (no snapshot => effective count is just the row count), now returning the structured
+ * projection instead of a bare number.
  * @param {Object} context - Segment/Class context instance.
  * @param {Object} operation
  * @param {Object[]} projectedVoterReadyRows
- * @returns {Promise<number>}
+ * @param {number} minReplicaCount
+ * @param {boolean} completionSafe
+ * @returns {Promise<Object>}
  */
-async function resolvePriorityRecoveryProjectedVoterReadyCount(
+async function resolvePriorityRecoveryQuorumProjection(
   context,
   operation,
   projectedVoterReadyRows,
+  minReplicaCount,
+  completionSafe,
 ) {
-  const projectedVoterReadyCount = projectedVoterReadyRows.length;
   const planningSnapshot =
     await context.getPriorityRecoveryPlanningSnapshot(operation);
-  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
-    return projectedVoterReadyCount;
-  }
-  const priorityRecoveryContext =
-    context.buildPriorityRecoveryAssessmentContextForOperation(
-      operation,
-      planningSnapshot,
-    );
-  const membershipSnapshot =
-    context.resolvePriorityRemoveSafetyMembershipSnapshot(
+  let recoveryProjectionNodeIds = null;
+  if (planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT) {
+    const priorityRecoveryContext =
+      context.buildPriorityRecoveryAssessmentContextForOperation(
+        operation,
+        planningSnapshot,
+      );
+    recoveryProjectionNodeIds = context.resolvePriorityRemoveSafetyMembershipSnapshot(
       planningSnapshot,
       priorityRecoveryContext,
       projectedVoterReadyRows,
-    );
-  return Math.max(
-    projectedVoterReadyCount,
-    membershipSnapshot.recoveryProjectionNodeIds.length,
-  );
+    ).recoveryProjectionNodeIds;
+  }
+  return projectQuorumAfterRemoval({
+    projectedVoterReadyRows,
+    minReplicaCount,
+    recoveryProjectionNodeIds,
+    completionSafe,
+    scope: QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR,
+  });
 }
 
 /**
@@ -234,23 +330,19 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   const requiredDistinctNodeCount = Number(
     priorityPartitionSummary.requiredDistinctNodeCount,
   );
-  if (
-    !Number.isFinite(requiredDistinctNodeCount) ||
-    requiredDistinctNodeCount <= NUM.ONE
-  ) {
-    return context.buildSafeRemoveSafetyEvaluation();
-  }
-  const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
+  const spreadFloor = projectQuorumAfterRemoval({
     projectedVoterReadyRows,
-  ).length;
-  if (projectedDistinctNodeCount < requiredDistinctNodeCount) {
+    requiredDistinctNodeCount,
+    scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
+  });
+  if (!spreadFloor.floorSatisfied) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CONTROL_DASH_PLANE_PARTITION +
         operation.partitionId +
         OPERATION_WORKFLOW_OWNER_LITERAL.PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED +
         OPERATION_WORKFLOW_OWNER_LITERAL.REQUIREMENT +
-        ` (${projectedDistinctNodeCount}/${requiredDistinctNodeCount})`,
+        ` (${spreadFloor.projectedDistinctNodeCount}/${requiredDistinctNodeCount})`,
     );
   }
 
@@ -458,10 +550,13 @@ async function evaluateRemoveSafety(context, operation) {
       }),
   );
   const projectedVoterReadyCount = projectedVoterReadyRows.length;
-  if (
-    !priorityRecoveryCompletionSafe &&
-    projectedVoterReadyCount < minReplicaCount
-  ) {
+  const simpleFloor = projectQuorumAfterRemoval({
+    projectedVoterReadyRows,
+    minReplicaCount,
+    completionSafe: priorityRecoveryCompletionSafe,
+    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
+  });
+  if (!priorityRecoveryCompletionSafe && !simpleFloor.floorSatisfied) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Critical partition ${operation.partitionId}` +
@@ -513,18 +608,20 @@ async function evaluateRemoveSafety(context, operation) {
       partitionId: operation?.partitionId,
     })
   ) {
-    const effectiveProjectedVoterReadyCount =
-      await resolvePriorityRecoveryProjectedVoterReadyCount(
+    const completionSafeFloor =
+      await resolvePriorityRecoveryQuorumProjection(
         context,
         operation,
         projectedVoterReadyRows,
+        minReplicaCount,
+        priorityRecoveryCompletionSafe,
       );
-    if (effectiveProjectedVoterReadyCount < minReplicaCount) {
+    if (!completionSafeFloor.floorSatisfied) {
       return context.buildDeferredRemoveSafetyEvaluationForOperation(
         operation,
         `Critical partition ${operation.partitionId}` +
           OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-          ` (${effectiveProjectedVoterReadyCount}/${minReplicaCount})`,
+          ` (${completionSafeFloor.effectiveProjectedVoterReadyCount}/${minReplicaCount})`,
       );
     }
   }
@@ -575,4 +672,6 @@ export {
   evaluatePriorityRecoveryCompletionRemoveSafety,
   evaluatePriorityPublishedMembershipRemoveSafety,
   evaluateRemoveSafety,
+  projectQuorumAfterRemoval,
+  QUORUM_PROJECTION_SCOPE,
 };
