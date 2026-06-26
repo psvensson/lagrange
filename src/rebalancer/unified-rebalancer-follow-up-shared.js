@@ -65,6 +65,7 @@ const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE = Object.freeze({
   TARGET_UNAVAILABLE: 'target_unavailable',
   SOURCE_FALLBACK_ADD_CREATED: 'source_fallback_add_created',
   OVER_REPLICATION_SUPPRESSED: 'over_replication_suppressed',
+  IN_FLIGHT_ADD_SATISFIES_DEFICIT: 'in_flight_add_satisfies_deficit',
 });
 const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON = Object.freeze({
   ADD_FOLLOW_UP_CREATED: 'add_follow_up_created',
@@ -73,6 +74,7 @@ const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON = Object.freeze({
   SOURCE_UNAVAILABLE: 'source_unavailable',
   TARGET_UNAVAILABLE: 'target_unavailable',
   AT_TARGET_NO_REMOVABLE_SOURCE: 'at_target_no_removable_source',
+  IN_FLIGHT_ADD_SATISFIES_DEFICIT: 'in_flight_add_satisfies_deficit',
 });
 const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD = Object.freeze({
   REASON: 'followUpMoveReason',

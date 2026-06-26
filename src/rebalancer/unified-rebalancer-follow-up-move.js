@@ -137,6 +137,66 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     return pendingTargetNodeIds;
   }
 
+  /**
+   * Count the replica-count-increasing ADD operations already in flight for this
+   * follow-up partition. REPLACE is count-neutral (adds one, removes one) and
+   * REMOVE decreases the count, so only `add`-type operations are tallied. The
+   * topology-blocking in-flight view is already entity-scoped; the partition
+   * re-check mirrors the sibling pending-target helpers and is defensive against
+   * any global view.
+   * @param {string} partitionId
+   * @return {number}
+   */
+  countPriorityRecoveryFollowUpInFlightAdds(partitionId) {
+    const followUpPartitionId = String(
+      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    let inFlightAddCount = NUM.ZERO;
+    for (const operation of this.getTopologyBlockingInFlightOperations()) {
+      const operationType = String(
+        operation?.type ||
+          operation?.operation_type ||
+          operation?.operationType ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).toLowerCase();
+      if (operationType !== MoveType.ADD) {
+        continue;
+      }
+      const operationPartitionId = String(
+        operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (
+        followUpPartitionId.length > NUM.ZERO &&
+        operationPartitionId.length > NUM.ZERO &&
+        operationPartitionId !== followUpPartitionId
+      ) {
+        continue;
+      }
+      inFlightAddCount += NUM.ONE;
+    }
+    return inFlightAddCount;
+  }
+
+  /**
+   * @param {string} partitionId
+   * @param {number} healthyReplicaCount
+   * @param {number} targetReplicaCount
+   * @return {boolean} true when in-flight ADDs already cover the deficit so a new
+   *   ADD would only re-issue work that is still settling.
+   */
+  isPriorityRecoveryFollowUpDeficitSatisfiedByInFlightAdds(
+    partitionId,
+    healthyReplicaCount,
+    targetReplicaCount,
+  ) {
+    const inFlightAddCount =
+      this.countPriorityRecoveryFollowUpInFlightAdds(partitionId);
+    return healthyReplicaCount + inFlightAddCount >= targetReplicaCount;
+  }
+
   resolvePriorityRecoveryFollowUpCandidateNodeIds(
     decision,
     targetState = null,
@@ -401,6 +461,27 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     const shouldReplace =
       healthyReplicas.length >= targetReplicaCount && !!sourceReplica;
     if (!shouldReplace) {
+      // Count-aware deficit gate: a genuine replica-count deficit may legitimately
+      // need several concurrent ADDs (fresh-partition provisioning fills 0 -> N),
+      // but the re-decision storm re-issues an ADD every tick while a prior ADD is
+      // still settling (learner catch-up/promotion runs slower than the ~1s plan
+      // cadence). Only emit a deficit ADD when current healthy replicas plus the
+      // replica-count-increasing ADDs already in flight still fall short of the
+      // target; otherwise defer until an in-flight ADD terminalizes. This bounds
+      // the storm to the true deficit without throwing on provisioning.
+      if (
+        healthyReplicas.length < targetReplicaCount &&
+        this.isPriorityRecoveryFollowUpDeficitSatisfiedByInFlightAdds(
+          partitionId,
+          healthyReplicas.length,
+          targetReplicaCount,
+        )
+      ) {
+        return this.buildPriorityRecoveryFollowUpMoveOutcome(
+          PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.IN_FLIGHT_ADD_SATISFIES_DEFICIT,
+          PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.IN_FLIGHT_ADD_SATISFIES_DEFICIT,
+        );
+      }
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
