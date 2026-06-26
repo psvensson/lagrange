@@ -190,3 +190,11 @@ boundary, the auto-spawn-budget interaction) are recorded there, not in this fil
   `architecture/INDEX.md`. **WS0–WS4 all complete.** Remaining = optional/epic-tracked
   (cross-owner invariant, `on-touched-owner`, EvoClaw scoring, memory graft, altitude-review
   unification).
+- 2026-06-26 — **FLAG PROMOTED to default-ON.** `isStandingInvariantsEnabled` flipped
+  `=== 'true'` → `!== 'false'` (`invariant-liveness.js`), matching the early-admin-SQL-engine
+  precedent. Quest-closures now auto-evaluate in-scope invariants and auto-spawn a reopen-budget-
+  bounded restoration Quest on a real HELD→BREACHED regression. Justified: all 3 live predicates
+  are cheap, the loop hook is fail-safe (try/catch), and auto-spawn is single-open + budget bounded.
+  Opt out with `LAGRANGE_STANDING_INVARIANTS=false`. Validated: solve suite 890/890 at the default
+  flag state (gate test updated to the default-ON contract), `model:invariants` + `lint:scripts`
+  green; 3 invariants evaluate HELD by default.

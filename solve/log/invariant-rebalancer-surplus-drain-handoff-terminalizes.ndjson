@@ -1,0 +1,1 @@
+{"ts":"2026-06-26T08:02:08.881Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}

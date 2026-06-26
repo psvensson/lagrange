@@ -702,7 +702,7 @@ function cmdHandoff(root, args) {
 // Tier-2 live-evidence verification of architecture invariants (standing dual of
 // doneWhen). `--evaluate` runs each invariant's predicate and records the verdict;
 // otherwise status is derived from the event log. Gated by
-// LAGRANGE_STANDING_INVARIANTS (default-off).
+// LAGRANGE_STANDING_INVARIANTS (default-ON; set =false to opt out).
 function changedFilesFromArgs(root, args) {
   if (typeof args.changed === 'string') {
     return args.changed.split(',').map((file) => file.trim()).filter(Boolean);

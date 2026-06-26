@@ -35,10 +35,12 @@ function tmpRoot() {
 
 const RAFT = {id: 'raft-x', owner: 'o', boundary: 'b', kind: 'safety'};
 
-t.test('flag is default-off and only true enables', (t) => {
-  t.equal(isStandingInvariantsEnabled({}), false);
+t.test('flag is default-ON and only =false opts out', (t) => {
+  t.equal(isStandingInvariantsEnabled({}), true);
   t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: 'false'}), false);
   t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: 'true'}), true);
+  // any non-'false' value keeps it enabled (default-on semantics).
+  t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: ''}), true);
   t.end();
 });
 
@@ -113,7 +115,8 @@ t.test('runInvariantsCommand: flag off is inert (no writes), flag on evaluates +
     }],
   }));
 
-  const off = runInvariantsCommand(root, {registry: regPath, evaluate: true}, {});
+  const off = runInvariantsCommand(root, {registry: regPath, evaluate: true},
+    {LAGRANGE_STANDING_INVARIANTS: 'false'});
   t.equal(off.enabled, false, 'flag off => disabled');
   t.same(off.invariants, [], 'flag off => no invariants rendered');
   t.notOk(fs.existsSync(path.join(root, 'solve', 'log', 'invariant-temp-ok.ndjson')),
@@ -189,7 +192,8 @@ t.test('flag off => trigger does not fire', (t) => {
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const reg = writeTrigReg(root, {scope: 'owner:raft'});
-  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg}, {});
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg},
+    {LAGRANGE_STANDING_INVARIANTS: 'false'});
   t.equal(out.fired, false);
   t.same(out.transitions, []);
   t.end();
@@ -339,7 +343,8 @@ t.test('altitudeInvariantDigest: empty when flag off; surfaces non-HELD drift wh
   const root = tmpRoot(); // fresh root => the real registry's live invariants read as UNGUARDED
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
 
-  t.equal(altitudeInvariantDigest(root, {}), '', 'flag off => empty (no behavior change)');
+  t.equal(altitudeInvariantDigest(root, {LAGRANGE_STANDING_INVARIANTS: 'false'}), '',
+    'flag off => empty (no behavior change)');
 
   const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
   const unguarded = altitudeInvariantDigest(root, env);
@@ -397,7 +402,8 @@ t.test('on-touched-owner trigger fires only when a changed file is in scope', (t
   t.same(hit.transitions, [{id: 'touch-x', from: STATUS.UNGUARDED, to: STATUS.HELD}],
     'matching changed file => invariant re-verified');
 
-  t.equal(triggerOnTouchedOwner(root, {changedFiles: ['src/raft/x.js'], registry: reg}, {}).fired,
+  t.equal(triggerOnTouchedOwner(root, {changedFiles: ['src/raft/x.js'], registry: reg},
+    {LAGRANGE_STANDING_INVARIANTS: 'false'}).fired,
     false, 'flag off => does not fire');
   t.end();
 });
@@ -449,7 +455,8 @@ t.test('scoreInvariants: flag gate + coverage/coherence shape', (t) => {
     }],
   }));
 
-  t.equal(scoreInvariants(root, {registry: regPath, evaluate: true}, {}).enabled, false,
+  t.equal(scoreInvariants(root, {registry: regPath, evaluate: true},
+    {LAGRANGE_STANDING_INVARIANTS: 'false'}).enabled, false,
     'flag off => disabled');
 
   const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
@@ -480,7 +487,8 @@ t.test('renderInvariantBoard: disabled when flag off; renders status when on', (
     }],
   }));
 
-  t.match(renderInvariantBoard(root, {registry: regPath}, {}), /Disabled/, 'flag off => disabled board');
+  t.match(renderInvariantBoard(root, {registry: regPath}, {LAGRANGE_STANDING_INVARIANTS: 'false'}),
+    /Disabled/, 'flag off => disabled board');
 
   const board = renderInvariantBoard(root, {registry: regPath}, {LAGRANGE_STANDING_INVARIANTS: 'true'});
   t.match(board, /board-x \| UNGUARDED/, 'renders the invariant row');

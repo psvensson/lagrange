@@ -8,8 +8,9 @@
 // Status is never stored on the entry and there is no new store — the only
 // persisted side effect is an append to the Solver event log.
 //
-// Gated behind LAGRANGE_STANDING_INVARIANTS (default-off): off => inert, no
-// evaluation, no writes, no behavior change.
+// Gated behind LAGRANGE_STANDING_INVARIANTS (default-ON since 2026-06-26):
+// LAGRANGE_STANDING_INVARIANTS=false => inert, no evaluation, no writes, no
+// behavior change.
 
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -31,7 +32,10 @@ const RESTORATION_LINKED_EVENT = 'invariant.restoration-linked';
 const RESTORATION_SKIPPED_EVENT = 'invariant.restoration-skipped';
 
 export function isStandingInvariantsEnabled(env = process.env) {
-  return env[STANDING_INVARIANTS_FLAG] === 'true';
+  // Promoted to default-ON (2026-06-26) after WS0–WS4 + follow-ons proved out:
+  // all live predicates are cheap, the trigger is fail-safe, and auto-spawn is
+  // reopen-budget bounded. Set LAGRANGE_STANDING_INVARIANTS=false to opt out.
+  return env[STANDING_INVARIANTS_FLAG] !== 'false';
 }
 
 // Registry entries that opted into Tier-2 live verification.
