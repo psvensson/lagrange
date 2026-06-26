@@ -450,23 +450,17 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   };
 }
 
-// Op-retire-on-timeline-REMOVED lever (default-off). A drain op's record-level
-// `workflowStep` column can lag behind its already-terminal timeline (write-through
-// lag, CL-016/CL-035 family): the row still reads `STOPPING` while the operation
-// timeline has reached `REMOVED/removed`. The classifier below consults the record
-// step first, so a stale non-terminal `false` short-circuits and the finished op is
-// wrongly counted active → `hasActiveOperationContexts` stays true → the partition
-// is pinned in `spread_satisfied_in_flight` and operation_drain never closes. When
-// enabled, a terminal timeline step is honored over a stale non-terminal record
-// step (scoped to removal-completing REMOVE/REPLACE ops; REPLACE still requires its
-// target to be ACTIVE_OPERATIONAL so a still-building replacement is never dropped).
-const PRIORITY_RECOVERY_OP_RETIRE_ON_TIMELINE_REMOVED_FLAG =
-  'LAGRANGE_PR_OP_RETIRE_ON_TIMELINE_REMOVED';
-function isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() {
-  return (
-    process.env[PRIORITY_RECOVERY_OP_RETIRE_ON_TIMELINE_REMOVED_FLAG] === 'true'
-  );
-}
+// Reconcile the two recorded truths about a drain op's progress. A drain op's
+// record-level `workflowStep` column can lag behind its already-terminal timeline
+// (write-through lag, CL-016/CL-035 family): the row still reads `STOPPING` while the
+// operation timeline has reached `REMOVED/removed`. The classifier below consults the
+// record step first, so a stale non-terminal `false` short-circuits and the finished op
+// is wrongly counted active → `hasActiveOperationContexts` stays true → the partition is
+// pinned in `spread_satisfied_in_flight` and operation_drain never closes. The
+// reconciliation honors a terminal timeline step over a stale non-terminal record step,
+// scoped to removal-completing REMOVE/REPLACE ops (ADD never retires here; REPLACE still
+// requires its target ACTIVE_OPERATIONAL so a still-building replacement is never dropped,
+// and an in-flight timeline entry blocks promotion).
 
 function resolvePriorityRecoveryOperationStepTerminalState(
   operationType,
@@ -494,8 +488,8 @@ function resolvePriorityRecoveryOperationStepTerminalState(
 // disagree (the CL-016/CL-035 write-through lag) is reconciled: honor a terminal timeline
 // step over a stale non-terminal record step, scoped so a still-building replacement is
 // never dropped (ADD never retires here; REPLACE requires its target ACTIVE_OPERATIONAL).
-// Flag-gated default-off. Isolating it gives a future default-on flip — or the over-removal
-// fix — exactly one place to edit, instead of an inline clause in the precedence cascade.
+// Reconciled in exactly one place so the over-removal fix has a single edit point instead
+// of an inline clause in the precedence cascade.
 function shouldRetireOnTerminalTimelineDespiteStaleStep(
   operationContext,
   operationType,
@@ -503,7 +497,6 @@ function shouldRetireOnTerminalTimelineDespiteStaleStep(
   latestTimelineStepTerminalState,
 ) {
   return (
-    isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() &&
     workflowStepTerminalState === false &&
     latestTimelineStepTerminalState === true &&
     operationContext.latestTimelineInFlight !== true &&
