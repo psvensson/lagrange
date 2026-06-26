@@ -126,13 +126,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       });
       coordinator.initialize();
 
-      // The default dedup gap admits a second same-partition ADD on a different
-      // node. With per-partition ADD serialization on, the second admission is
-      // deferred until the first terminalizes (one add-like settling at a time) —
-      // integration-proves the gate through createOperation; the unit gate lives in
-      // rebalance-coordinator-entity-inflight-add-serialize.test.js.
-      const serializeOn =
-        process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE === 'true';
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
@@ -140,20 +133,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           nodeId: 'node-2',
           replicaId: 'replica-1',
         });
-
-        if (serializeOn) {
-          await t.rejects(
-            coordinator.createOperation({
-              type: 'ADD',
-              partitionId: 'nodes-p1',
-              nodeId: 'node-3', // different node, same partition
-              replicaId: 'replica-2',
-            }),
-            'second same-partition ADD is deferred while the first is in flight');
-          t.equal(coordinator.stats.operationsCreated, 1,
-            'only the first ADD is created while it is non-terminal');
-          return;
-        }
 
         const second = await coordinator.createOperation({
           type: 'ADD',
@@ -179,13 +158,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       });
       coordinator.initialize();
 
-      // Characterizes replica-ID allocation across two concurrent same-partition
-      // ADDs. Per-partition ADD serialization would defer the second admission
-      // before allocation, so pin the flag off to exercise the allocation contract
-      // in the config it describes (serialization is covered by its own test).
-      const prevSerialize =
-        process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE;
-      delete process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE;
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
@@ -215,11 +187,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           'sequential ADD operations for one partition must not reuse replica ID',
         );
       } finally {
-        if (prevSerialize === undefined) {
-          delete process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE;
-        } else {
-          process.env.LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE = prevSerialize;
-        }
         await coordinator.shutdown();
       }
     });
