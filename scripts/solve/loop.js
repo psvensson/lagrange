@@ -53,7 +53,9 @@ import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
-import {triggerOnQuestClosure, questScopes} from './invariant-liveness.js';
+import {
+  triggerOnQuestClosure, questScopes, altitudeInvariantDigest,
+} from './invariant-liveness.js';
 import {pickFrontier} from './scheduler.js';
 import {
   validateAttempt,
@@ -595,9 +597,15 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
 // only surfaced as advice (health/CLI), so non-reflective drivers are never disturbed.
 function maybeRunReflection(root, quest, ctx, health, trigger, kind = 'micro') {
   if (!ctx.executor || typeof ctx.executor.reflect !== 'function') return false;
-  const prompt = kind === 'altitude' ?
+  let prompt = kind === 'altitude' ?
     altitudeReflectionPrompt(quest, health, trigger) :
     reflectionPrompt(quest, health, trigger);
+  if (kind === 'altitude') {
+    // Surface standing-invariant drift into the framing step-back (default-off:
+    // returns '' when the flag is off or all invariants are HELD).
+    const digest = altitudeInvariantDigest(root);
+    if (digest) prompt += ` ${digest}`;
+  }
   let note = null;
   try {
     const out = ctx.executor.reflect({

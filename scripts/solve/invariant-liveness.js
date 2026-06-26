@@ -229,6 +229,25 @@ export function triggerOnQuestClosure(
   return {fired: true, transitions};
 }
 
+// Altitude-review surfacing: a cheap, side-effect-free digest of standing invariants
+// that are NOT currently HELD (drift signals the framing review should weigh). Reads
+// the folded status only — no evaluation, no writes. Returns '' when the flag is off
+// or every live invariant is HELD, so callers can unconditionally append it.
+export function altitudeInvariantDigest(root, env = process.env) {
+  if (!isStandingInvariantsEnabled(env)) return '';
+  const {registry} = loadInvariantRegistry();
+  const drifting = liveInvariants(registry)
+    .map((invariant) => deriveStatus(root, invariant))
+    .filter((status) => status.status !== STATUS.HELD);
+  if (drifting.length === 0) return '';
+  const items = drifting
+    .map((status) => `${status.id} is ${status.status}`)
+    .join('; ');
+  return 'Standing-invariant drift to weigh in this framing step-back: ' +
+    `${items}. A BREACHED architecture invariant means a doc/contract no longer ` +
+    'reflects the running system — treat it as a frame signal, not a local fix.';
+}
+
 // The `solve invariants` command body. Default: render derived status from the
 // event log. With `--evaluate`: run each invariant's predicate first, record the
 // verdict, then render. Flag off: inert.

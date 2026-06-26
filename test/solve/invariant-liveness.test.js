@@ -330,3 +330,25 @@ t.test('invariantHeld probe is done iff the folded status is HELD', (t) => {
   t.equal(out.done, false, 'unknown invariant => not done');
   t.end();
 });
+
+// ---- Follow-on #2: altitude-review surfacing ----
+
+import {altitudeInvariantDigest} from '../../scripts/solve/invariant-liveness.js';
+
+t.test('altitudeInvariantDigest: empty when flag off; surfaces non-HELD drift when on', (t) => {
+  const root = tmpRoot(); // fresh root => the real registry's live invariants read as UNGUARDED
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+
+  t.equal(altitudeInvariantDigest(root, {}), '', 'flag off => empty (no behavior change)');
+
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+  const unguarded = altitudeInvariantDigest(root, env);
+  t.match(unguarded, /UNGUARDED/, 'flag on, no evals => surfaces UNGUARDED drift');
+
+  // Record a real breach for a known registry invariant; it must appear as BREACHED.
+  recordEvaluation(root, {id: 'raft-election-safety-one-vote-per-term'}, {verdict: 'fail'});
+  const breached = altitudeInvariantDigest(root, env);
+  t.match(breached, /raft-election-safety-one-vote-per-term is BREACHED/,
+    'a breached invariant is surfaced as a frame signal');
+  t.end();
+});

@@ -46,6 +46,25 @@ findings, pivots, and follow-on epics/quests are recorded.
   by definition); a contemplated EXHAUST-and-pivot.
 - **On demand** — `node scripts/solve.js reflect --id <id> --altitude --note "…"`.
 
+## Evidence feed: standing-invariant drift (the mechanical substrate)
+
+This review used to run on judgement alone. The **standing-invariant tier**
+(`.kiro/specs/standing-invariant-closure/`) now feeds it evidence: when the altitude
+reflection fires, `altitudeInvariantDigest` surfaces every live invariant that is not
+currently `HELD` (BREACHED/UNGUARDED) into the framing prompt — a BREACHED architecture
+invariant *is* the signal that "a doc/contract no longer reflects the running system,"
+exactly the frame-level question this review asks. Default-off behind
+`LAGRANGE_STANDING_INVARIANTS`; the digest reads the folded status only (no evaluation,
+no writes), so it is a cheap, side-effect-free input.
+
+**Partial by nature (the cheap-predicate subset).** Only invariants with *cheap live
+evidence* (a deterministic repro) become standing invariants that can feed this review
+on the per-Quest cadence; owner-boundary / single-semantic-owner properties whose only
+faithful evidence is an expensive model gate (Alloy / owner-traces) stay model-checked
+(`model:contracts`) and would, if promoted, bind to an `on-cadence` trigger rather than
+per-event. So the feed currently surfaces the repro-backed invariant classes; broadening
+it to owner-boundary properties needs a cheap runtime predicate that does not yet exist.
+
 ## Options under discussion
 
 - Keep this epic purely as a review/log surface (current).
