@@ -114,11 +114,9 @@ function createTimeoutTestCoordinator(options = {}) {
 
         // Entity-scoped read (SELECT_OPERATIONS_BY_ENTITY): match production's
         // entity filter so a per-partition observation does not leak ops from other
-        // partitions. Without this, the catch-all below returned ALL ops, which the
-        // per-entity in-flight ADD serializer (LAGRANGE_PR_ENTITY_INFLIGHT_ADD_SERIALIZE)
-        // would wrongly read as a cross-partition conflict. Params: [entityType,
-        // entityId, partitionId]; these test rows carry only partition_id, so the
-        // partition fallback clause is the one that matches.
+        // partitions (the catch-all below returns ALL ops, which is not faithful for
+        // an entity-scoped query). Params: [entityType, entityId, partitionId]; these
+        // test rows carry only partition_id, so the partition fallback clause matches.
         if (sql.includes('entity_type = ?') && sql.includes('entity_id = ?')) {
           const [entityType, entityId, partitionId] = params;
           const matching = allOps.filter((op) =>
