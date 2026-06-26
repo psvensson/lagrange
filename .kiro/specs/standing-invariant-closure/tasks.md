@@ -142,6 +142,26 @@ authoritative store introduced. ✓ MET.
 
 ---
 
+## Follow-ons (post-WS4, all DONE 2026-06-26)
+
+The five optional items beyond the core WS0–WS4, in the recommended order:
+
+- [x] **#1 Cross-owner invariant** (`c91eb38a`) — `rebalancer-surplus-drain-handoff-terminalizes`
+  (operation_workflow_owner, CL-038). Selective BREACH proven (rebalancer breaches, Raft stays HELD).
+- [x] **#2 Altitude-review unification** (`2f7db15c`) — `altitudeInvariantDigest` surfaces non-HELD
+  drift into the altitude reflection; documented partial (cheap-predicate subset) in the epic.
+- [x] **#3 on-touched-owner trigger** (`3fb4a528`) — `trigger.paths` + `triggerOnTouchedOwner` +
+  `invariants --changed/--since`; validator requires paths for the policy.
+- [x] **#4 Local EvoClaw-style scorer** (`70711e73`) — `invariants --score`: coverage (guarded
+  repro-backed CLs) + coherence (HELD fraction) + worklist. NOT the external benchmark (out of
+  scope — needs an agent-eval harness). Live: 3/8 coverage, 3/3 coherence.
+- [x] **#5 Memory graft (honest form)** (`e6ef9708`) — `invariants --export` durable status board
+  (projection) + documented Letta/Mem0 seam; external service integration declined on purpose
+  (`memory-graft-note.md`).
+
+Regression sweep after all five: full `test/solve/` 889/889, repros CL-038/040/041 green,
+`model:contract-records` + `model:invariants` + `lint:scripts` green.
+
 ## Closure records
 
 Closure for this spec is tracked in the project closure ledger
