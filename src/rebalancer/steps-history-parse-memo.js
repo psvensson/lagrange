@@ -17,14 +17,15 @@
  * ([[avoid-secondary-tertiary-caches]]): it memoizes ON the existing parse
  * seam rather than introducing a parallel read path.
  *
- * Default-off lever. When LAGRANGE_PR_STEPS_HISTORY_PARSE_MEMO !== 'true' the
- * parse is performed inline and returns a FRESH array — byte-identical to the
- * historical behavior. When on, a hit returns a SHARED, shallow-frozen array;
- * the existing array-input fast path already returns shared (unfrozen) arrays,
- * so a shared read-only result is already the de-facto consumer contract.
+ * Unconditional. A hit returns a SHARED, shallow-frozen array; the existing
+ * array-input fast path already returns shared (unfrozen) arrays, so a shared
+ * read-only result is already the de-facto consumer contract (no hot-path
+ * consumer mutates the parsed steps_history). Validated profiler-effective
+ * (eliminates the per-tick `parseStepsHistory` self-time frame on the saturated
+ * rejoiner) and safe across ~12k cache/rebalancer/control-plane/partition/admin
+ * tests; the prior default-off lever was baked in.
  */
 
-const FLAG_TRUE = 'true';
 const PARSE_MEMO_MAX_ENTRIES = 4096;
 
 const EMPTY_FROZEN = Object.freeze([]);
@@ -32,14 +33,6 @@ const EMPTY_FROZEN = Object.freeze([]);
 const parseMemo = new Map();
 let memoHits = 0;
 let memoMisses = 0;
-let inlineParses = 0;
-
-/**
- * @return {boolean} True when the steps_history parse memo lever is enabled.
- */
-function isStepsHistoryParseMemoEnabled() {
-  return process.env.LAGRANGE_PR_STEPS_HISTORY_PARSE_MEMO === FLAG_TRUE;
-}
 
 /**
  * Parse a non-empty steps_history JSON string into an array, returning [] on
@@ -60,21 +53,11 @@ function parseStepsHistoryJson(stepsHistoryString) {
 /**
  * Memoized parse of a steps_history string. Callers must first handle the
  * cheap array / empty / non-string cases; this entry point assumes a non-empty
- * string. With the lever off it parses inline (fresh array each call); with the
- * lever on it returns a shared, shallow-frozen parse keyed on the string.
+ * string. Returns a shared, shallow-frozen parse keyed on the string content.
  * @param {string} stepsHistoryString - Non-empty raw JSON string.
  * @return {Array} Parsed steps_history array (or []).
  */
 function memoizedParseStepsHistoryString(stepsHistoryString) {
-  if (!isStepsHistoryParseMemoEnabled()) {
-    inlineParses += 1;
-    try {
-      const parsed = JSON.parse(stepsHistoryString);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_error) {
-      return [];
-    }
-  }
   const cached = parseMemo.get(stepsHistoryString);
   if (cached !== undefined) {
     memoHits += 1;
@@ -92,14 +75,13 @@ function memoizedParseStepsHistoryString(stepsHistoryString) {
 
 /**
  * Engagement counters for the directed micro-repro: a real hit stream proves
- * the lever FIRES (re-parse avoided) rather than silently no-op'ing.
- * @return {{hits: number, misses: number, inlineParses: number, size: number}}
+ * the memo avoids the re-parse rather than silently no-op'ing.
+ * @return {{hits: number, misses: number, size: number}}
  */
 function getStepsHistoryParseMemoStats() {
   return {
     hits: memoHits,
     misses: memoMisses,
-    inlineParses,
     size: parseMemo.size,
   };
 }
@@ -111,7 +93,6 @@ function resetStepsHistoryParseMemo() {
   parseMemo.clear();
   memoHits = 0;
   memoMisses = 0;
-  inlineParses = 0;
 }
 
 export {

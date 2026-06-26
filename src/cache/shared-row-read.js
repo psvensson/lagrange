@@ -1,13 +1,13 @@
 /**
  * Call-site helpers that route an audited read-only hot path through the
- * cache's no-clone shared-row read (default-off lever
- * LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ) when available, and fall back to the
- * cloning read otherwise.
+ * cache's no-clone shared-row read (`getAllShared`/`filterShared`) when
+ * available, and fall back to `getAll`/`filter` otherwise.
  *
  * Why a helper rather than calling `getAllShared`/`filterShared` directly:
  * several consumers are constructed with mock caches that only implement
- * `getAll`/`filter`. The fallback keeps those paths working and makes the
- * lever-off behavior byte-identical to the historical cloning read.
+ * `getAll`/`filter`. The fallback keeps those paths working. The real cache's
+ * scan reads return frozen-shared rows unconditionally (the per-read deep clone
+ * was eliminated), so callers must treat returned rows as read-only.
  */
 
 const TYPE_FUNCTION = 'function';

@@ -66,16 +66,7 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
 
-const SHARED_ROW_READ_FLAG = 'LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ';
-
 let sharedRowReadEngagements = 0;
-
-/**
- * @return {boolean} True when the no-clone shared-row read lever is enabled.
- */
-function isSharedRowReadEnabled() {
-  return process.env[SHARED_ROW_READ_FLAG] === 'true';
-}
 
 /**
  * Engagement counter for the directed micro-repro: proves the no-clone shared
@@ -404,21 +395,20 @@ class SystemTableCache {
 
   /**
    * Read-isolation view of a stored row for the scan reads (getAll/filter).
-   * Default behavior CLONES (fastJsonClone) so the caller owns a mutable copy.
-   * Under the default-off lever LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ the row is
-   * instead deep-FROZEN and shared (isolation by immutability, amortized once per
-   * stored row vs. cloned every read) — the V8 profiler's #1 cluster-wide frame.
-   * The returned ARRAY (built by the callers below) stays mutable, so
-   * rows.sort()/filter()/push() are unaffected; only in-place row-field mutation
-   * throws (subagent-audited + full-suite-verified read-only consumers).
+   * The row is deep-FROZEN and shared (isolation by immutability, amortized once
+   * per stored row vs. cloned every read) instead of deep-cloned — eliminating
+   * the V8 profiler's #1 cluster-wide self-time frame (`fastJsonClone`) on the
+   * saturated rejoiner. The returned ARRAY (built by the callers below) stays
+   * mutable, so rows.sort()/filter()/push() are unaffected; only in-place
+   * row-field mutation throws (subagent-audited + full-suite-verified read-only
+   * consumers — the cache itself never mutates a stored row in place, every write
+   * replaces wholesale via table.set, so any latent mutator fails loud, not
+   * silent). The prior default-off lever was baked in.
    * @param {Object} record - Stored row.
-   * @return {Object} Frozen shared row (lever on) or a fresh clone (off).
+   * @return {Object} Frozen shared row.
    * @private
    */
   readView(record) {
-    if (!isSharedRowReadEnabled()) {
-      return this.deepClone(record);
-    }
     sharedRowReadEngagements += 1;
     return deepFreeze(record);
   }
@@ -455,49 +445,25 @@ class SystemTableCache {
   }
 
   /**
-   * Read isolation for a hot read-only path WITHOUT the per-read deep clone.
-   * Default-off lever LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ: when on, returns the
-   * STORED rows deep-frozen and shared (isolation by immutability, amortized
-   * freeze) instead of cloning every row every read; when off, delegates to the
-   * cloning getAll so behavior is byte-identical. Safe only for read-only
-   * consumers — subagent-audited for the priority-recovery snapshot path.
+   * Alias of {@link getAll}; scan reads already return frozen-shared rows via
+   * {@link readView}. Retained as a stable name for call sites (and the
+   * mock-cache fallback in shared-row-read.js) that opt into the no-clone read.
    * @param {string} tableName - Name of the system table.
-   * @return {Array<Object>} Frozen shared rows (lever on) or fresh clones (off).
+   * @return {Array<Object>} Frozen shared rows.
    */
   getAllShared(tableName) {
-    if (!isSharedRowReadEnabled()) {
-      return this.getAll(tableName);
-    }
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    return Array.from(table.values()).map((record) => {
-      sharedRowReadEngagements += 1;
-      return deepFreeze(record);
-    });
+    return this.getAll(tableName);
   }
 
   /**
-   * Filter records WITHOUT the per-read deep clone, returning frozen shared
-   * rows under the same default-off lever as {@link getAllShared}. Off-path is
-   * byte-identical to {@link filter}.
+   * Alias of {@link filter}; scan reads already return frozen-shared rows via
+   * {@link readView}.
    * @param {string} tableName - Name of the system table.
    * @param {Function} predicate - Returns true for matching records.
-   * @return {Array<Object>} Frozen shared matches (lever on) or clones (off).
+   * @return {Array<Object>} Frozen shared matches.
    */
   filterShared(tableName, predicate) {
-    if (!isSharedRowReadEnabled()) {
-      return this.filter(tableName, predicate);
-    }
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    const results = [];
-    for (const record of table.values()) {
-      if (predicate(record)) {
-        sharedRowReadEngagements += 1;
-        results.push(deepFreeze(record));
-      }
-    }
-    return results;
+    return this.filter(tableName, predicate);
   }
 
   /**

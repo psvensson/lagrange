@@ -10,7 +10,6 @@ import {
   readAllSharedRows,
 } from '../../src/cache/shared-row-read.js';
 
-const FLAG = 'LAGRANGE_PR_SNAPSHOT_SHARED_ROW_READ';
 const TABLE = 'replica_operations';
 const ROW_COUNT = 20;
 
@@ -28,120 +27,66 @@ function seedCache() {
   return cache;
 }
 
-function withFlag(value, fn) {
-  const previous = process.env[FLAG];
-  if (value === undefined) {
-    delete process.env[FLAG];
-  } else {
-    process.env[FLAG] = value;
-  }
-  try {
-    return fn();
-  } finally {
-    if (previous === undefined) {
-      delete process.env[FLAG];
-    } else {
-      process.env[FLAG] = previous;
-    }
-  }
-}
-
 test(
-  'shared-row read FIRES: no-clone frozen shared rows when lever on',
+  'shared-row read returns no-clone frozen shared rows',
   async (t) => {
     const cache = seedCache();
-    withFlag('true', () => {
-      resetSharedRowReadStats();
-      const rows = readAllSharedRows(cache, TABLE);
-      t.equal(rows.length, ROW_COUNT, 'returns every row');
-      t.ok(
-        rows.every((row) => Object.isFrozen(row)),
-        'lever-on rows are frozen (shared, no clone)',
-      );
-      t.equal(
-        getSharedRowReadStats().engagements,
-        ROW_COUNT,
-        'engagement counter proves the no-clone path fired per row',
-      );
-      // Reading the SAME table again returns the identical shared objects (the
-      // clone the profiler pinned is eliminated).
-      const rowsAgain = readAllSharedRows(cache, TABLE);
-      t.equal(
-        rows[0],
-        rowsAgain[0],
-        'subsequent reads share the identical row reference (no re-clone)',
-      );
-    });
+    resetSharedRowReadStats();
+    const rows = readAllSharedRows(cache, TABLE);
+    t.equal(rows.length, ROW_COUNT, 'returns every row');
+    t.ok(
+      rows.every((row) => Object.isFrozen(row)),
+      'rows are frozen (shared, no clone)',
+    );
+    t.equal(
+      getSharedRowReadStats().engagements,
+      ROW_COUNT,
+      'engagement counter proves the no-clone path fired per row',
+    );
+    // Reading the SAME table again returns the identical shared objects (the
+    // per-read clone the profiler pinned is eliminated).
+    const rowsAgain = readAllSharedRows(cache, TABLE);
+    t.equal(
+      rows[0],
+      rowsAgain[0],
+      'subsequent reads share the identical row reference (no re-clone)',
+    );
     t.end();
   },
 );
 
 test(
-  'shared-row read is frozen end-to-end (nested mutation fails loudly)',
+  'shared-row read is frozen end-to-end (mutation fails loudly)',
   async (t) => {
     const cache = seedCache();
-    withFlag('true', () => {
-      const [row] = readAllSharedRows(cache, TABLE);
-      t.throws(
-        () => {
-          row.status = 'mutated';
-        },
-        'top-level mutation of a shared row throws',
-      );
-      t.ok(
-        Object.isFrozen(row.steps_history) === false ||
-          typeof row.steps_history === 'string',
-        'nested values are deep-frozen or primitive',
-      );
-    });
+    const [row] = readAllSharedRows(cache, TABLE);
+    t.throws(
+      () => {
+        row.status = 'mutated';
+      },
+      'top-level mutation of a shared row throws',
+    );
     t.end();
   },
 );
 
-test(
-  'shared-row read no-op when lever off (cloning path, byte-identical)',
-  async (t) => {
-    const cache = seedCache();
-    withFlag(undefined, () => {
-      resetSharedRowReadStats();
-      const rows = readAllSharedRows(cache, TABLE);
-      t.equal(rows.length, ROW_COUNT, 'returns every row');
-      t.notOk(
-        rows.some((row) => Object.isFrozen(row)),
-        'lever-off rows are fresh mutable clones',
-      );
-      t.equal(
-        getSharedRowReadStats().engagements,
-        0,
-        'lever-off never engages the no-clone path',
-      );
-      // Distinct clones across reads (historical isolation contract).
-      const rowsAgain = readAllSharedRows(cache, TABLE);
-      t.not(
-        rows[0],
-        rowsAgain[0],
-        'lever-off returns a distinct clone per read',
-      );
-    });
-    t.end();
-  },
-);
-
-test('shared-row read value-equivalence on vs off', async (t) => {
+test('shared-row read carries the stored row values', async (t) => {
   const cache = seedCache();
-  const off = withFlag(undefined, () => readAllSharedRows(cache, TABLE));
-  const on = withFlag('true', () => readAllSharedRows(cache, TABLE));
-  t.same(
-    on.map((row) => ({...row})),
-    off.map((row) => ({...row})),
-    'shared and cloned reads carry identical row values',
+  const rows = readAllSharedRows(cache, TABLE);
+  const op3 = rows.find((row) => row.operation_id === 'op-3');
+  t.ok(op3, 'op-3 is present');
+  t.equal(op3.status, 'active', 'row field values are intact');
+  t.equal(
+    op3.partition_id,
+    'replica_operations-p3',
+    'row identity fields are intact',
   );
   t.end();
 });
 
-test('filterSharedRows respects the predicate and the lever', async (t) => {
-  const cache = seedCache();
-  withFlag('true', () => {
+test('filterSharedRows respects the predicate and returns frozen rows',
+  async (t) => {
+    const cache = seedCache();
     resetSharedRowReadStats();
     const matches = filterSharedRows(
       cache,
@@ -155,9 +100,8 @@ test('filterSharedRows respects the predicate and the lever', async (t) => {
       1,
       'one engagement per matched row',
     );
+    t.end();
   });
-  t.end();
-});
 
 test('shared-row helpers fall back gracefully on a mock cache', async (t) => {
   const mockCache = {
@@ -165,15 +109,13 @@ test('shared-row helpers fall back gracefully on a mock cache', async (t) => {
     filter: (_table, predicate) =>
       [{operation_id: 'mock'}].filter(predicate),
   };
-  withFlag('true', () => {
-    const rows = readAllSharedRows(mockCache, TABLE);
-    t.equal(rows[0].operation_id, 'mock', 'getAll fallback used');
-    t.notOk(
-      Object.isFrozen(rows[0]),
-      'mock without getAllShared is not frozen by the helper',
-    );
-    const filtered = filterSharedRows(mockCache, TABLE, () => true);
-    t.equal(filtered.length, 1, 'filter fallback used');
-  });
+  const rows = readAllSharedRows(mockCache, TABLE);
+  t.equal(rows[0].operation_id, 'mock', 'getAll fallback used');
+  t.notOk(
+    Object.isFrozen(rows[0]),
+    'a mock without getAllShared is not frozen by the helper',
+  );
+  const filtered = filterSharedRows(mockCache, TABLE, () => true);
+  t.equal(filtered.length, 1, 'filter fallback used');
   t.end();
 });
