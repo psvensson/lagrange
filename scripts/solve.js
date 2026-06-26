@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
   appendGuardOverride, appendReflection, readFindings}
@@ -37,7 +38,7 @@ import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
-import {runInvariantsCommand} from './solve/invariant-liveness.js';
+import {runInvariantsCommand, triggerOnTouchedOwner} from './solve/invariant-liveness.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -701,7 +702,36 @@ function cmdHandoff(root, args) {
 // doneWhen). `--evaluate` runs each invariant's predicate and records the verdict;
 // otherwise status is derived from the event log. Gated by
 // LAGRANGE_STANDING_INVARIANTS (default-off).
+function changedFilesFromArgs(root, args) {
+  if (typeof args.changed === 'string') {
+    return args.changed.split(',').map((file) => file.trim()).filter(Boolean);
+  }
+  if (typeof args.since === 'string') {
+    const out = spawnSync('git', ['diff', '--name-only', args.since], {cwd: root, encoding: 'utf8'});
+    return (out.stdout || '').split('\n').map((file) => file.trim()).filter(Boolean);
+  }
+  return null;
+}
+
 function cmdInvariants(root, args) {
+  // on-touched-owner trigger: re-verify invariants whose paths intersect changed files.
+  const changedFiles = changedFilesFromArgs(root, args);
+  if (changedFiles) {
+    const fired = triggerOnTouchedOwner(root, {changedFiles});
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(fired, null, 2)}\n`);
+      return;
+    }
+    if (!fired.fired) {
+      process.stdout.write('standing invariants disabled — set LAGRANGE_STANDING_INVARIANTS=true to enable\n');
+      return;
+    }
+    const lines = fired.transitions.map((t) => `${t.from} -> ${t.to}  ${t.id}`);
+    process.stdout.write(
+      `on-touched-owner re-verification (${fired.transitions.length} invariant(s)):\n` +
+      `${lines.join('\n') || '(none matched the changed files)'}\n`);
+    return;
+  }
   const out = runInvariantsCommand(root, args);
   if (args.json) {
     process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);

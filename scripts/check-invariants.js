@@ -145,6 +145,17 @@ function validateLiveEvidence(errors, label, entry, index) {
       errors.push(`${label}: ${at}.trigger — an expensive predicate cannot use ` +
         `per-event policy ${trigger.policy}; use on-cadence.`);
     }
+    // Optional owner paths; required for the on-touched-owner trigger.
+    if (trigger.paths !== undefined) {
+      if (!Array.isArray(trigger.paths) || trigger.paths.length === 0 ||
+        !trigger.paths.every((entry) => hasConcreteText(entry))) {
+        errors.push(`${label}: ${at}.trigger.paths must be a non-empty array of ` +
+          'concrete path prefixes.');
+      }
+    } else if (trigger.policy === 'on-touched-owner') {
+      errors.push(`${label}: ${at}.trigger.paths is required for the ` +
+        'on-touched-owner policy.');
+    }
   }
   if (live.restoration !== undefined) {
     if (!isObjectRecord(live.restoration)) {

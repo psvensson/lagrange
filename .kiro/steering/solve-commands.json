@@ -38,7 +38,7 @@
   },
   "invariants": {
     "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Gated by LAGRANGE_STANDING_INVARIANTS (default-off).",
-    "usage": "LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants [--evaluate] [--json]"
+    "usage": "LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants [--evaluate] [--json] [--changed a,b | --since <ref>]"
   },
   "probe": {
     "summary": "Run a probe over real artifacts to answer a frontier metric or the Quest doneWhen; the Solver trusts probes, not self-report.",

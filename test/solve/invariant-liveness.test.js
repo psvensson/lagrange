@@ -352,3 +352,68 @@ t.test('altitudeInvariantDigest: empty when flag off; surfaces non-HELD drift wh
     'a breached invariant is surfaced as a frame signal');
   t.end();
 });
+
+// ---- Follow-on #3: on-touched-owner trigger ----
+
+import {
+  triggerOnTouchedOwner, pathTouchesInvariant,
+} from '../../scripts/solve/invariant-liveness.js';
+
+function writeTouchReg(root, paths) {
+  const regPath = path.join(root, 'touch-registry.json');
+  fs.writeFileSync(regPath, JSON.stringify({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'touch-x', owner: 'o', boundary: 'b', kind: 'safety',
+      statement: 's', formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'exits 0',
+        evidence: {kind: 'repro', ref: 'node -e "process.exit(0)"'},
+        trigger: {policy: 'on-touched-owner', cost: 'cheap', paths},
+      },
+    }],
+  }));
+  return regPath;
+}
+
+t.test('pathTouchesInvariant prefix-matches changed files against declared paths', (t) => {
+  const inv = {liveEvidence: {trigger: {paths: ['src/raft/']}}};
+  t.ok(pathTouchesInvariant(inv, ['src/raft/liferaft.js']), 'prefix match');
+  t.notOk(pathTouchesInvariant(inv, ['src/rebalancer/x.js']), 'no match');
+  t.notOk(pathTouchesInvariant({liveEvidence: {trigger: {}}}, ['a']), 'no paths => no match');
+  t.end();
+});
+
+t.test('on-touched-owner trigger fires only when a changed file is in scope', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const reg = writeTouchReg(root, ['src/raft/']);
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+
+  const miss = triggerOnTouchedOwner(root, {changedFiles: ['src/rebalancer/y.js'], registry: reg}, env);
+  t.same(miss.transitions, [], 'no matching changed file => no re-verification');
+
+  const hit = triggerOnTouchedOwner(root, {changedFiles: ['src/raft/liferaft.js'], registry: reg}, env);
+  t.same(hit.transitions, [{id: 'touch-x', from: STATUS.UNGUARDED, to: STATUS.HELD}],
+    'matching changed file => invariant re-verified');
+
+  t.equal(triggerOnTouchedOwner(root, {changedFiles: ['src/raft/x.js'], registry: reg}, {}).fired,
+    false, 'flag off => does not fire');
+  t.end();
+});
+
+t.test('validator requires paths for on-touched-owner policy', (t) => {
+  const errors = validateInvariantRegistry({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'np', owner: 'o', boundary: 'b', kind: 'safety', statement: 's', formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'h', evidence: {kind: 'repro', ref: 'r'},
+        trigger: {policy: 'on-touched-owner', cost: 'cheap'},
+      },
+    }],
+  });
+  t.ok(errors.some((e) => /paths is required for the on-touched-owner/.test(e)),
+    'missing paths is rejected');
+  t.end();
+});

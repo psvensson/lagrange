@@ -229,6 +229,36 @@ export function triggerOnQuestClosure(
   return {fired: true, transitions};
 }
 
+// Does a changed file fall within an invariant's declared owner paths? Prefix match
+// against `liveEvidence.trigger.paths` (e.g. "src/raft/").
+export function pathTouchesInvariant(invariant, changedFiles) {
+  const paths = invariant.liveEvidence?.trigger?.paths;
+  if (!Array.isArray(paths) || paths.length === 0) return false;
+  return changedFiles.some(
+    (file) => paths.some((prefix) => file === prefix || file.startsWith(prefix)));
+}
+
+// on-touched-owner trigger: evaluate + record every on-touched-owner invariant whose
+// declared paths intersect the changed files. Cost guard applies (per-event policy);
+// inert when the flag is off. Never throws on a single invariant's failure.
+export function triggerOnTouchedOwner(
+  root, {changedFiles = [], registry: registryPath} = {}, env = process.env) {
+  if (!isStandingInvariantsEnabled(env)) return {fired: false, transitions: []};
+  const {registry} = loadInvariantRegistry(registryPath);
+  const transitions = [];
+  for (const invariant of liveInvariants(registry)) {
+    if (invariant.liveEvidence?.trigger?.policy !== 'on-touched-owner') continue;
+    if (triggerCostViolation(invariant)) continue;
+    if (!pathTouchesInvariant(invariant, changedFiles)) continue;
+    try {
+      transitions.push(evaluateAndRecord(root, invariant, env));
+    } catch {
+      continue;
+    }
+  }
+  return {fired: true, transitions};
+}
+
 // Altitude-review surfacing: a cheap, side-effect-free digest of standing invariants
 // that are NOT currently HELD (drift signals the framing review should weigh). Reads
 // the folded status only — no evaluation, no writes. Returns '' when the flag is off
