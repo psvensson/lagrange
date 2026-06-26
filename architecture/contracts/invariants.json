@@ -225,7 +225,7 @@
           "test": "test/closure/CL-041.repro.test.js"
         },
         "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": false}
+        "restoration": {"autoSpawn": true}
       }
     }
   ]

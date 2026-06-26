@@ -15,8 +15,14 @@ import {
   triggerCostViolation,
   triggerOnQuestClosure,
   questScopes,
+  evaluateAndRecord,
+  shouldSpawnRestoration,
+  restorationQuestId,
 } from '../../scripts/solve/invariant-liveness.js';
 import {validateInvariantRegistry} from '../../scripts/check-invariants.js';
+import {questFilePath, readLog, appendEvent} from '../../scripts/solve/store.js';
+import {invariantHeldProbe} from '../../scripts/solve/probes/invariant-held.js';
+import {OSCILLATION_REOPEN_BUDGET} from '../../scripts/solve/constants.js';
 
 // WS1 unit coverage for Tier-2 live-evidence verification of architecture
 // invariants (spec: .kiro/specs/standing-invariant-closure/). Covers the
@@ -212,5 +218,115 @@ t.test('cost guard (Req 6.3): expensive predicate cannot use a per-event trigger
   });
   t.ok(errors.some((e) => /expensive predicate cannot use/.test(e)),
     'validator rejects expensive per-event trigger');
+  t.end();
+});
+
+// ---- WS3: breach -> restoration ----
+
+function invariant(id, {ref, autoSpawn = false}) {
+  return {
+    id, owner: 'o', boundary: 'b', kind: 'safety', statement: 's', formalPredicate: 'p',
+    liveEvidence: {
+      tier: 2, holdsWhen: 'exits 0', evidence: {kind: 'repro', ref},
+      trigger: {policy: 'on-quest-closure', cost: 'cheap'},
+      restoration: {autoSpawn},
+    },
+  };
+}
+const PASS = 'node -e "process.exit(0)"';
+const FAIL = 'node -e "process.exit(1)"';
+
+t.test('evaluateAndRecord on a failing predicate => BREACHED and a breach falsifier', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const inv = invariant('br-x', {ref: FAIL});
+
+  const transition = evaluateAndRecord(root, inv, {});
+  t.same(transition, {id: 'br-x', from: STATUS.UNGUARDED, to: STATUS.BREACHED});
+
+  const log = readLog(root, `invariant-br-x`);
+  t.ok(log.some((e) => e.type === 'invariant.breach'), 'breach falsifier recorded');
+  t.notOk(fs.existsSync(questFilePath(root, restorationQuestId('br-x'))),
+    'no restoration Quest when autoSpawn is off');
+  t.end();
+});
+
+t.test('autoSpawn links a restoration Quest whose doneWhen is invariantHeld', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+  const inv = invariant('rs-x', {ref: FAIL, autoSpawn: true});
+
+  evaluateAndRecord(root, inv, env);
+  const questPath = questFilePath(root, restorationQuestId('rs-x'));
+  t.ok(fs.existsSync(questPath), 'restoration Quest scaffolded');
+  const quest = JSON.parse(fs.readFileSync(questPath, 'utf8'));
+  t.same(quest.doneWhen, {probe: 'invariantHeld', args: {id: 'rs-x'}},
+    'doneWhen = invariant returns to HELD');
+  t.equal(quest.links.restoresInvariant, 'rs-x');
+  t.ok(readLog(root, 'invariant-rs-x').some((e) => e.type === 'invariant.restoration-linked'),
+    'restoration-linked recorded');
+
+  // Re-breach while the Quest is open: no duplicate spawn (single-open guard).
+  evaluateAndRecord(root, inv, env);
+  const links = readLog(root, 'invariant-rs-x')
+    .filter((e) => e.type === 'invariant.restoration-linked').length;
+  t.equal(links, 1, 're-breach does not spawn a second restoration Quest');
+  t.end();
+});
+
+t.test('shouldSpawnRestoration guards: open Quest and reopen budget', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const inv = invariant('g-x', {ref: FAIL, autoSpawn: true});
+
+  t.equal(shouldSpawnRestoration(root, inv).spawn, true, 'first breach may spawn');
+
+  // Budget: once OSCILLATION_REOPEN_BUDGET restoration links exist, stop spawning.
+  for (let i = 0; i < OSCILLATION_REOPEN_BUDGET; i += 1) {
+    appendEvent(root, invariantStreamId('g-x'), {
+      type: 'invariant.restoration-linked', invariant: 'g-x', quest: `q${i}`,
+    });
+  }
+  const decision = shouldSpawnRestoration(root, inv);
+  t.equal(decision.spawn, false, 'budget exhausted => no spawn');
+  t.match(decision.reason, /budget/, 'reason cites the reopen budget');
+  t.end();
+});
+
+t.test('Req 5.3: status returns to HELD only via re-evaluation, not Quest closure', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+
+  evaluateAndRecord(root, invariant('h-x', {ref: FAIL, autoSpawn: true}), env);
+  t.equal(deriveStatus(root, {id: 'h-x'}).status, STATUS.BREACHED, 'breached');
+
+  // The restoration Quest existing/closing does NOT set HELD; a passing re-eval does.
+  evaluateAndRecord(root, invariant('h-x', {ref: PASS, autoSpawn: true}), env);
+  t.equal(deriveStatus(root, {id: 'h-x'}).status, STATUS.HELD, 're-eval restores HELD');
+  t.end();
+});
+
+t.test('invariantHeld probe is done iff the folded status is HELD', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const regPath = path.join(root, 'reg.json');
+  fs.writeFileSync(regPath, JSON.stringify({
+    schema: 'invariant-registry-v1',
+    invariants: [{id: 'p-x', owner: 'o', boundary: 'b', kind: 'safety',
+      statement: 's', formalPredicate: 'p'}],
+  }));
+
+  let out = invariantHeldProbe.measure({id: 'p-x', registry: regPath}, {root});
+  t.equal(out.done, false, 'UNGUARDED => not done');
+
+  recordEvaluation(root, {id: 'p-x'}, {verdict: 'pass'});
+  out = invariantHeldProbe.measure({id: 'p-x', registry: regPath}, {root});
+  t.equal(out.done, true, 'HELD => done');
+  t.equal(out.metric, 0);
+
+  out = invariantHeldProbe.measure({id: 'unknown', registry: regPath}, {root});
+  t.equal(out.done, false, 'unknown invariant => not done');
   t.end();
 });

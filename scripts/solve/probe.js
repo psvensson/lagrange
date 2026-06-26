@@ -13,11 +13,13 @@
 
 import {scenarioHarnessProbe} from './probes/scenario-harness.js';
 import {oracleProbe} from './probes/oracle.js';
+import {invariantHeldProbe} from './probes/invariant-held.js';
 import {attachEvidenceIdentity} from './evidence-identity.js';
 
 const REGISTRY = new Map([
   ['scenario-harness', scenarioHarnessProbe],
   ['oracle', oracleProbe],
+  ['invariantHeld', invariantHeldProbe],
 ]);
 
 export function registerProbe(name, probe) {
