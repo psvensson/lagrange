@@ -48,6 +48,17 @@ esac
 CONFIG="${CONFIG:-test/distributed/config/local.json}"
 SCENARIO="${SCENARIO:-rolling-restart}"
 DEBUG_LOGS="${DEBUG_LOGS:-}"
+
+# Host-orchestrator heap floor. The run.js orchestrator aggregates every node's
+# events + log capture on the host; a full rolling-restart (~570s) can push its
+# live set past Node's default ~4GB old-space cap, at which point it dies with
+# "JavaScript heap out of memory" BEFORE emitting a report. The gate then counts
+# that run as NO_REPORT — a silent OOM masquerading as a non-result (an
+# absence-proves-nothing trap; see operational-ground-truth.md). Raise the cap so
+# a real verdict is produced. Respect a caller-set --max-old-space-size.
+if [[ "${NODE_OPTIONS:-}" != *"max-old-space-size"* ]]; then
+  export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--max-old-space-size=${STAT_GATE_MAX_OLD_SPACE_MB:-8192}"
+fi
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT_DIR="test-output/reports"
 TMP_NDJSON="$(mktemp)"
