@@ -635,10 +635,6 @@ test('NodeJoiningService - activates message-group rows after membership write',
     service.activateMessageGroupServiceRows = async () => {
       order.push('activate-message-group-rows');
     };
-    service.startJoinOpportunisticBackfill = () => {
-      order.push('opportunistic-backfill');
-      return Promise.resolve();
-    };
     service.joinReadinessEvaluator
       .waitForCanonicalJoinReadinessConvergence = async () => {
         order.push('readiness');
@@ -657,11 +653,10 @@ test('NodeJoiningService - activates message-group rows after membership write',
       [
         'query',
         'activate-message-group-rows',
-        'opportunistic-backfill',
         'readiness',
         'ready-signal',
       ],
-      'service rows should activate before background repair and ready publication',
+      'service rows should activate before the readiness gate and ready publication',
     );
   });
 

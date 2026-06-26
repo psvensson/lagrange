@@ -346,21 +346,41 @@ test('Property 14: Code Path Uniqueness', async (t) => {
       'rpc-client.js', // For request-response pattern over message groups
     ];
 
+    // Transport module decomposition is allowed as long as each file still
+    // clearly belongs to transport/routing responsibilities. This includes
+    // delivery-path resilience helpers (retry-rate budgets, admission control)
+    // that bound how a node drives the transport toward a target owner.
+    const belongsToTransport = (transportFile) =>
+      transportFile.includes('transport') ||
+      transportFile.includes('router') ||
+      transportFile.includes('connection') ||
+      transportFile.includes('rpc') ||
+      transportFile.includes('address') ||
+      transportFile.includes('resolution') ||
+      transportFile.includes('retry') ||
+      transportFile.includes('budget') ||
+      transportFile.includes('admission');
+
     fc.assert(
       fc.property(
         fc.constantFrom(...transportFiles),
-        (transportFile) => {
-          // Transport module decomposition is allowed as long as each file
-          // still clearly belongs to transport/routing responsibilities.
-          return transportFile.includes('transport') ||
-            transportFile.includes('router') ||
-            transportFile.includes('connection') ||
-            transportFile.includes('rpc') ||
-            transportFile.includes('address') ||
-            transportFile.includes('resolution');
-        },
+        (transportFile) => belongsToTransport(transportFile),
       ),
       {numRuns: 10},
+    );
+
+    // Deterministic, exhaustive guard. The fast-check sweep above only samples a
+    // random subset per run (with a per-process seed), so on its own it can
+    // intermittently miss an off-pattern file under parallel batch execution.
+    // Assert over EVERY transport file so the result is identical every run.
+    const offPatternFiles = transportFiles.filter(
+      (file) => !belongsToTransport(file),
+    );
+    t.same(
+      offPatternFiles,
+      [],
+      'every transport file must belong to transport/routing responsibilities; ' +
+        `off-pattern file(s): ${JSON.stringify(offPatternFiles)}`,
     );
 
     t.ok(

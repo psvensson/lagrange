@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const CUTOVER_GUARD_FILE = Object.freeze({
   BOOTSTRAP_SERVICE: 'src/bootstrap/bootstrap-service.js',
   NODE_JOINING_SERVICE: 'src/bootstrap/node-joining-service.js',
-  ADMIN_WEBSOCKET_API: 'src/admin/admin-websocket-api.js',
+  ADMIN_WEBSOCKET_API: 'src/admin/admin-websocket-message-dispatch-methods.js',
   CREATE_MESSAGE_GROUP_PHASE:
     'src/bootstrap/phases/create-message-group-phase.js',
   JOIN_MESSAGE_GROUP_RUNTIME_OWNER:

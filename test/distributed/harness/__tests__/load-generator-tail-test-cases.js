@@ -798,10 +798,33 @@ export function registerLoadGeneratorTailTests({
   test('adaptive dispatch guardrail preserves healthy-node slot budget when ' +
     'only one node is admission-blocked',
   async () => {
+    // Hermetic against parallel-batch scheduling jitter (flaked only under
+    // `xargs -n 60 npx tap`, never in isolation). The guardrail's capacity
+    // floor is only applied while the cluster is *partiallyBlockedCluster*
+    // (dispatchReadyNodeCount strictly less than _availableNodes.length). Two
+    // wall-clock races previously let a guardrail tick momentarily observe a
+    // fully-healthy cluster, drop the floor to minMaxInFlight, and record a
+    // minEffectiveMaxInFlight below the expected 4*4=16 floor: (1) the blocked
+    // node's self-clearing `retryAfterMs: 200` backoff could lapse at a tick
+    // (counting it ready); (2) healthy nodes' 20ms setTimeout query delay could
+    // fire later than the slot-stall threshold under a starved event loop,
+    // aging a healthy node into SLOT_STALLED. Block the node deterministically
+    // via isLoadAdmissionReady() (re-evaluated every tick, no clearing window)
+    // and resolve healthy queries immediately so slots never age. The blocked
+    // node still raises nodeAdmissionBlocked and the guardrail still engages.
+    const healthyNodeIds = [
+      'healthy-node-a',
+      'healthy-node-b',
+      'healthy-node-c',
+      'healthy-node-d',
+    ];
     const nodes = [
       {
         id: 'isolated-blocked-node',
         breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        isLoadAdmissionReady() {
+          return false;
+        },
         async query(_sql) {
           const error = new Error('query_admission_deferred');
           error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
@@ -810,34 +833,12 @@ export function registerLoadGeneratorTailTests({
           throw error;
         },
       },
-      {
-        id: 'healthy-node-a',
+      ...healthyNodeIds.map((id) => ({
+        id,
         async query(_sql) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
           return {rows: []};
         },
-      },
-      {
-        id: 'healthy-node-b',
-        async query(_sql) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          return {rows: []};
-        },
-      },
-      {
-        id: 'healthy-node-c',
-        async query(_sql) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          return {rows: []};
-        },
-      },
-      {
-        id: 'healthy-node-d',
-        async query(_sql) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          return {rows: []};
-        },
-      },
+      })),
     ];
 
     const configuredMaxInFlight = 20;
