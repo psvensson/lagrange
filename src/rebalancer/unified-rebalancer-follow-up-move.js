@@ -1,5 +1,8 @@
 import {UnifiedRebalancerFollowUpDecision} from './unified-rebalancer-follow-up-decision.js';
 import {
+  computeInFlightAwareReplicaAccounting,
+} from './in-flight-aware-replica-count.js';
+import {
   applyUnifiedRebalancerFollowUpAugmentationMethods,
 } from './unified-rebalancer-follow-up-augmentation-methods.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
@@ -148,36 +151,17 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
    * @return {number}
    */
   countPriorityRecoveryFollowUpInFlightAdds(partitionId) {
-    const followUpPartitionId = String(
-      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-    let inFlightAddCount = NUM.ZERO;
-    for (const operation of this.getTopologyBlockingInFlightOperations()) {
-      const operationType = String(
-        operation?.type ||
-          operation?.operation_type ||
-          operation?.operationType ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).toLowerCase();
-      if (operationType !== MoveType.ADD) {
-        continue;
-      }
-      const operationPartitionId = String(
-        operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
-          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
-          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).trim();
-      if (
-        followUpPartitionId.length > NUM.ZERO &&
-        operationPartitionId.length > NUM.ZERO &&
-        operationPartitionId !== followUpPartitionId
-      ) {
-        continue;
-      }
-      inFlightAddCount += NUM.ONE;
-    }
-    return inFlightAddCount;
+    // Single-owner accounting: route the in-flight ADD classification through the
+    // shared helper (one definition of "an in-flight count-increasing ADD for a
+    // partition"). currentReplicas is intentionally empty here — this count is
+    // paired by the caller with the ACTIVE-only healthyReplicaCount, so the
+    // committed-row dedup the helper applies for occupancy must NOT apply (a
+    // CREATING replica is represented by its op, not an ACTIVE row).
+    return computeInFlightAwareReplicaAccounting({
+      currentReplicas: [],
+      inFlightOperations: this.getTopologyBlockingInFlightOperations(),
+      partitionId,
+    }).inFlightAddCount;
   }
 
   /**
