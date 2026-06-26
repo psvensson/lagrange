@@ -76,36 +76,48 @@ off = zero behavior change (verified). ✓ ALL MET.
 
 ## WS2 — Trigger policy (`on-quest-closure` default)
 
-Wire automatic re-evaluation on the cheap default trigger.
+Wire automatic re-evaluation on the cheap default trigger. — ✅ DONE (commit `87bd09af`)
 
-- [ ] Implement the trigger policy field and the `on-quest-closure` evaluator hook:
-      when a Quest whose scope intersects an invariant reaches a terminal,
-      re-evaluate that invariant.
-- [ ] Enforce the cost guard: an `expensive` predicate MAY NOT bind to a per-event
-      trigger; it binds to `on-cadence` only (Requirement 6.3).
-- [ ] (Optional, if cheap) wire `on-touched-owner` via the owner-boundary map.
+**Outcome (2026-06-26):** `triggerOnQuestClosure(root, {scopes})` evaluates + records every
+`on-quest-closure` invariant whose `trigger.scope` matches the closing quest's scopes (derived
+by `questScopes()` from owner + `touchesInvariantScopes`), returning `{from,to}` transitions.
+Wired into `loop.js` `recordQuestSolvedIfDone` as a flag-gated, fail-safe (try/catch) hook that
+fires once on the SOLVED transition. Cost guard (Req 6.3) enforced both at runtime
+(`triggerCostViolation` skips expensive per-event) and at declaration (validator rejects it).
+
+- [x] Implement the `on-quest-closure` evaluator hook (fires on the SOLVED terminal).
+- [x] Enforce the cost guard: expensive predicates cannot bind to a per-event trigger.
+- [ ] (Optional, if cheap) wire `on-touched-owner` via the owner-boundary map. → deferred
+      (scope matching already supports `owner:` tokens; the file→owner mapping is the only
+      missing piece and is not needed for the cheap default path).
 
 **doneWhen:** with the flag on, closing a Quest in the invariant's scope triggers a
 re-evaluation that records the resulting status transition to the event log, and an
 `expensive`-classified predicate is rejected from per-event triggers. Flag off =
-no triggers fire.
+no triggers fire. ✓ MET (unit 36/36; loop 52/52 unbroken).
 
-## WS3 — Breach → restoration Quest auto-link (Option A control flow)
+## WS3 — Breach → restoration Quest auto-link (Option A control flow) — ✅ DONE (commit `ce3f3b34`)
 
-Close the erosion→restoration loop, bounded by the existing reopen budget.
+**Outcome (2026-06-26):** `evaluateAndRecord` detects `HELD → BREACHED` and `reactToBreach`
+records a breach falsifier (`invariant.breach`), then auto-links a restoration Quest (doneWhen =
+new `invariantHeld` probe) when `restoration.autoSpawn` is set and `shouldSpawnRestoration` allows
+(skip when one is already open or `OSCILLATION_REOPEN_BUDGET` lifetime links reached). Req 5.3 is
+structural: status folds only evaluation events, so a SOLVED restoration Quest never sets HELD —
+re-evaluation does. Extracted `invariant-status.js` (leaf) to avoid a probe↔liveness import cycle.
 
-- [ ] On `HELD → BREACHED`, record the breach falsifier and **link** a restoration
-      Quest whose `doneWhen` is "the invariant returns to HELD."
-- [ ] Gate auto-spawn behind `restoration.autoSpawn`; when enabled, spawn subject to
-      `OSCILLATION_REOPEN_BUDGET` (Requirement 5.2).
-- [ ] Enforce Requirement 5.3: a SOLVED restoration Quest does NOT directly set HELD;
-      only a passing re-evaluation does.
+- [x] On `HELD → BREACHED`, record the breach falsifier and link a restoration Quest whose
+      `doneWhen` is "the invariant returns to HELD" (the `invariantHeld` probe).
+- [x] Gate auto-spawn behind `restoration.autoSpawn`; spawn subject to `OSCILLATION_REOPEN_BUDGET`
+      and a single-open guard.
+- [x] Enforce Req 5.3: a SOLVED restoration Quest does NOT set HELD; only a passing re-eval does.
 
 **doneWhen:** with the flag on and `autoSpawn` enabled, reverting the WS0 fix flips
 the invariant to BREACHED, records a falsifier, and auto-links a restoration Quest
 under the reopen budget; restoring the fix and re-evaluating returns it to HELD —
 demonstrated against live evidence. Storm test: a broad breach does not exceed the
-reopen budget.
+reopen budget. ✓ MET — proven end-to-end in an isolated worktree (BREACHED +
+`restore-raft-…` Quest auto-created + falsifier; restore → re-eval → HELD); budget +
+single-open guards unit-tested.
 
 ## WS4 — Generalize + validation hooks (after WS0–WS3 prove out)
 
