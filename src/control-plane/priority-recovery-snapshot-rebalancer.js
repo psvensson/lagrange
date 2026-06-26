@@ -490,6 +490,30 @@ function resolvePriorityRecoveryOperationStepTerminalState(
   );
 }
 
+// The single seam where the record `workflowStep` and the timeline `latestTimelineStep`
+// disagree (the CL-016/CL-035 write-through lag) is reconciled: honor a terminal timeline
+// step over a stale non-terminal record step, scoped so a still-building replacement is
+// never dropped (ADD never retires here; REPLACE requires its target ACTIVE_OPERATIONAL).
+// Flag-gated default-off. Isolating it gives a future default-on flip — or the over-removal
+// fix — exactly one place to edit, instead of an inline clause in the precedence cascade.
+function shouldRetireOnTerminalTimelineDespiteStaleStep(
+  operationContext,
+  operationType,
+  workflowStepTerminalState,
+  latestTimelineStepTerminalState,
+) {
+  return (
+    isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() &&
+    workflowStepTerminalState === false &&
+    latestTimelineStepTerminalState === true &&
+    operationContext.latestTimelineInFlight !== true &&
+    operationType !== OperationType.ADD &&
+    (operationType !== OperationType.REPLACE ||
+      operationContext.targetVisibilityState ===
+        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL)
+  );
+}
+
 function isPriorityRecoveryOperationContextTerminal(operationContext) {
   if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
     return false;
@@ -509,14 +533,12 @@ function isPriorityRecoveryOperationContextTerminal(operationContext) {
       operationContext.latestTimelineStep,
     );
   if (
-    isPriorityRecoveryOpRetireOnTimelineRemovedEnabled() &&
-    workflowStepTerminalState === false &&
-    latestTimelineStepTerminalState === true &&
-    operationContext.latestTimelineInFlight !== true &&
-    operationType !== OperationType.ADD &&
-    (operationType !== OperationType.REPLACE ||
-      operationContext.targetVisibilityState ===
-        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL)
+    shouldRetireOnTerminalTimelineDespiteStaleStep(
+      operationContext,
+      operationType,
+      workflowStepTerminalState,
+      latestTimelineStepTerminalState,
+    )
   ) {
     return true;
   }
