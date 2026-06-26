@@ -44,27 +44,35 @@ fails it while the restored fix passes it — proven against the existing repro 
 `npm run model:invariants` still green. If no closed CL can be expressed as a
 re-entrant predicate, STOP and record why the standing-invariant form is not viable.
 
-## WS1 — Invariant declaration + status fold (Option C: detect & report only)
+## WS1 — Invariant declaration + status fold (Option C: detect & report only) — ✅ DONE
 
-Introduce the sealed `Invariant` declaration and the derived status projection. No
-auto-spawn, no triggers beyond explicit re-check. Read-only output.
+**Outcome (2026-06-26, commit `62d7eeff`):** `scripts/solve/invariant-liveness.js` evaluates an
+invariant's `liveEvidence` predicate and derives `UNGUARDED/HELD/BREACHED` as a fold over the
+Solver event log (via `store.appendEvent`/`readLog`; stream id `invariant-<id>`). New `solve
+invariants [--evaluate] [--json]` subcommand. Validator extended for the optional block. Behind
+default-off `LAGRANGE_STANDING_INVARIANTS`. **Live proof:** flag-on `--evaluate` → raft invariant
+**HELD** on clean HEAD; **BREACHED** end-to-end in an isolated worktree with the CL-041
+serialization reverted; flag-off inert. Unit 25/25, model:invariants + lint:scripts + cli +
+list-commands green.
 
-- [ ] Add the additive `liveEvidence` block to the WS0 invariant's existing
-      `architecture/contracts/invariants.json` entry (shape per design §4) — NOT a new
-      registry. Extend the `model:invariants` validator to accept the optional block.
-- [ ] Implement `liveEvidence.holdsWhen` evaluation by **reusing the existing `doneWhen`
-      evaluator** (Requirement 1.2) — no second evaluation path.
-- [ ] Implement status as a **fold over the Solver event log** (Requirement 2) —
-      `UNGUARDED/HELD/BREACHED`. No new authoritative store.
-- [ ] Add `solve.js status --invariants` (and/or a registry view) deriving status
-      like `report` does.
-- [ ] Decide granularity (per-CL vs per-owner-boundary) against the real predicate;
-      record the decision. Resolve the altitude-review unification question (§7).
+- [x] Add the additive `liveEvidence` block to the WS0 invariant's entry (done in WS0); extend
+      the `model:invariants` validator to validate the optional block's shape.
+- [x] Implement `liveEvidence.holdsWhen` evaluation reusing the `doneWhen` evaluator for the
+      `probe` kind; `repro`/`command` kinds run the referenced command (the WS0 evidence type).
+- [x] Implement status as a **fold over the Solver event log** — `UNGUARDED/HELD/BREACHED`, no
+      new store (status never persisted on the entry).
+- [x] Add the registry view: `solve invariants` (chose a dedicated subcommand over overloading
+      `status --invariants`, since invariants are not quest-scoped).
+- [x] **Granularity decision:** per-invariant (= per durable property, anchored to a CL/ADR),
+      NOT per-owner-boundary — keeps each `holdsWhen` sharp and falsifiable; the registry already
+      groups by `owner`/`boundary` for rollups. **Altitude-review unification:** deferred to a
+      WS4 follow-up — the live tier is the mechanical substrate the standing altitude review
+      (`architecture-altitude-review.md`) can later consume, but wiring it is out of WS1 scope.
 
 **doneWhen:** with the flag on, the WS0 invariant declares and evaluates to HELD on
 clean code and BREACHED on the reverted-fix branch, with status computed as an
 event-log fold and no new persistent store added; `--invariants` renders it. Flag
-off = zero behavior change (verified).
+off = zero behavior change (verified). ✓ ALL MET.
 
 ## WS2 — Trigger policy (`on-quest-closure` default)
 
@@ -133,3 +141,7 @@ boundary, the auto-spawn-budget interaction) are recorded there, not in this fil
   (HELD exit 0 / BREACHED exit 1) in an isolated worktree; `model:invariants` green. WS1
   unblocked (build the event-log fold + `status --invariants`, behind
   `LAGRANGE_STANDING_INVARIANTS`).
+- 2026-06-26 — **WS1 DONE** (commit `62d7eeff`). `invariant-liveness.js` + `solve invariants`
+  subcommand + validator extension; HELD/BREACHED fold over the event log, default-off. Live
+  HELD (clean) / BREACHED (reverted worktree) proven end-to-end. NEXT = WS2 (on-quest-closure
+  trigger + cost guard).
