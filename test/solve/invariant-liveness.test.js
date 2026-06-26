@@ -417,3 +417,46 @@ t.test('validator requires paths for on-touched-owner policy', (t) => {
     'missing paths is rejected');
   t.end();
 });
+
+// ---- Follow-on #4: local EvoClaw-style scorer ----
+
+import {
+  scoreInvariants, reproBackedCLs, invariantGuardedCL,
+} from '../../scripts/solve/invariant-score.js';
+
+t.test('reproBackedCLs and invariantGuardedCL read the real repro surface', (t) => {
+  const cls = reproBackedCLs(process.cwd());
+  t.ok(cls.has('CL-041') && cls.has('CL-040') && cls.has('CL-038'),
+    'known repro-backed CLs are detected');
+  t.equal(invariantGuardedCL({liveEvidence: {evidence: {ref: 'npm run repro -- CL-041'}}}), 'CL-041');
+  t.equal(invariantGuardedCL({liveEvidence: {evidence: {test: 'test/closure/CL-040.repro.test.js'}}}), 'CL-040');
+  t.equal(invariantGuardedCL({liveEvidence: {evidence: {}}}), null);
+  t.end();
+});
+
+t.test('scoreInvariants: flag gate + coverage/coherence shape', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const regPath = path.join(root, 'score-reg.json');
+  fs.writeFileSync(regPath, JSON.stringify({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'score-x', owner: 'o', boundary: 'b', kind: 'safety', statement: 's', formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'h', evidence: {kind: 'repro', ref: 'node -e "process.exit(0)"'},
+        trigger: {policy: 'on-quest-closure', cost: 'cheap'},
+      },
+    }],
+  }));
+
+  t.equal(scoreInvariants(root, {registry: regPath, evaluate: true}, {}).enabled, false,
+    'flag off => disabled');
+
+  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
+  const score = scoreInvariants(root, {registry: regPath, evaluate: true}, env);
+  t.equal(score.liveInvariants, 1);
+  t.equal(score.held, 1, 'evaluated to HELD');
+  t.equal(score.coherence, 1, 'coherence = held/live');
+  t.same(score.statuses, [{id: 'score-x', status: STATUS.HELD}]);
+  t.end();
+});

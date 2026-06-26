@@ -39,6 +39,7 @@ import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {runInvariantsCommand, triggerOnTouchedOwner} from './solve/invariant-liveness.js';
+import {scoreInvariants} from './solve/invariant-score.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -714,6 +715,26 @@ function changedFilesFromArgs(root, args) {
 }
 
 function cmdInvariants(root, args) {
+  // --score: local EvoClaw-style coverage/coherence over the repro-backed surface.
+  if (args.score) {
+    const result = scoreInvariants(root, {evaluate: Boolean(args.evaluate)});
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+    if (!result.enabled) {
+      process.stdout.write('standing invariants disabled — set LAGRANGE_STANDING_INVARIANTS=true to enable\n');
+      return;
+    }
+    const pct = (value) => (value === null ? 'n/a' : `${Math.round(value * 100)}%`);
+    process.stdout.write(
+      'standing-invariant score (local, EvoClaw-style — not the external benchmark):\n' +
+      `  coverage:  ${result.guardedReproBackedCLs}/${result.reproBackedCLs} repro-backed CLs guarded (${pct(result.coverage)})\n` +
+      `  coherence: ${result.held}/${result.liveInvariants} live invariants HELD (${pct(result.coherence)}) ` +
+      `[${result.breached} breached, ${result.unguarded} unguarded]\n` +
+      `  worklist (unguarded repro-backed CLs): ${result.unguardedReproBackedCLs.join(', ') || '(none)'}\n`);
+    return;
+  }
   // on-touched-owner trigger: re-verify invariants whose paths intersect changed files.
   const changedFiles = changedFilesFromArgs(root, args);
   if (changedFiles) {
