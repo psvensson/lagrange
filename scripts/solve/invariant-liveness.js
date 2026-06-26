@@ -6,11 +6,9 @@
 // repro/command, or a probe), records the verdict as an event through the Solver
 // event-log store, and derives HELD/BREACHED/UNGUARDED as a FOLD over that log.
 // Status is never stored on the entry and there is no new store — the only
-// persisted side effect is an append to the Solver event log.
-//
-// Gated behind LAGRANGE_STANDING_INVARIANTS (default-ON since 2026-06-26):
-// LAGRANGE_STANDING_INVARIANTS=false => inert, no evaluation, no writes, no
-// behavior change.
+// persisted side effect is an append to the Solver event log. Always active
+// (unconditional): quest closures evaluate in-scope invariants and auto-spawn a
+// reopen-budget-bounded restoration Quest on a HELD->BREACHED breach.
 
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -26,17 +24,9 @@ import {
 // Re-export the leaf status surface so callers keep importing it from here.
 export {STATUS, invariantStreamId, deriveStatus};
 
-export const STANDING_INVARIANTS_FLAG = 'LAGRANGE_STANDING_INVARIANTS';
 const BREACH_EVENT = 'invariant.breach';
 const RESTORATION_LINKED_EVENT = 'invariant.restoration-linked';
 const RESTORATION_SKIPPED_EVENT = 'invariant.restoration-skipped';
-
-export function isStandingInvariantsEnabled(env = process.env) {
-  // Promoted to default-ON (2026-06-26) after WS0–WS4 + follow-ons proved out:
-  // all live predicates are cheap, the trigger is fail-safe, and auto-spawn is
-  // reopen-budget bounded. Set LAGRANGE_STANDING_INVARIANTS=false to opt out.
-  return env[STANDING_INVARIANTS_FLAG] !== 'false';
-}
 
 // Registry entries that opted into Tier-2 live verification.
 export function liveInvariants(registry) {
@@ -139,7 +129,7 @@ export function shouldSpawnRestoration(root, invariant) {
 
 // On HELD -> BREACHED: record the breach falsifier, then (when autoSpawn is on and
 // the guard allows) link a restoration Quest. Never throws.
-export function reactToBreach(root, invariant, transition, env = process.env) {
+export function reactToBreach(root, invariant, transition) {
   appendEvent(root, invariantStreamId(invariant.id), {
     type: BREACH_EVENT,
     invariant: invariant.id,
@@ -147,7 +137,6 @@ export function reactToBreach(root, invariant, transition, env = process.env) {
     to: transition.to,
     evidenceRef: invariant.liveEvidence?.evidence?.ref || null,
   });
-  if (!isStandingInvariantsEnabled(env)) return;
   if (!invariant.liveEvidence?.restoration?.autoSpawn) return;
   const decision = shouldSpawnRestoration(root, invariant);
   if (!decision.spawn) {
@@ -165,12 +154,12 @@ export function reactToBreach(root, invariant, transition, env = process.env) {
 
 // Evaluate one invariant, record the verdict, and react to a fresh breach. Returns
 // the {from,to} transition. Shared by the trigger and the `invariants` command.
-export function evaluateAndRecord(root, invariant, env = process.env) {
+export function evaluateAndRecord(root, invariant) {
   const before = deriveStatus(root, invariant).status;
   recordEvaluation(root, invariant, evaluateInvariant(invariant, {root}));
   const after = deriveStatus(root, invariant).status;
   if (before !== STATUS.BREACHED && after === STATUS.BREACHED) {
-    reactToBreach(root, invariant, {from: before, to: after}, env);
+    reactToBreach(root, invariant, {from: before, to: after});
   }
   return {id: invariant.id, from: before, to: after};
 }
@@ -215,8 +204,7 @@ function scopeMatches(invariant, scopes) {
 // the status transitions. Expensive per-event predicates are skipped (guarded);
 // inert when the flag is off. Never throws on a single invariant's failure.
 export function triggerOnQuestClosure(
-  root, {scopes = [], registry: registryPath} = {}, env = process.env) {
-  if (!isStandingInvariantsEnabled(env)) return {fired: false, transitions: []};
+  root, {scopes = [], registry: registryPath} = {}) {
   const {registry} = loadInvariantRegistry(registryPath);
   const transitions = [];
   for (const invariant of liveInvariants(registry)) {
@@ -225,7 +213,7 @@ export function triggerOnQuestClosure(
     if (triggerCostViolation(invariant)) continue;
     if (!scopeMatches(invariant, scopes)) continue;
     try {
-      transitions.push(evaluateAndRecord(root, invariant, env));
+      transitions.push(evaluateAndRecord(root, invariant));
     } catch {
       continue;
     }
@@ -246,8 +234,7 @@ export function pathTouchesInvariant(invariant, changedFiles) {
 // declared paths intersect the changed files. Cost guard applies (per-event policy);
 // inert when the flag is off. Never throws on a single invariant's failure.
 export function triggerOnTouchedOwner(
-  root, {changedFiles = [], registry: registryPath} = {}, env = process.env) {
-  if (!isStandingInvariantsEnabled(env)) return {fired: false, transitions: []};
+  root, {changedFiles = [], registry: registryPath} = {}) {
   const {registry} = loadInvariantRegistry(registryPath);
   const transitions = [];
   for (const invariant of liveInvariants(registry)) {
@@ -255,7 +242,7 @@ export function triggerOnTouchedOwner(
     if (triggerCostViolation(invariant)) continue;
     if (!pathTouchesInvariant(invariant, changedFiles)) continue;
     try {
-      transitions.push(evaluateAndRecord(root, invariant, env));
+      transitions.push(evaluateAndRecord(root, invariant));
     } catch {
       continue;
     }
@@ -267,8 +254,7 @@ export function triggerOnTouchedOwner(
 // that are NOT currently HELD (drift signals the framing review should weigh). Reads
 // the folded status only — no evaluation, no writes. Returns '' when the flag is off
 // or every live invariant is HELD, so callers can unconditionally append it.
-export function altitudeInvariantDigest(root, env = process.env) {
-  if (!isStandingInvariantsEnabled(env)) return '';
+export function altitudeInvariantDigest(root) {
   const {registry} = loadInvariantRegistry();
   const drifting = liveInvariants(registry)
     .map((invariant) => deriveStatus(root, invariant))
@@ -284,21 +270,14 @@ export function altitudeInvariantDigest(root, env = process.env) {
 
 // The `solve invariants` command body. Default: render derived status from the
 // event log. With `--evaluate`: run each invariant's predicate first, record the
-// verdict, then render. Flag off: inert.
-export function runInvariantsCommand(root, args = {}, env = process.env) {
-  if (!isStandingInvariantsEnabled(env)) {
-    return {
-      enabled: false,
-      note: `standing invariants disabled — set ${STANDING_INVARIANTS_FLAG}=true to enable`,
-      invariants: [],
-    };
-  }
+// verdict, then render.
+export function runInvariantsCommand(root, args = {}) {
   const {registry} = loadInvariantRegistry(args.registry);
   const entries = liveInvariants(registry);
   const evaluateNow = Boolean(args.evaluate);
   const invariants = entries.map((invariant) => {
     if (evaluateNow) {
-      evaluateAndRecord(root, invariant, env);
+      evaluateAndRecord(root, invariant);
     }
     const derived = deriveStatus(root, invariant);
     const live = invariant.liveEvidence || {};

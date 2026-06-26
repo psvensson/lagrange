@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import {loadInvariantRegistry} from '../check-invariants.js';
 import {
-  liveInvariants, evaluateAndRecord, deriveStatus, isStandingInvariantsEnabled, STATUS,
+  liveInvariants, evaluateAndRecord, deriveStatus, STATUS,
 } from './invariant-liveness.js';
 
 const CL_RE = /CL-\d+/i;
@@ -24,11 +24,8 @@ const CL_RE = /CL-\d+/i;
 // artifact the next session/agent can pick up, without an external memory service.
 // A real Letta/Mem0 backend would consume the same scoreInvariants() output; wiring an
 // external service is intentionally out of scope (see memory-graft-note.md).
-export function renderInvariantBoard(root, {registry} = {}, env = process.env) {
-  const score = scoreInvariants(root, {registry, evaluate: false}, env);
-  if (!score.enabled) {
-    return '# Standing invariants\n\n_Disabled — set `LAGRANGE_STANDING_INVARIANTS=true`._\n';
-  }
+export function renderInvariantBoard(root, {registry} = {}) {
+  const score = scoreInvariants(root, {registry, evaluate: false});
   const pct = (value) => (value === null ? 'n/a' : `${Math.round(value * 100)}%`);
   const rows = score.statuses
     .map((status) => `| ${status.id} | ${status.status} |`)
@@ -37,7 +34,7 @@ export function renderInvariantBoard(root, {registry} = {}, env = process.env) {
     '# Standing invariants (generated projection)',
     '',
     '_Derived from the Solver event log via `solve invariants`. Regenerate with',
-    '`LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants --export`._',
+    '`node scripts/solve.js invariants --export`._',
     '',
     `- coverage: ${score.guardedReproBackedCLs}/${score.reproBackedCLs} repro-backed CLs guarded (${pct(score.coverage)})`,
     `- coherence: ${score.held}/${score.liveInvariants} live invariants HELD (${pct(score.coherence)})`,
@@ -77,19 +74,15 @@ export function invariantGuardedCL(invariant) {
 }
 
 // Score the standing tier. With evaluate=true, re-verifies each invariant first;
-// otherwise scores the folded status. Inert (enabled:false) when the flag is off.
-export function scoreInvariants(root, {registry: registryPath, evaluate = false} = {},
-  env = process.env) {
-  if (!isStandingInvariantsEnabled(env)) {
-    return {enabled: false};
-  }
+// otherwise scores the folded status.
+export function scoreInvariants(root, {registry: registryPath, evaluate = false} = {}) {
   const {registry} = loadInvariantRegistry(registryPath);
   const live = liveInvariants(registry);
   const guarded = new Set();
   const statuses = live.map((invariant) => {
     if (evaluate) {
       try {
-        evaluateAndRecord(root, invariant, env);
+        evaluateAndRecord(root, invariant);
       } catch {
         // a single invariant's evaluation failure must not abort scoring
       }

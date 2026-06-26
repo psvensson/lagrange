@@ -701,8 +701,7 @@ function cmdHandoff(root, args) {
 
 // Tier-2 live-evidence verification of architecture invariants (standing dual of
 // doneWhen). `--evaluate` runs each invariant's predicate and records the verdict;
-// otherwise status is derived from the event log. Gated by
-// LAGRANGE_STANDING_INVARIANTS (default-ON; set =false to opt out).
+// otherwise status is derived from the event log. Always active (unconditional).
 function changedFilesFromArgs(root, args) {
   if (typeof args.changed === 'string') {
     return args.changed.split(',').map((file) => file.trim()).filter(Boolean);
@@ -732,10 +731,6 @@ function cmdInvariants(root, args) {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }
-    if (!result.enabled) {
-      process.stdout.write('standing invariants disabled — set LAGRANGE_STANDING_INVARIANTS=true to enable\n');
-      return;
-    }
     const pct = (value) => (value === null ? 'n/a' : `${Math.round(value * 100)}%`);
     process.stdout.write(
       'standing-invariant score (local, EvoClaw-style — not the external benchmark):\n' +
@@ -753,10 +748,6 @@ function cmdInvariants(root, args) {
       process.stdout.write(`${JSON.stringify(fired, null, 2)}\n`);
       return;
     }
-    if (!fired.fired) {
-      process.stdout.write('standing invariants disabled — set LAGRANGE_STANDING_INVARIANTS=true to enable\n');
-      return;
-    }
     const lines = fired.transitions.map((t) => `${t.from} -> ${t.to}  ${t.id}`);
     process.stdout.write(
       `on-touched-owner re-verification (${fired.transitions.length} invariant(s)):\n` +
@@ -766,10 +757,6 @@ function cmdInvariants(root, args) {
   const out = runInvariantsCommand(root, args);
   if (args.json) {
     process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
-    return;
-  }
-  if (!out.enabled) {
-    process.stdout.write(`${out.note}\n`);
     return;
   }
   if (out.invariants.length === 0) {

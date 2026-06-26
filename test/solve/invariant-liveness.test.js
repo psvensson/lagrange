@@ -5,7 +5,6 @@ import path from 'node:path';
 
 import {
   STATUS,
-  isStandingInvariantsEnabled,
   invariantStreamId,
   liveInvariants,
   evaluateInvariant,
@@ -34,15 +33,6 @@ function tmpRoot() {
 }
 
 const RAFT = {id: 'raft-x', owner: 'o', boundary: 'b', kind: 'safety'};
-
-t.test('flag is default-ON and only =false opts out', (t) => {
-  t.equal(isStandingInvariantsEnabled({}), true);
-  t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: 'false'}), false);
-  t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: 'true'}), true);
-  // any non-'false' value keeps it enabled (default-on semantics).
-  t.equal(isStandingInvariantsEnabled({LAGRANGE_STANDING_INVARIANTS: ''}), true);
-  t.end();
-});
 
 t.test('status folds over the event log: none=>UNGUARDED, latest verdict wins', (t) => {
   const root = tmpRoot();
@@ -96,7 +86,7 @@ t.test('invariantStreamId namespaces away from quest streams', (t) => {
   t.end();
 });
 
-t.test('runInvariantsCommand: flag off is inert (no writes), flag on evaluates + folds', (t) => {
+t.test('runInvariantsCommand: evaluates + folds', (t) => {
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
 
@@ -115,22 +105,14 @@ t.test('runInvariantsCommand: flag off is inert (no writes), flag on evaluates +
     }],
   }));
 
-  const off = runInvariantsCommand(root, {registry: regPath, evaluate: true},
-    {LAGRANGE_STANDING_INVARIANTS: 'false'});
-  t.equal(off.enabled, false, 'flag off => disabled');
-  t.same(off.invariants, [], 'flag off => no invariants rendered');
-  t.notOk(fs.existsSync(path.join(root, 'solve', 'log', 'invariant-temp-ok.ndjson')),
-    'flag off => nothing written');
-
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
-  const on = runInvariantsCommand(root, {registry: regPath, evaluate: true}, env);
+  const on = runInvariantsCommand(root, {registry: regPath, evaluate: true});
   t.equal(on.enabled, true);
   t.equal(on.invariants.length, 1);
   t.equal(on.invariants[0].status, STATUS.HELD, 'evaluated to HELD');
   t.equal(on.invariants[0].cost, 'cheap');
 
   // Re-run without --evaluate: status is derived from the recorded event.
-  const derived = runInvariantsCommand(root, {registry: regPath}, env);
+  const derived = runInvariantsCommand(root, {registry: regPath});
   t.equal(derived.invariants[0].status, STATUS.HELD, 'status persists via the fold');
   t.equal(derived.evaluated, false);
   t.end();
@@ -166,9 +148,8 @@ t.test('on-quest-closure trigger fires for matching scope, records a transition'
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const reg = writeTrigReg(root, {scope: 'owner:raft'});
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
 
-  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg}, env);
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg});
   t.equal(out.fired, true);
   t.same(out.transitions, [{id: 'trig-x', from: STATUS.UNGUARDED, to: STATUS.HELD}],
     'UNGUARDED -> HELD recorded on closure');
@@ -179,23 +160,11 @@ t.test('trigger skips when quest scope does not intersect the invariant scope', 
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const reg = writeTrigReg(root, {scope: 'owner:raft'});
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
 
-  const out = triggerOnQuestClosure(root, {scopes: ['owner:other'], registry: reg}, env);
+  const out = triggerOnQuestClosure(root, {scopes: ['owner:other'], registry: reg});
   t.same(out.transitions, [], 'no transition for non-matching scope');
   t.notOk(fs.existsSync(path.join(root, 'solve', 'log', 'invariant-trig-x.ndjson')),
     'nothing recorded for non-matching scope');
-  t.end();
-});
-
-t.test('flag off => trigger does not fire', (t) => {
-  const root = tmpRoot();
-  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
-  const reg = writeTrigReg(root, {scope: 'owner:raft'});
-  const out = triggerOnQuestClosure(root, {scopes: ['owner:raft'], registry: reg},
-    {LAGRANGE_STANDING_INVARIANTS: 'false'});
-  t.equal(out.fired, false);
-  t.same(out.transitions, []);
   t.end();
 });
 
@@ -258,10 +227,9 @@ t.test('evaluateAndRecord on a failing predicate => BREACHED and a breach falsif
 t.test('autoSpawn links a restoration Quest whose doneWhen is invariantHeld', (t) => {
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
   const inv = invariant('rs-x', {ref: FAIL, autoSpawn: true});
 
-  evaluateAndRecord(root, inv, env);
+  evaluateAndRecord(root, inv);
   const questPath = questFilePath(root, restorationQuestId('rs-x'));
   t.ok(fs.existsSync(questPath), 'restoration Quest scaffolded');
   const quest = JSON.parse(fs.readFileSync(questPath, 'utf8'));
@@ -272,7 +240,7 @@ t.test('autoSpawn links a restoration Quest whose doneWhen is invariantHeld', (t
     'restoration-linked recorded');
 
   // Re-breach while the Quest is open: no duplicate spawn (single-open guard).
-  evaluateAndRecord(root, inv, env);
+  evaluateAndRecord(root, inv);
   const links = readLog(root, 'invariant-rs-x')
     .filter((e) => e.type === 'invariant.restoration-linked').length;
   t.equal(links, 1, 're-breach does not spawn a second restoration Quest');
@@ -301,13 +269,12 @@ t.test('shouldSpawnRestoration guards: open Quest and reopen budget', (t) => {
 t.test('Req 5.3: status returns to HELD only via re-evaluation, not Quest closure', (t) => {
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
 
-  evaluateAndRecord(root, invariant('h-x', {ref: FAIL, autoSpawn: true}), env);
+  evaluateAndRecord(root, invariant('h-x', {ref: FAIL, autoSpawn: true}));
   t.equal(deriveStatus(root, {id: 'h-x'}).status, STATUS.BREACHED, 'breached');
 
   // The restoration Quest existing/closing does NOT set HELD; a passing re-eval does.
-  evaluateAndRecord(root, invariant('h-x', {ref: PASS, autoSpawn: true}), env);
+  evaluateAndRecord(root, invariant('h-x', {ref: PASS, autoSpawn: true}));
   t.equal(deriveStatus(root, {id: 'h-x'}).status, STATUS.HELD, 're-eval restores HELD');
   t.end();
 });
@@ -339,20 +306,16 @@ t.test('invariantHeld probe is done iff the folded status is HELD', (t) => {
 
 import {altitudeInvariantDigest} from '../../scripts/solve/invariant-liveness.js';
 
-t.test('altitudeInvariantDigest: empty when flag off; surfaces non-HELD drift when on', (t) => {
+t.test('altitudeInvariantDigest: surfaces non-HELD drift', (t) => {
   const root = tmpRoot(); // fresh root => the real registry's live invariants read as UNGUARDED
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
 
-  t.equal(altitudeInvariantDigest(root, {LAGRANGE_STANDING_INVARIANTS: 'false'}), '',
-    'flag off => empty (no behavior change)');
-
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
-  const unguarded = altitudeInvariantDigest(root, env);
+  const unguarded = altitudeInvariantDigest(root);
   t.match(unguarded, /UNGUARDED/, 'flag on, no evals => surfaces UNGUARDED drift');
 
   // Record a real breach for a known registry invariant; it must appear as BREACHED.
   recordEvaluation(root, {id: 'raft-election-safety-one-vote-per-term'}, {verdict: 'fail'});
-  const breached = altitudeInvariantDigest(root, env);
+  const breached = altitudeInvariantDigest(root);
   t.match(breached, /raft-election-safety-one-vote-per-term is BREACHED/,
     'a breached invariant is surfaced as a frame signal');
   t.end();
@@ -393,18 +356,13 @@ t.test('on-touched-owner trigger fires only when a changed file is in scope', (t
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const reg = writeTouchReg(root, ['src/raft/']);
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
 
-  const miss = triggerOnTouchedOwner(root, {changedFiles: ['src/rebalancer/y.js'], registry: reg}, env);
+  const miss = triggerOnTouchedOwner(root, {changedFiles: ['src/rebalancer/y.js'], registry: reg});
   t.same(miss.transitions, [], 'no matching changed file => no re-verification');
 
-  const hit = triggerOnTouchedOwner(root, {changedFiles: ['src/raft/liferaft.js'], registry: reg}, env);
+  const hit = triggerOnTouchedOwner(root, {changedFiles: ['src/raft/liferaft.js'], registry: reg});
   t.same(hit.transitions, [{id: 'touch-x', from: STATUS.UNGUARDED, to: STATUS.HELD}],
     'matching changed file => invariant re-verified');
-
-  t.equal(triggerOnTouchedOwner(root, {changedFiles: ['src/raft/x.js'], registry: reg},
-    {LAGRANGE_STANDING_INVARIANTS: 'false'}).fired,
-    false, 'flag off => does not fire');
   t.end();
 });
 
@@ -455,12 +413,7 @@ t.test('scoreInvariants: flag gate + coverage/coherence shape', (t) => {
     }],
   }));
 
-  t.equal(scoreInvariants(root, {registry: regPath, evaluate: true},
-    {LAGRANGE_STANDING_INVARIANTS: 'false'}).enabled, false,
-    'flag off => disabled');
-
-  const env = {LAGRANGE_STANDING_INVARIANTS: 'true'};
-  const score = scoreInvariants(root, {registry: regPath, evaluate: true}, env);
+  const score = scoreInvariants(root, {registry: regPath, evaluate: true});
   t.equal(score.liveInvariants, 1);
   t.equal(score.held, 1, 'evaluated to HELD');
   t.equal(score.coherence, 1, 'coherence = held/live');
@@ -472,7 +425,7 @@ t.test('scoreInvariants: flag gate + coverage/coherence shape', (t) => {
 
 import {renderInvariantBoard} from '../../scripts/solve/invariant-score.js';
 
-t.test('renderInvariantBoard: disabled when flag off; renders status when on', (t) => {
+t.test('renderInvariantBoard: renders status', (t) => {
   const root = tmpRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const regPath = path.join(root, 'board-reg.json');
@@ -487,10 +440,7 @@ t.test('renderInvariantBoard: disabled when flag off; renders status when on', (
     }],
   }));
 
-  t.match(renderInvariantBoard(root, {registry: regPath}, {LAGRANGE_STANDING_INVARIANTS: 'false'}),
-    /Disabled/, 'flag off => disabled board');
-
-  const board = renderInvariantBoard(root, {registry: regPath}, {LAGRANGE_STANDING_INVARIANTS: 'true'});
+  const board = renderInvariantBoard(root, {registry: regPath});
   t.match(board, /board-x \| UNGUARDED/, 'renders the invariant row');
   t.match(board, /coverage:/, 'includes coverage summary');
   t.end();
