@@ -90,6 +90,11 @@ This applies to ad-hoc work just as much as to Quests; for Quests the Solver's
 post-audit commit handoff already does it. Work on `main` (the user's standing
 directive), and end commit messages with the configured co-author trailer.
 
+The push exception is Quest-scoped: the Solver's Quest loop is durably authorized
+to auto-push its own scope-clean work (suppressible with `--no-push`), but for
+ad-hoc, non-Quest work a never-before-authorized push still pauses — commit, do not
+push, unless durably authorized. See solver-quests.md "Regular Commit And Push".
+
 ## Default Posture: Parallelism
 
 When sub-tasks are independent, run them concurrently rather than in sequence:

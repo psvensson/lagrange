@@ -21,7 +21,10 @@ template's front-matter for `domain` or `strength`:
 - **domain** comes from the `sources[]` config entry that `promote-finding` appends
   (that is why `--domain` is required at promotion time).
 - **strength** is inferred from the body text — the statement MUST contain a
-  normative keyword (`MUST`, `MUST NOT`, `SHOULD`, `SHALL`, `NEVER`, `MAY`).
+  normative keyword. The generator (`inferStrength` in
+  `scripts/generate-steering-llm-pack.js`) recognizes: `MUST`, `MUST NOT`, `SHALL`,
+  `SHALL NOT`, `NEVER`, `DO NOT`, `FORBIDDEN`, `REQUIRED`, `SHOULD`, `MAY`, and a
+  sentence-leading `ONLY`.
   A body with no such keyword is classified `info` and will NOT surface as a rule.
 
 So: write the body as a single normative sentence. The front-matter `source:` line

@@ -18,7 +18,9 @@ last_reviewed: 2026-06-01
 Every non-trivial task follows this lifecycle:
 
 1. **Author or select a Quest.** Use `node scripts/solve.js new --id <id>` when
-   no existing Quest matches the requested outcome.
+   no existing Quest matches the requested outcome. Omitting `--class` defaults to
+   `product` (a MEASURED goal); pass `--class process` only for decision/scaffolding
+   Quests that close on a recorded decision rather than a measured artifact.
 2. **Seal the goal.** Define `doneWhen` before implementation begins. Do not
    change it after the first attempt has been recorded.
 3. **Pick the execution mode.** Default to autonomous

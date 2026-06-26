@@ -35,7 +35,10 @@ Tests must never be skipped. Every test that exists must run and pass.
 - **Do not use** `.skip()`, `skip:`, `xit()`, `xdescribe()`, or any skip mechanism
 - **Do not comment out** tests to avoid running them
 - If a test is failing, fix the code or the test - do not skip it
-- If a test is no longer relevant, remove it entirely rather than skipping
+- If a test is no longer relevant, remove it entirely rather than skipping. "No
+  longer relevant" means the behavior it covered was *intentionally removed* — a
+  test that fails because behavior regressed MUST be fixed, never deleted to make
+  the suite green.
 
 ## No Test-Only Code Paths in Production Code
 

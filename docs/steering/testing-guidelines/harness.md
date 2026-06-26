@@ -106,6 +106,11 @@ When running tests during task execution:
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
 4. **Use test filtering** - Use patterns like `npm test -- --grep "pattern"` or similar to filter tests
 
+This targeted-run guidance governs *iteration*. It does NOT relax the closure bar:
+before closing a Quest or task, the static-guardrail and owner-boundary audits in
+[`proof-ladders.md`](proof-ladders.md) remain mandatory even when the focused unit
+and integration tests pass.
+
 ## When to Run Full Test Suite
 
 Only run the complete test suite (`npm test`) at:

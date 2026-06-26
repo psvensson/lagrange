@@ -14,7 +14,7 @@ Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle 
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
-> **Priority subset — not the full corpus.** This pack lists only the highest-priority architecture rules (capped per `maxRules` in `llm-pack.config.json`). For every architecture rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain architecture`.
+> **Priority subset — showing 40 of 105 architecture rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 65 lower-priority rules are omitted. For every architecture rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain architecture`.
 
 ## Rules
 
@@ -27,7 +27,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 5. [ARCH-0017] Control-plane pressure must not cause query/data-plane correctness failures. _(see system-guidelines.md:281)_
 6. [ARCH-0018] Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses. _(see system-guidelines.md:297)_
 7. [ARCH-0020] Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments. _(see system-guidelines.md:190)_
-8. [ARCH-0021] Non-forced readers do not repair authoritative state on the hot path. _(see system-guidelines.md:217)_
+8. [ARCH-0021] Non-forced readers do not repair authoritative state on the hot path. _(see system-guidelines.md:218)_
 9. [ARCH-0027] Do not pre-slice candidates to the requested replica count before admission. _(see runtime-contracts.md:331)_
 10. [ARCH-0034] Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint. _(see system-guidelines.md:352)_
 11. [ARCH-0036] During splits, moves, and leader elections, queries may be slower but must not fail because topology is transient. _(see runtime-contracts.md:400)_
@@ -46,7 +46,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 21. [ARCH-0025] Participant executors emit outcomes and do not persist owner-managed phase transitions directly. _(see runtime-contracts.md:270)_
 22. [ARCH-0029] Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling created by a phase must transfer to an explicit runtime owner before the phase completes. _(see system-guidelines.md:229)_
 23. [ARCH-0030] Quest validation must prove the owner path and affected tail consumers. _(see system-guidelines.md:338)_
-24. [ARCH-0035] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes. _(see runtime-contracts.md:210)_
+24. [ARCH-0035] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes. _(see runtime-contracts.md:211)_
 25. [ARCH-0038] Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource MUST have one semantic owner. _(see system-guidelines.md:101)_
 26. [ARCH-0040] Cache divergence, stale reads, missing rows, and repair needs must surface as typed owner outcomes or diagnostics. _(see system-guidelines.md:217)_
 
@@ -55,7 +55,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 27. [ARCH-0008] INSERT OR REPLACE and full-row replacement are forbidden for steady-state lifecycle/status mutation of existing system rows. _(see system-guidelines.md:207)_
 28. [ARCH-0009] Bootstrap shortcuts are phase-scoped exceptions only; they must not remain reachable from steady-state runtime code. _(see system-guidelines.md:214)_
 29. [ARCH-0011] Phase completion removes temporary scaffolding only, never the sole live dissemination, observation, admission, or repair path. _(see system-guidelines.md:239)_
-30. [ARCH-0022] Steady-state correctness must not depend on phase-owned wiring after phase completion. _(see system-guidelines.md:223)_
+30. [ARCH-0022] Steady-state correctness must not depend on phase-owned wiring after phase completion. _(see system-guidelines.md:224)_
 
 ### Readiness & Health Contracts
 

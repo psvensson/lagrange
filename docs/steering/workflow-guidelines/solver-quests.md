@@ -192,7 +192,12 @@ flush still commits).
 
 For the always-load commit-on-completion default — which also covers ad-hoc,
 non-Quest work (finished work is committed, not left pending) — see core.md
-"Default Posture: Commit On Completion".
+"Default Posture: Commit On Completion". Note the divergence on **push**: this
+Solver Quest-loop auto-push is durably pre-authorized handoff behavior, suppressible
+with `--no-push`/`SOLVER_NO_PUSH=1`. For ad-hoc, non-Quest work the opposite holds —
+a never-before-authorized push remains an Authorization stop-trigger and is NOT
+performed automatically. The Quest loop is the authorized exception, not a relaxation
+of the ad-hoc default.
 
 ## Convergence Guards
 
@@ -382,18 +387,27 @@ only where it removes repeated local patching:
 
 ## Attempt Flow
 
+Autonomous `run` is the default posture for an agent; supervised `step` is the
+human-paced path. Reach for `step` only for human-paced or exploratory work — an
+autonomous agent should almost always use `run`.
+
+For autonomous work:
+
+```sh
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+```
+
+`--keep-alive` is required for an autonomous agent: without it, `run` returns at the
+first NON-terminal stop (e.g. MAX_CYCLES, THEORY_REQUIRED) instead of driving on,
+which reads as a stall. `--max` caps cycles per run; reaching it raises the
+resumable MAX_CYCLES gate, not a terminal closure.
+
 For supervised work:
 
 1. Do the work and rerun the relevant harness/probe.
 2. `node scripts/solve.js step --id <id> --commit --changeRef diff:<path> --summary "<hypothesis>"`
    measures, validates the attempt, updates the strategy ladder, and records the log
    event synchronously without intermediate pending files or pauses.
-
-For autonomous work:
-
-```sh
-node scripts/solve.js run --id <id> --executor agent --yes
-```
 
 The agent executor writes a request dossier, runs the configured command, and
 reads back `{changeRef, summary, notes?}`. The agent reports only what changed.
@@ -776,6 +790,11 @@ never closes a quest, only honest SOLVED / EXHAUSTED do. It is model/CLI-agnosti
 it only re-invokes the same executor through the generic file contract.
 
 ## Known System-Theory Hypothesis (rolling-restart)
+
+> **Illustrative example — may be stale, not policy.** The following is a concrete
+> worked example of framing a system theory, tied to one live Quest. It is a
+> hypothesis-to-validate, not a steering rule; verify it against a current measured
+> run before relying on it, and expect it to drift as that Quest progresses.
 
 For the rolling-restart core-stability quest, repeated coupled-invariant
 oscillation (rr-D) between the `publication_converged` / `priority_spread_settled`

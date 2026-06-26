@@ -21,7 +21,7 @@ any distributed-harness or convergence work:
   deterministically in-process BEFORE changing code — build a targeted or
   fault-injected repro at the layer where the invariant is produced (see the
   reproduced-before-fix rule in
-  [`closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
+  [`closure-grammar.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
   and the substrate map in
   [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
   The docker statistical gate (`scripts/rolling-restart-stat-gate.sh`) is
@@ -54,10 +54,10 @@ any distributed-harness or convergence work:
   blockers are MASKED behind today's dominant reason, the peel-order, and emerging
   candidates — run `npm run analyze:latent-blockers` over the whole report corpus
   (the deterministic backbone of the latent-blocker census;
-  [`solve/epics/latent-convergence-blocker-census.md`](../epics/latent-convergence-blocker-census.md)).
+  [`solve/epics/latent-convergence-blocker-census.md`](../../solve/epics/latent-convergence-blocker-census.md)).
   Open raw ndjson only after an analyzer has named the owner/edge.
 - **Distributed blockers are tracked one invariant at a time.** Follow
-  [`solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
+  [`solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file
   under `closure-ledger/CL-###.md`; `closure-ledger.md` is the index.
   - **…but one-invariant-at-a-time fails when the invariants are COUPLED.** If

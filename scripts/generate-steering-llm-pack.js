@@ -317,6 +317,55 @@ function splitNormativeSentences(paragraph) {
   return [];
 }
 
+// Map each emitted normative sentence to the physical source line where it begins,
+// so two distinct rules drawn from the same multi-sentence paragraph cite distinct
+// lines instead of both citing the paragraph's first line. physicalLines are the raw
+// source lines composing the paragraph in order; firstLineNumber is the 1-based line
+// number of physicalLines[0]. Falls back to firstLineNumber when a sentence cannot be
+// located (e.g. text reshaped by inline-markdown stripping).
+function attributeSentenceLines(sentences, physicalLines, firstLineNumber) {
+  const stream = [];
+  physicalLines.forEach((raw, offset) => {
+    const words = normalizeWhitespace(stripInlineMarkdown(raw))
+      .toLowerCase()
+      .split(LOCAL_STR_SPACE)
+      .filter(Boolean);
+    for (const word of words) {
+      stream.push({word, line: firstLineNumber + offset});
+    }
+  });
+  let pointer = LOCAL_NUM_ZERO;
+  return sentences.map((sentence) => {
+    const words = normalizeWhitespace(stripInlineMarkdown(sentence))
+      .toLowerCase()
+      .split(LOCAL_STR_SPACE)
+      .filter(Boolean);
+    if (words.length === LOCAL_NUM_ZERO) {
+      return firstLineNumber;
+    }
+    const needle = words.slice(LOCAL_NUM_ZERO, Math.min(LOCAL_NUM_FOUR, words.length));
+    let matchIndex = -LOCAL_NUM_ONE;
+    for (let i = pointer; i + needle.length <= stream.length; i++) {
+      let matched = true;
+      for (let j = LOCAL_NUM_ZERO; j < needle.length; j++) {
+        if (stream[i + j].word !== needle[j]) {
+          matched = false;
+          break;
+        }
+      }
+      if (matched) {
+        matchIndex = i;
+        break;
+      }
+    }
+    if (matchIndex < LOCAL_NUM_ZERO) {
+      return firstLineNumber;
+    }
+    pointer = matchIndex + words.length;
+    return stream[matchIndex].line;
+  });
+}
+
 function scoreCandidate(candidate) {
   const strength = candidate.strength;
   let score = Number(candidate.sourcePriority || LOCAL_NUM_ZERO);
@@ -589,6 +638,9 @@ function parseMarkdownCandidates(content, source = {}) {
       cursor += LOCAL_NUM_ONE;
     }
 
+    const baseParagraph = paragraph;
+    const baseParagraphLines = lines.slice(index, cursor);
+
     const expandedRule = appendChildBulletsForParentRule(
       paragraph,
       lines,
@@ -610,17 +662,23 @@ function parseMarkdownCandidates(content, source = {}) {
     }
 
     const sentences = splitNormativeSentences(paragraph);
-    for (const sentence of sentences) {
+    // When the paragraph yields more than one rule and was not reshaped by
+    // child-bullet expansion, attribute each sentence to its own source line so
+    // distinct rules from one paragraph cite distinct lines (not all the first line).
+    const sentenceLines = (paragraph === baseParagraph && sentences.length > LOCAL_NUM_ONE) ?
+      attributeSentenceLines(sentences, baseParagraphLines, index + LOCAL_NUM_ONE) :
+      null;
+    sentences.forEach((sentence, sentenceIndex) => {
       pushCandidate(candidates, {
         text: sentence,
         domain: source.domain,
         sourceFile: source.file,
         sourcePriority: source.priority,
-        line: index + LOCAL_NUM_ONE,
+        line: sentenceLines ? sentenceLines[sentenceIndex] : index + LOCAL_NUM_ONE,
         section: sectionPathFromStack(sectionStack),
         kind: LOCAL_STR_PARAGRAPH,
       });
-    }
+    });
 
     index = cursor - LOCAL_NUM_ONE;
   }
@@ -1005,8 +1063,8 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
     'Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.',
     '',
     (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
-      `> **Priority subset — not the full corpus.** This pack lists only the highest-priority ${sourceForScope} rules (capped per \`maxRules\` in \`llm-pack.config.json\`). For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
-      `> **Complete pack.** All ${sourceForScope} rules are included below.`,
+      `> **Priority subset — showing ${rules.length} of ${domainTotal} ${sourceForScope} rules** (capped per \`maxRules\` in \`llm-pack.config.json\`). The IDs below are NOT gapless: ${domainTotal - rules.length} lower-priority rules are omitted. For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
+      `> **Complete pack.** All ${rules.length} ${sourceForScope} rules are included below.`,
     '',
     '## Rules',
     '',

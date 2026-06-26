@@ -54,14 +54,20 @@ Required workflow:
 
 1. Before editing production code, capture the relevant static guardrail status
    in the Quest attempt summary or finding.
-2. Choose guardrails by boundary, not by convenience:
-   - decision-boundary audit for readiness, admission, lifecycle, retry,
-     status, phase, outcome, or reason-code logic
-   - runtime-grammar audit for runtime meaning, owner-contract, or
-     presentation/decision-layer changes
-   - metadata gateway audit for system-table read/write ingress
-   - scalar/literal audit for files with material runtime edits
-   - cycle and complexity ratchets for extraction or broad refactor Quests
+2. Choose guardrails by boundary, not by convenience (each maps to a concrete
+   command):
+   - decision-boundary audit (`npm run audit:guideline:decision-boundaries`) for
+     readiness, admission, lifecycle, retry, status, phase, outcome, or reason-code
+     logic
+   - runtime-grammar audit (`npm run audit:runtime-grammar`, or
+     `audit:runtime-grammar:file` for a single file) for runtime meaning,
+     owner-contract, or presentation/decision-layer changes
+   - metadata gateway audit (`npm run test:metadata-gateway:audit`) for system-table
+     read/write ingress
+   - scalar/literal audit (`npm run audit:guideline:literals`) for files with
+     material runtime edits
+   - cycle and complexity ratchets (`npm run test:cycles` and `npm run
+     test:complexity`) for extraction or broad refactor Quests
 3. If a repo-wide guard already fails, run the narrowest file-scoped or
    boundary-scoped form that covers the touched files and record the inherited
    count before the change.

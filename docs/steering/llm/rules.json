@@ -119,12 +119,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 292,
-    "dedupedRuleCount": 286,
-    "exportedRuleCount": 286,
+    "candidateCount": 297,
+    "dedupedRuleCount": 290,
+    "exportedRuleCount": 290,
     "aliasRuleCount": 4,
-    "masterRuleCount": 282,
-    "estimatedAllRulesTokens": 10748
+    "masterRuleCount": 286,
+    "estimatedAllRulesTokens": 10887
   },
   "rules": [
     {
@@ -468,7 +468,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 217,
+          "line": 218,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -485,7 +485,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 223,
+          "line": 224,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -860,7 +860,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 51,
+          "line": 54,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -877,7 +877,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 53,
+          "line": 56,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -894,7 +894,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 55,
+          "line": 58,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -911,7 +911,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 57,
+          "line": 60,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -928,7 +928,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 59,
+          "line": 62,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -945,7 +945,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 91,
+          "line": 94,
           "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -978,7 +978,7 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 84,
+          "line": 90,
           "section": "Testing — Proof Ladders & Static Guardrails > Static Guardrail Preflight And Closure Policy"
         }
       ]
@@ -1120,7 +1120,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 210,
+          "line": 211,
           "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
         }
       ]
@@ -1334,7 +1334,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 128,
+          "line": 131,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
@@ -1351,7 +1351,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 131,
+          "line": 134,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
@@ -1402,7 +1402,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 42,
+          "line": 45,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1515,7 +1515,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/lifecycle.md",
-          "line": 22,
+          "line": 24,
           "section": "Workflow Lifecycle > Quest Lifecycle"
         }
       ]
@@ -1533,6 +1533,11 @@
         {
           "file": "testing-guidelines/fixtures.md",
           "line": 33,
+          "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
+        },
+        {
+          "file": "testing-guidelines/fixtures.md",
+          "line": 38,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
       ]
@@ -1666,7 +1671,7 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 101,
+          "line": 107,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
       ],
@@ -1684,7 +1689,7 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 102,
+          "line": 108,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
       ]
@@ -1805,7 +1810,7 @@
       "sources": [
         {
           "file": "doctrine/decision-experiments.md",
-          "line": 132,
+          "line": 135,
           "section": "Doctrine — Decisions And Experiments > 16. Treat Failure Migration As Boundary Evidence"
         }
       ]
@@ -1839,7 +1844,7 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 27,
+          "line": 28,
           "section": "Doctrine — Owner Boundaries > 1. One Semantic Owner Per Concern"
         }
       ]
@@ -1854,7 +1859,7 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 46,
+          "line": 47,
           "section": "Doctrine — Owner Boundaries > 6. Shrink The Boundary When Bugs Cluster"
         }
       ]
@@ -1983,7 +1988,7 @@
       "sources": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 27,
+          "line": 28,
           "section": "Doctrine — State And Lifetime > 5. Slower Under Pressure, Never Less Correct"
         }
       ]
@@ -2001,7 +2006,7 @@
       "sources": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 36,
+          "line": 38,
           "section": "Doctrine — State And Lifetime > 5. Slower Under Pressure, Never Less Correct"
         }
       ]
@@ -2031,7 +2036,7 @@
       "sources": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 53,
+          "line": 55,
           "section": "Doctrine — State And Lifetime > 5. Slower Under Pressure, Never Less Correct"
         }
       ]
@@ -2094,7 +2099,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 645,
+          "line": 659,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -2321,7 +2326,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 76,
+          "line": 79,
           "section": "Roadmap Steering Pointer > Quest Intake And Execution Flow"
         }
       ]
@@ -2338,7 +2343,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 106,
+          "line": 109,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2353,7 +2358,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 107,
+          "line": 110,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2370,7 +2375,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 111,
+          "line": 114,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2421,7 +2426,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 45,
+          "line": 48,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -2438,7 +2443,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 70,
+          "line": 73,
           "section": "Testing — Fixtures & Mutation Requirements > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -2455,7 +2460,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 75,
+          "line": 78,
           "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -2714,7 +2719,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 285,
+          "line": 287,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
         }
       ]
@@ -2776,28 +2781,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
+          "line": 90,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
       "id": "GOV-0019",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Never treat a blocked or incomplete run as a metric floor.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2808,7 +2798,22 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
+          "line": 97,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0020",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Never treat a blocked or incomplete run as a metric floor.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 101,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2835,7 +2840,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
+      "rule": "An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains.",
       "score": 206,
       "sources": [
         {
@@ -2850,12 +2855,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains.",
+      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 113,
+          "line": 114,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2870,7 +2875,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 113,
+          "line": 120,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
@@ -2919,7 +2924,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 179,
+          "line": 183,
           "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
@@ -2929,18 +2934,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Detectors fire only on real recorded events and never touch the sealed doneWhen.",
+      "rule": "For ad-hoc, non-Quest work the opposite holds — a never-before-authorized push remains an Authorization stop-trigger and is NOT performed automatically.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 199,
-          "section": "Quest Workflow > Convergence Guards"
+          "line": 193,
+          "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
     },
     {
       "id": "GOV-0029",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Detectors fire only on real recorded events and never touch the sealed doneWhen.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 204,
+          "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2955,7 +2975,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2970,7 +2990,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2979,23 +2999,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 367,
+          "line": 372,
           "section": "Quest Workflow > Two-Layer Theory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0032",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, measured theory promotion, and one-Quest-per-commit remain serial.",
-      "score": 205,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 409,
-          "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
@@ -3004,13 +3009,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "rule": "Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, measured theory promotion, and one-Quest-per-commit remain serial.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 445,
-          "section": "Quest Workflow > Source Change Verification"
+          "line": 425,
+          "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
@@ -3019,12 +3024,27 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 459,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0035",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not include unrelated dirty worktree entries from another Quest.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 456,
+          "line": 470,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3045,7 +3065,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3056,23 +3076,8 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 96,
+          "line": 100,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0036",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
-      "score": 204,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 503,
-          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
     },
@@ -3088,7 +3093,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 503,
+          "line": 517,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -3098,13 +3103,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "A guard never silently halts a run.",
+      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 563,
-          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
+          "line": 519,
+          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
     },
@@ -3113,13 +3118,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
+      "rule": "A guard never silently halts a run.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 651,
-          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+          "line": 577,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
@@ -3128,13 +3133,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
+      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 708,
-          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+          "line": 665,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     },
@@ -3143,13 +3148,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
+      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 746,
-          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
+          "line": 722,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
@@ -3158,13 +3163,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
+      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 767,
-          "section": "Quest Workflow > Keep-Alive Supervisor"
+          "line": 760,
+          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
     },
@@ -3173,12 +3178,27 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 781,
+          "section": "Quest Workflow > Keep-Alive Supervisor"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0044",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 800,
+          "line": 820,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3380,13 +3400,13 @@
       "sources": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 61,
+          "line": 62,
           "section": "Doctrine — State And Lifetime > 5. Slower Under Pressure, Never Less Correct"
         }
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3401,7 +3421,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3412,13 +3432,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 377,
+          "line": 382,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3427,13 +3447,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 378,
+          "line": 383,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3444,7 +3464,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 380,
+          "line": 385,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3465,7 +3485,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3474,7 +3494,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 553,
+          "line": 567,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3517,7 +3537,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3526,7 +3546,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 764,
+          "line": 778,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -3561,13 +3581,13 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 79,
+          "line": 85,
           "section": "Testing — Proof Ladders & Static Guardrails > Static Guardrail Preflight And Closure Policy"
         }
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3584,7 +3604,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3593,13 +3613,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 50,
+          "line": 52,
           "section": "Quest Delegation > Review Delegation"
         }
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3629,7 +3649,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3647,7 +3667,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3658,22 +3678,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 208,
-          "section": "Quest Workflow > Convergence Guards"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0055",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Measured promotion only: a theory is promoted exclusively by a measured post-patch evidence report; a subagent approval finding may inform but never promote. Audit flags any selected theory approved by a finding with no later measured report.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 222,
+          "line": 213,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3683,18 +3688,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Gradient refinement of the sealed metric: a frontier metric may be sharpened from the scalar priority count to the composite distance gradient (or any pair drawn from GRADIENT_REFINEMENT_METRICS) without tripping the goalpost-immutability check, provided the probe and every other metric arg are byte-identical. The refinement is strictly harder to satisfy and leaves the sealed doneWhen untouched (see isGradientRefinement), so steering the ladder on a sharper gradient is never punished as moving the goalposts.",
-      "score": 191,
+      "rule": "Measured promotion only: a theory is promoted exclusively by a measured post-patch evidence report; a subagent approval finding may inform but never promote. Audit flags any selected theory approved by a finding with no later measured report.",
+      "score": 192,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 270,
+          "line": 227,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
       "id": "GOV-0057",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Gradient refinement of the sealed metric: a frontier metric may be sharpened from the scalar priority count to the composite distance gradient (or any pair drawn from GRADIENT_REFINEMENT_METRICS) without tripping the goalpost-immutability check, provided the probe and every other metric arg are byte-identical. The refinement is strictly harder to satisfy and leaves the sealed doneWhen untouched (see isGradientRefinement), so steering the ladder on a sharper gradient is never punished as moving the goalposts.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 275,
+          "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3705,13 +3725,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 277,
+          "line": 282,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3720,13 +3740,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 546,
+          "line": 560,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3737,7 +3757,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 556,
+          "line": 570,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3832,7 +3852,22 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "--keep-alive is required for an autonomous agent: without it, run returns at the first NON-terminal stop (e.g.",
+      "score": 187,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 400,
+          "section": "Quest Workflow > Attempt Flow"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3841,13 +3876,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 409,
+          "line": 423,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3858,38 +3893,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 433,
+          "line": 447,
           "section": "Quest Workflow > Source Change Verification"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0062",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
-      "score": 187,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 433,
-          "section": "Quest Workflow > Source Change Verification"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0063",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "For any other open choice the agent MUST pick a sensible default, record a finding, and continue rather than pause.",
-      "score": 186,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 531,
-          "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
@@ -3898,12 +3903,42 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
+      "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
+      "score": 187,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 449,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0065",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "For any other open choice the agent MUST pick a sensible default, record a finding, and continue rather than pause.",
+      "score": 186,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 550,
+          "section": "Quest Workflow > Autonomy Default And Stop Triggers"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0066",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
       "rule": "EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of an altitude reflection; questioning a Quest's altitude is not moving its goalposts (see the Must-Not list in core.md).",
       "score": 186,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 692,
+          "line": 706,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -4026,7 +4061,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4035,13 +4070,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
+          "line": 92,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4050,13 +4085,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 103,
+          "line": 105,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4068,13 +4103,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 460,
+          "line": 474,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4085,13 +4120,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 699,
+          "line": 713,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4100,7 +4135,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 716,
+          "line": 730,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -4216,7 +4251,7 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 92,
+          "line": 98,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
       ]
@@ -4248,13 +4283,13 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 63,
+          "line": 64,
           "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
         }
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4263,13 +4298,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 141,
+          "line": 144,
           "section": "Roadmap Steering Pointer > Feature Flag Lifecycle"
         }
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4284,7 +4319,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4295,13 +4330,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 257,
+          "line": 262,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4335,7 +4370,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4346,7 +4381,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 570,
+          "line": 584,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4444,7 +4479,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4453,13 +4488,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 321,
+          "line": 326,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4468,13 +4503,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 515,
+          "line": 529,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4483,13 +4518,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 526,
+          "line": 540,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4500,13 +4535,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 531,
+          "line": 545,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4515,13 +4550,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 50,
+          "line": 51,
           "section": "Quest Delegation > Review Delegation"
         }
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4530,7 +4565,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 109,
+          "line": 112,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -4547,7 +4582,7 @@
       "sources": [
         {
           "file": "testing-guidelines/harness.md",
-          "line": 111,
+          "line": 116,
           "section": "Testing — Harness & Execution > When to Run Full Test Suite"
         }
       ]
@@ -4568,7 +4603,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4583,22 +4618,22 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "should",
       "tags": [],
-      "rule": "Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list.",
+      "rule": "Reach for step only for human-paced or exploratory work — an autonomous agent should almost always use run.",
       "score": 155,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 404,
-          "section": "Quest Workflow > Parallel-First Execution"
+          "line": 390,
+          "section": "Quest Workflow > Attempt Flow"
         }
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4607,13 +4642,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 404,
+          "line": 418,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0086",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list.",
+      "score": 155,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 420,
+          "section": "Quest Workflow > Parallel-First Execution"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4622,13 +4672,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 526,
+          "line": 542,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4658,7 +4708,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4667,13 +4717,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 578,
+          "line": 592,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4703,7 +4753,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4720,7 +4770,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4729,57 +4779,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 367,
+          "line": 372,
           "section": "Quest Workflow > Two-Layer Theory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0090",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.",
-      "score": 138,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 96,
-          "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0091",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "cache"
-      ],
-      "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
-      "score": 137,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 800,
-          "section": "Quest Workflow > Tracked Versus Regenerable"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0092",
-      "domain": "governance",
-      "strength": "should",
-      "tags": [],
-      "rule": "Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the frame itself: is this Quest at the right altitude, are the formal models / harness pulling their weight, is the code arranged to be reasoned about, should this Quest continue or honestly EXHAUST and pivot.",
-      "score": 130,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 679,
-          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
@@ -4790,16 +4791,80 @@
       "tags": [
         "governance"
       ],
+      "rule": "Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.",
+      "score": 138,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 99,
+          "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0094",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
+      "score": 137,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 819,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0095",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the frame itself: is this Quest at the right altitude, are the formal models / harness pulling their weight, is the code arranged to be reasoned about, should this Quest continue or honestly EXHAUST and pivot.",
+      "score": 130,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 693,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0096",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "Illustrative example — may be stale, not policy. The following is a concrete > worked example of framing a system theory, tied to one live Quest.",
+      "score": 125,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 794,
+          "section": "Quest Workflow > Known System-Theory Hypothesis (rolling-restart)"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0097",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "governance"
+      ],
       "rule": "Only overridable continuation codes are accepted: BLOCKED_THEORY and BLOCKED_SCOPE. The command refuses to override honesty/integrity invariants — regression-restore, measurement, unrecorded-evidence, and metric-projection guards cannot be bypassed this way.",
       "score": 124,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 641,
+          "line": 655,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     }
   ],
-  "generatedAt": "2026-06-26T15:38:51.050Z"
+  "generatedAt": "2026-06-26T20:52:25.828Z"
 }

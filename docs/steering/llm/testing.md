@@ -14,7 +14,7 @@ Load for test-first workflow, reliability harness work, and regression policy.
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
-> **Priority subset — not the full corpus.** This pack lists only the highest-priority testing rules (capped per `maxRules` in `llm-pack.config.json`). For every testing rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain testing`.
+> **Priority subset — showing 35 of 73 testing rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 38 lower-priority rules are omitted. For every testing rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain testing`.
 
 ## Rules
 
@@ -37,7 +37,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Ownership & Authority Policies
 
 14. [TEST-0001] When the mutation is lifecycle-related, assert both: - the initial row exists with canonical identity fields; - later transitions preserve owner boundaries and do not recreate or replace the row _(see testing-guidelines/fixtures.md:23)_
-15. [TEST-0012] Static guardrail proof is required even when focused unit and integration tests pass. Green behavior tests do not override a failed owner-path guard. _(see testing-guidelines/proof-ladders.md:84)_
+15. [TEST-0012] Static guardrail proof is required even when focused unit and integration tests pass. Green behavior tests do not override a failed owner-path guard. _(see testing-guidelines/proof-ladders.md:90)_
 16. [TEST-0034] A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporting must prove the direct owner path and the consuming status, diagnostics, admin, harness, or report surface. _(see testing-guidelines/release-gate.md:32)_
 
 ### Timeouts & Budget Management
@@ -48,15 +48,15 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 
 18. [TEST-0003] Do not comment out tests to avoid running them _(see testing-guidelines/fixtures.md:36)_
 19. [TEST-0004] If a test is failing, fix the code or the test - do not skip it _(see testing-guidelines/fixtures.md:37)_
-20. [TEST-0005] It is FORBIDDEN to: Add if (process.env.NODE_ENV === 'test') or similar environment checks that change runtime behavior for tests. _(see testing-guidelines/fixtures.md:51)_
-21. [TEST-0006] It is FORBIDDEN to: Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic. _(see testing-guidelines/fixtures.md:53)_
-22. [TEST-0007] It is FORBIDDEN to: Create alternate constructors, factory methods, or initialization paths that only tests call. _(see testing-guidelines/fixtures.md:55)_
-23. [TEST-0008] It is FORBIDDEN to: Weaken validation, skip steps, or short-circuit logic to make a test scenario easier to set up. _(see testing-guidelines/fixtures.md:57)_
-24. [TEST-0009] It is FORBIDDEN to: Export internal implementation details solely so tests can reach them. _(see testing-guidelines/fixtures.md:59)_
-25. [TEST-0010] Do not land a test-only change that leaves a known System Guidelines violation in the code path being tested. _(see testing-guidelines/fixtures.md:91)_
+20. [TEST-0005] It is FORBIDDEN to: Add if (process.env.NODE_ENV === 'test') or similar environment checks that change runtime behavior for tests. _(see testing-guidelines/fixtures.md:54)_
+21. [TEST-0006] It is FORBIDDEN to: Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic. _(see testing-guidelines/fixtures.md:56)_
+22. [TEST-0007] It is FORBIDDEN to: Create alternate constructors, factory methods, or initialization paths that only tests call. _(see testing-guidelines/fixtures.md:58)_
+23. [TEST-0008] It is FORBIDDEN to: Weaken validation, skip steps, or short-circuit logic to make a test scenario easier to set up. _(see testing-guidelines/fixtures.md:60)_
+24. [TEST-0009] It is FORBIDDEN to: Export internal implementation details solely so tests can reach them. _(see testing-guidelines/fixtures.md:62)_
+25. [TEST-0010] Do not land a test-only change that leaves a known System Guidelines violation in the code path being tested. _(see testing-guidelines/fixtures.md:94)_
 26. [TEST-0017] Do not ignore a failing test. A failing test indicates broken functionality and must be treated as a stop-the-line signal for the touched area. _(see testing-guidelines/regression-policy.md:345)_
 27. [TEST-0021] Do not rely on a broad scenario test alone when the bug is in a narrow system-table write path. _(see testing-guidelines/fixtures.md:28)_
-28. [TEST-0022] Production code must never contain alternate code paths, branches, or special-case logic that exist solely to make tests pass. _(see testing-guidelines/fixtures.md:42)_
+28. [TEST-0022] Production code must never contain alternate code paths, branches, or special-case logic that exist solely to make tests pass. _(see testing-guidelines/fixtures.md:45)_
 29. [TEST-0023] When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an integration test) you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it. _(see testing-guidelines/harness.md:56)_
 30. [TEST-0025] Tests must never be skipped. _(see testing-guidelines/fixtures.md:33)_
 31. [TEST-0027] Tests added during the change must match the Quest concern rather than an unrelated umbrella scope. _(see testing-guidelines/proof-ladders.md:23)_
@@ -66,4 +66,4 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 
 ### Governance & Scope Controls
 
-35. [TEST-0031] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:102)_
+35. [TEST-0031] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:108)_

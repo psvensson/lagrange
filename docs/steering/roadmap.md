@@ -48,6 +48,9 @@ Use these documents as follows:
 
 ## Document Authority Map
 
+This map mirrors `AGENTS.md`; `AGENTS.md` is authoritative for the steering load
+order. The table below assigns ownership of document *classes*, not boot sequence.
+
 Use repository documents according to this ownership split:
 
 | Document class | Canonical location | Primary concern |
@@ -151,9 +154,9 @@ Use these repository-root checks to confirm the steering stack still has one
 doctrine path and that top-level canonical source files declare their role:
 
 ```sh
-rg -n --glob '*.md' '`(doctrine|workflow-guidelines|testing-guidelines)\\.md`' docs/steering
-rg -n --glob '*.md' '\\docs/steering/(doctrine|workflow-guidelines|testing-guidelines)\\.md' docs/steering
-rg -n --glob '*.md' '\\docs/steering/(doctrine|workflow-guidelines|testing-guidelines)/INDEX\\.md' docs/steering
+rg -n --glob '*.md' '`(doctrine|workflow-guidelines|testing-guidelines)\.md`' docs/steering
+rg -n --glob '*.md' 'docs/steering/(doctrine|workflow-guidelines|testing-guidelines)\.md' docs/steering
+rg -n --glob '*.md' 'docs/steering/(doctrine|workflow-guidelines|testing-guidelines)/INDEX\.md' docs/steering
 for f in docs/steering/*.md; do
   rg -q '^status: canonical$' "$f" || continue
   rg -q '^## Document Role$' "$f" || echo "$f"
