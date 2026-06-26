@@ -18,6 +18,7 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {NodeService} from '../../node/node-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {
+  ERRNO,
   SUBSYSTEM,
 } from '../../constants/index.js';
 import {TRANSPORT_DEFAULT} from '../../constants/transport.js';
@@ -169,7 +170,20 @@ class MessageRouterSetup {
           error: error.message,
           stack: error.stack,
         });
-        throw new Error(ERROR_MSG.initFailed(error.message));
+        const initError = new Error(ERROR_MSG.initFailed(error.message));
+        if (error && error.code === ERRNO.EADDRINUSE) {
+          // A still-draining prior listener on this ws port is transient: tag
+          // the bind conflict retryable so the join re-attempt loop backs off
+          // and rebinds once the OS releases the socket, instead of treating
+          // the bind as fatal and exiting the node — which drops the rejoiner
+          // from membership and surfaces downstream as NODE_EXIT /
+          // nodeSlotUnavailable. Mirrors the admin-port (8081) fix in
+          // admin-websocket-api-base.js. The plain Error re-wrap would
+          // otherwise discard the original `code`/`retryable`.
+          initError.code = ERRNO.EADDRINUSE;
+          initError.retryable = true;
+        }
+        throw initError;
       }
     } else {
       // No wsPort - initialize without server (for testing or single-node scenarios)

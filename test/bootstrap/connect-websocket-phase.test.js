@@ -253,6 +253,58 @@ test(
 );
 
 test(
+  'ConnectWebSocketPhase preserves an EADDRINUSE bind conflict as retryable',
+  async () => {
+    // A rejoiner racing a still-draining prior listener gets EADDRINUSE from the
+    // router setup. The phase re-wraps the init failure; that re-wrap must carry
+    // the transient `code`/`retryable` through so the join retry loop backs off
+    // instead of exiting the node (the run1 NODE_EXIT / nodeSlotUnavailable).
+    const originalCreate = MessageRouterSetup.create;
+    MessageRouterSetup.create = async () => {
+      const bindError = new Error(
+        'MessageRouter initialization failed: listen EADDRINUSE: ' +
+          'address already in use 0.0.0.0:8082',
+      );
+      bindError.code = 'EADDRINUSE';
+      bindError.retryable = true;
+      throw bindError;
+    };
+
+    try {
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'rejoining-node',
+        delegates: {
+          getWsPort: () => 8082,
+          getIdentifyPayload: () => ({role: 'joining'}),
+          getNodeAddress: () => 'rejoining-node:8080',
+          getAdvertisedNodeWsAddress: () => null,
+          getLogger: () => ({info() {}, warn() {}, error() {}, debug() {}}),
+        },
+      });
+
+      await assert.rejects(
+        () => phase.phaseConnectWebSocket(),
+        (error) => {
+          assert.equal(
+            error.code,
+            'EADDRINUSE',
+            'the bind-conflict code must survive the join-phase re-wrap',
+          );
+          assert.equal(
+            error.retryable,
+            true,
+            'the transient bind conflict must stay retryable through the re-wrap',
+          );
+          return true;
+        },
+      );
+    } finally {
+      MessageRouterSetup.create = originalCreate;
+    }
+  },
+);
+
+test(
   'ConnectWebSocketPhase marks exhausted seed websocket timeout retryable',
   async () => {
     const originalCreate = MessageRouterSetup.create;

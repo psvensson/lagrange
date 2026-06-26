@@ -80,6 +80,45 @@ describe('MessageRouterSetup', () => {
       assert.strictEqual(router.hasSelfConnection(), true);
     });
 
+    it('tags a port-bind EADDRINUSE conflict retryable (rejoin race)',
+      async () => {
+        // A rejoiner can race a still-draining prior listener on the same ws
+        // port. The bind conflict is transient, so the join retry loop must see
+        // it as retryable instead of exiting the node (NODE_EXIT). Bind the port
+        // once, then a second create on the SAME port surfaces a real EADDRINUSE.
+        const port = ports.getPort();
+        const holder = await MessageRouterSetup.create({
+          nodeId: 'eaddrinuse-holder',
+          nodeAddress: `ws://localhost:${port}`,
+          wsPort: port,
+        });
+        createdRouters.push(holder);
+
+        await assert.rejects(
+          async () => {
+            const conflicting = await MessageRouterSetup.create({
+              nodeId: 'eaddrinuse-rejoiner',
+              nodeAddress: `ws://localhost:${port}`,
+              wsPort: port,
+            });
+            createdRouters.push(conflicting);
+          },
+          (err) => {
+            assert.strictEqual(
+              err.code,
+              'EADDRINUSE',
+              'the bind-conflict code must survive the init-failure re-wrap',
+            );
+            assert.strictEqual(
+              err.retryable,
+              true,
+              'a transient port-bind conflict must be classified retryable',
+            );
+            return true;
+          },
+        );
+      });
+
     it('keeps external transport admission closed until explicitly enabled',
       async () => {
         const gatedPort = ports.getPort();

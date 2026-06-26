@@ -236,7 +236,18 @@ class ConnectWebSocketPhase {
         stack: error.stack,
       });
       const routerInitFailed = JOINING_ERROR_MSG.routerInitFailed;
-      throw new Error(routerInitFailed(error.message));
+      const wrapped = new Error(routerInitFailed(error.message));
+      // Preserve a transient-bind classification through the re-wrap (e.g.
+      // EADDRINUSE on a still-draining prior listener during rejoin) so the
+      // join retry loop treats it as retryable and backs off, instead of
+      // exiting the node. A plain Error re-wrap would drop `code`/`retryable`.
+      if (error && error.code !== undefined) {
+        wrapped.code = error.code;
+      }
+      if (error && error.retryable !== undefined) {
+        wrapped.retryable = error.retryable;
+      }
+      throw wrapped;
     }
 
     this.delegates.setMessageRouter(messageRouter);
