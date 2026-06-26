@@ -247,6 +247,26 @@
         "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}
       }
+    },
+    {
+      "id": "rebalancer-surplus-drain-handoff-terminalizes",
+      "owner": "operation_workflow_owner",
+      "boundary": "rebalancer_handoff",
+      "kind": "liveness",
+      "statement": "A surplus-drain REPLACE whose declared source replica is already removed terminalizes (reaches SAFE) instead of re-dispatching a source-leader handoff to a replica that no longer exists (CL-038).",
+      "formalPredicate": "sourceReplicaRemoved => <>SAFE",
+      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-038.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-038 deterministic repro asserts a source-removed REPLACE reaches SAFE (does not loop re-dispatching a dead handoff) and exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-038",
+          "test": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:operation_workflow_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
     }
   ]
 }
