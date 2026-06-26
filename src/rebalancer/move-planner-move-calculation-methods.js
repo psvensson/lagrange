@@ -88,11 +88,6 @@ const PLACEMENT_OCCUPIED_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
 ]);
 
-// How far above the replica-count target a priority partition may be driven by
-// in-flight creation: exactly one temporary replacement voter, matching the
-// learner-promotion path's own single-replacement overshoot allowance. Beyond
-// this, new add-like moves are over-creation and are deferred.
-const PRIORITY_REPLACE_OVERSHOOT_ALLOWANCE = 1;
 
 const CAPACITY_REJECTION_REASON = Object.freeze({
   ADMISSION_ERROR: 'admission_error',
@@ -469,49 +464,35 @@ class MovePlannerMoveCalculationMethods {
       partitionId: this.entityId,
     });
     // In-flight-aware over-creation cap (priority control-plane partitions).
-    // The pending-operation bypass above lets the planner keep generating
-    // add-like moves for a priority partition while prior REPLACE replacements
-    // are still being created and their (frequently blocked) source removals
-    // have not drained. Committed rows lag that in-flight work, so per-node
-    // counts alone re-pick fresh target nodes every tick and overshoot the voter
-    // target — which dead-locks learner promotion (replica-count-limit) and
-    // keeps the partition over target until convergence times out. Bound new
-    // add-like moves through the single-owner accounting so the partition cannot
-    // be driven beyond target + one temporary replacement (the same overshoot
-    // the learner-promotion path already permits). Genuine provisioning and the
-    // first replacement are unaffected; only re-issuance beyond the bound trims.
-    // Only re-issuance WHILE creation is already in flight is over-creation; the
-    // first batch (nothing in flight yet) legitimately fans out concurrent
-    // spread-restoration REPLACEs and is left alone.
-    const inFlightCreationCount =
-      inFlightAccounting.inFlightAddCount +
-      inFlightAccounting.inFlightReplaceInCreationCount;
+    // Stop minting new replacements only once a SURPLUS of committed voters
+    // already exists (activeCount > target): that is the over-creation pile-up
+    // state observed in the gate — prior replacements promoted to voters but
+    // their sources have not drained (blocked on voter-ready spread), and with
+    // the pending-operation bypass above the planner keeps hopping to fresh
+    // target nodes and re-creating, driving the partition further over target
+    // until learner promotion dead-locks (replica-count-limit) and convergence
+    // times out. At or under target the first concurrent spread-restoration
+    // batch and provisioning fan-out are legitimate (they transiently exceed
+    // target by design as sources drain), so they are untouched; only the
+    // surplus that has not drained must stop growing so existing voters settle.
     if (
       !cleanupOnlyWhilePending &&
       addMoves.length > NUM.ZERO &&
-      inFlightCreationCount > NUM.ZERO &&
-      this.isControlPlanePriorityPartition()
+      this.isControlPlanePriorityPartition() &&
+      inFlightAccounting.activeCount > targetReplicaCount
     ) {
-      const maxCreation = targetReplicaCount + PRIORITY_REPLACE_OVERSHOOT_ALLOWANCE;
-      const allowedNewAdds = Math.max(
-        NUM.ZERO,
-        maxCreation - inFlightAccounting.creationEffectiveCount,
-      );
-      if (addMoves.length > allowedNewAdds) {
-        this.logger.debug(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
-          entityId: this.entityId,
-          targetReplicaCount,
-          maxCreation,
-          creationEffectiveCount: inFlightAccounting.creationEffectiveCount,
-          inFlightReplaceInCreationCount:
-            inFlightAccounting.inFlightReplaceInCreationCount,
-          inFlightAddCount: inFlightAccounting.inFlightAddCount,
-          requestedAdds: addMoves.length,
-          allowedNewAdds,
-          overCreationCap: true,
-        });
-        addMoves.length = allowedNewAdds;
-      }
+      this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
+        entityId: this.entityId,
+        targetReplicaCount,
+        activeCount: inFlightAccounting.activeCount,
+        creationEffectiveCount: inFlightAccounting.creationEffectiveCount,
+        inFlightReplaceInCreationCount:
+          inFlightAccounting.inFlightReplaceInCreationCount,
+        inFlightAddCount: inFlightAccounting.inFlightAddCount,
+        deferredAdds: addMoves.length,
+        overCreationCap: true,
+      });
+      addMoves.length = NUM.ZERO;
     }
     const shouldDeferAddsInDegraded =
       isDegradedPlacement &&

@@ -2,22 +2,19 @@
  * Falsifier: MovePlanner in-flight-aware over-creation cap.
  *
  * Pins the rolling-restart over-replication drain stall (gate 144654Z run3:
- * replica_operations-p1 driven to 4 voters/target 3 with an unpromotable
- * surplus learner r6, while blocked source removals never drain). A priority
- * control-plane partition whose pending-operation guard is bypassed kept
- * minting REPLACE replacements on HOPPING target nodes while a prior
- * replacement was still being created (its row had not materialized, so the
- * per-node guard did not see it and committed-row counts under-counted the
- * in-flight work). Each extra replacement pushed the partition past target and
- * dead-locked learner promotion (replica-count-limit).
+ * replica_operations-p1 driven to activeVoterCount=4 / target 3 with an
+ * unpromotable surplus learner r6, blocked source removals never draining).
+ * Once a SURPLUS of committed voters already exists (prior replacements promoted
+ * but their sources have not drained), the planner kept minting MORE REPLACE
+ * replacements on hopping target nodes, driving the partition further over
+ * target and dead-locking learner promotion (replica-count-limit).
  *
- * Policy under test: once in-flight creation already accounts for
- * target + 1 replicas (the single temporary replacement overshoot the
- * learner-promotion path itself permits), the planner must NOT mint another
- * add-like move for that partition. Provisioning and the FIRST replacement are
- * unaffected.
+ * Policy under test: while activeCount > target (a surplus that has not drained),
+ * a priority partition must NOT mint new add-like moves — only drain. At/under
+ * target the first concurrent spread-restoration batch and provisioning fan-out
+ * are untouched (they transiently exceed target by design as sources drain).
  *
- * RED before the cap (emits a 2nd REPLACE); GREEN after (no new add-like move).
+ * RED before the cap (emits an over-target ADD/REPLACE); GREEN after.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -27,8 +24,6 @@ import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {REBALANCER_ENTITY_TYPE, REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
-// A priority control-plane partition (the over-creation victim class) so the
-// pending-bypass is in force and the cap applies.
 const PRIORITY_PARTITION_ID = 'sql_transaction_participants-p1';
 
 function initEnv() {
@@ -57,15 +52,8 @@ function createMoveStateProvider({currentReplicas = [], inFlightOperations = []}
   };
 }
 
-function inFlightReplace(replicaId, targetNodeId) {
-  return {
-    operation_id: `op-${replicaId}-${targetNodeId}`,
-    type: REBALANCER_MOVE_TYPE.REPLACE,
-    partition_id: PRIORITY_PARTITION_ID,
-    replica_id: replicaId, // the SOURCE being replaced
-    target_node_id: targetNodeId,
-    workflow_step: 'creating',
-  };
+function active(replicaId, nodeId) {
+  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
 }
 
 function plannerFor(provider) {
@@ -87,22 +75,20 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
   t.afterEach(resetEnv);
 
   await t.test(
-    'defers a SECOND replacement while a prior REPLACE (hopped to another ' +
-    'node) is still being created and the partition is already at target',
+    'while OVER target (surplus voters not yet drained) no new add-like move ' +
+    'is minted — only drain',
     async (t) => {
-      // 3 active concentrated on 2 nodes (spread-unsatisfied) -> the planner
-      // wants to place a replica on node-3. A prior REPLACE is already creating
-      // a replacement on node-4 (a HOPPED target the per-node guard does not
-      // cover), so in-flight creation already accounts for target + 1.
+      // 4 active for target 3 = a surplus already exists. node-3 is unoccupied,
+      // so without the cap the planner would over-create a replacement there
+      // (the r4->r5->r6 pile-up). The cap must block it and let the surplus on
+      // node-1 drain instead.
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
+        active('r4', 'node-2'),
       ];
-      const planner = plannerFor(createMoveStateProvider({
-        currentReplicas,
-        inFlightOperations: [inFlightReplace('r3', 'node-4')],
-      }));
+      const planner = plannerFor(createMoveStateProvider({currentReplicas}));
 
       const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
 
@@ -112,17 +98,20 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
           m.type === REBALANCER_MOVE_TYPE.REPLACE,
       );
       t.same(addLike, [],
-        'no new ADD/REPLACE while in-flight creation already reaches target+1');
+        'no new ADD/REPLACE while a surplus of committed voters has not drained');
     },
   );
 
   await t.test(
-    'still emits the FIRST replacement when nothing is in flight',
+    'AT target (no surplus) the first concurrent spread-restoration batch is ' +
+    'allowed',
     async (t) => {
+      // 3 active concentrated on node-1 (at target, mis-spread). This legitimately
+      // moves replicas to other nodes; the cap must NOT engage (no surplus yet).
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
       ];
       const planner = plannerFor(createMoveStateProvider({currentReplicas}));
 
@@ -131,37 +120,22 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
       t.equal(
         moves.some((m) => m.type === REBALANCER_MOVE_TYPE.REPLACE),
         true,
-        'the first replacement (no in-flight creation yet) is allowed');
+        'at target with no surplus, spread restoration proceeds');
     },
   );
 
   await t.test(
-    'still provisions a genuine deficit even with one replacement in flight',
+    'UNDER target still provisions a genuine deficit',
     async (t) => {
-      // Only 1 active (genuine under-target). One ADD is already in flight; the
-      // partition is still below target, so further provisioning is allowed
-      // (deficit fill, not over-creation).
-      const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      ];
-      const planner = plannerFor(createMoveStateProvider({
-        currentReplicas,
-        inFlightOperations: [{
-          operation_id: 'op-add-r2',
-          type: REBALANCER_MOVE_TYPE.ADD,
-          partition_id: PRIORITY_PARTITION_ID,
-          replica_id: 'r2',
-          target_node_id: 'node-2',
-          workflow_step: 'creating',
-        }],
-      }));
+      const currentReplicas = [active('r1', 'node-1')];
+      const planner = plannerFor(createMoveStateProvider({currentReplicas}));
 
       const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
 
       t.equal(
         moves.some((m) => m.type === REBALANCER_MOVE_TYPE.ADD),
         true,
-        'genuine deficit still provisions (active 1 + inFlightAdd 1 < target 3)');
+        'genuine deficit (active 1 < target 3) still provisions');
     },
   );
 });

@@ -742,10 +742,18 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         false,
         'spread-contributing replicas must not be emitted as standalone removes while a priority add is still pending',
       );
+      // 4 ACTIVE for target 3 = a surplus that has not drained, so the
+      // in-flight-aware over-creation cap defers minting any new replacement
+      // (drain-first): no new add-like move is emitted while over target. The
+      // spread replica is still protected from standalone removal (above); the
+      // surplus drains and the compensating replacement is deferred to a later
+      // tick once the partition is back at target.
       t.equal(
-        moves.some((move) => move.type === MoveType.REPLACE),
-        true,
-        'the planner may still tie one removal to a compensating replacement',
+        moves.some(
+          (move) =>
+            move.type === MoveType.REPLACE || move.type === MoveType.ADD),
+        false,
+        'over-creation cap defers new replacements while a voter surplus exists',
       );
     },
   );
