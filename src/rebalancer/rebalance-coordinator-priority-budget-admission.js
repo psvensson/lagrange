@@ -21,6 +21,26 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_IN_FLIGHT = 'in flight';
 const LOCAL_STR_OBJECT = 'object';
 
+// Default-off: rate-limit the deferred-observation ESCAPE on the per-critical-partition
+// single-flight add-like lane. The escape opens the lane when the authoritative AND
+// cache reads both fail to confirm an in-flight add-like op (which is exactly what
+// happens on a saturated owner whose replica_operations writes lag) and priority-recovery
+// pressure is "contained" — so it cannot see the ADD it just admitted and re-opens every
+// planning tick (~1s), the increase_replica_count storm the analyze:redecision-storm
+// detector pins (gate 195141Z run1: 22 ADD dispatches over 65s at ~1.1s cadence, 5x
+// faster than the ~5s learner-promotion settle). This is the metastable limit cycle: the
+// corrective loop re-deciding faster than its prior action can settle. The cooldown adds
+// the missing hysteresis — open the lane on the FIRST deferred escape (so recovery still
+// makes progress and the escape's anti-deadlock purpose is preserved) but NOT again
+// within the settle window (so the storm is bounded to ~1 ADD per window per partition).
+const CRITICAL_ADD_LANE_DEFERRED_COOLDOWN_MS = 5000;
+
+function isCriticalAddLaneDeferredCooldownEnabled() {
+  return (
+    process.env.LAGRANGE_PR_CRITICAL_ADD_LANE_DEFERRED_COOLDOWN === 'true'
+  );
+}
+
 const {
   NUM,
   OperationType,
@@ -152,6 +172,9 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
         this.shouldAllowPriorityRecoveryDeferredObservation(
           context?.partitionId,
           operationObservation,
+        ) &&
+        !this.isCriticalAddLaneDeferredAdmissionRateLimited(
+          context?.partitionId,
         )
       ) {
         return;
@@ -181,6 +204,51 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
         conflictingOperationId: conflictingOperation.operationId,
       },
     );
+  }
+
+  /**
+   * Rate-limit (default-off) the deferred-observation escape on the critical add-like
+   * lane so a saturated owner that cannot observe its own freshly-admitted ADD does not
+   * re-open the lane every planning tick (the increase_replica_count storm). Returns
+   * true when an escape admission for this partition already happened within the cooldown
+   * window — the caller then fails CLOSED and defers the new add. Returns false (and
+   * records this admission as the window anchor) otherwise, so the FIRST escape still
+   * opens the lane (preserving the escape's anti-deadlock purpose). Flag-off: always
+   * false (byte-identical to the un-cooled escape).
+   * @param {string|null} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isCriticalAddLaneDeferredAdmissionRateLimited(partitionId) {
+    if (!isCriticalAddLaneDeferredCooldownEnabled()) {
+      return false;
+    }
+    const normalizedPartitionId =
+      typeof partitionId === 'string' ? partitionId.trim() : '';
+    if (normalizedPartitionId.length === NUM.ZERO) {
+      return false;
+    }
+    if (!(this._criticalAddLaneDeferredAdmitAtByPartition instanceof Map)) {
+      this._criticalAddLaneDeferredAdmitAtByPartition = new Map();
+    }
+    const nowMs =
+      typeof this.timeSource?.now === LOCAL_STR_FUNCTION ?
+        this.timeSource.now() :
+        Date.now();
+    const lastAdmitMs = this._criticalAddLaneDeferredAdmitAtByPartition.get(
+      normalizedPartitionId,
+    );
+    if (
+      Number.isFinite(lastAdmitMs) &&
+      nowMs - lastAdmitMs < CRITICAL_ADD_LANE_DEFERRED_COOLDOWN_MS
+    ) {
+      return true;
+    }
+    this._criticalAddLaneDeferredAdmitAtByPartition.set(
+      normalizedPartitionId,
+      nowMs,
+    );
+    return false;
   }
 
   /**
