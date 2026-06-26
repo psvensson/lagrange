@@ -98,6 +98,7 @@
     "analyze:cl039-link-rate": "node scripts/analyze-cl039-link-rate.js",
     "analyze:fix-engagement": "node scripts/analyze-fix-engagement.js",
     "analyze:redecision-storm": "node scripts/analyze-redecision-storm.js",
+    "analyze:replace-safety-blocks": "node scripts/analyze-replace-safety-blocks.js",
     "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
