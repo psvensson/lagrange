@@ -21,8 +21,8 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### General Guidelines
 
 1. [STYLE-0003] Do not introduce synonyms for an existing concept. _(see code-style.md:84)_
-2. [STYLE-0004] Do not expose semantic policy through combinable booleans when one named mode constant set should exist. _(see code-style.md:85)_
-3. [STYLE-0005] Do not leak raw storage or transport field shapes into runtime model names or contracts. _(see code-style.md:92)_
+2. [STYLE-0004] Do not expose semantic policy through combinable booleans when one named mode constant set should exist. _(see code-style.md:88)_
+3. [STYLE-0005] Do not leak raw storage or transport field shapes into runtime model names or contracts. _(see code-style.md:95)_
 4. [STYLE-0008] New source-code files must be named for the semantic responsibility they own, not for their position in a split. _(see code-style.md:62)_
 
 ### Ownership & Authority Policies
@@ -33,7 +33,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Readiness & Health Contracts
 
 7. [STYLE-0001] Do not create new files with ordinal, segment, or grab-bag names such as part-2, segment, misc, helpers, or utils unless that term is already an established domain concept in the repository. _(see code-style.md:66)_
-8. [STYLE-0011] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences. _(see code-style.md:87)_
+8. [STYLE-0011] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences. _(see code-style.md:90)_
 
 ### Testing & Harness Guidelines
 

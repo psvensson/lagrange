@@ -761,7 +761,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 85,
+          "line": 88,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -776,7 +776,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 92,
+          "line": 95,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -3921,7 +3921,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 87,
+          "line": 90,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -4801,5 +4801,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-26T06:18:45.605Z"
+  "generatedAt": "2026-06-26T13:01:52.943Z"
 }

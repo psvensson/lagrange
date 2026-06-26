@@ -82,6 +82,9 @@ When writing or modifying code:
   snapshot plus one explicit state model or decision table rather than a bag of
   independent `if` statements.
 - Do not introduce synonyms for an existing concept.
+- `terminalize` is not a word. Use `terminate` (an operation/handoff
+  `terminates`; the terminal state is reached by `terminating`). This applies to
+  identifiers, comments, commit messages, and steering prose alike.
 - Do not expose semantic policy through combinable booleans when one named mode
   constant set should exist.
 - When a boundary already owns a named mode vocabulary, call sites and tests
