@@ -23,7 +23,7 @@ decision/structure rather than a measured convergence metric.
 | Report projection | `scripts/solve/report.js` | `buildReport()` (~L126–180); `findingLines()` (~L43–53); `reportFilePath()` (~L28–31) |
 | Frontier view (REUSE) | `scripts/solve/frontier.js` | `buildFrontier()` (~L59–68); `renderFrontier()` (~L70–79); `runFrontierCommand()` (~L82–84) |
 | Closure-ledger parse + generated sibling | `scripts/closure-ledger-state.js` | `parseRecords()` (~L98–100); writes `closure-ledger.generated.md` |
-| Steering pack config | `.kiro/steering/llm-pack.config.json` | `sources[]` (~L10–110), entry = `{file, domain, priority}` |
+| Steering pack config | `docs/steering/llm-pack.config.json` | `sources[]` (~L10–110), entry = `{file, domain, priority}` |
 | Steering pack generator | `scripts/generate-steering-llm-pack.js` | source loop (~L1189–1198) — literal paths, **no glob today** |
 
 There is currently **no** inter-quest / quest→spec / quest→CL reference field, and
@@ -143,10 +143,10 @@ chat context.
 schema-light to stay LLM-cheap.
 
 **Changes.**
-1. New dir `.kiro/epics/` with `README.md` describing the tier (one level above
-   `.kiro/specs/`; an epic graduates to a spec when intent is sharp enough for a
+1. New dir `solve/epics/` with `README.md` describing the tier (one level above
+   `solve/specs/`; an epic graduates to a spec when intent is sharp enough for a
    sealed doneWhen).
-2. `.kiro/epics/_template.md` with fixed front-matter:
+2. `solve/epics/_template.md` with fixed front-matter:
    ```
    ---
    id: <kebab>
@@ -163,10 +163,10 @@ schema-light to stay LLM-cheap.
 3. Cross-link: an epic's `roadmapRow` matches Item 1's `links.roadmapRow`, so
    `trace --row` can later join roadmap → epic → quest. Document this in the README;
    no code in v1.
-4. `AGENTS.md` "Where Do I Look?" table — add one row pointing at `.kiro/epics/`.
+4. `AGENTS.md` "Where Do I Look?" table — add one row pointing at `solve/epics/`.
    Regenerate packs (Item 4's pipeline) so steering reflects the new tier.
 
-**Acceptance.** Authoring `.kiro/epics/<x>.md` from the template requires no tool and
+**Acceptance.** Authoring `solve/epics/<x>.md` from the template requires no tool and
 no regeneration to be useful; the AGENTS.md row points to it.
 
 **Risk.** Minimal (docs only). Risk is disuse — mitigated by making it the first step
@@ -196,7 +196,7 @@ fallback. The glob approach is dead-on-arrival without a generator rewrite that 
 front-matter parsing — out of scope for v1.
 
 **Changes.**
-1. New `.kiro/steering/findings/` source dir + `_template.md`:
+1. New `docs/steering/findings/` source dir + `_template.md`:
    ```
    ---
    source: quest:<id>#<frontier>
@@ -214,11 +214,11 @@ front-matter parsing — out of scope for v1.
      `{claim, evidence, rulesOut, ts}`. Disambiguate multiple findings on one
      frontier by `--match` (claim substring) or `--ts`. `--domain` is required
      because the generator can't infer it from the file.
-   - Writes `.kiro/steering/findings/<date>-<quest>-<slug>.md` from the template,
+   - Writes `docs/steering/findings/<date>-<quest>-<slug>.md` from the template,
      using the finding's `claim` as the body and `source: quest:<id>#<frontier>`.
      If the claim isn't already normative, the command warns the author to edit it
      into a MUST/SHOULD sentence before regenerating.
-   - **Appends a `sources[]` entry** to `.kiro/steering/llm-pack.config.json`:
+   - **Appends a `sources[]` entry** to `docs/steering/llm-pack.config.json`:
      `{file: "findings/<date>-<quest>-<slug>.md", domain: <--domain>, priority:
      100}` — this is how per-file domain is carried (the only working path).
    - Prints a reminder to run `npm run steering:llm:pack && npm run steering:check`
@@ -229,7 +229,7 @@ front-matter parsing — out of scope for v1.
 
 **Acceptance.**
 - `promote-finding --id <q> --frontier <f> --domain governance` on an existing
-  logged finding creates a well-formed file under `.kiro/steering/findings/` AND
+  logged finding creates a well-formed file under `docs/steering/findings/` AND
   appends a matching `sources[]` entry to `llm-pack.config.json`.
 - After `npm run steering:llm:pack`, the rule is in `rules.json` and queryable via
   `npm run rule -- --id <id>` with a source citation back to the findings file
@@ -256,7 +256,7 @@ authoring: a promoted finding whose body isn't a normative sentence silently lan
   edits / DT6 work).
 
 **Changes.**
-1. Write `.kiro/steering/memory-boundary.md` (source steering) stating roles:
+1. Write `docs/steering/memory-boundary.md` (source steering) stating roles:
    - **In-repo steering** = durable, shared, CI-gated *rules* (executable guardrails).
    - **External auto-memory** = transient, single-user *narrative + current frontier*
      (handoffs, live blocker state).
@@ -268,7 +268,7 @@ authoring: a promoted finding whose body isn't a normative sentence silently lan
    same source. Pick (a) for v1 to avoid generator coupling.
 3. Regenerate: `npm run steering:llm:pack` to clear the 8-day staleness; confirm
    `npm run steering:check` is green (catches any drift between source and packs).
-4. Add a pre-commit hook running `npm run steering:check` when `.kiro/steering/**`
+4. Add a pre-commit hook running `npm run steering:check` when `docs/steering/**`
    changes, so packs can't silently lag source again. **Verified: there is NO
    existing hook** — `.husky/` is empty, `.git/hooks/` has only samples, no
    husky/lefthook/simple-git-hooks dep, and `steering:check` is **not** in

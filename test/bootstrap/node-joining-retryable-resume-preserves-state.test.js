@@ -6,7 +6,7 @@
  * Terminal failures (non-retryable, resume budget exhausted) must still run
  * the full destructive cleanup exactly as before.
  *
- * See .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-006.md
+ * See solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-006.md
  * for the production witness (stat-gate-20260610T155735Z).
  */
 

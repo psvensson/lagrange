@@ -3,7 +3,7 @@ import LifeRaft from '../../src/raft/liferaft.js';
 import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 
 // CL-041 — deterministic unit repro of the @markwylde/liferaft vote-handler double-vote TOCTOU
-// (record: .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md).
+// (record: solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md).
 //
 // First violated invariant (Raft §5.2 — one vote per term): a server grants its vote to AT MOST
 // ONE candidate in a given term. liferaft's `vote` handler races: the `await raft.log.getLastInfo()`

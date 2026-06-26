@@ -131,7 +131,7 @@ graduatesTo: null
 
 > Handoff scope for the next agent. Everything below is evidence-grounded from the
 > 2026-06-23 profiling session (file:line verified at HEAD `67f5a10c`, but POSITIONAL —
-> re-grep before trusting). Read [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
+> re-grep before trusting). Read [`docs/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify).
 
 ## Intent (why now)
@@ -421,7 +421,7 @@ with `actuation.state=persisted_not_dispatched` + `workflowProgressPhaseId=termi
 deadline; assert it currently resolves NOT_DISPATCH_PENDING = bug reproduced) — harness to reuse:
 `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js` (real snapshot
 builders), and (b) the census flags run3 as PREDATING current HEAD — consider re-running the
-census fan-out (`.kiro/epics/latent-convergence-blocker-census.md`) to refresh the frontier.
+census fan-out (`solve/epics/latent-convergence-blocker-census.md`) to refresh the frontier.
 NOTE: this lever belongs to the `rolling-restart-core-stability` quest / `topology-convergence-
 hardening` epic, not this L-write epic.
 
@@ -525,7 +525,7 @@ as THE binding lever**, validated below the gate via a directed DT repro. The 3 
 once #4 un-masks. See task #10 (now re-prioritized) + #11.
 
 ➡️ **FRESH-AGENT START-HERE handoff:**
-[`.kiro/epics/spread-satisfied-in-flight-staleness-unmask.md`](spread-satisfied-in-flight-staleness-unmask.md)
+[`solve/epics/spread-satisfied-in-flight-staleness-unmask.md`](spread-satisfied-in-flight-staleness-unmask.md)
 — self-contained scope for census #4 (exact 3 classifier seams + file:line, the staleness signal,
 the flag, the directed-DT-repro validation plan, and how the 3 built levers compose). A fresh agent
 can start there directly.

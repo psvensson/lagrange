@@ -284,7 +284,7 @@ Total rules: 286
 | GOV-0082 | should | governance | Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list. |
 | GOV-0083 | should | governance | Independent work within a Quest SHOULD run concurrently: batch independent reads, fan out… |
 | GOV-0084 | should | governance | Longer work SHOULD use run --keep-alive so the loop survives those gates. |
-| GOV-0085 | should | governance | In-repo steering (.kiro/steering/, the generated packs under .kiro/steering/llm/, rules.j… |
+| GOV-0085 | should | governance | In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.jso… |
 | ARCH-0107 | may | architecture | Under load, the system may slow down, defer work, or reject new edge work with structured… |
 | GOV-0086 | may | governance | terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately … |
 | GOV-0087 | may | governance | It is git-ignored and may be rebuilt from the Quest plus event log. |

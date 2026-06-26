@@ -336,10 +336,10 @@ also enable future paid system services.
 
 | Item | Roadmap state | Scope notes |
 |------|--------|-------|
-| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `.kiro/specs/activation-cost-aware-placement/` |
+| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `solve/specs/activation-cost-aware-placement/` |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
-| Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `.kiro/specs/activation-cost-aware-placement/`. Architecture: `architecture/future/activation-cost-aware-placement.md` |
+| Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `solve/specs/activation-cost-aware-placement/`. Architecture: `architecture/future/activation-cost-aware-placement.md` |
 | Vector search service | 🔲 | |
 | Embedding service | 🔲 | |
 

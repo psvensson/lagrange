@@ -17,7 +17,7 @@ duplicate them:
   owner file + deletion condition). Source of truth for *where each file's content
   goes* once a cluster is laddered. That file explicitly excludes "roadmap scope
   decisions", which is why this roadmap is separate.
-- `.kiro/steering/system guidelines.md` §8–9 — the durable rule forbidding new
+- `docs/steering/system guidelines.md` §8–9 — the durable rule forbidding new
   ordinal/grab-bag filenames. Source of truth for *the standard we are converging on*.
 
 This roadmap is planning-only. It does not rename or move any runtime module.
@@ -243,7 +243,7 @@ Each source cluster has a mirrored set of ordinal test files (~196 total). They 
 - **Decision-boundary checker:** `scripts/check-guideline-decision-boundaries.js`
   (`audit:guideline:decision-boundaries`) with its 783-entry baseline — extractions
   must not introduce new boundary violations; re-baseline only for pure line shifts.
-- **Steering rule:** `.kiro/steering/system guidelines.md` §8–9.
+- **Steering rule:** `docs/steering/system guidelines.md` §8–9.
 
 ## Risks and open questions
 

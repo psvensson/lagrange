@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/testing.md
+compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
 last_reviewed: 2026-05-23
 ---
@@ -81,7 +81,7 @@ Required workflow:
 
 1. Identify the production files touched by the new or modified test and their
    direct owner collaborators.
-2. Check those files against `.kiro/steering/system-guidelines.md` with special
+2. Check those files against `docs/steering/system-guidelines.md` with special
    focus on:
    - owner dependency routing
    - duplicate logic and fallback paths

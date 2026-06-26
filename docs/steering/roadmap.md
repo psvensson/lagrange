@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/governance.md
+compiled_pack: docs/steering/llm/governance.md
 last_reviewed: 2026-06-01
 ---
 
@@ -52,18 +52,18 @@ Use repository documents according to this ownership split:
 
 | Document class | Canonical location | Primary concern |
 | --- | --- | --- |
-| Implementation doctrine | `.kiro/steering/doctrine/INDEX.md` | Repo-wide architectural intent |
-| Stable implementation contract | `.kiro/steering/system-guidelines.md` | Repo-wide hard stops |
-| Runtime contract detail | `.kiro/steering/runtime-contracts.md` | Control-plane, cache, metadata, pressure, and transport rules |
-| Workflow contract detail | `.kiro/steering/workflow-guidelines/INDEX.md` | Quest workflow |
-| Stable testing policy | `.kiro/steering/testing-guidelines/INDEX.md` | Durable repo-wide testing rules |
-| Style and lint | `.kiro/steering/code-style.md` | Formatting, lint, and local coding style |
+| Implementation doctrine | `docs/steering/doctrine/INDEX.md` | Repo-wide architectural intent |
+| Stable implementation contract | `docs/steering/system-guidelines.md` | Repo-wide hard stops |
+| Runtime contract detail | `docs/steering/runtime-contracts.md` | Control-plane, cache, metadata, pressure, and transport rules |
+| Workflow contract detail | `docs/steering/workflow-guidelines/INDEX.md` | Quest workflow |
+| Stable testing policy | `docs/steering/testing-guidelines/INDEX.md` | Durable repo-wide testing rules |
+| Style and lint | `docs/steering/code-style.md` | Formatting, lint, and local coding style |
 | Architecture entrypoint | `architecture/INDEX.md` | Canonical architecture entrypoint and subsystem detail |
 | AGPL roadmap | `roadmap.md` | Allowed feature scope and broad sequence |
 | Visibility roadmap | `product-roadmap.md` | Cross-edition status only |
 | Scope matrix | `edition-matrix.md` | Edition and implementation-home mapping |
 | Quest definitions | `solve/quests/*` | Active work goals, frontiers, and constraints |
-| Workstream-local procedure | `.kiro/specs/*`, `test/*.local.md` | Thresholds, scripts, checklists, local proof detail |
+| Workstream-local procedure | `solve/specs/*`, `test/*.local.md` | Thresholds, scripts, checklists, local proof detail |
 
 ## Quest Intake And Execution Flow
 
@@ -151,10 +151,10 @@ Use these repository-root checks to confirm the steering stack still has one
 doctrine path and that top-level canonical source files declare their role:
 
 ```sh
-rg -n --glob '*.md' '`(doctrine|workflow-guidelines|testing-guidelines)\\.md`' .kiro/steering
-rg -n --glob '*.md' '\\.kiro/steering/(doctrine|workflow-guidelines|testing-guidelines)\\.md' .kiro/steering
-rg -n --glob '*.md' '\\.kiro/steering/(doctrine|workflow-guidelines|testing-guidelines)/INDEX\\.md' .kiro/steering
-for f in .kiro/steering/*.md; do
+rg -n --glob '*.md' '`(doctrine|workflow-guidelines|testing-guidelines)\\.md`' docs/steering
+rg -n --glob '*.md' '\\docs/steering/(doctrine|workflow-guidelines|testing-guidelines)\\.md' docs/steering
+rg -n --glob '*.md' '\\docs/steering/(doctrine|workflow-guidelines|testing-guidelines)/INDEX\\.md' docs/steering
+for f in docs/steering/*.md; do
   rg -q '^status: canonical$' "$f" || continue
   rg -q '^## Document Role$' "$f" || echo "$f"
 done
@@ -164,7 +164,7 @@ Expected result:
 
 1. Short-name moved steering pointer references return zero hits in steering
    Markdown.
-2. Canonical `.kiro/steering/*/INDEX.md` references remain for moved steering
+2. Canonical `docs/steering/*/INDEX.md` references remain for moved steering
    trees.
 3. The `Document Role` loop prints no paths for top-level canonical source
    files. Pointer files, split subfiles, and generated LLM packs are outside

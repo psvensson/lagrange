@@ -6,7 +6,7 @@
  * drives the *real* `SystemTableCache.applySystemTableChange` apply path (no
  * mocks) for every propagated table, across the divergence modes the WS0 ordering
  * audit found
- * (`.kiro/specs/proximity-spray-cdc-propagation-overlay/ws0-ordering-audit.md`),
+ * (`solve/specs/proximity-spray-cdc-propagation-overlay/ws0-ordering-audit.md`),
  * plus two guard arms that keep a fix honest.
  *
  * Bug-repro modes (RED today, must flip green under the fix):

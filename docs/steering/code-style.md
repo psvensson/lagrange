@@ -3,7 +3,7 @@ scope: style
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/style.md
+compiled_pack: docs/steering/llm/style.md
 last_reviewed: 2026-05-23
 ---
 
@@ -30,9 +30,9 @@ Do not use this file for:
 
 For those concerns, use:
 
-- [`.kiro/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
-- [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
-- [`.kiro/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
+- [`docs/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
+- [`docs/steering/system-guidelines.md`](system-guidelines.md)
+- [`docs/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md)
 - [`../../roadmap.md`](../../roadmap.md)
 
@@ -70,7 +70,7 @@ When writing or modifying code:
 ## Constants And Naming
 
 - Follow the scalar/state generation contract from
-  [`.kiro/steering/system-guidelines.md`](system-guidelines.md).
+  [`docs/steering/system-guidelines.md`](system-guidelines.md).
 - Shared domain literals belong in their canonical owner module and must be
   imported from there.
 - File-local named constants are allowed when the value is private to one file.
@@ -108,9 +108,9 @@ When writing or modifying code:
 After writing or modifying code, also review the adjacent steering documents for
 non-style concerns:
 
-- [`.kiro/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
-- [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
-- [`.kiro/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
+- [`docs/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
+- [`docs/steering/system-guidelines.md`](system-guidelines.md)
+- [`docs/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
 
 ## Common Patterns
 

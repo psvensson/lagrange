@@ -184,7 +184,7 @@ report) and add the auto-link (A) once the predicate-expressibility question is 
   Invariant = "closure-ledger entry that never closes," the episodic/standing dual of a Quest.
   Recommended Option A model + Option C first increment, proven by a revert-a-closed-CL test.
   Open questions seeded.
-- 2026-06-23 — **Graduated to spec** `.kiro/specs/standing-invariant-closure/`
+- 2026-06-23 — **Graduated to spec** `solve/specs/standing-invariant-closure/`
   (requirements.md + design.md + tasks.md). Operator bought the direction. Status → graduated.
   WS0 (expressibility hard gate on CL-041/042) is the next action and blocks all later phases.
 - 2026-06-24 — **Correction (operator: architecture docs must reflect current state).** The

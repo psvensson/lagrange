@@ -4,7 +4,7 @@ import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 
 // CL-042 — deterministic unit repro of the @markwylde/liferaft + log-adapter Leader-Completeness
 // hole (Raft §5.4.1 election restriction). Record:
-// .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md
+// solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md
 //
 // First violated invariant (Raft §5.4.1): a server grants its vote only if the candidate's log is
 // at least as up-to-date as its own. An EMPTY log has last-log-term 0, but the adapters

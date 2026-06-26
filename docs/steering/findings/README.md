@@ -10,7 +10,7 @@ CI-gated guardrail instead of living only in transient external memory.
 [--match <substr> | --ts <iso>] [--slug <slug>]` reads the matching finding from the
 quest's append-only log and writes `<date>-<quest>-<slug>.md` from `_template.md`,
 then appends a matching `sources[]` entry to
-`.kiro/steering/llm-pack.config.json`. Promotion is an explicit human act; the
+`docs/steering/llm-pack.config.json`. Promotion is an explicit human act; the
 command only stages the file — you still run the regeneration and review the diff.
 
 ## What the steering generator actually reads (important)
@@ -41,7 +41,7 @@ npm run rule -- --id <assigned-id>      # e.g. GOV-0062
 npm run rule -- --domain governance     # browse the domain
 ```
 
-It enters the **compact** domain pack (`.kiro/steering/llm/<domain>.md`) only if its
+It enters the **compact** domain pack (`docs/steering/llm/<domain>.md`) only if its
 score clears that domain's `maxRules` cap — promoted findings default to
 `priority: 100`, so in a crowded domain they are queryable but may not surface in the
 always-loaded pack. To force one into the compact pack, raise its `priority` in the

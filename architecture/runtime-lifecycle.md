@@ -94,10 +94,10 @@ Mandatory owner boundaries:
 
 This section is the canonical owner map for consolidation work tracked in:
 
-1. `.kiro/specs/architecture-ownership-consolidation/requirements.md`
-2. `.kiro/specs/architecture-ownership-consolidation/design.md`
-3. `.kiro/specs/architecture-ownership-consolidation/tasks.md`
-4. `.kiro/specs/architecture-ownership-consolidation/owner-map.md`
+1. `solve/specs/architecture-ownership-consolidation/requirements.md`
+2. `solve/specs/architecture-ownership-consolidation/design.md`
+3. `solve/specs/architecture-ownership-consolidation/tasks.md`
+4. `solve/specs/architecture-ownership-consolidation/owner-map.md`
 
 | Concern | Owner | Runtime boundary |
 | --- | --- | --- |
@@ -178,7 +178,7 @@ State labels in this section are explicit and mandatory.
 2. Adapter ingress remains fixed, and mutation ownership remains serviceized
    via replicated meta services.
 3. Documentation, tests, and status claims stay closure-gated by
-   `.kiro/specs/runtime-ownership-closure/closure-matrix.md`.
+   `solve/specs/runtime-ownership-closure/closure-matrix.md`.
 
 ### Planned
 
@@ -340,8 +340,8 @@ The unified runtime model has one steady-state posture:
 
 1. `docs/admin-migration-guide.md`
 2. `docs/wasm-services-user-guide.md`
-3. `.kiro/specs/runtime-ownership-closure/closure-matrix.md`
-4. `.kiro/specs/runtime-ownership-closure/completion-gates.md`
+3. `solve/specs/runtime-ownership-closure/closure-matrix.md`
+4. `solve/specs/runtime-ownership-closure/completion-gates.md`
 ## Safety Interval (Read Consistency)
 
 WASM service groups use a CockroachDB-style closed-timestamp mechanism for strong reads without routing all reads to the leader.

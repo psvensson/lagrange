@@ -15,7 +15,7 @@ the steering corpus (contradictions, vocab-before-definition, pack-truncation
 framing, dangling refs, reworded duplicates). Source: steering-doc audit,
 2026-06-17.
 
-**Hard constraint (routing):** Generated packs (`.kiro/steering/llm/{architecture,
+**Hard constraint (routing):** Generated packs (`docs/steering/llm/{architecture,
 testing,style,governance}.md`, `rules-index.md`, `rules.json`, `manifest.json`)
 MUST NOT be hand-edited — `npm run steering:check` regenerates them and asserts
 `git diff --quiet`, so direct edits are reverted/flagged. Pack content changes go

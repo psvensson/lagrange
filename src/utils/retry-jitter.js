@@ -2,7 +2,7 @@
  * Bounded retry jitter — decorrelate synchronized retriers so independent nodes
  * do not all hammer a saturated owner at the same instant (a metastable-failure
  * sustaining mechanism; see
- * .kiro/specs/metastable-convergence-resilience/, Phase 1).
+ * solve/specs/metastable-convergence-resilience/, Phase 1).
  *
  * Conservative by construction: jitter is ADDITIVE-UPWARD only, so a jittered
  * delay is never SHORTER than the computed backoff — it can only spread the herd

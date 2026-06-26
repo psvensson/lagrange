@@ -9,20 +9,31 @@ projection — act on a record only after reading its file.
 ## 1 · Roadmap rows in play — 1
 _Scope authority (roadmap.md). A row is in play when an epic or quest cites it via links.roadmapRow._
 
-| row                       | epics                          | quests                         |
-| ------------------------- | ------------------------------ | ------------------------------ |
-| RM-0.1-fs-rolling-restart | topology-convergence-hardening | rolling-restart-core-stability |
+| row                       | epics                                                                                                                                                                                                                                        | quests                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| RM-0.1-fs-rolling-restart | control-plane-write-wedge-leader-local-establishment, convergence-timeout-leadership-settle, latent-convergence-blocker-census, slow-rejoiner-progress-or-evict, spread-satisfied-in-flight-staleness-unmask, topology-convergence-hardening | rolling-restart-core-stability |
 
-## 2 · Epics — 2
-_Lightweight planning above specs (.kiro/epics/) — sharpen intent before a sealed doneWhen exists._
+## 2 · Epics — 13
+_Lightweight planning above specs (solve/epics/) — sharpen intent before a sealed doneWhen exists._
 
-| id                             | status     | roadmapRow                | graduatesTo                                 |
-| ------------------------------ | ---------- | ------------------------- | ------------------------------------------- |
-| steering-doc-clarity           | graduated  | —                         | —                                           |
-| topology-convergence-hardening | sharpening | RM-0.1-fs-rolling-restart | membership-lifecycle-placement-hard-cutover |
+| id                                                   | status             | roadmapRow                | graduatesTo                                          |
+| ---------------------------------------------------- | ------------------ | ------------------------- | ---------------------------------------------------- |
+| architecture-altitude-review                         | discussing         | —                         | —                                                    |
+| continuous-ai-workflow-landscape                     | discussing         | —                         | —                                                    |
+| control-plane-write-wedge-leader-local-establishment | active             | RM-0.1-fs-rolling-restart | —                                                    |
+| convergence-timeout-leadership-settle                | discussing         | RM-0.1-fs-rolling-restart | —                                                    |
+| hardware-relative-convergence-budget                 | unknown            | —                         | —                                                    |
+| latent-convergence-blocker-census                    | sharpening         | RM-0.1-fs-rolling-restart | topology-convergence-hardening                       |
+| membership-single-owner-cutover                      | discussing         | —                         | membership-lifecycle-placement-hard-cutover          |
+| quest-standing-invariants                            | graduated          | —                         | standing-invariant-closure                           |
+| slow-rejoiner-progress-or-evict                      | resolved           | RM-0.1-fs-rolling-restart | convergence-timeout-leadership-settle                |
+| spread-satisfied-in-flight-staleness-unmask          | landed-default-off | RM-0.1-fs-rolling-restart | control-plane-write-wedge-leader-local-establishment |
+| steering-doc-clarity                                 | graduated          | —                         | —                                                    |
+| strategy-gate-and-altitude-teeth                     | unknown            | —                         | —                                                    |
+| topology-convergence-hardening                       | sharpening         | RM-0.1-fs-rolling-restart | membership-lifecycle-placement-hard-cutover          |
 
-## 3 · Specs — 9 (1 with open quests)
-_Detailed planning (.kiro/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._
+## 3 · Specs — 10 (1 with open quests)
+_Detailed planning (solve/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._
 
 | spec                                        | quests (open/total) | quest ids                                                                                                                                                                           |
 | ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,14 +46,16 @@ _Detailed planning (.kiro/specs/): design + requirements + tasks. Implemented by
 | proximity-spray-cdc-propagation-overlay     | 0/1                 | cdc-cache-delete-resurrection                                                                                                                                                       |
 | raft-logic-migration                        | 0/0                 | —                                                                                                                                                                                   |
 | spec-led-runtime-modularization             | 0/0                 | —                                                                                                                                                                                   |
+| standing-invariant-closure                  | 0/0                 | —                                                                                                                                                                                   |
 
-## 4 · Quests — 2 open / 20 terminal
+## 4 · Quests — 3 open / 21 terminal
 _The only measured layer (solve/quests/). Sealed goal; attempts and findings live in the append-only log._
 
 ### Open
 
 | id                                       | class   | spec                                        | attempts | reopens | osc | closes                 |
 | ---------------------------------------- | ------- | ------------------------------------------- | -------- | ------- | --- | ---------------------- |
+| l-write-membership-deferred-seed         | product | —                                           | 0        | 0       | 0   | —                      |
 | membership-publication-drain-determinism | product | membership-lifecycle-placement-hard-cutover | 0        | 0       | 0   | CL-001                 |
 | rolling-restart-core-stability           | product | membership-lifecycle-placement-hard-cutover | 74       | 13      | 2   | CL-001, CL-004, CL-030 |
 
@@ -51,6 +64,7 @@ _The only measured layer (solve/quests/). Sealed goal; attempts and findings liv
 | id                                        | class   | outcome   | attempts |
 | ----------------------------------------- | ------- | --------- | -------- |
 | alloy-execution-guardrails-verifier-fix   | product | solved    | 1        |
+| altitude-reflection-mechanism             | process | solved    | 1        |
 | autonomy-and-parallel-defaults            | process | solved    | 0        |
 | cdc-cache-delete-resurrection             | product | solved    | 1        |
 | core-system-logic-alloy-adjacency         | product | solved    | 1        |

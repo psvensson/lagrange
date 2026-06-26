@@ -2,7 +2,7 @@
 scope: architecture
 status: pointer
 always_load: false
-moved_to: .kiro/steering/doctrine/INDEX.md
+moved_to: docs/steering/doctrine/INDEX.md
 last_reviewed: 2026-05-23
 ---
 

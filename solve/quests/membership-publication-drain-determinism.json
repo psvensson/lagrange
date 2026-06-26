@@ -10,7 +10,7 @@
       "CL-001"
     ],
     "parentQuest": null,
-    "planDoc": ".kiro/epics/topology-convergence-hardening.md"
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
   },
   "doneWhen": {
     "probe": "oracle",

@@ -39,12 +39,12 @@ tightly so "ask the user" becomes a short, named exception list.
 
 | Target | File | Anchor | Pack effect |
 | --- | --- | --- | --- |
-| Always-loaded posture | `.kiro/steering/llm/core.md` | manual pack, `always_load: true`; sections North Star (17), Must-Not (30-62), Core Principles (87-105) | **Manual — edit directly.** Regen skips it because its `outputs` entry is `"manual": true` (generator reads-for-count then `continue`s without writing — `generate-steering-llm-pack.js:1215-1232`). |
-| Presented default mode | `.kiro/steering/llm/boot.md` | manual pack; First Commands (43-86), Conflict Rule (88-101) | **Manual — edit directly.** Untouched because `boot` is not in the `outputs` array at all; the generator never references it. |
-| Durable autonomy rules | `.kiro/steering/workflow-guidelines/solver-quests.md` | Operating Contract (18-34), Terminal/Blocking (478-498), Keep-Alive (658-685) | Canonical source → **governance pack** (config priority 110) via `npm run steering:llm:pack`. |
+| Always-loaded posture | `docs/steering/llm/core.md` | manual pack, `always_load: true`; sections North Star (17), Must-Not (30-62), Core Principles (87-105) | **Manual — edit directly.** Regen skips it because its `outputs` entry is `"manual": true` (generator reads-for-count then `continue`s without writing — `generate-steering-llm-pack.js:1215-1232`). |
+| Presented default mode | `docs/steering/llm/boot.md` | manual pack; First Commands (43-86), Conflict Rule (88-101) | **Manual — edit directly.** Untouched because `boot` is not in the `outputs` array at all; the generator never references it. |
+| Durable autonomy rules | `docs/steering/workflow-guidelines/solver-quests.md` | Operating Contract (18-34), Terminal/Blocking (478-498), Keep-Alive (658-685) | Canonical source → **governance pack** (config priority 110) via `npm run steering:llm:pack`. |
 | Durable parallel rules | same file | new section near Attempt Flow (352) / Strategy Ladder (421) | Canonical → governance pack. |
-| Execution-mode default | `.kiro/steering/workflow-guidelines/lifecycle.md` | Quest Lifecycle step 3 (24-25), First Commands (33-53) | Canonical → governance pack (`compiled_pack: governance.md`). |
-| Consistency cross-ref | `.kiro/steering/doctrine/decision-experiments.md` | parallel-Quest rule (103-105) | Read-only; new parallel norm must not contradict it. |
+| Execution-mode default | `docs/steering/workflow-guidelines/lifecycle.md` | Quest Lifecycle step 3 (24-25), First Commands (33-53) | Canonical → governance pack (`compiled_pack: governance.md`). |
+| Consistency cross-ref | `docs/steering/doctrine/decision-experiments.md` | parallel-Quest rule (103-105) | Read-only; new parallel norm must not contradict it. |
 
 ---
 
@@ -265,7 +265,7 @@ The plan adds posture; it touches none of these rule texts.
 ## Regeneration + verification mechanics
 
 > **BUILD-BREAKER WARNING.** `steering:check` (= `steering:llm:pack && git diff
-> --quiet -- .kiro/steering/llm`) is wired into `test:static` (`package.json:67,117`).
+> --quiet -- docs/steering/llm`) is wired into `test:static` (`package.json:67,117`).
 > So the canonical-source edits (`solver-quests.md`, `lifecycle.md`) MUST be
 > committed **together with** their regenerated outputs (`rules.json`,
 > `governance.md`, `rules-index.md`, `manifest.json`) in the same commit — otherwise
@@ -282,7 +282,7 @@ The plan adds posture; it touches none of these rule texts.
    source edits, not from quest findings) — but the dogfood quest can still record
    findings citing the new rule IDs.
 6. `npm run steering:check` green AFTER commit (it regenerates then
-   `git diff --quiet -- .kiro/steering/llm`; passes once the pack changes are
+   `git diff --quiet -- docs/steering/llm`; passes once the pack changes are
    committed). `steering:check` is now in `test:static`.
 
 ---

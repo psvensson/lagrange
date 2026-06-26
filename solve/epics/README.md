@@ -9,9 +9,9 @@ schema-light and tool-free: just a markdown file from `_template.md`.
 ```
 roadmap row            (roadmap.md — aspirational sequence)
    ↓  discuss intent / options / open questions HERE
-EPIC  (.kiro/epics/<id>.md)        ← this tier
+EPIC  (solve/epics/<id>.md)        ← this tier
    ↓  graduate when intent is sharp enough for a sealed doneWhen
-SPEC  (.kiro/specs/<name>/...)     (design + requirements + tasks)
+SPEC  (solve/specs/<name>/...)     (design + requirements + tasks)
    ↓
 QUEST (solve/quests/<id>.json)     (the only MEASURED layer)
 ```

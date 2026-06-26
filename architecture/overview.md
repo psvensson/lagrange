@@ -22,10 +22,10 @@ Do not use this file for:
 
 For those concerns, use:
 
-- [`.kiro/steering/doctrine.md`](.kiro/steering/doctrine.md)
-- [`.kiro/steering/system guidelines.md`](.kiro/steering/system%20guidelines.md)
-- [`.kiro/steering/testing-guidelines.md`](.kiro/steering/testing-guidelines.md)
-- [`.kiro/steering/roadmap.md`](.kiro/steering/roadmap.md)
+- [`docs/steering/doctrine.md`](docs/steering/doctrine.md)
+- [`docs/steering/system guidelines.md`](docs/steering/system%20guidelines.md)
+- [`docs/steering/testing-guidelines.md`](docs/steering/testing-guidelines.md)
+- [`docs/steering/roadmap.md`](docs/steering/roadmap.md)
 - [`roadmap.md`](roadmap.md)
 
 This document describes the architecture of the distributed database system.

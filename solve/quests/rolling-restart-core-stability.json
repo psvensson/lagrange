@@ -34,6 +34,6 @@
       "CL-030"
     ],
     "parentQuest": null,
-    "planDoc": ".kiro/epics/topology-convergence-hardening.md"
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
   }
 }

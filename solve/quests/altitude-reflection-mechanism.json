@@ -8,7 +8,7 @@
     "specRef": null,
     "closesCL": [],
     "parentQuest": null,
-    "planDoc": ".kiro/epics/architecture-altitude-review.md"
+    "planDoc": "solve/epics/architecture-altitude-review.md"
   },
   "doneWhen": {
     "probe": "oracle",

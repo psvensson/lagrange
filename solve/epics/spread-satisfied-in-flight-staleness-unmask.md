@@ -61,7 +61,7 @@ links:
 
 > **START-HERE handoff for a fresh agent.** Everything to begin is below; file:line verified
 > at HEAD `99033274` (2026-06-23) but POSITIONAL — re-grep before trusting. Read
-> [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md) first
+> [`docs/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md) first
 > (deterministic-first / gate-last / research-existing / subagent-verify / never-conclude-from-N=1).
 
 ## TL;DR (what to build, and the one hard rule)
@@ -189,6 +189,6 @@ in the gates because #4 masks the op before they can fire — they become reacha
 - Run a unit suite (from `/home/peter/projects/something`, NOT the /media path):
   `npx tap test/control-plane/priority-recovery-completion.test.js -- --no-coverage`
 - Latent-blocker corpus: `npm run analyze:latent-blockers` (run before any gate).
-- Full census frontier this descends from: `.kiro/epics/latent-convergence-blocker-census.md`
+- Full census frontier this descends from: `solve/epics/latent-convergence-blocker-census.md`
   (survivors run3 `test-output/latent-blocker-census-run3.json`); shared-root detail:
-  `.kiro/epics/control-plane-write-wedge-leader-local-establishment.md` (RE-GROUNDING + CORRECTION blocks).
+  `solve/epics/control-plane-write-wedge-leader-local-establishment.md` (RE-GROUNDING + CORRECTION blocks).

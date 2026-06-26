@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. Spec at `.kiro/specs/activation-cost-aware-placement/`.
+Planned. Spec at `solve/specs/activation-cost-aware-placement/`.
 
 ## Problem
 

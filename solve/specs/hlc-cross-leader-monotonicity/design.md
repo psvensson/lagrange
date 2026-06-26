@@ -5,7 +5,7 @@ oracle-backed (`solve/oracle/hlc-cross-leader-monotonicity.json`), closed on
 deterministic tests verified by a subagent.
 **Blocks:** Quest `cdc-cache-delete-resurrection` (HLC-LWW + tombstones needs a
 monotonic HLC fence). Discovered via
-`.kiro/specs/proximity-spray-cdc-propagation-overlay/ws0.5-reliability-substrate.md`.
+`solve/specs/proximity-spray-cdc-propagation-overlay/ws0.5-reliability-substrate.md`.
 
 ## Problem (verified 2026-06-15)
 

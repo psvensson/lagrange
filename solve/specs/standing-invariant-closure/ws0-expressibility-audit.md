@@ -14,7 +14,7 @@ fix passes it. WS1+ are unblocked.
 | Property | Raft §5.2 Election Safety: a follower grants ≤1 vote per term ⇒ ≤1 leader per term |
 | Registry entry (added) | `raft-election-safety-one-vote-per-term` in `architecture/contracts/invariants.json` |
 | Fix under guard | `src/raft/liferaft.js:291-295` (vote serialization, commit `1eee32dd`) |
-| Anchoring decision (ADR) | `.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md` (entry `contractRef`) |
+| Anchoring decision (ADR) | `solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md` (entry `contractRef`) |
 
 There was **no** pre-existing raft invariant in the registry, so WS0 added one — closing
 a real registry gap (Tier-1 `formalPredicate` documented; `modelRef` intentionally omitted

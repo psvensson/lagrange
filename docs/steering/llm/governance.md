@@ -39,7 +39,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 17. [GOV-0024] Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever. _(see workflow-guidelines/solver-quests.md:113)_
 18. [GOV-0026] A Quest must not accumulate an unrecoverable dirty tree. _(see workflow-guidelines/solver-quests.md:179)_
 19. [GOV-0028] Detectors fire only on real recorded events and never touch the sealed doneWhen. _(see workflow-guidelines/solver-quests.md:199)_
-20. [GOV-0029] A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see .kiro/steering/findings/README.md), NOT left only in external memory. _(see memory-boundary.md:20)_
+20. [GOV-0029] A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see docs/steering/findings/README.md), NOT left only in external memory. _(see memory-boundary.md:20)_
 21. [GOV-0030] Durable operational ground truth has exactly one canonical home, operational-ground-truth.md. AGENTS.md and the external auto-memory MUST link to it rather than restate it. _(see memory-boundary.md:26)_
 
 ### Ownership & Authority Policies

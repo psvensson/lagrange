@@ -8,7 +8,7 @@ import {SeededRandomSource} from '../../src/random/random-source.js';
 
 // CL-040 — deterministic repro of the @markwylde/liferaft + InMemoryLogAdapter same-index
 // stale-commit log-safety gap (surfaced by DT6 step 7 verification, see
-// .kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md).
+// solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md).
 //
 // First violated invariant (Raft §5.3 Log Matching / State Machine Safety): if a log entry is
 // committed at a given index, every node must hold the SAME committed entry at that index. Here a

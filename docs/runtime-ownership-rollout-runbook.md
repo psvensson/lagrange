@@ -34,8 +34,8 @@ Before promotion or after an incident rollback, verify:
 4. Diagnostics show the canonical lifecycle owner path rather than a startup-
    local or adapter-local path.
 5. Closure evidence in
-   `.kiro/specs/runtime-ownership-closure/completion-gates.md` and
-   `.kiro/specs/runtime-ownership-closure/closure-matrix.md` still matches the
+   `solve/specs/runtime-ownership-closure/completion-gates.md` and
+   `solve/specs/runtime-ownership-closure/closure-matrix.md` still matches the
    deployed code.
 
 Safe rollback rules:
@@ -121,7 +121,7 @@ Expected mismatch interpretation:
 ## 5. Sign-Off Checklist
 
 1. All V1..V6 checkpoints in
-   `.kiro/specs/runtime-ownership-closure/completion-gates.md` are complete.
+   `solve/specs/runtime-ownership-closure/completion-gates.md` are complete.
 2. `closure-matrix.md` includes evidence for all `S1..S10`.
 3. Admin mode state and OCI gate state are explicitly recorded for release.
 

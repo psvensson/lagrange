@@ -300,7 +300,7 @@ npm run migration:raft:stage:limited
 
 Reports are written under:
 
-`.kiro/specs/raft-logic-migration/reports/`
+`solve/specs/raft-logic-migration/reports/`
 
 Benchmark tuning notes (in `benchmark` config block):
 

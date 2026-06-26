@@ -18,7 +18,7 @@ Do not use this file for:
 - roadmap scope decisions
 
 For durable implementation rules, use
-[`.kiro/steering/system guidelines.md`](../.kiro/steering/system%20guidelines.md).
+[`docs/steering/system guidelines.md`](../docs/steering/system%20guidelines.md).
 
 ## Runtime Grammar Hierarchy
 

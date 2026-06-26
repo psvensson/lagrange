@@ -54,10 +54,10 @@ any distributed-harness or convergence work:
   blockers are MASKED behind today's dominant reason, the peel-order, and emerging
   candidates — run `npm run analyze:latent-blockers` over the whole report corpus
   (the deterministic backbone of the latent-blocker census;
-  [`.kiro/epics/latent-convergence-blocker-census.md`](../epics/latent-convergence-blocker-census.md)).
+  [`solve/epics/latent-convergence-blocker-census.md`](../epics/latent-convergence-blocker-census.md)).
   Open raw ndjson only after an analyzer has named the owner/edge.
 - **Distributed blockers are tracked one invariant at a time.** Follow
-  [`.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
+  [`solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file
   under `closure-ledger/CL-###.md`; `closure-ledger.md` is the index.
   - **…but one-invariant-at-a-time fails when the invariants are COUPLED.** If

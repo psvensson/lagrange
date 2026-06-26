@@ -6,8 +6,8 @@ conflicting copies.
 
 ## The two systems
 
-- **In-repo steering** (`.kiro/steering/**`, the generated packs under
-  `.kiro/steering/llm/`, `rules.json`, and `AGENTS.md`): durable, shared,
+- **In-repo steering** (`docs/steering/**`, the generated packs under
+  `docs/steering/llm/`, `rules.json`, and `AGENTS.md`): durable, shared,
   version-controlled, CI-gated **rules and ground truth**. This is the home for
   anything that should bind future work for *everyone*.
 - **External auto-memory** (the agent's `MEMORY.md` and its files, outside the
@@ -19,7 +19,7 @@ conflicting copies.
 
 - A lesson that should bind future work for everyone MUST be promoted into in-repo
   steering via `node scripts/solve.js promote-finding` (see
-  [`.kiro/steering/findings/README.md`](findings/README.md)), NOT left only in
+  [`docs/steering/findings/README.md`](findings/README.md)), NOT left only in
   external memory.
 - Session/narrative state (current blocker, handoff notes, working hypotheses) stays
   in external memory and MUST NOT be copied into in-repo steering.

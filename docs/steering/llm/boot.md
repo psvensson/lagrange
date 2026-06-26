@@ -3,7 +3,7 @@ scope: boot
 status: manual-pack
 always_load: true
 source_of_truth: self
-canonical_rules: .kiro/steering/workflow-guidelines/solver-quests.md
+canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
 last_reviewed: 2026-06-19
 ---
 
@@ -19,9 +19,9 @@ When sources appear to disagree at execution time, follow this order:
 
 1. **User and developer instructions, and safety limits.**
 2. **Quest workflow canon.** `AGENTS.md`,
-   `.kiro/steering/workflow-guidelines/solver-quests.md`, and the active Quest
+   `docs/steering/workflow-guidelines/solver-quests.md`, and the active Quest
    file define the current task and rules of engagement.
-3. **Domain packs under `.kiro/steering/llm/*.md`.** Apply only rules whose
+3. **Domain packs under `docs/steering/llm/*.md`.** Apply only rules whose
    scope intersects the touched owner boundary.
 
 The source-vs-pack distinction is a generator concern, not an execution-time
@@ -110,5 +110,5 @@ domain-pack constraints:
    "Default Posture: Autonomy" stop-triggers (Authorization / Safety / scope — see
    core.md for the authoritative four); the default
    posture stays autonomous for everything outside that stop-list.
-3. If a domain pack rule is outdated, edit its source under `.kiro/steering/`
+3. If a domain pack rule is outdated, edit its source under `docs/steering/`
    and run `npm run steering:llm:pack`.

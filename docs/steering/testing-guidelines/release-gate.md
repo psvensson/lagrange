@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/testing.md
+compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
 last_reviewed: 2026-06-01
 ---

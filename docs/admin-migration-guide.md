@@ -191,4 +191,4 @@ command handler interface, so CLI users see no change.
 
 1. `docs/wasm-services-user-guide.md`
 2. `docs/runtime-ownership-rollout-runbook.md`
-3. `.kiro/steering/architecture.md`
+3. `docs/steering/architecture.md`

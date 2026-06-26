@@ -4,7 +4,7 @@
  * single target owner, so a saturated owner (e.g. the sole-surviving seed during
  * a rolling restart) is not hammered by an unbounded retry storm. This breaks
  * the retry/work-amplification loop that sustains a metastable failure
- * (.kiro/specs/metastable-convergence-resilience/, Phase 1, task 1.5).
+ * (solve/specs/metastable-convergence-resilience/, Phase 1, task 1.5).
  *
  * Note: this bounds the PER-NODE contribution; with N nodes the aggregate is
  * still ~N x rate, but it removes each node's unbounded amplification.

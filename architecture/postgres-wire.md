@@ -179,7 +179,7 @@ Dialect flows through `SqlRequest.dialect` from `PostgresWireAdapter` to
 `SqlCore` to `SQLParser`. Internal system queries omit dialect, defaulting
 to SQLite mode. No component outside the parse phase is aware of dialect.
 
-Spec: `.kiro/specs/pg-sql-compat-layer/`
+Spec: `solve/specs/pg-sql-compat-layer/`
 
 ### PostgreSQL Compatibility — Future Directions (Planned)
 

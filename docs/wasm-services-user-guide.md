@@ -594,4 +594,4 @@ async start(replicaContext) {
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
 2. `docs/admin-migration-guide.md` (migration to meta-service owned admin paths)
 3. `docs/runtime-ownership-rollout-runbook.md` (phase rollout and rollback)
-4. `.kiro/steering/architecture.md` (active ownership model)
+4. `docs/steering/architecture.md` (active ownership model)

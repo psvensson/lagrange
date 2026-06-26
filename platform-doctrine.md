@@ -18,10 +18,10 @@ Do not use this file for:
 - testing policy
 - roadmap scope decisions
 
-For implementation work, use [`.kiro/steering/doctrine.md`](.kiro/steering/doctrine.md)
+For implementation work, use [`docs/steering/doctrine.md`](docs/steering/doctrine.md)
 as the canonical doctrine, then follow
-[`.kiro/steering/system guidelines.md`](.kiro/steering/system%20guidelines.md),
-[`.kiro/steering/testing-guidelines.md`](.kiro/steering/testing-guidelines.md),
+[`docs/steering/system guidelines.md`](docs/steering/system%20guidelines.md),
+[`docs/steering/testing-guidelines.md`](docs/steering/testing-guidelines.md),
 and [`roadmap.md`](roadmap.md).
 
 ## Purpose

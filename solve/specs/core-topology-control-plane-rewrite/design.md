@@ -85,7 +85,7 @@ raw evidence from cache, SQL, transport, timers, or phase internals.
 ## Inventory Handoff
 
 The pre-runtime inventory lives in
-`.kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`.
+`solve/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`.
 It is the source for package sequencing until runtime extraction starts. The
 important split is that publication rows, ACK state, and freshness must be
 canonical before projection/readiness consumers are cut over.

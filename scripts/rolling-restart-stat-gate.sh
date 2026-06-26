@@ -7,9 +7,9 @@
 # warm-state reuse confound) and emits a distribution: pass-rate,
 # missingPublishedCount histogram, duration percentiles, dominant-reason tally.
 #
-# See .kiro/specs/metastable-convergence-resilience/ (Phase 0).
+# See solve/specs/metastable-convergence-resilience/ (Phase 0).
 #
-# Sample size — SMALLEST FIRST (see .kiro/steering/operational-ground-truth.md
+# Sample size — SMALLEST FIRST (see docs/steering/operational-ground-truth.md
 # "Deterministic-first, gate-last"): start with the lowest N that could answer the
 # question and escalate ONLY when a small run is inconclusive. Default to N=3 — it
 # is also the `rolling-restart-core-stability` doneWhen streak (3 consecutive

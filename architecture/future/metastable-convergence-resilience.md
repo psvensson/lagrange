@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned / research. Spec at `.kiro/specs/metastable-convergence-resilience/`.
+Planned / research. Spec at `solve/specs/metastable-convergence-resilience/`.
 Motivated by the chronic `rolling-restart` non-convergence
 documented in
 [Active Gate Convergence Contract](../contracts/active-gate-convergence.md) and

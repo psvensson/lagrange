@@ -382,7 +382,7 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
 // (preRestartSettleMs, interRestartDelayMs, postRestartLoadSoakMs), stability
 // windows (postRestartQuietWindowMs), poll cadences, and attempt counts are NOT
 // here — scaling them would waste time or weaken a proof, not track hardware. See
-// .kiro/epics/hardware-relative-convergence-budget.md.
+// solve/epics/hardware-relative-convergence-budget.md.
 const WORK_BOUND_SCENARIO_TIMEOUT_FIELDS = Object.freeze([
   'preLoadReadinessTimeoutMs',
   'perRestartActiveTimeoutMs',

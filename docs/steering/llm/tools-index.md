@@ -54,6 +54,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:guideline:decision-boundaries` — Check semantic decision boundaries for independent branch piles.
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
 - `audit:guideline:literals` — Check write-scope files for new unowned runtime literals.
+- `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-ordinal-files` — `node scripts/check-no-ordinal-files.js`
 - `audit:operation-progress-authority` — Block retired operation-progress source vocabulary and new rebalancer ordinal files outside the owner-map ledger.
 - `audit:owner-boundary-segments` — Print extraction guidance for oversized owner-boundary segment files.
@@ -217,4 +218,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-142 scripts indexed; 64 have a curated description, 78 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+143 scripts indexed; 64 have a curated description, 79 fall back to their raw command. Improve coverage in the two sources named in the header comment.

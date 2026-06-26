@@ -3,7 +3,7 @@ scope: core
 status: manual-pack
 always_load: true
 source_of_truth: self
-canonical_rules: .kiro/steering/workflow-guidelines/solver-quests.md
+canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
 last_reviewed: 2026-06-19
 ---
 
@@ -111,10 +111,10 @@ This section governs the **pack-vs-source** axis (which copy of a rule is
 authoritative). For the separate **execution-time** precedence among instructions
 (user/safety > Quest canon > domain packs), see boot.md "Authority Order".
 
-Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Each
+Compact packs under [`docs/steering/llm/`](.) are the runtime surface. Each
 generated domain pack is a priority-ranked SUBSET (capped per `maxRules`), not the
 full rule corpus — consult [`rules-index.md`](rules-index.md) or `npm run rule` for
-every rule in a domain. Source steering under [`.kiro/steering/`](../) is consulted
+every rule in a domain. Source steering under [`docs/steering/`](../) is consulted
 only to chase cited detail behind a compact-pack rule or to repair pack drift. If
 source detail shows the pack is wrong, fix the source and regenerate with
 `npm run steering:llm:pack`.

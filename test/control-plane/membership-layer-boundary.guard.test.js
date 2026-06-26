@@ -5,7 +5,7 @@ import {test} from '../../src/test-helpers/tap.js';
 // Membership layer-ownership boundary guard (cutover plan §5 step 1).
 //
 // Canonical three-layer membership architecture
-// (.kiro/specs/membership-lifecycle-placement-hard-cutover/
+// (solve/specs/membership-lifecycle-placement-hard-cutover/
 //  membership-layer-ownership-contract.md):
 //   1. Failure detector (evidence)        — scattered readiness/liveness guards
 //   2. Membership agreement (view install) — Raft + control_plane_publications + epoch

@@ -49,7 +49,7 @@ links:
 > regardless of C-2 → that epic is now the live START-HERE.** Read its top banner first.
 
 > **FRESH-AGENT START HERE.** This epic is self-contained. Read
-> [`.kiro/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
+> [`docs/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify /
 > **coupled-invariant: stop single-frontier patching**). All file:line below were verified
 > at HEAD `a71e0b32` (2026-06-23) but are POSITIONAL — re-grep before trusting. This epic is
@@ -223,7 +223,7 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 - **Head A root + ranked levers**: [[post-swim-quiescence-heads-unified-root]] (lever 1 =
   rebalancer re-introduction suppression) + [[circular-dependency-class-formation-vs-steady-state]].
 - **Owner home**: [[membership-single-owner-cutover-plan]] / spec
-  `.kiro/specs/membership-lifecycle-placement-hard-cutover/` (active-set authority still the 7-source
+  `solve/specs/membership-lifecycle-placement-hard-cutover/` (active-set authority still the 7-source
   `resolveActiveNodeViews()` merge — the antipattern behind the readiness diffuseness).
 - **R1+R3** (now default-ON): the remove-safety wedge is gone; do NOT reopen it. If a lever here
   needs to read the honest blocker, R1/R3 are already on.

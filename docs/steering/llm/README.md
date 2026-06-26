@@ -9,6 +9,8 @@ source_of_truth: self
 
 # Steering LLM Pack — Index
 
+For the architecture domain tree, see [`architecture/INDEX.md`](../../../architecture/INDEX.md).
+
 Regenerate the generated packs with:
 
 ```bash

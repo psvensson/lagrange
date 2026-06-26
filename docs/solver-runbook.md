@@ -22,7 +22,7 @@ from a worker's self-report.
 separate: a falling metric never closes a Quest by itself.
 
 The strategy ladder is (canonical definition:
-`.kiro/steering/workflow-guidelines/solver-quests.md` — this runbook restates it
+`docs/steering/workflow-guidelines/solver-quests.md` — this runbook restates it
 for convenience and defers to that source if they ever diverge):
 
 ```text
@@ -31,7 +31,7 @@ observe -> local-fix -> widen-scope -> model -> change-approach -> park
 
 The ladder opens on `observe`, an instrument-before-patch rung (add measurement
 that discriminates explanations before changing source); see
-`.kiro/steering/workflow-guidelines/solver-quests.md` Strategy Ladder for the
+`docs/steering/workflow-guidelines/solver-quests.md` Strategy Ladder for the
 canonical definition. Honest progress keeps the rung, a stall climbs it, and
 `park` redirects the scheduler to another frontier. The run stops on **SOLVED**
 or **EXHAUSTED**.

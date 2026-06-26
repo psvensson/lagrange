@@ -24,7 +24,7 @@ import {invariantHeldProbe} from '../../scripts/solve/probes/invariant-held.js';
 import {OSCILLATION_REOPEN_BUDGET} from '../../scripts/solve/constants.js';
 
 // WS1 unit coverage for Tier-2 live-evidence verification of architecture
-// invariants (spec: .kiro/specs/standing-invariant-closure/). Covers the
+// invariants (spec: solve/specs/standing-invariant-closure/). Covers the
 // flag gate, the repro/command evaluation dispatch, and the HELD/BREACHED/
 // UNGUARDED fold over the Solver event log.
 

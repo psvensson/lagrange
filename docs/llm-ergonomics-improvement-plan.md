@@ -14,7 +14,7 @@ working model + work of 2026-06-15.
 
 > Corrections from the verification pass are marked **[V]** inline. The
 > load-bearing one: **all closure-ledger paths are under
-> `.kiro/specs/membership-lifecycle-placement-hard-cutover/`** — the bare
+> `solve/specs/membership-lifecycle-placement-hard-cutover/`** — the bare
 > `closure-ledger.md` / `closure-ledger/CL-###.md` paths in an earlier draft were a
 > shorthand and are corrected throughout WS8. (Ignore the stale duplicate copies
 > under `.claude/worktrees/…` and `.stryker-tmp/…`.) Two more: the gate's feasible
@@ -75,7 +75,7 @@ the two structural taxes. WS12 is hygiene, independent of the rest.
 
 ### Problem statement (grounded)
 **[V] Base path for this whole workstream:**
-`.kiro/specs/membership-lifecycle-placement-hard-cutover/` — the index is
+`solve/specs/membership-lifecycle-placement-hard-cutover/` — the index is
 `<base>/closure-ledger.md` and records are `<base>/closure-ledger/CL-###.md`.
 
 To learn "where is everything right now," an LLM reassembles state from four places:
@@ -141,8 +141,8 @@ piece is normalizing STATE across 38 files (WS8.1). No `src/` change.
 **Recommendation #2.**
 
 ### Problem statement (grounded)
-`AGENTS.md:42` and `.kiro/steering/llm/README.md:28` both cite
-`.kiro/steering/llm/rules.json` as the lookup for "Rule IDs and source citations,"
+`AGENTS.md:42` and `docs/steering/llm/README.md:28` both cite
+`docs/steering/llm/rules.json` as the lookup for "Rule IDs and source citations,"
 but it is **137 KB / 260 rules** — it truncates on a single `Read`, so an LLM sent
 there cannot load it. Each rule is
 `{id, domain, strength, tags, rule, score, sources:[{file,line,section}]}` (**[V]**

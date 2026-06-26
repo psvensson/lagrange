@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/governance.md
+compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
 last_reviewed: 2026-06-01
 ---
@@ -690,7 +690,7 @@ about, should this Quest continue or honestly EXHAUST and pivot. Triggers:
   `trigger: "on-demand"`).
 
 An altitude reflection's prompt demands the insight be **captured durably** — a
-`finding` (with `rulesOut`), a `.kiro/epics/` entry, or a recorded system theory
+`finding` (with `rulesOut`), a `solve/epics/` entry, or a recorded system theory
 — so a structural insight cannot evaporate in chat. EXHAUST-and-pivot to a
 higher-altitude Quest/epic is a **legitimate, encouraged outcome** of an altitude
 reflection; questioning a Quest's altitude is not moving its goalposts (see the

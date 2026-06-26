@@ -50,7 +50,7 @@ that fully exists today: prior `EVENT_REFLECTION` notes on **this quest's own
 append-only log** with `kind === 'altitude'` and `trigger`/note = `oscillation` (the
 "already concluded coupled" marker). The log persists across runs
 (`solve/log/<id>.ndjson`), so run-1/run-2 altitude reflections are already present.
-- SECONDARY (follow-on, NOT load-bearing): a linked `.kiro/epics/` entry tagged as a
+- SECONDARY (follow-on, NOT load-bearing): a linked `solve/epics/` entry tagged as a
   structural/user-gated lever. **VERIFIER CORRECTION:** this does not work as written —
   `trace`/`links` (`solve.js:625-700`) never reads epic *content*, epics carry no such
   tag, `links` only holds `roadmapRow/specRef/closesCL/parentQuest/planDoc`, and the
@@ -205,7 +205,7 @@ no new gate; condition (c) depends on the session primitive above.
 
 **Behaviour.**
 - *Autonomous:* HARD-STOP (a sanctioned terminal pause, not EXHAUSTED) and emit a
-  decision memo to `.kiro/epics/` framing the either/or for the user:
+  decision memo to `solve/epics/` framing the either/or for the user:
   *recalibrate the budget/oracle to the system's real settle envelope* vs
   *invest in convergence-speed/structural work*. Does not decide; escalates.
 - *Supervised:* surface the `goal-calibration-escalation` advisory with the same memo

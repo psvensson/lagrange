@@ -12,7 +12,7 @@ folded in — config-schema boot blocker, CDC apply semantics, `nodes` watermark
 two-place message-type edit, `refreshConfig` mode-collapse, PressureGovernor,
 file-path fixes, WS1 efficiency-claim deferral.)
 **Author:** design captured 2026-06-15
-**Supersedes (eventually):** `.kiro/specs/archived/latency-aware-topology/` and the
+**Supersedes (eventually):** `_legacy_work/specs-archive/latency-aware-topology/` and the
 runtime latency-group machinery under `src/topology/` (see §10 Migration).
 
 ---

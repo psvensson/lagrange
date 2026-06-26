@@ -8,7 +8,7 @@
     "specRef": null,
     "closesCL": [],
     "parentQuest": null,
-    "planDoc": ".kiro/epics/steering-doc-clarity.md"
+    "planDoc": "solve/epics/steering-doc-clarity.md"
   },
   "doneWhen": {
     "probe": "oracle",

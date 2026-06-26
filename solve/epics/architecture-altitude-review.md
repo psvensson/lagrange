@@ -49,7 +49,7 @@ findings, pivots, and follow-on epics/quests are recorded.
 ## Evidence feed: standing-invariant drift (the mechanical substrate)
 
 This review used to run on judgement alone. The **standing-invariant tier**
-(`.kiro/specs/standing-invariant-closure/`) now feeds it evidence: when the altitude
+(`solve/specs/standing-invariant-closure/`) now feeds it evidence: when the altitude
 reflection fires, `altitudeInvariantDigest` surfaces every live invariant that is not
 currently `HELD` (BREACHED/UNGUARDED) into the framing prompt — a BREACHED architecture
 invariant *is* the signal that "a doc/contract no longer reflects the running system,"

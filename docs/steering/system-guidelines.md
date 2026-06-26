@@ -3,25 +3,25 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: .kiro/steering/llm/architecture.md
+compiled_pack: docs/steering/llm/architecture.md
 llm_load: represented_by_compact_packs
 inclusion: represented_by_llm_core_and_architecture_pack
 last_reviewed: 2026-05-23
 ---
 
-> **Canonical source.** Generated packs at `.kiro/steering/llm/` derive rules from this file. Regenerate with `npm run steering:llm:pack` after edits.
+> **Canonical source.** Generated packs at `docs/steering/llm/` derive rules from this file. Regenerate with `npm run steering:llm:pack` after edits.
 
 # System Guidelines — Mandatory Implementation Contract
 
 ## Document Role
 
 This file is one of the canonical *source* steering documents that the LLM
-compact packs under `.kiro/steering/llm/` are generated from. It is **not** an
+compact packs under `docs/steering/llm/` are generated from. It is **not** an
 independent runtime override surface.
 
-Steering precedence (mirrors `AGENTS.md` and `.kiro/steering/llm/boot.md`):
+Steering precedence (mirrors `AGENTS.md` and `docs/steering/llm/boot.md`):
 
-1. The compact packs under `.kiro/steering/llm/` are the runtime execution
+1. The compact packs under `docs/steering/llm/` are the runtime execution
    surface for LLM sessions.
 2. Source steering files in this directory are consulted only to (a) chase
    cited detail behind a compact-pack rule, or (b) repair pack drift and

@@ -124,7 +124,7 @@
     "exportedRuleCount": 286,
     "aliasRuleCount": 4,
     "masterRuleCount": 282,
-    "estimatedAllRulesTokens": 10749
+    "estimatedAllRulesTokens": 10748
   },
   "rules": [
     {
@@ -2485,7 +2485,7 @@
       "tags": [
         "testing"
       ],
-      "rule": "Test closure and Quest closure both require the final affected-area deep dive required by .kiro/steering/system-guidelines.md.",
+      "rule": "Test closure and Quest closure both require the final affected-area deep dive required by docs/steering/system-guidelines.md.",
       "score": 208,
       "sources": [
         {
@@ -2944,7 +2944,7 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see .kiro/steering/findings/README.md), NOT left only in external memory.",
+      "rule": "A lesson that should bind future work for everyone MUST be promoted into in-repo steering via node scripts/solve.js promote-finding (see docs/steering/findings/README.md), NOT left only in external memory.",
       "score": 206,
       "sources": [
         {
@@ -4632,7 +4632,7 @@
       "domain": "governance",
       "strength": "should",
       "tags": [],
-      "rule": "In-repo steering (.kiro/steering/, the generated packs under .kiro/steering/llm/, rules.json, and AGENTS.md): durable, shared, version-controlled, CI-gated rules and ground truth*. This is the home for anything that should bind future work for everyone*.",
+      "rule": "In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.json, and AGENTS.md): durable, shared, version-controlled, CI-gated rules and ground truth*. This is the home for anything that should bind future work for everyone*.",
       "score": 150,
       "sources": [
         {
@@ -4801,5 +4801,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-26T15:30:00.563Z"
+  "generatedAt": "2026-06-26T15:38:51.050Z"
 }

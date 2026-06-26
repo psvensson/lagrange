@@ -6,7 +6,7 @@ repeatedly landed **correct but inert** (the precondition did not recur, costing
 hours of gate wall to discover the fix never engaged — CL-001 variant A).
 
 Below it sits a **sub-second, deterministic tier**. The closure-grammar's
-[reproduced-before-fix rung](../.kiro/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
+[reproduced-before-fix rung](../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
 already mandates a deterministic (or recurrence-measured) repro before a record
 enters `fix_in_progress`. This document names the substrate so you author that
 repro on existing machinery instead of building a third simulator.
