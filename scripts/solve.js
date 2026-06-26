@@ -39,7 +39,7 @@ import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {runInvariantsCommand, triggerOnTouchedOwner} from './solve/invariant-liveness.js';
-import {scoreInvariants} from './solve/invariant-score.js';
+import {scoreInvariants, renderInvariantBoard} from './solve/invariant-score.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -715,6 +715,16 @@ function changedFilesFromArgs(root, args) {
 }
 
 function cmdInvariants(root, args) {
+  // --export: write a durable, cross-session status board (a projection, not a store).
+  if (args.export) {
+    const board = renderInvariantBoard(root, {});
+    const out = typeof args.out === 'string' ?
+      args.out : path.join(root, 'solve', 'invariant-status.generated.md');
+    fs.mkdirSync(path.dirname(out), {recursive: true});
+    fs.writeFileSync(out, board);
+    process.stdout.write(`wrote ${out}\n`);
+    return;
+  }
   // --score: local EvoClaw-style coverage/coherence over the repro-backed surface.
   if (args.score) {
     const result = scoreInvariants(root, {evaluate: Boolean(args.evaluate)});

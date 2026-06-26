@@ -460,3 +460,30 @@ t.test('scoreInvariants: flag gate + coverage/coherence shape', (t) => {
   t.same(score.statuses, [{id: 'score-x', status: STATUS.HELD}]);
   t.end();
 });
+
+// ---- Follow-on #5: status board export (honest memory-graft form) ----
+
+import {renderInvariantBoard} from '../../scripts/solve/invariant-score.js';
+
+t.test('renderInvariantBoard: disabled when flag off; renders status when on', (t) => {
+  const root = tmpRoot();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const regPath = path.join(root, 'board-reg.json');
+  fs.writeFileSync(regPath, JSON.stringify({
+    schema: 'invariant-registry-v1',
+    invariants: [{
+      id: 'board-x', owner: 'o', boundary: 'b', kind: 'safety', statement: 's', formalPredicate: 'p',
+      liveEvidence: {
+        tier: 2, holdsWhen: 'h', evidence: {kind: 'repro', ref: 'node -e "process.exit(0)"'},
+        trigger: {policy: 'on-quest-closure', cost: 'cheap'},
+      },
+    }],
+  }));
+
+  t.match(renderInvariantBoard(root, {registry: regPath}, {}), /Disabled/, 'flag off => disabled board');
+
+  const board = renderInvariantBoard(root, {registry: regPath}, {LAGRANGE_STANDING_INVARIANTS: 'true'});
+  t.match(board, /board-x \| UNGUARDED/, 'renders the invariant row');
+  t.match(board, /coverage:/, 'includes coverage summary');
+  t.end();
+});

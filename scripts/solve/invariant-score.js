@@ -18,6 +18,38 @@ import {
 
 const CL_RE = /CL-\d+/i;
 
+// Render a durable, cross-session status board (a PROJECTION — like
+// solve/FRONTIER.generated.md — not a new authoritative store). This is the honest,
+// dependency-free form of the "memory graft": invariant state persisted to a readable
+// artifact the next session/agent can pick up, without an external memory service.
+// A real Letta/Mem0 backend would consume the same scoreInvariants() output; wiring an
+// external service is intentionally out of scope (see memory-graft-note.md).
+export function renderInvariantBoard(root, {registry} = {}, env = process.env) {
+  const score = scoreInvariants(root, {registry, evaluate: false}, env);
+  if (!score.enabled) {
+    return '# Standing invariants\n\n_Disabled — set `LAGRANGE_STANDING_INVARIANTS=true`._\n';
+  }
+  const pct = (value) => (value === null ? 'n/a' : `${Math.round(value * 100)}%`);
+  const rows = score.statuses
+    .map((status) => `| ${status.id} | ${status.status} |`)
+    .join('\n');
+  return [
+    '# Standing invariants (generated projection)',
+    '',
+    '_Derived from the Solver event log via `solve invariants`. Regenerate with',
+    '`LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants --export`._',
+    '',
+    `- coverage: ${score.guardedReproBackedCLs}/${score.reproBackedCLs} repro-backed CLs guarded (${pct(score.coverage)})`,
+    `- coherence: ${score.held}/${score.liveInvariants} live invariants HELD (${pct(score.coherence)})`,
+    `- worklist (unguarded repro-backed CLs): ${score.unguardedReproBackedCLs.join(', ') || '(none)'}`,
+    '',
+    '| invariant | status |',
+    '| --- | --- |',
+    rows,
+    '',
+  ].join('\n');
+}
+
 // The set of closure-ledger CLs that have a deterministic repro (registry-mapped or
 // the convention file) — the verifiable "milestone checkpoints".
 export function reproBackedCLs(root) {
