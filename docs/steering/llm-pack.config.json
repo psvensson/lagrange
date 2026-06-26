@@ -1,6 +1,6 @@
 {
-  "sourceDir": ".kiro/steering",
-  "llmDir": ".kiro/steering/llm",
+  "sourceDir": "docs/steering",
+  "llmDir": "docs/steering/llm",
   "domainPrefixes": {
     "architecture": "ARCH",
     "testing": "TEST",

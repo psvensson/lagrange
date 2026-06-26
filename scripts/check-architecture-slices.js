@@ -22,17 +22,17 @@ const DOMAIN_ROW_PATTERN = /^- \[([^\]]+)\]\(([^)]+)\) - (.+)$/u;
 const LOCAL_POINTER_FILES = Object.freeze([
   ROOT_ARCHITECTURE_PATH,
   'architecture/README.md',
-  '.kiro/steering/architecture.md',
-  '.kiro/steering/llm/README.md',
+  'docs/steering/architecture.md',
+  'docs/steering/llm/README.md',
   'AGENTS.md',
 ]);
 const LINK_CHECK_FILES = Object.freeze([
   ROOT_ARCHITECTURE_PATH,
   ARCHITECTURE_INDEX_PATH,
   'architecture/README.md',
-  '.kiro/steering/architecture.md',
-  '.kiro/steering/llm/README.md',
-  '.kiro/steering/roadmap.md',
+  'docs/steering/architecture.md',
+  'docs/steering/llm/README.md',
+  'docs/steering/roadmap.md',
   'AGENTS.md',
 ]);
 const LOCAL_ARCHITECTURE_INDEX_TEXT = 'architecture/INDEX.md';

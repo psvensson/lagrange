@@ -75,9 +75,9 @@ async function createFixture() {
   await writeFile(rootDir, 'architecture/overview.md', DOMAIN_CONTENT);
   await writeFile(rootDir, 'architecture/runtime.md', DOMAIN_CONTENT);
   await writeFile(rootDir, 'architecture/support.md', DOMAIN_CONTENT);
-  await writeFile(rootDir, '.kiro/steering/architecture.md', STEERING_POINTER);
-  await writeFile(rootDir, '.kiro/steering/llm/README.md', LLM_README);
-  await writeFile(rootDir, '.kiro/steering/roadmap.md', ROADMAP_POINTER);
+  await writeFile(rootDir, 'docs/steering/architecture.md', STEERING_POINTER);
+  await writeFile(rootDir, 'docs/steering/llm/README.md', LLM_README);
+  await writeFile(rootDir, 'docs/steering/roadmap.md', ROADMAP_POINTER);
   await writeFile(rootDir, 'AGENTS.md', AGENTS_POINTER);
   return rootDir;
 }

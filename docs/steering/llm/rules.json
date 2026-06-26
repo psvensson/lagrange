@@ -1,6 +1,6 @@
 {
-  "sourceDir": ".kiro/steering",
-  "llmDir": ".kiro/steering/llm",
+  "sourceDir": "docs/steering",
+  "llmDir": "docs/steering/llm",
   "sourceFiles": [
     {
       "file": "system-guidelines.md",
@@ -4801,5 +4801,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-26T13:01:52.943Z"
+  "generatedAt": "2026-06-26T15:30:00.563Z"
 }

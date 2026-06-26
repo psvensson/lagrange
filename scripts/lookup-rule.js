@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // lookup-rule — make the generated rule corpus reachable.
 //
-// `.kiro/steering/llm/rules.json` is ~137KB / 260 rules — it truncates on a
+// `docs/steering/llm/rules.json` is ~137KB / 260 rules — it truncates on a
 // single Read, so an agent pointed at it cannot load it. This tool answers the
 // two questions that blob is cited for ("what does rule X say / where is it
 // sourced?") without loading the whole corpus, and maintains a compact
@@ -25,8 +25,8 @@ import {fileURLToPath} from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const RULES_JSON_PATH = path.join(ROOT, '.kiro/steering/llm/rules.json');
-const INDEX_MD_PATH = path.join(ROOT, '.kiro/steering/llm/rules-index.md');
+const RULES_JSON_PATH = path.join(ROOT, 'docs/steering/llm/rules.json');
+const INDEX_MD_PATH = path.join(ROOT, 'docs/steering/llm/rules-index.md');
 const INDEX_SUMMARY_CHARS = 90;
 const EXIT_OK = 0;
 const EXIT_FAILURE = 1;

@@ -116,7 +116,7 @@
     "audit:owner-boundary-segments": "node scripts/check-file-size-thresholds.js --owner-boundary-guidance",
     "audit:closure-ledger": "node scripts/closure-ledger-state.js --check-state",
     "steering:llm:pack": "node scripts/generate-steering-llm-pack.js && node scripts/lookup-rule.js --write-index && node scripts/gen-tools-index.js && node scripts/gen-solve-commands-index.js",
-    "steering:check": "npm run steering:llm:pack && git diff --quiet -- .kiro/steering/llm",
+    "steering:check": "npm run steering:llm:pack && git diff --quiet -- docs/steering/llm",
     "rule": "node scripts/lookup-rule.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",
     "guard:guideline:constant-names:file": "node scripts/check-guideline-constant-names.js",

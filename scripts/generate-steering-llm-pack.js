@@ -55,7 +55,7 @@ const LOCAL_STR_MANUAL = 'manual';
 const LOCAL_STR_GENERATED = 'generated';
 
 const DEFAULT_CONFIG_PATH = path.join(
-  '.kiro',
+  'docs',
   'steering',
   'llm-pack.config.json',
 );
@@ -992,11 +992,11 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
     `scope: ${sourceForScope}`,
     'status: compiled',
     'always_load: false',
-    `source_of_truth: .kiro/steering/ (see llm-pack.config.json sources for ${sourceForScope})`,
+    `source_of_truth: docs/steering/ (see llm-pack.config.json sources for ${sourceForScope})`,
     'regenerate_with: npm run steering:llm:pack',
     '---',
     '',
-    '> **Compiled pack — do not hand-edit.** Regenerate with `npm run steering:llm:pack` after editing canonical sources under `.kiro/steering/`.',
+    '> **Compiled pack — do not hand-edit.** Regenerate with `npm run steering:llm:pack` after editing canonical sources under `docs/steering/`.',
     '',
     `# ${output.title || 'LLM Steering Pack'}`,
     '',
@@ -1102,7 +1102,7 @@ function renderReadme(manifestEntries = []) {
     '',
     'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the always-loaded priority subset of the rule corpus (capped per `maxRules`); consult `rules-index.md` or `npm run rule` for every rule in a domain. The source-vs-pack distinction is a generator concern, not a runtime one.',
     '',
-    'If a domain pack rule looks wrong, fix the underlying source file under `.kiro/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
+    'If a domain pack rule looks wrong, fix the underlying source file under `docs/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
     '',
     '## Notes',
     '',

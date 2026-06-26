@@ -2,11 +2,11 @@
 scope: governance
 status: compiled
 always_load: false
-source_of_truth: .kiro/steering/ (see llm-pack.config.json sources for governance)
+source_of_truth: docs/steering/ (see llm-pack.config.json sources for governance)
 regenerate_with: npm run steering:llm:pack
 ---
 
-> **Compiled pack — do not hand-edit.** Regenerate with `npm run steering:llm:pack` after editing canonical sources under `.kiro/steering/`.
+> **Compiled pack — do not hand-edit.** Regenerate with `npm run steering:llm:pack` after editing canonical sources under `docs/steering/`.
 
 # Governance Steering Pack
 
