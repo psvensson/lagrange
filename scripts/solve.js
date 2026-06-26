@@ -37,6 +37,7 @@ import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
+import {runInvariantsCommand} from './solve/invariant-liveness.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -696,6 +697,37 @@ function cmdHandoff(root, args) {
   process.stdout.write(runHandoffCommand(root, args));
 }
 
+// Tier-2 live-evidence verification of architecture invariants (standing dual of
+// doneWhen). `--evaluate` runs each invariant's predicate and records the verdict;
+// otherwise status is derived from the event log. Gated by
+// LAGRANGE_STANDING_INVARIANTS (default-off).
+function cmdInvariants(root, args) {
+  const out = runInvariantsCommand(root, args);
+  if (args.json) {
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    return;
+  }
+  if (!out.enabled) {
+    process.stdout.write(`${out.note}\n`);
+    return;
+  }
+  if (out.invariants.length === 0) {
+    process.stdout.write('no invariants carry a liveEvidence (Tier-2) block.\n');
+    return;
+  }
+  const lines = out.invariants.map((row) => {
+    const tags = `[${row.cost || '?'}, ${row.trigger || '?'}]`;
+    const ref = row.evidenceRef ? `  <- ${row.evidenceRef}` : '';
+    const tally = row.evaluations ?
+      `  (${row.evaluations} eval${row.evaluations === 1 ? '' : 's'}, last ${row.verdict})` : '';
+    return `${row.status.padEnd(9)} ${row.id}  ${tags}${ref}${tally}`;
+  });
+  const header = out.evaluated ?
+    'standing invariants (evaluated now):' :
+    'standing invariants (derived from event log):';
+  process.stdout.write(`${header}\n${lines.join('\n')}\n`);
+}
+
 const COMMANDS = {
   'new': cmdNew,
   'run': cmdRun,
@@ -706,6 +738,7 @@ const COMMANDS = {
   'overview': cmdOverview,
   'trace': cmdTrace,
   'handoff': cmdHandoff,
+  'invariants': cmdInvariants,
   'probe': cmdProbe,
   'finding': cmdFinding,
   'promote-finding': cmdPromoteFinding,

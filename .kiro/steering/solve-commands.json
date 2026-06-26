@@ -36,6 +36,10 @@
     "summary": "Compute the scope-safe git pathspec for committing exactly one Quest's work; dry-run by default, `--commit` executes, `--checkpoint` makes a squashable mid-quest save.",
     "usage": "node scripts/solve.js handoff --id <id> [--commit] [--checkpoint]"
   },
+  "invariants": {
+    "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Gated by LAGRANGE_STANDING_INVARIANTS (default-off).",
+    "usage": "LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants [--evaluate] [--json]"
+  },
   "probe": {
     "summary": "Run a probe over real artifacts to answer a frontier metric or the Quest doneWhen; the Solver trusts probes, not self-report.",
     "usage": "node scripts/solve.js probe --id <id> [--frontier <f>] [--probe doneWhen]"

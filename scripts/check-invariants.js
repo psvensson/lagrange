@@ -18,6 +18,11 @@ import {
 const DEFAULT_REGISTRY_PATH = 'architecture/contracts/invariants.json';
 const REGISTRY_SCHEMA = 'invariant-registry-v1';
 const VALID_KINDS = Object.freeze(['safety', 'liveness']);
+// Optional Tier-2 live-evidence block (spec: standing-invariant-closure).
+const LIVE_EVIDENCE_KINDS = Object.freeze(['repro', 'command', 'probe']);
+const TRIGGER_POLICIES = Object.freeze([
+  'on-quest-closure', 'on-touched-owner', 'on-cadence', 'on-explicit']);
+const TRIGGER_COSTS = Object.freeze(['cheap', 'expensive']);
 const HELP_TEXT = [
   'Usage: npm run model:invariants -- [--json] [registry.json]',
   '',
@@ -93,6 +98,57 @@ function validateEntryRefs(errors, label, entry, index, rootDir) {
   }
 }
 
+// The `liveEvidence` block is optional and additive (Requirement 8). When
+// present, validate its shape so a malformed Tier-2 declaration is caught.
+function validateLiveEvidence(errors, label, entry, index) {
+  const live = entry.liveEvidence;
+  if (live === undefined || live === null) {
+    return;
+  }
+  const at = `invariants[${index}].liveEvidence`;
+  if (!isObjectRecord(live)) {
+    errors.push(`${label}: ${at} must be an object.`);
+    return;
+  }
+  if (live.tier !== undefined && live.tier !== 2) {
+    errors.push(`${label}: ${at}.tier must be 2 when present.`);
+  }
+  if (!hasConcreteText(live.holdsWhen)) {
+    errors.push(`${label}: ${at}.holdsWhen must be concrete text.`);
+  }
+  const evidence = live.evidence;
+  if (!isObjectRecord(evidence)) {
+    errors.push(`${label}: ${at}.evidence must be an object.`);
+  } else {
+    validateEnum(errors, label, `${at}.evidence.kind`, evidence.kind,
+      LIVE_EVIDENCE_KINDS);
+    if ((evidence.kind === 'repro' || evidence.kind === 'command') &&
+      !hasConcreteText(evidence.ref)) {
+      errors.push(`${label}: ${at}.evidence.ref must be concrete text for kind ` +
+        `${evidence.kind}.`);
+    }
+    if (evidence.kind === 'probe' && !hasConcreteText(evidence.probe)) {
+      errors.push(`${label}: ${at}.evidence.probe must name a probe for kind probe.`);
+    }
+  }
+  const trigger = live.trigger;
+  if (!isObjectRecord(trigger)) {
+    errors.push(`${label}: ${at}.trigger must be an object.`);
+  } else {
+    validateEnum(errors, label, `${at}.trigger.policy`, trigger.policy,
+      TRIGGER_POLICIES);
+    validateEnum(errors, label, `${at}.trigger.cost`, trigger.cost, TRIGGER_COSTS);
+  }
+  if (live.restoration !== undefined) {
+    if (!isObjectRecord(live.restoration)) {
+      errors.push(`${label}: ${at}.restoration must be an object.`);
+    } else if (live.restoration.autoSpawn !== undefined &&
+      typeof live.restoration.autoSpawn !== 'boolean') {
+      errors.push(`${label}: ${at}.restoration.autoSpawn must be a boolean.`);
+    }
+  }
+}
+
 function validateCoupling(errors, label, entry, index, byId) {
   const coupled = entry.coupledWith;
   if (coupled === undefined || coupled === null) {
@@ -157,6 +213,7 @@ function validateInvariantRegistry(registry, options = {}) {
     }
     validateEntryFields(errors, label, entry, index);
     validateEntryRefs(errors, label, entry, index, rootDir);
+    validateLiveEvidence(errors, label, entry, index);
   });
   const byId = indexInvariantsById(registry);
   registry.invariants.forEach((entry, index) => {
