@@ -20,6 +20,7 @@ Use this index to choose the narrowest architecture domain file before reading i
 
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
 - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
+- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence, default-off)** verifies an entry's optional `liveEvidence` predicate against the running system / a deterministic repro and derives HELD/BREACHED as a fold over the Solver event log — run `LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants --evaluate`; a BREACH means the doc no longer reflects the system (spec: [`.kiro/specs/standing-invariant-closure/`](../.kiro/specs/standing-invariant-closure/)).
 - [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
 - [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
 - [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.

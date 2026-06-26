@@ -227,6 +227,26 @@
         "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}
       }
+    },
+    {
+      "id": "raft-log-matching-committed-entry-identity",
+      "owner": "message_group_raft_owner",
+      "boundary": "log_replication",
+      "kind": "safety",
+      "statement": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "formalPredicate": "\\A i: committed(i) => \\A n, m: log[n][i] = log[m][i]",
+      "contractRef": ".kiro/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-040 deterministic repro asserts a follower does not stale-commit its own same-index entry on heal and exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-040",
+          "test": "test/closure/CL-040.repro.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
     }
   ]
 }

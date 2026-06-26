@@ -119,22 +119,26 @@ reopen budget. ✓ MET — proven end-to-end in an isolated worktree (BREACHED +
 `restore-raft-…` Quest auto-created + falsifier; restore → re-eval → HELD); budget +
 single-open guards unit-tested.
 
-## WS4 — Generalize + validation hooks (after WS0–WS3 prove out)
+## WS4 — Generalize + validation hooks (after WS0–WS3 prove out) — ✅ DONE
 
-- [ ] Add a `liveEvidence` tier to a second, structurally different existing registry
-      entry (e.g. `single-semantic-owner` or `published-subset-covered`) to validate
-      the abstraction beyond raft-safety.
-- [ ] Exercise the doc-amendment breach resolution (Requirement 9.2b): drive a breach
-      whose honest fix is to amend the contract/`invariants.json`/owner map, and confirm
-      the formal tier (`model:contracts`) stays green afterward.
-- [ ] Document the live-evidence tier as a binding/probe in the affected contract
-      records' `metrics` so the new capability is described alongside Tier-1 gates.
-- [ ] (Optional/out-of-spec) wire the EvoClaw/SWE-EVO external scoring and/or a
-      memory-layer graft as separate, later efforts (epic-tracked, not gated here).
+**Outcome (2026-06-26):** see `ws4-generalization-note.md`. Added a second, structurally distinct
+invariant — `raft-log-matching-committed-entry-identity` (Raft §5.3 Log Matching; boundary
+`log_replication`, evidence `npm run repro -- CL-040`). Both invariants HELD on clean code;
+reverting the CL-040 fix in an isolated worktree gives a **selective** BREACH (log-matching
+BREACHED + restoration Quest auto-created; election-safety stays HELD).
+
+- [x] Add a `liveEvidence` tier to a second, structurally different invariant (Log Matching;
+      a cross-owner one — rebalancer CL-038 / control-plane CL-001 — noted as the next addition).
+- [x] Doc-amendment breach resolution (Req 9.2b): documented as a supported resolution path;
+      `model:invariants` + `model:contract-records` stay green across registry edits. A forced
+      synthetic breach-by-restatement is left as an operational example (needs a real property
+      change = its own Quest).
+- [x] Document the live-evidence tier alongside Tier-1 gates → `architecture/INDEX.md`.
+- [ ] (Optional/out-of-spec) EvoClaw/SWE-EVO scoring, memory-layer graft — epic-tracked.
 
 **doneWhen:** at least two structurally distinct invariant classes are HELD on clean
 code and BREACHED-on-regression proven, with the registry rendering both and no new
-authoritative store introduced.
+authoritative store introduced. ✓ MET.
 
 ---
 
@@ -155,5 +159,14 @@ boundary, the auto-spawn-budget interaction) are recorded there, not in this fil
   `LAGRANGE_STANDING_INVARIANTS`).
 - 2026-06-26 — **WS1 DONE** (commit `62d7eeff`). `invariant-liveness.js` + `solve invariants`
   subcommand + validator extension; HELD/BREACHED fold over the event log, default-off. Live
-  HELD (clean) / BREACHED (reverted worktree) proven end-to-end. NEXT = WS2 (on-quest-closure
-  trigger + cost guard).
+  HELD (clean) / BREACHED (reverted worktree) proven end-to-end.
+- 2026-06-26 — **WS2 DONE** (commit `87bd09af`). on-quest-closure trigger (loop.js hook,
+  fail-safe) + cost guard (Req 6.3, runtime + validator).
+- 2026-06-26 — **WS3 DONE** (commit `ce3f3b34`). Breach falsifier + reopen-budget-bounded
+  restoration Quest auto-link (`invariantHeld` doneWhen; Req 5.3 structural). Proven end-to-end.
+- 2026-06-26 — **WS4 DONE** (`ws4-generalization-note.md`). Second class
+  `raft-log-matching-committed-entry-identity` (Log Matching) added; selective BREACH proven
+  (CL-040 revert → log-matching BREACHED, election-safety stays HELD). Tier documented in
+  `architecture/INDEX.md`. **WS0–WS4 all complete.** Remaining = optional/epic-tracked
+  (cross-owner invariant, `on-touched-owner`, EvoClaw scoring, memory graft, altitude-review
+  unification).
