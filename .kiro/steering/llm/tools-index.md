@@ -40,6 +40,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:pg-baseline` — Analyze a Postgres baseline report.
 - `analyze:precondition-recurrence` — Analyze recurrence of stop-condition preconditions across runs.
 - `analyze:priority-recovery-residuals` — Extract priority-recovery residual witnesses grouped by owner and boundary.
+- `analyze:redecision-storm` — `node scripts/analyze-redecision-storm.js`
 - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
 - `analyze:topology-convergence` — Render topology convergence evidence from report or playback artifacts.
 
@@ -216,4 +217,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-141 scripts indexed; 64 have a curated description, 77 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+142 scripts indexed; 64 have a curated description, 78 fall back to their raw command. Improve coverage in the two sources named in the header comment.

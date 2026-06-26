@@ -131,6 +131,20 @@ Required workflow:
 6. Do not use roadmap state to claim Quest closure. Closure requires Solver
    terminal evidence.
 
+## Feature Flag Lifecycle
+
+A default-off feature flag (e.g. a `LAGRANGE_*` lever) is a temporary validation
+gate, not a permanent home for a second implementation. Every flag carries, in its
+landing commit or Quest, an owner and a written promote-or-retire condition — the
+evidence that would graduate it to default-on, or the finding that would delete it.
+
+A flag that preserves old behavior as the live default while a new mechanism sits
+dormant is an unfinished cutover (see [`doctrine/owner-boundaries.md`](doctrine/owner-boundaries.md) §1),
+not a building block. Periodically sweep the flags and retire or promote any whose
+condition has been met or has gone stale. This sweep is a manual discipline today —
+there is no automated flag-audit script — so it must be performed deliberately, not
+assumed.
+
 ## Audit Procedure
 
 Use these repository-root checks to confirm the steering stack still has one

@@ -73,8 +73,17 @@ any distributed-harness or convergence work:
     strategy, and whether truth is diffuse across owners — then EXHAUST-and-pivot if
     the lever is out of the current Quest's scope (see solver-quests.md "Mandatory
     Step-Back Reflection Turn").
-- **Research existing mechanisms first.** Before writing new machinery, search for
-  an existing owner-boundary solution — parallel machinery has been built here by
-  accident.
+- **Research existing mechanisms first — and verify they are WIRED, not half-built.**
+  Before writing new machinery, search for an existing owner-boundary solution —
+  parallel machinery has been built here by accident. But an existing mechanism may be
+  HALF-WIRED, and looks intentional: a *hollow intent recorder* whose old path is still
+  authoritative, a *projection of a projection* with no single owner, an *escape hatch*
+  that quietly bypasses the guard, or evidence/state that is *computed but never
+  consumed*. Before concluding a mechanism is missing, AND before building anything
+  alongside an existing one, prove its wiring state — that it is the sole authority and
+  actually fires — with an engagement analyzer (e.g. `analyze:fix-engagement` for
+  distributed drive paths), a red-on-revert deterministic/directed test, or a code trace.
+  When a mechanism is half-wired, the fix is to FINISH it to authority (retire the old
+  path, close the bypass, consume the evidence), NEVER to add a parallel path around it.
 - **Independently verify after implementing.** After a change, have a separate
   subagent independently verify it before relying on or reporting it.

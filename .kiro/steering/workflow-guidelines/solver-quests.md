@@ -65,6 +65,22 @@ The file declares:
 Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
 can close the Quest.
 
+## Closure Of Cutover Vs Building-Block Quests
+
+Two legitimate Quest shapes have different closure bars; do not conflate them.
+
+- A **cutover Quest** — one whose sealed `doneWhen` is "X is the authoritative owner"
+  or "the old path is retired" — closes SOLVED only on evidence the new mechanism is
+  ENGAGED and authoritative in a real run (an engagement proof: `analyze:fix-engagement`,
+  a red-on-revert directed test, or a trace), not merely that its code or tests exist. A
+  flag that leaves the old path live while the new mechanism sits dormant is an
+  unfinished cutover, not a closed Quest (see doctrine/owner-boundaries.md §1).
+- A **building-block Quest** — landing a safe, default-off lever for later validation —
+  closes legitimately when its OWN sealed `doneWhen` is met (e.g. "the lever is SAFE and
+  engages under a flag-on repro"), provided the flag carries a written promote-or-retire
+  condition (see the feature-flag lifecycle in roadmap.md). This preserves the
+  deterministic-first / gate-last discipline; the cutover bar above must not block it.
+
 ## Metric Validity And Invalid Samples
 
 A metric is only meaningful when it was read from a run that actually measured

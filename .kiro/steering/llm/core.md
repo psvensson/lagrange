@@ -128,6 +128,13 @@ Use this list before non-trivial work:
    predicate — is allowed; see solver-quests.md "Gradient refinement of the
    sealed metric".)
 2. **Do not claim SOLVED** without live `doneWhen` evidence.
+2b. **Do not close a cutover Quest on a dormant mechanism.** When a Quest's sealed
+    `doneWhen` is "X becomes the authoritative owner" or "the old path is retired",
+    SOLVED requires evidence the new mechanism is ENGAGED and authoritative in a real
+    run — not merely that its code or tests exist. A flag that leaves the old path as
+    the live default while the new mechanism sits dormant is an unfinished cutover. This
+    does NOT block the legitimate default-off building-block pattern — see
+    solver-quests.md "Closure of cutover vs building-block Quests".
 3. **Do not trust agent self-report** for done or metric movement; probes decide.
 4. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
    `diff:<path>`.

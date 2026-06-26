@@ -24,6 +24,11 @@ Every durable concern must have one semantic owner.
 Callers submit intent to the owner. Callers do not reproduce the owner's logic
 locally, and callers do not keep shadow state for the same concern.
 
+Introducing a new owner is a cutover, not an addition: the prior authority for that
+concern must be retired in the same body of work. A new owner left running alongside
+the old path it was meant to replace is an unfinished cutover, not a second owner —
+record it as incomplete, never as done.
+
 ## 6. Shrink The Boundary When Bugs Cluster
 
 When multiple bugs appear at the same boundary, assume the boundary is wrong
