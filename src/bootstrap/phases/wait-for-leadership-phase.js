@@ -37,6 +37,31 @@ const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
 ]);
 
 /**
+ * Tag a join-time leadership-establishment timeout as retryable.
+ *
+ * Message-group / system-service leadership not establishing within the wait
+ * window is a transient under-load condition during a rolling restart — the
+ * cluster is SAFE and still converging — not a terminal misconfiguration.
+ * Without this tag the plain Error is classified non-retryable, so the joiner
+ * exits on the first attempt and is dropped from membership (surfaces as
+ * nodeSlotUnavailable / NODE_EXIT). Both flags are set to cover both consumers:
+ * `deferRetry` is matched by isRetryableControlPlaneError (the inner join-resume
+ * decision, which preserves durable join progress and re-enters the failed
+ * segment) and `retryable` is read by resolveJoinFailureRetryable (the
+ * main-level re-join fallback). Both paths are bounded by the resume policy
+ * (attempt + elapsed budgets), so a leadership that never establishes still
+ * exits — just after retrying within budget. Mirrors
+ * buildRetryableMessageGroupRegistrationError and the EADDRINUSE fix (17697edd).
+ * @param {Error} error - The leadership-timeout error to tag.
+ * @return {Error} The same error, tagged retryable.
+ */
+function tagJoinLeadershipTimeoutRetryable(error) {
+  error.deferRetry = true;
+  error.retryable = true;
+  return error;
+}
+
+/**
  * Handles the wait-for-leadership phase of the join process.
  */
 class WaitForLeadershipPhase {
@@ -105,9 +130,12 @@ class WaitForLeadershipPhase {
       delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
-    // Timeout - fail joining
+    // Timeout - fail joining (transient under load; tag retryable so the join
+    // resume loop re-enters the wait within budget instead of exiting).
     const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
-    throw new Error(leadershipTimeout(timeoutMs));
+    throw tagJoinLeadershipTimeoutRetryable(
+      new Error(leadershipTimeout(timeoutMs)),
+    );
   }
 
   /**
@@ -154,7 +182,7 @@ class WaitForLeadershipPhase {
         };
         error.timeoutMs = timeoutMs;
         error.timeoutKind = context.timeoutKind;
-        return error;
+        return tagJoinLeadershipTimeoutRetryable(error);
       },
     });
   }
