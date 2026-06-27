@@ -409,7 +409,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     );
   }
   handleMetadataPublicationReadinessTransition() {
-    this.maybeInitializeRebalancer();
+    this.maybeInitializeRebalancer({readinessTransitionOnly: true});
     if (!this.isMetadataPublicationReady()) {
       return;
     }

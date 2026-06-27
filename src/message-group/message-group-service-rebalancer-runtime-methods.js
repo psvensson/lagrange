@@ -63,24 +63,43 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
      * Initialize message-group rebalancer when leader and dependencies are ready.
      * @private
      */
-    maybeInitializeRebalancer() {
+    maybeInitializeRebalancer(options = {}) {
+      const readinessTransitionOnly = options.readinessTransitionOnly === true;
       const backgroundReady = this.isBackgroundWorkReady();
       if (this.rebalancer) {
-        this.rebalancer.systemTableCache = this.systemTableCache;
-        this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
-        this.rebalancer.tablePolicyService = this.tablePolicyService;
-        if (
-          typeof this.rebalancer.setRebalanceCoordinator !== TYPEOF.FUNCTION
-        ) {
-          throw new Error(
-            MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REBALANCER_SET_COORDINATOR,
-          );
+        // Edge-gate (mirror of PartitionService.maybeInitializeRebalancer): the
+        // shared metadata-publication readiness state fans this call out across
+        // every message-group's rebalancer on each oscillation. The dependency
+        // re-wiring below only re-binds STABLE deps (systemTableCache,
+        // cdcIntegrationService, tablePolicyService, rebalanceCoordinator,
+        // transport/messageRouter, sqlQueryEngine) that are fixed at init and
+        // unchanged by a readiness blip; on the readiness-transition path it is
+        // required only on an actual rebalancer-leadership EDGE (or first init).
+        // When the resolved leadership is UNCHANGED on that path, the re-apply is
+        // provably redundant — skip it so a no-edge oscillation does zero fan-out
+        // work and cannot contribute to the event-loop freeze. Other callers
+        // (dependency setters) do NOT pass readinessTransitionOnly, so their
+        // re-apply is unchanged. setLeader is already edge-aware.
+        const desiredLeadership = this.resolveRebalancerLeadership();
+        const hasLeadershipEdge = this.rebalancer.isLeader !== desiredLeadership;
+        const skipReapply = readinessTransitionOnly && !hasLeadershipEdge;
+        if (!skipReapply) {
+          this.rebalancer.systemTableCache = this.systemTableCache;
+          this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
+          this.rebalancer.tablePolicyService = this.tablePolicyService;
+          if (
+            typeof this.rebalancer.setRebalanceCoordinator !== TYPEOF.FUNCTION
+          ) {
+            throw new Error(
+              MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REBALANCER_SET_COORDINATOR,
+            );
+          }
+          this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
+          this.rebalancer.messageRouter = this.transport;
+          this.rebalancer.sqlQueryEngine =
+            this.cdcIntegrationService?.sqlQueryEngine || null;
         }
-        this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
-        this.rebalancer.messageRouter = this.transport;
-        this.rebalancer.sqlQueryEngine =
-          this.cdcIntegrationService?.sqlQueryEngine || null;
-        this.rebalancer.setLeader(this.resolveRebalancerLeadership());
+        this.rebalancer.setLeader(desiredLeadership);
         return;
       }
       if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {

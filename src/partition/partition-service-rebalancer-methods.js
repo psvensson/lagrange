@@ -145,17 +145,49 @@ class PartitionServiceRebalancerMethods {
   }
   /**
    * Initialize rebalancer only when required dependencies are ready.
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.readinessTransitionOnly=false] - When true the
+   *   caller is the shared metadata-publication readiness-transition fan-out
+   *   (handleMetadataPublicationReadinessTransition), which never changes the
+   *   rebalancer's dependencies — only the node-wide readiness phase toggled.
+   *   In that case the unconditional dependency re-wiring is provably redundant
+   *   unless it crosses an actual rebalancer-leadership EDGE, so it is skipped
+   *   on a no-edge transition (the freeze fix). Every other caller (dependency
+   *   setters, leadership updates) keeps the unconditional re-apply.
    * @private
    */
-  maybeInitializeRebalancer() {
+  maybeInitializeRebalancer(options = {}) {
+    const readinessTransitionOnly = options.readinessTransitionOnly === true;
     const backgroundReady = this.isBackgroundWorkReady();
     if (this.rebalancer) {
-      const bundle2 = this.buildRebalancerDependencyBundle();
-      this.applyRebalancerDependencies(bundle2);
+      // Edge-gate (readiness-transition path only): the shared metadata-
+      // publication readiness state is a single node-wide object that ~every
+      // partition's rebalancer listens to. During control-plane recovery it
+      // oscillates (PRIORITY_CONTROL_PLANE_RECOVERY_PENDING toggles), and one
+      // transition synchronously fans this call out across every partition in a
+      // single tick. The dependency re-wiring below only re-binds STABLE deps
+      // (systemTableCache, cdcIntegrationService, tablePolicyService,
+      // messageRouter, sqlQueryEngine, rebalanceCoordinator) that are fixed at
+      // init and unchanged by a readiness blip; on this path it is required only
+      // on an actual rebalancer-leadership EDGE (or first init). When the
+      // resolved leadership is UNCHANGED, the re-apply is provably redundant —
+      // skipping it makes a no-edge oscillation do ZERO fan-out work and avoids
+      // the multi-second event-loop freeze that starves the readiness probes and
+      // sustains the limit cycle. setLeader is already edge-aware, so calling it
+      // on an unchanged outcome is a no-op. Dependency-setter callers do NOT pass
+      // readinessTransitionOnly, so their re-apply is unchanged.
+      const desiredLeadership = this.resolveRebalancerLeadership();
+      const hasLeadershipEdge = this.rebalancer.isLeader !== desiredLeadership;
+      const skipReapply = readinessTransitionOnly && !hasLeadershipEdge;
+      if (!skipReapply) {
+        const bundle2 = this.buildRebalancerDependencyBundle();
+        this.applyRebalancerDependencies(bundle2);
+      }
       if (
         typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION
       ) {
-        this.rebalancer.setLeader(this.resolveRebalancerLeadership());
+        this.rebalancer.setLeader(desiredLeadership);
       }
       return;
     }

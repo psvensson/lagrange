@@ -85,7 +85,7 @@ function assignMetadataPublication(serviceClass) {
       return true;
     },
     handleMetadataPublicationReadinessTransition() {
-      this.maybeInitializeRebalancer();
+      this.maybeInitializeRebalancer({readinessTransitionOnly: true});
       if (!this.isMetadataPublicationReady()) {
         return;
       }
