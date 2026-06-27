@@ -39,6 +39,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
         return {
           inFlightOperations: [],
           excludedSelfTargetedCount: NUM.ZERO,
+          excludedNonParticipatingCount: NUM.ZERO,
           excludedWarmingTargetCount: NUM.ZERO,
           excludedNonDiscoveryPartitionCount: NUM.ZERO,
           excludedRemotePriorityControlPlaneCount: NUM.ZERO,
@@ -71,6 +72,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
             excludedSelfSourcePriorityControlPlaneOperationDetails,
         });
       let excludedSelfTargetedCount = NUM.ZERO;
+      let excludedNonParticipatingCount = NUM.ZERO;
       let excludedWarmingTargetCount = NUM.ZERO;
       let excludedNonDiscoveryPartitionCount = NUM.ZERO;
       for (const row of rows) {
@@ -115,12 +117,37 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
             excludedPriorityControlPlaneOperationDetails.push(operationDetail);
             continue;
           }
+          // Last exclusion: an in-flight operation in which this joining node
+          // is neither the source nor the target is a bystander — it moves a
+          // replica between two other ACTIVE nodes and has no bearing on
+          // whether this node can serve its own replicas or route (a REPLACE
+          // keeps the partition's leader+quorum throughout, and the joiner
+          // reads discovery-critical partitions from its bootstrap snapshot
+          // pre-promotion). Counting such an op blocked a healthy joiner out
+          // of published membership for minutes on unrelated topology churn —
+          // the rolling-restart run6 (publication_missing_active_node) gate
+          // failure. Requiring the source to be an active member mirrors the
+          // sibling remote-active-peer exclusion and avoids trusting a move
+          // whose source membership the joiner cannot confirm (the target is
+          // already known-active, having survived the warming-target filter).
+          // Placed last so it only affects ops that survive every other
+          // exclusion; ops this node sources still count (non-self-targeted
+          // preservation property).
+          if (
+            normalizedOperation.sourceNodeId !== this.nodeId &&
+            normalizedOperation.targetNodeId !== this.nodeId &&
+            activeNodeIds.has(normalizedOperation.sourceNodeId)
+          ) {
+            excludedNonParticipatingCount++;
+            continue;
+          }
           inFlightOperations.push(operationDetail);
         }
       }
       return {
         inFlightOperations,
         excludedSelfTargetedCount,
+        excludedNonParticipatingCount,
         excludedWarmingTargetCount,
         excludedNonDiscoveryPartitionCount,
         excludedRemotePriorityControlPlaneCount:

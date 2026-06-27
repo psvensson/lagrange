@@ -458,12 +458,16 @@ test(
         case 'services':
           return [];
         case 'replica_operations':
+          // Joiner-sourced ops (source = this joining node) so the case
+          // isolates the discovery-vs-non-discovery dimension under test;
+          // bystander ops (joiner neither source nor target) are excluded by
+          // a separate participation-aware rule covered elsewhere.
           return [{
             operation_id: 'svc-op-1',
             type: 'MOVE_REPLICA',
             partition_id: 'services-p1',
             replica_id: 'services-p1-r2',
-            source_node_id: 'seed-node',
+            source_node_id: 'joining-node-readiness-evaluator',
             target_node_id: 'target-node',
             status: 'creating',
             workflow_step: 'PENDING',
@@ -473,7 +477,7 @@ test(
             type: 'MOVE_REPLICA',
             partition_id: 'sql_transactions-p1',
             replica_id: 'sql_transactions-p1-r2',
-            source_node_id: 'seed-node',
+            source_node_id: 'joining-node-readiness-evaluator',
             target_node_id: 'target-node',
             status: 'creating',
             workflow_step: 'PENDING',
