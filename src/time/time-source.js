@@ -57,6 +57,15 @@ class RealTimeSource {
   clearInterval(handle) {
     clearInterval(handle);
   }
+
+  // Cost-model seam (DT cost-model increment). A NO-OP in production and single-node
+  // DT: there is no per-node single-core contention model to charge against, so any
+  // caller may always call clock.charge(opKey, inputSize) with zero effect. The only
+  // real implementation lives on a VirtualNetwork's networkTimeSource, which advances
+  // just the owning node's virtual clock. Inert here keeps production byte-identical.
+  charge(_opKey, _inputSize) {
+    // no-op
+  }
 }
 
 /**
@@ -102,6 +111,14 @@ class VirtualTimeSource {
 
   clearInterval(handle) {
     this._timers.delete(handle);
+  }
+
+  // Cost-model seam (DT cost-model increment). A NO-OP on the single-node virtual clock:
+  // there is no per-node single-core contention model here. The real implementation lives
+  // only on a VirtualNetwork's networkTimeSource, which advances just the owning node's
+  // clock. Inert so DT4/single-node behavior is byte-identical.
+  charge(_opKey, _inputSize) {
+    // no-op
   }
 
   _schedule(fn, ms, args, repeating) {

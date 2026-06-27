@@ -116,8 +116,17 @@ function createVirtualNetwork(options = {}) {
     typeof options.random.random === VIRTUAL_NETWORK_STR_FUNCTION ?
       options.random :
       null;
+  // The per-node single-core cost model (cost-table.js). When absent (the default)
+  // the network charges nothing and is byte-for-byte the un-costed behavior; when a
+  // cost table is injected a charged callback advances only its owning node's logical
+  // clock, so concurrent work on that node contends (serial) while other nodes proceed.
+  const costTable =
+    options.costTable &&
+    typeof options.costTable.cost === VIRTUAL_NETWORK_STR_FUNCTION ?
+      options.costTable :
+      null;
 
-  // nodeId -> {state, clockMs, handler}
+  // nodeId -> {state, clockMs, busyUntilMs, handler}
   const nodes = new Map();
   // in-flight events: {seq, dueAt, kind, from, to, type, payload, fn}
   const queue = [];
@@ -147,6 +156,10 @@ function createVirtualNetwork(options = {}) {
     nodes.set(nodeId, {
       state: VIRTUAL_NETWORK_NODE_STATE.RUNNING,
       clockMs: nowMs,
+      // The node's single-core "busy until" instant. Idle == current time; a charge
+      // pushes it forward (start = max(now, busyUntil)), so back-to-back charges on
+      // one node serialize. With no cost table this never moves past nowMs.
+      busyUntilMs: nowMs,
       handler: typeof handler === VIRTUAL_NETWORK_STR_FUNCTION ? handler : null,
     });
   }
@@ -155,6 +168,26 @@ function createVirtualNetwork(options = {}) {
     const node = ensureNode(nodeId);
     node.state = VIRTUAL_NETWORK_NODE_STATE.RUNNING;
     node.clockMs = nowMs;
+    // A (re)started node's single core is idle at the current instant; drop any stale
+    // future busy-until carried from before it stopped.
+    node.busyUntilMs = nowMs;
+  }
+
+  // Charge `virtualMs` of single-core work to one node. The charge serializes against
+  // the node's own outstanding work (start = max(now, busyUntil)) and advances ONLY the
+  // owning node's logical clock — the global clock and other nodes are untouched, so
+  // independent nodes proceed in parallel while concurrent work on one node contends.
+  // A no-op for an unknown node or a non-positive charge.
+  function chargeNode(nodeId, virtualMs) {
+    const node = nodes.get(nodeId);
+    if (!node || !(virtualMs > VIRTUAL_NETWORK_NUM_ZERO)) {
+      return;
+    }
+    const start = Math.max(nowMs, node.busyUntilMs);
+    node.busyUntilMs = start + virtualMs;
+    if (node.state === VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
+      node.clockMs = node.busyUntilMs;
+    }
   }
 
   function killNode(nodeId) {
@@ -327,6 +360,16 @@ function createVirtualNetwork(options = {}) {
       clearInterval(handle) {
         cancelAdapterTimer(handle);
       },
+      // The cost-model seam: a hosted machine charges single-core work for an op via
+      // its TimeSource. Inert (no clock movement) unless this network was built with a
+      // costTable; the matching no-op on src/time/time-source.js lets the same caller
+      // run in production and single-node DT4 with zero effect.
+      charge(opKey, inputSize) {
+        if (!costTable) {
+          return;
+        }
+        chargeNode(nodeId, costTable.cost(opKey, inputSize));
+      },
     });
   }
 
@@ -441,7 +484,40 @@ function createVirtualNetwork(options = {}) {
     }
   }
 
+  // The single-core contention gate: if the event's owning node (a TIMER fires on its
+  // owner event.from; a MESSAGE is serviced by its recipient event.to) is RUNNING and
+  // still busy past this event's dueAt, the node's core cannot service it yet. Re-time
+  // the event FORWARD to the node's busyUntilMs and leave it on the queue (do not fire,
+  // do not regress the clock). dueAt only ever moves forward, so cross-instant causality
+  // and the PctScheduler co-due contract still hold; each defer strictly increases dueAt
+  // so the existing maxSteps guard still bounds the loop (no zero-progress spin). With no
+  // cost table busyUntilMs never exceeds dueAt, so this never defers — byte-identical.
+  function maybeDeferForBusyNode(event) {
+    if (!costTable) {
+      return false;
+    }
+    const ownerId = event.kind === VIRTUAL_NETWORK_EVENT_KIND.TIMER ?
+      event.from :
+      event.to;
+    const owner = nodes.get(ownerId);
+    if (
+      owner &&
+      owner.state === VIRTUAL_NETWORK_NODE_STATE.RUNNING &&
+      owner.busyUntilMs > event.dueAt
+    ) {
+      event.dueAt = owner.busyUntilMs;
+      return true;
+    }
+    return false;
+  }
+
+  // Returns true if the event actually fired/delivered, false if it was deferred
+  // (re-timed forward, left on the queue). With no cost table it always returns true.
   function deliverOne(event) {
+    if (maybeDeferForBusyNode(event)) {
+      // Deferred: the event stays queued at its new (later) dueAt; the clock does not move.
+      return false;
+    }
     nowMs = event.dueAt;
     removeFromQueue(event);
     if (event.kind === VIRTUAL_NETWORK_EVENT_KIND.TIMER) {
@@ -449,6 +525,7 @@ function createVirtualNetwork(options = {}) {
     } else {
       deliverMessage(event);
     }
+    return true;
   }
 
   /**
@@ -514,15 +591,25 @@ function createVirtualNetwork(options = {}) {
       }
       return Object.freeze({delivered: false, event: null, nowMs});
     }
-    const event = Object.freeze({
+    const snapshot = {
       kind: next.kind,
       from: next.from,
       to: next.to,
       type: next.type,
       dueAt: next.dueAt,
-    });
-    deliverOne(next);
-    return Object.freeze({delivered: true, event, nowMs});
+    };
+    // A busy owning node defers the event (re-timed forward, left on the queue): report
+    // it honestly as not delivered with the new dueAt, so the caller re-steps. With no
+    // cost table deliverOne always fires, so this is byte-identical to before.
+    if (!deliverOne(next)) {
+      snapshot.dueAt = next.dueAt;
+      return Object.freeze({
+        delivered: false,
+        event: Object.freeze(snapshot),
+        nowMs,
+      });
+    }
+    return Object.freeze({delivered: true, event: Object.freeze(snapshot), nowMs});
   }
 
   function now() {
@@ -531,6 +618,12 @@ function createVirtualNetwork(options = {}) {
 
   function nodeNow(nodeId) {
     return ensureNode(nodeId).clockMs;
+  }
+
+  // The node's single-core "busy until" instant (for cost-model assertions). Equal to
+  // the node's clock when idle; ahead of it while outstanding charged work remains.
+  function nodeBusyUntil(nodeId) {
+    return ensureNode(nodeId).busyUntilMs;
   }
 
   function nodeState(nodeId) {
@@ -548,6 +641,7 @@ function createVirtualNetwork(options = {}) {
   const api = Object.freeze({
     now,
     nodeNow,
+    nodeBusyUntil,
     nodeState,
     registerNode,
     startNode,
