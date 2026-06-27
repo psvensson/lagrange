@@ -80,6 +80,42 @@ Properties (why this is the right shape):
 `p̂_lowerWilson` is the Wilson 95% lower bound of the measured passRate at the
 reference node count `N_ref`.
 
+## 3b. Two calibrations — what is computed ONCE vs what is sealed ONCE
+
+There are two distinct calibrated quantities. **Neither is recomputed on an
+ordinary code change.** Keeping them separate is the whole point: the expensive
+thing must not be code-dependent.
+
+1. **The hardware factor (a HARDWARE property — cheap, stable, compute-once).**
+   This already exists: `scripts/calibrate-machine.js` runs a ~1 s micro-benchmark
+   (sqlite full-log scan + readiness-snapshot JSON serialize/parse + a CPU term —
+   the documented convergence hot-path mix) and emits `LAGRANGE_MACHINE_FACTOR =
+   hostFactor × cpuScaling`, measured against a stored reference
+   (`test/distributed/calibration-baseline.json`; this dev box IS the reference,
+   `hostFactor = 1.0`). The gate and the harness
+   (`convergence-budget-calibration.js`) **scale the work-bound timeouts by this
+   factor**, so a slower/faster box gets proportionally larger/smaller budgets.
+   It is a property of the *hardware*, so it is **re-measured only when the
+   hardware changes** (`--establish-baseline` on a new reference box, or the
+   per-host probe on a new runner) — never on a code change. "Other (logic)
+   factors" — node count via the `q^N` model, per-scenario work-bound budget
+   shape — compose on top of this hardware factor and may change with code; the
+   hardware term does not.
+
+2. **The passRate baseline (a CODE/CAPABILITY property — expensive, sealed once).**
+   This is the hours-long N≥15 gate (§4). It is **sealed once** as the reference
+   bar `T(5) = 0.109` and recorded here; ordinary changes are *compared against*
+   the sealed bar, they do **not** re-derive it. You spend gate-hours again only
+   to **deliberately validate an improvement** (e.g. a latency-tail lever) against
+   the fixed bar, and you re-seal `T` upward only if the new Wilson lower bound
+   clears the old one. So a routine change costs **zero** convergence-gate hours;
+   a milestone "did this lever raise q?" check costs one N≥15 gate, by choice.
+
+In short: the hardware factor (the thing that *should* be a reusable hardware
+constant) is the cheap ~1 s probe and is already wired into the timeouts; the
+hours-long value is the code-capability passRate, which is sealed once and
+referenced, not recomputed per change.
+
 ## 4. Calibration for the current setup (5 nodes)
 
 Current setup: **N_ref = 5 nodes**, `resourceLimits.cpus = 1.0`, `memory = 2g`,
