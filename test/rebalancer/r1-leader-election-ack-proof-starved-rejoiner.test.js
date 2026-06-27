@@ -127,7 +127,7 @@ function evaluateFastPath(safety, snapshot) {
 }
 
 test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner — the snapshot ' +
-  'wedges re-requesting the source-leader handoff (the 56x replace_remove_safety_blocked state)', (t) => {
+  'defers (with Lever A, by driving the voter-ready replacement election, not re-asking the source)', (t) => {
   const safety = makeSafety();
   const snapshot = buildWedgeSnapshot(safety);
 
@@ -142,10 +142,16 @@ test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner �
     'no row-based disjunct authorizes removal: source still leads, no handoff evidence, ' +
       'replacement ownership not row-observed',
   );
+  // Pre-Lever-A this wedged in REQUEST_SOURCE_LEADER_HANDOFF (re-asking the starved source
+  // forever — the original 56x replace_remove_safety_blocked state). Lever A escalates
+  // immediately to the voter-ready replacement (this fixture has a voter-ready follower
+  // replacement); with the replacement election already dispatched (evidence suppressed) it
+  // now WAITS for replacement ownership rather than re-pinging the node that cannot respond.
+  // The core R1 point is unchanged: rows alone still do NOT authorize removal (asserted above).
   t.equal(
     snapshot.state,
-    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
-    'the gate re-dispatches a STEP_DOWN to the starved source — forever (the wedge)',
+    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_REPLACEMENT_LEADER_OWNERSHIP,
+    'the gate drives the replacement election + waits for ownership (Lever A) — still no removal',
   );
   t.end();
 });

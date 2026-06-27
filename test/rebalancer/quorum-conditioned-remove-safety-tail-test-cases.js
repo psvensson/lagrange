@@ -618,8 +618,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         );
         t.match(
           handoffResult.error,
-          /handoff pending before safe removal/i,
-          'the defer should explain that source leader handoff is still pending',
+          /replacement leader ownership pending before safe removal/i,
+          'the defer escalates to the voter-ready replacement leader election (Lever A), still pending before safe removal',
         );
         coordinator.systemTableCache.merge('services', 'control_plane_publications-p1-r1', {
           raft_role: 'follower',
@@ -1007,8 +1007,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         );
         t.match(
           handoffResult.error,
-          /handoff pending before safe removal/i,
-          'the defer should reflect leader handoff rather than a stale publication-status block',
+          /replacement leader ownership pending before safe removal/i,
+          'the defer reflects the replacement leader election (Lever A), not a stale publication-status block',
         );
         t.notMatch(
           String(handoffResult.error || ''),
@@ -1158,8 +1158,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
         );
         t.match(
           String(handoffResult?.error || ''),
-          /handoff pending before safe removal/i,
-          'the owner-read path should defer on leader handoff rather than publication status',
+          /replacement leader ownership pending before safe removal/i,
+          'the owner-read path defers on the replacement leader election (Lever A), not publication status',
         );
         t.notMatch(
           String(handoffResult?.error || ''),

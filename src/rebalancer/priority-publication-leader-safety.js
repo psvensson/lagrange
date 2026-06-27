@@ -265,8 +265,26 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         operation,
         replacementReplicaRow,
       );
+    // Lever A (latency-tail reducer): escalate to driving the voter-ready
+    // replacement's election IMMEDIATELY, not only after the source handoff has
+    // stalled PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS (30s). The
+    // source handoff is a COOPERATIVE local election timer the source must run
+    // itself; when the source is the CPU-pegged rejoiner that timer never fires
+    // in budget, so the prior design wasted up to 30s (a quarter of the
+    // per-restart convergence budget) re-asking a node that cannot respond
+    // before escalating. Once a voter-ready replacement exists there is no reason
+    // to wait: the cooperative step-down would itself cause an election (the
+    // source arms an election timer and a follower wins), so driving the
+    // replacement's election directly is the SAME leadership transfer, just on a
+    // healthy node and without the 30s wait + the round-trip to the saturated
+    // source — no extra election churn. The stall age is retained below as a
+    // diagnostic field. Safety is identical to R3 (the predicate this generalizes):
+    // escalation NEVER authorizes removal (sourceRemovalLeadershipSafe still
+    // gates it) and requires the replacement be voter-ready, so it can never
+    // drive a stale node to leadership / split-brain. When the replacement is NOT
+    // yet voter-ready (replacementElectionTargetReady false) the cooperative
+    // source handoff path below is preserved unchanged.
     const escalateReplacementLeaderElection =
-      sourceLeaderHandoffStalled &&
       sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
       !replacementLeaderOwnershipObserved &&
       replacementElectionTargetReady;

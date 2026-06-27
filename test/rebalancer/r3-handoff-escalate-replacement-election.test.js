@@ -7,17 +7,22 @@ import {
   ReplicaOperationReason,
 } from '../../src/rebalancer/replica-operation-constants.js';
 
-// R3 below-gate DT repro (epic slow-rejoiner-progress-or-evict, lever R3 "drive the handoff").
+// R3 + Lever A below-gate DT repro (epic slow-rejoiner-progress-or-evict, "drive the handoff").
 //
 // A surplus-drain priority REPLACE must move leadership off a SLOW/event-loop-starved rejoiner.
 // The source-leader handoff is a COOPERATIVE local-timer raft step the saturated source must run
 // itself; on a starved node it never fires, so the source never releases leadership in the rows
 // and no completedLeaderHandoffEvidence is recorded. The gate then re-dispatches the SAME source
 // STEP_DOWN forever (the dominant replace_remove_safety_blocked wedge: the node is neither pushed
-// forward nor evicted). R3 detects a sustained-non-progressing source handoff (>= 30s anchored on
-// the first attempt) and ESCALATES to driving the voter-ready REPLACEMENT's leader election
-// instead — routing through the existing REQUEST_REPLACEMENT_LEADER_ELECTION dispatch. R3 NEVER
-// authorizes a removal; it only changes which handoff message is dispatched.
+// forward nor evicted). The fix ESCALATES to driving the voter-ready REPLACEMENT's leader election
+// instead — routing through the existing REQUEST_REPLACEMENT_LEADER_ELECTION dispatch; it NEVER
+// authorizes a removal, it only changes which handoff message is dispatched and to which node.
+//
+// Lever A (latency-tail reducer): the escalation is now IMMEDIATE once a voter-ready replacement
+// exists — it no longer waits for the 30s source-handoff stall (which wasted a quarter of the
+// per-restart convergence budget re-asking a node that cannot respond). The cooperative step-down
+// would itself cause an election, so driving the replacement's election directly is the same
+// leadership transfer on a healthy node, sooner. The 30s stall age is retained only as a diagnostic.
 //
 // Faithfulness: drives the REAL snapshot builder + the REAL stall recorder/reader; only the
 // external-state leaf readers (role/leader-id resolvers, evidence readers, voter-evidence) are
@@ -107,28 +112,34 @@ function buildSnapshot(safety) {
   );
 }
 
-test('R3: a FRESH (not-yet-stalled) source handoff re-asks the source — no escalation', (t) => {
+test('Lever A: a FRESH (stall=0) source-leader handoff with a VOTER-READY replacement escalates ' +
+  'IMMEDIATELY — it does not wait for the 30s stall', (t) => {
+  // stallMs well below the old 30s floor. Pre-Lever-A this stayed
+  // REQUEST_SOURCE_LEADER_HANDOFF (re-asking the saturated source); Lever A
+  // escalates straight to the replacement election. This is the red-on-revert
+  // assertion: restoring the `sourceLeaderHandoffStalled &&` guard makes this
+  // fall back to REQUEST_SOURCE_LEADER_HANDOFF and FAIL.
   const safety = makeSafety({stallMs: 1000});
   const snapshot = buildSnapshot(safety);
   t.equal(
     snapshot.state,
-    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
-    'below the 30s floor the gate still requests the source-leader handoff (no premature escalation)',
+    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
+    'a voter-ready replacement escalates immediately (no 30s wait re-asking the starved source)',
   );
-  t.equal(snapshot.escalateReplacementLeaderElection, undefined,
-    'a source-handoff snapshot does not carry the escalation flag');
+  t.equal(snapshot.escalateReplacementLeaderElection, true, 'escalation flag is set immediately');
+  t.equal(snapshot.replacementNodeId, HEALTHY_NODE,
+    'the election is dispatched to the healthy replacement node, not the starved source');
   t.end();
 });
 
-test('R3 PROMOTED (unconditional): a STALLED source handoff (>=30s) escalates to driving the ' +
-  'voter-ready replacement leader election', (t) => {
+test('Lever A: escalation is stall-INDEPENDENT — a long-stalled handoff also escalates ' +
+  '(behaviour unchanged from the >=30s R3 path it generalizes)', (t) => {
   const safety = makeSafety({stallMs: ESCALATE_AFTER_MS + 1000});
   const snapshot = buildSnapshot(safety);
   t.equal(
     snapshot.state,
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
-    'the stuck source handoff escalates to the replacement leader election (without R3 the ' +
-      'source-still-leader state would stay REQUEST_SOURCE_LEADER_HANDOFF forever)',
+    'a stuck source handoff still escalates to the replacement leader election',
   );
   t.equal(snapshot.escalateReplacementLeaderElection, true, 'escalation flag is set');
   t.equal(snapshot.replacementNodeId, HEALTHY_NODE,
