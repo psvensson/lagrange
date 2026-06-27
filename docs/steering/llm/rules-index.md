@@ -5,7 +5,7 @@ citations: `npm run rule -- --id <ID>` (or `--tag`, `--domain`,
 `--strength`, or free-text terms). Regenerate with
 `node scripts/lookup-rule.js --write-index`.
 
-Total rules: 290
+Total rules: 291
 
 | id | strength | domain | summary |
 | --- | --- | --- | --- |
@@ -87,26 +87,27 @@ Total rules: 290
 | TEST-0021 | must_not | testing | Do not rely on a broad scenario test alone when the bug is in a narrow system-table write… |
 | TEST-0022 | must_not | testing | Production code must never contain alternate code paths, branches, or special-case logic … |
 | TEST-0023 | must_not | testing | When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an inte… |
-| TEST-0024 | must_not | testing | Work must not close while the touched area remains red. |
+| TEST-0024 | must_not | testing | A gate must never be the iteration loop: do not gate to see whether a change helped, to d… |
+| TEST-0025 | must_not | testing | Work must not close while the touched area remains red. |
 | GOV-0003 | must_not | governance | Session/narrative state (current blocker, handoff notes, working hypotheses) stays in ext… |
 | ARCH-0048 | must | architecture | Components constructed with owner dependencies must route owned behavior through those de… |
 | ARCH-0049 | must | architecture | A transitional delegator must have a removal task, target owner, and structural guard pre… |
 | ARCH-0050 | must | architecture | Forbidden patterns: letting a consumer select, repair, or admit from an owner stream that… |
 | GOV-0004 | must_not | governance | Seal the goal. Define doneWhen before implementation begins. Do not change it after the f… |
-| TEST-0025 | must_not | testing | Tests must never be skipped. |
+| TEST-0026 | must_not | testing | Tests must never be skipped. |
 | STYLE-0007 | must | style | New or newly edited source-code files must finish within the per-scope thresholds owned b… |
 | STYLE-0008 | must | style | New source-code files must be named for the semantic responsibility they own, not for the… |
 | STYLE-0009 | must | style | Shared domain literals belong in their canonical owner module and must be imported from t… |
-| TEST-0026 | must | testing | The active Quest must define the required validation surface. |
-| TEST-0027 | must | testing | Tests added during the change must match the Quest concern rather than an unrelated umbre… |
-| TEST-0028 | must | testing | After the Quest validation surface is green, perform the required closure deep dive acros… |
-| TEST-0029 | must | testing | When residual closure moves to a follow-on Quest or frontier, the original Quest must sto… |
-| TEST-0030 | must | testing | New or newly edited source-code files must finish within the per-scope thresholds owned b… |
-| TEST-0031 | must | testing | If a Quest touches an inherited oversized source-code file, it must extract or refactor t… |
-| TEST-0032 | must | testing | The test must fail with the current code |
-| TEST-0033 | must | testing | The next regression in that area must prove the reduced boundary, not only the immediate … |
-| TEST-0034 | must | testing | A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporti… |
-| TEST-0035 | must | testing | Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use … |
+| TEST-0027 | must | testing | The active Quest must define the required validation surface. |
+| TEST-0028 | must | testing | Tests added during the change must match the Quest concern rather than an unrelated umbre… |
+| TEST-0029 | must | testing | After the Quest validation surface is green, perform the required closure deep dive acros… |
+| TEST-0030 | must | testing | When residual closure moves to a follow-on Quest or frontier, the original Quest must sto… |
+| TEST-0031 | must | testing | New or newly edited source-code files must finish within the per-scope thresholds owned b… |
+| TEST-0032 | must | testing | If a Quest touches an inherited oversized source-code file, it must extract or refactor t… |
+| TEST-0033 | must | testing | The test must fail with the current code |
+| TEST-0034 | must | testing | The next regression in that area must prove the reduced boundary, not only the immediate … |
+| TEST-0035 | must | testing | A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporti… |
+| TEST-0036 | must | testing | Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use … |
 | ARCH-0051 | must_not | architecture | Do not respond to repeated distributed failures by adding more scattered local special ca… |
 | ARCH-0052 | must_not | architecture | Do not treat hot-path green tests as analysis closure while the original scenario now fai… |
 | ARCH-0053 | must_not | architecture | Quests must never close from symptom movement alone (such as changed timeout durations, t… |
@@ -146,26 +147,26 @@ Total rules: 290
 | GOV-0014 | must | governance | Broad rows must gain a linked spec or architecture document before active implementation … |
 | GOV-0015 | must | governance | The Quest must name the roadmap row, approved maintenance scope, or explicit user request… |
 | STYLE-0010 | must | style | All code must be written with ESLint rules in mind from the start. |
-| TEST-0036 | must | testing | Every test that exists must run and pass. |
-| TEST-0037 | must | testing | Tests must exercise the real production code paths. |
-| TEST-0038 | must | testing | The test suite must prove that production code works — not that a test-friendly fork of i… |
-| TEST-0039 | must | testing | When adding new tests or changing existing tests for production code, you must also audit… |
-| TEST-0040 | must | testing | Timeouts in control-plane logic are hard correctness bugs and must be tested as typed out… |
-| TEST-0041 | must | testing | Test closure and Quest closure both require the final affected-area deep dive required by… |
-| TEST-0042 | must | testing | Every non-trivial Quest must prove that it did not increase architecture drift while fixi… |
-| TEST-0043 | must | testing | All bug fixes MUST be preceded by a failing test that reproduces the bug. |
-| TEST-0044 | must | testing | When the second correctness bug appears at the same architectural boundary in one work cy… |
-| TEST-0045 | must | testing | When a bug involves component ownership, lifecycle persistence, or system-table row mutat… |
-| TEST-0046 | must | testing | When a change touches shared metadata reads or writes, tests and CI checks must prove the… |
-| TEST-0047 | must | testing | When a change touches control-plane progression (dispatch, rebalance, split, admission pr… |
-| TEST-0048 | must | testing | When a change touches CDC propagation, watches, subscriptions, reconnect loops, buffers, … |
-| TEST-0049 | must | testing | When an owner path is intentionally unresolved under pressure, publication establishment,… |
-| TEST-0050 | must | testing | When a Quest exists because a distributed, integration, load, or scenario failure must be… |
-| TEST-0051 | must | testing | If the fixture contract was correct, the next attempt must target the runtime owner bound… |
-| TEST-0052 | must | testing | When a delegated worker reviews a scenario Quest, it must compare current probe evidence … |
-| TEST-0053 | must | testing | When a change touches startup, readiness, admin snapshot, service discovery, or another s… |
-| TEST-0054 | must | testing | Tests MUST verify this property at the unit and integration layers, not only in the distr… |
-| TEST-0055 | must | testing | Failures discovered in the touched area, or discovered by the test runs chosen for the cu… |
+| TEST-0037 | must | testing | Every test that exists must run and pass. |
+| TEST-0038 | must | testing | Tests must exercise the real production code paths. |
+| TEST-0039 | must | testing | The test suite must prove that production code works — not that a test-friendly fork of i… |
+| TEST-0040 | must | testing | When adding new tests or changing existing tests for production code, you must also audit… |
+| TEST-0041 | must | testing | Timeouts in control-plane logic are hard correctness bugs and must be tested as typed out… |
+| TEST-0042 | must | testing | Test closure and Quest closure both require the final affected-area deep dive required by… |
+| TEST-0043 | must | testing | Every non-trivial Quest must prove that it did not increase architecture drift while fixi… |
+| TEST-0044 | must | testing | All bug fixes MUST be preceded by a failing test that reproduces the bug. |
+| TEST-0045 | must | testing | When the second correctness bug appears at the same architectural boundary in one work cy… |
+| TEST-0046 | must | testing | When a bug involves component ownership, lifecycle persistence, or system-table row mutat… |
+| TEST-0047 | must | testing | When a change touches shared metadata reads or writes, tests and CI checks must prove the… |
+| TEST-0048 | must | testing | When a change touches control-plane progression (dispatch, rebalance, split, admission pr… |
+| TEST-0049 | must | testing | When a change touches CDC propagation, watches, subscriptions, reconnect loops, buffers, … |
+| TEST-0050 | must | testing | When an owner path is intentionally unresolved under pressure, publication establishment,… |
+| TEST-0051 | must | testing | When a Quest exists because a distributed, integration, load, or scenario failure must be… |
+| TEST-0052 | must | testing | If the fixture contract was correct, the next attempt must target the runtime owner bound… |
+| TEST-0053 | must | testing | When a delegated worker reviews a scenario Quest, it must compare current probe evidence … |
+| TEST-0054 | must | testing | When a change touches startup, readiness, admin snapshot, service discovery, or another s… |
+| TEST-0055 | must | testing | Tests MUST verify this property at the unit and integration layers, not only in the distr… |
+| TEST-0056 | must | testing | Failures discovered in the touched area, or discovered by the test runs chosen for the cu… |
 | GOV-0016 | must_not | governance | Do not move goalposts in place. |
 | GOV-0017 | must_not | governance | Two legitimate Quest shapes have different closure bars; do not conflate them. |
 | GOV-0018 | must_not | governance | An invalid sample is an honest no-measurement: it never counts as progress, never satisfi… |
@@ -212,17 +213,17 @@ Total rules: 290
 | GOV-0046 | must | governance | widen-scope: selected frontier theory required. |
 | GOV-0047 | must | governance | model: selected frontier theory, active system theory, and --modelRef or --modelNotApplic… |
 | GOV-0048 | must | governance | change-approach: selected frontier theory remains required; model evidence is not require… |
-| TEST-0056 | must_not | testing | Reproduce deterministically in-process BEFORE changing code; the non-deterministic docker… |
+| TEST-0057 | must_not | testing | Reproduce deterministically in-process BEFORE changing code; the non-deterministic docker… |
 | GOV-0049 | must | governance | THEORY_REQUIRED (non-terminal): the selected rung needs system or frontier theory before … |
 | ARCH-0091 | must_not | architecture | The services row is the canonical example of non-overlapping field owners on one row: ide… |
 | ARCH-0092 | must_not | architecture | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
 | GOV-0050 | must | governance | MAX_CYCLES / THEORY_REQUIRED / recoverable BLOCKED: the executor can act on these, so the… |
 | ARCH-0093 | should | architecture | All service communication that should be a message goes through the MessageRouter. |
-| TEST-0057 | must | testing | Existing violations in touched files must be fixed when they are part of the same semanti… |
+| TEST-0058 | must | testing | Existing violations in touched files must be fixed when they are part of the same semanti… |
 | GOV-0051 | must | governance | Use source, test, architecture, and steering files for the implementation or documentatio… |
 | GOV-0052 | must | governance | Durable conclusions must be recorded with node scripts/solve.js finding before they are r… |
 | GOV-0053 | must | governance | Later attempts must use the same sealed goalposts. |
-| TEST-0058 | must | testing | Slow-dependency resilience — inject artificial latency into a dependency (mock that resol… |
+| TEST-0059 | must | testing | Slow-dependency resilience — inject artificial latency into a dependency (mock that resol… |
 | GOV-0054 | must_not | governance | A building-block Quest — landing a safe, default-off lever for later validation — closes … |
 | GOV-0055 | must_not | governance | Oscillation detection: returning the frontier to a previously-abandoned blocker (owner / … |
 | GOV-0056 | must_not | governance | Measured promotion only: a theory is promoted exclusively by a measured post-patch eviden… |
@@ -242,35 +243,35 @@ Total rules: 290
 | GOV-0065 | must | governance | For any other open choice the agent MUST pick a sensible default, record a finding, and c… |
 | GOV-0066 | must | governance | EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of … |
 | STYLE-0011 | should | style | When a boundary already owns a named mode vocabulary, call sites and tests should use tha… |
-| TEST-0059 | should | testing | The test should capture the exact failure scenario from the bug report |
-| TEST-0060 | should | testing | The failure message should match the reported error |
-| TEST-0061 | should | testing | The fix should make the failing test pass |
-| TEST-0062 | should | testing | Is the current problem a repeated pattern? If so, is there a shared abstraction that shou… |
+| TEST-0060 | should | testing | The test should capture the exact failure scenario from the bug report |
+| TEST-0061 | should | testing | The failure message should match the reported error |
+| TEST-0062 | should | testing | The fix should make the failing test pass |
+| TEST-0063 | should | testing | Is the current problem a repeated pattern? If so, is there a shared abstraction that shou… |
 | ARCH-0099 | must | architecture | Every active Quest must name its residual-closure inventory before code is treated as com… |
-| TEST-0063 | must | testing | When a bug depends on stale cache truth, stale routing, delayed authoritative visibility,… |
+| TEST-0064 | must | testing | When a bug depends on stale cache truth, stale routing, delayed authoritative visibility,… |
 | GOV-0067 | must_not | governance | Climbing a rung is a response to a measured stall — a trustworthy observation that the cu… |
 | GOV-0068 | must_not | governance | The reopen is evidence-gated: it is refused unless at least one contributing attempt re-c… |
 | GOV-0069 | must_not | governance | It runs the audit and refuses on failure, derives the in-scope set purely from the Quest'… |
 | GOV-0070 | must_not | governance | The production reflection path runs only when the executor exposes a reflect() method (th… |
 | GOV-0071 | must_not | governance | A supervised driver — a human, or any agent that drives the Solver through individual sub… |
 | ARCH-0100 | may | architecture | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
-| TEST-0064 | should | testing | No other tests should break |
+| TEST-0065 | should | testing | No other tests should break |
 | ARCH-0101 | should | architecture | A human idea should first become either: - a sharpened roadmap item; - or a bounded Quest |
 | ARCH-0102 | should | architecture | Active implementation should target one executable concern per Quest. |
 | ARCH-0103 | should | architecture | Quest status should live in the Solver event log and report rather than in parallel track… |
-| TEST-0065 | should | testing | All non-trivial implementation work should have validation owned by its active Quest. |
-| TEST-0066 | should | testing | Runtime Quests that touch already oversized files should record whether they are adding l… |
-| TEST-0067 | should | testing | These tests should be small and targeted. |
-| TEST-0068 | should | testing | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
+| TEST-0066 | should | testing | All non-trivial implementation work should have validation owned by its active Quest. |
+| TEST-0067 | should | testing | Runtime Quests that touch already oversized files should record whether they are adding l… |
+| TEST-0068 | should | testing | These tests should be small and targeted. |
+| TEST-0069 | should | testing | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
 | GOV-0072 | must | governance | Periodically sweep the flags and retire or promote any whose condition has been met or ha… |
 | GOV-0073 | must | governance | class: "product" (default) or "process". Product goals must be MEASURED against a real ar… |
 | GOV-0074 | must | governance | Regression-restore gate: once a measured run records an invariant regression, the very ne… |
 | GOV-0075 | must_not | governance | Findings promoted into steering MUST be written as a normative sentence containing MUST, … |
-| TEST-0069 | must_not | testing | A convergence-bug repro MUST exercise the layer where the invariant is produced or violat… |
+| TEST-0070 | must_not | testing | A convergence-bug repro MUST exercise the layer where the invariant is produced or violat… |
 | GOV-0076 | must | governance | explore: open a bounded free-explore rung. A missing theory maps here: the run keeps thin… |
-| TEST-0070 | may | testing | Only return to suite-local fixes after the shared runner boundary is shown stable. |
-| TEST-0071 | may | testing | Only restore higher parallelism after the aggregate gate is proven stable at the new boun… |
-| TEST-0072 | may | testing | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
+| TEST-0071 | may | testing | Only return to suite-local fixes after the shared runner boundary is shown stable. |
+| TEST-0072 | may | testing | Only restore higher parallelism after the aggregate gate is proven stable at the new boun… |
+| TEST-0073 | may | testing | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
 | ARCH-0104 | should | architecture | Runtime Quests that follow such a model should cite it as their scope basis and proof sur… |
 | ARCH-0105 | should | architecture | Implementation work should be as explicit and bounded as the runtime design. |
 | ARCH-0106 | should | architecture | Optional real sub-agents should accelerate this sequence, not replace it. |
@@ -280,8 +281,8 @@ Total rules: 290
 | GOV-0080 | must | governance | The agent MUST stop and request user input only on one of the four canonical core.md stop… |
 | GOV-0081 | should | governance | The review should return findings, candidate risks, or suggested frontiers. |
 | GOV-0082 | may | governance | A row may move to active implementation only when the intended behavior is sharp enough t… |
-| TEST-0073 | may | testing | Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in t… |
-| TEST-0074 | may | testing | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
+| TEST-0074 | may | testing | Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in t… |
+| TEST-0075 | may | testing | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
 | GOV-0083 | should | governance | It is advisory rather than terminal, but a high-severity signal should usually produce a … |
 | GOV-0084 | should | governance | Reach for step only for human-paced or exploratory work — an autonomous agent should almo… |
 | GOV-0085 | should | governance | Independent work within a Quest SHOULD run concurrently: batch independent reads, fan out… |

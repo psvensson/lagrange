@@ -58,6 +58,18 @@ Use this order for scenario Quests:
 4. representative scenario rerun;
 5. Solver step commit or autonomous loop report.
 
+The expensive non-deterministic statistical gate (the docker rolling-restart
+stat-gate and equivalent multi-run scenario reruns) is a last resort, reached
+only after deterministic in-process proof. A fix is validated by a deterministic
+reproduction that goes red on revert, not by a passing gate run. Run a gate only
+when the claim is irreducibly statistical — a true pass-rate or variance question
+no deterministic test can answer, or a one-time milestone certification of an
+already-deterministically-proven change against a sealed bar — and even then
+minimize the run count, starting at the smallest informative N. A gate must never
+be the iteration loop: do not gate to see whether a change helped, to discover
+the next blocker, or to re-confirm a mechanism a deterministic test already
+demonstrates.
+
 ## Delegated Review
 
 When a delegated worker reviews a scenario Quest, it must compare current probe

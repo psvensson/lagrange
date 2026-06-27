@@ -17,35 +17,45 @@ any distributed-harness or convergence work:
 - **Absence proves nothing.** The playback bundle is a sparse curated sample — a
   missing log line does NOT mean the code did not run. Ground truth is the full
   per-node logs under `test-output/reports/.playback/<run>/.full-logs/`.
-- **Deterministic-first, gate-last.** Reproduce a convergence failure
-  deterministically in-process BEFORE changing code — build a targeted or
-  fault-injected repro at the layer where the invariant is produced (see the
-  reproduced-before-fix rule in
+- **Deterministic-first; the gate is a LAST RESORT ONLY.** The PRIMARY evidence
+  for every convergence fix is a deterministic in-process reproduction — a
+  targeted or fault-injected repro at the layer where the invariant is produced,
+  red-on-revert, built BEFORE changing code and kept as the validating proof
+  afterward (see the reproduced-before-fix rule in
   [`closure-grammar.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
   and the substrate map in
   [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
-  The docker statistical gate (`scripts/rolling-restart-stat-gate.sh`) is
-  non-deterministic and expensive (each run is ~5–10 min): it is last-resort
-  certification of a landed fix, NOT the iteration loop. **Start with the lowest N
-  that could answer the question and escalate only when the result forces it.**
-  Each run costs wall-clock you can't get back, so the burden is on justifying a
-  LARGER N, never a smaller one. Concretely:
-  - **Default to the smallest informative N, usually N=3.** N=3 is not merely a
-    probe — `rolling-restart-core-stability`'s `doneWhen` is *3 consecutive
-    scenario-PASS*, so a clean N=3 (3/3) literally satisfies closure (confirm with
-    `solve.js probe`). A single hard breach, corruption, or clean mechanistic
-    confirmation is also conclusive at N=1–3 — stop early; more runs add nothing.
-  - **Escalate ONLY when the small run is genuinely inconclusive** — e.g. a
-    borderline/mixed pass rate (2/3) where you need to tell variance from signal,
-    or a convergence-*rate* promotion verdict where the statistic itself is the
-    claim. Then, and only then, go to N≥8.
-  - Never conclude a *rate* from N=1, and never default to N=8 every iteration —
-    both are sampling errors, one optimistic, one wasteful. Match the sample size
-    to the question, smallest-first.
-  BEFORE queuing a gate, run `npm run analyze:latent-blockers`: the gate is a
+  A fix is "proven" when a deterministic test demonstrates the mechanism and goes
+  red on revert — NOT when a gate happens to pass. If you reach for the docker
+  statistical gate (`scripts/rolling-restart-stat-gate.sh`), first write down the
+  exact question and why no in-process test can answer it; if you can't, you are
+  not ready to gate.
+  - **Run a gate ONLY when the claim is irreducibly statistical** and no
+    deterministic test can stand in: a true pass-*rate* / variance question, or a
+    one-time milestone certification of a landed, already-DT-proven improvement
+    against a sealed bar. Mechanism, classification, recovery, and red-on-revert
+    are deterministic questions — answer them in-process, never with a gate.
+  - **A gate is never the iteration loop.** Do not gate to "see if it helped", to
+    discover the next blocker, or to re-confirm a mechanism a DT already shows.
+    Each run is non-deterministic and costs ~5–10 min of wall-clock you can't get
+    back; a multi-headed run masks every reason but the dominant one.
+  - **When a gate is genuinely required, minimize it.** Start at the smallest
+    informative N and escalate only when the result forces it (a borderline mixed
+    rate, or a rate-promotion verdict where the statistic itself is the claim).
+    Never conclude a *rate* from N=1; never default to a large N every iteration.
+  - `rolling-restart-core-stability`'s `doneWhen` is the sealed variance-aware
+    metric in [`docs/convergence-donewhen-metric.md`](../../docs/convergence-donewhen-metric.md)
+    (Wilson 95% lower-bound passRate ≥ `T(N_nodes)` + a hard SAFE floor), NOT
+    "3 consecutive PASS". Its convergence axis is met *by construction* at the
+    hardware floor, and the passRate baseline is **sealed once** — so a routine
+    change costs ZERO gate-hours and is validated deterministically; you spend one
+    N≥15 gate only to deliberately certify a latency-tail improvement against the
+    sealed bar (and re-seal `T` upward only if the new Wilson lower bound clears
+    the old one).
+  BEFORE queuing any gate, run `npm run analyze:latent-blockers`: the gate is a
   serial max-frequency oracle that shows only the single dominant reason and masks
-  the rest, so do not spend a ~40-min gate to learn the next layer the corpus
-  already reveals.
+  the rest, so do not spend a gate to learn the next layer the corpus already
+  reveals.
 - **Use the analyzers, not raw-log grep.** Read
   [`test/distributed/harness/README.md`](../../test/distributed/harness/README.md) first,
   then `npm run analyze:distributed-failure -- --report <r>` /

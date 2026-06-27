@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-26T20:52:25.829Z",
+  "generatedAt": "2026-06-27T11:09:33.505Z",
   "packs": [
     {
       "name": "core",
@@ -31,7 +31,7 @@
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
       "ruleCount": 35,
-      "estimatedTokens": 1160,
+      "estimatedTokens": 1197,
       "domains": [
         "testing"
       ],
