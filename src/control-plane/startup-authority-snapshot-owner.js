@@ -18,6 +18,47 @@ import {
   PUBLICATION_RECOVERY_GATE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
+import {
+  PROJECTION_READINESS_ACTIVE_GATE_STATE,
+  PROJECTION_READINESS_REASON,
+} from './projection-readiness-constants.js';
+
+function isStartupProjectionActiveGateServeEligibleInFlight(
+  activeGate,
+  prioritySpreadDurablySatisfied,
+) {
+  // Only the stronger REPAIR_READY state (repair lane ready, serve blocked)
+  // is eligible; INTERNAL_READY means the repair lane itself is not ready.
+  if (
+    activeGate?.state !==
+    PROJECTION_READINESS_ACTIVE_GATE_STATE.REPAIR_READY
+  ) {
+    return false;
+  }
+  if (prioritySpreadDurablySatisfied !== true) {
+    return false;
+  }
+  const reasonCodes = Array.isArray(activeGate?.reasonCodes) ?
+    activeGate.reasonCodes :
+    [];
+  // FAIL-CLOSED allowlist: relax only when the active gate's serve-lane
+  // reasonCodes are EXACTLY priority_recovery_active — i.e. the sole thing
+  // keeping the serve lane closed is the in-flight recovery op, with no other
+  // disqualifier (serve_not_eligible, publication_stream_*, AND internal-lane
+  // reasons such as cluster_member_unhealthy that can ride along in
+  // REPAIR_READY). Any other reason, or a summarized snapshot whose reasonCodes
+  // were dropped to bound the served payload, keeps the node conservatively
+  // RECOVERY_PENDING. An allowlist (not a disqualifier blocklist) stays safe if
+  // new lane reasons are added later.
+  return (
+    reasonCodes.includes(
+      PROJECTION_READINESS_REASON.PRIORITY_RECOVERY_ACTIVE,
+    ) &&
+    reasonCodes.every((reasonCode) =>
+      reasonCode === PROJECTION_READINESS_REASON.PRIORITY_RECOVERY_ACTIVE,
+    )
+  );
+}
 
 export {
   STARTUP_AUTHORITY_ADMISSION_STATE,
@@ -439,12 +480,29 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       canonicalStartupNodeIds.length === NUM.ZERO
     ) ||
     isStartupProjectionActiveGateBlocked(projectionReadinessActiveGate);
+  // A node whose voter-ready (durable) priority spread is satisfied is
+  // serve-eligible even while a recovery operation is still in flight, PROVIDED
+  // the only thing the projection active gate is waiting on is that in-flight
+  // op (no serve/publication disqualifier). Treating spread_satisfied_in_flight
+  // as recovery_pending withheld serve-eligibility cluster-wide — the root of
+  // the rolling-restart run3 (seed LEADER_METADATA_INCOMPLETE) and run7 (load
+  // nodeSlotUnavailable) gate failures. The durable summary (not the optimistic
+  // closure-witness one) keeps this voter-ready-sound regardless of the
+  // LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY flag.
+  const prioritySpreadDurablySatisfied =
+    publicationRecoveryGate.durablePriorityPartitionSummary?.satisfied === true;
+  const activeGateRecoveryServeEligible =
+    isStartupProjectionActiveGateServeEligibleInFlight(
+      projectionReadinessActiveGate,
+      prioritySpreadDurablySatisfied,
+    );
+  const activeGateRecoveryBlocksReadiness =
+    isStartupProjectionActiveGateRecoveryOpen(projectionReadinessActiveGate) &&
+    !activeGateRecoveryServeEligible;
   const state = blocked ?
     STARTUP_AUTHORITY_STATE.BLOCKED :
     (priorityRecoveryReasonCodes.length > NUM.ZERO ||
-      isStartupProjectionActiveGateRecoveryOpen(
-        projectionReadinessActiveGate,
-      ) ?
+      activeGateRecoveryBlocksReadiness ?
       STARTUP_AUTHORITY_STATE.RECOVERY_PENDING :
       STARTUP_AUTHORITY_STATE.READY);
 

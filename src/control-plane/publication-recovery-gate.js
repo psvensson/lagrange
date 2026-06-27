@@ -393,6 +393,18 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
       prioritySpreadDecision.priorityPartitionSummary ?
         Object.freeze({...prioritySpreadDecision.priorityPartitionSummary}) :
         null,
+    // The STRICT (voter-ready-sound) summary, distinct from the optimistic
+    // priorityPartitionSummary above (which the closure witness can mark
+    // satisfied for a spread_satisfied_in_flight REPLACE without a voter-ready
+    // replacement when LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY is off). Exposed
+    // so serve-eligibility decisions can require genuine voter-ready spread
+    // independent of that flag.
+    durablePriorityPartitionSummary:
+      prioritySpreadDecision.durablePriorityPartitionSummary ?
+        Object.freeze({
+          ...prioritySpreadDecision.durablePriorityPartitionSummary,
+        }) :
+        null,
     publicationOwnerStream,
     streamOutcome: publicationOwnerStream.streamOutcome,
     ackState: publicationOwnerStream.ackState,
