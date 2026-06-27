@@ -15,6 +15,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
 } from '../../src/bootstrap/node-joining-service.js';
+import {
+  WaitForLeadershipPhase,
+} from '../../src/bootstrap/phases/wait-for-leadership-phase.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -127,6 +130,47 @@ function buildJoinReadinessTimeoutError() {
   return error;
 }
 
+/**
+ * Generate the EXACT error production throws when message-group leadership does
+ * not establish within the wait window, by driving the real WaitForLeadershipPhase
+ * to its timeout on a virtual clock (no real time, no network). Using the real
+ * phase rather than a hand-built error keeps the end-to-end resume test below
+ * tied to the production throw+tag path: revert the retryable tag in
+ * wait-for-leadership-phase.js and attempt 1 becomes terminal (red-on-revert).
+ * This deterministically reproduces the transient NODE_EXIT root from
+ * calibration gate 073124Z run4 without a multi-hour gate run.
+ * @return {Promise<Error>} The real leadership-timeout error.
+ */
+async function buildRealLeadershipTimeoutError() {
+  let nowMs = 0;
+  const config = {
+    leadershipWaitTimeoutMs: 120000,
+    leadershipWaitInitialDelayMs: 10,
+    leadershipWaitMaxDelayMs: 100,
+    leadershipWaitBackoffMultiplier: 2,
+  };
+  const noop = () => {};
+  const phase = new WaitForLeadershipPhase({
+    nodeId: TEST_NODE_ID,
+    delegates: {
+      getConfig: () => config,
+      getLogger: () => ({debug: noop, info: noop, warn: noop, error: noop}),
+      getNow: () => () => nowMs,
+      getSleep: () => async (delayMs) => {
+        nowMs += Math.max(delayMs, config.leadershipWaitTimeoutMs);
+      },
+      getMessageGroupServices: () => new Map(),
+      getMessageGroupServicesSize: () => 0,
+    },
+  });
+  try {
+    await phase.phaseWaitForLeadership();
+  } catch (error) {
+    return error;
+  }
+  throw new Error('expected phaseWaitForLeadership to time out');
+}
+
 test('CL-006: retryable join-step failure preserves join state for the ' +
   'resume re-entry (no destructive cleanup, no FAILED event)', async (t) => {
   initializeTestEnvironment();
@@ -149,6 +193,37 @@ test('CL-006: retryable join-step failure preserves join state for the ' +
     'infrastructure the checkpoint skips depend on');
   t.equal(spies.failedEvents, 0,
     'a resumed attempt is not a final failure and must not emit FAILED');
+});
+
+test('join leadership-establishment timeout recovers on resume instead of ' +
+  'exiting the node (NODE_EXIT SAFE-floor repro, gate 073124Z run4)',
+async (t) => {
+  initializeTestEnvironment();
+
+  // The exact transient error that killed joiner 35a891b8 in calibration gate
+  // 073124Z run4 (it was classified retryable:false -> attempt 0 -> exit 1 ->
+  // dropped from membership). Deterministically reproduced from the real phase.
+  const leadershipTimeout = await buildRealLeadershipTimeoutError();
+  t.match(leadershipTimeout.message, /failed to establish leadership within/,
+    'sanity: the injected error is the real leadership-timeout error');
+
+  const {service, spies} = buildResumableJoinHarness({
+    failures: [leadershipTimeout],
+  });
+
+  const result = await service.join();
+
+  t.equal(result.success, true,
+    'a transient leadership timeout must recover on the resume attempt — ' +
+    'the node must NOT exit (this is the run4 NODE_EXIT, now prevented)');
+  t.equal(spies.coordinatorRuns, 2,
+    'the resume loop must re-enter the join after the leadership timeout');
+  t.equal(spies.cleanupFailedJoinCalls, 0,
+    'a resumable leadership timeout must NOT run destructive cleanup');
+  t.equal(spies.genericCleanupCalls, 0,
+    'a resumable leadership timeout must NOT tear down join infrastructure');
+  t.equal(spies.failedEvents, 0,
+    'a resumed leadership timeout is not a terminal failure (no FAILED event)');
 });
 
 test('CL-006: non-retryable join failure still runs the full destructive ' +
