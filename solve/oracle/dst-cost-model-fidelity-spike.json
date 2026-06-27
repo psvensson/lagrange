@@ -1,0 +1,7 @@
+{
+  "metric": 2,
+  "target": 0,
+  "done": false,
+  "classification": "open",
+  "note": "SEALED kill-gate. metric = number of REQUIRED distinct latency-root CLASSES still UNPROVEN (starts at 2: one CPU-saturation missed-budget root AND one non-CPU coordination tail / leadership-handoff / spread-establishment). The oracle probe marks done when metric<=target, so metric counts DOWN to target=0. A root class counts as PROVEN only when the cost-modeled in-process harness reproduces docker's per-run ROOT-CAUSE LABEL for that root, red-on-revert (removing the cost charge / lever flips the label to converged), AND the in-process directional verdict matches a docker single-run trace on the shared seed/inputs across a >=2-point parameter sweep. The charged-op set MUST be re-profiled at HEAD (parseStepsHistory is memoized away; the fastJsonClone deep-clone at system-table-cache.js:932 is still live). The bar is per-run LABEL agreement, NOT aggregate-passRate correlation (unfalsifiable at p=0.30/N=20). done=true (SOLVED) when metric reaches 0 => cost model viable, the dst-cost-model-circle program proceeds. If an honest cost model cannot prove both classes after genuine attempts, record EXHAUSTED => Option B refuted at the kill-gate, fall back to the logical circle (do NOT relax the bar to aggregate passRate or a single root). Not yet built: metric=2 (both classes unproven)."
+}
