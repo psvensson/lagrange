@@ -142,7 +142,7 @@ opens 5432. **The ONLY missing piece is the trigger/owner.** Enum values: type `
   rows) and mints one `createOperation` ADD per target node, mirroring initial partition provisioning
   (`sql-query-engine-initial-partition-provisioning.js:386-399`). Gets psql up; **no self-heal** (a lost
   pgwire node is never replaced — no steady-state reconciler).
-- **Approach B (durable owner — RECOMMENDED):** instantiate a `UnifiedRebalancer` with
+- **Approach B (durable owner — CHOSEN, operator 2026-06-28):** instantiate a `UnifiedRebalancer` with
   `entityType: RUNTIME_SERVICE` seeded from `service_definitions` (a runtime-service owner analogous to
   `PartitionService`/`MessageGroupService`). Then `start`/`stop`/`scale` ALL become uniform "set
   `replica_count`, let the owner converge" — **self-healing**, and it reuses the already-green planning/
@@ -346,6 +346,54 @@ Concretely D2 requires three coupled pieces:
    place the PG-wire replica so `start` can drive it and ship-not-started can reliably *withhold* it.
 
 D1 (auto-start) is rejected: it loses the lifecycle lesson the onboarding is built around.
+
+## Implementation blueprint — RUNTIME_SERVICE rebalancer owner (Approach B, file-anchored)
+
+Confirmed: the RUNTIME_SERVICE planner/executor/dispatch machinery is fully wired and GREEN; the only
+missing piece is a *planning leader* (no `UnifiedRebalancer` is constructed for `entityType RUNTIME_SERVICE`).
+- Planner already branches: `getRuntimeServicePolicy()` (`unified-rebalancer-policy-scheduler-methods.js:24-26,53-55`).
+- Replica discovery already handles it: `getCurrentReplicas()` (`unified-rebalancer-replica-state.js:238-251`, reads the `services` table).
+- Dispatch already routes RUNTIME_SERVICE ops (`replica-dispatch-service-dispatch-observation-methods.js:31-33`).
+- Executor handler already built behind the pgwire gate on both paths (`bootstrap-service-control-plane-runtime-methods.js:119`, `node-joining-publication-activation.js:441`).
+
+`UnifiedRebalancer` constructor contract (`unified-rebalancer-lifecycle-base.js:39-284`): required
+`entityId, entityType, systemTableCache, cdcIntegrationService, tablePolicyService, nodeId, messageRouter,
+rebalanceCoordinator` (others auto-pulled from the coordinator via `syncOwnerDependenciesFromCoordinator`);
+the `MovePlanner` is built internally. Mirror the **MESSAGE_GROUP** owner
+(`message-group-service-rebalancer-runtime-methods.js:66-154`) — it's the right template because pgwire is
+a fixed system service (vs partition's one-per-replica). Reuse the single per-node `rebalanceCoordinator`
+(`control-plane-setup.js`); do NOT create a second.
+
+Ordered steps:
+1. **Entity-aware policy** — edit `getRuntimeServicePolicy()` (`unified-rebalancer-policy-scheduler-methods.js:53-55`)
+   to override `targetReplicaCount` from `service_definitions.replica_count` for `this.entityId` (field
+   `replica_count`; NaN/missing → fall back to static default, never 0). This is what makes `scale` work and
+   `replica_count=0` mean "place nothing". Testable in isolation.
+2. **Owner setup** — new `src/bootstrap/shared/runtime-service-rebalancer-setup.js` mirroring
+   `runtime-service-handler-setup.js`: enumerate active RUNTIME_SERVICE defs via
+   `systemTableCache.filter(SERVICE_DEFINITIONS, d => serviceType===RUNTIME_SERVICE && status==='active')`;
+   construct one `UnifiedRebalancer` per `serviceId`; `initialize()` + leadership-gated `setLeader(...)`;
+   return a handle with `quiesceAll()` + a discovery-refresh subscription (refresh per-entity set on
+   `service_definitions` cache/CDC change so user services get owners too).
+3. **Construct at seed** — call from `bootstrap-service-control-plane-runtime-methods.js:119-144` right after
+   `initializeRuntimeServiceHandler()`; store handle for teardown.
+4. **Construct at join** — same from `node-joining-publication-activation.js:441-464`.
+5. **Leadership** — drive `setLeader` from the raft-role/readiness hooks the message-group owner uses
+   (`resolveRebalancerLeadership()`); strictly leader-only (else duplicate ADD storm).
+6. **Teardown** — `quiesceRebalancing()`/`shutdown()` (already shutdown-aware) per entity; NO re-arming
+   discovery timer (use cache/CDC subscription, unsubscribe on shutdown — avoids the integration-suite hang class).
+
+Risks: keep runtime-service owners NON-priority so they don't compete with the ~1s control-plane-priority
+cadence the live convergence work depends on (with `replica_count=0` shipped, pgwire plans zero moves → ~nil
+blast radius at ship time); leader-only execution; shutdown-awareness; the seeded `service_endpoints` row is
+an endpoint advertisement, not a `services` replica row (rebalancer keys on `services`, no collision) — but
+fix `list`/`status` so they don't double-count it.
+
+Red-on-revert DT test (no gate; model on `test/integration/pgwire-rebalance.integration.test.js` +
+`test/rebalancer/runtime-service-entity.test.js`): mock `systemTableCache` with a `sys-postgres-wire`
+definition (active, replica_count=3), 3 ready nodes, 0 `services` rows → drive one reconcile tick → assert an
+ADD/CREATE_REPLICA for `runtime_service`/`sys-postgres-wire`; assert NONE without the owner, and NONE with
+`replica_count=0` (proves ship-not-started gating).
 
 ## Sequencing & dependencies
 
