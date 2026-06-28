@@ -111,6 +111,46 @@ but is **not** in `ENV_MAPPINGS` (cannot move WS port via env); admin port 8081 
 ### Image publish
 - GitHub Actions buildx → `ghcr.io/<org>/lagrange:<semver>` + `:latest`, `linux/amd64`+`linux/arm64`. AGPL license labels. Consider multi-stage to drop the `python3/make/g++` build toolchain.
 
+### Why pgwire is never placed — RESOLVED (W0b follow-up, 2026-06-28). Fake-endpoints hypothesis REFUTED.
+The deficit is not 0 because of the seeded endpoints — `sys-postgres-wire` is simply **absent from every
+reconciliation set**. There are two reconcilers and pgwire falls through both:
+- **Bootstrap/join `ServiceReconciler`** (`src/bootstrap/shared/startup-service-lifecycle-owner.js:55-63`):
+  its `desiredStateReader` is an **in-memory Map** populated only with `MESSAGE_GROUP` + `PARTITION`
+  descriptors (`seed-message-groups-phase.js:79`, `seed-partitions-phase.js:103`, join equivalents);
+  its `actualStateReader` (`seed-infrastructure-phase.js:301-335`) enumerates only message-group +
+  partition handles. **Runtime services are never queued** → the planner
+  (`service-reconciler-planner.js:206`) never even iterates pgwire. The seeded `service_endpoints` are
+  never read here.
+- **Per-entity `UnifiedRebalancer`**: instantiated only for `MESSAGE_GROUP`
+  (`message-group-service-rebalancer-runtime-methods.js:117`) and `PARTITION`
+  (`partition-service-rebalancer-methods.js:257`). **No `entityType: RUNTIME_SERVICE` rebalancer is ever
+  constructed**, and nothing discovers RUNTIME_SERVICE entities from `service_definitions`. So 0
+  RUNTIME_SERVICE decisions are logged because **no instance bound to pgwire exists**, not because of a
+  filter.
+The RUNTIME_SERVICE capability itself is **fully built and GREEN in this tree** (verified by running the
+tests): `MovePlanner` emits ADD for runtime_service (`move-planner-runtime-service.test.js` 27/27),
+the executor CREATE→start path (`runtime-service-handler.test.js` 29/29), and end-to-end planning+node
+selection (`pgwire-rebalance.integration.test.js` 8/8). The dispatch chain downstream of an ADD op is
+complete: `rebalanceCoordinator.createOperation({type:'add', entityType:'runtime_service', entityId:'sys-postgres-wire', nodeId})`
+→ `replica_operations` row → dispatcher CREATE_REPLICA to `runtime-service-handler.js:141` →
+`RuntimeServiceAdapter` → `service-runtime-lifecycle` writes the `services` row + `pgwire-runtime-module.start()`
+opens 5432. **The ONLY missing piece is the trigger/owner.** Enum values: type `'add'`, entityType
+`'runtime_service'`; partitionId defaults to entityId.
+
+### `service start` implementation — two approaches
+- **Approach A (minimal trigger):** `service start` computes deficit (desired `replica_count` vs `services`
+  rows) and mints one `createOperation` ADD per target node, mirroring initial partition provisioning
+  (`sql-query-engine-initial-partition-provisioning.js:386-399`). Gets psql up; **no self-heal** (a lost
+  pgwire node is never replaced — no steady-state reconciler).
+- **Approach B (durable owner — RECOMMENDED):** instantiate a `UnifiedRebalancer` with
+  `entityType: RUNTIME_SERVICE` seeded from `service_definitions` (a runtime-service owner analogous to
+  `PartitionService`/`MessageGroupService`). Then `start`/`stop`/`scale` ALL become uniform "set
+  `replica_count`, let the owner converge" — **self-healing**, and it reuses the already-green planning/
+  executor machinery. Missing piece = the owner + entity-discovery-from-`service_definitions`. Combined
+  with D2: ship pgwire `replica_count=0` (or status inactive); `start` sets it to 3 → owner places via
+  the proven chain; `stop` sets 0 → owner removes. This makes the latent fake-health bug moot (truth
+  comes from the `services` table the owner maintains).
+
 ## Workstreams & sealed acceptance (doneWhen)
 
 Each is independently verifiable. `W0` is a prerequisite falsification and runs first.
