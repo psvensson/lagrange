@@ -182,7 +182,6 @@ function assignRaftLifecycle(serviceClass) {
       const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
         replicaId: this.replicaId,
         replicaIds: this.replicaIds,
-        partitionRotationKey: this.groupId,
         baseElectionMinMs,
         baseElectionMaxMs,
         electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,

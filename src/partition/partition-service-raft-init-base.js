@@ -309,7 +309,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
       replicaIds: this.replicaIds,
-      partitionRotationKey: this.partitionId,
       baseElectionMinMs,
       baseElectionMaxMs,
       electionJitterPerReplicaMs:
@@ -607,7 +606,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       computeReplicaElectionTimeouts({
         replicaId: this.replicaId,
         replicaIds: this.replicaIds,
-        partitionRotationKey: this.partitionId,
         baseElectionMinMs,
         baseElectionMaxMs,
         electionJitterPerReplicaMs:

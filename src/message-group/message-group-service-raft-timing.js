@@ -59,7 +59,6 @@ function assignRaftTiming(serviceClass) {
         computeReplicaElectionTimeouts({
           replicaId: this.replicaId,
           replicaIds: this.replicaIds,
-          partitionRotationKey: this.groupId,
           baseElectionMinMs,
           baseElectionMaxMs,
           electionJitterPerReplicaMs:
