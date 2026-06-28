@@ -35,19 +35,18 @@ single seed because **no runtime replica was placed**, not because of a status
 flag. The listener opens only when the rebalancer places a `RUNTIME_SERVICE`
 replica and `RuntimeServiceHandler` materializes it via
 `pgwire-runtime-module.start()` (`src/runtime/pgwire-runtime-module.js:256-270`)
-behind `PgWireStartupSafetyGate`. **What actually gates placement on a small
-cluster is not yet pinned (W0b).** The guided path therefore depends on a product
-decision (see "Key open decision" below). Either way the teaching arc is:
+behind `PgWireStartupSafetyGate`. **DECISION D2 (below): the SQL service ships
+not-started; the operator starts it explicitly.** W0b pins the placement mechanism
+so `start` can drive it. The teaching arc is:
 
 1. Bring up the cluster (compose or Helm) — **≥3 nodes** (the replica floor; see Risks).
-2. **Manage services through a service-management API** (list / status / start /
-   stop / scale / deploy). The capability is reachable today only as raw SQL on
+2. **Manage services through the `lagrange service` API** (list / status / start /
+   stop / scale / deploy). Today the only surface is raw SQL on
    `service_definitions` over the admin-WS `query` channel
    (`docs/wasm-services-user-guide.md` §3–6); there is **no clean verb surface**
-   and **no `start`/`stop` builder** — that gap is the WS-API workstream.
-3. **Reach SQL**: either pgsql comes up automatically once ≥3 nodes are ready
-   (if W0b shows placement just needs quorum), or the operator runs
-   `lagrange service start sys-postgres-wire` (if we choose to ship it not-started).
+   and **no `start`/`stop` mechanism at all** — that gap is the WS-API workstream.
+3. **`lagrange service list`** shows `sys-postgres-wire` present but **not placed**;
+   **`lagrange service start sys-postgres-wire`** places its replica → 5432 opens.
 4. Connect with `psql`, run SQL.
 5. **Deploy a small hello-world service** — the same API path, teaching how to run
    *your own* services on Lagrange.
@@ -255,35 +254,34 @@ item here.
   is reachable.
 - The admin-WS `query` envelope + canonical SQL templates are documented as the automation surface.
 
-## Key open decision (resolve with W0b evidence)
+## Key decision — RESOLVED: D2 ship-not-started + real start action (operator, 2026-06-28)
 
-Does psql come up **automatically** on a healthy ≥3-node cluster, or do we want operators to
-**explicitly start it**? Two coherent products:
+The SQL service ships **not-started** and the operator **explicitly starts it** — this is the
+intended teaching arc ("see pgsql defined-but-not-running → `lagrange service start` → psql works").
+Concretely D2 requires three coupled pieces:
 
-- **D1 — Auto-start (no product change).** Keep pgsql shipping `active`/`replica_count=3`; W0b
-  confirms a ≥3-node cluster places the replica and 5432 opens on its own. Onboarding = "bring up
-  3 nodes → psql just works"; service management is taught via the **hello-world deploy** only.
-  WS-API `start` is then **not** needed for the basic round-trip (and WS-API drops off the critical
-  path). Lowest effort, best first impression. Cost: loses the "start the SQL service" lesson.
-- **D2 — Ship-not-started (matches the requested narrative).** Change the built-in pgsql definition
-  to ship not-started (status inactive **or** replica_count 0) **and** implement a real server-side
-  `service start` action that places the replica. Onboarding = "see pgsql defined-but-not-running →
-  `lagrange service start` it → psql works", which doubles as the canonical lifecycle lesson. Cost:
-  a product change to a built-in + the hardest WS-API piece (server-side start/stop), and it must not
-  break the existing assumption elsewhere that pgsql is active by default (audit callers).
+1. **Built-in pgsql ships not-started.** Change `createPostgresWireDefinition()` (and/or the seed
+   registration) so the definition is present but does **not** get a placed replica at boot — by
+   shipping `status='inactive'` or `replica_count=0` (W0b decides which actually prevents placement,
+   since `status` may not gate it). **Must audit every caller/test that assumes pgsql is active by
+   default** and update them (this is a behavior change to a built-in).
+2. **A real server-side `service start` (and `stop`) action** that drives *placement*, not a status
+   flip — `start` requests/raises placement of a `RUNTIME_SERVICE` replica; `stop` scales-to-0 /
+   issues a REMOVE replica_operation. These are net-new server actions (no SQL builder exists).
+3. **W0b feeds the implementation** (not the decision): pin exactly what the rebalancer needs to
+   place the PG-wire replica so `start` can drive it and ship-not-started can reliably *withhold* it.
 
-Recommendation: **decide after W0b.** If W0b shows auto-placement on 3 nodes is reliable, D1 gives
-the cleanest 30-minute win; D2 is the better *teaching* story but is a real feature. Either way W0b
-is the gate.
+D1 (auto-start) is rejected: it loses the lifecycle lesson the onboarding is built around.
 
 ## Sequencing & dependencies
 
-`W0` (DONE) → **`W0b` (BLOCKER: pin the placement precondition; resolves the Key open decision)**.
-`W1` (Dockerfile EXPOSE fix, multi-stage, naming) runs in parallel with `W0b`. Then `W2`/`W3` (W3
-render-only). **WS-API scope depends on the decision**: under D1 it's just `list`/`status`/`scale`/
-`deploy` (off the psql critical path); under D2 it additionally includes the server-side
-`start`/`stop` actions and is back on the critical path before `W2`/`W4`'s psql step. `WS-HELLO`
-needs WS-API `deploy`. `W4` needs W2 patterns + W3 chart. `W5` narrates the green end-to-end flow.
+`W0` (DONE) → **`W0b` (BLOCKER: pin the placement mechanism so `start` can drive it and
+ship-not-started can withhold it)** → **WS-API core** (built-in-not-started change + server-side
+`start`/`stop` placement actions + `list`/`status`/`scale`/`deploy` verbs + caller audit).
+`W1` (Dockerfile EXPOSE fix, multi-stage, naming) runs in parallel. Then `W2` (needs W1 + WS-API) ‖
+`W3` (render-only, needs W1 image name) → `WS-HELLO` (needs WS-API `deploy`) → `W4` (needs W2
+patterns + W3 chart + WS-API) → `W5` (docs narrate the green end-to-end flow). **WS-API is firmly on
+the critical path** under D2: without the start action there is no psql.
 
 ## Reuse vs build-new
 
