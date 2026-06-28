@@ -12,7 +12,7 @@
   },
   "doneWhenSealed": {
     "metricDoc": "docs/convergence-donewhen-metric.md",
-    "window": "N >= 15 fixed-code runs",
+    "window": "N >= 11 fixed-code runs (operator-set 2026-06-28; Wilson-LB self-adjusts to demand passRate >= 9/11=0.818 at N=11; more same-code runs may be pooled if borderline)",
     "safetyFloor": "CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource = 0 every run (hard, never relaxed)",
     "convergenceBar": "Wilson-95 lower bound of scenario-PASS rate >= 0.50 (T_new, operator-sealed 2026-06-28; strictly above the solved parent quest's achieved Wilson-LB 0.357)",
     "residualBar": "the run4 drain/in-flight family (convergence_timeout, replica_operations_in_flight, publication_epochs_disagree) is NOT the dominant fail reason in any run of the window",
