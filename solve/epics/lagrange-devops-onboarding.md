@@ -83,17 +83,28 @@ but is **not** in `ENV_MAPPINGS` (cannot move WS port via env); admin port 8081 
 
 ## Design
 
-### docker-compose (3-node)
-- `seed`: `NODE_ID=lagrange-seed`, `NODE_ADDRESS=seed:8080`, `NODE_ADVERTISED_WS_ADDRESS=ws://seed:8082`, `TRANSPORT_WS_HOST=0.0.0.0`, `DATA_DIR=/data`, **no** `SEED_NODE_ADDRESS`, volume `seed-data:/data`. Publish host `8080`, `5432`, `8081`.
-- `node-2`/`node-3`: same shape + `SEED_NODE_ADDRESS=seed:8080`, distinct id/address/volume. Do not publish 5432 from all three (clash) — publish seed's, or map 5433/5434.
-- 8082 stays inside the compose network. `healthcheck` = `GET :8080/readyz`; joiners `depends_on: { seed: { condition: service_healthy } }` (mitigates the first-boot race).
+### docker-compose (3-node) — verified working in W0b
+- `seed`: `NODE_ID=lseed` (seeds accept any id), `NODE_ADDRESS=seed:8080`, `REST_API_PORT=8080`,
+  `TRANSPORT_WS_HOST=0.0.0.0`, `DATA_DIR=/data`, **no** `SEED_NODE_ADDRESS`, volume `seed-data:/data`.
+  Publish host `8080`, `5432`, `8081`. **Do NOT set `NODE_ADVERTISED_WS_ADDRESS`** (R15 — crashes boot).
+- `node-2`/`node-3`: same shape + `SEED_NODE_ADDRESS=seed:8080`, distinct address/volume, and a
+  **valid-UUID `NODE_ID`** (R14 — joiners with a non-UUID id are rejected `HTTP 400`). Do not publish
+  5432 from all three (clash) — publish seed's, or map 5433/5434.
+- 8082 (WS peer transport) stays inside the compose network — WS advertised address derives from
+  `node.address`, so `node-2:8082`/`node-3:8082` resolve on the compose network. `healthcheck` =
+  `GET :8080/readyz`; joiners `depends_on: { seed: { condition: service_healthy } }` (first-boot race).
 
 ### Helm chart (`charts/lagrange/`, StatefulSet)
 - Headless `Service` (`clusterIP: None`, name `lagrange`) ⇒ stable DNS `lagrange-0.lagrange.<ns>.svc.cluster.local`.
 - `StatefulSet` `serviceName: lagrange`, `podManagementPolicy: OrderedReady` (so `lagrange-0` is the seed and Ready before joiners start).
-- Per-pod identity via entrypoint wrapper deriving ordinal from `$HOSTNAME`/`POD_NAME`:
-  `NODE_ID=$POD_NAME`, `NODE_ADDRESS=$POD_NAME.lagrange.$NS.svc:8080`, `NODE_ADVERTISED_WS_ADDRESS=ws://$POD_NAME.lagrange.$NS.svc:8082`, `TRANSPORT_WS_HOST=0.0.0.0`, `DATA_DIR=/data`; `SEED_NODE_ADDRESS=lagrange-0.lagrange.$NS.svc:8080` **only for ordinal>0**.
-- `volumeClaimTemplates` (one PVC per pod at `/data`) ⇒ restart re-binds same PVC ⇒ same NODE_ID + raft log ⇒ auto-rejoin, not fresh identity.
+- Per-pod identity via entrypoint wrapper: `NODE_ADDRESS=$POD_NAME.lagrange.$NS.svc:8080`,
+  `TRANSPORT_WS_HOST=0.0.0.0`, `DATA_DIR=/data`; `SEED_NODE_ADDRESS=lagrange-0.lagrange.$NS.svc:8080`
+  **only for ordinal>0**. **`NODE_ID` must be a stable UUID, NOT the pod name** (R14 — joiners are
+  rejected unless the id is a UUID). Generate a UUID on first boot and persist it in the PVC
+  (`$DATA_DIR/node-id`), reusing it on restart; the seed (ordinal 0) may use any id. **Do NOT set
+  `NODE_ADVERTISED_WS_ADDRESS`** (R15). The PVC-persisted UUID is what makes restart = auto-rejoin.
+- `volumeClaimTemplates` (one PVC per pod at `/data`) ⇒ restart re-binds same PVC ⇒ same persisted
+  NODE_ID + raft log ⇒ auto-rejoin, not fresh identity.
 - Client services: `lagrange-sql` (5432), `lagrange-admin` (8081, optional). Probes from `docs/bootstrap-readiness-probes.md:52-74` (startup `/startupz`, readiness `/readyz`, liveness `/livez`, all 8080) so client services route only to Ready nodes.
 - Configurable: `replicas`, `resources`, `securityContext` (non-root), `storageClassName`, `image`/`tag`.
 
@@ -112,15 +123,38 @@ Each is independently verifiable. `W0` is a prerequisite falsification and runs 
   service is "stopped" — the definition ships `status='active'`, `replica_count=3`
   (`meta-service-factory.js:85-102`, `wasm-service-models.js:156-173`). The gate logging "Runtime
   service handler setup completed for PG wire" is the *handler* being wired, not a *placed replica*.
-- **W0b — Pin the real placement precondition (BLOCKER, do before sealing WS-API).** Find why the
-  `RUNTIME_SERVICE` (`minReplicaCount:1`, `rebalancer-constants.js:137-146`) PG-wire replica is not
-  placed on a 1-node cluster, and whether a healthy **3-node** cluster places it automatically.
-  Instrument the rebalancer critical-topology path (`unified-rebalancer-critical-topology-methods.js:428-508`,
-  `unified-rebalancer-replica-state.js:169-179`) + the safety gate (`pgwire-startup-safety-gate.js:118-136`)
-  to capture the blocking condition (required-ready-node count, endpoint-visibility settling, heartbeat
-  service, leadership). Accept: a documented, reproduced answer to "what is the minimal precondition for
-  5432 to open" on 1-node and 3-node clusters. **This determines whether WS-API `start` is even needed
-  (see Key open decision) and whether WS-API is on the critical path.**
+- **W0b — Pin the real placement precondition. RESOLVED 2026-06-28 (empirical, Docker 3-node).**
+  VERDICT: **psql/5432 never comes up automatically on ANY cluster size.** Built `lagrange:w0b`, ran a
+  3-node cluster (1 seed + 2 joiners on a shared docker network); the cluster formed cleanly
+  (`expectedNodeCount:3`, `publishedActiveNodeCount:3`, raft-live, settled) yet **no node ever opened
+  5432** (checked `/proc/net/tcp` on all 3 after ~6 min). Admin-WS queries pinned the mechanism:
+  - `service_definitions` for `sys-postgres-wire`: `status='active'`, `replica_count=3`.
+  - `services` (actually-placed replicas): **0 rows** for pgwire.
+  - `replica_operations`: **0** pgwire ADD ops ever created; rebalancer logs show **0 RUNTIME_SERVICE
+    reconciliation decisions** (it reconciles system *partitions* + message_groups, never the pgwire
+    runtime service).
+  - `service_endpoints`: **3 rows marked `healthy`** — but these are **seeded at boot** by
+    `registerBuiltInMetaServiceEndpoints` (one per node), NOT backed by a real replica/listener.
+  ROOT: nothing ever acts on the pgwire desired state to **place a replica**. The desired-vs-actual
+  reconciler (`service-reconciler-planner.js:127-131`: ADD when `runningReplicas < desiredReplicaCount`)
+  would compute a deficit of 3, but no ADD is planned/dispatched for the built-in — and the
+  **fake-healthy seeded endpoints** plausibly suppress deficit/readiness detection (the
+  endpoint-visibility check `visiblePostgresWireNodeIds` is satisfied by them). Other system services
+  (e.g. message_group) are placed at **bootstrap** (`reason:"bootstrap_message_groups"` via
+  service-lifecycle); pgwire (RUNTIME_SERVICE) has **no equivalent bootstrap placement**.
+  CONSEQUENCE: D2 is not just a preference — there is currently **no automatic path to a running
+  pgsql at all**. The placement chain to drive from `start` is: ServiceReconciler ADD →
+  CREATE dispatched to a node's `runtime-service-handler.js:148` → `pgwire-runtime-module.start()`
+  (`:256-270`) binds 5432 and writes the `services` row. **First implementation task (cluster still
+  reproducible via the recipe below): determine why the reconciler emits no deficit for the built-in
+  and whether the fake-healthy endpoints are the suppressor.**
+  - **Latent bug surfaced:** a built-in service with `replica_count=3` that is never placed yet
+    publishes 3 `healthy` endpoints — the cluster *reports* pgsql healthy while no listener exists.
+    Fix as part of WS-API (`list`/`status` must report *placed* truth, not seeded endpoints).
+  - **Repro recipe:** `docker build -t lagrange:w0b .`; `docker network create L`; run seed
+    (`NODE_ID=lseed NODE_ADDRESS=lseed:8080 REST_API_PORT=8080 TRANSPORT_WS_HOST=0.0.0.0 DATA_DIR=/data`,
+    no `SEED_NODE_ADDRESS`, publish 8080/8081/5432); run 2 joiners with **UUID** `NODE_ID`s + 
+    `SEED_NODE_ADDRESS=lseed:8080`. Query state via admin-WS `query` on :8081.
 - **WS-API — Service-management surface (NEW).** A clean, SQL-free verb surface (list / status /
   start / stop / scale / deploy). Read/scale/create/deploy reuse the existing SQL builders
   (`src/wasm-service/meta-command-handlers.js`); **`start` and `stop` have NO builder today**
@@ -308,7 +342,14 @@ run user services. The built-in pgsql runtime min is 1 (`rebalancer-constants.js
 `status='inactive'` flip does NOT tear down the listener (placement ignores `status`) — stop must be
 a real scale-to-0/REMOVE action. R13 admin WS is unauthenticated and `admin-auth-middleware.js` is
 policy-only (no token/principal/credential source) — real auth is a separate quest; quickstart is
-localhost-only.
+localhost-only. **R14 (verified W0b) joiner `NODE_ID` MUST be a valid UUID — the seed `/bootstrap`
+rejects non-UUID ids (`HTTP 400 nodeId must be a valid UUID`); seeds themselves accept any id. This
+REFUTES the StatefulSet "NODE_ID = $POD_NAME" design for joiners (`lagrange-1` would fail to join).
+Joiners need a stable per-pod UUID — persist a generated one in the PVC on first boot, or derive a
+deterministic UUIDv5 from the pod name.** **R15 (verified W0b) `NODE_ADVERTISED_WS_ADDRESS` is a
+dead/broken env: `ENV_MAPPINGS` maps it to `node.advertisedWsAddress`, but the node config schema is
+`additionalProperties:false` and rejects it → setting it crashes boot (`/node must NOT have additional
+properties`). Do not set it; WS advertised address derives from `node.address`.**
 
 ## Closure
 

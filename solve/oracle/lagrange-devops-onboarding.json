@@ -1,11 +1,11 @@
 {
-  "metric": 8,
+  "metric": 7,
   "target": 0,
   "done": false,
-  "note": "Lower-is-better = count of unmet workstream acceptance criteria. W0 RESOLVED (single seed never opens 5432; the real lever is replica PLACEMENT, not service_definitions.status). W0b (BLOCKER) must pin the placement precondition and resolve the Key open decision (D1 auto-start vs D2 ship-not-started) before WS-API scope is sealed. Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md.",
+  "note": "Lower-is-better = count of unmet workstream acceptance criteria. W0 RESOLVED (real lever is replica PLACEMENT, not service_definitions.status). W0b RESOLVED 2026-06-28 (3-node Docker repro): psql/5432 NEVER auto-starts on ANY cluster size — pgwire definition is active+replica_count=3 but 0 replicas are ever placed (services table empty, 0 ADD ops, 0 RUNTIME_SERVICE reconciliation decisions); the 3 'healthy' service_endpoints are boot-seeded fakes. Decision D2 confirmed mandatory (no auto path exists). Remaining workstreams set met by operator/CI when their verify artifact is green; done at metric=0. See solve/epics/lagrange-devops-onboarding.md.",
   "workstreams": {
     "W0-psql-path-resolved": true,
-    "W0b-placement-precondition-pinned": false,
+    "W0b-placement-precondition-pinned": true,
     "WS-API-service-management": false,
     "WS-HELLO-example": false,
     "W1-image-published": false,
