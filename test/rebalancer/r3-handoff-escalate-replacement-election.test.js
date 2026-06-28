@@ -147,6 +147,70 @@ test('Lever A: escalation is stall-INDEPENDENT — a long-stalled handoff also e
   t.end();
 });
 
+// Authoritative-leadership escalation (instrument-confirmed stat-gate-20260628T130105Z):
+// a CPU-saturated source leaves a STALE per-replica raft_role row — it reads `follower`
+// even while leader_node_id still names the source node. The pre-fix escalation gate
+// (sourceRoleState !== FOLLOWER) is then never true, so the escalation is DORMANT and the
+// surplus-drain source removal sits in passive WAIT_REPLACEMENT_LEADER_OWNERSHIP with
+// nothing driving the transfer off the saturated node (28/28 stuck-drain decisions).
+const staleFollowerSourceRow = {
+  replica_id: SOURCE_REPLICA_ID,
+  node_id: STARVED_NODE,
+  raft_role: 'follower',
+};
+function buildStaleFollowerSnapshot(safety) {
+  return safety.buildPriorityPublicationLeaderRemoveSafetySnapshot(
+    replaceOperation(),
+    staleFollowerSourceRow,
+    replacementFollowerRow,
+    stalePartitionRow,
+    {},
+    {priorityRecoveryCompletionSafe: false},
+  );
+}
+
+test('Authoritative-leadership: a STALE-follower source row whose partition leader_node_id ' +
+  'still names the source NODE escalates to the replacement election (red-on-revert: the ' +
+  'pre-fix sourceRoleState!==FOLLOWER gate leaves it dormant in WAIT_REPLACEMENT_LEADER_OWNERSHIP)',
+(t) => {
+  const safety = makeSafety({stallMs: 1000});
+  const snapshot = buildStaleFollowerSnapshot(safety);
+  t.equal(
+    snapshot.state,
+    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
+    'leadership still on the source node (authoritative leader_node_id) drives the replacement ' +
+      'election despite the stale follower replica role',
+  );
+  t.equal(snapshot.escalateReplacementLeaderElection, true,
+    'escalation fires on the authoritative partition-leadership signal');
+  t.equal(snapshot.replacementNodeId, HEALTHY_NODE,
+    'the election is dispatched to the healthy off-node replacement, not the saturated source');
+  t.end();
+});
+
+test('Authoritative-leadership SAFETY: a stale-follower source whose partition leader is ' +
+  'on a THIRD node (already off the source node) does NOT escalate — removal is SAFE ' +
+  '(a canonical successor already holds leadership)',
+(t) => {
+  const safety = makeSafety({stallMs: 1000});
+  const snapshot = safety.buildPriorityPublicationLeaderRemoveSafetySnapshot(
+    replaceOperation(),
+    staleFollowerSourceRow,
+    replacementFollowerRow,
+    {leader_node_id: 'node-third'},
+    {},
+    {priorityRecoveryCompletionSafe: false},
+  );
+  t.equal(
+    snapshot.state,
+    PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
+    'leadership already off the source node → removal is safe, no needless election driven',
+  );
+  t.not(snapshot.escalateReplacementLeaderElection, true,
+    'the authoritative gate does not fire when the source node is not the partition leader');
+  t.end();
+});
+
 test('R3 SAFETY: escalation requires a VOTER-READY replacement — a non-voter-ready replacement ' +
   'never escalates (can never drive a non-voter-ready node to leadership)', (t) => {
   const safety = makeSafety({

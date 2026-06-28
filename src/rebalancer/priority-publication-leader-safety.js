@@ -296,8 +296,30 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     // drive a stale node to leadership / split-brain. When the replacement is NOT
     // yet voter-ready (replacementElectionTargetReady false) the cooperative
     // source handoff path below is preserved unchanged.
+    // Authoritative-leadership escalation gate. The per-replica raft_role row a
+    // saturated source leaves is frequently STALE: it reads `follower` even while
+    // this node is still the partition leader (instrument-confirmed below-gate
+    // stat-gate-20260628T130105Z — 28/28 stuck-drain decisions had
+    // sourceRoleState=follower WITH partitionLeaderNodeId===sourceNodeId). Gating the
+    // escalation on the per-replica role ALONE leaves it dormant in exactly the
+    // regime it exists for, so the surplus-drain source removal sits in passive
+    // WAIT_REPLACEMENT_LEADER_OWNERSHIP with nothing driving the transfer off the
+    // saturated node. Authoritative leadership lives on the partition row
+    // (leader_node_id): when it still names the source node AND a voter-ready
+    // replacement exists on a DIFFERENT node, leadership has not left the saturated
+    // node regardless of the stale replica role, so drive the replacement's election
+    // to pull it. SAFE exactly as the role-based path: escalation NEVER authorizes a
+    // removal (sourceRemovalLeadershipSafe still gates) and requires a voter-ready
+    // replacement, so a lost campaign is only a transient extra election.
+    const partitionLeadershipStillOnSourceNode =
+      partitionLeaderNodeId !== null &&
+      sourceNodeId !== null &&
+      partitionLeaderNodeId === sourceNodeId &&
+      replacementNodeId !== null &&
+      replacementNodeId !== sourceNodeId;
     const escalateReplacementLeaderElection =
-      sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
+      (sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER ||
+        partitionLeadershipStillOnSourceNode) &&
       !replacementLeaderOwnershipObserved &&
       replacementElectionTargetReady;
 
