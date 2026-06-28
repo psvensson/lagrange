@@ -41,7 +41,7 @@ function initEnv() {
 }
 
 function createMockCache(
-  nodes = [], services = [], replicaOperations = [],
+  nodes = [], services = [], replicaOperations = [], serviceDefinitions = [],
 ) {
   const now = Date.now();
   const normalizedNodes = nodes.map((n) => ({
@@ -52,6 +52,9 @@ function createMockCache(
   const cache = {
     nodes: new Map(normalizedNodes.map((n) => [n.node_id, n])),
     services: new Map(services.map((s) => [s.service_id, s])),
+    service_definitions: new Map(
+      serviceDefinitions.map((d) => [d.service_id, d]),
+    ),
     partitions: new Map(),
     tables: new Map(),
     message_groups: new Map(),
@@ -82,10 +85,11 @@ function createRebalancer(options = {}) {
     nodes = [],
     services = [],
     replicaOperations = [],
+    serviceDefinitions = [],
   } = options;
 
   const mockCache = createMockCache(
-    nodes, services, replicaOperations,
+    nodes, services, replicaOperations, serviceDefinitions,
   );
 
   return new UnifiedRebalancer({
@@ -206,6 +210,72 @@ test('getPolicy returns runtime service policy', async (t) => {
     const p2 = await rebalancer.getPolicy();
     t.not(p1, p2, 'different object references');
     t.equal(p1.targetReplicaCount, p2.targetReplicaCount);
+  });
+});
+
+// --- Entity-aware desired replica_count (service start / scale / ship-not-started) ---
+// Red-on-revert: with the entity-aware getRuntimeServicePolicy override reverted,
+// targetReplicaCount would always be the static default (3), failing the
+// explicit-count and ship-not-started cases below.
+test('getRuntimeServicePolicy derives targetReplicaCount from service_definitions', async (t) => {
+  initEnv();
+
+  await t.test('overrides target with the definition replica_count', async (t) => {
+    const rebalancer = createRebalancer({
+      serviceDefinitions: [
+        {
+          service_id: 'sys-postgres-wire',
+          service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+          status: 'active',
+          replica_count: 5,
+        },
+      ],
+    });
+    const policy = await rebalancer.getPolicy();
+    t.equal(policy.targetReplicaCount, 5, 'desired follows replica_count');
+    t.equal(policy.minReplicaCount, 1, 'static floor preserved');
+  });
+
+  await t.test('replica_count=0 means place nothing (ship-not-started)', async (t) => {
+    const rebalancer = createRebalancer({
+      serviceDefinitions: [
+        {
+          service_id: 'sys-postgres-wire',
+          service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+          status: 'active',
+          replica_count: 0,
+        },
+      ],
+    });
+    const policy = await rebalancer.getPolicy();
+    t.equal(policy.targetReplicaCount, 0, 'explicit 0 is honored');
+  });
+
+  await t.test('missing definition falls back to the static default', async (t) => {
+    const rebalancer = createRebalancer();
+    const policy = await rebalancer.getPolicy();
+    t.equal(
+      policy.targetReplicaCount,
+      REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
+    );
+  });
+
+  await t.test('non-finite replica_count falls back to the static default', async (t) => {
+    const rebalancer = createRebalancer({
+      serviceDefinitions: [
+        {
+          service_id: 'sys-postgres-wire',
+          service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+          status: 'active',
+          replica_count: 'not-a-number',
+        },
+      ],
+    });
+    const policy = await rebalancer.getPolicy();
+    t.equal(
+      policy.targetReplicaCount,
+      REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
+    );
   });
 });
 

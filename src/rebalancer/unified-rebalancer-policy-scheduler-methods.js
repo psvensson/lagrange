@@ -7,10 +7,12 @@ const {
   REBALANCER_DEFAULT_POLICY,
   REBALANCER_LOG_MSG,
   RECONCILE_REASON,
+  SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
 const POLICY_SCHEDULER_CONSTRUCTOR = 'constructor';
+const SERVICE_DEFINITION_REPLICA_COUNT_COLUMN = 'replica_count';
 
 class UnifiedRebalancerPolicySchedulerMethods {
   /**
@@ -47,11 +49,28 @@ class UnifiedRebalancerPolicySchedulerMethods {
 
   /**
    * Get runtime service policy.
-   * Returns the default runtime service placement policy.
+   *
+   * Starts from the static runtime-service placement defaults and overrides
+   * `targetReplicaCount` with the per-entity desired `replica_count` from this
+   * service's `service_definitions` row, so `scale` and "ship not-started"
+   * (`replica_count = 0`) drive placement. A missing/non-finite/negative value
+   * falls back to the static default; an explicit `0` is honored (place none).
+   *
    * @return {Object} Runtime service policy.
    */
   getRuntimeServicePolicy() {
-    return {...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE};
+    const policy = {...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE};
+    const definition = this.systemTableCache?.get(
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      this.entityId,
+    );
+    const desiredReplicaCount = Number(
+      definition?.[SERVICE_DEFINITION_REPLICA_COUNT_COLUMN],
+    );
+    if (Number.isFinite(desiredReplicaCount) && desiredReplicaCount >= NUM.ZERO) {
+      policy.targetReplicaCount = desiredReplicaCount;
+    }
+    return policy;
   }
 
   /**
