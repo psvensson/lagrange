@@ -166,19 +166,23 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
 
   /**
    * @param {string} partitionId
-   * @param {number} healthyReplicaCount
+   * @param {number} occupiedReplicaCount active replicas on ready nodes,
+   *   INCLUDING settled non-voting learners (getReadyNodeOccupiedReplicas), not
+   *   just voter-ready healthy replicas. A learner that has materialized but
+   *   cannot promote (target+1 voter cap) still occupies its slot, so counting
+   *   only voter-ready replicas re-mints it as a fresh ADD every tick.
    * @param {number} targetReplicaCount
-   * @return {boolean} true when in-flight ADDs already cover the deficit so a new
-   *   ADD would only re-issue work that is still settling.
+   * @return {boolean} true when occupied slots plus in-flight ADDs already cover
+   *   the target, so a new ADD would only re-issue work that is still settling.
    */
   isPriorityRecoveryFollowUpDeficitSatisfiedByInFlightAdds(
     partitionId,
-    healthyReplicaCount,
+    occupiedReplicaCount,
     targetReplicaCount,
   ) {
     const inFlightAddCount =
       this.countPriorityRecoveryFollowUpInFlightAdds(partitionId);
-    return healthyReplicaCount + inFlightAddCount >= targetReplicaCount;
+    return occupiedReplicaCount + inFlightAddCount >= targetReplicaCount;
   }
 
   resolvePriorityRecoveryFollowUpCandidateNodeIds(
@@ -453,11 +457,22 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       // replica-count-increasing ADDs already in flight still fall short of the
       // target; otherwise defer until an in-flight ADD terminalizes. This bounds
       // the storm to the true deficit without throwing on provisioning.
+      // Suppression counts OCCUPIED slots (active replicas on ready nodes,
+      // including settled non-voting learners), not just voter-ready healthy
+      // replicas: a pile of learners that cannot promote under the target+1
+      // voter cap still occupies the partition's slots, so re-minting an ADD per
+      // tick (the over-replication storm) only deepens the surplus. The genuine
+      // voter deficit (healthy < target) still triggers consideration; we defer
+      // only when alive replicas already fill the target and the existing
+      // learners can promote once a restarting voter's slot frees (promotion is
+      // uncapped while voters < target).
+      const occupiedAliveReplicas =
+        this.getReadyNodeOccupiedReplicas(currentReplicas);
       if (
         healthyReplicas.length < targetReplicaCount &&
         this.isPriorityRecoveryFollowUpDeficitSatisfiedByInFlightAdds(
           partitionId,
-          healthyReplicas.length,
+          occupiedAliveReplicas.length,
           targetReplicaCount,
         )
       ) {

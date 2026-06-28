@@ -355,6 +355,35 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     });
   }
 
+  // Like getHealthyReplicas but INCLUDING non-voting learners: every active
+  // replica on a READY node occupies a partition slot, even a learner that has
+  // not yet promoted (and, under the target+1 voter cap, may be unable to
+  // promote at all). The priority-recovery deficit gate uses this so a pile of
+  // settled-but-unpromoted learners — which getHealthyReplicas excludes by role,
+  // making the partition look perpetually under-replicated — is not re-minted as
+  // a fresh ADD every plan tick (the over-replication storm). A learner on a
+  // NOT-ready node is still excluded (the readyNodeIds filter is the liveness
+  // guard), so this never suppresses the legitimate re-placement of a genuinely
+  // dead replica.
+  getReadyNodeOccupiedReplicas(replicas) {
+    const activeReplicas = replicas.filter((replica) => {
+      const status = replica.status || ReplicaStatus.ACTIVE;
+      return status === ReplicaStatus.ACTIVE;
+    });
+    if (!this.isCriticalSystemPartition()) {
+      return activeReplicas;
+    }
+    const readyNodeIds = new Set(
+      this.getAvailableNodes().map((node) => node.node_id),
+    );
+    return activeReplicas.filter(
+      (replica) =>
+        replica?.node_id &&
+        replica?.address &&
+        readyNodeIds.has(replica.node_id),
+    );
+  }
+
   async calculateTargetState(currentReplicas, policy) {
     return this.movePlanner.calculateTargetState(currentReplicas, policy);
   }

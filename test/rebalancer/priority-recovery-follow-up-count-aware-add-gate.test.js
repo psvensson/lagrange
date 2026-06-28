@@ -46,6 +46,19 @@ function activeVoterReplica(nodeId, replicaId) {
   };
 }
 
+function activeLearnerReplica(nodeId, replicaId) {
+  return {
+    service_id: replicaId,
+    service_type: EntityType.PARTITION,
+    node_id: nodeId,
+    partition_id: PARTITION_ID,
+    replica_id: replicaId,
+    address: `addr-${replicaId}`,
+    raft_role: 'learner',
+    status: ReplicaStatus.ACTIVE,
+  };
+}
+
 function inFlightOperation(operationId, type, targetNodeId, replicaId) {
   return {
     operation_id: operationId,
@@ -166,6 +179,107 @@ test('count-aware gate allows provisioning ADDs while in-flight ADDs fall short'
         move.type,
         MoveType.ADD,
         'concurrent provisioning ADDs are allowed until in-flight ADDs cover the deficit',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+// The learner-exclusion bug (getHealthyReplicas drops non-voting learners) only
+// applies to CRITICAL system partitions, so these two pin the occupied-slot gate
+// against a real system partition id (control_plane_publications-p1).
+const CRIT_PARTITION = 'control_plane_publications-p1';
+function critReplica(nodeId, replicaId, role) {
+  return {
+    service_id: replicaId,
+    service_type: EntityType.PARTITION,
+    node_id: nodeId,
+    partition_id: CRIT_PARTITION,
+    replica_id: replicaId,
+    address: `addr-${replicaId}`,
+    raft_role: role,
+    status: ReplicaStatus.ACTIVE,
+  };
+}
+function buildCriticalRebalancer(extraNodeIds = []) {
+  return createTestRebalancer({
+    entityId: CRIT_PARTITION,
+    entityType: EntityType.PARTITION,
+    nodeId: NODE_A,
+    cacheData: {
+      nodes: [NODE_A, NODE_B, NODE_C, NODE_D, ...extraNodeIds].map((id) => ({
+        node_id: id,
+        status: 'active',
+      })),
+      replicaOperations: [],
+    },
+  });
+}
+function buildCriticalDecision() {
+  return {
+    decisionSnapshot: {
+      partitionId: CRIT_PARTITION,
+      semanticState: 'needs_operation',
+      progress: {nextRequiredAction: 'create_recovery_operation'},
+      planner: {requiredDistinctNodeCount: TARGET_REPLICA_COUNT},
+      admission: {effectiveEligibleNodeIds: [NODE_A, NODE_B, NODE_C, NODE_D]},
+      publication: {recoveryActiveNodeIds: [NODE_A, NODE_B, NODE_C, NODE_D]},
+    },
+  };
+}
+
+test('occupied-slot gate defers an ADD when settled ALIVE learners already fill the target ' +
+  '(red-on-revert: counting voter-ready healthy replicas alone re-mints the over-replication storm)',
+  async (t) => {
+    // Critical partition. healthy(voters) = 2, plus ONE settled non-voting
+    // learner on a ready node, target = 3, NO in-flight ADD. getHealthyReplicas
+    // excludes the learner -> pre-fix sees 2 < 3 with 0 in-flight -> emits
+    // ANOTHER ADD (the storm). getReadyNodeOccupiedReplicas counts the alive
+    // learner -> 3 >= 3 -> defer and let the existing learner promote (uncapped
+    // while voters < target).
+    const rebalancer = buildCriticalRebalancer();
+    try {
+      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+        decision: buildCriticalDecision(),
+        currentReplicas: [
+          critReplica(NODE_A, 'r-a', 'voter'),
+          critReplica(NODE_B, 'r-b', 'voter'),
+          critReplica(NODE_C, 'r-c', 'learner'),
+        ],
+      });
+      t.equal(
+        move.followUpMoveState,
+        'in_flight_add_satisfies_deficit',
+        'a settled alive learner occupies its slot -> defer the redundant follow-up ADD',
+      );
+      t.equal(move.type, undefined, 'deferred follow-up should emit no ADD move');
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+test('occupied-slot gate STILL creates an ADD when a learner is on a NOT-ready (dead) node ' +
+  '(alive-guard: a dead replica must be re-placed, never suppressed)',
+  async (t) => {
+    // Critical partition. healthy(voters) = 2, plus a learner on DEAD_NODE which
+    // is NOT in the ready node set, target = 3, no in-flight ADD. The dead-node
+    // learner is excluded by the readyNodeIds liveness filter -> occupied = 2 <
+    // 3 -> ADD still fires (the dead replica must be re-placed).
+    const DEAD_NODE = 'node-e-dead';
+    const rebalancer = buildCriticalRebalancer();
+    try {
+      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+        decision: buildCriticalDecision(),
+        currentReplicas: [
+          critReplica(NODE_A, 'r-a', 'voter'),
+          critReplica(NODE_B, 'r-b', 'voter'),
+          critReplica(DEAD_NODE, 'r-e', 'learner'),
+        ],
+      });
+      t.equal(
+        move.type,
+        MoveType.ADD,
+        'a learner on a dead node does not occupy a live slot -> re-placement ADD must still fire',
       );
     } finally {
       rebalancer.shutdown();
