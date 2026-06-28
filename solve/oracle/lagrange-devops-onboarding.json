@@ -1,10 +1,12 @@
 {
-  "metric": 6,
+  "metric": 7,
   "target": 0,
   "done": false,
-  "note": "Lower-is-better = count of unmet workstream acceptance criteria (W0..W5). Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md and doneWhenSealed in the quest.",
+  "note": "Lower-is-better = count of unmet workstream acceptance criteria. W0 is RESOLVED (a bare node ships pgsql registered-but-not-started; quickstart must start it explicitly) but is counted met only as a falsification, not a deliverable. Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md and doneWhenSealed in the quest.",
   "workstreams": {
-    "W0-psql-path-falsified": false,
+    "W0-psql-path-resolved": true,
+    "WS-API-service-management": false,
+    "WS-HELLO-example": false,
     "W1-image-published": false,
     "W2-compose-cluster-roundtrip": false,
     "W3-chart-render-gate-in-ci": false,

@@ -20,6 +20,29 @@ Kubernetes**: the Dockerfile image is published nowhere, and the only k8s artifa
 (`examples/kubernetes-endpoint-sync-controller/`) is a *sidecar* that projects
 endpoints and presupposes an already-running cluster it cannot create.
 
+## Onboarding mental model (operator-set 2026-06-28)
+
+Lagrange is a distributed **data + service platform** — think "a tiny Kubernetes
+and Postgres in one process group." The cluster (compose/Helm) brings up the
+*platform*; everything else, **including SQL, is a service the platform runs**.
+W0 confirmed this empirically: a bare node opens 8080/8081/8082 but **not 5432** —
+the Postgres-wire service ships *registered but not started* (by design, see
+`docs/convergence`/W0 below). The onboarding embraces that fact instead of hiding
+it. The guided path is:
+
+1. Bring up the cluster (compose or Helm).
+2. **Manage services through a service-management API** (list / start / stop /
+   scale / deploy). The admin-WebSocket message contract already supports this
+   (`docs/wasm-services-user-guide.md` §3–6); it needs a clean, documented verb
+   surface (CLI/HTTP), since `ddb-admin` has no deploy/scale verb today.
+3. **Start the built-in `pgsql` service** (it exists, stopped) → 5432 opens.
+4. Connect with `psql`, run SQL.
+5. **Deploy a small hello-world service** — the same API path, teaching how to run
+   *your own* services on Lagrange.
+
+The "psql isn't on by default" moment is reframed from a bug into the first
+teaching moment about what Lagrange actually is.
+
 ## Ground-truth wiring (verified against source — do not regress)
 
 Authoritative env→config map: `src/config/config-constants.js:285-322` (`ENV_MAPPINGS`).
@@ -70,17 +93,30 @@ but is **not** in `ENV_MAPPINGS` (cannot move WS port via env); admin port 8081 
 
 Each is independently verifiable. `W0` is a prerequisite falsification and runs first.
 
-- **W0 — Falsify the psql path (HIGHEST RISK).** pgwire is a *gated runtime service*
-  (`PgWireStartupSafetyGate.guardedSetup`, `src/bootstrap/bootstrap-service-control-plane-runtime-methods.js:121-143`)
-  whose failure is isolated — a node can report bootstrap-complete with **no 5432 listener**.
-  Accept: a bare `docker run` seed opens 5432 and `psql -h 127.0.0.1 -p 5432 -c 'SELECT 1'`
-  returns `1` with no extra step; OR the required service-deploy step is documented and the
-  round-trip works after it. *Everything that mentions "psql" depends on this answer.*
+- **W0 — Falsify the psql path. RESOLVED 2026-06-28.** Verdict: a bare node does **NOT** open
+  5432. Ran a single seed → ready (`/readyz`+`/bootstrap/ready`=200), listening on 8080/8081/8082,
+  **never 5432** (psql refused, even after 3 min). pgwire is a *runtime-managed replicated service*
+  (`src/runtime/pgwire-cutover-guard.js`: only path to a listener is the replicated runtime module);
+  the Postgres-wire meta-service *definition* is registered at seed boot
+  (`registerBuiltInMetaServiceDefinitions`, `src/bootstrap/phases/seed-registration-phase.js:283`,
+  port 5432) and the gate passes ("Runtime service handler setup completed for PG wire") — but a
+  registered definition is **not** a started replica, so no socket opens. This is now a *designed
+  feature* of the onboarding (pgsql exists-but-stopped), not a defect. Consequence: the quickstart
+  MUST include an explicit "start the pgsql service" step (WS-API below) before psql works.
+- **WS-API — Service-management surface (NEW).** Expose a clean, documented API to list / start /
+  stop / scale / deploy services, wrapping the existing admin-WS message contract
+  (`docs/wasm-services-user-guide.md` §3–6). Accept: an operator can `list` services and see
+  `pgsql` present+stopped, `start` it so 5432 opens, and `deploy` a new service — without writing
+  raw SQL inserts. (CLI verb and/or thin HTTP; no dead knobs per constraints.)
+- **WS-HELLO — Hello-world service example (NEW).** A minimal deployable service + its manifest in
+  `examples/`, deployed via WS-API. Accept: following the doc, the operator deploys it and reaches
+  its endpoint. Doubles as the canonical "run your own service on Lagrange" lesson.
 - **W1 — Image published.** Tagged build pushes multi-arch `ghcr.io/<org>/lagrange`; a CI job
   pulls it and `docker run --rm <img> --version` prints the version, `--dry-run` exits clean.
-- **W2 — Compose cluster.** `docker compose up -d` ⇒ all three `/readyz` 200; `psql` to the seed
-  runs `CREATE TABLE / INSERT / SELECT` round-trip; after `docker compose restart` data and
-  NODE_IDs are unchanged and the cluster re-converges. Verified by `scripts/verify-compose-quickstart.sh`.
+- **W2 — Compose cluster.** `docker compose up -d` ⇒ all three `/readyz` 200; **start the `pgsql`
+  service via WS-API** (5432 opens); `psql` to the seed runs `CREATE TABLE / INSERT / SELECT`
+  round-trip; after `docker compose restart` data and NODE_IDs are unchanged and the cluster
+  re-converges. Verified by `scripts/verify-compose-quickstart.sh`.
 - **W3 — Chart renders/lints.** `helm lint` clean; `helm template` for default + custom
   (`replicas=5`, custom storageClass, non-root) renders the three probes on 8080, headless
   service (`clusterIP: None`), volumeClaimTemplates at `/data`, and `lagrange-sql`/`lagrange-admin`
@@ -92,7 +128,9 @@ Each is independently verifiable. `W0` is a prerequisite falsification and runs 
   Verified by `scripts/verify-chart-on-kind.sh`.
 - **W5 — 30-minute quickstart docs.** `docs/getting-started-compose.md` and
   `docs/getting-started-kubernetes.md` whose command blocks ARE the W2/W4 scripts (narrated),
-  carrying a reader from zero to a psql round-trip (+ WASM deploy) — the Phase 0.5 exit criterion.
+  following the onboarding mental model end to end: bring up cluster → `list` services (see `pgsql`
+  stopped) → `start` pgsql → psql round-trip → `deploy` the hello-world service (WS-HELLO) →
+  reach its endpoint. Satisfies the Phase 0.5 exit criterion.
 
 Cross-cutting: standardize new artifact names on `lagrange` (image/chart) and the `lagrange-admin`
 bin alias in docs (R9); document the 8081-hardcode and dead `NODE_WS_PORT` env (R6/R7) as known
