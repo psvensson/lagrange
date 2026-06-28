@@ -41,6 +41,96 @@ test('computeReplicaElectionTimeouts uses hash fallback for unknown replicas', a
   );
 });
 
+test('computeReplicaElectionTimeouts without rotation key preserves index-0 preference (backward compat)', async (t) => {
+  const replicaIds = ['r1', 'r2', 'r3', 'r4', 'r5'];
+  const base = {
+    replicaIds,
+    baseElectionMinMs: 1000,
+    baseElectionMaxMs: 3000,
+    electionJitterPerReplicaMs: 500,
+  };
+  // No partitionRotationKey: the index-0 replica must still get jitter 0.
+  t.equal(
+    computeReplicaElectionTimeouts({...base, replicaId: 'r1'}).jitterMs,
+    0,
+    'index-0 replica keeps jitter 0 when no rotation key supplied',
+  );
+  t.equal(
+    computeReplicaElectionTimeouts({...base, replicaId: 'r3'}).jitterMs,
+    1000,
+    'index-2 replica keeps index*step jitter when no rotation key supplied',
+  );
+});
+
+test('computeReplicaElectionTimeouts rotates leadership preference per partition (de-concentration)', async (t) => {
+  const replicaIds = ['r1', 'r2', 'r3', 'r4', 'r5'];
+  const step = 500;
+  const base = {
+    replicaIds,
+    baseElectionMinMs: 1000,
+    baseElectionMaxMs: 3000,
+    electionJitterPerReplicaMs: step,
+  };
+
+  // For one partition key, the rotation must be a PERMUTATION of the jitter set
+  // {0, 500, 1000, 1500, 2000} — every replica still gets a DISTINCT jitter, so the
+  // split-vote-avoidance property is preserved.
+  const partitionKey = 'sql_transactions-p1';
+  const jittersForPartition = replicaIds.map((replicaId) =>
+    computeReplicaElectionTimeouts({
+      ...base, replicaId, partitionRotationKey: partitionKey,
+    }).jitterMs);
+  const expectedSet = replicaIds.map((_unused, index) => index * step);
+  t.same(
+    [...jittersForPartition].sort((a, b) => a - b),
+    expectedSet,
+    'rotated jitters are a permutation of the index-based jitter set (all distinct)',
+  );
+
+  // The pure function must be cross-node deterministic: identical inputs => identical
+  // output (this is what keeps every node electing the same preferred leader).
+  t.equal(
+    computeReplicaElectionTimeouts({
+      ...base, replicaId: 'r3', partitionRotationKey: partitionKey,
+    }).jitterMs,
+    computeReplicaElectionTimeouts({
+      ...base, replicaId: 'r3', partitionRotationKey: partitionKey,
+    }).jitterMs,
+    'rotation is deterministic for identical inputs',
+  );
+
+  // RED-ON-REVERT: across many partitions the preferred (jitter-0) replica must NOT be
+  // a single index. Without the rotation, index-0 is ALWAYS preferred and this set has
+  // size 1 — which is the leadership-concentration root being fixed.
+  const partitions = [
+    'sql_transactions-p1', 'sql_write_operations-p1',
+    'sql_transaction_participants-p1', 'control_plane_publications-p1',
+    'code-p1', 'replica_operations-p1', 'wasm_operations-p1',
+    'latency_groups-p1', 'storage_reservations-p1',
+  ];
+  const preferredIndexes = new Set();
+  for (const partitionRotationKey of partitions) {
+    let bestIndex = -1;
+    let bestJitter = Number.POSITIVE_INFINITY;
+    replicaIds.forEach((replicaId, index) => {
+      const jitter = computeReplicaElectionTimeouts({
+        ...base, replicaId, partitionRotationKey,
+      }).jitterMs;
+      if (jitter < bestJitter) {
+        bestJitter = jitter;
+        bestIndex = index;
+      }
+    });
+    preferredIndexes.add(bestIndex);
+  }
+  t.ok(
+    preferredIndexes.size >= 3,
+    `preferred-leader replica varies across partitions ` +
+    `(distinct preferred indexes=${preferredIndexes.size}, ` +
+    `expected >=3; concentration bug would give 1)`,
+  );
+});
+
 test('applyRuntimeRaftTiming updates live raft and rearms timers', async (t) => {
   let lastHeartbeatDuration = null;
   const leaderRaft = {
