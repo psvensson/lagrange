@@ -136,11 +136,103 @@ Cross-cutting: standardize new artifact names on `lagrange` (image/chart) and th
 bin alias in docs (R9); document the 8081-hardcode and dead `NODE_WS_PORT` env (R6/R7) as known
 constraints rather than fake knobs.
 
+## WS-API: service-management surface — design detail
+
+### Reality on the ground (verified, cite before changing)
+- Over the admin WebSocket (`ws://<host>:8081/api/admin/stream`) the dispatch switch
+  (`src/admin/admin-websocket-message-dispatch-methods.js:132-159`) accepts **only**
+  `query`, `partition_callback`, `refresh` (+ live-query sub/unsub). Everything else is
+  silently ignored. `isAdminMessageDispatchable` confirms (`src/admin/admin-service-message-adapter.js:52-56`).
+- **All service lifecycle is SQL against `service_definitions`** (the desired-state table). The
+  `ServiceReconciler` (`src/service/service-reconciler.js:40`) converges actual→desired and
+  `ServiceLifecycleManager` (`src/service/service-lifecycle-manager.js`) is the sole owner of
+  create/start/stop. There is **no distinct "start" op** — "started" = a row with `status='active'`
+  and a valid `replica_count`.
+- The meta-verbs (`createService/scaleService/updateService/deleteService/listServices/...`) already
+  exist as **pure SQL-builder functions** (`src/wasm-service/meta-command-handlers.js`:
+  `handleCreateService:209`, `handleScaleService:378`, `handleDeleteService:414`,
+  `handleUpdateService:284`; `handleListServices` in `src/admin/admin-meta-command-handlers.js:119`).
+  They return `{success, sql, params}` and are **not wired to any wire message** — they are
+  in-process embedder helpers today. Replica-count rule: **odd and ≥ 3** (`isValidReplicaCount`,
+  meta-command-handlers.js:197-201).
+- **The admin WS is unauthenticated.** `admin-auth-middleware.js` exists (`validateSecurityContext`,
+  `authorizeAction`) but is wired only into debug-runtime + pgwire, **not** the admin-WS path.
+- The existing CLI (`src/cli/bin/ddb-admin.js`) is a **curses TUI**, not a subcommand CLI; it takes
+  only `[node-address]` + `--read-only/--help/--version`. Mutations follow
+  `executeNodeManagementQuery` (`src/cli/admin-cli-action-methods.js:400-465`): build queryId →
+  `connectionManager.sendQuery(queryId, sql, params)` → await `query:result` → check `affectedRows`
+  → `forceRefresh()`. Palette commands register via `CLI_COMMAND`/`CLI_COMMAND_DEFINITIONS`
+  (`src/cli/cli-constants.js`).
+- The only HTTP server is the bootstrap/health Fastify (`src/bootstrap/bootstrap-api-server-methods.js`);
+  `/register-service` there is an **internal** node/replica-handoff mechanism, not a CRUD API.
+
+### Verb surface (the proposed contract)
+A first-class, SQL-free **`lagrange service`** verb set, each verb mapping to existing reconciler
+state. Verbs reuse the SQL builders in `meta-command-handlers.js` (do not re-author SQL):
+
+| Verb | Effect | Underlying write (existing builder) |
+| --- | --- | --- |
+| `service list [--type T] [--json]` | show definitions + runtime/endpoint state | `SELECT` `service_definitions` (+ `services`, `service_endpoints`) |
+| `service status <id>` | one service: desired vs actual, replicas, endpoints | `SELECT` joins |
+| `service start <id>` | bring a registered-but-stopped service up | `UPDATE service_definitions SET status='active'[, replica_count=N]` |
+| `service stop <id>` | soft-deactivate (keeps definition) | `handleDeleteService` → `UPDATE … status='inactive'` |
+| `service scale <id> <n>` | change replica count (odd, ≥3) | `handleScaleService` → `UPDATE … replica_count=n` |
+| `service deploy <manifest>` | publish + define a new service | `handlePublishModule` (`code`,`module_manifests`) + `handleCreateService` (`service_definitions`) |
+
+`service start sys-postgres-wire` is the canonical "turn on psql" step. Minimal effect today:
+`UPDATE service_definitions SET status='active', replica_count=3, updated_at=… WHERE service_id='sys-postgres-wire'`
+(service id `META_SERVICE_ID.POSTGRES_WIRE`, type `RUNTIME_SERVICE`, runtime `native_js`,
+endpoint 5432; `src/wasm-service/meta-service-factory.js:85-102`).
+
+### Transport decision (the fork, with a recommendation)
+- **Option A — CLI-first over the existing `query` channel (RECOMMENDED for this quest).** Add a
+  non-interactive `lagrange service …` subcommand mode that connects to :8081 and issues the
+  builder-produced SQL via the existing `sendQuery` path (exactly the `executeNodeManagementQuery`
+  pattern). **Zero new wire protocol, zero new execution path, no parallel state** — it reuses the
+  reconciler and the query socket. SQL stays *inside* the CLI so operators never hand-write it. Fills
+  roadmap rows `RM-0.5-cde-cluster-*`/`node-start` and `RM-0.5-dw-cli-wasm-*`. Cons: the current bin
+  is TUI-only, so a subcommand router (or a sibling `lagrange` bin) must be added.
+- **Option B — first-class wire operations.** Add a `service_command` admin-WS message type wired to
+  the meta handlers (and make them execute, not just build SQL), so automation sends
+  `{type:"service_command", action:"scale", …}` instead of SQL. Cleaner long-term API; more code, and
+  it duplicates a path Option A already covers. **Defer to a follow-on** once the verb shape is proven.
+- **Option C — HTTP routes on the admin plane.** Best for language-agnostic automation/CI, easy to
+  `curl` in docs; but net-new Fastify routes, sharper auth urgency (network-exposed), and overlaps A.
+  **Defer.**
+
+**Recommendation:** ship **A** now (CLI verbs hiding SQL, over the existing query channel) and
+**document the admin-WS `query` envelope + the canonical SQL templates** as the automation escape
+hatch for v0.1; graduate to **B** (first-class wire ops) as a follow-on quest, and consider **C**
+only if operators ask for HTTP. This honors [[avoid-secondary-tertiary-caches]] (reuse the reconciler
++ query path) and [[no-lingering-flags-no-test-flags]] (no flags — the verbs are unconditional).
+
+### Auth seam (required before exposing 8081 beyond localhost)
+Wire the existing-but-unused `src/admin/admin-auth-middleware.js` into the admin-WS handshake
+(`handleConnection`, dispatch-methods.js:76), token/config-gated. For the local quickstart
+(compose/kind via localhost/port-forward) the channel may stay open **with a loud "trusted boundary
+only" warning** in the docs, but the design must land the seam so we are not shipping an
+unauthenticated remote control plane. This is a named acceptance item, not an afterthought.
+
+### WS-API acceptance (sharpens the sealed criterion)
+- `lagrange service list` shows `sys-postgres-wire` present and **stopped** on a fresh cluster.
+- `lagrange service start sys-postgres-wire` causes 5432 to open and a `psql` round-trip to succeed —
+  with **no raw SQL typed by the operator**.
+- `lagrange service scale <id> 3` and `service stop <id>` reflect in `service_definitions` and the
+  reconciler converges (verified via `service status`).
+- `lagrange service deploy examples/<hello-world>` (WS-HELLO) brings the service up and its endpoint
+  is reachable.
+- The admin-WS `query` envelope + SQL templates are documented as the automation surface; the auth
+  seam is wired (token-gated) with the localhost-only caveat documented.
+
 ## Sequencing & dependencies
 
-`W0` (no deps) → `W1` (Dockerfile EXPOSE fix, optional multi-stage, naming) → `W2` (needs W0+W1)
-‖ `W3` (render-only, needs W1 image name; parallel with W2) → `W4` (needs W2 patterns + W3 chart + W0)
-→ `W5` (docs are the green W2/W4 scripts narrated).
+`W0` (DONE) → `W1` (Dockerfile EXPOSE fix, optional multi-stage, naming) and `WS-API`
+(CLI `lagrange service` verbs over the existing query channel + auth seam) can proceed in parallel;
+`WS-API` gates the psql round-trip in `W2`/`W4` and the deploy step in `WS-HELLO`. Then
+`W2` (needs W1 + WS-API) ‖ `W3` (render-only, needs W1 image name) → `WS-HELLO` (needs WS-API) →
+`W4` (needs W2 patterns + W3 chart + WS-API) → `W5` (docs narrate the green WS-API/W2/W4 flow
+end-to-end). Critical insight: **WS-API is now on the critical path** — without `service start`,
+there is no psql, so it precedes every psql-dependent acceptance.
 
 ## Reuse vs build-new
 
