@@ -25,23 +25,35 @@ endpoints and presupposes an already-running cluster it cannot create.
 Lagrange is a distributed **data + service platform** — think "a tiny Kubernetes
 and Postgres in one process group." The cluster (compose/Helm) brings up the
 *platform*; everything else, **including SQL, is a service the platform runs**.
-W0 confirmed this empirically: a bare node opens 8080/8081/8082 but **not 5432** —
-the Postgres-wire service ships *registered but not started* (by design, see
-`docs/convergence`/W0 below). The onboarding embraces that fact instead of hiding
-it. The guided path is:
+W0 confirmed empirically that a bare single seed opens 8080/8081/8082 but **not
+5432**. CORRECTION (post-review, see W0/W0b below): the pgsql service does **not**
+ship "stopped". `createPostgresWireDefinition()` seeds it with `replica_count=3`
+and `serializeServiceDefinition` defaults `status='active'`
+(`src/wasm-service/meta-service-factory.js:85-102`, `src/wasm-service/wasm-service-models.js:156-173`)
+— so the definition is **active and wants 3 replicas**. 5432 is closed on the
+single seed because **no runtime replica was placed**, not because of a status
+flag. The listener opens only when the rebalancer places a `RUNTIME_SERVICE`
+replica and `RuntimeServiceHandler` materializes it via
+`pgwire-runtime-module.start()` (`src/runtime/pgwire-runtime-module.js:256-270`)
+behind `PgWireStartupSafetyGate`. **What actually gates placement on a small
+cluster is not yet pinned (W0b).** The guided path therefore depends on a product
+decision (see "Key open decision" below). Either way the teaching arc is:
 
-1. Bring up the cluster (compose or Helm).
-2. **Manage services through a service-management API** (list / start / stop /
-   scale / deploy). The admin-WebSocket message contract already supports this
-   (`docs/wasm-services-user-guide.md` §3–6); it needs a clean, documented verb
-   surface (CLI/HTTP), since `ddb-admin` has no deploy/scale verb today.
-3. **Start the built-in `pgsql` service** (it exists, stopped) → 5432 opens.
+1. Bring up the cluster (compose or Helm) — **≥3 nodes** (the replica floor; see Risks).
+2. **Manage services through a service-management API** (list / status / start /
+   stop / scale / deploy). The capability is reachable today only as raw SQL on
+   `service_definitions` over the admin-WS `query` channel
+   (`docs/wasm-services-user-guide.md` §3–6); there is **no clean verb surface**
+   and **no `start`/`stop` builder** — that gap is the WS-API workstream.
+3. **Reach SQL**: either pgsql comes up automatically once ≥3 nodes are ready
+   (if W0b shows placement just needs quorum), or the operator runs
+   `lagrange service start sys-postgres-wire` (if we choose to ship it not-started).
 4. Connect with `psql`, run SQL.
 5. **Deploy a small hello-world service** — the same API path, teaching how to run
    *your own* services on Lagrange.
 
-The "psql isn't on by default" moment is reframed from a bug into the first
-teaching moment about what Lagrange actually is.
+The honest version of the "psql isn't on by default on one node" moment is a
+teaching moment about Lagrange being a placement-driven service platform.
 
 ## Ground-truth wiring (verified against source — do not regress)
 
@@ -93,21 +105,32 @@ but is **not** in `ENV_MAPPINGS` (cannot move WS port via env); admin port 8081 
 
 Each is independently verifiable. `W0` is a prerequisite falsification and runs first.
 
-- **W0 — Falsify the psql path. RESOLVED 2026-06-28.** Verdict: a bare node does **NOT** open
-  5432. Ran a single seed → ready (`/readyz`+`/bootstrap/ready`=200), listening on 8080/8081/8082,
+- **W0 — Falsify the psql path. RESOLVED 2026-06-28.** Verdict: a bare **single** seed does **NOT**
+  open 5432. Ran a single seed → ready (`/readyz`+`/bootstrap/ready`=200), listening on 8080/8081/8082,
   **never 5432** (psql refused, even after 3 min). pgwire is a *runtime-managed replicated service*
-  (`src/runtime/pgwire-cutover-guard.js`: only path to a listener is the replicated runtime module);
-  the Postgres-wire meta-service *definition* is registered at seed boot
-  (`registerBuiltInMetaServiceDefinitions`, `src/bootstrap/phases/seed-registration-phase.js:283`,
-  port 5432) and the gate passes ("Runtime service handler setup completed for PG wire") — but a
-  registered definition is **not** a started replica, so no socket opens. This is now a *designed
-  feature* of the onboarding (pgsql exists-but-stopped), not a defect. Consequence: the quickstart
-  MUST include an explicit "start the pgsql service" step (WS-API below) before psql works.
-- **WS-API — Service-management surface (NEW).** Expose a clean, documented API to list / start /
-  stop / scale / deploy services, wrapping the existing admin-WS message contract
-  (`docs/wasm-services-user-guide.md` §3–6). Accept: an operator can `list` services and see
-  `pgsql` present+stopped, `start` it so 5432 opens, and `deploy` a new service — without writing
-  raw SQL inserts. (CLI verb and/or thin HTTP; no dead knobs per constraints.)
+  (`src/runtime/pgwire-cutover-guard.js`: only path to a listener is the replicated runtime module).
+  POST-REVIEW CORRECTION: the listener is closed because **no replica was placed**, NOT because the
+  service is "stopped" — the definition ships `status='active'`, `replica_count=3`
+  (`meta-service-factory.js:85-102`, `wasm-service-models.js:156-173`). The gate logging "Runtime
+  service handler setup completed for PG wire" is the *handler* being wired, not a *placed replica*.
+- **W0b — Pin the real placement precondition (BLOCKER, do before sealing WS-API).** Find why the
+  `RUNTIME_SERVICE` (`minReplicaCount:1`, `rebalancer-constants.js:137-146`) PG-wire replica is not
+  placed on a 1-node cluster, and whether a healthy **3-node** cluster places it automatically.
+  Instrument the rebalancer critical-topology path (`unified-rebalancer-critical-topology-methods.js:428-508`,
+  `unified-rebalancer-replica-state.js:169-179`) + the safety gate (`pgwire-startup-safety-gate.js:118-136`)
+  to capture the blocking condition (required-ready-node count, endpoint-visibility settling, heartbeat
+  service, leadership). Accept: a documented, reproduced answer to "what is the minimal precondition for
+  5432 to open" on 1-node and 3-node clusters. **This determines whether WS-API `start` is even needed
+  (see Key open decision) and whether WS-API is on the critical path.**
+- **WS-API — Service-management surface (NEW).** A clean, SQL-free verb surface (list / status /
+  start / stop / scale / deploy). Read/scale/create/deploy reuse the existing SQL builders
+  (`src/wasm-service/meta-command-handlers.js`); **`start` and `stop` have NO builder today**
+  (`UPDATABLE_FIELDS` excludes `status`; `status` does not gate placement) — they require a
+  **server-side action** (place / REMOVE a replica), so a slice of "first-class wire ops" is pulled
+  forward for those two verbs. Accept: an operator can `list` services and see runtime state (defined
+  vs placed/healthy, joining `service_definitions` × `service_endpoints`/`services`), `scale`/`deploy`
+  without raw SQL, and (if the decision is ship-not-started) `start sys-postgres-wire` so 5432 opens.
+  No flags; no dead knobs.
 - **WS-HELLO — Hello-world service example (NEW).** A minimal deployable service + its manifest in
   `examples/`, deployed via WS-API. Accept: following the doc, the operator deploys it and reaches
   its endpoint. Doubles as the canonical "run your own service on Lagrange" lesson.
@@ -167,22 +190,25 @@ constraints rather than fake knobs.
   `/register-service` there is an **internal** node/replica-handoff mechanism, not a CRUD API.
 
 ### Verb surface (the proposed contract)
-A first-class, SQL-free **`lagrange service`** verb set, each verb mapping to existing reconciler
-state. Verbs reuse the SQL builders in `meta-command-handlers.js` (do not re-author SQL):
+A SQL-free **`lagrange service`** verb set. Read/scale/create/deploy reuse the existing SQL builders
+in `meta-command-handlers.js`; **`start`/`stop` have no builder and need a server-side action**
+(status does not gate placement — see W0/W0b):
 
-| Verb | Effect | Underlying write (existing builder) |
+| Verb | Effect | Backing mechanism |
 | --- | --- | --- |
-| `service list [--type T] [--json]` | show definitions + runtime/endpoint state | `SELECT` `service_definitions` (+ `services`, `service_endpoints`) |
-| `service status <id>` | one service: desired vs actual, replicas, endpoints | `SELECT` joins |
-| `service start <id>` | bring a registered-but-stopped service up | `UPDATE service_definitions SET status='active'[, replica_count=N]` |
-| `service stop <id>` | soft-deactivate (keeps definition) | `handleDeleteService` → `UPDATE … status='inactive'` |
-| `service scale <id> <n>` | change replica count (odd, ≥3) | `handleScaleService` → `UPDATE … replica_count=n` |
-| `service deploy <manifest>` | publish + define a new service | `handlePublishModule` (`code`,`module_manifests`) + `handleCreateService` (`service_definitions`) |
+| `service list [--type T] [--json]` | defined vs placed/healthy, replicas, endpoints | `SELECT` joining `service_definitions` × `service_endpoints`/`services` (`health_status`) — **not definitions alone** |
+| `service status <id>` | one service: desired vs actual, replicas, endpoints, why-not-placed | `SELECT` joins + safety-gate/topology reason |
+| `service start <id>` | ensure a replica is **placed** (open the listener) | **NEW server-side action** (request placement / scale-from-0). No SQL builder exists; `status` is not the lever |
+| `service stop <id>` | tear down running replicas | **NEW server-side action** (scale-to-0 / REMOVE replica_operation). `handleDeleteService` only flips `status='inactive'`, which does **not** stop the listener |
+| `service scale <id> <n>` | change replica count (odd, ≥3 — user services) | `handleScaleService` → `UPDATE … replica_count=n` (`meta-command-handlers.js:378`) |
+| `service deploy <manifest>` | publish + define a new service | `handlePublishModule` (`code`,`module_manifests`) + `handleCreateService` (`service_definitions`); manifest must supply `handlerFunctionId` unless `serviceProfile===SQL_ENGINE` (`meta-command-handlers.js:217-221`) |
 
-`service start sys-postgres-wire` is the canonical "turn on psql" step. Minimal effect today:
-`UPDATE service_definitions SET status='active', replica_count=3, updated_at=… WHERE service_id='sys-postgres-wire'`
-(service id `META_SERVICE_ID.POSTGRES_WIRE`, type `RUNTIME_SERVICE`, runtime `native_js`,
-endpoint 5432; `src/wasm-service/meta-service-factory.js:85-102`).
+`service start sys-postgres-wire` is the intended "turn on psql" step **only if we choose the
+ship-not-started model** (Key open decision). It is **not** `UPDATE … status='active'`: that field
+is already `active` at boot and is excluded from `UPDATABLE_FIELDS` (`meta-command-handlers.js:266-276`),
+and flipping it opens no socket. The real lever is *replica placement* via the rebalancer /
+`RuntimeServiceHandler` / `pgwire-runtime-module.start()` — which is what the new server-side
+`start`/`stop` actions must drive (pending W0b's pinned precondition).
 
 ### Transport decision (the fork, with a recommendation)
 - **Option A — CLI-first over the existing `query` channel (RECOMMENDED for this quest).** Add a
@@ -206,33 +232,58 @@ hatch for v0.1; graduate to **B** (first-class wire ops) as a follow-on quest, a
 only if operators ask for HTTP. This honors [[avoid-secondary-tertiary-caches]] (reuse the reconciler
 + query path) and [[no-lingering-flags-no-test-flags]] (no flags — the verbs are unconditional).
 
-### Auth seam (required before exposing 8081 beyond localhost)
-Wire the existing-but-unused `src/admin/admin-auth-middleware.js` into the admin-WS handshake
-(`handleConnection`, dispatch-methods.js:76), token/config-gated. For the local quickstart
-(compose/kind via localhost/port-forward) the channel may stay open **with a loud "trusted boundary
-only" warning** in the docs, but the design must land the seam so we are not shipping an
-unauthenticated remote control plane. This is a named acceptance item, not an afterthought.
+### Auth (out of scope for this quest; localhost-only + follow-on)
+The admin WS is unauthenticated today, and `src/admin/admin-auth-middleware.js` is **policy-only**:
+`validateSecurityContext`/`authorizeAction` (`admin-auth-middleware.js:34,72`) have **no token
+verification, no credential/identity store, and no source of a `principal`**. So "just wire it in,
+token-gated" is not a small seam — real auth needs a credential/token source + an authenticating
+handshake + a policy store, none of which exist. DECISION: the quickstart runs the admin plane
+**localhost/port-forward only, with a loud "trusted boundary only" warning** in the docs (no
+regression — it's already open). **Authentication is its own follow-on quest**, not an acceptance
+item here.
 
 ### WS-API acceptance (sharpens the sealed criterion)
-- `lagrange service list` shows `sys-postgres-wire` present and **stopped** on a fresh cluster.
-- `lagrange service start sys-postgres-wire` causes 5432 to open and a `psql` round-trip to succeed —
-  with **no raw SQL typed by the operator**.
-- `lagrange service scale <id> 3` and `service stop <id>` reflect in `service_definitions` and the
-  reconciler converges (verified via `service status`).
+- `lagrange service list` shows `sys-postgres-wire` and its **placement/health state** (defined vs
+  placed/listening) on a fresh ≥3-node cluster.
+- A `psql` round-trip succeeds with **no raw SQL typed by the operator** — either automatically once
+  the cluster is healthy (if W0b shows placement just needs quorum) or after
+  `lagrange service start sys-postgres-wire` (if ship-not-started is chosen).
+- `lagrange service scale <id> 3` reflects in `service_definitions` and the reconciler converges;
+  `service stop <id>` actually tears down the listener (verified via `service status`, not just a
+  `status` flag).
 - `lagrange service deploy examples/<hello-world>` (WS-HELLO) brings the service up and its endpoint
   is reachable.
-- The admin-WS `query` envelope + SQL templates are documented as the automation surface; the auth
-  seam is wired (token-gated) with the localhost-only caveat documented.
+- The admin-WS `query` envelope + canonical SQL templates are documented as the automation surface.
+
+## Key open decision (resolve with W0b evidence)
+
+Does psql come up **automatically** on a healthy ≥3-node cluster, or do we want operators to
+**explicitly start it**? Two coherent products:
+
+- **D1 — Auto-start (no product change).** Keep pgsql shipping `active`/`replica_count=3`; W0b
+  confirms a ≥3-node cluster places the replica and 5432 opens on its own. Onboarding = "bring up
+  3 nodes → psql just works"; service management is taught via the **hello-world deploy** only.
+  WS-API `start` is then **not** needed for the basic round-trip (and WS-API drops off the critical
+  path). Lowest effort, best first impression. Cost: loses the "start the SQL service" lesson.
+- **D2 — Ship-not-started (matches the requested narrative).** Change the built-in pgsql definition
+  to ship not-started (status inactive **or** replica_count 0) **and** implement a real server-side
+  `service start` action that places the replica. Onboarding = "see pgsql defined-but-not-running →
+  `lagrange service start` it → psql works", which doubles as the canonical lifecycle lesson. Cost:
+  a product change to a built-in + the hardest WS-API piece (server-side start/stop), and it must not
+  break the existing assumption elsewhere that pgsql is active by default (audit callers).
+
+Recommendation: **decide after W0b.** If W0b shows auto-placement on 3 nodes is reliable, D1 gives
+the cleanest 30-minute win; D2 is the better *teaching* story but is a real feature. Either way W0b
+is the gate.
 
 ## Sequencing & dependencies
 
-`W0` (DONE) → `W1` (Dockerfile EXPOSE fix, optional multi-stage, naming) and `WS-API`
-(CLI `lagrange service` verbs over the existing query channel + auth seam) can proceed in parallel;
-`WS-API` gates the psql round-trip in `W2`/`W4` and the deploy step in `WS-HELLO`. Then
-`W2` (needs W1 + WS-API) ‖ `W3` (render-only, needs W1 image name) → `WS-HELLO` (needs WS-API) →
-`W4` (needs W2 patterns + W3 chart + WS-API) → `W5` (docs narrate the green WS-API/W2/W4 flow
-end-to-end). Critical insight: **WS-API is now on the critical path** — without `service start`,
-there is no psql, so it precedes every psql-dependent acceptance.
+`W0` (DONE) → **`W0b` (BLOCKER: pin the placement precondition; resolves the Key open decision)**.
+`W1` (Dockerfile EXPOSE fix, multi-stage, naming) runs in parallel with `W0b`. Then `W2`/`W3` (W3
+render-only). **WS-API scope depends on the decision**: under D1 it's just `list`/`status`/`scale`/
+`deploy` (off the psql critical path); under D2 it additionally includes the server-side
+`start`/`stop` actions and is back on the critical path before `W2`/`W4`'s psql step. `WS-HELLO`
+needs WS-API `deploy`. `W4` needs W2 patterns + W3 chart. `W5` narrates the green end-to-end flow.
 
 ## Reuse vs build-new
 
@@ -251,12 +302,20 @@ no retry, joiners only retry 4× — gate ordering on `/readyz`. R4 WS is 8082 n
 addresses default to `localhost` — inject pod FQDN. R6 admin 8081 hardcoded. R7 `NODE_WS_PORT` env
 mapping is dead (needs a small src change if a non-default WS port is required). R8 AGPL image
 license obligations. R9 naming drift (`distributed-database-system`/`ddb-admin`/Lagrange). R10 fat
-build image — consider multi-stage.
+build image — consider multi-stage. **R11 replica floor: user-created services and the `scale` verb
+require odd, ≥3 replicas (`isValidReplicaCount`, `meta-command-handlers.js:197-201,222-225,385-387`),
+so the quickstart cluster must be ≥3 nodes for WS-HELLO/`scale` to converge — the "1-node try" cannot
+run user services. The built-in pgsql runtime min is 1 (`rebalancer-constants.js:137-146`) but the
+`scale` verb cannot express <3 (verb/policy mismatch — surface it).** R12 `service stop` via a
+`status='inactive'` flip does NOT tear down the listener (placement ignores `status`) — stop must be
+a real scale-to-0/REMOVE action. R13 admin WS is unauthenticated and `admin-auth-middleware.js` is
+policy-only (no token/principal/credential source) — real auth is a separate quest; quickstart is
+localhost-only.
 
 ## Closure
 
-Operator-attested against the W0–W5 acceptance checklist (mirrored in
-`solve/oracle/lagrange-devops-onboarding.json`). Quest closes when W1–W5 are green and W0 is
-resolved (psql path proven or its required step documented), with the chart render-gate
-(`check-lagrange-chart.js`) in `test:ci` and a reviewer able to follow either getting-started doc
-to a psql round-trip.
+Operator-attested against the workstream acceptance checklist (mirrored in
+`solve/oracle/lagrange-devops-onboarding.json`). Quest closes when W0b is resolved (placement
+precondition pinned → Key open decision made), WS-API/WS-HELLO/W1–W5 are green, the chart render-gate
+(`check-lagrange-chart.js`) is in `test:ci`, and a reviewer can follow either getting-started doc to a
+psql round-trip on a ≥3-node cluster.

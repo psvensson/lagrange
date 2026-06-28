@@ -1,10 +1,11 @@
 {
-  "metric": 7,
+  "metric": 8,
   "target": 0,
   "done": false,
-  "note": "Lower-is-better = count of unmet workstream acceptance criteria. W0 is RESOLVED (a bare node ships pgsql registered-but-not-started; quickstart must start it explicitly) but is counted met only as a falsification, not a deliverable. Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md and doneWhenSealed in the quest.",
+  "note": "Lower-is-better = count of unmet workstream acceptance criteria. W0 RESOLVED (single seed never opens 5432; the real lever is replica PLACEMENT, not service_definitions.status). W0b (BLOCKER) must pin the placement precondition and resolve the Key open decision (D1 auto-start vs D2 ship-not-started) before WS-API scope is sealed. Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md.",
   "workstreams": {
     "W0-psql-path-resolved": true,
+    "W0b-placement-precondition-pinned": false,
     "WS-API-service-management": false,
     "WS-HELLO-example": false,
     "W1-image-published": false,
