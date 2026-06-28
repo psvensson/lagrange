@@ -12,6 +12,7 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
+const ReplicaStatusForTest = {REMOVING: 'removing'};
 const TEST_NODE_ID = 'node-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_TARGET_NODE_ID = 'node-4';
@@ -460,3 +461,33 @@ test('count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the a
     );
     coordinator.shutdown();
   });
+
+test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source ' +
+  '-- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target', async (t) => {
+  initializeTestEnvironment();
+  // 3 ACTIVE + 1 REMOVING (a REPLACE source-removal whose drain lags) = physically
+  // over target 3. Active-only counting would miss the removing source (the bug);
+  // occupancy (active + removing) sees 4 > 3 and holds the next churn create.
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-4', ReplicaStatusForTest.REMOVING),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_REPLACE_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-5',
+    replicaId: CRIT_PARTITION_ID + '-r1',
+    sourceNodeId: 'node-1',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'a draining (removing) source keeps the partition over target -> churn create is held');
+  t.equal(sqlEngine.getOperations().length, 0, 'the held churn create persists no replica operation');
+  coordinator.shutdown();
+});

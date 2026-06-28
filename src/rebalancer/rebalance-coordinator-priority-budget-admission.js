@@ -36,6 +36,17 @@ const {
 const LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET =
   'critical-partition create lane held: over target on alive replicas';
 
+// Statuses that PHYSICALLY occupy a partition slot: a live replica (active) OR a
+// source still draining (removing) -- the latter is the over-replication surplus
+// itself (a REPLACE source-removal whose drain lags), so it MUST count or the
+// hold never sees the surplus. Coming-up statuses (pending/creating/syncing) are
+// deliberately excluded so a 0->N provisioning fan-out still admits until the Nth
+// lands; removed/failed are gone and never count.
+const LANE_OCCUPANCY_STATUSES = new Set([
+  ReplicaStatus.ACTIVE,
+  ReplicaStatus.REMOVING,
+]);
+
 const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
   OperationType.REPLACE,
@@ -230,7 +241,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     let occupiedAliveCount = NUM.ZERO;
     for (const row of serviceRows) {
       const status = String(row?.status || ReplicaStatus.ACTIVE).toLowerCase();
-      if (status !== ReplicaStatus.ACTIVE) {
+      if (!LANE_OCCUPANCY_STATUSES.has(status)) {
         continue;
       }
       const nodeId = row?.node_id || row?.nodeId;
