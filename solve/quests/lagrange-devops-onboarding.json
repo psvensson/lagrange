@@ -1,0 +1,62 @@
+{
+  "id": "lagrange-devops-onboarding",
+  "statement": "A DevOps-savvy operator can stand up a multi-node Lagrange cluster — locally via 'docker compose up' and on Kubernetes via the charts/lagrange Helm chart (StatefulSet, per-pod stable NODE_ID, PVC-backed Raft/SQLite, probes, headless+sql+admin services) — from a published multi-arch ghcr.io image, and reach a working psql SQL round-trip by following getting-started-compose.md or getting-started-kubernetes.md, within ~30 minutes (Phase 0.5 exit criterion); the chart render-gate runs in test:ci.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.5-cde-helm-chart",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/lagrange-devops-onboarding.md"
+  },
+  "doneWhenSealed": {
+    "planDoc": "solve/epics/lagrange-devops-onboarding.md",
+    "oracle": "solve/oracle/lagrange-devops-onboarding.json",
+    "closure": "operator-attested against the W0-W5 acceptance checklist (artifact-bound, each verifiable by a script/CI job, not a statistical bar); the oracle probe is the machine liveness signal and is set to done only when every workstream artifact is green (metric=0). Mirrors the operator-attested closure convention used by rolling-restart quests.",
+    "criteria": [
+      "W0 (prerequisite falsification): pgwire/psql availability is resolved — a bare 'docker run' seed opens 5432 and 'psql -h 127.0.0.1 -p 5432 -c \"SELECT 1\"' returns 1 with no extra step; OR the required service-deploy step is documented and the round-trip works after it. (pgwire is a gated runtime service; a node can report bootstrap-complete with no listener — must be proven, not assumed.)",
+      "W1: a tagged build publishes multi-arch (linux/amd64+arm64) ghcr.io/<org>/lagrange:<semver> and :latest; a CI job pulls it and 'docker run --rm <img> --version' prints the version and '--dry-run' exits clean.",
+      "W2: 'docker compose up -d' forms a converged 3-node cluster (all three /readyz return 200); psql to the seed runs CREATE TABLE / INSERT / SELECT round-trip; after 'docker compose restart' data and NODE_IDs are unchanged and the cluster re-converges. Verified by scripts/verify-compose-quickstart.sh.",
+      "W3: 'helm lint' is clean and 'helm template' for default + custom (replicas=5, custom storageClassName, non-root securityContext) renders the three probes on 8080, a headless service (clusterIP: None), volumeClaimTemplates mounted at /data, and lagrange-sql(5432)/lagrange-admin(8081) services. Gated by scripts/check-lagrange-chart.js, wired into test:ci.",
+      "W4: on kind, 'helm install' brings all PVCs to Bound and all pods to passing /startupz+/readyz; lagrange-0 is the seed (no SEED_NODE_ADDRESS) and others joined; 'kubectl port-forward svc/lagrange-sql 5432' + psql round-trip succeeds; 'kubectl delete pod lagrange-1' rebinds the same PVC with the same NODE_ID and rejoins with data intact. Verified by scripts/verify-chart-on-kind.sh.",
+      "W5: docs/getting-started-compose.md and docs/getting-started-kubernetes.md exist; their command blocks ARE the W2/W4 verify scripts (narrated), carrying a reader from zero to a psql SQL round-trip (and a WASM service deploy), satisfying the Phase 0.5 exit criterion."
+    ]
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/lagrange-devops-onboarding.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "lagrange-devops-onboarding-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/lagrange-devops-onboarding.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "w0-falsify-psql-first",
+      "statement": "Resolve W0 (psql/pgwire availability) before authoring any doc or acceptance that assumes 'connect with psql' works — pgwire is a gated runtime service whose failure is isolated, so a node can report bootstrap-complete with no 5432 listener (src/bootstrap/bootstrap-service-control-plane-runtime-methods.js:121-143)."
+    },
+    {
+      "id": "no-dead-config-knobs",
+      "statement": "Do not expose chart/compose values that map to ignored config: NODE_WS_PORT is not in ENV_MAPPINGS and admin port 8081 is hardcoded (src/admin/admin-websocket-api-base.js:153). Document these as known constraints; do not add knobs that silently do nothing."
+    },
+    {
+      "id": "transcribe-proven-wiring",
+      "statement": "Seed/join env wiring (NODE_ID, NODE_ADDRESS, SEED_NODE_ADDRESS, DATA_DIR, TRANSPORT_WS_HOST, advertised WS) must match the proven harness wiring in test/distributed/harness/cluster-class-lifecycle-base.js:270-319; NODE_ID must be stable per replica (unset => new uuidv4 each boot)."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

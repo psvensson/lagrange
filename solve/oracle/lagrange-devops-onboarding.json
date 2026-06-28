@@ -1,0 +1,14 @@
+{
+  "metric": 6,
+  "target": 0,
+  "done": false,
+  "note": "Lower-is-better = count of unmet workstream acceptance criteria (W0..W5). Set each to met by the operator/CI when its verify artifact is green; done becomes true at metric=0. See solve/epics/lagrange-devops-onboarding.md and doneWhenSealed in the quest.",
+  "workstreams": {
+    "W0-psql-path-falsified": false,
+    "W1-image-published": false,
+    "W2-compose-cluster-roundtrip": false,
+    "W3-chart-render-gate-in-ci": false,
+    "W4-chart-on-kind-pvc-identity": false,
+    "W5-getting-started-docs": false
+  }
+}

@@ -188,17 +188,17 @@ Focus shifts to developer experience.
 
 ### 1. Cluster Deployment Experience
 
-| Item | Roadmap state |
-|------|--------|
-| Dockerfile | ✅ |
-| Bootstrap API | ✅ |
-| Node join protocol | ✅ |
-| Admin port | ✅ |
-| `lagrange cluster init` | 🔲 |
-| `lagrange node start` | 🔲 |
-| `lagrange cluster join` | 🔲 |
-| `docker-compose` cluster | 🔲 |
-| Kubernetes Helm chart | 🔧 |
+| Id | Item | Roadmap state |
+|----|------|--------|
+| `RM-0.5-cde-dockerfile` | Dockerfile | ✅ |
+| `RM-0.5-cde-bootstrap-api` | Bootstrap API | ✅ |
+| `RM-0.5-cde-node-join` | Node join protocol | ✅ |
+| `RM-0.5-cde-admin-port` | Admin port | ✅ |
+| `RM-0.5-cde-cluster-init` | `lagrange cluster init` | 🔲 |
+| `RM-0.5-cde-node-start` | `lagrange node start` | 🔲 |
+| `RM-0.5-cde-cluster-join` | `lagrange cluster join` | 🔲 |
+| `RM-0.5-cde-docker-compose` | `docker-compose` cluster | 🔲 |
+| `RM-0.5-cde-helm-chart` | Kubernetes Helm chart | 🔧 |
 
 `Kubernetes Helm chart` is approved scope in this section. Further
 implementation work stays tied to a deployment description that covers values
@@ -207,17 +207,17 @@ task expansion begins.
 
 ### 2. Developer Workflow
 
-| Item | Roadmap state |
-|------|--------|
-| Programmatic runtime | ✅ |
-| Iterator mode | ✅ |
-| Stage mode | ✅ |
-| Plan mode | ✅ |
-| WASM deployment via manifest | ✅ |
-| CLI wasm publish | 🔲 |
-| CLI wasm deploy | 🔲 |
-| CLI wasm scale | 🔲 |
-| Getting-started tutorial | 🔲 |
+| Id | Item | Roadmap state |
+|----|------|--------|
+| `RM-0.5-dw-programmatic-runtime` | Programmatic runtime | ✅ |
+| `RM-0.5-dw-iterator-mode` | Iterator mode | ✅ |
+| `RM-0.5-dw-stage-mode` | Stage mode | ✅ |
+| `RM-0.5-dw-plan-mode` | Plan mode | ✅ |
+| `RM-0.5-dw-wasm-manifest` | WASM deployment via manifest | ✅ |
+| `RM-0.5-dw-cli-wasm-publish` | CLI wasm publish | 🔲 |
+| `RM-0.5-dw-cli-wasm-deploy` | CLI wasm deploy | 🔲 |
+| `RM-0.5-dw-cli-wasm-scale` | CLI wasm scale | 🔲 |
+| `RM-0.5-dw-getting-started` | Getting-started tutorial | 🔲 |
 
 ### 3. Service Development Inner Loop
 
