@@ -178,3 +178,53 @@ critical-path latency tail (current frontier: leadership-handoff — see Lever A
 and voter-ready-spread under load), then re-run N≥15 and **re-seal `T` upward**
 only if the new Wilson lower bound clears the old one (that is the evidence that
 a lever actually helped, immune to single-run variance).
+
+## 6. Certification — SOLVED (operator-attested, 2026-06-28)
+
+Both axes of the §5 `doneWhen` are met outright, at a full N=15 window, with
+margin. Closing the quest on this evidence.
+
+**Gate `20260628T064848Z`, N=15** (HEAD `04e9103c`, `srcFingerprint
+e746c1633b09f68d`, un-mask `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true`):
+
+- **SAFETY floor — MET, every run.** `NODE_EXIT = 0/15`, `hardBreaches =
+  CORRUPT = 0/15`. The baseline (`073124Z`) had `NODE_EXIT 1/15`; that binding
+  gap is closed.
+- **CONVERGENCE — MET with margin.** passRate `9/15 = 0.600` (sequence
+  `PPffPPfPPfPPffP`), Wilson 95% CI `[0.357, 0.802]`. Lower bound **0.357 ≥
+  T(5) = 0.109** (3.3×).
+- **Provable improvement.** The new Wilson lower bound `0.357` clears the old
+  `0.109` decisively — by this document's own "did the lever help?" test, the
+  two fixes landed this campaign raised the convergence floor, immune to
+  single-run variance (passRate `0.267 → 0.600`).
+
+**What moved it** (both DT red-on-revert + adversarially safety-verified, no
+gate spent to find them):
+- **A1** (`5cdb1880`) — participation-aware join in-flight gate: a healthy
+  joiner is no longer held out of membership by an in-flight op it neither
+  sources nor targets (was `publication_missing_active_node`).
+- **B1** (`522e3def`) — serve-eligible while spread satisfied in flight: a
+  voter-ready node is serve-eligible while a recovery op merely finishes, gated
+  fail-closed on the durable (voter-ready-sound) spread + a serve-lane
+  reasonCode allowlist (was `restart_recovery_timeout` + `nodeSlotUnavailable`).
+
+All three of those failure heads are absent from every one of the 15 runs.
+
+**Re-seal.** Per §3/§5, the bar re-seals upward to the newly-proven floor:
+**`T(5) = 0.357`** (`q_target = 0.357^(1/5) = 0.812`), superseding the prior
+`0.109`. Future changes are compared against this higher bar.
+
+**Residual (non-blocking).** All 6 fails are the drain/in-flight family (4×
+`convergence_timeout`, 1× `replica_operations_in_flight`, 1× a new singleton
+`publication_epochs_disagree`) — the run4 dead-target REPLACE drain churn, which
+is saturation-entangled and does not block this `doneWhen`. Left as documented
+future work.
+
+**Closure mechanism (honest record).** The Solver harness emits a SOLVED
+terminal only when a `doneWhen` *probe* evaluates done, and no probe expresses
+this Wilson-LB/SAFE aggregate (the quest JSON still carries the legacy
+`scenario-harness consecutive:3` probe, which must not be faked). So this
+closure is **operator-attested**: recorded here, in the quest log
+(`solve/log/rolling-restart-core-stability.ndjson`), and in external memory; the
+Solver machine status is left honestly open. A future `convergence-passrate`
+probe could mechanize it.
