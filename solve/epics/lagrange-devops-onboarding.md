@@ -347,6 +347,44 @@ Concretely D2 requires three coupled pieces:
 
 D1 (auto-start) is rejected: it loses the lifecycle lesson the onboarding is built around.
 
+## Service scaling model — "a partition IS a service" (operator-refined 2026-06-28)
+
+Services are **first-class replicated entities** that reuse the existing unified machinery — NOT a
+parallel mechanism (architecture forbids a parallel planner, `architecture/future/activation-cost-aware-placement.md:98-108`).
+The code already grains this way: `UnifiedRebalancer` is entity-agnostic (PARTITION/MESSAGE_GROUP/
+RUNTIME_SERVICE) over one `MovePlanner` + one placement kernel. **Partition split/merge (keyspace
+resharding) is the ONLY partition-specific piece and the only thing inapplicable to a stateless service.**
+
+Verb-surface change: **NO manual `service scale` command.** Desired count is **policy-driven** and the
+rebalancer converges transparently — exactly how tables/message-groups are operated. Keep
+`list`/`status`/`deploy` and the lifecycle (`start`/`stop` = policy enable/disable, per D2 ship-not-started).
+
+Resource/load-aware reality (verified, wired vs dormant):
+- **CPU% + Memory%: real producers, scored, default-ON.** `node-service.js:356/359` →
+  `nodes.cpu_usage_percent`/`memory_usage_percent` (heartbeat) → `placement-owner-decision.js
+  calculateScoreDimensions()` (equal-weight sum); `DEFAULT_TABLE_POLICY.placementConstraints` enables
+  considerCpuLoad/considerMemoryLoad. **Runtime-service placement already runs the same scorer**
+  (`move-planner.js:667`, RUNTIME_SERVICE_SPREAD) → CPU/mem-aware placement is FREE once the owner exists.
+- **Disk%: scored but no producer** (always 0; add a statvfs probe in `getNodeStats()` to activate).
+  Disk-BYTES budget IS wired (`storage-admission-service.js`, ADD/REPLACE/SPLIT) — storage only.
+- **Load-driven MOVEMENT: absent everywhere** (partitions too). MOVE_REASON
+  (`rebalancer-constants.js:382-388`) has no hot-node/rebalance-by-load; load only scores the TARGET of
+  an already-triggered move. The selection half is shared/free; only the TRIGGER (hot-node detector + a
+  load move reason) is missing — build once on the shared planner so partitions benefit too.
+- **Network/request-rate per node: absent** from `nodes`/placement; **custom weights/plugin: none**
+  (fixed equal-weight sum, 2 score profiles). Both net-new = one score dimension (+ per-node metric for
+  network) on the ONE planner.
+- **`service_definitions.resource_budget` is a WASM exec-sandbox limit, NOT a placement budget** — do
+  not repurpose.
+- **Replica-count load autoscaler: does not exist for ANY entity.** "Reuse data-storage transparent
+  scaling" = reuse declarative-policy + convergence (real today); load-driven grow/shrink is net-new,
+  build generically for partitions + services.
+
+Build order under this model: (1) RUNTIME_SERVICE owner makes services first-class → CPU/mem-aware
+placement + policy convergence FREE; (2) service policy accessor/storage (reuse TablePolicyService
+pattern) so desired = policy; (3) load-driven movement trigger + network/custom score dimensions =
+incremental dimensions on the shared planner, generic (partitions + services), as a follow-on.
+
 ## Implementation blueprint — RUNTIME_SERVICE rebalancer owner (Approach B, file-anchored)
 
 Confirmed: the RUNTIME_SERVICE planner/executor/dispatch machinery is fully wired and GREEN; the only
