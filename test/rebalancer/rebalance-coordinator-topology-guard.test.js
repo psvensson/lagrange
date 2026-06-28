@@ -382,3 +382,81 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
 
   coordinator.shutdown();
 });
+
+// Structural goal-owner Increment 1: count-keyed critical create lane hold.
+// A critical partition over its replica target on ALIVE replicas must not admit a
+// new add-like op (ADD inflow OR REPLACE churn) — the lane stays held until the
+// surplus drains. The net-new catch vs the existing rows-only distinct-node ADD
+// guard is REPLACE (which that guard exempts), so the red-on-revert is a REPLACE.
+const CRIT_PARTITION_ID = 'control_plane_publications-p1';
+function critRow(replicaId, nodeId, status) {
+  return createServiceRow(replicaId, nodeId, {
+    partitionId: CRIT_PARTITION_ID,
+    status: status || 'active',
+  });
+}
+
+test('count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target ' +
+  'on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold ' +
+  'the churn is admitted)', async (t) => {
+  initializeTestEnvironment();
+  // 4 ACTIVE replicas on 4 ready nodes, target 3 => over target by 1.
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_REPLACE_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-5',
+    replicaId: CRIT_PARTITION_ID + '-r1',
+    sourceNodeId: 'node-1',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'over-target REPLACE churn is rejected by the count-keyed lane hold');
+  t.equal(
+    sqlEngine.getOperations().length,
+    0,
+    'the held REPLACE churn create persists no replica operation',
+  );
+  coordinator.shutdown();
+});
+
+test('count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so ' +
+  'a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)',
+  async (t) => {
+    initializeTestEnvironment();
+    // 3 ACTIVE on ready nodes + 1 FAILED => 4 rows but alive-occupancy 3 == target.
+    const rows = [
+      critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+      critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+      critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+      critRow(CRIT_PARTITION_ID + '-r4', 'node-4', TEST_FAILED_STATUS),
+    ];
+    const {coordinator, sqlEngine} = createCoordinator({
+      cacheServices: rows,
+      authoritativeServices: rows,
+    });
+    await coordinator.createOperation({
+      type: TEST_REPLACE_OPERATION_TYPE,
+      partitionId: CRIT_PARTITION_ID,
+      nodeId: 'node-5',
+      replicaId: CRIT_PARTITION_ID + '-r4',
+      sourceNodeId: 'node-4',
+      emitOperationCreated: false,
+      enforceConcurrentOperationBudget: true,
+    });
+    t.equal(
+      sqlEngine.getOperations().length,
+      1,
+      'alive-occupancy at target (failed replica excluded) admits the re-placement REPLACE',
+    );
+    coordinator.shutdown();
+  });

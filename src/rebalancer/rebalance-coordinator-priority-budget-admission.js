@@ -24,6 +24,7 @@ const LOCAL_STR_OBJECT = 'object';
 const {
   NUM,
   OperationType,
+  ReplicaStatus,
   SERVICE_TYPE,
   WORKFLOW_STEP,
   buildPriorityRecoveryOperationAssessment,
@@ -31,6 +32,9 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = REBALANCE_COORDINATOR_SHARED;
+
+const LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET =
+  'critical-partition create lane held: over target on alive replicas';
 
 const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
@@ -167,6 +171,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       );
     }
     if (!conflictingOperation) {
+      await this.holdCriticalPartitionCreateLaneIfOverTarget(context);
       return;
     }
 
@@ -179,6 +184,79 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
           `${context.partitionId} already has an add-like operation ` +
           LOCAL_STR_IN_FLIGHT,
         conflictingOperationId: conflictingOperation.operationId,
+      },
+    );
+  }
+
+  /**
+   * Count-keyed lane hold (structural goal-owner, Increment 1). Even when no
+   * add-like operation currently holds the critical create lane -- because a
+   * prior op released it on spread-satisfaction, or its REMOVED step terminalized
+   * while the source replica row still lags -- keep the lane CLOSED for a new
+   * add-like op (ADD inflow OR REPLACE churn) while the partition is STRICTLY over
+   * its replica target on ALIVE replicas. This is the in-flight + liveness window
+   * the rows-only distinct-node ADD guard misses and the reason the
+   * over-replication surplus (REPLACE source-removals whose drain lags) keeps
+   * re-growing on the saturated coordinator.
+   *
+   * Alive-guard: a replica on a not-ready node is not counted, so (a) a legitimate
+   * REPLACE draining a replica off a restarting node still admits (occupied <=
+   * target) and (b) a dead replica's slot frees for re-placement. REMOVE never
+   * reaches this lane, so the surplus-draining removal always proceeds and the
+   * count falls back to target -- the hold is transient, never a deadlock. Fails
+   * OPEN if the authoritative row read is unavailable (never blocks on a read gap).
+   *
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async holdCriticalPartitionCreateLaneIfOverTarget(context) {
+    const targetReplicaCount =
+      await this.resolveTopologyGuardTargetReplicaCount({
+        partitionId: context?.partitionId,
+        entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+      });
+    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= NUM.ZERO) {
+      return;
+    }
+    const serviceRows = await this.getAuthoritativeEntityServiceRows({
+      partitionId: context?.partitionId,
+      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+      entityId: context?.entityId || context?.partitionId,
+    });
+    if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
+      return;
+    }
+    let occupiedAliveCount = NUM.ZERO;
+    for (const row of serviceRows) {
+      const status = String(row?.status || ReplicaStatus.ACTIVE).toLowerCase();
+      if (status !== ReplicaStatus.ACTIVE) {
+        continue;
+      }
+      const nodeId = row?.node_id || row?.nodeId;
+      if (!nodeId || !this.isNodeReadyForRouting(nodeId)) {
+        continue;
+      }
+      occupiedAliveCount += NUM.ONE;
+    }
+    if (occupiedAliveCount <= targetReplicaCount) {
+      return;
+    }
+    this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET, {
+      partitionId: context?.partitionId || null,
+      occupiedAliveCount,
+      targetReplicaCount,
+      normalizedMoveType: context?.normalizedMoveType || null,
+    });
+    throw this.createConcurrentOperationBudgetError(
+      context?.normalizedMoveType,
+      LOCAL_NUM_ONE,
+      {
+        message:
+          LOCAL_STR_CRITICAL_PARTITION +
+          `${context.partitionId} at ${occupiedAliveCount} alive replicas over ` +
+          `target ${targetReplicaCount}; holding add-like create ` +
+          LOCAL_STR_IN_FLIGHT,
       },
     );
   }
