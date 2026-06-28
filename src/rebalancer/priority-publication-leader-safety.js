@@ -52,6 +52,18 @@ const {
 const PRIORITY_PUBLICATION_SOURCE_HANDOFF_ESCALATE_AFTER_MS =
   TIME_MS.SECOND * 30;
 
+// Observability (no behavior change): a single debug-level trace of every
+// applicable, not-yet-safe priority source-leader-handoff decision. The
+// resulting safety `state` (REQUEST_SOURCE_LEADER_HANDOFF / path-1 on the
+// source vs REQUEST_REPLACEMENT_LEADER_ELECTION / path-2 on the replacement vs
+// WAIT_REPLACEMENT_LEADER_OWNERSHIP) is unambiguously derivable from the logged
+// gate components, so this is the canonical signal for diagnosing WHY a
+// surplus-drain source removal stalls (is the escalation firing? is the
+// replacement voter-ready? does leadership actually move?). Emitted at debug so
+// it is captured only under --debug-logs/--capture-logs with ~zero steady cost.
+const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG =
+  'priority-publication leader-remove-safety decision';
+
 // R1 (epic slow-rejoiner-progress-or-evict, "proof-not-rows"): PROMOTED default-ON
 // (gate `stat-gate-20260623T164130Z`: SAFE 3/3, priority-recovery remove-safety residual
 // witnesses 3→0; escape hatch = set the flag to 'false'). Authorizes a priority-partition
@@ -288,6 +300,33 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
       !replacementLeaderOwnershipObserved &&
       replacementElectionTargetReady;
+
+    if (
+      operation?.type === OperationType.REPLACE &&
+      this.isReplaceSourceLeaderHandoffRequiredPartition(partitionId) &&
+      !sourceRemovalLeadershipSafe
+    ) {
+      this.logger?.debug?.(
+        PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG,
+        {
+          operationId: operation?.operationId ?? null,
+          partitionId,
+          sourceNodeId,
+          partitionLeaderNodeId,
+          replacementNodeId,
+          sourceRoleState,
+          replacementRoleState,
+          replacementElectionTargetReady,
+          escalateReplacementLeaderElection,
+          replacementLeaderOwnershipObserved,
+          sourceLeadershipReleaseObserved,
+          sourceLeaderHandoffStalled,
+          sourceLeaderHandoffStallMs,
+          handoffRequestRetrySuppressed,
+          replacementLeaderElectionRetrySuppressed,
+        },
+      );
+    }
 
     if (
       operation?.type !== OperationType.REPLACE ||
