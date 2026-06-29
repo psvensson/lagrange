@@ -90,6 +90,7 @@ describe('rolling restart liveness classifier', () => {
     );
     assert.equal(verdict.fullLogReplay.filesScanned, 5);
     assert.equal(verdict.fullLogReplay.matchedSampleCount, 3);
+    assert.equal(verdict.downstreamWorkflow.state, 'absent');
     assert.equal(verdict.evidenceGaps.length, 0);
   });
 
@@ -161,6 +162,19 @@ describe('rolling restart liveness classifier', () => {
     assert.equal(verdict.owner, 'operation_workflow_owner');
     assert.equal(verdict.boundary, 'workflow_timeout');
     assert.equal(verdict.enabledAction, 'reconcile_stale_operation_progress');
+    assert.equal(verdict.downstreamWorkflow.state, 'observed');
+    assert.equal(
+      verdict.downstreamWorkflow.partitionId,
+      'sql_transaction_participants-p1',
+    );
+    assert.equal(
+      verdict.downstreamWorkflow.operationId,
+      'ecef9408-b66f-4f03-a0d7-6341b3c2f621',
+    );
+    assert.equal(verdict.downstreamWorkflow.currentStepId, 'dispatch_pending');
+    assert.equal(verdict.downstreamWorkflow.actuationState, 'transition_deferred');
+    assert.equal(verdict.downstreamWorkflow.stepAgeMs, 74121);
+    assert.equal(verdict.downstreamWorkflow.stepTimeoutMs, 30000);
   });
 
   it('prints the same verdict through the CLI', () => {

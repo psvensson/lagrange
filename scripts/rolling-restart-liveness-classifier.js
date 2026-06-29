@@ -46,6 +46,7 @@ const EVIDENCE_PATH_LIVENESS_EVIDENCE =
   'rollingRestartLivenessEvidence.samples';
 const EVIDENCE_PATH_PRIORITY_RECOVERY =
   'report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary';
+const EVIDENCE_PATH_DOWNSTREAM_WORKFLOW_ABSENT = ABSENT_VALUE;
 
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
 const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
@@ -80,6 +81,38 @@ const EVIDENCE_FULL_LOG_REPLAY_ABSENT = Object.freeze({
   linesScanned: NUM_ZERO,
   decisionTraceCount: NUM_ZERO,
   matchedSampleCount: NUM_ZERO,
+});
+const DOWNSTREAM_WORKFLOW_ABSENT = Object.freeze({
+  state: ABSENT_VALUE,
+  evidencePath: EVIDENCE_PATH_DOWNSTREAM_WORKFLOW_ABSENT,
+  owner: ABSENT_VALUE,
+  boundary: ABSENT_VALUE,
+  enabledAction: ABSENT_VALUE,
+  partitionCount: ABSENT_VALUE,
+  partitionId: ABSENT_VALUE,
+  operationId: ABSENT_VALUE,
+  currentStepId: ABSENT_VALUE,
+  currentStepState: ABSENT_VALUE,
+  workflowState: ABSENT_VALUE,
+  workflowProgressPhaseId: ABSENT_VALUE,
+  actuationState: ABSENT_VALUE,
+  progressContractState: ABSENT_VALUE,
+  waitMode: ABSENT_VALUE,
+  pressureState: ABSENT_VALUE,
+  pendingWrites: ABSENT_VALUE,
+  pendingWriteGrowthCount: ABSENT_VALUE,
+  stepAgeMs: ABSENT_VALUE,
+  stepTimeoutMs: ABSENT_VALUE,
+  lastProgressTimestamp: ABSENT_VALUE,
+  deadlineMs: ABSENT_VALUE,
+  lastObservedAtMs: ABSENT_VALUE,
+  quiescenceState: ABSENT_VALUE,
+  canonicalBlocker: ABSENT_VALUE,
+  inFlightCount: ABSENT_VALUE,
+  effectiveInFlightReplicaOperationCount: ABSENT_VALUE,
+  staleInFlightReplicaOperationCount: ABSENT_VALUE,
+  actuationStateCounts: Object.freeze({}),
+  inFlightReplicaOperationStatuses: Object.freeze({}),
 });
 const EVIDENCE_GAP_FULL_OWNER_EXECUTION_TRACE =
   'full_owner_execution_trace';
@@ -175,6 +208,7 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
   );
   const downstream = classifyDownstreamWorkflow({
     graph,
+    scenario,
     publication,
     progress,
   });
@@ -201,6 +235,7 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
     publicationDelta,
     progressWitness,
     fullLogReplay: livenessEvidence.fullLogReplay,
+    downstreamWorkflow: downstream.witness,
   };
 
   if (downstream.blocked) {
@@ -532,7 +567,7 @@ function compareProgressSamples(previous, current) {
   return PROGRESS_WITNESS_ABSENT;
 }
 
-function classifyDownstreamWorkflow({graph, publication, progress}) {
+function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
   const prioritySummary = firstRecord(
     publication[PROPERTY_PRIORITY_RECOVERY_PROGRESS_SUMMARY],
   );
@@ -560,8 +595,17 @@ function classifyDownstreamWorkflow({graph, publication, progress}) {
       isRecord(dominantWitness)
     );
   if (!blocked) {
-    return {blocked: false};
+    return {
+      blocked: false,
+      witness: DOWNSTREAM_WORKFLOW_ABSENT,
+    };
   }
+  const witness = buildDownstreamWorkflowWitness({
+    prioritySummary,
+    dominantWitness,
+    priorityEdge,
+    scenario,
+  });
   return {
     blocked: true,
     owner: textValue(
@@ -584,7 +628,136 @@ function classifyDownstreamWorkflow({graph, publication, progress}) {
       dominantWitness.lastProgressAtMs,
     ),
     evidencePath: EVIDENCE_PATH_PRIORITY_RECOVERY,
+    witness,
   };
+}
+
+function buildDownstreamWorkflowWitness({
+  prioritySummary,
+  dominantWitness,
+  priorityEdge,
+  scenario,
+}) {
+  const failureClassification = firstRecord(scenario.failureClassification);
+  const postRebalanceClosure = firstRecord(
+    failureClassification.postRebalanceClosure,
+  );
+  const operationDrainEvidence = firstRecord(
+    postRebalanceClosure.dimensions?.operation_drain?.evidence,
+  );
+  const quiescenceEvidence = firstRecord(
+    scenario.details?.diagnostics?.quiescence,
+    scenario.details?.diagnostics?.failure?.quiescence,
+  );
+  if (!hasDownstreamWorkflowEvidence({
+    dominantWitness,
+    operationDrainEvidence,
+    quiescenceEvidence,
+  })) {
+    return DOWNSTREAM_WORKFLOW_ABSENT;
+  }
+  const topologyOperatorWitness = firstRecord(
+    dominantWitness.topologyOperatorWitness,
+    prioritySummary.topologyOperatorWitness,
+  );
+  return {
+    state: WITNESS_STATE_OBSERVED,
+    evidencePath: EVIDENCE_PATH_PRIORITY_RECOVERY,
+    owner: textValue(
+      dominantWitness.currentOwner,
+      dominantWitness.actuationOwner,
+      priorityEdge?.owner,
+      OWNER_OPERATION_WORKFLOW,
+    ),
+    boundary: textValue(
+      dominantWitness.blockingBoundary,
+      priorityEdge?.boundary,
+      BOUNDARY_WORKFLOW_PROGRESS,
+    ),
+    enabledAction: textValue(
+      dominantWitness.nextRequiredAction,
+      dominantWitness.progressNextAction,
+      ACTION_WAIT_FOR_OPERATION_PROGRESS,
+    ),
+    partitionCount: valueOrAbsent(normalizeNumber(prioritySummary.partitionCount)),
+    partitionId: textValue(dominantWitness.partitionId, ABSENT_VALUE),
+    operationId: textValue(
+      topologyOperatorWitness.operatorId,
+      firstText(dominantWitness.operationIds),
+      firstText(dominantWitness.witnessIds),
+      ABSENT_VALUE,
+    ),
+    currentStepId: textValue(
+      topologyOperatorWitness.currentStepId,
+      dominantWitness.workflowProgressPhaseId,
+      ABSENT_VALUE,
+    ),
+    currentStepState: textValue(
+      topologyOperatorWitness.currentStepState,
+      ABSENT_VALUE,
+    ),
+    workflowState: textValue(dominantWitness.workflowState, ABSENT_VALUE),
+    workflowProgressPhaseId: textValue(
+      dominantWitness.workflowProgressPhaseId,
+      ABSENT_VALUE,
+    ),
+    actuationState: textValue(dominantWitness.actuationState, ABSENT_VALUE),
+    progressContractState: textValue(
+      dominantWitness.progressContractState,
+      ABSENT_VALUE,
+    ),
+    waitMode: textValue(dominantWitness.waitMode, ABSENT_VALUE),
+    pressureState: textValue(
+      dominantWitness.pressureState,
+      dominantWitness.transportPressureState,
+      ABSENT_VALUE,
+    ),
+    pendingWrites: valueOrAbsent(normalizeNumber(dominantWitness.pendingWrites)),
+    pendingWriteGrowthCount: valueOrAbsent(
+      normalizeNumber(dominantWitness.pendingWriteGrowthCount),
+    ),
+    stepAgeMs: valueOrAbsent(normalizeNumber(dominantWitness.stepAgeMs)),
+    stepTimeoutMs: valueOrAbsent(normalizeNumber(dominantWitness.stepTimeoutMs)),
+    lastProgressTimestamp: normalizeTimestamp(
+      dominantWitness.lastProgressAtMs,
+    ),
+    deadlineMs: valueOrAbsent(normalizeNumber(topologyOperatorWitness.deadlineMs)),
+    lastObservedAtMs: valueOrAbsent(
+      normalizeNumber(topologyOperatorWitness.lastObservedAtMs),
+    ),
+    quiescenceState: textValue(quiescenceEvidence.state, ABSENT_VALUE),
+    canonicalBlocker: textValue(
+      quiescenceEvidence.canonicalBlocker,
+      failureClassification.dominantReason,
+      ABSENT_VALUE,
+    ),
+    inFlightCount: valueOrAbsent(
+      firstFiniteNumber(
+        quiescenceEvidence.inFlightCount,
+        operationDrainEvidence.inFlightReplicaOperationCount,
+      ),
+    ),
+    effectiveInFlightReplicaOperationCount: valueOrAbsent(
+      normalizeNumber(operationDrainEvidence.effectiveInFlightReplicaOperationCount),
+    ),
+    staleInFlightReplicaOperationCount: valueOrAbsent(
+      normalizeNumber(operationDrainEvidence.staleInFlightReplicaOperationCount),
+    ),
+    actuationStateCounts: firstRecord(prioritySummary.actuationStateCounts),
+    inFlightReplicaOperationStatuses: firstRecord(
+      operationDrainEvidence.inFlightReplicaOperationStatuses,
+    ),
+  };
+}
+
+function hasDownstreamWorkflowEvidence({
+  dominantWitness,
+  operationDrainEvidence,
+  quiescenceEvidence,
+}) {
+  return isRecord(dominantWitness) ||
+    isRecord(operationDrainEvidence) ||
+    isRecord(quiescenceEvidence);
 }
 
 function buildPublicationDelta({samples, progress, bestProgress}) {
@@ -710,6 +883,10 @@ function textValue(...values) {
     }
   }
   return EMPTY_TEXT;
+}
+
+function firstText(values) {
+  return Array.isArray(values) ? textValue(...values) : EMPTY_TEXT;
 }
 
 function normalizeNumber(value) {
