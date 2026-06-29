@@ -74,6 +74,7 @@ const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+const ORPHAN_REDRIVE_RECONCILE_BOUNDARY = 'orphan_redrive';
 
 class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusReconcile {
   isPriorityRecoveryTimeoutVisibilityOperation(operation) {
@@ -371,7 +372,11 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
               now,
             }),
         ).catch((error) =>
-          this.handleReplicaOperationReconcileError(op, error, 'orphan_redrive'),
+          this.handleReplicaOperationReconcileError(
+            op,
+            error,
+            ORPHAN_REDRIVE_RECONCILE_BOUNDARY,
+          ),
         );
       }),
     );
@@ -667,10 +672,36 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         sourceState,
       ) ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
+    return this.resolvePriorityRecoveryOperationDrainStaleState(
+      mappedState,
+      completion,
+      operation,
+      sourceState,
+    );
+  }
+
+  resolvePriorityRecoveryOperationDrainStaleState(
+    mappedState,
+    completion,
+    operation,
+    sourceState,
+  ) {
+    if (completion.state !== PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
+      return mappedState;
+    }
+    if (
+      mappedState === PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.IN_FLIGHT &&
+      this.isStaleStoppingRemoveDrainWithoutRetirementEvidence(
+        operation,
+        sourceState,
+      )
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .STALE_WITHOUT_RETIREMENT_EVIDENCE;
+    }
     if (
       mappedState ===
         PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE &&
-      completion.state === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED &&
       operation &&
       this.isPriorityRecoveryOperationDrainStepStale(operation)
     ) {
@@ -682,6 +713,19 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         .STALE_WITHOUT_RETIREMENT_EVIDENCE;
     }
     return mappedState;
+  }
+
+  isStaleStoppingRemoveDrainWithoutRetirementEvidence(
+    operation,
+    sourceState,
+  ) {
+    return (
+      operation?.type === OperationType.REMOVE &&
+      operation?.workflowStep === WORKFLOW_STEP.STOPPING &&
+      sourceState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.REMOVAL_IN_FLIGHT &&
+      this.isPriorityRecoveryOperationDrainStepStale(operation)
+    );
   }
 
   decidePriorityRecoveryOperationDrainRelease(evidence) {

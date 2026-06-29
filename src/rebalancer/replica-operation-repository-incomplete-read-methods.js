@@ -187,15 +187,20 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    * @private
    */
     isPriorityRecoveryIncompleteOperationVisibilityCandidate(operation) {
-      return Boolean(
-        operation &&
-        operation.type === OperationType.REPLACE &&
-        isPriorityControlPlanePartition({
-          partitionId: operation.partitionId,
-        }) &&
-        PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
+      if (
+        !operation ||
+        !isPriorityControlPlanePartition({partitionId: operation.partitionId})
+      ) {
+        return false;
+      }
+      if (operation.type === OperationType.REPLACE) {
+        return PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
           operation.workflowStep,
-        ),
+        );
+      }
+      return (
+        operation.type === OperationType.REMOVE &&
+        operation.workflowStep === WORKFLOW_STEP.STOPPING
       );
     }
 

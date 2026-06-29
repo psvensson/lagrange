@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 4
+**Attempts:** 5
 
 ## Links
 - roadmap row: RM-0.1-fs-rolling-restart
@@ -18,34 +18,38 @@
 - Frontier: rolling-restart-run4-drain-residual-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: convergence_timeout
-- Mechanism: observation_gap
-- Movement: narrowed: attemptErrors -> convergence_timeout
-- Latest evidence: test-output/reports/stat-gate-20260629T185514Z-run3.report.json
+- Dominant reason: unknown
+- Mechanism: topology_gap
+- Movement: solved: PASS -> PASS
+- Latest evidence: test-output/reports/stat-gate-20260629T194704Z-run3.report.json
 - Selected theory: theory-20260629-stopping-source-removal-reclaim
 - Next move: continue supervised step for rolling-restart-run4-drain-residual-main
 - Oscillation: blocker "convergence_timeout" revisited 2x (whack-a-mole; change strategy)
-- No longer current: attemptErrors; Do not count stat-gate-20260629T185514Z as Wilson/statistical closure: only run1 scenario-passed. Do not treat run2 as an invalid oracle sample on current evidence; the final clean read missed an acknowledged id. Do not treat run3 as class-quiescence accounting regression; operation_drain_stalled false blocker is gone and this is a different operation_workflow_owner/source-removal residual.
+- No longer current: PASS; Do not claim Quest closure from N=3 mechanistic evidence. Do not run a new source edit before preserving this checkpoint. Do not revive the old STOPPING source-removal theory unless a fresh valid report shows the same REMOVE/removing/STOPPING owner-unavailable shape.
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for rolling-restart-run4-drain-residual-main
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 9
-- Owner areas: src/control-plane, test/control-plane, test/distributed/harness
+- Changed files: 13
+- Owner areas: src/control-plane, src/rebalancer, test/control-plane, test/distributed/harness, test/rebalancer
 - Categories: runtime, test
-- Action: land or separate 3 owner areas: src/control-plane, test/control-plane, test/distributed/harness
+- Action: split by owner area before the next attempt (13 files)
+- Action: land or separate 5 owner areas: src/control-plane, src/rebalancer, test/control-plane, test/distributed/harness, test/rebalancer
 - Split plan:
   - src/control-plane: 4 file(s)
   - test/control-plane: 3 file(s)
+  - src/rebalancer: 2 file(s)
   - test/distributed/harness: 2 file(s)
+  - test/rebalancer: 2 file(s)
 - Signal: broad-source-scope severity=medium
+- Signal: large-diff-stack severity=medium
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-drain-residual-main** [open] rung 4, attempts 4, metric 3 -> 2 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-drain-residual-main** [parked {exhausted}] rung 5, attempts 5, metric 3 -> 3 — ladder exhausted without metric movement
 
 ## Findings
 - **rolling-restart-run4-drain-residual-main**: Forensics on cert gate stat-gate-20260628T064848Z (3 parallel agents + source verification): all 6 run4-family fails share ONE non-masking root = REPLACE surplus-drain source-removal (STOPPING->REMOVED) not completing within the ~120s budget, because ~30/34 partition leaderships pin on CPU-pegged node 7493b0ab (mean CPU 75-81% on FAILs vs 57-73% on PASS) serializing all drain reconciles on one starved event loop. (a) convergence_timeout x4 (runs 3,4,10,13): one partition stays over-target (voterCount 4 vs 3) 124-174s; run3 witness deadlineMs lapsed 181s before lastObservedAtMs => drain op deadline passes WITHOUT prompt re-drive. (b) replica_operations_in_flight x1 (run7): same drain root via stricter quiescence oracle; 2 REPLACE ops stuck in workflowStep=ACTIVE counted effectiveInFlight forever -- VERIFIED in src: DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP (replica-operation-liveness.js:73-84) has no ACTIVE entry => resolveStepTimeoutMs returns null => isReplicaOperationStale false (607-608). NOTE: ACTIVE-discount would MASK the real drain stall, not fix it. (c) publication_epochs_disagree x1 (run14): node being REPLACE-removed froze pub epoch 5 vs committed 9 for ~4.5min (CL-001 variant-D recurrence) -- REAL staleness but NOT a SAFE-floor breach (hard bars all 0, gate classes it CONVERGED). DISCRIMINATOR is a tail (CPU 73.2% PASS run2 overlaps 74.9% FAIL run10), not a threshold => latency-tail per sealed metric doc, limit-cycle stays refuted. (rules out: Do not build an ACTIVE-step stale-cap as the fix -- it masks the surplus-drain stall the convergence_timeout family also hits. The real lever family = make source-removal drain re-drive promptly on deadline-lapse and/or relieve coordinator-leadership concentration; both must reduce the drain latency tail, not hide it from an oracle.) [test-output/reports/stat-gate-20260628T064848Z.json + per-run reports runs 3/4/7/10/13/14 + agents a5819dc202693b82b,a72a7b8e7f3174d3a,a520a5380813a077a]
@@ -103,12 +107,19 @@
 - **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T185514Z-run3.report.json. Metric: 3 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T185514Z-run3.report.json]
 - **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T185514Z-run3.report.json. Metric: 2 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T185514Z-run3.report.json]
 - **rolling-restart-run4-drain-residual-main**: Post-patch N=3 gate stat-gate-20260629T185514Z is safety-clean and supports the class-quiescence accounting fix, but it does not close run4. Aggregate: staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, classTally CONVERGED=3, missingPublishedCount=0 for all runs, but scenario passRate=1/3. Run1 PASS. Run2 is product-visible acknowledged-write visibility failure (BLOCK_EVIDENCE_INCOMPLETE/attemptErrors: one acknowledged benchmark_events id missing after recovery barrier on node 7493b0ab; publication/priority/hard invariants green). Run3 is product residual convergence_timeout: operation_workflow_owner/workflow_progress with one effective in-flight replica operation, post-rebalance closure open on operation_drain/cdc_projection_visible/no_over_target, and concrete REMOVE 050f54ad-4a4d-489d-8fd9-16ce96d67b21 stuck removing/STOPPING after source owner shutdown. (rules out: Do not count stat-gate-20260629T185514Z as Wilson/statistical closure: only run1 scenario-passed. Do not treat run2 as an invalid oracle sample on current evidence; the final clean read missed an acknowledged id. Do not treat run3 as class-quiescence accounting regression; operation_drain_stalled false blocker is gone and this is a different operation_workflow_owner/source-removal residual.) [test-output/reports/stat-gate-20260629T185514Z.md; test-output/reports/stat-gate-20260629T185514Z.json; test-output/reports/stat-gate-20260629T185514Z-run1.report.json; test-output/reports/stat-gate-20260629T185514Z-run2.report.json; test-output/reports/stat-gate-20260629T185514Z-run3.report.json; subagent:019f14ce-f9e0-79d0-a783-3f2bfd45e664; subagent:019f14ce-dbe1-7e50-82ca-6f0cf4659e9d]
+- **rolling-restart-run4-drain-residual-main**: Deterministic source fix for theory-20260629-stopping-source-removal-reclaim landed locally: priority REMOVE/STOPPING rows are visible to recovery only after the STOPPING dispatch fence, and stale owner-unavailable source removals with sourceState=REMOVAL_IN_FLIGHT fail stale without asserting removal. This directly models run3 operation 050f54ad-4a4d-489d-8fd9-16ce96d67b21; repository guard proves remote REMOVE/PENDING stays excluded. Fresh rolling-restart evidence is still required before claiming scenario movement or Quest closure. (rules out: Do not count this as run4 closure; no post-fix rolling-restart gate has run. Do not complete priority REMOVE/STOPPING on REMOVING source visibility; stale failure is deliberate because it does not claim source retirement. Do not expose pre-dispatch priority REMOVE rows to remote recovery owners.) [solve/changes/rolling-restart-run4-drain-residual/stopping-source-removal-reclaim.diff; npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile-terminal-visibility.test.js; npm test -- test/rebalancer/replica-operation-repository.test.js; npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js; npm test -- test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js; npm run model:contracts; subagent:019f14df-ee0f-74a0-80e3-7129784f46bc]
+- **rolling-restart-run4-drain-residual-main**: Post-final-source subagent verification for the stopping-source-removal-reclaim patch: verifier 019f14df-ee0f-74a0-80e3-7129784f46bc reviewed the final src/rebalancer changes plus the added repository pre-dispatch exclusion guard, found no blocking issues, and confirmed the intended contract: priority REMOVE/STOPPING rows become remotely recoverable only after the STOPPING dispatch fence, stale owner-unavailable REMOVING source-removal drains fail stale without claiming source retirement, available-owner drains are not stolen, and remote REMOVE/PENDING rows remain excluded. (rules out: Do not claim run4 closure from deterministic/source verification alone; a fresh rolling-restart gate is still required. Do not expose remote priority REMOVE rows before STOPPING, and do not complete stale REMOVING source removals without source-retirement evidence.) [subagent:019f14df-ee0f-74a0-80e3-7129784f46bc; solve/changes/rolling-restart-run4-drain-residual/stopping-source-removal-reclaim.diff; npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile-terminal-visibility.test.js; npm test -- test/rebalancer/replica-operation-repository.test.js; npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js; npm test -- test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js; npm run model:contracts]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T194704Z-run1.report.json. Metric: 2 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T194704Z-run1.report.json]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T194704Z-run2.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T194704Z-run2.report.json]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T194704Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T194704Z-run3.report.json]
+- **rolling-restart-run4-drain-residual-main**: Post-patch N=3 gate stat-gate-20260629T194704Z supports theory-20260629-stopping-source-removal-reclaim: all 3 runs are scenario PASS (durations 313184/327931/365611ms), aggregate passRate=1, convergeRate=1, staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, classTally CONVERGED=3, missingPublishedCount=0 for every run, and dominantReasonTally none=3. The old priority REMOVE/removing/STOPPING owner-unavailable source-removal convergence_timeout residual did not recur in this measured gate. This is not Quest closure because the sealed doneWhen requires Wilson-95 LB >= 0.50 over N>=15. (rules out: Do not claim Quest closure from N=3 mechanistic evidence. Do not run a new source edit before preserving this checkpoint. Do not revive the old STOPPING source-removal theory unless a fresh valid report shows the same REMOVE/removing/STOPPING owner-unavailable shape.) [test-output/reports/stat-gate-20260629T194704Z.md; test-output/reports/stat-gate-20260629T194704Z.json; test-output/reports/stat-gate-20260629T194704Z-run1.report.json; test-output/reports/stat-gate-20260629T194704Z-run2.report.json; test-output/reports/stat-gate-20260629T194704Z-run3.report.json; subagent:019f14ec-6a9c-7520-9a00-5bea62df5058; subagent:019f14ec-6b53-7790-a242-aafaa7d1e8a9]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T194704Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T194704Z-run3.report.json]
 
 ## Theories
 - **theory-20260629-pr-service-row-index** [active] system, mechanism priority-recovery snapshot context building has an O(replica_operations x service_rows) target-service scan inside the owner tick; replacing it with a per-snapshot partition-service-row index should reduce event-loop work without changing owner decisions., owner priority_recovery_snapshot_owner, modelGate npm run model:contracts
 - **theory-20260629-pr-service-row-index-frontier** [needs-rerun] frontier, frontier rolling-restart-run4-drain-residual-main, layer ownership, mechanism byte-identical indexed target-service evidence lookup in priority-recovery snapshot owner, owner priority_recovery_snapshot_owner, boundary replica_operation_context_target_service_evidence, modelGate npm run model:contracts
 - **theory-20260629-class-quiescence-drain-row-stale-accounting** [supported] frontier, frontier rolling-restart-run4-drain-residual-main, layer observation, mechanism class-quiescence scalar staleInFlightCount can undercount canonical stale replica-operation drain rows, owner scenario_harness_class_quiescence, boundary replica_operation_drain_accounting, modelGate npm run model:contracts
-- **theory-20260629-stopping-source-removal-reclaim** [active] frontier, frontier rolling-restart-run4-drain-residual-main, layer ownership, mechanism operation_workflow_owner can strand a REMOVE in removing/STOPPING when the source partition service shuts down during rolling restart, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
+- **theory-20260629-stopping-source-removal-reclaim** [supported] frontier, frontier rolling-restart-run4-drain-residual-main, layer ownership, mechanism operation_workflow_owner can strand a REMOVE in removing/STOPPING when the source partition service shuts down during rolling restart, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 
 ## Selected Theories
 - **rolling-restart-run4-drain-residual-main**: theory-20260629-stopping-source-removal-reclaim
@@ -126,6 +137,14 @@
 - **theory-20260629-class-quiescence-drain-row-stale-accounting**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/stat-gate-20260629T185514Z-run2.report.json]
 - **theory-20260629-class-quiescence-drain-row-stale-accounting**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260629T185514Z-run3.report.json]
 - **theory-20260629-class-quiescence-drain-row-stale-accounting**: supported (scenario=failed, theory=supported, movement=moved_boundary) [test-output/reports/stat-gate-20260629T185514Z-run3.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260629T185514Z-run3.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=needs-rerun, theory=supported, movement=deterministic-proof) [solve/changes/rolling-restart-run4-drain-residual/stopping-source-removal-reclaim.diff]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T194704Z-run1.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T194704Z-run1.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T194704Z-run2.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T194704Z-run2.report.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=passed, theory=supported, movement=cleared) [test-output/reports/stat-gate-20260629T194704Z.json]
+- **theory-20260629-stopping-source-removal-reclaim**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T194704Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -134,3 +153,4 @@
 | 2026-06-29T16:16:49.233Z | rolling-restart-run4-drain-residual-main | local-fix | 2 -> 2 | flat | same | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/priority-recovery-target-service-index.diff |
 | 2026-06-29T16:47:33.659Z | rolling-restart-run4-drain-residual-main | widen-scope | 2 -> 1 | progress | same | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/priority-recovery-target-service-index.diff |
 | 2026-06-29T17:53:37.265Z | rolling-restart-run4-drain-residual-main | model | 3 -> 3 | flat | solved | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/convergence-drain-row-stale-accounting.diff |
+| 2026-06-29T19:42:34.457Z | rolling-restart-run4-drain-residual-main | change-approach | 2 -> 2 | flat | narrowed | theory-20260629-stopping-source-removal-reclaim | diff:solve/changes/rolling-restart-run4-drain-residual/stopping-source-removal-reclaim.diff |

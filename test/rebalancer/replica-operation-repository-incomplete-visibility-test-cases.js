@@ -255,6 +255,57 @@ export function registerReplicaOperationRepositoryIncompleteVisibilityTests({
   );
 
   test(
+    'queryCachedIncompleteOperations exposes only dispatched priority ' +
+      'REMOVE rows to remote recovery owners',
+    async (t) => {
+      const pendingRemoveRow = makeRow({
+        operation_id: 'priority-remove-pending-remote-owner',
+        type: OperationType.REMOVE,
+        partition_id: 'replica_operations-p1',
+        entity_id: 'replica_operations-p1',
+        replica_id: 'replica_operations-p1-r4',
+        source_node_id: 'node-remote-owner',
+        target_node_id: 'node-remove-target',
+        workflow_step: WORKFLOW_STEP.PENDING,
+        status: 'pending',
+      });
+      const stoppingRemoveRow = makeRow({
+        operation_id: 'priority-remove-stopping-remote-owner',
+        type: OperationType.REMOVE,
+        partition_id: 'replica_operations-p1',
+        entity_id: 'replica_operations-p1',
+        replica_id: 'replica_operations-p1-r5',
+        source_node_id: 'node-remote-owner',
+        target_node_id: 'node-remove-target',
+        workflow_step: WORKFLOW_STEP.STOPPING,
+        status: 'removing',
+      });
+      const rows = [pendingRemoveRow, stoppingRemoveRow];
+      const repo = createTestRepository({
+        systemTableCache: {
+          get() {
+            return null;
+          },
+          getAll() {
+            return rows;
+          },
+          filter(_tableName, predicate) {
+            return rows.filter(predicate);
+          },
+        },
+      });
+
+      const operations = repo.queryCachedIncompleteOperations();
+
+      t.same(
+        operations.map((operation) => operation.operationId),
+        ['priority-remove-stopping-remote-owner'],
+        'remote recovery owners should see only priority REMOVE rows past the STOPPING dispatch fence',
+      );
+    },
+  );
+
+  test(
     'buildReplicaOperationReadParticipationFailure evaluates owner reads ' +
       'against control-plane recovery readiness',
     async (t) => {
