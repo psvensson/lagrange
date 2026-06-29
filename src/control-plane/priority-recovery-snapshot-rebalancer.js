@@ -53,6 +53,7 @@ import {
   STATUS_ACTIVE,
 } from './priority-recovery-snapshot-contract.js';
 import {readFirstIntegerField, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryTargetServiceRowIndex, selectPriorityRecoveryTargetServiceRowsFromIndex} from './priority-recovery-target-service-row-index.js';
 import {buildPriorityRecoveryReplicaOperationContext, buildPriorityRecoveryReplicaOperationSourceRows, normalizePriorityRecoveryReplicaOperationContextBuildOptions} from './priority-recovery-snapshot-workflow.js';
 
 function buildPriorityRecoveryReplicaOperationContexts(
@@ -76,6 +77,11 @@ function buildPriorityRecoveryReplicaOperationContexts(
       {};
   const byOperationId = {};
   const byPartitionId = {};
+  const targetServiceRowIndex = buildPriorityRecoveryTargetServiceRowIndex(serviceRows);
+  const contextBuildOptions = {
+    ...normalizedOptions,
+    targetServiceRowIndex,
+  };
   for (const replicaOperationRow of buildPriorityRecoveryReplicaOperationSourceRows(
     replicaOperationRows,
     replicaOperationsSummary,
@@ -84,7 +90,7 @@ function buildPriorityRecoveryReplicaOperationContexts(
       replicaOperationRow,
       operationTimelineById,
       serviceRows,
-      normalizedOptions,
+      contextBuildOptions,
     );
     if (!builtContext) {
       continue;
@@ -259,6 +265,102 @@ function resolvePriorityRecoveryTargetServiceRowProgressTimestampMs(serviceRow) 
     PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS;
 }
 
+function buildPriorityRecoveryTargetServiceEvidenceState() {
+  return {
+    hasMatchingTargetServiceRow: false,
+    hasOperationalMatchingTargetServiceRow: false,
+    hasActiveMatchingTargetServiceRow: false,
+    hasTerminalMatchingTargetServiceRow: false,
+    targetServiceProgressAtMs:
+      PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS,
+  };
+}
+
+function resolvePriorityRecoveryTargetServiceCandidateRows(
+  options,
+  operationContext,
+  serviceRows,
+) {
+  return options.targetServiceRowIndex instanceof Map ?
+    selectPriorityRecoveryTargetServiceRowsFromIndex(
+      operationContext,
+      options.targetServiceRowIndex,
+    ) :
+    serviceRows;
+}
+
+function recordPriorityRecoveryTargetServiceEvidenceRow(evidenceState, serviceRow) {
+  evidenceState.hasMatchingTargetServiceRow = true;
+  if (
+    resolvePriorityRecoveryTargetServiceRowTerminalState(serviceRow) ===
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL
+  ) {
+    evidenceState.hasTerminalMatchingTargetServiceRow = true;
+  }
+  const targetServiceRowVisibilityState =
+    resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow);
+  const rowProgressAtMs =
+    isPriorityRecoveryTargetServiceRowProgressing(
+      serviceRow,
+      targetServiceRowVisibilityState,
+    ) ?
+      resolvePriorityRecoveryTargetServiceRowProgressTimestampMs(serviceRow) :
+      PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS;
+  if (Number.isFinite(rowProgressAtMs) && rowProgressAtMs > NUM.ZERO) {
+    evidenceState.targetServiceProgressAtMs = Math.max(
+      evidenceState.targetServiceProgressAtMs,
+      rowProgressAtMs,
+    );
+  }
+  if (
+    targetServiceRowVisibilityState ===
+    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
+  ) {
+    evidenceState.hasOperationalMatchingTargetServiceRow = true;
+    return;
+  }
+  if (
+    targetServiceRowVisibilityState ===
+    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_NON_OPERATIONAL
+  ) {
+    evidenceState.hasActiveMatchingTargetServiceRow = true;
+  }
+}
+
+function resolvePriorityRecoveryTargetServiceEvidenceVisibilityState(
+  evidenceState,
+) {
+  return [
+    {
+      matches: evidenceState.hasOperationalMatchingTargetServiceRow === true,
+      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
+    },
+    {
+      matches: evidenceState.hasActiveMatchingTargetServiceRow === true,
+      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_NON_OPERATIONAL,
+    },
+    {
+      matches: evidenceState.hasMatchingTargetServiceRow === true,
+      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.NON_ACTIVE,
+    },
+    {
+      matches: true,
+      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
+    },
+  ].find((entry) => entry.matches === true).state;
+}
+
+function resolvePriorityRecoveryTargetServiceEvidenceTerminalState(
+  evidenceState,
+) {
+  if (evidenceState.hasMatchingTargetServiceRow !== true) {
+    return PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN;
+  }
+  return evidenceState.hasTerminalMatchingTargetServiceRow === true ?
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL :
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL;
+}
+
 function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
   const operationContext =
     options.operationContext &&
@@ -268,13 +370,13 @@ function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ?
     options.serviceRows :
     [];
-  let hasMatchingTargetServiceRow = false;
-  let hasOperationalMatchingTargetServiceRow = false;
-  let hasActiveMatchingTargetServiceRow = false;
-  let hasTerminalMatchingTargetServiceRow = false;
-  let targetServiceProgressAtMs =
-    PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS;
-  for (const serviceRow of serviceRows) {
+  const candidateServiceRows = resolvePriorityRecoveryTargetServiceCandidateRows(
+    options,
+    operationContext,
+    serviceRows,
+  );
+  const evidenceState = buildPriorityRecoveryTargetServiceEvidenceState();
+  for (const serviceRow of candidateServiceRows) {
     if (
       !doesPriorityRecoveryServiceRowMatchOperationTarget(
         operationContext,
@@ -283,70 +385,18 @@ function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
     ) {
       continue;
     }
-    hasMatchingTargetServiceRow = true;
-    if (
-      resolvePriorityRecoveryTargetServiceRowTerminalState(serviceRow) ===
-      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL
-    ) {
-      hasTerminalMatchingTargetServiceRow = true;
-    }
-    const targetServiceRowVisibilityState =
-      resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow);
-    const rowProgressAtMs =
-      isPriorityRecoveryTargetServiceRowProgressing(
-        serviceRow,
-        targetServiceRowVisibilityState,
-      ) ?
-        resolvePriorityRecoveryTargetServiceRowProgressTimestampMs(serviceRow) :
-        PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS;
-    if (Number.isFinite(rowProgressAtMs) && rowProgressAtMs > NUM.ZERO) {
-      targetServiceProgressAtMs = Math.max(
-        targetServiceProgressAtMs,
-        rowProgressAtMs,
-      );
-    }
-    if (
-      targetServiceRowVisibilityState ===
-      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
-    ) {
-      hasOperationalMatchingTargetServiceRow = true;
-      continue;
-    }
-    if (
-      targetServiceRowVisibilityState ===
-      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_NON_OPERATIONAL
-    ) {
-      hasActiveMatchingTargetServiceRow = true;
-    }
+    recordPriorityRecoveryTargetServiceEvidenceRow(evidenceState, serviceRow);
   }
-  const visibilityState = [
-    {
-      matches: hasOperationalMatchingTargetServiceRow === true,
-      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
-    },
-    {
-      matches: hasActiveMatchingTargetServiceRow === true,
-      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_NON_OPERATIONAL,
-    },
-    {
-      matches: hasMatchingTargetServiceRow === true,
-      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.NON_ACTIVE,
-    },
-    {
-      matches: true,
-      state: PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
-    },
-  ].find((entry) => entry.matches === true).state;
   return Object.freeze({
-    visibilityState,
-    terminalState: hasMatchingTargetServiceRow === true ?
-      hasTerminalMatchingTargetServiceRow === true ?
-        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL :
-        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL :
-      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN,
-    ...(targetServiceProgressAtMs >
+    visibilityState: resolvePriorityRecoveryTargetServiceEvidenceVisibilityState(
+      evidenceState,
+    ),
+    terminalState: resolvePriorityRecoveryTargetServiceEvidenceTerminalState(
+      evidenceState,
+    ),
+    ...(evidenceState.targetServiceProgressAtMs >
       PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS ?
-      {progressAtMs: targetServiceProgressAtMs} :
+      {progressAtMs: evidenceState.targetServiceProgressAtMs} :
       {}),
   });
 }
@@ -481,6 +531,10 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   };
 }
 
+const PRIORITY_RECOVERY_OPERATION_STEP_TERMINAL_STATE = Object.freeze({
+  UNKNOWN: 'operation_step_terminal_unknown',
+});
+
 // Reconcile the two recorded truths about a drain op's progress. A drain op's
 // record-level `workflowStep` column can lag behind its already-terminal timeline
 // (write-through lag, CL-016/CL-035 family): the row still reads `STOPPING` while the
@@ -507,7 +561,7 @@ function resolvePriorityRecoveryOperationStepTerminalState(
       normalizedWorkflowStep,
     )
   ) {
-    return null;
+    return PRIORITY_RECOVERY_OPERATION_STEP_TERMINAL_STATE.UNKNOWN;
   }
   return isTerminalReplicaOperationStep(
     normalizedOperationType,

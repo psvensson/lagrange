@@ -426,6 +426,7 @@ function buildPriorityRecoveryReplicaOperationContext(
   const targetServiceEvidence = buildPriorityRecoveryTargetServiceEvidence({
     operationContext: normalizedReplicaOperation,
     serviceRows,
+    targetServiceRowIndex: options.targetServiceRowIndex,
   });
   const context = {
     operationId,
