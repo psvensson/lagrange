@@ -251,6 +251,85 @@ test('updateStep confirms persisted state only after transaction commit',
     }
   });
 
+test('updateStep normalizes row-shaped steps history before mutating a ' +
+  'committed transition', async (t) => {
+  const coordinator = createMinimalCoordinator();
+  coordinator.initialize();
+  let persistedStepsHistory = null;
+  const originalPersistOperationUpdate =
+    coordinator.repository.persistOperationUpdate
+      .bind(coordinator.repository);
+  coordinator.repository.persistOperationUpdate = async (
+    operationUpdate,
+    options,
+  ) => {
+    persistedStepsHistory = operationUpdate.stepsHistory;
+    return originalPersistOperationUpdate(operationUpdate, options);
+  };
+
+  try {
+    const initialHistory = [{
+      step: WORKFLOW_STEP.PENDING,
+      timestamp: Date.now() - 1,
+    }];
+    const operation = createTestOperation({
+      operationId: 'op-row-shaped-history-transition',
+      status: 'pending',
+      workflowStep: WORKFLOW_STEP.PENDING,
+    });
+    delete operation.stepsHistory;
+    operation.steps_history = JSON.stringify(initialHistory);
+
+    await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+    t.ok(
+      Array.isArray(persistedStepsHistory),
+      'persisted transition should receive normalized stepsHistory',
+    );
+    t.equal(
+      persistedStepsHistory.length,
+      2,
+      'persisted transition should retain row history before the new step',
+    );
+    t.same(
+      persistedStepsHistory[0],
+      initialHistory[0],
+      'persisted transition should preserve row-shaped steps_history',
+    );
+    t.equal(
+      persistedStepsHistory[1]?.step,
+      WORKFLOW_STEP.SENDING,
+      'persisted transition should append the committed step',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'row-shaped operation should still advance after commit',
+    );
+    t.ok(
+      Array.isArray(operation.stepsHistory),
+      'committed mutation should leave canonical stepsHistory on the operation',
+    );
+    t.equal(
+      operation.stepsHistory.length,
+      2,
+      'existing row history should be retained before the new step entry',
+    );
+    t.same(
+      operation.stepsHistory[0],
+      initialHistory[0],
+      'row-shaped steps_history should be preserved',
+    );
+    t.equal(
+      operation.stepsHistory[1]?.step,
+      WORKFLOW_STEP.SENDING,
+      'new committed step should be appended',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('updateStep keeps the committed transition when post-commit ' +
   'confirmation is temporarily unavailable', async (t) => {
   const callOrder = [];

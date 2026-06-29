@@ -41,6 +41,28 @@ const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = new Set([
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 
+function normalizeOperationWorkflowTransitionStepsHistory(operation) {
+  if (Array.isArray(operation?.stepsHistory)) {
+    return operation.stepsHistory;
+  }
+  const rawStepsHistory = operation?.steps_history;
+  if (Array.isArray(rawStepsHistory)) {
+    return rawStepsHistory;
+  }
+  if (
+    typeof rawStepsHistory === TYPEOF.STRING &&
+    rawStepsHistory.length > NUM.ZERO
+  ) {
+    try {
+      const parsedStepsHistory = JSON.parse(rawStepsHistory);
+      return Array.isArray(parsedStepsHistory) ? parsedStepsHistory : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 class OperationWorkflowTransitionOrchestration
   extends OperationWorkflowOwnerExecutionLane {
   async loadAuthoritativeTransitionExecutionSession(sessionId) {
@@ -422,15 +444,15 @@ class OperationWorkflowTransitionOrchestration
     if (readinessSnapshot) {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
     }
+    const currentStepsHistory =
+      normalizeOperationWorkflowTransitionStepsHistory(operation);
     const projectedOperation = {
       ...operation,
       workflowStep: step,
       updatedAt: now,
       status: persistedStatus,
       stepsHistory: [
-        ...(Array.isArray(operation.stepsHistory) ?
-          operation.stepsHistory :
-          []),
+        ...currentStepsHistory,
         stepEntry,
       ],
     };
@@ -441,6 +463,7 @@ class OperationWorkflowTransitionOrchestration
       operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
         Math.max(previousUpdatedAt, now) :
         now;
+      operation.stepsHistory = currentStepsHistory;
       if (step === WORKFLOW_STEP.CREATING) {
         delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
       }
@@ -534,7 +557,7 @@ class OperationWorkflowTransitionOrchestration
     operation.workflowStep = step;
     operation.updatedAt = now;
     operation.status = persistedStatus;
-    operation.stepsHistory.push(stepEntry);
+    operation.stepsHistory = projectedOperation.stepsHistory;
     if (step === WORKFLOW_STEP.CREATING) {
       delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
     }

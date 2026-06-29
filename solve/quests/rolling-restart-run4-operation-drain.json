@@ -1,0 +1,48 @@
+{
+  "id": "rolling-restart-run4-operation-drain",
+  "statement": "Rolling-restart run4 operation drain residual no longer leaves terminal replica_operations_in_flight/effective-in-flight rows after publication and active-gate coverage are otherwise converged, while the inherited run4 safety floor and N>=15 Wilson closure bar remain intact.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-observer-staleness",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "metricDoc": "docs/convergence-donewhen-metric.md",
+    "window": "N >= 15 fixed-code rolling-restart runs for the inherited run4 closure projection",
+    "safetyFloor": "CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource = 0 every run (hard, never relaxed)",
+    "convergenceBar": "Wilson-95 lower bound of scenario-PASS rate >= 0.50",
+    "residualBar": "terminal operation drain evidence no longer reports replica_operations_in_flight or effective in-flight replica-operation rows after publication convergence and active-gate coverage are otherwise satisfied",
+    "closure": "operator-attested statistical bar inherited through parentQuest rolling-restart-run4-drain-residual; legacy scenario-harness consecutive probe remains a liveness signal only"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-operation-drain-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "rolling-restart",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
