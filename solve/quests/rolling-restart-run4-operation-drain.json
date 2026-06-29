@@ -22,7 +22,7 @@
     "probe": "scenario-harness",
     "args": {
       "scenario": "rolling-restart",
-      "consecutive": 3,
+      "consecutive": 15,
       "metric": "priority"
     }
   },
