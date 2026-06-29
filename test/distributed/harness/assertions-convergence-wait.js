@@ -4,6 +4,7 @@ import {normalizeReplicaOperationRecord} from '../../../src/rebalancer/replica-o
 import {ASSERTIONS_CONTROL_SNAPSHOT_EXTRACTION} from './assertions-control-snapshot-extraction.js';
 import {
   buildPostRebalanceClosureSnapshot,
+  buildPostRebalanceReplicaOperationDrainDiagnostics,
   countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
   isPostRebalanceCdcProjectionVisibleSatisfied,
@@ -127,6 +128,102 @@ const FINAL_ADJUDICATION_POLL_INTERVAL_MS = 100;
 const FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT = 0;
 const FINAL_ADJUDICATION_FORCE_REPAIR = true;
 const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
+
+function buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics) {
+  return new Set(
+    (Array.isArray(
+      controlPlaneDiagnostics?.replicaOperations?.inFlightOperationIds,
+    ) ?
+      controlPlaneDiagnostics.replicaOperations.inFlightOperationIds :
+      []
+    )
+      .map((operationId) => String(operationId || '').trim())
+      .filter((operationId) => operationId.length > 0),
+  );
+}
+
+function selectCanonicalReplicaOperationDrainRows(
+  replicaOperationDrainRows,
+  canonicalInFlightOperationIds,
+) {
+  if (canonicalInFlightOperationIds.size === 0) {
+    return replicaOperationDrainRows;
+  }
+  return replicaOperationDrainRows.filter((row) =>
+    canonicalInFlightOperationIds.has(row.operationId),
+  );
+}
+
+function hasCompleteReplicaOperationDrainRowCoverage(
+  replicaOperationDrainRows,
+  canonicalInFlightOperationIds,
+) {
+  if (replicaOperationDrainRows.length === 0) {
+    return false;
+  }
+  if (canonicalInFlightOperationIds.size === 0) {
+    return true;
+  }
+  const coveredOperationIds = new Set(
+    replicaOperationDrainRows
+      .map((row) => String(row.operationId || '').trim())
+      .filter((operationId) => operationId.length > 0),
+  );
+  return [...canonicalInFlightOperationIds].every((operationId) =>
+    coveredOperationIds.has(operationId),
+  );
+}
+
+function buildReplicaOperationDrainDiscountCounts({
+  controlPlaneDiagnostics,
+  operationRows,
+  nowMs,
+  cdcProjectionVisibleSatisfied,
+  criticalSystemTopologyReady,
+  controlPlaneStaleInFlightReplicaOperationCount,
+}) {
+  const canonicalInFlightOperationIds =
+    buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics);
+  const replicaOperationDrainRows = selectCanonicalReplicaOperationDrainRows(
+    buildPostRebalanceReplicaOperationDrainDiagnostics(
+      controlPlaneDiagnostics,
+      operationRows,
+      {
+        nowMs,
+        allowPostPublicationNonBlockingReplicaOperations:
+          cdcProjectionVisibleSatisfied,
+        cdcProjectionVisibleSatisfied,
+        criticalSystemTopologyReady,
+        inFlightOperationIds:
+          controlPlaneDiagnostics?.replicaOperations?.inFlightOperationIds,
+        operationTimelineById:
+          controlPlaneDiagnostics?.replicaOperations?.operationTimelineById,
+      },
+    ),
+    canonicalInFlightOperationIds,
+  );
+  const drainRowCoverageComplete =
+    hasCompleteReplicaOperationDrainRowCoverage(
+      replicaOperationDrainRows,
+      canonicalInFlightOperationIds,
+  );
+  const drainStaleInFlightReplicaOperationCount =
+    replicaOperationDrainRows.filter((row) => row.staleDiscountApplied).length;
+  const drainAdditionalInFlightDiscountCount =
+    replicaOperationDrainRows.filter((row) =>
+      row.additionalInFlightDiscountEligible,
+    ).length;
+
+  return {
+    staleInFlightReplicaOperationCount: drainRowCoverageComplete ?
+      drainStaleInFlightReplicaOperationCount :
+      Math.max(
+        controlPlaneStaleInFlightReplicaOperationCount,
+        drainStaleInFlightReplicaOperationCount,
+      ),
+    additionalInFlightDiscountCount: drainAdditionalInFlightDiscountCount,
+  };
+}
 
 async function queryNodeConsistencyStateViaSql(node) {
   const [nodesResult, partResult, svcResult] = await Promise.all([
@@ -674,7 +771,7 @@ async function waitForConvergence(nodes, options = {}) {
     const hasOverTarget = [...latestCounts.values()].some(
       (c) => c > targetVoterCount,
     );
-    const staleInFlightReplicaOperationCount = Number.isFinite(
+    const controlPlaneStaleInFlightReplicaOperationCount = Number.isFinite(
       latestControlPlaneDiagnostics?.replicaOperations?.staleInFlightCount,
     ) ?
       Math.max(
@@ -691,8 +788,6 @@ async function waitForConvergence(nodes, options = {}) {
       );
     const membershipFreezeActive =
       isMembershipFreezeActive(latestControlPlaneDiagnostics);
-    latestStaleInFlightReplicaOperationCount =
-      staleInFlightReplicaOperationCount;
     latestCacheVisibleSatisfiedPriorityRecoveryOperationCount =
       cacheVisibleSatisfiedPriorityRecoveryOperationCount;
     const preliminaryCdcProjectionVisibleSatisfied =
@@ -702,25 +797,27 @@ async function waitForConvergence(nodes, options = {}) {
         voterCounts: latestCounts,
         targetVoterCount,
         inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
-        staleInFlightReplicaOperationCount,
+        staleInFlightReplicaOperationCount:
+          controlPlaneStaleInFlightReplicaOperationCount,
         cacheVisibleSatisfiedPriorityRecoveryOperationCount,
         ignoreStaleInFlightReplicaOperations,
         publishedActiveNodeIds: latestPublishedActiveNodeIds,
         projectedActiveNodeIds: latestProjectedActiveNodeIds,
         controlPlaneDiagnostics: latestControlPlaneDiagnostics,
       });
-    const additionalInFlightDiscountCount =
-      countAdditionalPostRebalanceReplicaOperationDiscounts(
-        latestControlPlaneDiagnostics,
-        latestOperationRows,
-        {
-          nowMs: now,
-          allowPostPublicationNonBlockingReplicaOperations:
-            preliminaryCdcProjectionVisibleSatisfied,
-          cdcProjectionVisibleSatisfied: preliminaryCdcProjectionVisibleSatisfied,
-          criticalSystemTopologyReady: options.criticalSystemTopologyReady === true,
-        },
-      );
+    const {
+      staleInFlightReplicaOperationCount,
+      additionalInFlightDiscountCount,
+    } = buildReplicaOperationDrainDiscountCounts({
+      controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+      operationRows: latestOperationRows,
+      nowMs: now,
+      cdcProjectionVisibleSatisfied: preliminaryCdcProjectionVisibleSatisfied,
+      criticalSystemTopologyReady: options.criticalSystemTopologyReady === true,
+      controlPlaneStaleInFlightReplicaOperationCount,
+    });
+    latestStaleInFlightReplicaOperationCount =
+      staleInFlightReplicaOperationCount;
     latestAdditionalInFlightDiscountCount = additionalInFlightDiscountCount;
     const staleInFlightDiscountCount = Math.max(
       0,

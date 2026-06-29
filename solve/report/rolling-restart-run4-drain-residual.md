@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 3
+**Attempts:** 4
 
 ## Links
 - roadmap row: RM-0.1-fs-rolling-restart
@@ -18,30 +18,33 @@
 - Frontier: rolling-restart-run4-drain-residual-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: convergence_timeout
+- Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: same blocker remains: convergence_timeout
-- Latest evidence: test-output/reports/stat-gate-20260629T162344Z-run3.report.json
-- Selected theory: theory-20260629-pr-service-row-index-frontier
-- Next move: continue supervised step for rolling-restart-run4-drain-residual-main
-- No longer current: Do not treat missing legacy satisfiedInvariant labels as a live regression when the current report fields show publication ready, priority spread satisfied, and zero invariant breaches; continue from the operation workflow progress residual instead.; Do not treat the priority-recovery target-service-row index checkpoint as unverified or blocked by the prior decision-boundary line-shift audit finding.
+- Movement: solved: convergence_timeout -> PASS
+- Latest evidence: test-output/reports/stat-gate-20260629T174518Z-run1.report.json
+- Selected theory: theory-20260629-pr-service-row-index-frontier (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for rolling-restart-run4-drain-residual-main
+- No longer current: convergence_timeout; Do not treat the restored countAdditionalPostRebalanceReplicaOperationDiscounts re-export as part of wait-loop discount accounting; it is preserved only as the existing harness public API while waitForConvergence uses filtered drain rows.
 
 ## Continuation
 - Status: allowed
-- Next action: continue rolling-restart-run4-drain-residual-main with modelRef or modelNotApplicable evidence
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 7
-- Owner areas: src/control-plane, test/control-plane
+- Changed files: 9
+- Owner areas: src/control-plane, test/control-plane, test/distributed/harness
 - Categories: runtime, test
+- Action: land or separate 3 owner areas: src/control-plane, test/control-plane, test/distributed/harness
 - Split plan:
   - src/control-plane: 4 file(s)
   - test/control-plane: 3 file(s)
-- Signals: none
+  - test/distributed/harness: 2 file(s)
+- Signal: broad-source-scope severity=medium
+- Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-drain-residual-main** [open] rung 3, attempts 3, metric 3 -> 1 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-drain-residual-main** [solved] rung 4, attempts 4, metric 3 -> 3 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-drain-residual-main**: Forensics on cert gate stat-gate-20260628T064848Z (3 parallel agents + source verification): all 6 run4-family fails share ONE non-masking root = REPLACE surplus-drain source-removal (STOPPING->REMOVED) not completing within the ~120s budget, because ~30/34 partition leaderships pin on CPU-pegged node 7493b0ab (mean CPU 75-81% on FAILs vs 57-73% on PASS) serializing all drain reconciles on one starved event loop. (a) convergence_timeout x4 (runs 3,4,10,13): one partition stays over-target (voterCount 4 vs 3) 124-174s; run3 witness deadlineMs lapsed 181s before lastObservedAtMs => drain op deadline passes WITHOUT prompt re-drive. (b) replica_operations_in_flight x1 (run7): same drain root via stricter quiescence oracle; 2 REPLACE ops stuck in workflowStep=ACTIVE counted effectiveInFlight forever -- VERIFIED in src: DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP (replica-operation-liveness.js:73-84) has no ACTIVE entry => resolveStepTimeoutMs returns null => isReplicaOperationStale false (607-608). NOTE: ACTIVE-discount would MASK the real drain stall, not fix it. (c) publication_epochs_disagree x1 (run14): node being REPLACE-removed froze pub epoch 5 vs committed 9 for ~4.5min (CL-001 variant-D recurrence) -- REAL staleness but NOT a SAFE-floor breach (hard bars all 0, gate classes it CONVERGED). DISCRIMINATOR is a tail (CPU 73.2% PASS run2 overlaps 74.9% FAIL run10), not a threshold => latency-tail per sealed metric doc, limit-cycle stays refuted. (rules out: Do not build an ACTIVE-step stale-cap as the fix -- it masks the surplus-drain stall the convergence_timeout family also hits. The real lever family = make source-removal drain re-drive promptly on deadline-lapse and/or relieve coordinator-leadership concentration; both must reduce the drain latency tail, not hide it from an oracle.) [test-output/reports/stat-gate-20260628T064848Z.json + per-run reports runs 3/4/7/10/13/14 + agents a5819dc202693b82b,a72a7b8e7f3174d3a,a520a5380813a077a]
@@ -84,10 +87,13 @@
 - **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T162344Z-run3.report.json. Metric: 2 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T162344Z-run3.report.json]
 - **rolling-restart-run4-drain-residual-main**: Fresh N=3 gate stat-gate-20260629T162344Z restores the regression-restore labels by concrete report fields even though the scenario-harness satisfiedInvariants projection only emits compact labels: aggregate gate class is 3/3 CONVERGED with staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0; run3 has publicationStatus=PUBLISHED, missingPublishedCount=0, publicationRecoveryGate.ready=true, priorityPartitionSummary.satisfied=true with largestSpreadGap=0, and invariantBreaches hardCount=0/softCount=0. The remaining metric-1 residual is operation_workflow_owner workflow_progress/source_removal, not abandoned priority bootstrap, readyz closure, or publication/priority-spread convergence. (rules out: Do not treat missing legacy satisfiedInvariant labels as a live regression when the current report fields show publication ready, priority spread satisfied, and zero invariant breaches; continue from the operation workflow progress residual instead.) [test-output/reports/stat-gate-20260629T162344Z.md; test-output/reports/stat-gate-20260629T162344Z.json; test-output/reports/stat-gate-20260629T162344Z-run3.report.json]
 - **rolling-restart-run4-drain-residual-main**: Final source-change verifier 019f1423-153e-7bc0-a98d-b2a6196ebf96 found no blocking findings after the decision-boundary audit fix: the regenerated diff artifact is byte-identical to the live source/test diff, the target-service-row index is still built once per snapshot and threaded into target-service evidence, full-scan fallback and matcher authority remain intact, serialized equality and engagement tests cover the behavior, and the raw null terminal-state sentinel was replaced by an explicit UNKNOWN state. (rules out: Do not treat the priority-recovery target-service-row index checkpoint as unverified or blocked by the prior decision-boundary line-shift audit finding.) [subagent:019f1423-153e-7bc0-a98d-b2a6196ebf96; solve/changes/rolling-restart-run4-drain-residual/priority-recovery-target-service-index.diff]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T174518Z-run1.report.json. Metric: 1 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T174518Z-run1.report.json]
+- **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T174518Z-run1.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T174518Z-run1.report.json]
+- **rolling-restart-run4-drain-residual-main**: Final source-change verifier 019f146b-a23f-7bf3-bc4d-c61d6a2ae9d5 found no blocking findings for the convergence drain-row stale accounting patch: waitForConvergence uses filtered drain diagnostic rows for stale and additional discount counts, canonical coverage is exact by normalized operation id, incomplete canonical row coverage falls back only to summary stale count, noncanonical additional rows are not counted, the public countAdditionalPostRebalanceReplicaOperationDiscounts re-export remains available for harness consumers, and hard no-over-target enforcement is unchanged. (rules out: Do not treat the restored countAdditionalPostRebalanceReplicaOperationDiscounts re-export as part of wait-loop discount accounting; it is preserved only as the existing harness public API while waitForConvergence uses filtered drain rows.) [subagent:019f146b-a23f-7bf3-bc4d-c61d6a2ae9d5; solve/changes/rolling-restart-run4-drain-residual/convergence-drain-row-stale-accounting.diff; test-output/reports/stat-gate-20260629T174518Z-run1.report.json]
 
 ## Theories
 - **theory-20260629-pr-service-row-index** [active] system, mechanism priority-recovery snapshot context building has an O(replica_operations x service_rows) target-service scan inside the owner tick; replacing it with a per-snapshot partition-service-row index should reduce event-loop work without changing owner decisions., owner priority_recovery_snapshot_owner, modelGate npm run model:contracts
-- **theory-20260629-pr-service-row-index-frontier** [supported] frontier, frontier rolling-restart-run4-drain-residual-main, layer ownership, mechanism byte-identical indexed target-service evidence lookup in priority-recovery snapshot owner, owner priority_recovery_snapshot_owner, boundary replica_operation_context_target_service_evidence, modelGate npm run model:contracts
+- **theory-20260629-pr-service-row-index-frontier** [falsified] frontier, frontier rolling-restart-run4-drain-residual-main, layer ownership, mechanism byte-identical indexed target-service evidence lookup in priority-recovery snapshot owner, owner priority_recovery_snapshot_owner, boundary replica_operation_context_target_service_evidence, modelGate npm run model:contracts
 
 ## Selected Theories
 - **rolling-restart-run4-drain-residual-main**: theory-20260629-pr-service-row-index-frontier
@@ -96,6 +102,8 @@
 - **theory-20260629-pr-service-row-index-frontier**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/stat-gate-20260629T152542Z-run3.report.json]
 - **theory-20260629-pr-service-row-index-frontier**: supported (scenario=improved, theory=supported, movement=same) [test-output/reports/stat-gate-20260629T162344Z-run3.report.json]
 - **theory-20260629-pr-service-row-index-frontier**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/stat-gate-20260629T162344Z-run3.report.json]
+- **theory-20260629-pr-service-row-index-frontier**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T174518Z-run1.report.json]
+- **theory-20260629-pr-service-row-index-frontier**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/stat-gate-20260629T174518Z-run1.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -103,3 +111,4 @@
 | 2026-06-29T08:11:11.223Z | rolling-restart-run4-drain-residual-main | observe | 3 -> 3 | flat | solved |  | diff:solve/changes/rolling-restart-run4-drain-residual/attempt-1-live-raft-leadership.diff |
 | 2026-06-29T16:16:49.233Z | rolling-restart-run4-drain-residual-main | local-fix | 2 -> 2 | flat | same | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/priority-recovery-target-service-index.diff |
 | 2026-06-29T16:47:33.659Z | rolling-restart-run4-drain-residual-main | widen-scope | 2 -> 1 | progress | same | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/priority-recovery-target-service-index.diff |
+| 2026-06-29T17:53:37.265Z | rolling-restart-run4-drain-residual-main | model | 3 -> 3 | flat | solved | theory-20260629-pr-service-row-index-frontier | diff:solve/changes/rolling-restart-run4-drain-residual/convergence-drain-row-stale-accounting.diff |

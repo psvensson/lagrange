@@ -573,3 +573,290 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
     assert.strictEqual(typeof result.settledAfterMs, 'number');
     assert.ok(result.settledAfterMs >= 0);
   });
+
+test('waitForConvergence — uses drain-row stale classification when control-plane summary undercounts',
+  async () => {
+    const node = {
+      id: 'mock-drain-row-stale-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId: 'mock-drain-row-stale-node',
+          partitionIds: ['p1'],
+          servicesRows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address: 'mock-drain-row-stale-node/p1/r0',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-b/p1/r1',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-c/p1/r2',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-d/p1/r3',
+              partition_id: 'p1',
+            },
+          ],
+          operationRows: [
+            {
+              operation_id: 'op-stale-syncing-undercounted',
+              type: 'REPLACE',
+              partition_id: 'p1',
+              source_node_id: 'node-a',
+              target_node_id: 'node-b',
+              replica_id: 'p1-r3',
+              status: 'syncing',
+              workflow_step: 'SYNCING',
+              updated_at: Date.now() - 120000,
+            },
+          ],
+          controlPlaneDiagnostics: {
+            replicaOperations: {
+              staleInFlightCount: 0,
+              inFlightOperationIds: ['op-stale-syncing-undercounted'],
+            },
+          },
+        })],
+      }),
+    };
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
+test('waitForConvergence — does not use stale drain rows outside canonical in-flight ids',
+  async () => {
+    const snapshot = buildControlSnapshotRecord({
+      nodeId: 'mock-canonical-inflight-node',
+      partitionIds: ['p1'],
+      servicesRows: [
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'leader',
+          address: 'mock-canonical-inflight-node/p1/r0',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-b/p1/r1',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-c/p1/r2',
+          partition_id: 'p1',
+        },
+      ],
+      operationRows: [
+        {
+          operation_id: 'op-stale-row-not-canonical',
+          type: 'REPLACE',
+          partition_id: 'p1',
+          source_node_id: 'node-a',
+          target_node_id: 'node-b',
+          replica_id: 'p1-r3',
+          status: 'syncing',
+          workflow_step: 'SYNCING',
+          updated_at: Date.now() - 120000,
+        },
+      ],
+      controlPlaneDiagnostics: {
+        replicaOperations: {
+          staleInFlightCount: 0,
+          inFlightOperationIds: ['op-canonical-missing-row'],
+        },
+      },
+    });
+    snapshot.replicaOperations.inFlightCount = 1;
+
+    const node = {
+      id: 'mock-canonical-inflight-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({rows: [snapshot]}),
+    };
+
+    await assert.rejects(
+      waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+        ignoreStaleInFlightReplicaOperations: true,
+      }),
+      /Convergence/,
+    );
+  });
+
+test('waitForConvergence — falls back to summary stale count when canonical drain row is missing',
+  async () => {
+    const snapshot = buildControlSnapshotRecord({
+      nodeId: 'mock-canonical-summary-fallback-node',
+      partitionIds: ['p1'],
+      servicesRows: [
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'leader',
+          address: 'mock-canonical-summary-fallback-node/p1/r0',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-b/p1/r1',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-c/p1/r2',
+          partition_id: 'p1',
+        },
+      ],
+      operationRows: [],
+      controlPlaneDiagnostics: {
+        replicaOperations: {
+          staleInFlightCount: 1,
+          inFlightOperationIds: ['op-canonical-missing-row'],
+        },
+      },
+    });
+    snapshot.replicaOperations.inFlightCount = 1;
+
+    const node = {
+      id: 'mock-canonical-summary-fallback-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({rows: [snapshot]}),
+    };
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
+test('waitForConvergence — does not use noncanonical additional drain discounts',
+  async () => {
+    const snapshot = buildControlSnapshotRecord({
+      nodeId: 'mock-noncanonical-additional-discount-node',
+      partitionIds: ['p1'],
+      servicesRows: [
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'leader',
+          address: 'mock-noncanonical-additional-discount-node/p1/r0',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-b/p1/r1',
+          partition_id: 'p1',
+        },
+        {
+          service_type: 'partition',
+          status: 'ACTIVE',
+          raft_role: 'follower',
+          address: 'node-c/p1/r2',
+          partition_id: 'p1',
+        },
+      ],
+      operationRows: [
+        {
+          operation_id: 'op-noncanonical-priority-recovery',
+          type: 'REPLACE',
+          partition_id: 'p1',
+          source_node_id: 'node-a',
+          target_node_id: 'node-d',
+          replica_id: 'p1-r3',
+          status: 'syncing',
+          workflow_step: 'SYNCING',
+          updated_at: Date.now() - 1000,
+        },
+      ],
+      controlPlaneDiagnostics: {
+        replicaOperations: {
+          staleInFlightCount: 0,
+          inFlightOperationIds: ['op-canonical-missing-row'],
+        },
+        publicationConvergence: {
+          priorityRecoveryClosureWitness: {
+            state: 'closure_satisfied_fresh',
+            prioritySpreadPending: false,
+            publicationRefreshRequired: false,
+            blockedPartitionIds: [],
+            blockedPartitionCount: 0,
+            unresolvedSemanticStateIds: [],
+            unresolvedSemanticStateCount: 0,
+          },
+          priorityRecoveryPartitionIdsBySemanticState: {
+            spread_satisfied_in_flight: ['p1'],
+          },
+          priorityRecoveryPartitionSemanticStateHistory: [{
+            partitionId: 'p1',
+            semanticStateIds: ['spread_satisfied_in_flight'],
+          }],
+        },
+      },
+    });
+    snapshot.replicaOperations.inFlightCount = 1;
+
+    const node = {
+      id: 'mock-noncanonical-additional-discount-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({rows: [snapshot]}),
+    };
+
+    await assert.rejects(
+      waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+        ignoreStaleInFlightReplicaOperations: true,
+        criticalSystemTopologyReady: true,
+      }),
+      /Convergence/,
+    );
+  });
