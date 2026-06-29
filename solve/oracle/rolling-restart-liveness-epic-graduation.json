@@ -1,0 +1,28 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "solved",
+  "note": "Lower-is-better = unmet epic graduation record criteria.",
+  "evidence": {
+    "epic": "solve/epics/rolling-restart-liveness-observatory.md",
+    "emulationQuest": "solve/report/rolling-restart-liveness-emulation.md",
+    "fullLogReplayQuest": "solve/report/rolling-restart-liveness-log-replay.md",
+    "downstreamWitnessQuest": "solve/report/rolling-restart-liveness-downstream-witness.md"
+  },
+  "workstreams": {
+    "epic-status-graduated": true,
+    "solved-quest-chain-recorded": true,
+    "non-product-stability-caveat-recorded": true
+  },
+  "observed": {
+    "status": "graduated",
+    "graduatesTo": "topology-convergence-hardening",
+    "quests": [
+      "rolling-restart-liveness-emulation",
+      "rolling-restart-liveness-log-replay",
+      "rolling-restart-liveness-downstream-witness"
+    ],
+    "nonClaim": "rolling-restart-run4-drain-residual remains separate; product statistical stability is not closed by this docs Quest."
+  }
+}

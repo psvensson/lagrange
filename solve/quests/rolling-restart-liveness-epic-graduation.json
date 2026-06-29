@@ -1,0 +1,51 @@
+{
+  "id": "rolling-restart-liveness-epic-graduation",
+  "statement": "The rolling-restart-liveness-observatory workflow planning epic is marked graduated and records the solved liveness-emulation, full-log replay, and downstream-witness Quest evidence as its decision trail, without claiming rolling-restart-run4-drain-residual or product stability is closed.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-liveness-downstream-witness",
+    "planDoc": "solve/epics/rolling-restart-liveness-observatory.md"
+  },
+  "doneWhenSealed": {
+    "planDoc": "solve/epics/rolling-restart-liveness-observatory.md",
+    "oracle": "solve/oracle/rolling-restart-liveness-epic-graduation.json",
+    "closure": "The epic planning file records that the observatory work graduated into solved Quest evidence; this Quest is docs/process only and does not close run4 or claim product stability.",
+    "acceptance": [
+      "The epic front matter status is graduated and keeps graduatesTo: topology-convergence-hardening.",
+      "The epic names the solved Quest chain: rolling-restart-liveness-emulation, rolling-restart-liveness-log-replay, and rolling-restart-liveness-downstream-witness.",
+      "The epic records the grounded run1, run4, and run7 liveness conclusions without claiming rolling-restart-run4-drain-residual is solved."
+    ]
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-liveness-epic-graduation.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "epic-graduation-record",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-liveness-epic-graduation.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-product-stability-claim",
+      "statement": "Do not claim rolling-restart-run4-drain-residual or the product statistical gate is solved; this Quest only updates the epic planning record."
+    }
+  ]
+}

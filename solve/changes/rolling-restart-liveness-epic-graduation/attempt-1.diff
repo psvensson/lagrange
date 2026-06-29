@@ -1,0 +1,190 @@
+diff --git a/solve/OVERVIEW.generated.md b/solve/OVERVIEW.generated.md
+index 015f961f..7e8572e8 100644
+--- a/solve/OVERVIEW.generated.md
++++ b/solve/OVERVIEW.generated.md
+@@ -6,14 +6,15 @@ static documents you read; the **Quest log is the only moving part**, and a
+ Quest closes only by the Solver terminal state (SOLVED / EXHAUSTED). This is a
+ projection — act on a record only after reading its file.
+ 
+-## 1 · Roadmap rows in play — 1
++## 1 · Roadmap rows in play — 2
+ _Scope authority (roadmap.md). A row is in play when an epic or quest cites it via links.roadmapRow._
+ 
+-| row                       | epics                                                                                                                                                                                                                                        | quests                         |
+-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+-| RM-0.1-fs-rolling-restart | control-plane-write-wedge-leader-local-establishment, convergence-timeout-leadership-settle, latent-convergence-blocker-census, slow-rejoiner-progress-or-evict, spread-satisfied-in-flight-staleness-unmask, topology-convergence-hardening | rolling-restart-core-stability |
++| row                       | epics                                                                                                                                                                                                                                                                              | quests                                                                                                                                                                                                                              |
++| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
++| RM-0.1-fs-rolling-restart | control-plane-write-wedge-leader-local-establishment, convergence-timeout-leadership-settle, latent-convergence-blocker-census, rolling-restart-liveness-observatory, slow-rejoiner-progress-or-evict, spread-satisfied-in-flight-staleness-unmask, topology-convergence-hardening | rolling-restart-core-stability, rolling-restart-liveness-downstream-witness, rolling-restart-liveness-emulation, rolling-restart-liveness-epic-graduation, rolling-restart-liveness-log-replay, rolling-restart-run4-drain-residual |
++| RM-0.5-cde-helm-chart     | —                                                                                                                                                                                                                                                                                  | lagrange-devops-onboarding                                                                                                                                                                                                          |
+ 
+-## 2 · Epics — 13
++## 2 · Epics — 16
+ _Lightweight planning above specs (solve/epics/) — sharpen intent before a sealed doneWhen exists._
+ 
+ | id                                                   | status             | roadmapRow                | graduatesTo                                          |
+@@ -22,10 +23,13 @@ _Lightweight planning above specs (solve/epics/) — sharpen intent before a sea
+ | continuous-ai-workflow-landscape                     | discussing         | —                         | —                                                    |
+ | control-plane-write-wedge-leader-local-establishment | active             | RM-0.1-fs-rolling-restart | —                                                    |
+ | convergence-timeout-leadership-settle                | discussing         | RM-0.1-fs-rolling-restart | —                                                    |
++| dst-cost-model-circle                                | discussing         | —                         | —                                                    |
+ | hardware-relative-convergence-budget                 | unknown            | —                         | —                                                    |
++| lagrange-devops-onboarding                           | unknown            | —                         | —                                                    |
+ | latent-convergence-blocker-census                    | sharpening         | RM-0.1-fs-rolling-restart | topology-convergence-hardening                       |
+ | membership-single-owner-cutover                      | discussing         | —                         | membership-lifecycle-placement-hard-cutover          |
+ | quest-standing-invariants                            | graduated          | —                         | standing-invariant-closure                           |
++| rolling-restart-liveness-observatory                 | graduated          | RM-0.1-fs-rolling-restart | topology-convergence-hardening                       |
+ | slow-rejoiner-progress-or-evict                      | resolved           | RM-0.1-fs-rolling-restart | convergence-timeout-leadership-settle                |
+ | spread-satisfied-in-flight-staleness-unmask          | landed-default-off | RM-0.1-fs-rolling-restart | control-plane-write-wedge-leader-local-establishment |
+ | steering-doc-clarity                                 | graduated          | —                         | —                                                    |
+@@ -35,55 +39,62 @@ _Lightweight planning above specs (solve/epics/) — sharpen intent before a sea
+ ## 3 · Specs — 10 (1 with open quests)
+ _Detailed planning (solve/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._
+ 
+-| spec                                        | quests (open/total) | quest ids                                                                                                                                                                           |
+-| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+-| activation-cost-aware-placement             | 0/0                 | —                                                                                                                                                                                   |
+-| core-topology-control-plane-rewrite         | 0/5                 | model-bounded-retry-exit-routing, model-owner-trace-validation, model-owner-transition-recoverable-wake, model-projection-freshness-epoch-fencing, model-readiness-handoff-liveness |
+-| developer-experience-remediation            | 0/0                 | —                                                                                                                                                                                   |
+-| hlc-cross-leader-monotonicity               | 0/1                 | hlc-cross-leader-monotonicity                                                                                                                                                       |
+-| membership-lifecycle-placement-hard-cutover | 2/2                 | membership-publication-drain-determinism, rolling-restart-core-stability                                                                                                            |
+-| metastable-convergence-resilience           | 0/0                 | —                                                                                                                                                                                   |
+-| proximity-spray-cdc-propagation-overlay     | 0/1                 | cdc-cache-delete-resurrection                                                                                                                                                       |
+-| raft-logic-migration                        | 0/0                 | —                                                                                                                                                                                   |
+-| spec-led-runtime-modularization             | 0/0                 | —                                                                                                                                                                                   |
+-| standing-invariant-closure                  | 0/0                 | —                                                                                                                                                                                   |
+-
+-## 4 · Quests — 3 open / 21 terminal
++| spec                                        | quests (open/total) | quest ids                                                                                                                                                                                                                                                                     |
++| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
++| activation-cost-aware-placement             | 0/0                 | —                                                                                                                                                                                                                                                                             |
++| core-topology-control-plane-rewrite         | 0/5                 | model-bounded-retry-exit-routing, model-owner-trace-validation, model-owner-transition-recoverable-wake, model-projection-freshness-epoch-fencing, model-readiness-handoff-liveness                                                                                           |
++| developer-experience-remediation            | 0/0                 | —                                                                                                                                                                                                                                                                             |
++| hlc-cross-leader-monotonicity               | 0/1                 | hlc-cross-leader-monotonicity                                                                                                                                                                                                                                                 |
++| membership-lifecycle-placement-hard-cutover | 4/7                 | membership-publication-drain-determinism, rolling-restart-core-stability, rolling-restart-liveness-downstream-witness, rolling-restart-liveness-emulation, rolling-restart-liveness-epic-graduation, rolling-restart-liveness-log-replay, rolling-restart-run4-drain-residual |
++| metastable-convergence-resilience           | 0/0                 | —                                                                                                                                                                                                                                                                             |
++| proximity-spray-cdc-propagation-overlay     | 0/1                 | cdc-cache-delete-resurrection                                                                                                                                                                                                                                                 |
++| raft-logic-migration                        | 0/0                 | —                                                                                                                                                                                                                                                                             |
++| spec-led-runtime-modularization             | 0/0                 | —                                                                                                                                                                                                                                                                             |
++| standing-invariant-closure                  | 0/0                 | —                                                                                                                                                                                                                                                                             |
++
++## 4 · Quests — 7 open / 24 terminal
+ _The only measured layer (solve/quests/). Sealed goal; attempts and findings live in the append-only log._
+ 
+ ### Open
+ 
+ | id                                       | class   | spec                                        | attempts | reopens | osc | closes                 |
+ | ---------------------------------------- | ------- | ------------------------------------------- | -------- | ------- | --- | ---------------------- |
++| dst-cost-model-fidelity-spike            | product | —                                           | 0        | 0       | 0   | —                      |
+ | l-write-membership-deferred-seed         | product | —                                           | 0        | 0       | 0   | —                      |
++| lagrange-devops-onboarding               | product | —                                           | 0        | 0       | 0   | —                      |
+ | membership-publication-drain-determinism | product | membership-lifecycle-placement-hard-cutover | 0        | 0       | 0   | CL-001                 |
+ | rolling-restart-core-stability           | product | membership-lifecycle-placement-hard-cutover | 74       | 13      | 2   | CL-001, CL-004, CL-030 |
++| rolling-restart-liveness-epic-graduation | process | membership-lifecycle-placement-hard-cutover | 0        | 0       | 0   | —                      |
++| rolling-restart-run4-drain-residual      | product | membership-lifecycle-placement-hard-cutover | 0        | 0       | 0   | —                      |
+ 
+ ### Terminal
+ 
+-| id                                        | class   | outcome   | attempts |
+-| ----------------------------------------- | ------- | --------- | -------- |
+-| alloy-execution-guardrails-verifier-fix   | product | solved    | 1        |
+-| altitude-reflection-mechanism             | process | solved    | 1        |
+-| autonomy-and-parallel-defaults            | process | solved    | 0        |
+-| cdc-cache-delete-resurrection             | product | solved    | 1        |
+-| core-system-logic-alloy-adjacency         | product | solved    | 1        |
+-| core-system-logic-model-adjacency         | product | solved    | 1        |
+-| hlc-cross-leader-monotonicity             | product | solved    | 1        |
+-| legacy-work-tracker-removal               | product | solved    | 1        |
+-| model-bounded-retry-exit-routing          | product | solved    | 1        |
+-| model-owner-trace-validation              | product | solved    | 1        |
+-| model-owner-transition-recoverable-wake   | product | solved    | 1        |
+-| model-projection-freshness-epoch-fencing  | product | solved    | 1        |
+-| model-readiness-handoff-liveness          | product | solved    | 1        |
+-| non-docker-validation-green               | product | exhausted | 0        |
+-| quest-git-handoff-requirement             | product | solved    | 1        |
+-| quest-model-guidance-theory-use           | product | solved    | 1        |
+-| quest-source-change-subagent-verification | product | solved    | 1        |
+-| quest-system-continuation-gates           | process | solved    | 1        |
+-| quest-workflow-signal-quality             | process | solved    | 1        |
+-| steering-doc-clarity                      | process | solved    | 0        |
+-| workflow-linking-and-memory-loop          | process | solved    | 0        |
++| id                                          | class   | outcome   | attempts |
++| ------------------------------------------- | ------- | --------- | -------- |
++| alloy-execution-guardrails-verifier-fix     | product | solved    | 1        |
++| altitude-reflection-mechanism               | process | solved    | 1        |
++| autonomy-and-parallel-defaults              | process | solved    | 0        |
++| cdc-cache-delete-resurrection               | product | solved    | 1        |
++| core-system-logic-alloy-adjacency           | product | solved    | 1        |
++| core-system-logic-model-adjacency           | product | solved    | 1        |
++| hlc-cross-leader-monotonicity               | product | solved    | 1        |
++| legacy-work-tracker-removal                 | product | solved    | 1        |
++| model-bounded-retry-exit-routing            | product | solved    | 1        |
++| model-owner-trace-validation                | product | solved    | 1        |
++| model-owner-transition-recoverable-wake     | product | solved    | 1        |
++| model-projection-freshness-epoch-fencing    | product | solved    | 1        |
++| model-readiness-handoff-liveness            | product | solved    | 1        |
++| non-docker-validation-green                 | product | exhausted | 0        |
++| quest-git-handoff-requirement               | product | solved    | 1        |
++| quest-model-guidance-theory-use             | product | solved    | 1        |
++| quest-source-change-subagent-verification   | product | solved    | 1        |
++| quest-system-continuation-gates             | process | solved    | 1        |
++| quest-workflow-signal-quality               | process | solved    | 1        |
++| rolling-restart-liveness-downstream-witness | process | solved    | 1        |
++| rolling-restart-liveness-emulation          | process | solved    | 1        |
++| rolling-restart-liveness-log-replay         | process | solved    | 1        |
++| steering-doc-clarity                        | process | solved    | 0        |
++| workflow-linking-and-memory-loop            | process | solved    | 0        |
+ 
+ ## 5 · Closure frontier — 15 active of 42
+ _Cross-quest invariant tracking (closure-ledger/CL-###), grouped by subsystem. Quests claim these via links.closesCL._
+diff --git a/solve/epics/rolling-restart-liveness-observatory.md b/solve/epics/rolling-restart-liveness-observatory.md
+index d268ec53..f8461aba 100644
+--- a/solve/epics/rolling-restart-liveness-observatory.md
++++ b/solve/epics/rolling-restart-liveness-observatory.md
+@@ -1,7 +1,7 @@
+ ---
+ id: rolling-restart-liveness-observatory
+ roadmapRow: RM-0.1-fs-rolling-restart
+-status: sharpening
++status: graduated
+ graduatesTo: topology-convergence-hardening
+ ---
+ 
+@@ -59,13 +59,24 @@ stuck or insufficient-evidence verdict.
+ Every verdict should include the owner, boundary, enabled action, last progress
+ timestamp, queue state, publication delta, and evidence path.
+ 
+-## Active Quest
++## Graduated Quest Chain
+ 
+-- `rolling-restart-liveness-emulation` - implement and prove the
+-  classifier/emulator with fixtures for the latest `publication_missing_active_node`
+-  stall and at least one known drain/in-flight stall.
++This epic graduated into solved Quest evidence:
+ 
+-This Quest does not mutate the sealed doneWhen of
++- `rolling-restart-liveness-emulation` - introduced the
++  `analyze:rolling-restart-liveness` classifier/emulator, six-way verdict
++  taxonomy, and deterministic fixtures for publication liveness and a known
++  drain/in-flight stall.
++- `rolling-restart-liveness-log-replay` - linked full per-node logs into the
++  analyzer so sparse playback absence is not treated as proof; the latest
++  `stat-gate-20260629T045155Z-run1` sample classifies as
++  `stuck_executed_no_visibility` from complete full-log evidence.
++- `rolling-restart-liveness-downstream-witness` - enriched
++  `stuck_downstream_workflow_progress` verdicts with structured downstream
++  workflow witnesses; run4 names the operation/partition/queue-pressure state,
++  and run7 preserves `replica_operations_in_flight` as a blocker.
++
++The Quest chain does not mutate the sealed doneWhen of
+ `rolling-restart-run4-drain-residual`, does not close any product stability claim,
+ and does not replace the statistical gate. It creates the below-gate success
+ model used before the next expensive certification run.
+@@ -132,3 +143,7 @@ Consult or link these before implementation:
+   efficiency to success metrics and liveness classification. Subagent review
+   tightened the positive verdict to require observed post-action progress and
+   recommended the six-way taxonomy above.
++- 2026-06-29 - Graduated after the solved Quest chain produced the replayable
++  liveness verdict surface: run1 is grounded as `stuck_executed_no_visibility`,
++  run4/run7 downstream stalls carry workflow witnesses, and
++  `replica_operations_in_flight` remains a blocker rather than success.

@@ -1,7 +1,7 @@
 ---
 id: rolling-restart-liveness-observatory
 roadmapRow: RM-0.1-fs-rolling-restart
-status: sharpening
+status: graduated
 graduatesTo: topology-convergence-hardening
 ---
 
@@ -59,13 +59,24 @@ stuck or insufficient-evidence verdict.
 Every verdict should include the owner, boundary, enabled action, last progress
 timestamp, queue state, publication delta, and evidence path.
 
-## Active Quest
+## Graduated Quest Chain
 
-- `rolling-restart-liveness-emulation` - implement and prove the
-  classifier/emulator with fixtures for the latest `publication_missing_active_node`
-  stall and at least one known drain/in-flight stall.
+This epic graduated into solved Quest evidence:
 
-This Quest does not mutate the sealed doneWhen of
+- `rolling-restart-liveness-emulation` - introduced the
+  `analyze:rolling-restart-liveness` classifier/emulator, six-way verdict
+  taxonomy, and deterministic fixtures for publication liveness and a known
+  drain/in-flight stall.
+- `rolling-restart-liveness-log-replay` - linked full per-node logs into the
+  analyzer so sparse playback absence is not treated as proof; the latest
+  `stat-gate-20260629T045155Z-run1` sample classifies as
+  `stuck_executed_no_visibility` from complete full-log evidence.
+- `rolling-restart-liveness-downstream-witness` - enriched
+  `stuck_downstream_workflow_progress` verdicts with structured downstream
+  workflow witnesses; run4 names the operation/partition/queue-pressure state,
+  and run7 preserves `replica_operations_in_flight` as a blocker.
+
+The Quest chain does not mutate the sealed doneWhen of
 `rolling-restart-run4-drain-residual`, does not close any product stability claim,
 and does not replace the statistical gate. It creates the below-gate success
 model used before the next expensive certification run.
@@ -132,3 +143,7 @@ Consult or link these before implementation:
   efficiency to success metrics and liveness classification. Subagent review
   tightened the positive verdict to require observed post-action progress and
   recommended the six-way taxonomy above.
+- 2026-06-29 - Graduated after the solved Quest chain produced the replayable
+  liveness verdict surface: run1 is grounded as `stuck_executed_no_visibility`,
+  run4/run7 downstream stalls carry workflow witnesses, and
+  `replica_operations_in_flight` remains a blocker rather than success.
