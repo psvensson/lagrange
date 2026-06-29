@@ -7,7 +7,11 @@ import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
 import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
-import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+import {
+  normalizeControlPlanePublicationRow,
+  readInteger,
+  readLowerText,
+} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
 import {
   buildPublicationOwnerStreamState,
@@ -287,6 +291,57 @@ class MembershipPublicationCoordinatorReads {
   getLatestPublicationForNodeSync(nodeId, options = {}) {
     const latestPublicationRow = this.getLatestPublicationRowSync(options);
     return publicationRowIncludesNode(latestPublicationRow, nodeId) ? latestPublicationRow : null;
+  }
+
+  // Saturation-relief (rolling-restart drain residual): the readiness planning
+  // memo's per-tick epoch-staleness recheck
+  // (isMemoizedMembershipPublicationPlanningProjectionEpochStale) needs only the
+  // (epoch, status) of the highest-epoch membership publication that includes the
+  // node — yet getLatestPublicationForNodeSync re-normalizes EVERY publications
+  // cache row (JSON.parse of the array/object columns) on every routing call. The
+  // V8 profiler pinned normalizeControlPlanePublicationRow as a top self-time
+  // frame on the CPU-pegged rejoiner. This probe selects the winning row by CHEAP
+  // scalar reads (kind + epoch, the SAME readLowerText/readInteger coercion the
+  // full normalize uses) and full-normalizes ONLY that one row — byte-identical
+  // (epoch, status, node-inclusion) to getLatestPublicationForNodeSync, but N→1
+  // normalizes. Returns the bare {publicationEpoch, status} the recheck consumes,
+  // or null when no highest-epoch membership row includes the node.
+  getLatestMembershipPublicationEpochStatusForNodeSync(nodeId, options = {}) {
+    const preloadedRows = Array.isArray(options.publicationRows) ? options.publicationRows : null;
+    const publicationRows =
+      preloadedRows ||
+      (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
+        []);
+    let winningRow = null;
+    let winningEpochSortValue = -Infinity;
+    for (const row of publicationRows) {
+      // Mirror the normalized filter (publicationKind === MEMBERSHIP_PUBLICATION_KIND)
+      // and sort key ((publicationEpoch || 0) desc, stable → first row wins ties)
+      // using only scalar coercion — no JSON.parse of the array/object columns.
+      const publicationKind = readLowerText(row?.publication_kind, row?.publicationKind);
+      if (publicationKind !== MEMBERSHIP_PUBLICATION_KIND) {
+        continue;
+      }
+      const epochSortValue =
+        readInteger(row?.publication_epoch, row?.publicationEpoch) || NUM.ZERO;
+      if (epochSortValue > winningEpochSortValue) {
+        winningEpochSortValue = epochSortValue;
+        winningRow = row;
+      }
+    }
+    if (!winningRow) {
+      return null;
+    }
+    // Full-normalize ONLY the winner to reuse exact inclusion + status semantics.
+    const normalizedWinner = normalizeControlPlanePublicationRow(winningRow);
+    if (!publicationRowIncludesNode(normalizedWinner, nodeId)) {
+      return null;
+    }
+    return {
+      publicationEpoch: normalizedWinner.publicationEpoch,
+      status: normalizedWinner.status,
+    };
   }
 
   async getAcknowledgementCandidateForNode(nodeId, options = {}) {

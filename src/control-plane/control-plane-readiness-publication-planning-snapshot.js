@@ -226,13 +226,27 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     cachedProjection,
   ) {
     const service = this.membershipPublicationService;
-    if (
-      !service ||
-      typeof service.getLatestPublicationForNodeSync !== TYPEOF.FUNCTION
-    ) {
+    if (!service) {
       return false;
     }
-    const latestPub = service.getLatestPublicationForNodeSync(nodeId);
+    // Prefer the cheap (epoch, status) probe that normalizes only the winning row
+    // (saturation-relief: avoids the per-tick full-table re-normalize); fall back
+    // to the full read for service stubs that predate the probe.
+    let latestPub = null;
+    if (
+      typeof service.getLatestMembershipPublicationEpochStatusForNodeSync ===
+      TYPEOF.FUNCTION
+    ) {
+      latestPub = service.getLatestMembershipPublicationEpochStatusForNodeSync(
+        nodeId,
+      );
+    } else if (
+      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION
+    ) {
+      latestPub = service.getLatestPublicationForNodeSync(nodeId);
+    } else {
+      return false;
+    }
     const latestEpoch = latestPub ?
       (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
       null;

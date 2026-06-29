@@ -368,5 +368,10 @@ export {
   normalizeNodeRow,
   normalizeServiceEndpointRow,
   normalizeServiceRow,
+  // Cheap scalar readers exported for hot-path probes that must select a row by
+  // kind/epoch WITHOUT the full (JSON.parse-bearing) row normalize, while keeping
+  // byte-identical coercion semantics to normalizeControlPlanePublicationRow.
+  readInteger,
+  readLowerText,
   serializeControlPlanePublicationRow,
 };
