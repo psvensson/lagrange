@@ -3,5 +3,5 @@
   "target": 0,
   "done": false,
   "classification": "pending",
-  "note": "Pending. This oracle should flip only after focused operation_workflow_owner tests prove deterministic re-drive for REMOVE+ACTIVE and REPLACE+SENDING target-active surplus-drain rows, including safety negatives and idempotency coverage."
+  "note": "Pending (re-scoped 2026-06-29). This oracle flips only after focused virtual-clock rebalancer tests (a) FORCE spread_satisfied_in_flight over a durably STALLED in-flight priority-partition REPLACE and prove red-on-revert that the EXISTING level-triggered dispatch-pending reentry does not re-drive it, then (b) prove the stalled-in-flight un-mask (threaded through all 3 classifier sites, stepTimeoutMs=0-safe) makes the EXISTING reentry re-drive it while a genuinely-progressing in-flight op stays signed off, with safety negatives (remove-safety/quorum/leader-handoff/B4 fence) and single-flight idempotency coverage, plus a subagent source-change verification finding. Do NOT flip on the symptom-layer framing (REMOVE+ACTIVE / REPLACE+SENDING deferred-executor-outcome) or any new/faster re-drive mechanism added while the mask remains."
 }
