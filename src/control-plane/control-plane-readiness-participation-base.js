@@ -148,6 +148,17 @@ class ControlPlaneReadinessParticipationBase {
     // by the existing readiness invalidation markers — see
     // resolveMemoizedPriorityRecoveryPlanningProjectionSync.
     this.priorityRecoveryPlanningProjectionMemoByNodeId = new Map();
+    // Saturation-relief: per-publisher-node timestamp of the last AUTHORITATIVE
+    // membership-publication planning refresh (the async 5x SELECT* + PR rebuild in
+    // getMembershipPublicationPlanningSnapshotBestEffort). The async refresh half is
+    // otherwise ungated and re-runs every owner tick even when nothing changed,
+    // pegging the saturated owner loop. The BestEffort gate skips the authoritative
+    // refresh (returning the CDC-current sync answer) while the readiness
+    // invalidation marker has NOT bumped since this timestamp AND we are within the
+    // planning stale-grace floor — keyed on the authoritative-refresh time (NOT the
+    // sync-memo capturedAtMs) so a periodic authoritative refresh still bounds any
+    // CDC-lag drift.
+    this.lastAuthoritativePlanningRefreshAtMsByNodeId = new Map();
     // CL-034: per-publisher-node memo of the membership-publication planning
     // SNAPSHOT MERGE (resolveMembershipPublicationPlanningSnapshot) — the residual
     // readiness-build cost CL-033's projection memo did not cover, validated by the
