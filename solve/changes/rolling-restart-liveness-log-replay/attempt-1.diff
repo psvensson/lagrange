@@ -1,0 +1,800 @@
+diff --git a/scripts/analyze-rolling-restart-liveness.js b/scripts/analyze-rolling-restart-liveness.js
+index e75c2146..dea35bfd 100644
+--- a/scripts/analyze-rolling-restart-liveness.js
++++ b/scripts/analyze-rolling-restart-liveness.js
+@@ -4,6 +4,9 @@ import process from 'node:process';
+ import {
+   buildRollingRestartLivenessVerdict,
+ } from './rolling-restart-liveness-classifier.js';
++import {
++  enrichArtifactWithFullLogEvidenceSync,
++} from './rolling-restart-liveness-full-log-replay.js';
+ import {
+   readArtifactWithSidecarsSync,
+ } from './artifact-sidecar-loader.js';
+@@ -37,7 +40,10 @@ function main(argv) {
+     return EXIT_USAGE;
+   }
+   try {
+-    const artifact = readArtifactWithSidecarsSync(artifactPath);
++    const artifact = enrichArtifactWithFullLogEvidenceSync(
++      artifactPath,
++      readArtifactWithSidecarsSync(artifactPath),
++    );
+     const verdict = buildRollingRestartLivenessVerdict(artifact, {
+       sourceArtifact: artifactPath,
+     });
+diff --git a/scripts/rolling-restart-liveness-classifier.js b/scripts/rolling-restart-liveness-classifier.js
+index 6c58e858..3fdf25da 100644
+--- a/scripts/rolling-restart-liveness-classifier.js
++++ b/scripts/rolling-restart-liveness-classifier.js
+@@ -35,6 +35,7 @@ const PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE =
+ const PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES =
+   'rollingRestartLivenessSamples';
+ const PROPERTY_SOURCE_ARTIFACT = 'sourceArtifact';
++const PROPERTY_FULL_LOG_REPLAY = 'fullLogReplay';
+ 
+ const EVIDENCE_PATH_ARTIFACT = 'artifact';
+ const EVIDENCE_PATH_ACTIVE_GATE_PROGRESS =
+@@ -72,6 +73,14 @@ const QUEUE_STATE_OBSERVED = 'observed';
+ const QUEUE_STATE_ABSENT = ABSENT_VALUE;
+ const EVIDENCE_COMPLETENESS_COMPLETE = 'complete';
+ const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
++const EVIDENCE_FULL_LOG_REPLAY_ABSENT = Object.freeze({
++  state: ABSENT_VALUE,
++  evidencePath: ABSENT_VALUE,
++  filesScanned: NUM_ZERO,
++  linesScanned: NUM_ZERO,
++  decisionTraceCount: NUM_ZERO,
++  matchedSampleCount: NUM_ZERO,
++});
+ const EVIDENCE_GAP_FULL_OWNER_EXECUTION_TRACE =
+   'full_owner_execution_trace';
+ const EVIDENCE_GAP_POST_ENQUEUE_PROGRESS_SAMPLES =
+@@ -191,6 +200,7 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
+     queueState,
+     publicationDelta,
+     progressWitness,
++    fullLogReplay: livenessEvidence.fullLogReplay,
+   };
+ 
+   if (downstream.blocked) {
+@@ -337,6 +347,10 @@ function selectLivenessEvidence(artifact, scenario, publication) {
+       EVIDENCE_COMPLETENESS_COMPLETE :
+       EVIDENCE_COMPLETENESS_SPARSE,
+     samples: sampleList,
++    fullLogReplay: firstRecord(
++      evidence[PROPERTY_FULL_LOG_REPLAY],
++      EVIDENCE_FULL_LOG_REPLAY_ABSENT,
++    ),
+   };
+ }
+ 
+@@ -414,7 +428,7 @@ function selectSampleActionEvidence(samples) {
+     if (!isRecord(enabledSample) && isEnabledActionSample(sample)) {
+       enabledSample = sample;
+     }
+-    if (!isRecord(executionSample) && isExecutedActionSample(sample)) {
++    if (isExecutedActionSample(sample)) {
+       executionSample = sample;
+     }
+   }
+diff --git a/scripts/rolling-restart-liveness-full-log-replay.js b/scripts/rolling-restart-liveness-full-log-replay.js
+new file mode 100644
+index 00000000..e2209cc6
+--- /dev/null
++++ b/scripts/rolling-restart-liveness-full-log-replay.js
+@@ -0,0 +1,439 @@
++import fs from 'node:fs';
++import path from 'node:path';
++import {constants as zlibConstants, gunzipSync} from 'node:zlib';
++
++const ENCODING_UTF8 = 'utf8';
++const NEWLINE = '\n';
++const EMPTY_TEXT = '';
++const TYPEOF_OBJECT = 'object';
++const TYPEOF_STRING = 'string';
++const NUM_ZERO = 0;
++const NUM_ONE = 1;
++const FIRST_INDEX = 0;
++const LOG_GZIP_SUFFIX = '.log.gz';
++const REPORT_JSON_SUFFIX = '.report.json';
++const PLAYBACK_DIRNAME = '.playback';
++const FULL_LOGS_DIRNAME = '.full-logs';
++const SCENARIO_ROLLING_RESTART = 'rolling-restart';
++
++const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
++const PROPERTY_REPORT = 'report';
++const PROPERTY_SCENARIOS = 'scenarios';
++const PROPERTY_JSON_PATH = 'jsonPath';
++const PROPERTY_PUBLICATION_CONVERGENCE = 'publicationConvergence';
++const PROPERTY_ACTIVE_GATE = 'activeGate';
++const PROPERTY_PROGRESS = 'progress';
++const PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE =
++  'rollingRestartLivenessEvidence';
++
++const FULL_LOG_REPLAY_STATE_COMPLETE = 'complete';
++const FULL_LOG_REPLAY_STATE_MISSING = 'missing';
++const FULL_LOG_REPLAY_STATE_UNRESOLVED = 'unresolved';
++const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
++
++const TRACE_MSG_CONVERGENCE_DECISION = 'convergence decision trace';
++const DECISION_DRIVE = 'drive';
++const DECISION_SKIP = 'skip';
++const REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
++const REASON_RECONCILE_IN_FLIGHT = 'reconcile-in-flight';
++const OUTCOME_RECONCILE_COMMITTED = 'reconcile-committed';
++const OUTCOME_RECONCILE_TIMED_OUT = 'reconcile-timed-out';
++const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
++  'reconcile_owner_membership_publication';
++const ACTION_EVENT_OWNER_RECONCILE_ENQUEUED = 'owner_reconcile_enqueued';
++const ACTION_EVENT_RECONCILE_COMPLETED = 'reconcile_completed';
++const ACTION_EVENT_RECONCILE_IN_FLIGHT = 'reconcile_in_flight';
++const ACTION_STATE_EXECUTED = 'executed';
++const ACTION_STATE_IN_FLIGHT = 'in_flight';
++const SAMPLE_FIELD_MISSING_PUBLISHED_COUNT = 'missingPublishedCount';
++const SAMPLE_FIELD_PUBLICATION_EPOCH = 'publicationEpoch';
++const SAMPLE_FIELD_PENDING_RECONCILE_COUNT = 'pendingReconcileCount';
++
++function enrichArtifactWithFullLogEvidenceSync(sourceArtifactPath, artifact) {
++  const resolution = resolveFullLogDirectory(sourceArtifactPath, artifact);
++  if (resolution.state !== FULL_LOG_REPLAY_STATE_COMPLETE) {
++    if (hasExistingLivenessEvidence(artifact)) {
++      return artifact;
++    }
++    return attachFullLogEvidence(artifact, {
++      completeness: EVIDENCE_COMPLETENESS_SPARSE,
++      samples: [],
++      fullLogReplay: {
++        state: resolution.state,
++        evidencePath: resolution.evidencePath,
++        filesScanned: NUM_ZERO,
++        linesScanned: NUM_ZERO,
++        decisionTraceCount: NUM_ZERO,
++        matchedSampleCount: NUM_ZERO,
++      },
++    });
++  }
++
++  const replay = replayFullLogsSync(
++    resolution.evidencePath,
++    selectCurrentPublicationState(artifact),
++  );
++  return attachFullLogEvidence(artifact, {
++    completeness: FULL_LOG_REPLAY_STATE_COMPLETE,
++    samples: replay.samples,
++    fullLogReplay: {
++      state: FULL_LOG_REPLAY_STATE_COMPLETE,
++      evidencePath: resolution.evidencePath,
++      filesScanned: replay.filesScanned,
++      linesScanned: replay.linesScanned,
++      decisionTraceCount: replay.decisionTraceCount,
++      matchedSampleCount: replay.samples.length,
++      parseErrorCount: replay.parseErrorCount,
++      currentStateFiltered: replay.currentStateFiltered,
++      latestSampleTimestamp: replay.latestSampleTimestamp,
++      outcomeCounts: replay.outcomeCounts,
++    },
++  });
++}
++
++function attachFullLogEvidence(artifact, fullLogEvidence) {
++  const existingEvidence = firstRecord(
++    artifact[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++  );
++  return {
++    ...artifact,
++    [PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE]: {
++      ...existingEvidence,
++      ...fullLogEvidence,
++    },
++  };
++}
++
++function resolveFullLogDirectory(sourceArtifactPath, artifact) {
++  const report = firstRecord(artifact[PROPERTY_REPORT], artifact);
++  const scenario = selectScenario(report);
++  const scenarioName = textValue(
++    scenario.scenario,
++    scenario.name,
++    scenario.playback?.scenarioName,
++    SCENARIO_ROLLING_RESTART,
++  );
++  const failureBundlePath = resolveLinkedPath(
++    sourceArtifactPath,
++    scenario[PROPERTY_FAILURE_BUNDLE]?.[PROPERTY_JSON_PATH],
++  );
++  const linkedCandidate = failureBundlePath ?
++    path.join(
++      path.dirname(path.dirname(failureBundlePath)),
++      FULL_LOGS_DIRNAME,
++      scenarioName,
++    ) :
++    EMPTY_TEXT;
++  const reportCandidate = resolveReportSiblingFullLogPath(
++    sourceArtifactPath,
++    scenarioName,
++  );
++  const candidates = [linkedCandidate, reportCandidate].filter(Boolean);
++  for (const candidate of candidates) {
++    if (hasLogGzipFiles(candidate)) {
++      return {
++        state: FULL_LOG_REPLAY_STATE_COMPLETE,
++        evidencePath: candidate,
++      };
++    }
++  }
++  return {
++    state: candidates.length > NUM_ZERO ?
++      FULL_LOG_REPLAY_STATE_MISSING :
++      FULL_LOG_REPLAY_STATE_UNRESOLVED,
++    evidencePath: candidates[FIRST_INDEX] || EMPTY_TEXT,
++  };
++}
++
++function resolveReportSiblingFullLogPath(sourceArtifactPath, scenarioName) {
++  const base = path.basename(sourceArtifactPath);
++  if (!base.endsWith(REPORT_JSON_SUFFIX)) {
++    return EMPTY_TEXT;
++  }
++  return path.join(
++    path.dirname(sourceArtifactPath),
++    PLAYBACK_DIRNAME,
++    base.slice(NUM_ZERO, -REPORT_JSON_SUFFIX.length),
++    FULL_LOGS_DIRNAME,
++    scenarioName,
++  );
++}
++
++function resolveLinkedPath(sourceArtifactPath, linkedPath) {
++  const candidate = String(linkedPath || EMPTY_TEXT).trim();
++  if (!candidate) {
++    return EMPTY_TEXT;
++  }
++  if (path.isAbsolute(candidate) || fs.existsSync(candidate)) {
++    return candidate;
++  }
++  return path.resolve(path.dirname(sourceArtifactPath), candidate);
++}
++
++function hasLogGzipFiles(directoryPath) {
++  if (!directoryPath || !fs.existsSync(directoryPath)) {
++    return false;
++  }
++  return fs.readdirSync(directoryPath).some(
++    (entry) => entry.endsWith(LOG_GZIP_SUFFIX),
++  );
++}
++
++function replayFullLogsSync(fullLogDirectory, currentState) {
++  const files = fs.readdirSync(fullLogDirectory)
++    .filter((entry) => entry.endsWith(LOG_GZIP_SUFFIX))
++    .sort();
++  const samples = [];
++  let linesScanned = NUM_ZERO;
++  let parseErrorCount = NUM_ZERO;
++  let decisionTraceCount = NUM_ZERO;
++  const outcomeCounts = {};
++
++  for (const file of files) {
++    const filePath = path.join(fullLogDirectory, file);
++    const lines = decompressLines(fs.readFileSync(filePath));
++    for (let index = NUM_ZERO; index < lines.length; index += NUM_ONE) {
++      const line = lines[index];
++      if (!line) {
++        continue;
++      }
++      linesScanned += NUM_ONE;
++      if (!line.includes(TRACE_MSG_CONVERGENCE_DECISION)) {
++        continue;
++      }
++      const parsed = parseJsonLine(line);
++      if (!isRecord(parsed)) {
++        parseErrorCount += NUM_ONE;
++        continue;
++      }
++      if (parsed.msg !== TRACE_MSG_CONVERGENCE_DECISION) {
++        continue;
++      }
++      decisionTraceCount += NUM_ONE;
++      incrementOutcomeCount(outcomeCounts, parsed.outcome);
++      const sample = buildTraceSample({
++        parsed,
++        filePath,
++        lineNumber: index + NUM_ONE,
++      });
++      if (isRecord(sample)) {
++        samples.push(sample);
++      }
++    }
++  }
++
++  const selectedSamples = selectCurrentWindowSamples(samples, currentState);
++  return {
++    filesScanned: files.length,
++    linesScanned,
++    parseErrorCount,
++    decisionTraceCount,
++    samples: selectedSamples,
++    currentStateFiltered: selectedSamples.length !== samples.length,
++    latestSampleTimestamp: textValue(
++      selectedSamples[selectedSamples.length - NUM_ONE]?.timestamp,
++    ),
++    outcomeCounts,
++  };
++}
++
++function decompressLines(buffer) {
++  return gunzipSync(buffer, {finishFlush: zlibConstants.Z_SYNC_FLUSH})
++    .toString(ENCODING_UTF8)
++    .split(NEWLINE);
++}
++
++function parseJsonLine(line) {
++  try {
++    return JSON.parse(line);
++  } catch {
++    return EMPTY_TEXT;
++  }
++}
++
++function buildTraceSample({parsed, filePath, lineNumber}) {
++  const event = selectTraceEvent(parsed);
++  const actionState = selectTraceActionState(parsed);
++  if (!event && !actionState && !hasPublicationState(parsed)) {
++    return EMPTY_TEXT;
++  }
++  const sample = {
++    timestamp: textValue(parsed.time),
++    event,
++    actionState,
++    decision: textValue(parsed.decision),
++    reason: textValue(parsed.reason, parsed.contractReason),
++    outcome: textValue(parsed.outcome),
++    evidencePath: `${filePath}:${lineNumber}`,
++  };
++  assignFiniteNumber(
++    sample,
++    SAMPLE_FIELD_MISSING_PUBLISHED_COUNT,
++    parsed.missingPublishedCount,
++  );
++  assignFiniteNumber(sample, SAMPLE_FIELD_PUBLICATION_EPOCH, parsed.publicationEpoch);
++  assignFiniteNumber(
++    sample,
++    SAMPLE_FIELD_PENDING_RECONCILE_COUNT,
++    parsed.pendingReconcileCount,
++  );
++  return sample;
++}
++
++function selectTraceEvent(parsed) {
++  if (
++    parsed.decision === DECISION_DRIVE &&
++    parsed.outcome === OUTCOME_RECONCILE_COMMITTED
++  ) {
++    return ACTION_EVENT_RECONCILE_COMPLETED;
++  }
++  if (
++    parsed.decision === DECISION_DRIVE &&
++    (
++      parsed.contractNextAction === ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
++      parsed.contractReason === REASON_OWNER_RECONCILE_PENDING ||
++      parsed.outcome === OUTCOME_RECONCILE_TIMED_OUT
++    )
++  ) {
++    return ACTION_EVENT_OWNER_RECONCILE_ENQUEUED;
++  }
++  if (
++    parsed.decision === DECISION_SKIP &&
++    parsed.reason === REASON_RECONCILE_IN_FLIGHT
++  ) {
++    return ACTION_EVENT_RECONCILE_IN_FLIGHT;
++  }
++  return EMPTY_TEXT;
++}
++
++function selectTraceActionState(parsed) {
++  if (parsed.decision === DECISION_DRIVE) {
++    return ACTION_STATE_EXECUTED;
++  }
++  if (
++    parsed.decision === DECISION_SKIP &&
++    parsed.reason === REASON_RECONCILE_IN_FLIGHT
++  ) {
++    return ACTION_STATE_IN_FLIGHT;
++  }
++  return EMPTY_TEXT;
++}
++
++function selectCurrentWindowSamples(samples, currentState) {
++  if (
++    !Number.isFinite(currentState.publicationEpoch) ||
++    !Number.isFinite(currentState.missingPublishedCount)
++  ) {
++    return samples;
++  }
++  const matchingSamples = samples.filter(
++    (sample) =>
++      sample.publicationEpoch === currentState.publicationEpoch &&
++      sample.missingPublishedCount === currentState.missingPublishedCount,
++  );
++  return matchingSamples.length > NUM_ZERO ? matchingSamples : samples;
++}
++
++function selectCurrentPublicationState(artifact) {
++  const report = firstRecord(artifact[PROPERTY_REPORT], artifact);
++  const scenario = selectScenario(report);
++  const publication = firstRecord(
++    scenario[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_FAILURE_BUNDLE]?.[PROPERTY_PUBLICATION_CONVERGENCE],
++  );
++  const activeGate = firstRecord(publication[PROPERTY_ACTIVE_GATE]);
++  const progress = firstRecord(
++    activeGate[PROPERTY_PROGRESS],
++    publication.activeGateProgress,
++    publication[PROPERTY_PROGRESS],
++  );
++  return {
++    publicationEpoch: normalizeNumber(progress.publicationEpoch),
++    missingPublishedCount: normalizeNumber(
++      progress.missingPublishedCount ??
++      progress.activeGateOwnerCohortMissingPublishedCount,
++    ),
++  };
++}
++
++function hasExistingLivenessEvidence(artifact) {
++  const report = firstRecord(artifact[PROPERTY_REPORT], artifact);
++  const scenario = selectScenario(report);
++  const publication = firstRecord(
++    scenario[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_FAILURE_BUNDLE]?.[PROPERTY_PUBLICATION_CONVERGENCE],
++  );
++  const activeGate = firstRecord(publication[PROPERTY_ACTIVE_GATE]);
++  const evidence = firstRecord(
++    artifact[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    scenario[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    publication[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    activeGate[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++  );
++  return evidence.complete === true ||
++    evidence.completeness === FULL_LOG_REPLAY_STATE_COMPLETE ||
++    Array.isArray(evidence.samples);
++}
++
++function selectScenario(report) {
++  const scenarios = Array.isArray(report[PROPERTY_SCENARIOS]) ?
++    report[PROPERTY_SCENARIOS] :
++    [];
++  return firstRecord(scenarios[FIRST_INDEX]);
++}
++
++function incrementOutcomeCount(outcomeCounts, outcome) {
++  const key = textValue(outcome);
++  if (!key) {
++    return;
++  }
++  outcomeCounts[key] = (outcomeCounts[key] || NUM_ZERO) + NUM_ONE;
++}
++
++function hasPublicationState(parsed) {
++  return Number.isFinite(normalizeNumber(parsed.publicationEpoch)) ||
++    Number.isFinite(normalizeNumber(parsed.missingPublishedCount));
++}
++
++function assignFiniteNumber(target, key, value) {
++  const number = normalizeNumber(value);
++  if (Number.isFinite(number)) {
++    target[key] = number;
++  }
++}
++
++function normalizeNumber(value) {
++  if (value === EMPTY_TEXT) {
++    return Number.NaN;
++  }
++  const number = Number(value);
++  return Number.isFinite(number) ? number : Number.NaN;
++}
++
++function firstRecord(...values) {
++  return values.find(isRecord) || {};
++}
++
++function isRecord(value) {
++  return Boolean(value) &&
++    typeof value === TYPEOF_OBJECT &&
++    !Array.isArray(value);
++}
++
++function textValue(...values) {
++  for (const value of values) {
++    if (typeof value === TYPEOF_STRING && value.length > NUM_ZERO) {
++      return value;
++    }
++  }
++  return EMPTY_TEXT;
++}
++
++export {
++  FULL_LOG_REPLAY_STATE_COMPLETE,
++  FULL_LOG_REPLAY_STATE_MISSING,
++  enrichArtifactWithFullLogEvidenceSync,
++  replayFullLogsSync,
++};
+diff --git a/test/scripts/analyze-rolling-restart-liveness.test.js b/test/scripts/analyze-rolling-restart-liveness.test.js
+index d7fe376a..d24034c2 100644
+--- a/test/scripts/analyze-rolling-restart-liveness.test.js
++++ b/test/scripts/analyze-rolling-restart-liveness.test.js
+@@ -1,8 +1,10 @@
+-import {describe, it} from 'node:test';
++import {after, describe, it} from 'node:test';
+ import assert from 'node:assert/strict';
+ import {execFileSync} from 'node:child_process';
+ import fs from 'node:fs';
++import {tmpdir} from 'node:os';
+ import path from 'node:path';
++import {gzipSync} from 'node:zlib';
+ import {
+   REQUIRED_VERDICTS,
+   ROLLING_RESTART_LIVENESS_VERDICT,
+@@ -12,10 +14,19 @@ import {
+ const NODE_BIN = process.execPath;
+ const SCRIPT_PATH = 'scripts/analyze-rolling-restart-liveness.js';
+ const ENCODING_UTF8 = 'utf8';
++const JSON_INDENT_SPACES = 2;
++const NEWLINE = '\n';
+ const FIXTURE_DIRECTORY =
+   'test/scripts/__fixtures__/rolling-restart-liveness';
+ const TOPOLOGY_FIXTURE_DIRECTORY =
+   'test/scripts/__fixtures__/topology-convergence';
++const SCENARIO_ROLLING_RESTART = 'rolling-restart';
++const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
++  'reconcile_owner_membership_publication';
++const REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
++const OUTCOME_RECONCILE_TIMED_OUT = 'reconcile-timed-out';
++const MSG_CONVERGENCE_DECISION_TRACE = 'convergence decision trace';
++const TEMP_PREFIX = 'rolling-restart-liveness-';
+ const RUN1_REPORT_PATH =
+   'test-output/reports/stat-gate-20260629T045155Z-run1.report.json';
+ const ENQUEUE_BACKLOG_FIXTURE_PATH =
+@@ -28,6 +39,13 @@ const EXECUTED_NO_VISIBILITY_FIXTURE_PATH =
+   `${FIXTURE_DIRECTORY}/publication-executed-no-visibility.fixture.json`;
+ const DRAIN_STALL_FIXTURE_PATH =
+   `${TOPOLOGY_FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.fixture.json`;
++const temporaryDirectories = [];
++
++after(() => {
++  for (const directory of temporaryDirectories) {
++    fs.rmSync(directory, {recursive: true, force: true});
++  }
++});
+ 
+ describe('rolling restart liveness classifier', () => {
+   it('publishes the full verdict taxonomy', () => {
+@@ -41,12 +59,12 @@ describe('rolling restart liveness classifier', () => {
+     ]);
+   });
+ 
+-  it('classifies latest publication_missing_active_node run without progress hand-waving', () => {
++  it('classifies latest publication_missing_active_node run from full logs', () => {
+     const verdict = runAnalyzer(RUN1_REPORT_PATH);
+ 
+     assert.equal(
+       verdict.verdict,
+-      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
+     );
+     assert.notEqual(
+       verdict.verdict,
+@@ -58,15 +76,21 @@ describe('rolling restart liveness classifier', () => {
+       verdict.enabledAction,
+       'reconcile_owner_membership_publication',
+     );
+-    assert.equal(verdict.lastProgressTimestamp, 'absent');
++    assert.equal(
++      verdict.lastProgressTimestamp,
++      '2026-06-29T05:00:58.642Z',
++    );
+     assert.equal(verdict.queueState.state, 'observed');
+     assert.equal(verdict.queueState.pendingWrites, 3);
+     assert.equal(verdict.publicationDelta.toMissingPublishedCount, 1);
++    assert.equal(verdict.publicationDelta.changed, false);
+     assert.equal(
+-      verdict.evidencePath,
+-      'report.scenarios[0].publicationConvergence.activeGate.progress',
++      verdict.fullLogReplay.state,
++      'complete',
+     );
+-    assert.ok(verdict.evidenceGaps.includes('full_owner_execution_trace'));
++    assert.equal(verdict.fullLogReplay.filesScanned, 5);
++    assert.equal(verdict.fullLogReplay.matchedSampleCount, 3);
++    assert.equal(verdict.evidenceGaps.length, 0);
+   });
+ 
+   it('keeps enqueue plus backlog from becoming a positive progress verdict', () => {
+@@ -152,6 +176,80 @@ describe('rolling restart liveness classifier', () => {
+       ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
+     );
+   });
++
++  it('uses full-log execution evidence for an executed-no-visibility verdict', () => {
++    const reportPath = writeFullLogReport({
++      createFullLogs: true,
++      logLines: [
++        decisionTraceLine({
++          time: '2026-06-29T05:00:01.000Z',
++          decision: 'drive',
++          reason: 'driven',
++          outcome: OUTCOME_RECONCILE_TIMED_OUT,
++          publicationEpoch: 7,
++          missingPublishedCount: 1,
++        }),
++        decisionTraceLine({
++          time: '2026-06-29T05:00:06.000Z',
++          decision: 'drive',
++          reason: 'driven',
++          outcome: OUTCOME_RECONCILE_TIMED_OUT,
++          publicationEpoch: 7,
++          missingPublishedCount: 1,
++        }),
++      ],
++    });
++
++    const verdict = runAnalyzer(reportPath);
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
++    );
++    assert.equal(verdict.fullLogReplay.state, 'complete');
++    assert.equal(verdict.fullLogReplay.decisionTraceCount, 2);
++    assert.equal(verdict.lastProgressTimestamp, '2026-06-29T05:00:06.000Z');
++    assert.equal(verdict.publicationDelta.changed, false);
++  });
++
++  it('uses complete full logs to classify enabled action not executed', () => {
++    const reportPath = writeFullLogReport({
++      createFullLogs: true,
++      logLines: [
++        decisionTraceLine({
++          time: '2026-06-29T05:00:01.000Z',
++          decision: 'skip',
++          reason: 'not-owner',
++        }),
++      ],
++    });
++
++    const verdict = runAnalyzer(reportPath);
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
++    );
++    assert.equal(verdict.fullLogReplay.state, 'complete');
++    assert.equal(verdict.fullLogReplay.matchedSampleCount, 0);
++    assert.equal(verdict.evidenceGaps.length, 0);
++  });
++
++  it('keeps missing full logs as insufficient evidence', () => {
++    const reportPath = writeFullLogReport({
++      createFullLogs: false,
++      logLines: [],
++    });
++
++    const verdict = runAnalyzer(reportPath);
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++    );
++    assert.equal(verdict.fullLogReplay.state, 'missing');
++    assert.ok(verdict.evidenceGaps.includes('full_owner_execution_trace'));
++  });
+ });
+ 
+ function readJson(filePath) {
+@@ -166,3 +264,101 @@ function runAnalyzer(filePath) {
+   );
+   return JSON.parse(output);
+ }
++
++function writeFullLogReport({createFullLogs, logLines}) {
++  const directory = fs.mkdtempSync(path.join(tmpdir(), TEMP_PREFIX));
++  temporaryDirectories.push(directory);
++  const runDirectory = path.join(directory, 'playback', 'run1');
++  const scenarioDirectory = path.join(runDirectory, SCENARIO_ROLLING_RESTART);
++  const failureBundlePath = path.join(scenarioDirectory, 'failure-bundle.json');
++  fs.mkdirSync(scenarioDirectory, {recursive: true});
++  fs.writeFileSync(failureBundlePath, '{}', ENCODING_UTF8);
++  if (createFullLogs) {
++    const fullLogDirectory = path.join(
++      runDirectory,
++      '.full-logs',
++      SCENARIO_ROLLING_RESTART,
++    );
++    fs.mkdirSync(fullLogDirectory, {recursive: true});
++    fs.writeFileSync(
++      path.join(fullLogDirectory, 'node-a.log.gz'),
++      gzipSync(`${logLines.join(NEWLINE)}${NEWLINE}`),
++    );
++  }
++  const reportPath = path.join(directory, 'run.report.json');
++  fs.writeFileSync(
++    reportPath,
++    JSON.stringify(
++      {
++        scenarios: [
++          {
++            scenario: SCENARIO_ROLLING_RESTART,
++            failureBundle: {
++              jsonPath: failureBundlePath,
++            },
++            publicationConvergence: {
++              activeGate: {
++                progress: basePublicationProgress(),
++              },
++            },
++          },
++        ],
++      },
++      null,
++      JSON_INDENT_SPACES,
++    ),
++    ENCODING_UTF8,
++  );
++  return reportPath;
++}
++
++function basePublicationProgress() {
++  return {
++    publicationEpoch: 7,
++    missingPublishedCount: 1,
++    publicationActiveGateHandoffPendingReconcileCount: 1,
++    publicationActiveGateHandoffNextAction:
++      ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
++    activeGateOwnerCohortPendingReconcileCount: 1,
++    activeGateOwnerCohortMissingPublishedCount: 1,
++    membershipPublicationHandoffOutcomeState: 'write_deferred',
++    membershipPublicationHandoffOutcomeReasonCode: 'owner_reconcile_enqueued',
++    membershipPublicationHandoffOutcomeEnqueued: true,
++    selectedControlPlaneOwnerQueueDepth: {
++      pendingWrites: 2,
++      pendingWriteGrowthCount: 3,
++    },
++  };
++}
++
++function decisionTraceLine({
++  time,
++  decision,
++  reason,
++  outcome = '',
++  publicationEpoch = '',
++  missingPublishedCount = '',
++}) {
++  const trace = {
++    level: 30,
++    time,
++    nodeId: 'node-a',
++    pid: 1,
++    subsystem: 'control-plane-readiness',
++    msg: MSG_CONVERGENCE_DECISION_TRACE,
++    decision,
++    reason,
++  };
++  if (outcome) {
++    trace.outcome = outcome;
++    trace.contractReason = REASON_OWNER_RECONCILE_PENDING;
++    trace.contractNextAction = ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
++  }
++  if (Number.isFinite(Number(publicationEpoch))) {
++    trace.publicationEpoch = publicationEpoch;
++  }
++  if (Number.isFinite(Number(missingPublishedCount))) {
++    trace.missingPublishedCount = missingPublishedCount;
++  }
++  return JSON.stringify(trace);
++}

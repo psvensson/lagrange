@@ -35,6 +35,7 @@ const PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE =
 const PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES =
   'rollingRestartLivenessSamples';
 const PROPERTY_SOURCE_ARTIFACT = 'sourceArtifact';
+const PROPERTY_FULL_LOG_REPLAY = 'fullLogReplay';
 
 const EVIDENCE_PATH_ARTIFACT = 'artifact';
 const EVIDENCE_PATH_ACTIVE_GATE_PROGRESS =
@@ -72,6 +73,14 @@ const QUEUE_STATE_OBSERVED = 'observed';
 const QUEUE_STATE_ABSENT = ABSENT_VALUE;
 const EVIDENCE_COMPLETENESS_COMPLETE = 'complete';
 const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
+const EVIDENCE_FULL_LOG_REPLAY_ABSENT = Object.freeze({
+  state: ABSENT_VALUE,
+  evidencePath: ABSENT_VALUE,
+  filesScanned: NUM_ZERO,
+  linesScanned: NUM_ZERO,
+  decisionTraceCount: NUM_ZERO,
+  matchedSampleCount: NUM_ZERO,
+});
 const EVIDENCE_GAP_FULL_OWNER_EXECUTION_TRACE =
   'full_owner_execution_trace';
 const EVIDENCE_GAP_POST_ENQUEUE_PROGRESS_SAMPLES =
@@ -191,6 +200,7 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
     queueState,
     publicationDelta,
     progressWitness,
+    fullLogReplay: livenessEvidence.fullLogReplay,
   };
 
   if (downstream.blocked) {
@@ -337,6 +347,10 @@ function selectLivenessEvidence(artifact, scenario, publication) {
       EVIDENCE_COMPLETENESS_COMPLETE :
       EVIDENCE_COMPLETENESS_SPARSE,
     samples: sampleList,
+    fullLogReplay: firstRecord(
+      evidence[PROPERTY_FULL_LOG_REPLAY],
+      EVIDENCE_FULL_LOG_REPLAY_ABSENT,
+    ),
   };
 }
 
@@ -414,7 +428,7 @@ function selectSampleActionEvidence(samples) {
     if (!isRecord(enabledSample) && isEnabledActionSample(sample)) {
       enabledSample = sample;
     }
-    if (!isRecord(executionSample) && isExecutedActionSample(sample)) {
+    if (isExecutedActionSample(sample)) {
       executionSample = sample;
     }
   }

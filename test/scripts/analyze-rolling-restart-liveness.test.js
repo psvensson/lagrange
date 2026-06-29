@@ -1,8 +1,10 @@
-import {describe, it} from 'node:test';
+import {after, describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {gzipSync} from 'node:zlib';
 import {
   REQUIRED_VERDICTS,
   ROLLING_RESTART_LIVENESS_VERDICT,
@@ -12,10 +14,19 @@ import {
 const NODE_BIN = process.execPath;
 const SCRIPT_PATH = 'scripts/analyze-rolling-restart-liveness.js';
 const ENCODING_UTF8 = 'utf8';
+const JSON_INDENT_SPACES = 2;
+const NEWLINE = '\n';
 const FIXTURE_DIRECTORY =
   'test/scripts/__fixtures__/rolling-restart-liveness';
 const TOPOLOGY_FIXTURE_DIRECTORY =
   'test/scripts/__fixtures__/topology-convergence';
+const SCENARIO_ROLLING_RESTART = 'rolling-restart';
+const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
+  'reconcile_owner_membership_publication';
+const REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
+const OUTCOME_RECONCILE_TIMED_OUT = 'reconcile-timed-out';
+const MSG_CONVERGENCE_DECISION_TRACE = 'convergence decision trace';
+const TEMP_PREFIX = 'rolling-restart-liveness-';
 const RUN1_REPORT_PATH =
   'test-output/reports/stat-gate-20260629T045155Z-run1.report.json';
 const ENQUEUE_BACKLOG_FIXTURE_PATH =
@@ -28,6 +39,13 @@ const EXECUTED_NO_VISIBILITY_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-executed-no-visibility.fixture.json`;
 const DRAIN_STALL_FIXTURE_PATH =
   `${TOPOLOGY_FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.fixture.json`;
+const temporaryDirectories = [];
+
+after(() => {
+  for (const directory of temporaryDirectories) {
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
 
 describe('rolling restart liveness classifier', () => {
   it('publishes the full verdict taxonomy', () => {
@@ -41,12 +59,12 @@ describe('rolling restart liveness classifier', () => {
     ]);
   });
 
-  it('classifies latest publication_missing_active_node run without progress hand-waving', () => {
+  it('classifies latest publication_missing_active_node run from full logs', () => {
     const verdict = runAnalyzer(RUN1_REPORT_PATH);
 
     assert.equal(
       verdict.verdict,
-      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
+      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
     );
     assert.notEqual(
       verdict.verdict,
@@ -58,15 +76,21 @@ describe('rolling restart liveness classifier', () => {
       verdict.enabledAction,
       'reconcile_owner_membership_publication',
     );
-    assert.equal(verdict.lastProgressTimestamp, 'absent');
+    assert.equal(
+      verdict.lastProgressTimestamp,
+      '2026-06-29T05:00:58.642Z',
+    );
     assert.equal(verdict.queueState.state, 'observed');
     assert.equal(verdict.queueState.pendingWrites, 3);
     assert.equal(verdict.publicationDelta.toMissingPublishedCount, 1);
+    assert.equal(verdict.publicationDelta.changed, false);
     assert.equal(
-      verdict.evidencePath,
-      'report.scenarios[0].publicationConvergence.activeGate.progress',
+      verdict.fullLogReplay.state,
+      'complete',
     );
-    assert.ok(verdict.evidenceGaps.includes('full_owner_execution_trace'));
+    assert.equal(verdict.fullLogReplay.filesScanned, 5);
+    assert.equal(verdict.fullLogReplay.matchedSampleCount, 3);
+    assert.equal(verdict.evidenceGaps.length, 0);
   });
 
   it('keeps enqueue plus backlog from becoming a positive progress verdict', () => {
@@ -152,6 +176,80 @@ describe('rolling restart liveness classifier', () => {
       ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
     );
   });
+
+  it('uses full-log execution evidence for an executed-no-visibility verdict', () => {
+    const reportPath = writeFullLogReport({
+      createFullLogs: true,
+      logLines: [
+        decisionTraceLine({
+          time: '2026-06-29T05:00:01.000Z',
+          decision: 'drive',
+          reason: 'driven',
+          outcome: OUTCOME_RECONCILE_TIMED_OUT,
+          publicationEpoch: 7,
+          missingPublishedCount: 1,
+        }),
+        decisionTraceLine({
+          time: '2026-06-29T05:00:06.000Z',
+          decision: 'drive',
+          reason: 'driven',
+          outcome: OUTCOME_RECONCILE_TIMED_OUT,
+          publicationEpoch: 7,
+          missingPublishedCount: 1,
+        }),
+      ],
+    });
+
+    const verdict = runAnalyzer(reportPath);
+
+    assert.equal(
+      verdict.verdict,
+      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
+    );
+    assert.equal(verdict.fullLogReplay.state, 'complete');
+    assert.equal(verdict.fullLogReplay.decisionTraceCount, 2);
+    assert.equal(verdict.lastProgressTimestamp, '2026-06-29T05:00:06.000Z');
+    assert.equal(verdict.publicationDelta.changed, false);
+  });
+
+  it('uses complete full logs to classify enabled action not executed', () => {
+    const reportPath = writeFullLogReport({
+      createFullLogs: true,
+      logLines: [
+        decisionTraceLine({
+          time: '2026-06-29T05:00:01.000Z',
+          decision: 'skip',
+          reason: 'not-owner',
+        }),
+      ],
+    });
+
+    const verdict = runAnalyzer(reportPath);
+
+    assert.equal(
+      verdict.verdict,
+      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
+    );
+    assert.equal(verdict.fullLogReplay.state, 'complete');
+    assert.equal(verdict.fullLogReplay.matchedSampleCount, 0);
+    assert.equal(verdict.evidenceGaps.length, 0);
+  });
+
+  it('keeps missing full logs as insufficient evidence', () => {
+    const reportPath = writeFullLogReport({
+      createFullLogs: false,
+      logLines: [],
+    });
+
+    const verdict = runAnalyzer(reportPath);
+
+    assert.equal(
+      verdict.verdict,
+      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
+    );
+    assert.equal(verdict.fullLogReplay.state, 'missing');
+    assert.ok(verdict.evidenceGaps.includes('full_owner_execution_trace'));
+  });
 });
 
 function readJson(filePath) {
@@ -165,4 +263,102 @@ function runAnalyzer(filePath) {
     {encoding: ENCODING_UTF8},
   );
   return JSON.parse(output);
+}
+
+function writeFullLogReport({createFullLogs, logLines}) {
+  const directory = fs.mkdtempSync(path.join(tmpdir(), TEMP_PREFIX));
+  temporaryDirectories.push(directory);
+  const runDirectory = path.join(directory, 'playback', 'run1');
+  const scenarioDirectory = path.join(runDirectory, SCENARIO_ROLLING_RESTART);
+  const failureBundlePath = path.join(scenarioDirectory, 'failure-bundle.json');
+  fs.mkdirSync(scenarioDirectory, {recursive: true});
+  fs.writeFileSync(failureBundlePath, '{}', ENCODING_UTF8);
+  if (createFullLogs) {
+    const fullLogDirectory = path.join(
+      runDirectory,
+      '.full-logs',
+      SCENARIO_ROLLING_RESTART,
+    );
+    fs.mkdirSync(fullLogDirectory, {recursive: true});
+    fs.writeFileSync(
+      path.join(fullLogDirectory, 'node-a.log.gz'),
+      gzipSync(`${logLines.join(NEWLINE)}${NEWLINE}`),
+    );
+  }
+  const reportPath = path.join(directory, 'run.report.json');
+  fs.writeFileSync(
+    reportPath,
+    JSON.stringify(
+      {
+        scenarios: [
+          {
+            scenario: SCENARIO_ROLLING_RESTART,
+            failureBundle: {
+              jsonPath: failureBundlePath,
+            },
+            publicationConvergence: {
+              activeGate: {
+                progress: basePublicationProgress(),
+              },
+            },
+          },
+        ],
+      },
+      null,
+      JSON_INDENT_SPACES,
+    ),
+    ENCODING_UTF8,
+  );
+  return reportPath;
+}
+
+function basePublicationProgress() {
+  return {
+    publicationEpoch: 7,
+    missingPublishedCount: 1,
+    publicationActiveGateHandoffPendingReconcileCount: 1,
+    publicationActiveGateHandoffNextAction:
+      ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    activeGateOwnerCohortPendingReconcileCount: 1,
+    activeGateOwnerCohortMissingPublishedCount: 1,
+    membershipPublicationHandoffOutcomeState: 'write_deferred',
+    membershipPublicationHandoffOutcomeReasonCode: 'owner_reconcile_enqueued',
+    membershipPublicationHandoffOutcomeEnqueued: true,
+    selectedControlPlaneOwnerQueueDepth: {
+      pendingWrites: 2,
+      pendingWriteGrowthCount: 3,
+    },
+  };
+}
+
+function decisionTraceLine({
+  time,
+  decision,
+  reason,
+  outcome = '',
+  publicationEpoch = '',
+  missingPublishedCount = '',
+}) {
+  const trace = {
+    level: 30,
+    time,
+    nodeId: 'node-a',
+    pid: 1,
+    subsystem: 'control-plane-readiness',
+    msg: MSG_CONVERGENCE_DECISION_TRACE,
+    decision,
+    reason,
+  };
+  if (outcome) {
+    trace.outcome = outcome;
+    trace.contractReason = REASON_OWNER_RECONCILE_PENDING;
+    trace.contractNextAction = ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
+  }
+  if (Number.isFinite(Number(publicationEpoch))) {
+    trace.publicationEpoch = publicationEpoch;
+  }
+  if (Number.isFinite(Number(missingPublishedCount))) {
+    trace.missingPublishedCount = missingPublishedCount;
+  }
+  return JSON.stringify(trace);
 }

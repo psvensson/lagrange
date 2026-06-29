@@ -5,6 +5,9 @@ import {
   buildRollingRestartLivenessVerdict,
 } from './rolling-restart-liveness-classifier.js';
 import {
+  enrichArtifactWithFullLogEvidenceSync,
+} from './rolling-restart-liveness-full-log-replay.js';
+import {
   readArtifactWithSidecarsSync,
 } from './artifact-sidecar-loader.js';
 
@@ -37,7 +40,10 @@ function main(argv) {
     return EXIT_USAGE;
   }
   try {
-    const artifact = readArtifactWithSidecarsSync(artifactPath);
+    const artifact = enrichArtifactWithFullLogEvidenceSync(
+      artifactPath,
+      readArtifactWithSidecarsSync(artifactPath),
+    );
     const verdict = buildRollingRestartLivenessVerdict(artifact, {
       sourceArtifact: artifactPath,
     });
