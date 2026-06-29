@@ -329,73 +329,17 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     return resolvedPlanningSnapshot;
   }
 
-  // Saturation-relief: the BestEffort async branch issues authoritative full-table
-  // reads (5x SELECT* + the priority-recovery planning rebuild) every owner tick.
-  // Skip it while the cache is provably fresh — the readiness invalidation marker
-  // (publications cluster / this node's node|service writes, incl. the drain-
-  // completion services removal) has NOT bumped since the last AUTHORITATIVE refresh
-  // AND we are within the planning stale-grace floor — and return the CDC-current
-  // sync answer instead. Keyed on the authoritative-refresh time (a dedicated
-  // marker), NOT the sync-memo capturedAtMs, so a stale cache always forces a
-  // refresh and a periodic floor refresh bounds any CDC-lag drift; during a
-  // no-progress stall nothing invalidates, so the redundant per-tick authoritative
-  // refresh is skipped and the saturated owner loop is freed to drive the drain.
-  canReuseSyncMembershipPublicationPlanningSnapshot(nodeId, observedAt) {
-    const markerKey = nodeId || this.nodeId;
-    const lastRefreshMarker = this.lastAuthoritativePlanningRefreshAtMsByNodeId;
-    if (!markerKey || !lastRefreshMarker) {
-      return false;
-    }
-    const lastRefreshAtMs = Number(lastRefreshMarker.get(markerKey));
-    if (!Number.isFinite(lastRefreshAtMs) || lastRefreshAtMs <= NUM.ZERO) {
-      return false;
-    }
-    if (this.isReadinessSnapshotInvalidated(markerKey, lastRefreshAtMs)) {
-      return false;
-    }
-    return this.isReadinessPlanningMemoWithinStaleGrace(
-      observedAt,
-      lastRefreshAtMs,
-    );
-  }
-
-  recordAuthoritativeMembershipPublicationPlanningRefresh(nodeId, refreshAtMs) {
-    const markerKey = nodeId || this.nodeId;
-    const lastRefreshMarker = this.lastAuthoritativePlanningRefreshAtMsByNodeId;
-    if (markerKey && lastRefreshMarker) {
-      // Stamp the refresh START time (captured before the authoritative read), NOT
-      // the finish time, matching the sync-memo capturedAtMs discipline: an
-      // invalidation (e.g. a services write) that lands DURING the in-flight read
-      // then has invalidatedAt >= refreshStart, so the next gate check re-opens and
-      // the write is not masked until the grace floor.
-      lastRefreshMarker.set(
-        markerKey,
-        Number.isFinite(refreshAtMs) ? refreshAtMs : this.now(),
-      );
-    }
-  }
-
   async getMembershipPublicationPlanningSnapshotBestEffort(nodeId, observedAt) {
     const syncSnapshot = this.getMembershipPublicationPlanningAnswerSync(
       nodeId,
       observedAt,
     );
-    if (
-      this.canReuseSyncMembershipPublicationPlanningSnapshot(nodeId, observedAt)
-    ) {
-      return syncSnapshot;
-    }
-    const refreshStartedAtMs = this.now();
     const timeoutMs =
       this.membershipPublicationPlanningSnapshotRefreshTimeoutMs;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
       const asyncSnapshot = await this.getMembershipPublicationPlanningSnapshot(
         nodeId,
         observedAt,
-      );
-      this.recordAuthoritativeMembershipPublicationPlanningRefresh(
-        nodeId,
-        refreshStartedAtMs,
       );
       return this.resolvePriorityRecoveryPlanningAnswer(
         nodeId,
@@ -422,10 +366,6 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
           }
         }),
       ]);
-      this.recordAuthoritativeMembershipPublicationPlanningRefresh(
-        nodeId,
-        refreshStartedAtMs,
-      );
       return this.resolvePriorityRecoveryPlanningAnswer(
         nodeId,
         observedAt,
