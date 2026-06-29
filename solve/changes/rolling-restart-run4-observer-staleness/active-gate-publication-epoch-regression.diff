@@ -1,0 +1,310 @@
+diff --git a/test/distributed/harness/__tests__/cluster-active-wait-terminal-startup-blocker-test-cases.js b/test/distributed/harness/__tests__/cluster-active-wait-terminal-startup-blocker-test-cases.js
+index baf14346..04e96bb7 100644
+--- a/test/distributed/harness/__tests__/cluster-active-wait-terminal-startup-blocker-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-active-wait-terminal-startup-blocker-test-cases.js
+@@ -725,6 +725,248 @@ export function registerClusterActiveWaitTerminalStartupBlockerTests(context) {
+     );
+   });
+ 
++  test('Unit: _waitForAllActive keeps the last meaningful startup blocker when' +
++  ' terminal publication epoch regresses after closed publication progress',
++  async () => {
++    const TERMINAL_PUBLICATION_REGRESSION_CLUSTER_SIZE = 3;
++    const TERMINAL_PUBLICATION_REGRESSION_TIMEOUT_MS = 5;
++    const TERMINAL_PUBLICATION_REGRESSION_DOCKER_SOCKET_PATH =
++    '/var/run/docker.sock';
++    const TERMINAL_PUBLICATION_REGRESSION_IMAGE = 'distributed-db:test';
++    const TERMINAL_PUBLICATION_REGRESSION_SEED_ID = 'seed-1';
++    const TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID = 'joiner-a';
++    const TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID = 'joiner-b';
++    const TERMINAL_PUBLICATION_REGRESSION_GREEN_NODE_ID = 'green-observer';
++    const TERMINAL_PUBLICATION_REGRESSION_STALE_NODE_ID = 'stale-observer';
++    const TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE = 'active';
++    const TERMINAL_PUBLICATION_REGRESSION_INACTIVE_STATE = 'inactive';
++    const TERMINAL_PUBLICATION_REGRESSION_PUBLICATION_STATUS = 'PUBLISHED';
++    const TERMINAL_PUBLICATION_REGRESSION_ADMIN_HEALTH_SOURCE =
++    'admin_health';
++    const TERMINAL_PUBLICATION_REGRESSION_EXPECTED_ERROR =
++    'Not all nodes reached ACTIVE state within';
++    const TERMINAL_PUBLICATION_REGRESSION_LAST_PROGRESS_FRAGMENT =
++    'publication=PUBLISHED';
++    const TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT = 0;
++    const TERMINAL_PUBLICATION_REGRESSION_SINGLE_COUNT = 1;
++    const TERMINAL_PUBLICATION_REGRESSION_DOUBLE_COUNT = 2;
++    const TERMINAL_PUBLICATION_REGRESSION_TRIPLE_COUNT = 3;
++    const TERMINAL_PUBLICATION_REGRESSION_GREEN_EPOCH = 4;
++    const TERMINAL_PUBLICATION_REGRESSION_STALE_EPOCH = 3;
++
++    const cluster = createCluster({
++      size: TERMINAL_PUBLICATION_REGRESSION_CLUSTER_SIZE,
++      docker: {socketPath: TERMINAL_PUBLICATION_REGRESSION_DOCKER_SOCKET_PATH},
++      image: TERMINAL_PUBLICATION_REGRESSION_IMAGE,
++      timeouts: {
++        convergence: TERMINAL_PUBLICATION_REGRESSION_TIMEOUT_MS,
++      },
++    });
++
++    cluster._sleep = async () => {};
++    cluster._recordClusterStage = () => {};
++    cluster._collectFailureLogs = async () => {};
++
++    const allActiveNodeDiagnostics = Object.freeze([{
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++      active: true,
++      state: TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE,
++    }, {
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++      active: true,
++      state: TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE,
++    }, {
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++      active: true,
++      state: TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE,
++    }]);
++    const regressedNodeDiagnostics = Object.freeze([{
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++      active: true,
++      state: TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE,
++    }, {
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++      active: true,
++      state: TERMINAL_PUBLICATION_REGRESSION_ACTIVE_STATE,
++    }, {
++      nodeId: TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++      active: false,
++      state: TERMINAL_PUBLICATION_REGRESSION_INACTIVE_STATE,
++    }]);
++    const greenProgressProbe = Object.freeze({
++      allActive: false,
++      nodeDiagnostics: allActiveNodeDiagnostics,
++      snapshotCoverage: {
++        completeCoverage: true,
++        expectedNodeCount: TERMINAL_PUBLICATION_REGRESSION_CLUSTER_SIZE,
++        bestCoverageNodeCount:
++        TERMINAL_PUBLICATION_REGRESSION_TRIPLE_COUNT,
++        selectedNodeId: TERMINAL_PUBLICATION_REGRESSION_GREEN_NODE_ID,
++        selectedAdminReady: true,
++        selectedReachableBy:
++        TERMINAL_PUBLICATION_REGRESSION_ADMIN_HEALTH_SOURCE,
++        selectedPublishedActiveNodeIds: [
++          TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++        ],
++        selectedMissingPublishedNodeIds: [],
++        selectedPublicationConvergence: {
++          publicationEpoch: TERMINAL_PUBLICATION_REGRESSION_GREEN_EPOCH,
++          publicationStatus:
++          TERMINAL_PUBLICATION_REGRESSION_PUBLICATION_STATUS,
++          pendingAckNodeIds: [],
++          publishedActiveNodeIds: [
++            TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++            TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++            TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++          ],
++          priorityPartitionSummary: {
++            satisfied: true,
++            blockedPartitionCount:
++            TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++            totalSpreadGap: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++          },
++        },
++      },
++      publicationConvergenceGate: {
++        ready: true,
++        reasons: [],
++        publicationStatus: TERMINAL_PUBLICATION_REGRESSION_PUBLICATION_STATUS,
++        pendingAckNodeIds: [],
++        missingPublishedNodeIds: [],
++        priorityPartitionSummary: {
++          satisfied: true,
++          blockedPartitionCount: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++          totalSpreadGap: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++        },
++      },
++      priorityRecoveryInvariants: {
++        invariants: [],
++        failingInvariantIds: [],
++        passed: true,
++      },
++    });
++    const regressedCurrentProbe = Object.freeze({
++      allActive: false,
++      nodeDiagnostics: regressedNodeDiagnostics,
++      snapshotCoverage: {
++        completeCoverage: true,
++        expectedNodeCount: TERMINAL_PUBLICATION_REGRESSION_CLUSTER_SIZE,
++        bestCoverageNodeCount:
++        TERMINAL_PUBLICATION_REGRESSION_TRIPLE_COUNT,
++        selectedNodeId: TERMINAL_PUBLICATION_REGRESSION_STALE_NODE_ID,
++        selectedAdminReady: true,
++        selectedReachableBy:
++        TERMINAL_PUBLICATION_REGRESSION_ADMIN_HEALTH_SOURCE,
++        selectedPublishedActiveNodeIds: [
++          TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++        ],
++        selectedMissingPublishedNodeIds: [
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++        ],
++        selectedPublicationConvergence: {
++          publicationEpoch: TERMINAL_PUBLICATION_REGRESSION_STALE_EPOCH,
++          publicationStatus:
++          TERMINAL_PUBLICATION_REGRESSION_PUBLICATION_STATUS,
++          pendingAckNodeIds: [],
++          publishedActiveNodeIds: [
++            TERMINAL_PUBLICATION_REGRESSION_SEED_ID,
++            TERMINAL_PUBLICATION_REGRESSION_JOINER_A_ID,
++          ],
++          priorityPartitionSummary: {
++            satisfied: true,
++            blockedPartitionCount:
++            TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++            totalSpreadGap: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++          },
++        },
++      },
++      publicationConvergenceGate: {
++        ready: false,
++        reasons: [
++          'publication_missing_active_node=' +
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++        ],
++        publicationStatus: TERMINAL_PUBLICATION_REGRESSION_PUBLICATION_STATUS,
++        pendingAckNodeIds: [],
++        missingPublishedNodeIds: [
++          TERMINAL_PUBLICATION_REGRESSION_JOINER_B_ID,
++        ],
++        priorityPartitionSummary: {
++          satisfied: true,
++          blockedPartitionCount: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++          totalSpreadGap: TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++        },
++      },
++      priorityRecoveryInvariants: {
++        invariants: [],
++        failingInvariantIds: [],
++        passed: true,
++      },
++    });
++    let probeCallCount = TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT;
++    cluster._probeClusterActiveState = async () => {
++      probeCallCount += TERMINAL_PUBLICATION_REGRESSION_SINGLE_COUNT;
++      return probeCallCount === TERMINAL_PUBLICATION_REGRESSION_SINGLE_COUNT ?
++        greenProgressProbe :
++        regressedCurrentProbe;
++    };
++
++    let timeoutError = null;
++    await assert.rejects(
++      async () => {
++        await cluster._waitForAllActive();
++      },
++      (error) => {
++        timeoutError = error;
++        return typeof error?.message === 'string' &&
++        error.message.includes(TERMINAL_PUBLICATION_REGRESSION_EXPECTED_ERROR);
++      },
++    );
++
++    assert.equal(
++      timeoutError?.diagnostics?.activeGate?.progress?.selectedSnapshotNodeId,
++      TERMINAL_PUBLICATION_REGRESSION_GREEN_NODE_ID,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.activeGate?.progress?.publicationEpoch,
++      TERMINAL_PUBLICATION_REGRESSION_GREEN_EPOCH,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.activeGate?.progress?.missingPublishedCount,
++      TERMINAL_PUBLICATION_REGRESSION_ZERO_COUNT,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.noProgress?.currentProgress
++        ?.selectedSnapshotNodeId,
++      TERMINAL_PUBLICATION_REGRESSION_STALE_NODE_ID,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.noProgress?.currentProgress
++        ?.publicationEpoch,
++      TERMINAL_PUBLICATION_REGRESSION_STALE_EPOCH,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.noProgress?.currentProgress
++        ?.selectedPublishedActiveCount,
++      TERMINAL_PUBLICATION_REGRESSION_DOUBLE_COUNT,
++    );
++    assert.equal(
++      timeoutError?.diagnostics?.activeGate?.lastProgressEvent?.message.includes(
++        TERMINAL_PUBLICATION_REGRESSION_LAST_PROGRESS_FRAGMENT,
++      ),
++      true,
++    );
++    assert.equal(
++      timeoutError?.message.includes(
++        'snapshotNode=' + TERMINAL_PUBLICATION_REGRESSION_GREEN_NODE_ID,
++      ),
++      true,
++    );
++  });
++
+   test(TERMINAL_PRIORITY_REGRESSION_TEST_NAME, async () => {
+     const cluster = createCluster({
+       size: TERMINAL_PRIORITY_REGRESSION_CLUSTER_SIZE,
+diff --git a/test/distributed/harness/cluster-active-wait-loop.js b/test/distributed/harness/cluster-active-wait-loop.js
+index add936b7..688fc4e3 100644
+--- a/test/distributed/harness/cluster-active-wait-loop.js
++++ b/test/distributed/harness/cluster-active-wait-loop.js
+@@ -131,6 +131,11 @@ const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
+     matches: (evidence) =>
+       evidence.coverageRegressionWithoutPublicationImprovement === true,
+   }),
++  Object.freeze({
++    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
++    matches: (evidence) =>
++      evidence.publicationEpochRegressionWithoutPublicationImprovement === true,
++  }),
+   Object.freeze({
+     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
+     matches: () => true,
+@@ -666,6 +671,13 @@ function normalizeActiveWaitProgressPublicationStatusRank(progressSnapshot) {
+     ZERO;
+ }
+ 
++function normalizeActiveWaitProgressPublicationEpoch(progressSnapshot) {
++  return Number.isInteger(progressSnapshot?.publicationEpoch) &&
++    progressSnapshot.publicationEpoch >= ZERO ?
++    progressSnapshot.publicationEpoch :
++    null;
++}
++
+ function normalizeActiveWaitProgressPublishedActiveCount(progressSnapshot) {
+   return Number.isInteger(progressSnapshot?.selectedPublishedActiveCount) &&
+     progressSnapshot.selectedPublishedActiveCount >= ZERO ?
+@@ -1210,6 +1222,12 @@ function buildTerminalActiveWaitProgressEvidence({
+     normalizeActiveWaitProgressCoverageNodeCount(
+       lastMeaningfulProgressSnapshot,
+     );
++  const currentPublicationEpoch =
++    normalizeActiveWaitProgressPublicationEpoch(currentProgressSnapshot);
++  const lastMeaningfulPublicationEpoch =
++    normalizeActiveWaitProgressPublicationEpoch(
++      lastMeaningfulProgressSnapshot,
++    );
+   const bestSnapshotCoverageNodeCount =
+     normalizeActiveWaitProgressCoverageNodeCount(
+       bestSnapshotCoverageProgressSnapshot,
+@@ -1266,6 +1284,13 @@ function buildTerminalActiveWaitProgressEvidence({
+       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
+       currentActiveNodeCount < lastMeaningfulActiveNodeCount &&
+       publicationImprovementEvidence.semanticPublicationImproved !== true,
++    publicationEpochRegressionWithoutPublicationImprovement:
++      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
++      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
++      currentPublicationEpoch !== null &&
++      lastMeaningfulPublicationEpoch !== null &&
++      currentPublicationEpoch < lastMeaningfulPublicationEpoch &&
++      publicationImprovementEvidence.semanticPublicationImproved !== true,
+     currentPriorityRecoveryOperationEvidenceRegression:
+       priorityRecoveryRegressionEvidence.operationEvidenceRegression,
+   };

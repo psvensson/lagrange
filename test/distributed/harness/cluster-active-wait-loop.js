@@ -132,6 +132,11 @@ const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
       evidence.coverageRegressionWithoutPublicationImprovement === true,
   }),
   Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+    matches: (evidence) =>
+      evidence.publicationEpochRegressionWithoutPublicationImprovement === true,
+  }),
+  Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
     matches: () => true,
   }),
@@ -664,6 +669,13 @@ function normalizeActiveWaitProgressPublicationStatusRank(progressSnapshot) {
     progressSnapshot.publicationStatusRank >= ZERO ?
     progressSnapshot.publicationStatusRank :
     ZERO;
+}
+
+function normalizeActiveWaitProgressPublicationEpoch(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.publicationEpoch) &&
+    progressSnapshot.publicationEpoch >= ZERO ?
+    progressSnapshot.publicationEpoch :
+    null;
 }
 
 function normalizeActiveWaitProgressPublishedActiveCount(progressSnapshot) {
@@ -1210,6 +1222,12 @@ function buildTerminalActiveWaitProgressEvidence({
     normalizeActiveWaitProgressCoverageNodeCount(
       lastMeaningfulProgressSnapshot,
     );
+  const currentPublicationEpoch =
+    normalizeActiveWaitProgressPublicationEpoch(currentProgressSnapshot);
+  const lastMeaningfulPublicationEpoch =
+    normalizeActiveWaitProgressPublicationEpoch(
+      lastMeaningfulProgressSnapshot,
+    );
   const bestSnapshotCoverageNodeCount =
     normalizeActiveWaitProgressCoverageNodeCount(
       bestSnapshotCoverageProgressSnapshot,
@@ -1265,6 +1283,13 @@ function buildTerminalActiveWaitProgressEvidence({
       isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
       currentActiveNodeCount < lastMeaningfulActiveNodeCount &&
+      publicationImprovementEvidence.semanticPublicationImproved !== true,
+    publicationEpochRegressionWithoutPublicationImprovement:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
+      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
+      currentPublicationEpoch !== null &&
+      lastMeaningfulPublicationEpoch !== null &&
+      currentPublicationEpoch < lastMeaningfulPublicationEpoch &&
       publicationImprovementEvidence.semanticPublicationImproved !== true,
     currentPriorityRecoveryOperationEvidenceRegression:
       priorityRecoveryRegressionEvidence.operationEvidenceRegression,
