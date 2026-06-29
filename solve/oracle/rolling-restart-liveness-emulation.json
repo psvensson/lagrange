@@ -1,0 +1,15 @@
+{
+  "metric": 6,
+  "target": 0,
+  "done": false,
+  "classification": "open",
+  "note": "Lower-is-better = unmet classifier/emulator acceptance criteria. This Quest closes only when failed rolling-restart samples can be classified by deterministic replay/emulation with progress-witness discipline; it does not close run4 or claim product stability.",
+  "workstreams": {
+    "run1-structured-verdict": false,
+    "progress-witness-schema": false,
+    "enqueue-backlog-red-fixture": false,
+    "synthetic-slow-progress-fixture": false,
+    "synthetic-true-stuck-fixture": false,
+    "drain-in-flight-stall-fixture": false
+  }
+}
