@@ -487,8 +487,9 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
   // as recovery_pending withheld serve-eligibility cluster-wide — the root of
   // the rolling-restart run3 (seed LEADER_METADATA_INCOMPLETE) and run7 (load
   // nodeSlotUnavailable) gate failures. The durable summary (not the optimistic
-  // closure-witness one) keeps this voter-ready-sound regardless of the
-  // LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY flag.
+  // closure-witness one) keeps this voter-ready-sound regardless of the in-flight
+  // spread optimism (which the stall un-mask only withdraws once a remove-dispatch
+  // op is stalled past its budget without a voter-ready target).
   const prioritySpreadDurablySatisfied =
     publicationRecoveryGate.durablePriorityPartitionSummary?.satisfied === true;
   const activeGateRecoveryServeEligible =

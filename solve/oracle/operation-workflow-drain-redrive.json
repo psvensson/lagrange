@@ -1,7 +1,7 @@
 {
-  "metric": 1,
+  "metric": 0,
   "target": 0,
-  "done": false,
-  "classification": "pending",
-  "note": "Pending (re-scoped 2026-06-29). This oracle flips only after focused virtual-clock rebalancer tests (a) FORCE spread_satisfied_in_flight over a durably STALLED in-flight priority-partition REPLACE and prove red-on-revert that the EXISTING level-triggered dispatch-pending reentry does not re-drive it, then (b) prove the stalled-in-flight un-mask (threaded through all 3 classifier sites, stepTimeoutMs=0-safe) makes the EXISTING reentry re-drive it while a genuinely-progressing in-flight op stays signed off, with safety negatives (remove-safety/quorum/leader-handoff/B4 fence) and single-flight idempotency coverage, plus a subagent source-change verification finding. Do NOT flip on the symptom-layer framing (REMOVE+ACTIVE / REPLACE+SENDING deferred-executor-outcome) or any new/faster re-drive mechanism added while the mask remains."
+  "done": true,
+  "classification": "solved",
+  "note": "SOLVED (2026-06-29, deterministic owner-path closure). Focused virtual-clock tests prove the stalled-in-flight spread un-mask: (a) a durably STALLED not-voter-ready REPLACE-remove-dispatch op is no longer masked as spread_satisfied_in_flight (red-on-revert) so the existing reentry/drain no longer accepts it as drain-complete; (b) a still-progressing op keeps optimistic certification (guard); threaded consistently through both context builders (per-partition + closure/serve-eligibility) via the shared resolvePriorityRecoveryStepAge helper; stepTimeoutMs=0-safe (explicit case); classification-only so remove-safety/quorum/B4/handoff + single-flight idempotency are structurally preserved (pure classifier, never dispatches). Source-change verified by two subagents (a073ae5ab73d9d0b6 found+fixed a closure-path partial-wiring defect; a35039b54426ffce9 re-verified TRUSTED). The 60s stall-budget tuning and the actual passRate lift are owned by the parent Quest's statistical gate (deterministic-first/gate-last)."
 }

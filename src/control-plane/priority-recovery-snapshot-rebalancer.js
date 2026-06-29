@@ -355,6 +355,33 @@ function _resolvePriorityRecoveryTargetVisibilityState(options = {}) {
   return buildPriorityRecoveryTargetServiceEvidence(options).visibilityState;
 }
 
+// Time the operation has spent in its current workflow step, anchored on the
+// latest steps_history entry (when the current step was entered). This is the
+// stall signal the spread classifier consults, computed identically here for both
+// the per-partition decision-snapshot builder and the full-cluster closure builder
+// so the two views never disagree. It is robust to a stepTimeoutMs of 0 (no
+// per-step deadline) because it never reads stepTimeoutMs, and it anchors on the
+// steps_history entry timestamp rather than updatedAt: a wedged op whose dispatch-
+// retry loop re-persists updatedAt would never age past a per-step timeout, but its
+// step-entered timestamp does not move. Missing timing => null (not stalled).
+function resolvePriorityRecoveryStepAge(stepsHistory, nowMs) {
+  const latestEntry =
+    Array.isArray(stepsHistory) && stepsHistory.length > NUM.ZERO ?
+      stepsHistory[stepsHistory.length - NUM.ONE] :
+      null;
+  const enteredAtMs = normalizePriorityRecoveryInteger(
+    latestEntry?.timestamp ?? latestEntry?.timestampMs,
+  );
+  const currentStepEnteredAtMs = Number.isFinite(enteredAtMs) ?
+    enteredAtMs :
+    null;
+  const stepAgeMs =
+    Number.isFinite(nowMs) && Number.isFinite(currentStepEnteredAtMs) ?
+      Math.max(NUM.ZERO, nowMs - currentStepEnteredAtMs) :
+      null;
+  return {currentStepEnteredAtMs, stepAgeMs};
+}
+
 function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   if (!record || typeof record !== TYPEOF.OBJECT) {
     return null;
@@ -401,6 +428,8 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
     stepsHistory.length > NUM.ZERO ?
       stepsHistory[stepsHistory.length - NUM.ONE] :
       null;
+  const {currentStepEnteredAtMs, stepAgeMs} =
+    resolvePriorityRecoveryStepAge(stepsHistory, nowMs);
   return {
     operationId,
     partitionId,
@@ -447,6 +476,8 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
           PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
       ).toLowerCase() || null,
     latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
+    currentStepEnteredAtMs,
+    stepAgeMs,
   };
 }
 
@@ -641,6 +672,7 @@ function isPriorityRecoveryCompletedPlacementOperationContext(
 export {
   _resolvePriorityRecoveryTargetVisibilityState,
   buildPriorityRecoveryOperationContextFromRecord,
+  resolvePriorityRecoveryStepAge,
   buildPriorityRecoveryReplicaOperationContexts,
   buildPriorityRecoveryTargetServiceEvidence,
   doesPriorityRecoveryServiceRowMatchOperationTarget,

@@ -29,6 +29,7 @@ import {registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases} from './pr
 import {registerPriorityRecoverySqlDispatchTimeoutReentryTestCases} from './priority-recovery-sql-dispatch-timeout-reentry-test-cases.js';
 import {registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases} from './priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js';
 import {registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases} from './priority-recovery-serial-wait-coordinator-handoff-test-cases.js';
+import {registerPriorityRecoverySpreadSatisfiedStallReentryTestCases} from './priority-recovery-spread-satisfied-stall-reentry-test-cases.js';
 
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
@@ -1166,6 +1167,10 @@ registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   dependencies: registrationDependencies,
 });
 registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
+  registerCase,
+  dependencies: registrationDependencies,
+});
+registerPriorityRecoverySpreadSatisfiedStallReentryTestCases({
   registerCase,
   dependencies: registrationDependencies,
 });

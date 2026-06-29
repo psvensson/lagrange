@@ -396,9 +396,9 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     // The STRICT (voter-ready-sound) summary, distinct from the optimistic
     // priorityPartitionSummary above (which the closure witness can mark
     // satisfied for a spread_satisfied_in_flight REPLACE without a voter-ready
-    // replacement when LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY is off). Exposed
-    // so serve-eligibility decisions can require genuine voter-ready spread
-    // independent of that flag.
+    // replacement while a remove-dispatch op is still within its stall budget).
+    // Exposed so serve-eligibility decisions can require genuine voter-ready
+    // spread independent of that in-flight optimism.
     durablePriorityPartitionSummary:
       prioritySpreadDecision.durablePriorityPartitionSummary ?
         Object.freeze({

@@ -59,20 +59,28 @@ function buildPriorityRecoverySemanticPartitionSetMap() {
   return partitionIdsBySemanticState;
 }
 
-// Un-mask flag (default-off): require a REPLACE's new target replica to be
-// voter-ready (ACTIVE_OPERATIONAL) before it CERTIFIES priority spread. The
-// optimistic default certifies spread the moment a REPLACE reaches its
-// REMOVE-dispatch phase on an eligible target — BEFORE the new replica becomes
-// active/voter-ready — so a genuinely under-spread partition reads as
-// `spread_satisfied_in_flight`, masking the real blocker: the REPLACE-created
-// learner failing voter-ready promotion under load (CL-003 / CL-009 / CL-021).
-// With the flag on, REPLACE-remove-dispatch alone no longer certifies spread, so
-// the closure reports the honest under-spread/promotion blocker instead.
-const PRIORITY_RECOVERY_SPREAD_REQUIRE_VOTER_READY_FLAG =
-  'LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY';
-function isPriorityRecoverySpreadRequireVoterReadyEnabled() {
+// Once a REPLACE has sat in its REMOVE-dispatch phase (ACTIVE/STOPPING) longer
+// than this without its new target replica reaching voter-ready, the optimistic
+// spread certification is withdrawn: the replacement learner has failed voter-ready
+// promotion (CL-003 / CL-009 / CL-021) and the partition is genuinely under-spread,
+// so the closure must report the honest blocker and let the owner re-drive the
+// stalled source-removal instead of masking it as `spread_satisfied_in_flight`.
+// Below this budget a still-promoting replacement keeps its optimistic
+// certification, so a transient not-yet-voter-ready op is never penalized.
+const PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS = 60000;
+
+// Stall is anchored on the operation context's stepAgeMs (time in the current
+// workflow step, from steps_history), NOT on stepTimeoutMs: a wedged op whose
+// dispatch-retry loop re-persists updatedAt would never age past a per-step
+// timeout, and a step with stepTimeoutMs of 0 has no deadline at all, so neither
+// could drive this un-mask. A missing stepAgeMs (no timing evidence) reads as
+// not-stalled, preserving the optimistic certification.
+function isReplaceRemoveDispatchSpreadStalled(operationContext) {
+  const stepAgeMs = operationContext?.stepAgeMs;
   return (
-    process.env[PRIORITY_RECOVERY_SPREAD_REQUIRE_VOTER_READY_FLAG] === 'true'
+    Number.isFinite(stepAgeMs) &&
+    stepAgeMs >=
+      PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS
   );
 }
 
@@ -97,13 +105,17 @@ function isPriorityRecoverySpreadSatisfyingOperationContext(
     operationContext?.targetVisibilityState ===
     PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
   if (isReplaceRemoveDispatchPhase(operationContext)) {
-    // Un-mask: a REPLACE in its REMOVE-dispatch phase only certifies spread once
-    // its new target replica is actually voter-ready. Flag-off → the optimistic
-    // legacy behavior (REMOVE-dispatch alone certifies) is preserved byte-identical.
-    if (isPriorityRecoverySpreadRequireVoterReadyEnabled()) {
-      return targetVoterReady;
-    }
-    return true;
+    // A REPLACE in its REMOVE-dispatch phase certifies priority spread while it is
+    // still progressing: a voter-ready target genuinely satisfies spread, and a
+    // not-yet-voter-ready replacement keeps a bounded grace window. But a STALLED
+    // replacement (target never reached voter-ready within the stall budget) stops
+    // certifying so the under-spread partition reports the honest blocker and the
+    // owner re-drives the wedged source-removal. Unconditional (no flag); the stall
+    // scope keeps transient progress optimistic so it is not falsely un-masked.
+    return (
+      targetVoterReady ||
+      !isReplaceRemoveDispatchSpreadStalled(operationContext)
+    );
   }
   return targetVoterReady;
 }

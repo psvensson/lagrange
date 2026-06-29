@@ -27,7 +27,7 @@ import {
 } from './priority-recovery-snapshot-contract.js';
 import {buildPriorityRecoveryBlockedPartitions, hasPriorityRecoverySpreadGap, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
 import {buildPriorityRecoveryEmergencyBudgetOwnerIds, resolvePriorityPartitionSummaryFromPublication} from './priority-recovery-snapshot-active-gate.js';
-import {buildPriorityRecoveryTargetServiceEvidence} from './priority-recovery-snapshot-rebalancer.js';
+import {buildPriorityRecoveryTargetServiceEvidence, parsePriorityRecoveryStepsHistory, resolvePriorityRecoveryStepAge} from './priority-recovery-snapshot-rebalancer.js';
 
 function buildPriorityRecoveryAdmissionPlan(options = {}) {
   const maxConcurrentAdds = Math.max(
@@ -412,6 +412,17 @@ function buildPriorityRecoveryReplicaOperationContext(
   );
   const latestTimelineEntry =
     timeline.length > NUM.ZERO ? timeline[timeline.length - 1] : null;
+  // Stall signal from the raw steps_history (NOT the operationTimelineById entries,
+  // whose synthetic current-state entry is timestamped with the churning updatedAt).
+  // Computed via the shared helper so this closure builder and the per-partition
+  // builder agree on whether a remove-dispatch op is stalled (else the spread
+  // un-mask would silently re-mask on the serve-eligibility / closure path).
+  const {currentStepEnteredAtMs, stepAgeMs} = resolvePriorityRecoveryStepAge(
+    parsePriorityRecoveryStepsHistory(
+      replicaOperationRow.stepsHistory ?? replicaOperationRow.steps_history,
+    ),
+    options.nowMs,
+  );
   const targetServiceEvidence = buildPriorityRecoveryTargetServiceEvidence({
     operationContext: normalizedReplicaOperation,
     serviceRows,
@@ -462,6 +473,8 @@ function buildPriorityRecoveryReplicaOperationContext(
     latestTimelineStatus:
       String(latestTimelineEntry?.status || '').toLowerCase() || null,
     latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
+    currentStepEnteredAtMs,
+    stepAgeMs,
     targetVisibilityState: targetServiceEvidence.visibilityState,
     targetServiceTerminalState: targetServiceEvidence.terminalState,
     ...(Number.isFinite(targetServiceEvidence.progressAtMs) ?
