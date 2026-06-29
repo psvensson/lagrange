@@ -1,0 +1,7 @@
+{
+  "metric": 1,
+  "target": 0,
+  "done": false,
+  "classification": "pending",
+  "note": "Pending. This oracle should flip only after focused operation_workflow_owner tests prove deterministic re-drive for REMOVE+ACTIVE and REPLACE+SENDING target-active surplus-drain rows, including safety negatives and idempotency coverage."
+}

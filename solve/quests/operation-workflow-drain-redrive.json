@@ -1,0 +1,52 @@
+{
+  "id": "operation-workflow-drain-redrive",
+  "statement": "Operation workflow owner deterministically re-drives surplus-drain rows with durable stuck evidence, including REMOVE+ACTIVE and REPLACE+SENDING with target-active visibility, so source-removal drain cannot leave a partition over target without an enabled owner action; proven by focused virtual-clock rebalancer tests before any rolling-restart statistical gate.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "parentEvidence": "rolling-restart-run4-drain-residual finding 2026-06-29T10:45:58.517Z; stat-gate-20260629T093159Z-run3.report.json",
+    "closure": "Deterministic owner-path closure only. This child Quest proves operation-workflow drain re-drive for the concrete over-target row shapes before any rolling-restart statistical gate; the parent Quest owns the rolling-restart pass-rate and residual-family statistical bar.",
+    "acceptance": [
+      "A focused virtual-clock rebalancer test seeds a durable REMOVE operation in workflowStep ACTIVE, with source service row still present and voter count over target, then proves operation_workflow_owner re-enters existing remove reconcile/dispatch or transitions through existing STOPPING/removal evidence without bypassing remove safety.",
+      "A focused virtual-clock rebalancer test seeds a durable REPLACE operation in workflowStep SENDING with target-active visibility and deferred executor outcome, then proves owner retry advances to ACTIVE and source removal dispatch without duplicate operation rows.",
+      "Negative safety tests prove no remove dispatch when replacement is not voter-ready, publication membership is unsafe, quorum would be violated, or leader handoff remains pending.",
+      "Race/idempotency coverage proves dispatch retry and lifecycle re-entry firing together still produce one operation id, one owner action, and CAS/steps-history-preserving progress.",
+      "The Quest records focused test evidence and a subagent source-change verification finding before it can be consumed by rolling-restart-run4-drain-residual."
+    ]
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/operation-workflow-drain-redrive.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-workflow-drain-redrive-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/operation-workflow-drain-redrive.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-first-gate-last",
+      "statement": "Do not use a rolling-restart statistical gate to prove this child Quest. Build and pass the focused owner-path deterministic tests first; the parent Quest owns any later statistical confirmation."
+    }
+  ]
+}
