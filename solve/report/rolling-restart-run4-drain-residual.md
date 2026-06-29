@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 0
+**Attempts:** 1
 
 ## Links
 - roadmap row: RM-0.1-fs-rolling-restart
@@ -24,21 +24,24 @@
 - Latest evidence: test-output/reports/stat-gate-20260629T045155Z-run2.report.json
 - Selected theory: none
 - Next move: continue supervised step for rolling-restart-run4-drain-residual-main
-- No longer current: Do not treat the passing run2 probe as satisfying run4's sealed N>=11/Wilson statistical bar, and do not return to election-timeout rotation or ACTIVE-oracle masking.
+- No longer current: Do not gate or extend timeouts for this symptom; do not return to election-timeout rotation; do not allow stale partition/services cache leadership to override an available live Raft non-leader verdict.
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for rolling-restart-run4-drain-residual-main
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 0
-- Owner areas: none
-- Categories: none
+- Changed files: 3
+- Owner areas: src/control-plane, test/control-plane
+- Categories: runtime, test
+- Split plan:
+  - test/control-plane: 2 file(s)
+  - src/control-plane: 1 file(s)
 - Signals: none
 
 ## Frontiers
-- **rolling-restart-run4-drain-residual-main** [open] rung 0, attempts 0, metric ? -> 3
+- **rolling-restart-run4-drain-residual-main** [solved] rung 1, attempts 1, metric 3 -> 3
 
 ## Findings
 - **rolling-restart-run4-drain-residual-main**: Forensics on cert gate stat-gate-20260628T064848Z (3 parallel agents + source verification): all 6 run4-family fails share ONE non-masking root = REPLACE surplus-drain source-removal (STOPPING->REMOVED) not completing within the ~120s budget, because ~30/34 partition leaderships pin on CPU-pegged node 7493b0ab (mean CPU 75-81% on FAILs vs 57-73% on PASS) serializing all drain reconciles on one starved event loop. (a) convergence_timeout x4 (runs 3,4,10,13): one partition stays over-target (voterCount 4 vs 3) 124-174s; run3 witness deadlineMs lapsed 181s before lastObservedAtMs => drain op deadline passes WITHOUT prompt re-drive. (b) replica_operations_in_flight x1 (run7): same drain root via stricter quiescence oracle; 2 REPLACE ops stuck in workflowStep=ACTIVE counted effectiveInFlight forever -- VERIFIED in src: DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP (replica-operation-liveness.js:73-84) has no ACTIVE entry => resolveStepTimeoutMs returns null => isReplicaOperationStale false (607-608). NOTE: ACTIVE-discount would MASK the real drain stall, not fix it. (c) publication_epochs_disagree x1 (run14): node being REPLACE-removed froze pub epoch 5 vs committed 9 for ~4.5min (CL-001 variant-D recurrence) -- REAL staleness but NOT a SAFE-floor breach (hard bars all 0, gate classes it CONVERGED). DISCRIMINATOR is a tail (CPU 73.2% PASS run2 overlaps 74.9% FAIL run10), not a threshold => latency-tail per sealed metric doc, limit-cycle stays refuted. (rules out: Do not build an ACTIVE-step stale-cap as the fix -- it masks the surplus-drain stall the convergence_timeout family also hits. The real lever family = make source-removal drain re-drive promptly on deadline-lapse and/or relieve coordinator-leadership concentration; both must reduce the drain latency tail, not hide it from an oracle.) [test-output/reports/stat-gate-20260628T064848Z.json + per-run reports runs 3/4/7/10/13/14 + agents a5819dc202693b82b,a72a7b8e7f3174d3a,a520a5380813a077a]
@@ -50,6 +53,9 @@
 - **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T045155Z-run2.report.json. Metric: unknown -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T045155Z-run2.report.json]
 - **rolling-restart-run4-drain-residual-main**: Latest N=2 gate evidence is safety-clean but mixed (1 CONVERGED, 1 STALLED); the failed run's dominant reason is publication_missing_active_node with accepted owner-reconcile wake evidence, so run4 is not statistically closed and the next lever should stay on publication drain/queue visibility before any new gate. (rules out: Do not treat the passing run2 probe as satisfying run4's sealed N>=11/Wilson statistical bar, and do not return to election-timeout rotation or ACTIVE-oracle masking.) [test-output/reports/stat-gate-20260629T045155Z.md; test-output/reports/stat-gate-20260629T045155Z-run1.report.json; test-output/reports/stat-gate-20260629T045155Z-run2.report.json]
 - **rolling-restart-run4-drain-residual-main**: Ingested evidence from stat-gate-20260629T045155Z-run2.report.json. Metric: unknown -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T045155Z-run2.report.json]
+- **rolling-restart-run4-drain-residual-main**: New liveness observatory classifies stat-gate-20260629T045155Z-run1 as stuck_executed_no_visibility at the publication_visibility boundary: owner reconcile executed and timed out without a progress witness, while the full log shows membership-publication epoch 26 failed to upsert control_plane_publications with No leader available for write operation after the driver selected tier1-partition-row at publicationEpoch 25. This selects the narrow lever of making live Raft control_plane_publications write-leadership authoritative over stale partition/services cache leadership. (rules out: Do not gate or extend timeouts for this symptom; do not return to election-timeout rotation; do not allow stale partition/services cache leadership to override an available live Raft non-leader verdict.) [test-output/reports/stat-gate-20260629T045155Z-run1.report.json + .playback full log rolling-restart/7493b0ab-a054-5fad-a91b-5e331db29304.log.gz lines 18361-18362]
+- **rolling-restart-run4-drain-residual-main**: Subagent verifier approved the source patch with no blocking findings: live canWriteSystemTableLocally is checked first and both true and false resolve as tier0-raft-live, stale cache tiers remain fallback only when the live probe is absent or throws, owner-driver scope stays on the single resolver, and resolver plus driver tests are red-on-revert for the stale live-nonleader case. The suggested extra fallback test for a throwing live probe was added and passed. [subagent:019f1268-1663-7373-9880-a3c64bec6f16]
+- **rolling-restart-run4-drain-residual-main**: Post-attempt subagent verification for the recorded source-change artifact: verifier 019f1268-1663-7373-9880-a3c64bec6f16 passed the live-Raft leadership patch with no blocking findings, confirmed stale cache tiers cannot override an available live non-leader verdict, confirmed fallback remains available only when live probing is absent or throws, and the suggested throwing-probe fallback regression was added before final validation. [subagent:019f1268-1663-7373-9880-a3c64bec6f16]
 
 ## Theories
 _(none recorded)_
@@ -63,3 +69,4 @@ _(none recorded)_
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-06-29T08:11:11.223Z | rolling-restart-run4-drain-residual-main | observe | 3 -> 3 | flat | solved |  | diff:solve/changes/rolling-restart-run4-drain-residual/attempt-1-live-raft-leadership.diff |

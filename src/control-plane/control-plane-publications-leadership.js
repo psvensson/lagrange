@@ -1,5 +1,6 @@
 import {TABLES} from '../constants/tables.js';
 import {COLUMN} from '../constants/columns.js';
+import {TYPEOF} from '../constants/types.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -12,7 +13,7 @@ import {
 // localPartitionServices (nulled after bootstrap) and is therefore false for
 // every node in steady state.
 //
-// Tier 1: the PARTITIONS row's leader_node_id — ground truth, durable, replicated.
+// Tier 1: the PARTITIONS row's leader_node_id — durable, replicated fallback.
 // Tier 2: a live SERVICES raft_role=leader witness for this node — advisory/faster
 //         readback when the partition row has not yet landed in the local cache.
 // Fail-safe: returns false on any missing dependency or error (never throws), so
@@ -32,49 +33,62 @@ const LEADERSHIP_TIER = Object.freeze({
   NONE: 'none',
 });
 
-// Single source of truth for control_plane_publications write-leadership. Returns
-// both the boolean and the tier that decided it. isControlPlanePublicationsWriteLeader
-// is exactly `.isLeader` of this — the tier annotation never changes the verdict.
-// The branch order and per-tier try/catch boundaries are preserved verbatim from
-// the original predicate (which had been wrong twice before settling on Tier-0
-// first): Tier-0 live Raft role, then the `!cache || !nodeId` guard, then the
-// durable PARTITIONS row, then the live SERVICES witness; fail-safe to NONE.
-function resolveControlPlanePublicationsLeadership(
-  systemTableCache,
-  nodeId,
-  cdcIntegrationService = null,
-) {
-  // Tier-0 (authoritative, never lags): the LIVE in-memory Raft role of this
-  // node's local control_plane_publications partition service. canWriteSystemTableLocally
-  // resolves via partitionServicesProvider() (steady-state) → resolveLeaderRole
-  // (reads partitionService.isLeader / getRole). This is the reliable source; the
-  // cache tiers below lag and can be withheld by the very stall we are recovering
-  // from, which is why cache-only resolution converged only intermittently.
+const LEADERSHIP_RESOLUTION_STATE = Object.freeze({
+  RESOLVED: 'resolved',
+  UNAVAILABLE: 'unavailable',
+});
+
+const LEADERSHIP_RESOLUTION_UNAVAILABLE = Object.freeze({
+  state: LEADERSHIP_RESOLUTION_STATE.UNAVAILABLE,
+});
+
+function buildLeadershipResolution(isLeader, tier) {
+  return Object.freeze({
+    state: LEADERSHIP_RESOLUTION_STATE.RESOLVED,
+    leadership: Object.freeze({isLeader, tier}),
+  });
+}
+
+function isLeadershipResolved(resolution) {
+  return resolution?.state === LEADERSHIP_RESOLUTION_STATE.RESOLVED;
+}
+
+function resolveLiveControlPlanePublicationsLeadership(cdcIntegrationService) {
   try {
     if (
-      cdcIntegrationService?.canWriteSystemTableLocally?.(
-        TABLES.CONTROL_PLANE_PUBLICATIONS,
-      ) === true
+      typeof cdcIntegrationService?.canWriteSystemTableLocally !==
+        TYPEOF.FUNCTION
     ) {
-      return {isLeader: true, tier: LEADERSHIP_TIER.RAFT_LIVE};
+      return LEADERSHIP_RESOLUTION_UNAVAILABLE;
     }
+    const canWriteLocally = cdcIntegrationService.canWriteSystemTableLocally(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+    );
+    return buildLeadershipResolution(
+      canWriteLocally === true,
+      LEADERSHIP_TIER.RAFT_LIVE,
+    );
   } catch {
-    // fall through to the cache tiers
+    return LEADERSHIP_RESOLUTION_UNAVAILABLE;
   }
-  if (!systemTableCache || !nodeId) {
-    return {isLeader: false, tier: LEADERSHIP_TIER.NONE};
-  }
+}
+
+function resolvePartitionRowLeadership(systemTableCache, nodeId) {
   try {
     const partitionRow = systemTableCache.get?.(
       TABLES.PARTITIONS,
       CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
     );
     if (partitionRow && partitionRow[COLUMN.LEADER_NODE_ID] === nodeId) {
-      return {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW};
+      return buildLeadershipResolution(true, LEADERSHIP_TIER.PARTITION_ROW);
     }
   } catch {
     // fall through to the live witness
   }
+  return LEADERSHIP_RESOLUTION_UNAVAILABLE;
+}
+
+function resolveServicesWitnessLeadership(systemTableCache, nodeId) {
   try {
     const witness = systemTableCache.find?.(
       TABLES.SERVICES,
@@ -85,10 +99,49 @@ function resolveControlPlanePublicationsLeadership(
         String(row[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE_LEADER,
     );
     if (witness) {
-      return {isLeader: true, tier: LEADERSHIP_TIER.SERVICES_WITNESS};
+      return buildLeadershipResolution(true, LEADERSHIP_TIER.SERVICES_WITNESS);
     }
   } catch {
     // fail-safe
+  }
+  return LEADERSHIP_RESOLUTION_UNAVAILABLE;
+}
+
+// Single source of truth for control_plane_publications write-leadership. Returns
+// both the boolean and the tier that decided it. isControlPlanePublicationsWriteLeader
+// is exactly `.isLeader` of this — the tier annotation never changes the verdict.
+// Branch order: Tier-0 live Raft role, then the `!cache || !nodeId` guard, then
+// the durable PARTITIONS row, then the live SERVICES witness; fail-safe to NONE.
+function resolveControlPlanePublicationsLeadership(
+  systemTableCache,
+  nodeId,
+  cdcIntegrationService = null,
+) {
+  // Tier-0 (authoritative, never lags): the LIVE in-memory Raft role of this
+  // node's local control_plane_publications partition service. When this signal
+  // is available, both true and false are authoritative; stale partition/cache
+  // rows must not override a live non-leader verdict.
+  const liveResolution =
+    resolveLiveControlPlanePublicationsLeadership(cdcIntegrationService);
+  if (isLeadershipResolved(liveResolution)) {
+    return liveResolution.leadership;
+  }
+  if (!systemTableCache || !nodeId) {
+    return {isLeader: false, tier: LEADERSHIP_TIER.NONE};
+  }
+  const partitionResolution = resolvePartitionRowLeadership(
+    systemTableCache,
+    nodeId,
+  );
+  if (isLeadershipResolved(partitionResolution)) {
+    return partitionResolution.leadership;
+  }
+  const witnessResolution = resolveServicesWitnessLeadership(
+    systemTableCache,
+    nodeId,
+  );
+  if (isLeadershipResolved(witnessResolution)) {
+    return witnessResolution.leadership;
   }
   return {isLeader: false, tier: LEADERSHIP_TIER.NONE};
 }

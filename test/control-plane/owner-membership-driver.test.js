@@ -50,6 +50,30 @@ t.test('drive: no-op when this node is NOT the publications leader', async (t) =
   t.equal(planningCalls, 0, 'gated before reading planning snapshot');
 });
 
+t.test('drive: live non-leader evidence wins over a stale partition-row leader', async (t) => {
+  let planningCalls = 0;
+  const ctx = {
+    nodeId: 'seed',
+    systemTableCache: leaderCache('seed'),
+    cdcIntegrationService: {
+      canWriteSystemTableLocally: () => false,
+    },
+    readPublicationPlanningSnapshot: async () => {
+      planningCalls += 1;
+      return null;
+    },
+    reconcileActiveGateMembershipPublication: async () => {},
+    logger: {},
+    ...traceStubs(),
+  };
+  t.equal(await drive.call(ctx), false, 'returns false');
+  t.equal(
+    planningCalls,
+    0,
+    'live non-leader evidence gates before stale-cache planning',
+  );
+});
+
 t.test('drive: no-op while a prior drive is in flight', async (t) => {
   let planningCalls = 0;
   const ctx = {

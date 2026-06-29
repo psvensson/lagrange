@@ -26,7 +26,7 @@ t.test('tier 0: live in-memory role via canWriteSystemTableLocally (never lags)'
       canWriteSystemTableLocally: () => false,
     }),
     false,
-    'in-memory non-leader -> false (falls to empty cache)',
+    'in-memory non-leader -> false without consulting stale cache tiers',
   );
   // throwing cdc -> fall through to cache tiers, fail-safe
   t.equal(
@@ -47,6 +47,70 @@ t.test('tier 1: partitions row leader_node_id', async (t) => {
   };
   t.equal(isControlPlanePublicationsWriteLeader(cache, 'seed'), true, 'leader');
   t.equal(isControlPlanePublicationsWriteLeader(cache, 'rejoiner'), false, 'non-leader');
+});
+
+t.test('tier 0: live non-leader verdict wins over stale partition row', async (t) => {
+  const staleLeaderCache = {
+    get: (table, key) =>
+      table === 'partitions' && key === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID ?
+        {leader_node_id: 'seed'} :
+        null,
+    find: () => null,
+  };
+  const liveNonLeader = {
+    canWriteSystemTableLocally: () => false,
+  };
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(
+      staleLeaderCache,
+      'seed',
+      liveNonLeader,
+    ),
+    {isLeader: false, tier: LEADERSHIP_TIER.RAFT_LIVE},
+    'a live Raft non-leader result prevents stale partition-row ownership',
+  );
+  t.equal(
+    isControlPlanePublicationsWriteLeader(
+      staleLeaderCache,
+      'seed',
+      liveNonLeader,
+    ),
+    false,
+    'predicate also fails closed on live non-leader evidence',
+  );
+});
+
+t.test('tier 0: unavailable live probe falls back to partition row', async (t) => {
+  const leaderCache = {
+    get: (table, key) =>
+      table === 'partitions' && key === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID ?
+        {leader_node_id: 'seed'} :
+        null,
+    find: () => null,
+  };
+  const throwingProbe = {
+    canWriteSystemTableLocally: () => {
+      throw new Error('probe unavailable');
+    },
+  };
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(
+      leaderCache,
+      'seed',
+      throwingProbe,
+    ),
+    {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW},
+    'a failed live probe is unavailable, not a live non-leader verdict',
+  );
+  t.equal(
+    isControlPlanePublicationsWriteLeader(
+      leaderCache,
+      'seed',
+      throwingProbe,
+    ),
+    true,
+    'predicate preserves the cache fallback when live probing fails',
+  );
 });
 
 t.test('tier 2: live services raft_role witness (case-insensitive)', async (t) => {
@@ -85,6 +149,12 @@ t.test('resolveLeadership reports the deciding tier', async (t) => {
       canWriteSystemTableLocally: () => true,
     }),
     {isLeader: true, tier: LEADERSHIP_TIER.RAFT_LIVE},
+  );
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(emptyCache, 'seed', {
+      canWriteSystemTableLocally: () => false,
+    }),
+    {isLeader: false, tier: LEADERSHIP_TIER.RAFT_LIVE},
   );
   t.strictSame(
     resolveControlPlanePublicationsLeadership(
@@ -147,8 +217,11 @@ t.test('predicate equals resolveLeadership().isLeader for all branches', async (
     [{get: () => null, find: () => null}, null, cdcFalse],
     [{get: () => null, find: () => null}, 'seed', cdcTrue],
     [{get: () => null, find: () => null}, 'seed', cdcThrows],
+    [partitionLeaderCache, 'seed', null],
+    [partitionLeaderCache, 'seed', cdcThrows],
     [partitionLeaderCache, 'seed', cdcFalse],
     [partitionLeaderCache, 'other', cdcFalse],
+    [witnessCache, 'seed', null],
     [witnessCache, 'seed', cdcFalse],
     [witnessCache, 'other', cdcFalse],
     [throwingCache, 'seed', cdcFalse],
