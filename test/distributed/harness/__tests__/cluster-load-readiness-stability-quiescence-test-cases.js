@@ -1443,6 +1443,310 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
     });
 
   test(
+    'Unit: waitForControlPlaneQuiescence uses drain-row stale classification ' +
+    'when scalar stale count undercounts',
+    async () => {
+      const NODE_ID = 'seed-row-stale';
+      const START_AT_MS = 100000;
+      const STALE_ROW_AGE_MS = 70000;
+      const OPERATION_IDS = Object.freeze([
+        'op-row-stale-1',
+        'op-row-stale-2',
+        'op-row-stale-3',
+        'op-row-stale-4',
+      ]);
+      const SCALAR_STALE_IN_FLIGHT_COUNT = 2;
+      const EXPECTED_EFFECTIVE_IN_FLIGHT_COUNT = 0;
+
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      let currentNowMs = START_AT_MS;
+      cluster._nodes = new Map([[NODE_ID, {
+        id: NODE_ID,
+        role: NODE_ROLES.SEED,
+        async getControlSnapshot() {
+          return {
+            rows: [{
+              capturedAt: currentNowMs,
+              leaders: {partitions: NODE_ID},
+              replicaOperations: {
+                inFlightCount: OPERATION_IDS.length,
+                staleInFlightCount: SCALAR_STALE_IN_FLIGHT_COUNT,
+                inFlightOperationIds: [...OPERATION_IDS],
+                partitionGroupInFlight: {partitions: OPERATION_IDS.length},
+                operationTimelineById: Object.fromEntries(
+                  OPERATION_IDS.map((operationId) => [operationId, [{
+                    step: 'CREATING',
+                    status: 'creating',
+                    inFlight: true,
+                  }]]),
+                ),
+                rows: OPERATION_IDS.map((operationId, index) => ({
+                  operationId,
+                  type: 'REPLACE',
+                  partitionId: `row-stale-partition-${index}`,
+                  status: 'creating',
+                  workflowStep: 'CREATING',
+                  updatedAt: currentNowMs - STALE_ROW_AGE_MS,
+                })),
+              },
+            }],
+          };
+        },
+        async getLogs() {
+          return '';
+        },
+      }]]);
+      cluster._sleep = async () => {
+        currentNowMs += 1;
+      };
+      cluster._collectFailureLogs = async () => {
+        throw new Error('row-derived stale quiescence should not fail');
+      };
+      const originalDateNow = Date.now;
+      Date.now = () => currentNowMs;
+      try {
+        const result = await cluster.waitForControlPlaneQuiescence({
+          stableWindowMs: 2,
+          timeoutMs: 20,
+          noProgressTimeoutMs: 10,
+          maxInFlightCount: 0,
+          ignoreStaleInFlightReplicaOperations: true,
+        });
+
+        assert.equal(result.inFlightCount, OPERATION_IDS.length);
+        assert.equal(
+          result.staleInFlightCount,
+          OPERATION_IDS.length,
+        );
+        assert.equal(
+          result.effectiveInFlightCount,
+          EXPECTED_EFFECTIVE_IN_FLIGHT_COUNT,
+        );
+        assert.equal(result.state, CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT);
+        assert.equal(result.canonicalBlocker, null);
+      } finally {
+        Date.now = originalDateNow;
+      }
+    },
+  );
+
+  test(
+    'Unit: waitForControlPlaneQuiescence keeps non-stale canonical drain rows ' +
+    'blocking',
+    async () => {
+      const NODE_ID = 'seed-row-effective';
+      const START_AT_MS = 200000;
+      const STALE_ROW_AGE_MS = 70000;
+      const EFFECTIVE_OPERATION_ID = 'op-row-live';
+      const OPERATION_IDS = Object.freeze([
+        'op-row-stale-a',
+        'op-row-stale-b',
+        'op-row-stale-c',
+        EFFECTIVE_OPERATION_ID,
+      ]);
+
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      let currentNowMs = START_AT_MS;
+      cluster._nodes = new Map([[NODE_ID, {
+        id: NODE_ID,
+        role: NODE_ROLES.SEED,
+        async getControlSnapshot() {
+          return {
+            rows: [{
+              capturedAt: currentNowMs,
+              leaders: {partitions: NODE_ID},
+              replicaOperations: {
+                inFlightCount: OPERATION_IDS.length,
+                staleInFlightCount: 2,
+                inFlightOperationIds: [...OPERATION_IDS],
+                partitionGroupInFlight: {partitions: OPERATION_IDS.length},
+                operationTimelineById: Object.fromEntries(
+                  OPERATION_IDS.map((operationId) => [operationId, [{
+                    step: 'CREATING',
+                    status: 'creating',
+                    inFlight: true,
+                  }]]),
+                ),
+                rows: OPERATION_IDS.map((operationId, index) => ({
+                  operationId,
+                  type: 'REPLACE',
+                  partitionId: `row-effective-partition-${index}`,
+                  status: 'creating',
+                  workflowStep: 'CREATING',
+                  updatedAt: operationId === EFFECTIVE_OPERATION_ID ?
+                    currentNowMs :
+                    currentNowMs - STALE_ROW_AGE_MS,
+                })),
+              },
+            }],
+          };
+        },
+        async getLogs() {
+          return '';
+        },
+      }]]);
+      cluster._sleep = async () => {
+        currentNowMs += 1;
+      };
+      let collected = false;
+      cluster._collectFailureLogs = async () => {
+        collected = true;
+      };
+      const originalDateNow = Date.now;
+      Date.now = () => currentNowMs;
+      try {
+        await assert.rejects(
+          async () => cluster.waitForControlPlaneQuiescence({
+            stableWindowMs: 2,
+            timeoutMs: 20,
+            noProgressTimeoutMs: 5,
+            maxInFlightCount: 0,
+            ignoreStaleInFlightReplicaOperations: true,
+          }),
+          (error) => {
+            assert.ok(collected, 'should collect failure logs before throwing');
+            assert.match(error.message, /Control plane quiescence stalled/i);
+            assert.equal(error.quiescence.effectiveInFlightCount, 1);
+            assert.equal(error.quiescence.staleInFlightCount, 3);
+            const effectiveRows =
+              error.quiescence.replicaOperationDrainRows.filter(
+                (row) => row.effectiveInFlight,
+              );
+            assert.deepEqual(effectiveRows.map((row) => row.operationId), [
+              EFFECTIVE_OPERATION_ID,
+            ]);
+            return true;
+          },
+        );
+      } finally {
+        Date.now = originalDateNow;
+      }
+    },
+  );
+
+  test(
+    'Unit: waitForControlPlaneQuiescence preserves scalar stale count when ' +
+    'canonical drain row coverage is incomplete',
+    async () => {
+      const NODE_ID = 'seed-row-missing';
+      const START_AT_MS = 300000;
+      const STALE_ROW_AGE_MS = 70000;
+      const MISSING_OPERATION_IDS = Object.freeze([
+        'op-row-missing-a',
+        'op-row-missing-b',
+      ]);
+      const SCALAR_STALE_IN_FLIGHT_COUNT = 4;
+      const PRESENT_OPERATION_IDS = Object.freeze([
+        'op-row-covered-a',
+        'op-row-covered-b',
+        'op-row-covered-c',
+      ]);
+      const CANONICAL_OPERATION_IDS = Object.freeze([
+        ...PRESENT_OPERATION_IDS,
+        ...MISSING_OPERATION_IDS,
+      ]);
+
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      let currentNowMs = START_AT_MS;
+      cluster._nodes = new Map([[NODE_ID, {
+        id: NODE_ID,
+        role: NODE_ROLES.SEED,
+        async getControlSnapshot() {
+          return {
+            rows: [{
+              capturedAt: currentNowMs,
+              leaders: {partitions: NODE_ID},
+              replicaOperations: {
+                inFlightCount: CANONICAL_OPERATION_IDS.length,
+                staleInFlightCount: SCALAR_STALE_IN_FLIGHT_COUNT,
+                inFlightOperationIds: [...CANONICAL_OPERATION_IDS],
+                partitionGroupInFlight: {
+                  partitions: CANONICAL_OPERATION_IDS.length,
+                },
+                operationTimelineById: Object.fromEntries(
+                  CANONICAL_OPERATION_IDS.map((operationId) => [operationId, [{
+                    step: 'CREATING',
+                    status: 'creating',
+                    inFlight: true,
+                  }]]),
+                ),
+                rows: PRESENT_OPERATION_IDS.map((operationId, index) => ({
+                  operationId,
+                  type: 'REPLACE',
+                  partitionId: `row-missing-partition-${index}`,
+                  status: 'creating',
+                  workflowStep: 'CREATING',
+                  updatedAt: currentNowMs - STALE_ROW_AGE_MS,
+                })),
+              },
+            }],
+          };
+        },
+        async getLogs() {
+          return '';
+        },
+      }]]);
+      cluster._sleep = async () => {
+        currentNowMs += 1;
+      };
+      let collected = false;
+      cluster._collectFailureLogs = async () => {
+        collected = true;
+      };
+      const originalDateNow = Date.now;
+      Date.now = () => currentNowMs;
+      try {
+        await assert.rejects(
+          async () => cluster.waitForControlPlaneQuiescence({
+            stableWindowMs: 2,
+            timeoutMs: 20,
+            noProgressTimeoutMs: 5,
+            maxInFlightCount: 0,
+            ignoreStaleInFlightReplicaOperations: true,
+          }),
+          (error) => {
+            assert.ok(collected, 'should collect failure logs before throwing');
+            assert.match(error.message, /Control plane quiescence stalled/i);
+            assert.equal(
+              error.quiescence.inFlightCount,
+              CANONICAL_OPERATION_IDS.length,
+            );
+            assert.equal(
+              error.quiescence.staleInFlightCount,
+              SCALAR_STALE_IN_FLIGHT_COUNT,
+            );
+            assert.equal(error.quiescence.effectiveInFlightCount, 1);
+            assert.deepEqual(
+              error.quiescence.replicaOperationDrainRows.map((row) =>
+                row.operationId,
+              ),
+              [...PRESENT_OPERATION_IDS],
+            );
+            return true;
+          },
+        );
+      } finally {
+        Date.now = originalDateNow;
+      }
+    },
+  );
+
+  test(
     'Unit: waitForControlPlaneQuiescence discounts nested cache-visible priority recovery diagnostics',
     async () => {
       const cluster = createCluster({
@@ -1544,6 +1848,7 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
       });
 
       let currentNowMs = QUIESCENCE_RESET_START_AT_MS;
+      const QUIESCENCE_RESET_STALE_ROW_AGE_MS = 70000;
       const blockedSnapshot = {
         rows: [{
           capturedAt: QUIESCENCE_RESET_BLOCKED_CAPTURED_AT_MS,
@@ -1582,17 +1887,18 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
             },
             operationTimelineById: {
               [QUIESCENCE_RESET_OPERATION_ID]: [{
-                step: QUIESCENCE_RESET_STEP,
-                status: QUIESCENCE_RESET_STATUS,
+                step: 'CREATING',
+                status: 'creating',
                 inFlight: true,
               }],
             },
             rows: [{
               operationId: QUIESCENCE_RESET_OPERATION_ID,
               partitionId: QUIESCENCE_RESET_PARTITION_ID,
-              status: QUIESCENCE_RESET_STATUS,
-              workflowStep: QUIESCENCE_RESET_STEP,
-              updatedAt: QUIESCENCE_RESET_START_AT_MS,
+              status: 'creating',
+              workflowStep: 'CREATING',
+              updatedAt: QUIESCENCE_RESET_START_AT_MS -
+                QUIESCENCE_RESET_STALE_ROW_AGE_MS,
             }],
           },
         }],
@@ -1653,11 +1959,11 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
                 effectiveInFlight: row.effectiveInFlight,
               }),
             ), [{
-              operationId: QUIESCENCE_RESET_OPERATION_ID,
-              partitionId: QUIESCENCE_RESET_PARTITION_ID,
-              stale: false,
-              effectiveInFlight: true,
-            }]);
+            operationId: QUIESCENCE_RESET_OPERATION_ID,
+            partitionId: QUIESCENCE_RESET_PARTITION_ID,
+            stale: true,
+            effectiveInFlight: false,
+          }]);
             return true;
           },
         );

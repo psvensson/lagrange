@@ -1,7 +1,6 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {
   buildPostRebalanceReplicaOperationDrainDiagnostics,
-  countAdditionalPostRebalanceReplicaOperationDiscounts,
 } from './post-rebalance-closure-contract.js';
 import {
   buildControlPlaneQuiescenceCandidateWindowReset,
@@ -65,6 +64,46 @@ const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
 
+function normalizeQuiescenceOperationIdSet(operationIds) {
+  return new Set(
+    (Array.isArray(operationIds) ? operationIds : [])
+      .map((operationId) => String(operationId || '').trim())
+      .filter((operationId) => operationId.length > ZERO),
+  );
+}
+
+function selectCanonicalQuiescenceReplicaOperationDrainRows(
+  replicaOperationDrainRows,
+  canonicalInFlightOperationIds,
+) {
+  if (canonicalInFlightOperationIds.size === ZERO) {
+    return replicaOperationDrainRows;
+  }
+  return replicaOperationDrainRows.filter((row) =>
+    canonicalInFlightOperationIds.has(String(row.operationId || '').trim()),
+  );
+}
+
+function hasCompleteQuiescenceReplicaOperationDrainRowCoverage(
+  replicaOperationDrainRows,
+  canonicalInFlightOperationIds,
+) {
+  if (replicaOperationDrainRows.length === ZERO) {
+    return false;
+  }
+  if (canonicalInFlightOperationIds.size === ZERO) {
+    return true;
+  }
+  const coveredOperationIds = new Set(
+    replicaOperationDrainRows
+      .map((row) => String(row.operationId || '').trim())
+      .filter((operationId) => operationId.length > ZERO),
+  );
+  return [...canonicalInFlightOperationIds].every((operationId) =>
+    coveredOperationIds.has(operationId),
+  );
+}
+
 function buildQuiescenceReplicaOperationDrainRows(
   snapshotProbe,
   criticalSystemTopology,
@@ -88,6 +127,48 @@ function buildQuiescenceReplicaOperationDrainRows(
   );
 }
 
+function buildQuiescenceReplicaOperationDrainDiscounts(
+  snapshotProbe,
+  criticalSystemTopology,
+  nowMs,
+) {
+  const canonicalInFlightOperationIds = normalizeQuiescenceOperationIdSet(
+    snapshotProbe?.inFlightOperationIds,
+  );
+  const replicaOperationDrainRows =
+    selectCanonicalQuiescenceReplicaOperationDrainRows(
+      buildQuiescenceReplicaOperationDrainRows(
+        snapshotProbe,
+        criticalSystemTopology,
+        nowMs,
+      ),
+      canonicalInFlightOperationIds,
+    );
+  const drainRowCoverageComplete =
+    hasCompleteQuiescenceReplicaOperationDrainRowCoverage(
+      replicaOperationDrainRows,
+      canonicalInFlightOperationIds,
+    );
+  const scalarStaleInFlightCount =
+    Number.isInteger(snapshotProbe?.staleInFlightCount) &&
+    snapshotProbe.staleInFlightCount >= ZERO ?
+      snapshotProbe.staleInFlightCount :
+      ZERO;
+  const drainStaleInFlightCount =
+    replicaOperationDrainRows.filter((row) => row.staleDiscountApplied).length;
+
+  return Object.freeze({
+    staleInFlightCount: drainRowCoverageComplete ?
+      drainStaleInFlightCount :
+      Math.max(scalarStaleInFlightCount, drainStaleInFlightCount),
+    additionalInFlightDiscountCount:
+      replicaOperationDrainRows.filter((row) =>
+        row.additionalInFlightDiscountEligible,
+      ).length,
+    replicaOperationDrainRows,
+  });
+}
+
 function buildQuiescenceSnapshotProbeWithDiscount(
   snapshotProbe,
   criticalSystemTopology,
@@ -96,31 +177,20 @@ function buildQuiescenceSnapshotProbeWithDiscount(
   if (snapshotProbe?.error) {
     return snapshotProbe;
   }
-  const operationRows = Array.isArray(snapshotProbe?.replicaOperationRows) ?
-    snapshotProbe.replicaOperationRows :
-    [];
-  const additionalInFlightDiscountCount =
-    countAdditionalPostRebalanceReplicaOperationDiscounts(
-      snapshotProbe?.controlPlaneDiagnostics || {},
-      operationRows,
-      {
-        nowMs,
-        allowPostPublicationNonBlockingReplicaOperations: true,
-        cdcProjectionVisibleSatisfied:
-          snapshotProbe?.cdcProjectionVisibleSatisfied === true,
-        criticalSystemTopologyReady: criticalSystemTopology?.ready === true,
-        inFlightOperationIds: snapshotProbe?.inFlightOperationIds,
-        operationTimelineById: snapshotProbe?.operationTimelineById,
-      },
-    );
+  const {
+    staleInFlightCount,
+    additionalInFlightDiscountCount,
+    replicaOperationDrainRows,
+  } = buildQuiescenceReplicaOperationDrainDiscounts(
+    snapshotProbe,
+    criticalSystemTopology,
+    nowMs,
+  );
   return Object.freeze({
     ...snapshotProbe,
+    staleInFlightCount,
     additionalInFlightDiscountCount,
-    replicaOperationDrainRows: buildQuiescenceReplicaOperationDrainRows(
-      snapshotProbe,
-      criticalSystemTopology,
-      nowMs,
-    ),
+    replicaOperationDrainRows,
   });
 }
 
