@@ -73,6 +73,23 @@ If production code is hard to test, fix the design:
 The test suite must prove that production code works — not that a
 test-friendly fork of it works.
 
+## No Flag-Coupled Tests
+
+The "No Test-Only Code Paths" rule above forbids a flag that *only a test* reads.
+This section governs the inverse: a *production* feature flag that a test couples
+to. The two together close the loop — neither tests nor production may smuggle a
+flag into the proof.
+
+- A test MUST assert the real, unconditional production behavior, and MUST NEVER
+  set, branch on, or pin a feature flag to make an assertion pass. A green test
+  that only holds while a flag is in one position proves the flag, not the
+  behavior.
+- Production feature flags are within-session scaffolds only. By the end of the
+  session a flag MUST be either baked in unconditionally (the flag deleted and the
+  new behavior made the only path) or removed together with the functionality it
+  gated; a flag MUST NOT linger as a permanent production toggle. Bake the chosen
+  behavior in first, then update the test to assert that unconditional behavior.
+
 ## System Guideline Conformance Gate for New and Existing Tests
 
 When adding new tests or changing existing tests for production code, you must

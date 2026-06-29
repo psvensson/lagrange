@@ -348,6 +348,12 @@ When you discover failing or timing-out tests you must address each failure with
 4. **Apply the fix.** Update the test if it is checking the wrong behavior, fix the implementation if it is broken, or fix timing issues and clean up resources properly.
 5. **Verify by re-running.** Re-run the test to confirm it passes before closing the task.
 
+A test that fails because behavior *regressed* MUST be fixed (in the code or the
+test), and MUST NEVER be deleted or skipped to make the suite green; deletion is
+reserved for behavior that was *intentionally removed*. See the "No Skipped Tests
+Policy" in [`fixtures.md`](fixtures.md) for the same rule stated from the
+remove-vs-fix angle.
+
 **Rationale:** Broken tests erode confidence in the suite. Work must not close
 while the touched area remains red.
 

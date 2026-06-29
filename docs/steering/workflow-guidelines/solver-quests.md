@@ -394,13 +394,14 @@ autonomous agent should almost always use `run`.
 For autonomous work:
 
 ```sh
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
 `--keep-alive` is required for an autonomous agent: without it, `run` returns at the
 first NON-terminal stop (e.g. MAX_CYCLES, THEORY_REQUIRED) instead of driving on,
-which reads as a stall. `--max` caps cycles per run; reaching it raises the
-resumable MAX_CYCLES gate, not a terminal closure.
+which reads as a stall. The optional `--max <N>` caps cycles per run; reaching it
+raises the resumable MAX_CYCLES gate, not a terminal closure (omit it to use the
+default cap).
 
 For supervised work:
 

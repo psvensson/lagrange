@@ -1116,7 +1116,7 @@ function renderReadme(manifestEntries = []) {
   // Pure index. Load order is owned by AGENTS.md; do not duplicate it here.
   // Pack sizes live in manifest.json (regenerated alongside this file).
   const purpose = {
-    core: 'Always-load operating contract, must-not checklist, template picker.',
+    core: 'Always-load operating contract, must-not checklist, Quest shape picker.',
     boot: 'Authority order, Quest vocabulary pointer, first commands, conflict rule.',
     architecture: 'Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy.',
     testing: 'Test design, fixtures, regression policy, harness rules.',
@@ -1147,7 +1147,7 @@ function renderReadme(manifestEntries = []) {
     '',
     '| File | Mode | Purpose |',
     '| --- | --- | --- |',
-    '| `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |',
+    '| `core.md` | manual | Always-load operating contract, must-not checklist, Quest shape picker. |',
     '| `boot.md` | manual | Authority order, Quest vocabulary pointer, first commands, conflict rule. |',
     ...manifestEntries
       .filter((entry) => entry.name !== 'core')

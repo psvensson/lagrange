@@ -21,7 +21,7 @@ npm run steering:llm:pack
 
 | File | Mode | Purpose |
 | --- | --- | --- |
-| `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |
+| `core.md` | manual | Always-load operating contract, must-not checklist, Quest shape picker. |
 | `boot.md` | manual | Authority order, Quest vocabulary pointer, first commands, conflict rule. |
 | `architecture.md` | generated | Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy. |
 | `testing.md` | generated | Test design, fixtures, regression policy, harness rules. |

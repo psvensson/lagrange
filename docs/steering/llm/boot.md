@@ -46,10 +46,13 @@ terminal; see core.md "Default Posture: Autonomy"):
 
 ```sh
 node scripts/solve.js new --id <id> --statement "<sealed result>"
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
-`--yes` confirms that the `agent` executor may make real edits — without it,
+`--max <N>` is optional (it caps the cycle count for one invocation; the default
+cap applies when omitted, and `--keep-alive` resumes past it), so the canonical
+runnable command leaves it off. `--yes` confirms that the `agent` executor may
+make real edits — without it,
 `--executor agent` refuses to run (it never silently mutates the tree). `--yes`
 does **not** advance gates: surviving non-terminal gates (MAX_CYCLES,
 THEORY_REQUIRED, recoverable BLOCKED) across restarts is what `--keep-alive` does
@@ -110,5 +113,9 @@ domain-pack constraints:
    "Default Posture: Autonomy" stop-triggers (Authorization / Safety / scope — see
    core.md for the authoritative four); the default
    posture stays autonomous for everything outside that stop-list.
-3. If a domain pack rule is outdated, edit its source under `docs/steering/`
-   and run `npm run steering:llm:pack`.
+
+Separately — and this is **drift repair, not a runtime override** — if a domain
+pack rule is simply outdated (the source and the user agree; the generated pack
+lagged), edit its source under `docs/steering/` and run
+`npm run steering:llm:pack`. That regenerates the pack; it is not a way to resolve
+a live user-vs-canon conflict, which the two steps above govern.

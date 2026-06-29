@@ -23,10 +23,11 @@ Every non-trivial task follows this lifecycle:
    Quests that close on a recorded decision rather than a measured artifact.
 2. **Seal the goal.** Define `doneWhen` before implementation begins. Do not
    change it after the first attempt has been recorded.
-3. **Pick the execution mode.** Default to autonomous
+3. **Default to autonomous execution.** Run
    `run --executor agent --yes --keep-alive` for non-trivial work — drive to a true
-   terminal without pausing (see core.md "Default Posture: Autonomy"). Use
-   supervised `step` for human-paced or exploratory work.
+   terminal without pausing (see core.md "Default Posture: Autonomy"). Reach for
+   supervised `step` only for human-paced or exploratory work; mode selection is not
+   a free choice for routine non-trivial work.
 4. **Measure before and after.** Attempts are valid only when the Solver can
    re-measure the configured frontier metric.
 5. **Record findings.** Use `node scripts/solve.js finding` for durable
@@ -40,7 +41,7 @@ For a new implementation task, default to an autonomous, self-resuming run:
 
 ```sh
 node scripts/solve.js new --id <id> --statement "<sealed result>"
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
 For human-paced or exploratory work, drive it step by step:
@@ -53,7 +54,7 @@ For an existing Quest:
 
 ```sh
 node scripts/solve.js status --id <id>
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive --max 20
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
 ## Progress Grammar

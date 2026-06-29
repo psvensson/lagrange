@@ -33,7 +33,7 @@ guardrail command map.
 | `promote-finding` | Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`). | `node scripts/solve.js promote-finding --id <id> --frontier <f> --domain <architecture|testing|governance|style>` |
 | `override` | Recorded-reason escape hatch: authorize one bypass of an overridable guard (only the heuristic theory/scope guards; never honesty/integrity invariants). Requires a falsifiable --reason. | `node scripts/solve.js override --id <id> --frontier <f> --guard <theory|scope> --reason "<justification>"` |
 | `reflect` | Record a reflection think-cycle (no attempt, no metric claim): micro by default, or `--altitude` to question the frame. `--note` is required. | `node scripts/solve.js reflect --id <id> --note "<text>" [--frontier <fid>] [--altitude]` |
-| `step` | Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit`. | `node scripts/solve.js step --id <id> [--commit --changeRef diff:<path> --summary "<what changed>"]` |
+| `step` | Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit` (or `--abort` to discard the pending attempt). | `node scripts/solve.js step --id <id> [--commit --changeRef diff:<path> --summary "<what changed>" | --abort]` |
 | `step-pending` | Print the pending supervised step (the pinned baseline attempt awaiting a commit) as JSON. | `node scripts/solve.js step-pending --id <id>` |
 | `theory` | Two-layer (system + frontier) theory management used to break a stall: declare, option, select, record, supersede, list, card, import-ledger. | `node scripts/solve.js theory <system|option|select|record|supersede|list|card|import-ledger> --id <id> ...` |
 | `health` | Quest health diagnostics: stall, oscillation, and coupled-invariant signals that gate the theory/reflection rungs. | `node scripts/solve.js health --id <id>` |
@@ -41,7 +41,7 @@ guardrail command map.
 | `attempt` | Record a one-shot measured attempt that runs a harness command and captures the result as evidence. | `node scripts/solve.js attempt --id <id> --frontier <f> --changeRef diff:<path> -- <harness cmd...>` |
 | `audit` | Run the Quest audit (scope and evidence-honesty checks) that gates a git handoff. | `node scripts/solve.js audit --id <id>` |
 | `upgrade` | Migrate a Quest file to the current schema. | `node scripts/solve.js upgrade --id <id>` |
-| `reopen` | Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. | `node scripts/solve.js reopen --id <id> --frontier <f>` |
+| `reopen` | Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen. | `node scripts/solve.js reopen --id <id> --frontier <f> --reason "<why>"` |
 
 ---
 

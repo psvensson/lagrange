@@ -46,7 +46,9 @@ Use focused steering files for detail:
   delegated execution, guardrails, findings, and terminal reports
 - [`testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md): validation policy
 - [`code-style.md`](code-style.md): formatting and lint policy
-- [`roadmap.md`](roadmap.md): implementation scope and edition boundaries
+- [`roadmap.md`](roadmap.md): roadmap **steering pointer** (the actual
+  implementation scope and edition-boundary map is the repo-root
+  [`../../roadmap.md`](../../roadmap.md), which this pointer routes to)
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md): canonical
   architecture entrypoint, current owner maps, and subsystem detail index
 - [`../../architecture.md`](../../architecture.md): compatibility pointer for

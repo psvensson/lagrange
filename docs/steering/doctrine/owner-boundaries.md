@@ -29,6 +29,12 @@ concern must be retired in the same body of work. A new owner left running along
 the old path it was meant to replace is an unfinished cutover, not a second owner —
 record it as incomplete, never as done.
 
+A recorded-incomplete owner of exactly this kind currently exists: the
+`partitions.leader_node_id` / `message_groups.leader_node_id` rows in
+[`../runtime-contracts.md`](../runtime-contracts.md) have a canonical owner *row*
+but no named writer *component* yet. That is a known gap tracked under this rule,
+not a §1 exception.
+
 ## 6. Shrink The Boundary When Bugs Cluster
 
 When multiple bugs appear at the same boundary, assume the boundary is wrong
@@ -62,6 +68,12 @@ Prefer:
 Do not let diagnostics views, retained owner state, bootstrap-normalized
 ingress state, or cache-local observations drift into a second operational
 authority by convention.
+
+This rule pairs with — and is distinct from — single-path §11b ("One Contract
+Shape Per Concern", see [`single-path.md`](single-path.md)). §14 governs naming
+the *consumers* of a shared surface; §11b governs keeping one *contract shape*
+(schema/version) per concern. They are two rules, not one; consult both when a
+shared surface changes.
 
 ## 17. Quest Execution Has One Current Boundary
 

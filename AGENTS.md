@@ -108,3 +108,14 @@ A Quest is closed only by the Solver's terminal state:
 
 Do not move goalposts mid-Quest. If the task changes, author a new Quest or
 record a finding that explains why the current Quest is exhausted.
+
+Two always-on default postures govern how you drive a Quest to that terminal;
+this entry point only names them, the authoritative statements are in
+[`docs/steering/llm/core.md`](docs/steering/llm/core.md):
+
+- **Autonomy** — drive a non-trivial Quest to a true terminal without pausing;
+  stop only on the core.md stop-triggers (Authorization / Goalpost ambiguity /
+  EXHAUSTED / Safety). See core.md "Default Posture: Autonomy".
+- **Commit on completion** — committing finished, verified work is durably
+  authorized; do not wait to be asked. See core.md "Default Posture: Commit On
+  Completion".

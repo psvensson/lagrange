@@ -26,9 +26,12 @@ Before claiming SOLVED:
 
 ## EXHAUSTED
 
-A Quest is EXHAUSTED when every frontier has climbed to the `park` rung of the
-strategy ladder and no honest remaining move exists. (A frontier that parked as
-`cannot_measure` rather than `exhausted` is resumable — see solver-quests.md.)
+A Quest is EXHAUSTED only when every frontier has parked **as `exhausted`** — each
+had at least one honestly-measured sample and no honest remaining move exists. A
+frontier that parked as `cannot_measure` (it could not be measured at all) is
+**not** EXHAUSTED: it is a resumable measurement park and does not count toward the
+terminal, so a Quest with any `cannot_measure` park is still open (see
+solver-quests.md "resumable measurement park").
 
 EXHAUSTED is a real terminal result, not a request to keep patching locally.
 Use findings to explain what was ruled out and author a new Quest only if the

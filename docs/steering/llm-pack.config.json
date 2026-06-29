@@ -119,7 +119,12 @@
       "priority": 100
     },
     {
-      "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro-at-correct-altitude.md",
+      "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+      "domain": "testing",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
       "domain": "testing",
       "priority": 100
     }
@@ -191,7 +196,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 166
+          "line": 168
         }
       ]
     },
@@ -204,7 +209,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 169
+          "line": 171
         }
       ]
     },
@@ -217,7 +222,7 @@
       "aliases": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 107
+          "line": 128
         }
       ]
     },
@@ -225,7 +230,7 @@
       "note": "degraded-evidence (same architecture domain): runtime-contracts canonical; suppress state-encoding restatement",
       "canonical": {
         "file": "runtime-contracts.md",
-        "line": 312
+        "line": 324
       },
       "aliases": [
         {

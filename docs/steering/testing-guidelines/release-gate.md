@@ -55,7 +55,9 @@ Use this order for scenario Quests:
 2. static guardrail relevant to the touched owner boundary;
 3. shared unit-only gate when the package manager or runner boundary requires
    it;
-4. representative scenario rerun;
+4. representative scenario rerun — **last resort only**, governed by the gate
+   policy in the next paragraph (reach it only for an irreducibly-statistical
+   claim, never as a routine step);
 5. Solver step commit or autonomous loop report.
 
 The expensive non-deterministic statistical gate (the docker rolling-restart
@@ -69,6 +71,21 @@ minimize the run count, starting at the smallest informative N. A gate must neve
 be the iteration loop: do not gate to see whether a change helped, to discover
 the next blocker, or to re-confirm a mechanism a deterministic test already
 demonstrates.
+
+## Deterministic Proof Must Move the Binding Observable
+
+A deterministic proof MUST move the real in-cluster binding observable that the
+`doneWhen` is about — not merely the internal math or return value of the
+mechanism the fix introduces. A unit test of your own new function cannot fail to
+"engage"; passing it proves the function runs, not that the binding signal moved.
+
+- Before spending a gate, split efficacy into two questions and answer the first
+  deterministically and cheaply, below the gate: (a) does the lever move the
+  binding in-cluster observable at all (deterministic, red-on-revert), and only
+  then (b) does it lift the statistical metric (the gate's job).
+- A lever that passes its own unit DT but never moves the real observable is NOT
+  proven; do NOT advance it to a gate. Reproduce the observable deterministically
+  in-process first.
 
 ## Delegated Review
 

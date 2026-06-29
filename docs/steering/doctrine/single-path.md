@@ -55,6 +55,12 @@ Prefer:
 Do not let observed, published, retained, cached, repaired, or fast-path
 variants drift into several interchangeable authorities.
 
+The "consumer set" and "forbidden reinterpretations" bullets above overlap by
+design with owner-boundaries §14 ("Shared Surfaces Must Name Consumers", see
+[`owner-boundaries.md`](owner-boundaries.md)). They are two distinct rules: §11b
+keeps one *contract shape* per concern; §14 names the *consumers* of a shared
+surface. Apply both, not one in place of the other.
+
 ## 12. Normalize Boundary Impedance Once
 
 Storage rows, bootstrap inputs, wire payloads, and transport observations are

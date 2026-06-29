@@ -161,10 +161,15 @@ Forbidden patterns:
 ### Canonical writers
 
 The owner rows above declare which row is authoritative; the components below are
-the single writers. The full matrix is
-[`architecture/current-owner-maps.md`](../../architecture/current-owner-maps.md)
-and `architecture/control-plane.md` ("services Row Ownership Matrix") — this table
-is a steering summary that defers to them, not a second source of truth.
+the single writers. This table is a steering summary that defers to the canonical
+maps, not a second source of truth. The canonical maps are split by concern:
+component ownership lives in
+[`architecture/current-owner-maps.md`](../../architecture/current-owner-maps.md),
+the `services` field-writer matrix in `architecture/control-plane.md`
+("services Row Ownership Matrix"), and the leader rows
+(`partitions.leader_node_id` / `message_groups.leader_node_id`) in
+`architecture/runtime-lifecycle.md` and `architecture/overview.md` (not in
+`current-owner-maps.md`).
 
 | Concern (table.field) | Single writer |
 | --- | --- |
@@ -174,6 +179,13 @@ is a steering summary that defers to them, not a second source of truth.
 | `services` identity (`service_id`, `address`, …) | service-row creation owner (`PartitionService` / `MessageGroupService`) |
 | membership publication (`control_plane_publications`) | `MembershipPublicationCoordinator` |
 | `partitions.leader_node_id`, `message_groups.leader_node_id` | the owner ROW is canonical, but no single writer component is named today — treat the row as authoritative, never reconstruct leader identity from `services.raft_role`, and assign/confirm the writer before extending this path |
+
+The unnamed writer for the leader rows is a **known incomplete-owner gap**, not a
+contradiction of doctrine §1 ("one semantic owner per concern", see
+[`doctrine/owner-boundaries.md`](doctrine/owner-boundaries.md)): the owner *row*
+exists, the owner *component* has not been cut over yet. Per §1's own rule, this
+is recorded as an unfinished cutover here rather than papered over — assign the
+writer before extending the path.
 
 The `services` row is the canonical example of non-overlapping field owners on one
 row: identity, lifecycle (`ReplicaStateMachine`), and `raft_role`

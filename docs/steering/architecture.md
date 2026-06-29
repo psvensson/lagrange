@@ -1,13 +1,17 @@
 ---
 scope: architecture
-status: canonical
+status: pointer
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md
 last_reviewed: 2026-05-23
 ---
 
-> **Canonical source.** Architecture document tree pointer.
+> **Pointer — not a rule source.** This file only routes architecture-document
+> lookups to the canonical tree; it carries no implementation rules of its own.
+> The architecture *policy* rules live in `runtime-contracts.md` and the
+> `doctrine/` sub-files (which is where the architecture pack's rules come from).
+> Do not treat this pointer as a co-equal source of architecture policy.
 
 # Architecture Steering Pointer
 

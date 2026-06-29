@@ -26,7 +26,8 @@ Required workflow:
 4. If validation reveals a second concern, record a finding and add or author a
    frontier instead of silently widening the current one.
 5. After the Quest validation surface is green, perform the required closure
-   deep dive across the affected area before claiming SOLVED.
+   deep dive across the affected area before claiming SOLVED (scope and stop
+   condition defined under "Closure deep dive — scope" below).
 6. If that deep dive finds mistakes, irregularities, or doctrine/system
    guideline violations in the affected area, fix them before claiming SOLVED.
 7. If a Quest changes a shared contract, validation must prove not only the
@@ -42,8 +43,28 @@ This keeps test closure aligned with bounded implementation scope instead of
 letting validation sprawl across unrelated concerns.
 
 The Quest is not SOLVED merely because the named tests pass. Test closure and
-Quest closure both require the final affected-area deep dive required by
-`docs/steering/system-guidelines.md`.
+Quest closure both require the final affected-area deep dive defined next, which is
+the same obligation named in
+[`docs/steering/system-guidelines.md`](../system-guidelines.md) §13 ("Closure
+Requires Proof, Review, And Truth Repair").
+
+### Closure deep dive — scope
+
+The "affected area" is bounded, not the whole repo: it is the files the Quest
+changed plus their **direct owner collaborators** — the owners and tail consumers
+(status, diagnostics, admin, harness, reporting) named in the diff. The deep dive
+re-reads exactly that set for:
+
+1. doctrine / system-guideline violations introduced by the change, **and**
+   pre-existing violations in the same semantic boundary (one owner / one concern);
+2. tail-consumer surfaces of any changed shared contract that were not updated;
+3. leftover scaffolds — a flag, test-only path, or dead branch the change should
+   have removed.
+
+The deep dive is **complete** when every file in that bounded set has been checked
+and each finding is either fixed or recorded as an explicitly out-of-scope
+follow-on frontier. It does not require reading files outside the touched owner
+boundary.
 
 ## Static Guardrail Preflight And Closure Policy
 

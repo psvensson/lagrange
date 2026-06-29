@@ -61,8 +61,8 @@
     "usage": "node scripts/solve.js reflect --id <id> --note \"<text>\" [--frontier <fid>] [--altitude]"
   },
   "step": {
-    "summary": "Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit`.",
-    "usage": "node scripts/solve.js step --id <id> [--commit --changeRef diff:<path> --summary \"<what changed>\"]"
+    "summary": "Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit` (or `--abort` to discard the pending attempt).",
+    "usage": "node scripts/solve.js step --id <id> [--commit --changeRef diff:<path> --summary \"<what changed>\" | --abort]"
   },
   "step-pending": {
     "summary": "Print the pending supervised step (the pinned baseline attempt awaiting a commit) as JSON.",
@@ -93,7 +93,7 @@
     "usage": "node scripts/solve.js upgrade --id <id>"
   },
   "reopen": {
-    "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts.",
-    "usage": "node scripts/solve.js reopen --id <id> --frontier <f>"
+    "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen.",
+    "usage": "node scripts/solve.js reopen --id <id> --frontier <f> --reason \"<why>\""
   }
 }

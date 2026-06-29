@@ -133,45 +133,45 @@ Use this list before non-trivial work:
    predicate — is allowed; see solver-quests.md "Gradient refinement of the
    sealed metric".)
 2. **Do not claim SOLVED** without live `doneWhen` evidence.
-2b. **Do not close a cutover Quest on a dormant mechanism.** When a Quest's sealed
-    `doneWhen` is "X becomes the authoritative owner" or "the old path is retired",
-    SOLVED requires evidence the new mechanism is ENGAGED and authoritative in a real
-    run — not merely that its code or tests exist. A flag that leaves the old path as
-    the live default while the new mechanism sits dormant is an unfinished cutover. This
-    does NOT block the legitimate default-off building-block pattern — see
-    solver-quests.md "Closure of cutover vs building-block Quests".
-3. **Do not trust agent self-report** for done or metric movement; probes decide.
-4. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
+3. **Do not close a cutover Quest on a dormant mechanism.** When a Quest's sealed
+   `doneWhen` is "X becomes the authoritative owner" or "the old path is retired",
+   SOLVED requires evidence the new mechanism is ENGAGED and authoritative in a real
+   run — not merely that its code or tests exist. A flag that leaves the old path as
+   the live default while the new mechanism sits dormant is an unfinished cutover. This
+   does NOT block the legitimate default-off building-block pattern — see
+   solver-quests.md "Closure of cutover vs building-block Quests".
+4. **Do not trust agent self-report** for done or metric movement; probes decide.
+5. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
    `diff:<path>`.
-5. **Do not bypass frozen architecture decisions** without explicit user
+6. **Do not bypass frozen architecture decisions** without explicit user
    override/confirmation.
-6. **Do not widen, model, or change approach** on a stalled frontier without
+7. **Do not widen, model, or change approach** on a stalled frontier without
    selected Quest theory evidence.
-7. **Do not exceed file-size caps** when modifying or creating files; refactor
+8. **Do not exceed file-size caps** when modifying or creating files; refactor
    first if exceeded.
-8. **Do not write runtime/domain scalars inline**; use named constants or
+9. **Do not write runtime/domain scalars inline**; use named constants or
    ingress normalization.
-9. **Do not encode runtime state with `null` or `undefined`**; use explicit
-   variants.
-10. **Do not implement semantic decisions as independent branch piles**; collect
-   evidence and emit one canonical outcome.
-11. **Do not let callers reproduce owner logic locally**; owners decide and
+10. **Do not encode runtime state with `null` or `undefined`**; use explicit
+    variants.
+11. **Do not implement semantic decisions as independent branch piles**; collect
+    evidence and emit one canonical outcome.
+12. **Do not let callers reproduce owner logic locally**; owners decide and
     caches observe.
-12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
+13. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
     proof pass.
-13a. **Do not keep patching a parked frontier**; record findings and redirect to
+14. **Do not keep patching a parked frontier**; record findings and redirect to
     another frontier or end EXHAUSTED.
-13b. **Do not keep patching a sealed Quest when an altitude reflection shows the
+15. **Do not keep patching a sealed Quest when an altitude reflection shows the
     lever is out of its scope**; capture the insight durably (finding / epic /
     system theory), then honestly EXHAUST and author the higher-altitude Quest/epic.
-14. **Do not leave completed work uncommitted**; commit every finished, coherent
+16. **Do not leave completed work uncommitted**; commit every finished, coherent
     unit of work (a Quest terminal or an ad-hoc task), scoped to its own files and
     excluding unrelated dirty worktree entries. For Quests this is the post-audit
     commit-and-push handoff. See "Default Posture: Commit On Completion".
-15. **Do not hand off Quest source changes without subagent verification**;
+17. **Do not hand off Quest source changes without subagent verification**;
     spawn a subagent verifier and record a Solver finding with evidence
     `subagent:<id>` before audit/git handoff.
-16. **Do not hand-roll a shell command where a script already does it**; consult
+18. **Do not hand-roll a shell command where a script already does it**; consult
     `npm run commands` / [`tools-index.md`](tools-index.md) first (see "Tool
     Discovery").
 

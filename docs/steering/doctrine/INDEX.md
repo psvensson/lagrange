@@ -34,7 +34,12 @@ Read together with [`../system-guidelines.md`](../system-guidelines.md),
 [`../../../architecture.md`](../../../architecture.md) is a compatibility pointer
 for older links only.
 
-## Doctrine Summary
+## Doctrine Summary (highlights — not the full rule set)
+
+These nine lines are a memory aid, **not** the complete or authoritatively-numbered
+doctrine. The canonical rules are the numbered sections §1–§17 (with §11a/§11b)
+in the four sub-files below; these summary numbers are independent of the section
+numbers and do not map to them one-to-one. Read the sub-files for the binding text.
 
 1. one semantic owner per concern
 2. one write ingress per plane
