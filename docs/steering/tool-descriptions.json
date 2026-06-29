@@ -7,6 +7,7 @@
   "distributed:stop-containers": "Stop local Docker containers and Node processes created by the distributed harness.",
   "analyze:distributed-failure": "Summarize a distributed failure report or bundle; the first analyzer to reach for over raw-log grep.",
   "analyze:topology-convergence": "Explain topology-convergence edges from a scenario artifact (add --explain <edge>).",
+  "analyze:rolling-restart-liveness": "Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.",
   "analyze:causal-model": "Print stop-condition and critical-path evidence from a scenario artifact.",
   "analyze:priority-recovery-residuals": "Split priority-recovery residuals from an artifact before ad-hoc extraction.",
   "analyze:owner-files": "Find likely owner files for an owner/boundary before broad source searches.",

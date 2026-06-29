@@ -1,0 +1,1343 @@
+diff --git a/docs/steering/llm/tools-index.md b/docs/steering/llm/tools-index.md
+index d82b5240..478838ef 100644
+--- a/docs/steering/llm/tools-index.md
++++ b/docs/steering/llm/tools-index.md
+@@ -44,6 +44,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
+ - `analyze:redecision-storm` — `node scripts/analyze-redecision-storm.js`
+ - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
+ - `analyze:replace-safety-blocks` — `node scripts/analyze-replace-safety-blocks.js`
++- `analyze:rolling-restart-liveness` — Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.
+ - `analyze:topology-convergence` — Render topology convergence evidence from report or playback artifacts.
+ 
+ ## audit
+@@ -220,4 +221,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
+ 
+ ---
+ 
+-145 scripts indexed; 64 have a curated description, 81 fall back to their raw command. Improve coverage in the two sources named in the header comment.
++146 scripts indexed; 65 have a curated description, 81 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+diff --git a/docs/steering/tool-descriptions.json b/docs/steering/tool-descriptions.json
+index 08812dcf..44f4a06a 100644
+--- a/docs/steering/tool-descriptions.json
++++ b/docs/steering/tool-descriptions.json
+@@ -7,6 +7,7 @@
+   "distributed:stop-containers": "Stop local Docker containers and Node processes created by the distributed harness.",
+   "analyze:distributed-failure": "Summarize a distributed failure report or bundle; the first analyzer to reach for over raw-log grep.",
+   "analyze:topology-convergence": "Explain topology-convergence edges from a scenario artifact (add --explain <edge>).",
++  "analyze:rolling-restart-liveness": "Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.",
+   "analyze:causal-model": "Print stop-condition and critical-path evidence from a scenario artifact.",
+   "analyze:priority-recovery-residuals": "Split priority-recovery residuals from an artifact before ad-hoc extraction.",
+   "analyze:owner-files": "Find likely owner files for an owner/boundary before broad source searches.",
+diff --git a/package.json b/package.json
+index 37eac5d3..6d4b0df8 100644
+--- a/package.json
++++ b/package.json
+@@ -89,6 +89,7 @@
+     "test:topology-failure-gates": "node scripts/run-topology-failure-gates.js",
+     "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",
+     "analyze:topology-convergence": "node scripts/analyze-topology-convergence.js",
++    "analyze:rolling-restart-liveness": "node scripts/analyze-rolling-restart-liveness.js",
+     "analyze:owner-decisions": "node scripts/analyze-topology-convergence.js --decision-table",
+     "analyze:owner-explain": "node scripts/analyze-topology-convergence.js --explain",
+     "analyze:owner-glossary": "node scripts/analyze-topology-convergence.js --glossary",
+diff --git a/scripts/analyze-rolling-restart-liveness.js b/scripts/analyze-rolling-restart-liveness.js
+new file mode 100644
+index 00000000..e75c2146
+--- /dev/null
++++ b/scripts/analyze-rolling-restart-liveness.js
+@@ -0,0 +1,54 @@
++#!/usr/bin/env node
++
++import process from 'node:process';
++import {
++  buildRollingRestartLivenessVerdict,
++} from './rolling-restart-liveness-classifier.js';
++import {
++  readArtifactWithSidecarsSync,
++} from './artifact-sidecar-loader.js';
++
++const ARG_HELP_SHORT = '-h';
++const ARG_HELP_LONG = '--help';
++const ARGUMENT_ARTIFACT_INDEX = 2;
++const EXIT_SUCCESS = 0;
++const EXIT_USAGE = 1;
++const EXIT_FAILURE = 2;
++const JSON_INDENT_SPACES = 2;
++const NEWLINE = '\n';
++const EMPTY_TEXT = '';
++
++const HELP_TEXT = [
++  'Usage: node scripts/analyze-rolling-restart-liveness.js <artifact.json>',
++  '',
++  'Classifies a rolling-restart failed sample with deterministic liveness',
++  'evidence: owner wake/queue admission, queue drain, publication visibility,',
++  'and downstream operation workflow progress.',
++].join(NEWLINE);
++
++function main(argv) {
++  const artifactPath = argv[ARGUMENT_ARTIFACT_INDEX] || EMPTY_TEXT;
++  if (artifactPath === ARG_HELP_SHORT || artifactPath === ARG_HELP_LONG) {
++    process.stdout.write(`${HELP_TEXT}${NEWLINE}`);
++    return EXIT_SUCCESS;
++  }
++  if (!artifactPath) {
++    process.stderr.write(`${HELP_TEXT}${NEWLINE}`);
++    return EXIT_USAGE;
++  }
++  try {
++    const artifact = readArtifactWithSidecarsSync(artifactPath);
++    const verdict = buildRollingRestartLivenessVerdict(artifact, {
++      sourceArtifact: artifactPath,
++    });
++    process.stdout.write(
++      `${JSON.stringify(verdict, null, JSON_INDENT_SPACES)}${NEWLINE}`,
++    );
++    return EXIT_SUCCESS;
++  } catch (error) {
++    process.stderr.write(`${error.message}${NEWLINE}`);
++    return EXIT_FAILURE;
++  }
++}
++
++process.exitCode = main(process.argv);
+diff --git a/scripts/rolling-restart-liveness-classifier.js b/scripts/rolling-restart-liveness-classifier.js
+new file mode 100644
+index 00000000..6c58e858
+--- /dev/null
++++ b/scripts/rolling-restart-liveness-classifier.js
+@@ -0,0 +1,744 @@
++import {
++  EDGE_ID,
++} from '../src/diagnostics/topology-convergence-constants.js';
++import {
++  buildTopologyConvergenceGraph,
++  buildTopologyConvergenceGraphFromArtifacts,
++} from '../src/diagnostics/topology-convergence-graph.js';
++
++const SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1 =
++  'rolling-restart-liveness-verdict-v1';
++
++const ABSENT_VALUE = 'absent';
++const EMPTY_TEXT = '';
++const TYPEOF_OBJECT = 'object';
++const TYPEOF_STRING = 'string';
++const NUM_ZERO = 0;
++const NUM_ONE = 1;
++const FIRST_INDEX = 0;
++const SECOND_INDEX = 1;
++
++const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
++const PROPERTY_REPORT = 'report';
++const PROPERTY_SCENARIOS = 'scenarios';
++const PROPERTY_TRIAGE_SUMMARY = 'triageSummary';
++const PROPERTY_PUBLICATION_CONVERGENCE = 'publicationConvergence';
++const PROPERTY_ACTIVE_GATE = 'activeGate';
++const PROPERTY_PROGRESS = 'progress';
++const PROPERTY_BEST_PROGRESS = 'bestProgress';
++const PROPERTY_PRIORITY_RECOVERY_PROGRESS_SUMMARY =
++  'priorityRecoveryProgressSummary';
++const PROPERTY_PRIORITY_RECOVERY_PROGRESS_CLASSES =
++  'priorityRecoveryProgressClasses';
++const PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE =
++  'rollingRestartLivenessEvidence';
++const PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES =
++  'rollingRestartLivenessSamples';
++const PROPERTY_SOURCE_ARTIFACT = 'sourceArtifact';
++
++const EVIDENCE_PATH_ARTIFACT = 'artifact';
++const EVIDENCE_PATH_ACTIVE_GATE_PROGRESS =
++  'report.scenarios[0].publicationConvergence.activeGate.progress';
++const EVIDENCE_PATH_ACTIVE_GATE_BEST_PROGRESS =
++  'report.scenarios[0].publicationConvergence.activeGate.bestProgress';
++const EVIDENCE_PATH_LIVENESS_EVIDENCE =
++  'rollingRestartLivenessEvidence.samples';
++const EVIDENCE_PATH_PRIORITY_RECOVERY =
++  'report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary';
++
++const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
++const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
++const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
++const BOUNDARY_PUBLICATION_VISIBILITY = 'publication_visibility';
++const BOUNDARY_PUBLICATION_CONVERGENCE = 'publication_convergence';
++const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
++const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
++  'reconcile_owner_membership_publication';
++const ACTION_WAIT_FOR_OPERATION_PROGRESS = 'wait_for_operation_progress';
++const ACTION_ABSENT = ABSENT_VALUE;
++
++const HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED =
++  'owner_reconcile_enqueued';
++const HANDOFF_REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
++const HANDOFF_STATE_WRITE_DEFERRED = 'write_deferred';
++const ACTION_EVENT_OWNER_RECONCILE_ENQUEUED = 'owner_reconcile_enqueued';
++const ACTION_EVENT_RECONCILE_STARTED = 'reconcile_started';
++const ACTION_EVENT_RECONCILE_COMPLETED = 'reconcile_completed';
++const ACTION_EVENT_PUBLICATION_WRITTEN = 'publication_written';
++const ACTION_STATE_EXECUTED = 'executed';
++
++const WITNESS_STATE_OBSERVED = 'observed';
++const QUEUE_STATE_OBSERVED = 'observed';
++const QUEUE_STATE_ABSENT = ABSENT_VALUE;
++const EVIDENCE_COMPLETENESS_COMPLETE = 'complete';
++const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
++const EVIDENCE_GAP_FULL_OWNER_EXECUTION_TRACE =
++  'full_owner_execution_trace';
++const EVIDENCE_GAP_POST_ENQUEUE_PROGRESS_SAMPLES =
++  'post_enqueue_progress_samples';
++const EVIDENCE_GAP_PUBLICATION_READBACK_AFTER_RECONCILE =
++  'publication_readback_after_reconcile';
++
++const PROGRESS_WITNESS_ABSENT = Object.freeze({
++  state: ABSENT_VALUE,
++  kind: ABSENT_VALUE,
++  evidencePath: ABSENT_VALUE,
++  timestamp: ABSENT_VALUE,
++  before: ABSENT_VALUE,
++  after: ABSENT_VALUE,
++});
++
++const METRIC_RULES = Object.freeze([
++  Object.freeze({
++    field: 'ownerQueueDepth',
++    kind: 'owner_queue_depth_decreased',
++    decreasing: true,
++  }),
++  Object.freeze({
++    field: 'inFlightDepth',
++    kind: 'in_flight_depth_decreased',
++    decreasing: true,
++  }),
++  Object.freeze({
++    field: 'missingPublishedCount',
++    kind: 'missing_published_shrank',
++    decreasing: true,
++  }),
++  Object.freeze({
++    field: 'cdcLag',
++    kind: 'cdc_lag_decreased',
++    decreasing: true,
++  }),
++  Object.freeze({
++    field: 'publicationEpoch',
++    kind: 'publication_epoch_changed',
++    changing: true,
++  }),
++  Object.freeze({
++    field: 'readbackEpoch',
++    kind: 'publication_readback_changed',
++    changing: true,
++  }),
++]);
++
++const EXECUTION_PROGRESS_EVENTS = Object.freeze(new Set([
++  ACTION_EVENT_RECONCILE_STARTED,
++  ACTION_EVENT_RECONCILE_COMPLETED,
++  ACTION_EVENT_PUBLICATION_WRITTEN,
++]));
++
++const ENABLED_ACTION_EVENTS = Object.freeze(new Set([
++  ACTION_EVENT_OWNER_RECONCILE_ENQUEUED,
++  HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED,
++]));
++
++const ROLLING_RESTART_LIVENESS_VERDICT = Object.freeze({
++  OBSERVED_PROGRESSING_BUDGET_EXHAUSTED:
++    'observed_progressing_budget_exhausted',
++  STUCK_NO_ENABLED_ACTION: 'stuck_no_enabled_action',
++  STUCK_ENABLED_ACTION_NOT_EXECUTED: 'stuck_enabled_action_not_executed',
++  STUCK_EXECUTED_NO_VISIBILITY: 'stuck_executed_no_visibility',
++  STUCK_DOWNSTREAM_WORKFLOW_PROGRESS: 'stuck_downstream_workflow_progress',
++  INSUFFICIENT_EVIDENCE: 'insufficient_evidence',
++});
++
++const REQUIRED_VERDICTS = Object.freeze([
++  ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++  ROLLING_RESTART_LIVENESS_VERDICT.STUCK_NO_ENABLED_ACTION,
++  ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
++  ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
++  ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
++  ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++]);
++
++function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
++  const graph = buildGraphForArtifact(artifact);
++  const scenario = selectScenario(artifact);
++  const publication = selectPublicationConvergence(artifact, scenario);
++  const progress = selectActiveGateProgress(publication);
++  const bestProgress = selectActiveGateBestProgress(publication);
++  const livenessEvidence = selectLivenessEvidence(artifact, scenario, publication);
++  const samples = normalizeLivenessSamples(livenessEvidence.samples);
++  const sourceArtifact = textValue(
++    options[PROPERTY_SOURCE_ARTIFACT],
++    artifact[PROPERTY_SOURCE_ARTIFACT],
++    EVIDENCE_PATH_ARTIFACT,
++  );
++  const downstream = classifyDownstreamWorkflow({
++    graph,
++    publication,
++    progress,
++  });
++  const actionEvidence = buildActionEvidence(progress, samples);
++  const progressWitness = selectProgressWitness(samples, actionEvidence);
++  const publicationDelta = buildPublicationDelta({
++    samples,
++    progress,
++    bestProgress,
++  });
++  const queueState = buildQueueState(progress, samples);
++  const executedWithoutVisibility = isExecutedWithoutVisibility({
++    actionEvidence,
++    progressWitness,
++    publicationDelta,
++  });
++  const base = {
++    schemaVersion: SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1,
++    scenario: textValue(scenario.scenario, graph.scenario, 'rolling-restart'),
++    sourceArtifact,
++    requiredVerdicts: REQUIRED_VERDICTS.slice(),
++    topologyFrontier: buildTopologyFrontier(graph),
++    queueState,
++    publicationDelta,
++    progressWitness,
++  };
++
++  if (downstream.blocked) {
++    return finalizeVerdict(base, {
++      verdict: ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
++      owner: downstream.owner,
++      boundary: downstream.boundary,
++      enabledAction: downstream.enabledAction,
++      lastProgressTimestamp: downstream.lastProgressTimestamp,
++      evidencePath: downstream.evidencePath,
++      evidenceGaps: [],
++    });
++  }
++
++  if (progressWitness.state !== ABSENT_VALUE) {
++    return finalizeVerdict(base, {
++      verdict:
++        ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++      owner: actionEvidence.owner,
++      boundary: actionEvidence.boundary,
++      enabledAction: actionEvidence.enabledAction,
++      lastProgressTimestamp: progressWitness.timestamp,
++      evidencePath: progressWitness.evidencePath,
++      evidenceGaps: [],
++    });
++  }
++
++  if (!actionEvidence.enabled) {
++    return finalizeVerdict(base, {
++      verdict: ROLLING_RESTART_LIVENESS_VERDICT.STUCK_NO_ENABLED_ACTION,
++      owner: actionEvidence.owner,
++      boundary: actionEvidence.boundary,
++      enabledAction: ACTION_ABSENT,
++      lastProgressTimestamp: ABSENT_VALUE,
++      evidencePath: actionEvidence.evidencePath,
++      evidenceGaps: [],
++    });
++  }
++
++  if (executedWithoutVisibility) {
++    return finalizeVerdict(base, {
++      verdict: ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
++      owner: actionEvidence.owner,
++      boundary: BOUNDARY_PUBLICATION_VISIBILITY,
++      enabledAction: actionEvidence.enabledAction,
++      lastProgressTimestamp: actionEvidence.executionTimestamp,
++      evidencePath: actionEvidence.evidencePath,
++      evidenceGaps: [],
++    });
++  }
++
++  if (actionEvidence.enabled && livenessEvidence.complete) {
++    return finalizeVerdict(base, {
++      verdict:
++        ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
++      owner: actionEvidence.owner,
++      boundary: actionEvidence.boundary,
++      enabledAction: actionEvidence.enabledAction,
++      lastProgressTimestamp: ABSENT_VALUE,
++      evidencePath: actionEvidence.evidencePath,
++      evidenceGaps: [],
++    });
++  }
++
++  return finalizeVerdict(base, {
++    verdict: ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++    owner: actionEvidence.owner,
++    boundary: actionEvidence.boundary,
++    enabledAction: actionEvidence.enabledAction,
++    lastProgressTimestamp: ABSENT_VALUE,
++    evidencePath: actionEvidence.evidencePath,
++    evidenceGaps: [
++      EVIDENCE_GAP_FULL_OWNER_EXECUTION_TRACE,
++      EVIDENCE_GAP_POST_ENQUEUE_PROGRESS_SAMPLES,
++      EVIDENCE_GAP_PUBLICATION_READBACK_AFTER_RECONCILE,
++    ],
++  });
++}
++
++function buildGraphForArtifact(artifact) {
++  if (
++    isRecord(artifact[PROPERTY_FAILURE_BUNDLE]) ||
++    isRecord(artifact[PROPERTY_TRIAGE_SUMMARY])
++  ) {
++    return buildTopologyConvergenceGraphFromArtifacts({
++      failureBundle: artifact[PROPERTY_FAILURE_BUNDLE] || {},
++      triageSummary: artifact[PROPERTY_TRIAGE_SUMMARY] || {},
++      report: artifact[PROPERTY_REPORT] || artifact,
++    });
++  }
++  return buildTopologyConvergenceGraph(artifact[PROPERTY_REPORT] || artifact);
++}
++
++function selectScenario(artifact) {
++  const report = artifact[PROPERTY_REPORT] || artifact;
++  const scenarios = Array.isArray(report[PROPERTY_SCENARIOS]) ?
++    report[PROPERTY_SCENARIOS] :
++    [];
++  return isRecord(scenarios[FIRST_INDEX]) ? scenarios[FIRST_INDEX] : {};
++}
++
++function selectPublicationConvergence(artifact, scenario) {
++  return firstRecord(
++    scenario[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_FAILURE_BUNDLE]?.[PROPERTY_PUBLICATION_CONVERGENCE],
++    artifact[PROPERTY_TRIAGE_SUMMARY]?.[PROPERTY_PUBLICATION_CONVERGENCE],
++  );
++}
++
++function selectActiveGateProgress(publication) {
++  const activeGate = firstRecord(publication[PROPERTY_ACTIVE_GATE]);
++  return firstRecord(
++    activeGate[PROPERTY_PROGRESS],
++    publication.activeGateProgress,
++    publication[PROPERTY_PROGRESS],
++  );
++}
++
++function selectActiveGateBestProgress(publication) {
++  const activeGate = firstRecord(publication[PROPERTY_ACTIVE_GATE]);
++  return firstRecord(activeGate[PROPERTY_BEST_PROGRESS]);
++}
++
++function selectLivenessEvidence(artifact, scenario, publication) {
++  const evidence = firstRecord(
++    artifact[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    scenario[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    publication[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++    publication[PROPERTY_ACTIVE_GATE]?.[PROPERTY_ROLLING_RESTART_LIVENESS_EVIDENCE],
++  );
++  const sampleList = firstArray(
++    evidence.samples,
++    artifact[PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES],
++    scenario[PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES],
++    publication[PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES],
++    publication[PROPERTY_ACTIVE_GATE]?.[PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES],
++  );
++  const completeness = evidence.complete === true ||
++    evidence.completeness === EVIDENCE_COMPLETENESS_COMPLETE;
++  return {
++    complete: completeness,
++    completeness: completeness ?
++      EVIDENCE_COMPLETENESS_COMPLETE :
++      EVIDENCE_COMPLETENESS_SPARSE,
++    samples: sampleList,
++  };
++}
++
++function normalizeLivenessSamples(samples) {
++  return samples
++    .filter(isRecord)
++    .map((sample, index) => ({
++      index,
++      timestamp: normalizeTimestamp(sample.timestamp ?? sample.ts),
++      event: textValue(sample.event, sample.action, sample.type),
++      actionState: textValue(sample.actionState, sample.state),
++      ownerQueueDepth: normalizeNumber(
++        sample.ownerQueueDepth ??
++        sample.queueDepth ??
++        sample.pendingWrites,
++      ),
++      inFlightDepth: normalizeNumber(sample.inFlightDepth),
++      missingPublishedCount: normalizeNumber(sample.missingPublishedCount),
++      cdcLag: normalizeNumber(sample.cdcLag ?? sample.bufferedEvents),
++      publicationEpoch: normalizeNumber(sample.publicationEpoch),
++      readbackEpoch: normalizeNumber(sample.readbackEpoch),
++      evidencePath: textValue(
++        sample.evidencePath,
++        `${EVIDENCE_PATH_LIVENESS_EVIDENCE}[${index}]`,
++      ),
++    }))
++    .sort((left, right) => left.index - right.index);
++}
++
++function buildActionEvidence(progress, samples) {
++  const sampleEvidence = selectSampleActionEvidence(samples);
++  if (sampleEvidence.enabled) {
++    return sampleEvidence;
++  }
++  const pendingReconcileCount = normalizeNumber(
++    progress.publicationActiveGateHandoffPendingReconcileCount ??
++    progress.activeGateOwnerCohortPendingReconcileCount,
++  );
++  const outcomeReason = textValue(
++    progress.membershipPublicationHandoffOutcomeReasonCode,
++  );
++  const outcomeState = textValue(
++    progress.membershipPublicationHandoffOutcomeState,
++  );
++  const enqueued = progress.membershipPublicationHandoffOutcomeEnqueued === true;
++  const nextAction = textValue(
++    progress.publicationActiveGateHandoffNextAction,
++    pendingReconcileCount > NUM_ZERO ?
++      ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION :
++      ACTION_ABSENT,
++  );
++  const enabled = enqueued ||
++    pendingReconcileCount > NUM_ZERO ||
++    outcomeReason === HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED ||
++    outcomeReason === HANDOFF_REASON_OWNER_RECONCILE_PENDING ||
++    outcomeState === HANDOFF_STATE_WRITE_DEFERRED;
++  return {
++    enabled,
++    executed: false,
++    owner: enabled ? OWNER_STARTUP_ACTIVE_GATE : OWNER_TOPOLOGY_PUBLICATION,
++    boundary: enabled ?
++      BOUNDARY_PUBLICATION_VISIBILITY :
++      BOUNDARY_PUBLICATION_CONVERGENCE,
++    enabledAction: enabled ? nextAction : ACTION_ABSENT,
++    enabledTimestamp: ABSENT_VALUE,
++    executionTimestamp: ABSENT_VALUE,
++    evidencePath: EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
++  };
++}
++
++function selectSampleActionEvidence(samples) {
++  let enabledSample = EMPTY_TEXT;
++  let executionSample = EMPTY_TEXT;
++  for (const sample of samples) {
++    if (!isRecord(enabledSample) && isEnabledActionSample(sample)) {
++      enabledSample = sample;
++    }
++    if (!isRecord(executionSample) && isExecutedActionSample(sample)) {
++      executionSample = sample;
++    }
++  }
++  const enabled = isRecord(enabledSample);
++  const executed = isRecord(executionSample);
++  return {
++    enabled,
++    executed,
++    owner: OWNER_STARTUP_ACTIVE_GATE,
++    boundary: BOUNDARY_PUBLICATION_VISIBILITY,
++    enabledAction: enabled ?
++      ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION :
++      ACTION_ABSENT,
++    enabledTimestamp: enabled ? enabledSample.timestamp : ABSENT_VALUE,
++    executionTimestamp: executed ? executionSample.timestamp : ABSENT_VALUE,
++    evidencePath: enabled ?
++      enabledSample.evidencePath :
++      EVIDENCE_PATH_LIVENESS_EVIDENCE,
++  };
++}
++
++function isEnabledActionSample(sample) {
++  return ENABLED_ACTION_EVENTS.has(sample.event) ||
++    sample.actionState === HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED ||
++    sample.actionState === HANDOFF_REASON_OWNER_RECONCILE_PENDING;
++}
++
++function isExecutedActionSample(sample) {
++  return EXECUTION_PROGRESS_EVENTS.has(sample.event) ||
++    sample.actionState === ACTION_STATE_EXECUTED;
++}
++
++function selectProgressWitness(samples, actionEvidence) {
++  if (!actionEvidence.enabled || samples.length < SECOND_INDEX) {
++    return PROGRESS_WITNESS_ABSENT;
++  }
++  const enabledIndex = selectEnabledActionIndex(samples, actionEvidence);
++  for (let index = enabledIndex + NUM_ONE; index < samples.length; index += NUM_ONE) {
++    const eventWitness = buildExecutionProgressWitness(samples[index]);
++    if (eventWitness.state !== ABSENT_VALUE) {
++      return eventWitness;
++    }
++    const metricWitness = compareProgressSamples(
++      samples[index - NUM_ONE],
++      samples[index],
++    );
++    if (metricWitness.state !== ABSENT_VALUE) {
++      return metricWitness;
++    }
++  }
++  return PROGRESS_WITNESS_ABSENT;
++}
++
++function selectEnabledActionIndex(samples, actionEvidence) {
++  const directIndex = samples.findIndex(isEnabledActionSample);
++  if (directIndex >= NUM_ZERO) {
++    return directIndex;
++  }
++  if (actionEvidence.enabledTimestamp === ABSENT_VALUE) {
++    return FIRST_INDEX;
++  }
++  const timestampIndex = samples.findIndex(
++    (sample) => sample.timestamp === actionEvidence.enabledTimestamp,
++  );
++  return timestampIndex >= NUM_ZERO ? timestampIndex : FIRST_INDEX;
++}
++
++function buildExecutionProgressWitness(sample) {
++  if (!EXECUTION_PROGRESS_EVENTS.has(sample.event)) {
++    return PROGRESS_WITNESS_ABSENT;
++  }
++  return {
++    state: WITNESS_STATE_OBSERVED,
++    kind: sample.event,
++    evidencePath: sample.evidencePath,
++    timestamp: sample.timestamp,
++    before: ABSENT_VALUE,
++    after: sample.event,
++  };
++}
++
++function compareProgressSamples(previous, current) {
++  for (const rule of METRIC_RULES) {
++    const before = previous[rule.field];
++    const after = current[rule.field];
++    if (!Number.isFinite(before) || !Number.isFinite(after)) {
++      continue;
++    }
++    const moved = rule.decreasing ? after < before : after !== before;
++    if (moved) {
++      return {
++        state: WITNESS_STATE_OBSERVED,
++        kind: rule.kind,
++        evidencePath: current.evidencePath,
++        timestamp: current.timestamp,
++        before,
++        after,
++      };
++    }
++  }
++  return PROGRESS_WITNESS_ABSENT;
++}
++
++function classifyDownstreamWorkflow({graph, publication, progress}) {
++  const prioritySummary = firstRecord(
++    publication[PROPERTY_PRIORITY_RECOVERY_PROGRESS_SUMMARY],
++  );
++  const dominantWitness = firstRecord(prioritySummary.dominantWitness);
++  const progressClasses = firstRecord(
++    progress[PROPERTY_PRIORITY_RECOVERY_PROGRESS_CLASSES],
++  );
++  const blockedPartitionCount = normalizeNumber(
++    progress.priorityRecoveryBlockedPartitionCount ??
++    progress.priorityBlockedPartitionCount ??
++    progressClasses.blockedPartitionCount,
++  );
++  const unresolvedSemanticStateCount = normalizeNumber(
++    progress.priorityRecoveryUnresolvedSemanticStateCount ??
++    progressClasses.unresolvedSemanticStateCount,
++  );
++  const missingPublishedCount = normalizeNumber(publication.missingPublishedCount);
++  const priorityEdge = graph.edges.find(
++    (edge) => edge.id === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
++  );
++  const blocked = missingPublishedCount === NUM_ZERO &&
++    (
++      blockedPartitionCount > NUM_ZERO ||
++      unresolvedSemanticStateCount > NUM_ZERO ||
++      isRecord(dominantWitness)
++    );
++  if (!blocked) {
++    return {blocked: false};
++  }
++  return {
++    blocked: true,
++    owner: textValue(
++      dominantWitness.currentOwner,
++      dominantWitness.actuationOwner,
++      priorityEdge?.owner,
++      OWNER_OPERATION_WORKFLOW,
++    ),
++    boundary: textValue(
++      dominantWitness.blockingBoundary,
++      priorityEdge?.boundary,
++      BOUNDARY_WORKFLOW_PROGRESS,
++    ),
++    enabledAction: textValue(
++      dominantWitness.nextRequiredAction,
++      dominantWitness.progressNextAction,
++      ACTION_WAIT_FOR_OPERATION_PROGRESS,
++    ),
++    lastProgressTimestamp: normalizeTimestamp(
++      dominantWitness.lastProgressAtMs,
++    ),
++    evidencePath: EVIDENCE_PATH_PRIORITY_RECOVERY,
++  };
++}
++
++function buildPublicationDelta({samples, progress, bestProgress}) {
++  if (samples.length >= SECOND_INDEX) {
++    const firstSample = samples[FIRST_INDEX];
++    const lastSample = samples[samples.length - NUM_ONE];
++    return {
++      evidencePath: EVIDENCE_PATH_LIVENESS_EVIDENCE,
++      fromPublicationEpoch: valueOrAbsent(firstSample.publicationEpoch),
++      toPublicationEpoch: valueOrAbsent(lastSample.publicationEpoch),
++      fromReadbackEpoch: valueOrAbsent(firstSample.readbackEpoch),
++      toReadbackEpoch: valueOrAbsent(lastSample.readbackEpoch),
++      fromMissingPublishedCount: valueOrAbsent(firstSample.missingPublishedCount),
++      toMissingPublishedCount: valueOrAbsent(lastSample.missingPublishedCount),
++      changed: didPublicationChange(firstSample, lastSample),
++    };
++  }
++  return {
++    evidencePath: EVIDENCE_PATH_ACTIVE_GATE_BEST_PROGRESS,
++    fromPublicationEpoch: valueOrAbsent(bestProgress.publicationEpoch),
++    toPublicationEpoch: valueOrAbsent(progress.publicationEpoch),
++    fromReadbackEpoch: ABSENT_VALUE,
++    toReadbackEpoch: ABSENT_VALUE,
++    fromMissingPublishedCount: valueOrAbsent(bestProgress.missingPublishedCount),
++    toMissingPublishedCount: valueOrAbsent(progress.missingPublishedCount),
++    changed: didPublicationChange(bestProgress, progress),
++  };
++}
++
++function didPublicationChange(left, right) {
++  return changedNumber(left.publicationEpoch, right.publicationEpoch) ||
++    changedNumber(left.readbackEpoch, right.readbackEpoch) ||
++    decreasedNumber(left.missingPublishedCount, right.missingPublishedCount);
++}
++
++function buildQueueState(progress, samples) {
++  const lastSample = samples[samples.length - NUM_ONE] || {};
++  const depthRecord = firstRecord(progress.selectedControlPlaneOwnerQueueDepth);
++  const pendingWrites = firstFiniteNumber(
++    depthRecord.pendingWrites,
++    lastSample.ownerQueueDepth,
++  );
++  if (!Number.isFinite(pendingWrites)) {
++    return {
++      state: QUEUE_STATE_ABSENT,
++      evidencePath: ABSENT_VALUE,
++      pendingWrites: ABSENT_VALUE,
++      pendingWriteGrowthCount: ABSENT_VALUE,
++      inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
++    };
++  }
++  return {
++    state: QUEUE_STATE_OBSERVED,
++    evidencePath: samples.length > NUM_ZERO ?
++      lastSample.evidencePath :
++      EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
++    pendingWrites,
++    pendingWriteGrowthCount: valueOrAbsent(depthRecord.pendingWriteGrowthCount),
++    inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
++  };
++}
++
++function isExecutedWithoutVisibility({
++  actionEvidence,
++  progressWitness,
++  publicationDelta,
++}) {
++  return actionEvidence.executed &&
++    progressWitness.state === ABSENT_VALUE &&
++    publicationDelta.changed === false;
++}
++
++function buildTopologyFrontier(graph) {
++  const frontier = graph.frontier?.[FIRST_INDEX] || {};
++  return {
++    edgeId: textValue(frontier.id, graph.summary?.firstFrontierEdgeId, ABSENT_VALUE),
++    owner: textValue(frontier.owner, graph.summary?.firstFrontierOwner, ABSENT_VALUE),
++    boundary: textValue(
++      frontier.boundary,
++      graph.summary?.firstFrontierBoundary,
++      ABSENT_VALUE,
++    ),
++    reason: textValue(
++      frontier.dominantReason,
++      graph.summary?.firstFrontierReason,
++      ABSENT_VALUE,
++    ),
++    evidencePath: textValue(frontier.evidencePath, ABSENT_VALUE),
++  };
++}
++
++function finalizeVerdict(base, fields) {
++  return {
++    ...base,
++    verdict: fields.verdict,
++    owner: fields.owner,
++    boundary: fields.boundary,
++    enabledAction: fields.enabledAction,
++    lastProgressTimestamp: fields.lastProgressTimestamp,
++    evidencePath: fields.evidencePath,
++    evidenceGaps: fields.evidenceGaps,
++  };
++}
++
++function firstRecord(...values) {
++  return values.find(isRecord) || {};
++}
++
++function firstArray(...values) {
++  return values.find(Array.isArray) || [];
++}
++
++function isRecord(value) {
++  return Boolean(value) &&
++    typeof value === TYPEOF_OBJECT &&
++    !Array.isArray(value);
++}
++
++function textValue(...values) {
++  for (const value of values) {
++    if (typeof value === TYPEOF_STRING && value.length > NUM_ZERO) {
++      return value;
++    }
++  }
++  return EMPTY_TEXT;
++}
++
++function normalizeNumber(value) {
++  const number = Number(value);
++  return Number.isFinite(number) ? number : Number.NaN;
++}
++
++function firstFiniteNumber(...values) {
++  for (const value of values) {
++    const number = normalizeNumber(value);
++    if (Number.isFinite(number)) {
++      return number;
++    }
++  }
++  return Number.NaN;
++}
++
++function normalizeTimestamp(value) {
++  const number = normalizeNumber(value);
++  if (Number.isFinite(number)) {
++    return number;
++  }
++  if (typeof value === TYPEOF_STRING && value.length > NUM_ZERO) {
++    return value;
++  }
++  return ABSENT_VALUE;
++}
++
++function valueOrAbsent(value) {
++  return Number.isFinite(value) ? value : ABSENT_VALUE;
++}
++
++function changedNumber(left, right) {
++  return Number.isFinite(left) && Number.isFinite(right) && left !== right;
++}
++
++function decreasedNumber(left, right) {
++  return Number.isFinite(left) && Number.isFinite(right) && right < left;
++}
++
++export {
++  REQUIRED_VERDICTS,
++  ROLLING_RESTART_LIVENESS_VERDICT,
++  SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1,
++  buildRollingRestartLivenessVerdict,
++};
+diff --git a/solve/log/rolling-restart-liveness-emulation.ndjson b/solve/log/rolling-restart-liveness-emulation.ndjson
+index 3cd9492a..993ead86 100644
+--- a/solve/log/rolling-restart-liveness-emulation.ndjson
++++ b/solve/log/rolling-restart-liveness-emulation.ndjson
+@@ -1,2 +1,8 @@
+ {"ts":"2026-06-29T06:33:43.182Z","type":"evidence-ingested","frontier":"publication-liveness-emulation","evidence":"solve/oracle/rolling-restart-liveness-emulation.json","evidenceIdentity":{"path":"solve/oracle/rolling-restart-liveness-emulation.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-liveness-emulation.json","exists":true,"size":626,"mtimeMs":1782714786016.1428,"sha256":"eb0721d6fccddfae589dc5fecab0d83ad33e71511cdfab06f21015d4bd10c29d","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"},"observedAt":"2026-06-29T06:33:43.180Z","fingerprint":"f0bb7eba2712f09e0caf563af4211b1dac2e2ee43a6de3a05def59cd1d483d75"},"evidenceFingerprint":"f0bb7eba2712f09e0caf563af4211b1dac2e2ee43a6de3a05def59cd1d483d75","probeScope":"doneWhen","probeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-liveness-emulation.json\"},\"probe\":\"oracle\"}","metricKind":"priority","reportTimestamp":"2026-06-29T06:33:43.181Z","metric":6,"invalidSample":false,"done":false,"verdict":"unknown","verdictReason":null,"rootCauseClass":null,"dominantReason":null,"priorityItems":null,"owner":null,"boundary":null,"waitMode":null,"nextAction":null,"mechanism":"transition_gap","selectedTheory":null,"satisfiedInvariants":[],"summary":"Evidence ingested successfully","blockerBefore":null,"blockerAfter":null,"blockerMovement":null,"diagnosticMovement":"closure evidence ingested"}
+ {"ts":"2026-06-29T06:33:43.182Z","type":"finding","frontier":"publication-liveness-emulation","claim":"Ingested evidence from rolling-restart-liveness-emulation.json. Metric: unknown -> 6. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed.","evidence":"solve/oracle/rolling-restart-liveness-emulation.json","rulesOut":null,"regressionClassification":null,"scopePressureClassification":null}
++{"ts":"2026-06-29T06:36:59.233Z","type":"quest-declared","sealed":{"doneWhen":{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"}},"frontierMetrics":[{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"}},{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"}}]}}
++{"ts":"2026-06-29T06:48:59.872Z","type":"attempt","frontier":"drain-in-flight-progress-emulation","rung":"observe","rungIndex":0,"prevRungIndex":0,"hypothesis":"add rolling-restart liveness classifier and fixtures","changeRef":"diff:solve/changes/rolling-restart-liveness-emulation/attempt-1.diff","metricBefore":6,"metricAfter":0,"metricDirection":"lower-is-better","invalidSample":false,"done":true,"evidence":"solve/oracle/rolling-restart-liveness-emulation.json","beforeEvidence":"solve/oracle/rolling-restart-liveness-emulation.json","beforeEvidenceIdentity":{"path":"solve/oracle/rolling-restart-liveness-emulation.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-liveness-emulation.json","exists":true,"size":626,"mtimeMs":1782714786016.1428,"sha256":"eb0721d6fccddfae589dc5fecab0d83ad33e71511cdfab06f21015d4bd10c29d","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"},"observedAt":"2026-06-29T06:36:59.237Z","fingerprint":"f0bb7eba2712f09e0caf563af4211b1dac2e2ee43a6de3a05def59cd1d483d75"},"beforeEvidenceFingerprint":"f0bb7eba2712f09e0caf563af4211b1dac2e2ee43a6de3a05def59cd1d483d75","evidenceIdentity":{"path":"solve/oracle/rolling-restart-liveness-emulation.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-liveness-emulation.json","exists":true,"size":1163,"mtimeMs":1782715682773.7053,"sha256":"d613b5bc9263408ff34ce27f81a45f85e3b1aa2b795517be007ed07eb183adcd","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"},"observedAt":"2026-06-29T06:48:59.869Z","fingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75"},"evidenceFingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75","probeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-liveness-emulation.json\"},\"probe\":\"oracle\"}","beforeProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-liveness-emulation.json\"},\"probe\":\"oracle\"}","afterProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-liveness-emulation.json\"},\"probe\":\"oracle\"}","metricKind":null,"theoryRef":null,"expectedMovement":null,"negativeResultMeans":null,"modelRef":null,"modelNotApplicable":null,"blockerBefore":null,"blockerAfter":null,"blockerMovement":"no_evidence","diagnosticMovement":"no evidence recorded","satisfiedInvariants":null,"nodeExit":null,"discrimination":null}
++{"ts":"2026-06-29T06:48:59.872Z","type":"solved","frontier":"drain-in-flight-progress-emulation","evidence":"solve/oracle/rolling-restart-liveness-emulation.json","evidenceIdentity":{"path":"solve/oracle/rolling-restart-liveness-emulation.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-liveness-emulation.json","exists":true,"size":1163,"mtimeMs":1782715682773.7053,"sha256":"d613b5bc9263408ff34ce27f81a45f85e3b1aa2b795517be007ed07eb183adcd","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"},"observedAt":"2026-06-29T06:48:59.869Z","fingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75"},"evidenceFingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75"}
++{"ts":"2026-06-29T06:48:59.872Z","type":"quest","status":"solved","evidence":"solve/oracle/rolling-restart-liveness-emulation.json","evidenceIdentity":{"path":"solve/oracle/rolling-restart-liveness-emulation.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-liveness-emulation.json","exists":true,"size":1163,"mtimeMs":1782715682773.7053,"sha256":"d613b5bc9263408ff34ce27f81a45f85e3b1aa2b795517be007ed07eb183adcd","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-liveness-emulation.json"},"observedAt":"2026-06-29T06:48:59.872Z","fingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75"},"evidenceFingerprint":"340293881f31ba965b1352bcf37887c082c81c0bdf355576da72c6c0d47e1a75"}
++{"ts":"2026-06-29T06:53:34.119Z","type":"finding","frontier":"drain-in-flight-progress-emulation","claim":"Subagent verifier approved source changes for the rolling-restart liveness classifier and fixtures","evidence":"subagent:019f1224-4512-7df3-ab9b-2392a215feb3","rulesOut":null,"regressionClassification":null,"scopePressureClassification":null}
++{"ts":"2026-06-29T06:54:21.207Z","type":"finding","frontier":"drain-in-flight-progress-emulation","claim":"Model evidence finding: core-system architecture model is not applicable because this Quest changes only diagnostic analyzer and fixture tooling, not runtime owner contracts or product behavior","evidence":"architecture/contracts/core-system-logic.md","rulesOut":null,"regressionClassification":null,"scopePressureClassification":null}
+diff --git a/solve/oracle/rolling-restart-liveness-emulation.json b/solve/oracle/rolling-restart-liveness-emulation.json
+index 10cde86d..2b42f49a 100644
+--- a/solve/oracle/rolling-restart-liveness-emulation.json
++++ b/solve/oracle/rolling-restart-liveness-emulation.json
+@@ -1,15 +1,23 @@
+ {
+-  "metric": 6,
++  "metric": 0,
+   "target": 0,
+-  "done": false,
+-  "classification": "open",
++  "done": true,
++  "classification": "solved",
+   "note": "Lower-is-better = unmet classifier/emulator acceptance criteria. This Quest closes only when failed rolling-restart samples can be classified by deterministic replay/emulation with progress-witness discipline; it does not close run4 or claim product stability.",
++  "evidence": {
++    "analyzer": "npm run analyze:rolling-restart-liveness -- <artifact>",
++    "source": "scripts/rolling-restart-liveness-classifier.js",
++    "cli": "scripts/analyze-rolling-restart-liveness.js",
++    "test": "test/scripts/analyze-rolling-restart-liveness.test.js",
++    "latestPublicationMissingActiveNodeReport": "test-output/reports/stat-gate-20260629T045155Z-run1.report.json",
++    "knownDrainInFlightFixture": "test/scripts/__fixtures__/topology-convergence/priority-workflow-timeout-transition-deferred.fixture.json"
++  },
+   "workstreams": {
+-    "run1-structured-verdict": false,
+-    "progress-witness-schema": false,
+-    "enqueue-backlog-red-fixture": false,
+-    "synthetic-slow-progress-fixture": false,
+-    "synthetic-true-stuck-fixture": false,
+-    "drain-in-flight-stall-fixture": false
++    "run1-structured-verdict": true,
++    "progress-witness-schema": true,
++    "enqueue-backlog-red-fixture": true,
++    "synthetic-slow-progress-fixture": true,
++    "synthetic-true-stuck-fixture": true,
++    "drain-in-flight-stall-fixture": true
+   }
+ }
+diff --git a/solve/report/rolling-restart-liveness-emulation.md b/solve/report/rolling-restart-liveness-emulation.md
+index d4f17c92..fbda4c35 100644
+--- a/solve/report/rolling-restart-liveness-emulation.md
++++ b/solve/report/rolling-restart-liveness-emulation.md
+@@ -4,9 +4,9 @@
+ 
+ **Class:** process · **Closure:** DECISION
+ 
+-**Outcome:** IN PROGRESS (no terminal recorded)
++**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/rolling-restart-liveness-emulation.json
+ 
+-**Attempts:** 0
++**Attempts:** 1
+ 
+ ## Links
+ - roadmap row: RM-0.1-fs-rolling-restart
+@@ -27,21 +27,33 @@
+ 
+ ## Continuation
+ - Status: allowed
+-- Next action: continue supervised step for drain-in-flight-progress-emulation
++- Next action: continue supervised step for publication-liveness-emulation
+ - Blocker: none
+ 
+ ## Scope Pressure
+-- Changed files: 0
+-- Owner areas: none
+-- Categories: none
+-- Signals: none
++- Changed files: 12
++- Owner areas: docs, package.json, scripts/analyze-rolling-restart-liveness.js, scripts/rolling-restart-liveness-classifier.js, solve, test/scripts
++- Categories: other, test, workflow
++- Action: split by owner area before the next attempt (12 files)
++- Action: land or separate 6 owner areas: docs, package.json, scripts/analyze-rolling-restart-liveness.js, scripts/rolling-restart-liveness-classifier.js, solve, test/scripts
++- Split plan:
++  - test/scripts: 5 file(s)
++  - docs: 2 file(s)
++  - solve: 2 file(s)
++  - package.json: 1 file(s)
++  - scripts/analyze-rolling-restart-liveness.js: 1 file(s)
++  - scripts/rolling-restart-liveness-classifier.js: 1 file(s)
++- Signal: broad-source-scope severity=medium
++- Signal: large-diff-stack severity=medium
+ 
+ ## Frontiers
+ - **publication-liveness-emulation** [open] rung 0, attempts 0, metric ? -> ?
+-- **drain-in-flight-progress-emulation** [open] rung 0, attempts 0, metric ? -> ?
++- **drain-in-flight-progress-emulation** [solved] rung 0, attempts 1, metric 6 -> 0
+ 
+ ## Findings
+ - **publication-liveness-emulation**: Ingested evidence from rolling-restart-liveness-emulation.json. Metric: unknown -> 6. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/rolling-restart-liveness-emulation.json]
++- **drain-in-flight-progress-emulation**: Subagent verifier approved source changes for the rolling-restart liveness classifier and fixtures [subagent:019f1224-4512-7df3-ab9b-2392a215feb3]
++- **drain-in-flight-progress-emulation**: Model evidence finding: core-system architecture model is not applicable because this Quest changes only diagnostic analyzer and fixture tooling, not runtime owner contracts or product behavior [architecture/contracts/core-system-logic.md]
+ 
+ ## Theories
+ _(none recorded)_
+@@ -55,3 +67,4 @@ _(none recorded)_
+ ## Attempt log
+ | ts | frontier | rung | metric | result | blocker movement | theory | change |
+ | --- | --- | --- | --- | --- | --- | --- | --- |
++| 2026-06-29T06:48:59.872Z | drain-in-flight-progress-emulation | observe | 6 -> 0 | progress | no_evidence |  | diff:solve/changes/rolling-restart-liveness-emulation/attempt-1.diff |
+diff --git a/test/scripts/__fixtures__/rolling-restart-liveness/enqueue-backlog-no-progress.fixture.json b/test/scripts/__fixtures__/rolling-restart-liveness/enqueue-backlog-no-progress.fixture.json
+new file mode 100644
+index 00000000..4e774f44
+--- /dev/null
++++ b/test/scripts/__fixtures__/rolling-restart-liveness/enqueue-backlog-no-progress.fixture.json
+@@ -0,0 +1,49 @@
++{
++  "scenarios": [
++    {
++      "scenario": "rolling-restart",
++      "publicationConvergence": {
++        "publicationStatus": "PUBLISHED",
++        "missingPublishedCount": 1,
++        "activeGate": {
++          "state": "stalled",
++          "ready": false,
++          "progress": {
++            "publicationEpoch": 25,
++            "missingPublishedCount": 1,
++            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
++            "publicationActiveGateHandoffPendingReconcileCount": 1,
++            "membershipPublicationHandoffOutcomeReasonCode": "owner_reconcile_enqueued",
++            "membershipPublicationHandoffOutcomeEnqueued": true,
++            "selectedControlPlaneOwnerQueueDepth": {
++              "pendingWrites": 3,
++              "pendingWriteGrowthCount": 10
++            }
++          }
++        },
++        "rollingRestartLivenessEvidence": {
++          "complete": true,
++          "samples": [
++            {
++              "timestamp": 1000,
++              "event": "owner_reconcile_enqueued",
++              "ownerQueueDepth": 3,
++              "missingPublishedCount": 1,
++              "cdcLag": 517,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            },
++            {
++              "timestamp": 2000,
++              "ownerQueueDepth": 3,
++              "missingPublishedCount": 1,
++              "cdcLag": 517,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            }
++          ]
++        }
++      }
++    }
++  ]
++}
+diff --git a/test/scripts/__fixtures__/rolling-restart-liveness/publication-executed-no-visibility.fixture.json b/test/scripts/__fixtures__/rolling-restart-liveness/publication-executed-no-visibility.fixture.json
+new file mode 100644
+index 00000000..7650e593
+--- /dev/null
++++ b/test/scripts/__fixtures__/rolling-restart-liveness/publication-executed-no-visibility.fixture.json
+@@ -0,0 +1,44 @@
++{
++  "scenarios": [
++    {
++      "scenario": "rolling-restart",
++      "publicationConvergence": {
++        "publicationStatus": "PUBLISHED",
++        "missingPublishedCount": 1,
++        "activeGate": {
++          "state": "stalled",
++          "ready": false,
++          "progress": {
++            "publicationEpoch": 25,
++            "missingPublishedCount": 1,
++            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
++            "publicationActiveGateHandoffPendingReconcileCount": 1
++          }
++        },
++        "rollingRestartLivenessEvidence": {
++          "complete": true,
++          "samples": [
++            {
++              "timestamp": 1000,
++              "event": "owner_reconcile_enqueued",
++              "ownerQueueDepth": 1,
++              "missingPublishedCount": 1,
++              "cdcLag": 10,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            },
++            {
++              "timestamp": 2000,
++              "actionState": "executed",
++              "ownerQueueDepth": 1,
++              "missingPublishedCount": 1,
++              "cdcLag": 10,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            }
++          ]
++        }
++      }
++    }
++  ]
++}
+diff --git a/test/scripts/__fixtures__/rolling-restart-liveness/publication-no-enabled-action.fixture.json b/test/scripts/__fixtures__/rolling-restart-liveness/publication-no-enabled-action.fixture.json
+new file mode 100644
+index 00000000..0b07315e
+--- /dev/null
++++ b/test/scripts/__fixtures__/rolling-restart-liveness/publication-no-enabled-action.fixture.json
+@@ -0,0 +1,40 @@
++{
++  "scenarios": [
++    {
++      "scenario": "rolling-restart",
++      "publicationConvergence": {
++        "publicationStatus": "PUBLISHED",
++        "missingPublishedCount": 1,
++        "activeGate": {
++          "state": "stalled",
++          "ready": false,
++          "progress": {
++            "publicationEpoch": 25,
++            "missingPublishedCount": 1
++          }
++        },
++        "rollingRestartLivenessEvidence": {
++          "complete": true,
++          "samples": [
++            {
++              "timestamp": 1000,
++              "ownerQueueDepth": 0,
++              "missingPublishedCount": 1,
++              "cdcLag": 20,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            },
++            {
++              "timestamp": 2000,
++              "ownerQueueDepth": 0,
++              "missingPublishedCount": 1,
++              "cdcLag": 20,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            }
++          ]
++        }
++      }
++    }
++  ]
++}
+diff --git a/test/scripts/__fixtures__/rolling-restart-liveness/publication-slow-progress.fixture.json b/test/scripts/__fixtures__/rolling-restart-liveness/publication-slow-progress.fixture.json
+new file mode 100644
+index 00000000..5b7ff4e4
+--- /dev/null
++++ b/test/scripts/__fixtures__/rolling-restart-liveness/publication-slow-progress.fixture.json
+@@ -0,0 +1,49 @@
++{
++  "scenarios": [
++    {
++      "scenario": "rolling-restart",
++      "publicationConvergence": {
++        "publicationStatus": "PUBLISHED",
++        "missingPublishedCount": 2,
++        "activeGate": {
++          "state": "stalled",
++          "ready": false,
++          "progress": {
++            "publicationEpoch": 25,
++            "missingPublishedCount": 2,
++            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
++            "publicationActiveGateHandoffPendingReconcileCount": 2,
++            "membershipPublicationHandoffOutcomeReasonCode": "owner_reconcile_enqueued",
++            "membershipPublicationHandoffOutcomeEnqueued": true,
++            "selectedControlPlaneOwnerQueueDepth": {
++              "pendingWrites": 3,
++              "pendingWriteGrowthCount": 0
++            }
++          }
++        },
++        "rollingRestartLivenessEvidence": {
++          "complete": true,
++          "samples": [
++            {
++              "timestamp": 1000,
++              "event": "owner_reconcile_enqueued",
++              "ownerQueueDepth": 3,
++              "missingPublishedCount": 2,
++              "cdcLag": 200,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            },
++            {
++              "timestamp": 2000,
++              "ownerQueueDepth": 2,
++              "missingPublishedCount": 1,
++              "cdcLag": 150,
++              "publicationEpoch": 25,
++              "readbackEpoch": 25
++            }
++          ]
++        }
++      }
++    }
++  ]
++}
+diff --git a/test/scripts/analyze-rolling-restart-liveness.test.js b/test/scripts/analyze-rolling-restart-liveness.test.js
+new file mode 100644
+index 00000000..d7fe376a
+--- /dev/null
++++ b/test/scripts/analyze-rolling-restart-liveness.test.js
+@@ -0,0 +1,168 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {execFileSync} from 'node:child_process';
++import fs from 'node:fs';
++import path from 'node:path';
++import {
++  REQUIRED_VERDICTS,
++  ROLLING_RESTART_LIVENESS_VERDICT,
++  buildRollingRestartLivenessVerdict,
++} from '../../scripts/rolling-restart-liveness-classifier.js';
++
++const NODE_BIN = process.execPath;
++const SCRIPT_PATH = 'scripts/analyze-rolling-restart-liveness.js';
++const ENCODING_UTF8 = 'utf8';
++const FIXTURE_DIRECTORY =
++  'test/scripts/__fixtures__/rolling-restart-liveness';
++const TOPOLOGY_FIXTURE_DIRECTORY =
++  'test/scripts/__fixtures__/topology-convergence';
++const RUN1_REPORT_PATH =
++  'test-output/reports/stat-gate-20260629T045155Z-run1.report.json';
++const ENQUEUE_BACKLOG_FIXTURE_PATH =
++  `${FIXTURE_DIRECTORY}/enqueue-backlog-no-progress.fixture.json`;
++const SLOW_PROGRESS_FIXTURE_PATH =
++  `${FIXTURE_DIRECTORY}/publication-slow-progress.fixture.json`;
++const NO_ENABLED_ACTION_FIXTURE_PATH =
++  `${FIXTURE_DIRECTORY}/publication-no-enabled-action.fixture.json`;
++const EXECUTED_NO_VISIBILITY_FIXTURE_PATH =
++  `${FIXTURE_DIRECTORY}/publication-executed-no-visibility.fixture.json`;
++const DRAIN_STALL_FIXTURE_PATH =
++  `${TOPOLOGY_FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.fixture.json`;
++
++describe('rolling restart liveness classifier', () => {
++  it('publishes the full verdict taxonomy', () => {
++    assert.deepEqual(REQUIRED_VERDICTS, [
++      ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_NO_ENABLED_ACTION,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
++      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++    ]);
++  });
++
++  it('classifies latest publication_missing_active_node run without progress hand-waving', () => {
++    const verdict = runAnalyzer(RUN1_REPORT_PATH);
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.INSUFFICIENT_EVIDENCE,
++    );
++    assert.notEqual(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++    );
++    assert.equal(verdict.owner, 'startup_active_gate_owner');
++    assert.equal(verdict.boundary, 'publication_visibility');
++    assert.equal(
++      verdict.enabledAction,
++      'reconcile_owner_membership_publication',
++    );
++    assert.equal(verdict.lastProgressTimestamp, 'absent');
++    assert.equal(verdict.queueState.state, 'observed');
++    assert.equal(verdict.queueState.pendingWrites, 3);
++    assert.equal(verdict.publicationDelta.toMissingPublishedCount, 1);
++    assert.equal(
++      verdict.evidencePath,
++      'report.scenarios[0].publicationConvergence.activeGate.progress',
++    );
++    assert.ok(verdict.evidenceGaps.includes('full_owner_execution_trace'));
++  });
++
++  it('keeps enqueue plus backlog from becoming a positive progress verdict', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      readJson(ENQUEUE_BACKLOG_FIXTURE_PATH),
++      {sourceArtifact: ENQUEUE_BACKLOG_FIXTURE_PATH},
++    );
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_ENABLED_ACTION_NOT_EXECUTED,
++    );
++    assert.equal(verdict.progressWitness.state, 'absent');
++  });
++
++  it('classifies a synthetic slow-progress publication sample as progressing', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      readJson(SLOW_PROGRESS_FIXTURE_PATH),
++      {sourceArtifact: SLOW_PROGRESS_FIXTURE_PATH},
++    );
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++    );
++    assert.equal(verdict.progressWitness.kind, 'owner_queue_depth_decreased');
++    assert.equal(verdict.progressWitness.before, 3);
++    assert.equal(verdict.progressWitness.after, 2);
++  });
++
++  it('classifies a publication stall with no enabled action', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      readJson(NO_ENABLED_ACTION_FIXTURE_PATH),
++      {sourceArtifact: NO_ENABLED_ACTION_FIXTURE_PATH},
++    );
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_NO_ENABLED_ACTION,
++    );
++    assert.equal(verdict.enabledAction, 'absent');
++  });
++
++  it('classifies an executed owner action that never becomes visible', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      readJson(EXECUTED_NO_VISIBILITY_FIXTURE_PATH),
++      {sourceArtifact: EXECUTED_NO_VISIBILITY_FIXTURE_PATH},
++    );
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_EXECUTED_NO_VISIBILITY,
++    );
++    assert.equal(verdict.lastProgressTimestamp, 2000);
++    assert.equal(verdict.publicationDelta.changed, false);
++  });
++
++  it('classifies a known drain/in-flight stall through the same evidence model', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      readJson(DRAIN_STALL_FIXTURE_PATH),
++      {sourceArtifact: DRAIN_STALL_FIXTURE_PATH},
++    );
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
++    );
++    assert.equal(verdict.owner, 'operation_workflow_owner');
++    assert.equal(verdict.boundary, 'workflow_timeout');
++    assert.equal(verdict.enabledAction, 'reconcile_stale_operation_progress');
++  });
++
++  it('prints the same verdict through the CLI', () => {
++    const output = execFileSync(
++      NODE_BIN,
++      [SCRIPT_PATH, SLOW_PROGRESS_FIXTURE_PATH],
++      {encoding: ENCODING_UTF8},
++    );
++    const verdict = JSON.parse(output);
++
++    assert.equal(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
++    );
++  });
++});
++
++function readJson(filePath) {
++  return JSON.parse(fs.readFileSync(path.resolve(filePath), ENCODING_UTF8));
++}
++
++function runAnalyzer(filePath) {
++  const output = execFileSync(
++    NODE_BIN,
++    [SCRIPT_PATH, filePath],
++    {encoding: ENCODING_UTF8},
++  );
++  return JSON.parse(output);
++}

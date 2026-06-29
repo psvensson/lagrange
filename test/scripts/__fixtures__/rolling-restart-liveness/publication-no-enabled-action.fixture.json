@@ -1,0 +1,40 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "missingPublishedCount": 1,
+        "activeGate": {
+          "state": "stalled",
+          "ready": false,
+          "progress": {
+            "publicationEpoch": 25,
+            "missingPublishedCount": 1
+          }
+        },
+        "rollingRestartLivenessEvidence": {
+          "complete": true,
+          "samples": [
+            {
+              "timestamp": 1000,
+              "ownerQueueDepth": 0,
+              "missingPublishedCount": 1,
+              "cdcLag": 20,
+              "publicationEpoch": 25,
+              "readbackEpoch": 25
+            },
+            {
+              "timestamp": 2000,
+              "ownerQueueDepth": 0,
+              "missingPublishedCount": 1,
+              "cdcLag": 20,
+              "publicationEpoch": 25,
+              "readbackEpoch": 25
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -44,6 +44,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:redecision-storm` — `node scripts/analyze-redecision-storm.js`
 - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
 - `analyze:replace-safety-blocks` — `node scripts/analyze-replace-safety-blocks.js`
+- `analyze:rolling-restart-liveness` — Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.
 - `analyze:topology-convergence` — Render topology convergence evidence from report or playback artifacts.
 
 ## audit
@@ -220,4 +221,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-145 scripts indexed; 64 have a curated description, 81 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+146 scripts indexed; 65 have a curated description, 81 fall back to their raw command. Improve coverage in the two sources named in the header comment.

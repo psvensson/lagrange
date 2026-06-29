@@ -89,6 +89,7 @@
     "test:topology-failure-gates": "node scripts/run-topology-failure-gates.js",
     "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",
     "analyze:topology-convergence": "node scripts/analyze-topology-convergence.js",
+    "analyze:rolling-restart-liveness": "node scripts/analyze-rolling-restart-liveness.js",
     "analyze:owner-decisions": "node scripts/analyze-topology-convergence.js --decision-table",
     "analyze:owner-explain": "node scripts/analyze-topology-convergence.js --explain",
     "analyze:owner-glossary": "node scripts/analyze-topology-convergence.js --glossary",

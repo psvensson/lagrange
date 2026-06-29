@@ -1,0 +1,49 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "missingPublishedCount": 2,
+        "activeGate": {
+          "state": "stalled",
+          "ready": false,
+          "progress": {
+            "publicationEpoch": 25,
+            "missingPublishedCount": 2,
+            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
+            "publicationActiveGateHandoffPendingReconcileCount": 2,
+            "membershipPublicationHandoffOutcomeReasonCode": "owner_reconcile_enqueued",
+            "membershipPublicationHandoffOutcomeEnqueued": true,
+            "selectedControlPlaneOwnerQueueDepth": {
+              "pendingWrites": 3,
+              "pendingWriteGrowthCount": 0
+            }
+          }
+        },
+        "rollingRestartLivenessEvidence": {
+          "complete": true,
+          "samples": [
+            {
+              "timestamp": 1000,
+              "event": "owner_reconcile_enqueued",
+              "ownerQueueDepth": 3,
+              "missingPublishedCount": 2,
+              "cdcLag": 200,
+              "publicationEpoch": 25,
+              "readbackEpoch": 25
+            },
+            {
+              "timestamp": 2000,
+              "ownerQueueDepth": 2,
+              "missingPublishedCount": 1,
+              "cdcLag": 150,
+              "publicationEpoch": 25,
+              "readbackEpoch": 25
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
