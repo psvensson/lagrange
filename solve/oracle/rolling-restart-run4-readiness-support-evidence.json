@@ -1,0 +1,45 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "diagnostics-normalized",
+  "evidence": {
+    "source": [
+      "src/diagnostics/topology-convergence-constants.js",
+      "src/diagnostics/topology-convergence-core-normalizers.js",
+      "src/diagnostics/topology-convergence-normalizers.js",
+      "src/diagnostics/topology-convergence-readiness-normalizers.js",
+      "src/diagnostics/topology-convergence-active-gate-normalizers.js",
+      "src/diagnostics/topology-convergence-publication-normalizers.js",
+      "src/diagnostics/topology-convergence-decision-table.js",
+      "src/diagnostics/topology-convergence-graph.js"
+    ],
+    "test": "test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "liveReport": "test-output/reports/stat-gate-20260630T051118Z-run1.report.json",
+    "subagent": [
+      "019f171f-2ab3-7ea0-83c1-5a8b80f2ac7a",
+      "019f1729-c694-7200-890b-f5c13df88f22"
+    ]
+  },
+  "observed": {
+    "focusedTest": "zero readiness timeline reason counts satisfy startup_readiness_owner/startup_support_evidence",
+    "absentGuard": "absent readiness evidence remains readiness_startup_support/evidence_missing",
+    "unsupportedGuard": "non-empty unsupported readiness evidence remains readiness_startup_support/evidence_missing",
+    "liveTopologyFrontierCount": 0,
+    "liveReadinessState": "satisfied",
+    "liveReadinessEvidencePath": "failureBundle.readiness"
+  },
+  "validations": {
+    "node-test": "node --test test/diagnostics/topology-convergence-readiness-support-evidence.test.js test/diagnostics/topology-convergence-graph.test.js",
+    "live-topology": "npm --silent run analyze:topology-convergence -- test-output/reports/stat-gate-20260630T051118Z-run1.report.json",
+    "eslint": "npx eslint src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "metrics": "npm run test:metrics:scoped -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "file-size": "npm run audit:file-size -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "runtime-grammar": "npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "literals": "npm run audit:guideline:literals -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "decision-boundaries": "npm run audit:guideline:decision-boundaries -- src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js",
+    "constant-names": "npm run guard:guideline:constant-names:file -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-core-normalizers.js src/diagnostics/topology-convergence-normalizers.js src/diagnostics/topology-convergence-readiness-normalizers.js src/diagnostics/topology-convergence-active-gate-normalizers.js src/diagnostics/topology-convergence-publication-normalizers.js src/diagnostics/topology-convergence-decision-table.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-readiness-support-evidence.test.js",
+    "model-contracts": "npm run model:contracts",
+    "diff-check": "git diff --check"
+  }
+}

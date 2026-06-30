@@ -4,25 +4,9 @@ import {
   SOURCE_ORDER_BASE,
   FIRST_FRONTIER_INDEX,
   TOPOLOGY_CONVERGENCE_EMPTY_REASON_LIST,
-  PUBLICATION_STATUS_PUBLISHED,
-  PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING,
-  PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION,
-  PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
-  PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
-  PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
-  PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
-  PUBLICATION_OWNER_REVISION_STATE_CURRENT,
-  PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
-  PUBLICATION_PENDING_STATUS_SET,
-  TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL,
   SOURCE_PATH,
   SOURCE_FIELD,
-  READINESS_SUPPORT_PATH,
-  READINESS_RECOVERABILITY_RULES,
-  READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES,
   LIST_SEPARATOR,
-  OWNER,
-  BOUNDARY,
 } from './topology-convergence-constants.js';
 
 import {
@@ -31,10 +15,6 @@ import {
   firstText,
   textOrUnknown,
   numberOrZero,
-  numberOrUnknown,
-  booleanVariant,
-  parseBooleanVariant,
-  firstFiniteNumber,
   flattenEvidencePath,
   firstRecord,
   firstArray,
@@ -42,8 +22,21 @@ import {
   arrayCandidate,
   firstRecordWithSource,
   firstArrayWithSource,
-  isTopologyOperatorWitnessPresent,
 } from './topology-convergence-core-normalizers.js';
+
+import {
+  normalizeActiveGateSnapshotCoverageProgress,
+} from './topology-convergence-active-gate-normalizers.js';
+
+import {
+  buildReplayablePublicationActiveGateHandoffFromOwnerEvidence,
+  hasPublicationActiveGateHandoffContract,
+} from './topology-convergence-publication-normalizers.js';
+
+import {
+  deriveProjectionReadinessFailure,
+  normalizeExplicitReadinessSupportEvidence,
+} from './topology-convergence-readiness-normalizers.js';
 
 export {
   asRecord,
@@ -64,7 +57,39 @@ export {
   firstRecordWithSource,
   firstArrayWithSource,
   isTopologyOperatorWitnessPresent,
+  normalizeProgressContract,
 } from './topology-convergence-core-normalizers.js';
+
+export {
+  normalizeActiveGateSnapshotCoverageProgress,
+} from './topology-convergence-active-gate-normalizers.js';
+
+export {
+  isClosedPublicationOwnerAckState,
+  normalizePublicationOwnerStreamEvidence,
+  isNonTerminalTopologyOperatorWitness,
+  normalizePublicationEvidence,
+  buildTopologyOperatorWitnessDiagnosticSource,
+  isPublicationPendingEvidence,
+  isPublicationConsumerLagEvidence,
+  hasPublicationMissingPublishedEvidence,
+  isPublicationMissingPublishedEvidence,
+  hasPublicationActiveGateHandoffContract,
+  hasReplayableNoDebtPublicationPendingOwnerEvidence,
+  buildReplayablePublicationActiveGateHandoffFromOwnerEvidence,
+} from './topology-convergence-publication-normalizers.js';
+
+export {
+  resolveReadinessSupportPath,
+  resolveReadinessRecoverability,
+  normalizeReadinessSupportEvidence,
+  normalizeExplicitReadinessSupportEvidence,
+  deriveProjectionReadinessFailure,
+} from './topology-convergence-readiness-normalizers.js';
+
+export {
+  READINESS_PROJECTION_EXCLUDED_SOURCE,
+} from './topology-convergence-constants.js';
 
 export {
   selectTopologyOperatorWitness,
@@ -82,26 +107,6 @@ export {
   selectPriorityRecoveryEvidencePath,
   normalizePriorityRecoveryEvidence,
 } from './topology-convergence-priority-recovery-normalizers.js';
-
-
-import {
-  buildPublicationActiveGateHandoffContract,
-} from '../control-plane/publication-active-gate-handoff-contract.js';
-
-const READINESS_PROJECTION_EXCLUDED_CLASS_CODE =
-  'readiness_projection_excluded';
-export const READINESS_PROJECTION_EXCLUDED_SOURCE =
-  'publicationConvergence.projectionDiagnostics';
-const READINESS_PROJECTION_EXCLUDED_CAUSE =
-  'readiness_projection_excluded';
-const READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE =
-  'cluster_member_unhealthy';
-const READINESS_PROJECTION_PROGRESS_STATE = 'readiness_retryable';
-const READINESS_PROJECTION_PROGRESS_NEXT_ACTION =
-  'wait_for_readiness_support';
-const READINESS_PROJECTION_PROGRESS_TERMINAL_STATE = 'satisfied';
-const READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY =
-  'cluster_member_health';
 
 // Scenarios & Reports
 export function firstScenario(report) {
@@ -176,412 +181,12 @@ export function firstFailureBundleEvidenceRecordWithSource(...candidates) {
   };
 }
 
-// Publication normalizers
-export function isClosedPublicationOwnerAckState(ackState) {
-  return ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED ||
-    ackState === PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED;
-}
-
-export function normalizePublicationOwnerStreamEvidence(publication) {
-  const publicationOwnerStream = asRecord(publication.publicationOwnerStream);
-  const revision = asRecord(publicationOwnerStream.revision);
-  return {
-    ackState: textOrUnknown(
-      publication.ackState || publicationOwnerStream.ackState,
-    ),
-    freshnessFence: textOrUnknown(
-      publication.freshnessFence || publicationOwnerStream.freshnessFence,
-    ),
-    recoveryOutcome: textOrUnknown(
-      publication.recoveryOutcome || publicationOwnerStream.recoveryOutcome,
-    ),
-    revisionState: textOrUnknown(revision.state),
-    streamOutcome: textOrUnknown(
-      publication.streamOutcome || publicationOwnerStream.streamOutcome,
-    ),
-  };
-}
-
-export function isNonTerminalTopologyOperatorWitness(witness) {
-  const record = asRecord(witness);
-  if (!isTopologyOperatorWitnessPresent(record)) {
-    return false;
-  }
-  return textOrUnknown(record[SOURCE_FIELD.CURRENT_STEP_STATE]) !==
-    TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL;
-}
-
-export function normalizePublicationEvidence(publication) {
-  const ownerStreamEvidence =
-    normalizePublicationOwnerStreamEvidence(publication);
-  const topologyOperatorWitness = asRecord(
-    publication[SOURCE_FIELD.TOPOLOGY_OPERATOR_WITNESS],
-  );
-  return {
-    publicationStatus: textOrUnknown(publication.publicationStatus),
-    publicationPending: publication.publicationPending === true,
-    recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
-    pendingAckCount: numberOrZero(publication.pendingAckCount),
-    blockedNodeCount: numberOrZero(publication.blockedNodeCount),
-    missingPublishedCount: numberOrZero(publication.missingPublishedCount),
-    missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
-    prioritySpreadPending: publication.prioritySpreadPending === true,
-    topologyOperatorWitness,
-    ...ownerStreamEvidence,
-    source: {
-      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
-      publicationStatus: textOrUnknown(publication.publicationStatus),
-      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
-      pendingAckCount: numberOrUnknown(publication.pendingAckCount),
-      blockedNodeCount: numberOrUnknown(publication.blockedNodeCount),
-      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
-      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
-      missingPublishedCount: numberOrUnknown(publication.missingPublishedCount),
-      publicationPending: booleanVariant(publication.publicationPending),
-      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
-      prioritySpreadPending: booleanVariant(publication.prioritySpreadPending),
-      publicationOwnerAckState: ownerStreamEvidence.ackState,
-      publicationOwnerFreshnessFence: ownerStreamEvidence.freshnessFence,
-      publicationOwnerRecoveryOutcome: ownerStreamEvidence.recoveryOutcome,
-      publicationOwnerRevisionState: ownerStreamEvidence.revisionState,
-      publicationOwnerStreamOutcome: ownerStreamEvidence.streamOutcome,
-      ...buildTopologyOperatorWitnessDiagnosticSource(
-        topologyOperatorWitness,
-      ),
-    },
-  };
-}
-
-export function buildTopologyOperatorWitnessDiagnosticSource(witness) {
-  const record = asRecord(witness);
-  if (!isTopologyOperatorWitnessPresent(record)) {
-    return {};
-  }
-  return {
-    topologyOperatorId: textOrUnknown(record[SOURCE_FIELD.OPERATOR_ID]),
-    topologyOperatorKind: textOrUnknown(record[SOURCE_FIELD.KIND]),
-    topologyOperatorCurrentStepId: textOrUnknown(
-      record[SOURCE_FIELD.CURRENT_STEP_ID],
-    ),
-    topologyOperatorCurrentStepState: textOrUnknown(
-      record[SOURCE_FIELD.CURRENT_STEP_STATE],
-    ),
-    topologyOperatorNextAction: textOrUnknown(
-      record[SOURCE_FIELD.NEXT_ACTION],
-    ),
-  };
-}
-
-export function isPublicationPendingEvidence(evidence) {
-  return (
-    (evidence.publicationPending === true &&
-      evidence.missingPublishedCount === SOURCE_ORDER_BASE) ||
-    PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
-    evidence.recoveryProtocolState ===
-      PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING
-  );
-}
-
-export function isPublicationConsumerLagEvidence(evidence) {
-  return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
-    evidence.pendingAckCount === SOURCE_ORDER_BASE &&
-    isClosedPublicationOwnerAckState(evidence.ackState) &&
-    evidence.revisionState === PUBLICATION_OWNER_REVISION_STATE_CURRENT &&
-    evidence.streamOutcome === PUBLICATION_OWNER_STREAM_OUTCOME_STALE &&
-    evidence.freshnessFence ===
-      PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG &&
-    evidence.recoveryOutcome ===
-      PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER;
-}
-
-export function hasPublicationMissingPublishedEvidence(evidence) {
-  return evidence.missingPublishedCount > SOURCE_ORDER_BASE ||
-    evidence.missingPublishedNodeIds.length > SOURCE_ORDER_BASE;
-}
-
-export function isPublicationMissingPublishedEvidence(evidence) {
-  return hasPublicationMissingPublishedEvidence(evidence) &&
-    evidence.prioritySpreadPending !== true &&
-    isPublicationConsumerLagEvidence(evidence) !== true;
-}
-
-// Readiness Normalizers
-export function resolveReadinessSupportPath(readiness, activeGate) {
-  const snapshot = {
-    activeGateState: textOrUnknown(asRecord(activeGate).state),
-    classCode: textOrUnknown(readiness.classCode),
-    terminalReason: textOrUnknown(readiness.terminalReason),
-    source: textOrUnknown(readiness.source),
-    cause: textOrUnknown(readiness.cause),
-  };
-  if (READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES.some((rule) =>
-    rule.matches(snapshot),
-  )) {
-    return READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS;
-  }
-  return READINESS_SUPPORT_PATH.READINESS_FAILURE;
-}
-
-export function resolveReadinessRecoverability(readiness) {
-  const snapshot = {
-    recoverability: textOrUnknown(readiness.recoverability),
-    classCode: textOrUnknown(readiness.classCode),
-    terminalReason: textOrUnknown(readiness.terminalReason),
-  };
-  const decision = READINESS_RECOVERABILITY_RULES.find((rule) =>
-    rule.matches(snapshot),
-  );
-  return decision.recoverability;
-}
-
-export function normalizeReadinessSupportEvidence(readinessFailure, activeGate) {
-  const readiness = asRecord(readinessFailure);
-  if (Object.keys(readiness).length === SOURCE_ORDER_BASE) {
-    return {};
-  }
-  const recoverability = resolveReadinessRecoverability(readiness);
-  const supportPath = resolveReadinessSupportPath(readiness, activeGate);
-  return {
-    ...readiness,
-    recoverability,
-    supportPath,
-  };
-}
-
-export function deriveProjectionReadinessFailure(publication) {
-  const projectionDiagnostics = asRecord(publication.projectionDiagnostics);
-  const missingPublishedNodeIds = arrayOrEmpty(
-    publication.missingPublishedNodeIds,
-  );
-  const readinessExcludedNodeIds = arrayOrEmpty(
-    projectionDiagnostics.readinessExcludedNodeIds,
-  );
-  const unhealthyExcludedNodeIds = arrayOrEmpty(
-    projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
-  );
-  const excludedNodeIdSet = new Set([
-    ...readinessExcludedNodeIds,
-    ...unhealthyExcludedNodeIds,
-  ]);
-  const blockedNodeIds = missingPublishedNodeIds
-    .filter((nodeId) => excludedNodeIdSet.has(nodeId))
-    .sort();
-  if (blockedNodeIds.length === SOURCE_ORDER_BASE) {
-    return {};
-  }
-  const unhealthyNodeIdSet = new Set(unhealthyExcludedNodeIds);
-  const nodeReasonsByNodeId = {};
-  for (const nodeId of blockedNodeIds) {
-    nodeReasonsByNodeId[nodeId] = unhealthyNodeIdSet.has(nodeId) ?
-      [
-        READINESS_PROJECTION_EXCLUDED_CAUSE,
-        READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE,
-      ] :
-      [READINESS_PROJECTION_EXCLUDED_CAUSE];
-  }
-  const hasUnhealthyBlockedNode = blockedNodeIds.some((nodeId) =>
-    unhealthyNodeIdSet.has(nodeId),
-  );
-  const cause = hasUnhealthyBlockedNode ?
-    READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE :
-    READINESS_PROJECTION_EXCLUDED_CAUSE;
-  return {
-    mode: textOrUnknown(projectionDiagnostics.readinessDecisionMode),
-    classCode: READINESS_PROJECTION_EXCLUDED_CLASS_CODE,
-    terminalReason: UNKNOWN_VALUE,
-    source: READINESS_PROJECTION_EXCLUDED_SOURCE,
-    cause,
-    nodeReasonsByNodeId,
-    progressSignal: {
-      attemptsSinceProgress: UNKNOWN_VALUE,
-      maxAttempts: UNKNOWN_VALUE,
-      stalled: false,
-    },
-    progressContract: {
-      owner: OWNER.READINESS,
-      boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
-      state: READINESS_PROJECTION_PROGRESS_STATE,
-      reason: cause,
-      nextAction: READINESS_PROJECTION_PROGRESS_NEXT_ACTION,
-      wakeSource: READINESS_PROJECTION_EXCLUDED_SOURCE,
-      retryAfterMs: SOURCE_ORDER_BASE,
-      terminalState: READINESS_PROJECTION_PROGRESS_TERMINAL_STATE,
-      blockingDependency: READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY,
-    },
-  };
-}
-
 // Top Reasons Normalizer
 export function normalizeTopReasons(topReasons) {
   return arrayOrEmpty(topReasons).map((entry) => ({
     reason: textOrUnknown(entry?.reason),
     count: numberOrZero(entry?.count),
   }));
-}
-
-// Replayable Contract
-export function hasPublicationActiveGateHandoffContract(handoff) {
-  const record = asRecord(handoff);
-  return textOrUnknown(record.state) !== UNKNOWN_VALUE ||
-    textOrUnknown(record.reasonCode) !== UNKNOWN_VALUE ||
-    textOrUnknown(record.nextAction) !== UNKNOWN_VALUE;
-}
-
-export function hasReplayableNoDebtPublicationPendingOwnerEvidence(publication) {
-  return parseBooleanVariant(publication.publicationPending) === true &&
-    textOrUnknown(publication.recoveryProtocolState) ===
-      PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION &&
-    numberOrZero(publication.pendingAckCount) === SOURCE_ORDER_BASE &&
-    arrayOrEmpty(publication.pendingAckNodeIds).length === SOURCE_ORDER_BASE &&
-    numberOrZero(publication.missingPublishedCount) === SOURCE_ORDER_BASE &&
-    arrayOrEmpty(publication.missingPublishedNodeIds).length ===
-      SOURCE_ORDER_BASE &&
-    parseBooleanVariant(publication.prioritySpreadPending) !== true;
-}
-
-export function buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
-  publicationActiveGateHandoff,
-  publication,
-  progress,
-}) {
-  if (hasPublicationActiveGateHandoffContract(publicationActiveGateHandoff)) {
-    return publicationActiveGateHandoff;
-  }
-  if (!hasReplayableNoDebtPublicationPendingOwnerEvidence(publication)) {
-    return publicationActiveGateHandoff;
-  }
-  return buildPublicationActiveGateHandoffContract({
-    publicationConvergence: {
-      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
-      publicationStatus: textOrUnknown(publication.publicationStatus),
-      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
-      publicationPending: parseBooleanVariant(publication.publicationPending),
-      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
-      pendingAckCount: numberOrZero(publication.pendingAckCount),
-      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
-      missingPublishedCount: numberOrZero(publication.missingPublishedCount),
-      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
-      prioritySpreadPending:
-        parseBooleanVariant(publication.prioritySpreadPending),
-    },
-    activeGateProgress: progress,
-  });
-}
-
-export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
-  const coverage = asRecord(snapshotCoverage);
-  if (Object.keys(coverage).length === SOURCE_ORDER_BASE) {
-    return {};
-  }
-  const selectedObservedNodeIds = arrayOrEmpty(
-    coverage.selectedObservedNodeIds,
-  );
-  const completeCoverage =
-    coverage.completeCoverage === true ||
-    coverage.snapshotCoverageComplete === true;
-  const rawContract = coverage.progressContract || coverage.progress?.progressContract;
-
-  const isRepairDeferred =
-    coverage.selectedSnapshotRepairDeferred === true ||
-    coverage.selectedSnapshotObservationMode === 'repair_deferred';
-  const selectedSnapshotError = firstText(
-    coverage.selectedSnapshotError,
-    coverage.selectedError,
-    coverage.selectedSnapshotReachabilityError,
-    coverage.selectedReachabilityError,
-  );
-  const fallbackState = completeCoverage ?
-    'satisfied' :
-    isRepairDeferred ?
-      'deferred' :
-      selectedSnapshotError ?
-        'blocked' :
-        'deferred';
-  const fallbackReason = completeCoverage ?
-    'snapshot_coverage_complete' :
-    selectedSnapshotError ?
-      `snapshot_coverage_incomplete: ${selectedSnapshotError}` :
-      'snapshot_coverage_incomplete';
-  const fallbackNextAction = completeCoverage ? 'none' : (coverage.selectedSnapshotObservationNextAction || 'retry');
-  const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
-  const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof coverage.selectedSnapshotObservationRetryAfterMs === 'number' ? coverage.selectedSnapshotObservationRetryAfterMs : 1000);
-  const fallbackTerminalState = 'satisfied';
-  const fallbackBlockingDependency = 'none';
-
-  let progressContract;
-  if (rawContract) {
-    progressContract = normalizeProgressContract(rawContract, {
-      owner: OWNER.ACTIVE_GATE,
-      boundary: BOUNDARY.SNAPSHOT_COVERAGE,
-      state: fallbackState,
-      reason: fallbackReason,
-      nextAction: fallbackNextAction,
-      wakeSource: fallbackWakeSource,
-      retryAfterMs: fallbackRetryAfterMs,
-      terminalState: fallbackTerminalState,
-      evidencePath: ABSENT_VALUE,
-      blockingDependency: fallbackBlockingDependency,
-    });
-  }
-
-  const result = {
-    snapshotCoverageComplete: completeCoverage,
-    snapshotCoverageNodeCount: firstFiniteNumber(
-      coverage.bestCoverageNodeCount,
-      coverage.snapshotCoverageNodeCount,
-      selectedObservedNodeIds.length,
-    ),
-    expectedNodeCount: firstFiniteNumber(
-      coverage.expectedNodeCount,
-      coverage.bestCoverageNodeCount,
-      selectedObservedNodeIds.length,
-    ),
-    selectedSnapshotNodeId: firstText(
-      coverage.selectedSnapshotNodeId,
-      coverage.selectedNodeId,
-    ),
-    selectedSnapshotAdminReady: coverage.selectedSnapshotAdminReady,
-    selectedSnapshotReachableBy: firstText(
-      coverage.selectedSnapshotReachableBy,
-      coverage.selectedReachableBy,
-    ),
-    selectedSnapshotError,
-    selectedSnapshotTimeoutMs: firstFiniteNumber(
-      coverage.selectedSnapshotTimeoutMs,
-      coverage.selectedTimeoutMs,
-    ),
-    selectedSnapshotObservationMode: firstText(
-      coverage.selectedSnapshotObservationMode,
-    ),
-    selectedSnapshotObservationState: firstText(
-      coverage.selectedSnapshotObservationState,
-      coverage.selectedSnapshotRevisionState,
-    ),
-    selectedSnapshotObservationContractState: firstText(
-      coverage.selectedSnapshotObservationContractState,
-    ),
-    selectedSnapshotObservationRefreshState: firstText(
-      coverage.selectedSnapshotObservationRefreshState,
-    ),
-    selectedSnapshotObservationNextAction: firstText(
-      coverage.selectedSnapshotObservationNextAction,
-    ),
-    selectedSnapshotObservationReasonCodes: arrayOrEmpty(
-      coverage.selectedSnapshotObservationReasonCodes,
-    ),
-    selectedSnapshotRepairDeferred: isRepairDeferred,
-    selectedPublishedActiveNodeIds: arrayOrEmpty(
-      coverage.selectedPublishedActiveNodeIds,
-    ),
-    selectedMissingPublishedNodeIds: arrayOrEmpty(
-      coverage.selectedMissingPublishedNodeIds,
-    ),
-  };
-
-  if (progressContract) {
-    result.progressContract = progressContract;
-  }
-  return result;
 }
 
 // Master input normalizer
@@ -856,6 +461,23 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     recordCandidate(triageSummary.readiness?.failure, SOURCE_PATH.READINESS_FAILURE),
   );
   const readinessFailure = readinessFailureEvidence.record;
+  const readinessEvidence = firstRecordWithSource(
+    recordCandidate(
+      normalizeExplicitReadinessSupportEvidence(
+        failureBundle.readiness,
+        SOURCE_PATH.FAILURE_BUNDLE_READINESS,
+      ),
+      SOURCE_PATH.FAILURE_BUNDLE_READINESS,
+    ),
+    recordCandidate(
+      normalizeExplicitReadinessSupportEvidence(
+        triageSummary.readiness,
+        SOURCE_PATH.TRIAGE_READINESS,
+      ),
+      SOURCE_PATH.TRIAGE_READINESS,
+    ),
+  );
+  const readiness = readinessEvidence.record;
 
   return {
     scenario: firstText(
@@ -881,6 +503,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     progressSummary,
     topologyOperatorWitness: topologyOperatorWitnessEvidence.record,
     priorityRecoveryPartitionWitnesses,
+    readiness,
     readinessFailure,
     postRebalanceClosure: postRebalanceClosureEvidence.record,
     evidencePath: {
@@ -905,6 +528,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
       activeGateProgress: progressEvidence.sourcePath,
       publicationActiveGateHandoff:
         publicationActiveGateHandoffSourcePath,
+      readiness: readinessEvidence.sourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
       postRebalanceClosure: postRebalanceClosureEvidence.sourcePath,
     },
@@ -994,28 +618,4 @@ export function joinValues(values) {
     return ABSENT_VALUE;
   }
   return values.map((value) => String(value)).join(LIST_SEPARATOR);
-}
-
-export function normalizeProgressContract(rawContract, fallback = {}) {
-  const contract = asRecord(rawContract);
-  const toText = (val, fallbackVal) => {
-    let checkVal = val;
-    if (checkVal === 'absent') {
-      checkVal = '';
-    }
-    const s = String(checkVal || fallbackVal || '').trim();
-    return s.length > 0 ? s : 'absent';
-  };
-  return {
-    owner: toText(contract.owner, fallback.owner),
-    boundary: toText(contract.boundary, fallback.boundary),
-    state: toText(contract.state || contract.contractState, fallback.state),
-    reason: toText(contract.reason, fallback.reason),
-    nextAction: toText(contract.nextAction || contract.progressNextAction, fallback.nextAction),
-    wakeSource: toText(contract.wakeSource, fallback.wakeSource),
-    retryAfterMs: typeof contract.retryAfterMs === 'number' ? contract.retryAfterMs : (typeof fallback.retryAfterMs === 'number' ? fallback.retryAfterMs : 0),
-    terminalState: toText(contract.terminalState, fallback.terminalState),
-    evidencePath: toText(contract.evidencePath, fallback.evidencePath),
-    blockingDependency: toText(contract.blockingDependency, fallback.blockingDependency),
-  };
 }

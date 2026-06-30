@@ -17,13 +17,17 @@ import {
   EDGE_STATE,
   SOURCE_ORDER_BASE,
   ABSENT_VALUE,
+  UNKNOWN_VALUE,
   REASON_SEPARATOR,
   OWNER_WITNESS_FIELD,
   TYPE_OBJECT,
   TYPE_STRING,
   glossaryEntries,
-  cloneDecisionTableRows,
 } from './topology-convergence-constants.js';
+
+import {
+  cloneDecisionTableRows,
+} from './topology-convergence-decision-table.js';
 
 import {
   firstText,
@@ -107,6 +111,7 @@ const RUNTIME_PROMOTION_GUARD_REASON =
   'active_gate_runtime_promotion_requires_non_repeated_contract';
 const OWNER_DIAGNOSTICS = 'diagnostics_owner';
 const BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK = 'causal_analysis_framework';
+const POST_REBALANCE_CLOSURE_STATE_OPEN = 'open';
 const PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD = Object.freeze({
   ACTIVE_GATE: 'activeGate',
   NEXT_ACTION: 'nextAction',
@@ -545,24 +550,20 @@ function buildActiveGateRuntimePromotionGuard({
 }
 
 function buildReadinessEdge(normalized) {
-  const readiness = normalizeReadinessSupportEvidence(
-    normalized.readinessFailure,
-    normalized.activeGate,
-  );
+  const readinessSelection = selectReadinessEvidence(normalized);
+  const readiness = readinessSelection.record;
   const reasons = createTopologyConvergenceReasonList();
-  const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
+  const state = resolveReadinessEdgeState(
+    readiness,
+    normalized.activeGate,
+    reasons,
+  );
 
-  const rawContract =
-    (normalized.readiness && normalized.readiness.progressContract) ||
-    (
-      normalized.readinessFailure &&
-      normalized.readinessFailure.progressContract
-    ) ||
-    (readiness && readiness.progressContract);
+  const rawContract = readiness.progressContract;
   const progressContract = normalizeProgressContract(rawContract, {
     owner: OWNER.READINESS,
     boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
-    evidencePath: normalized.evidencePath.readinessFailure,
+    evidencePath: readinessSelection.evidencePath,
   });
 
   return buildEdge({
@@ -572,7 +573,8 @@ function buildReadinessEdge(normalized) {
     state,
     owner: progressContract.owner || OWNER.READINESS,
     boundary: progressContract.boundary || BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
-    evidencePath: progressContract.evidencePath || normalized.evidencePath.readinessFailure,
+    evidencePath: progressContract.evidencePath ||
+      readinessSelection.evidencePath,
     source: {
       mode: textOrUnknown(readiness.mode),
       classCode: textOrUnknown(readiness.classCode),
@@ -589,6 +591,31 @@ function buildReadinessEdge(normalized) {
     dependencies: [EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE],
     projectionHint: PROJECTION_HINT.READINESS,
   });
+}
+
+function selectReadinessEvidence(normalized) {
+  const readinessFailure = normalizeReadinessSupportEvidence(
+    normalized.readinessFailure,
+    normalized.activeGate,
+  );
+  if (Object.keys(readinessFailure).length > SOURCE_ORDER_BASE) {
+    return {
+      record: readinessFailure,
+      evidencePath: normalized.evidencePath.readinessFailure,
+    };
+  }
+  return {
+    record: asRecord(normalized.readiness),
+    evidencePath: normalized.evidencePath.readiness,
+  };
+}
+
+function resolveReadinessEdgeState(readiness, activeGate, reasons) {
+  if (readiness.ready === true) {
+    reasons.push(REASON.READINESS_SATISFIED);
+    return EDGE_STATE.SATISFIED;
+  }
+  return resolveReadinessState(readiness, activeGate, reasons);
 }
 
 function buildTopFailureReasonsEdge(normalized) {
@@ -648,7 +675,7 @@ function hasOpenPostRebalanceClosure(postRebalanceClosure) {
   if (Object.keys(closure).length === SOURCE_ORDER_BASE) {
     return false;
   }
-  return textOrUnknown(closure.state) === 'open' ||
+  return textOrUnknown(closure.state) === POST_REBALANCE_CLOSURE_STATE_OPEN ||
     arrayOrEmpty(closure.blockers).length > SOURCE_ORDER_BASE;
 }
 
@@ -656,7 +683,7 @@ function collectPostRebalanceBlockerIds(postRebalanceClosure) {
   const closure = asRecord(postRebalanceClosure);
   return arrayOrEmpty(closure.blockers)
     .map((blocker) => textOrUnknown(asRecord(blocker).id))
-    .filter((blockerId) => blockerId !== 'unknown');
+    .filter((blockerId) => blockerId !== UNKNOWN_VALUE);
 }
 
 function buildEdge(edge) {

@@ -9,6 +9,9 @@ import {
   SOURCE_FIELD,
 } from './topology-convergence-constants.js';
 
+const EMPTY_TEXT = '';
+const TYPE_NUMBER = 'number';
+
 // Base Normalizers & Utilities
 export function asRecord(value) {
   if (value && typeof value === TYPE_OBJECT && !Array.isArray(value)) {
@@ -162,4 +165,39 @@ export function isTopologyOperatorWitnessPresent(witness) {
     textOrUnknown(witness[SOURCE_FIELD.CURRENT_STEP_ID]) !== UNKNOWN_VALUE &&
     textOrUnknown(witness[SOURCE_FIELD.NEXT_ACTION]) !== UNKNOWN_VALUE
   );
+}
+
+export function normalizeProgressContract(rawContract, fallback = {}) {
+  const contract = asRecord(rawContract);
+  const toText = (value, fallbackValue) => {
+    const candidateValue = value === ABSENT_VALUE ? EMPTY_TEXT : value;
+    const text = String(
+      candidateValue || fallbackValue || EMPTY_TEXT,
+    ).trim();
+    return text.length > SOURCE_ORDER_BASE ? text : ABSENT_VALUE;
+  };
+  return {
+    owner: toText(contract.owner, fallback.owner),
+    boundary: toText(contract.boundary, fallback.boundary),
+    state: toText(contract.state || contract.contractState, fallback.state),
+    reason: toText(contract.reason, fallback.reason),
+    nextAction: toText(
+      contract.nextAction || contract.progressNextAction,
+      fallback.nextAction,
+    ),
+    wakeSource: toText(contract.wakeSource, fallback.wakeSource),
+    retryAfterMs: typeof contract.retryAfterMs === TYPE_NUMBER ?
+      contract.retryAfterMs :
+      (
+        typeof fallback.retryAfterMs === TYPE_NUMBER ?
+          fallback.retryAfterMs :
+          SOURCE_ORDER_BASE
+      ),
+    terminalState: toText(contract.terminalState, fallback.terminalState),
+    evidencePath: toText(contract.evidencePath, fallback.evidencePath),
+    blockingDependency: toText(
+      contract.blockingDependency,
+      fallback.blockingDependency,
+    ),
+  };
 }

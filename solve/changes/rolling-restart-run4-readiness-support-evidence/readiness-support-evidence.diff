@@ -1,0 +1,2169 @@
+diff --git a/src/diagnostics/topology-convergence-active-gate-normalizers.js b/src/diagnostics/topology-convergence-active-gate-normalizers.js
+new file mode 100644
+index 00000000..142b1edf
+--- /dev/null
++++ b/src/diagnostics/topology-convergence-active-gate-normalizers.js
+@@ -0,0 +1,199 @@
++import {
++  ABSENT_VALUE,
++  UNKNOWN_VALUE,
++  SOURCE_ORDER_BASE,
++  OWNER,
++  BOUNDARY,
++} from './topology-convergence-constants.js';
++
++import {
++  asRecord,
++  arrayOrEmpty,
++  firstFiniteNumber,
++  firstText,
++  normalizeProgressContract,
++} from './topology-convergence-core-normalizers.js';
++
++const ACTIVE_GATE_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED =
++  'repair_deferred';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_SATISFIED = 'satisfied';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_DEFERRED = 'deferred';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_BLOCKED = 'blocked';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_REASON_COMPLETE =
++  'snapshot_coverage_complete';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_REASON_INCOMPLETE =
++  'snapshot_coverage_incomplete';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_NEXT_ACTION_NONE = 'none';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_NEXT_ACTION_RETRY = 'retry';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_WAKE_SOURCE_NONE = 'none';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_WAKE_SOURCE_ACTIVE_GATE = 'active-gate';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_BLOCKING_DEPENDENCY_NONE = 'none';
++const ACTIVE_GATE_SNAPSHOT_PROGRESS_DEFAULT_RETRY_AFTER_MS = 1000;
++const TYPE_NUMBER = 'number';
++
++export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
++  const coverage = asRecord(snapshotCoverage);
++  if (Object.keys(coverage).length === SOURCE_ORDER_BASE) {
++    return {};
++  }
++  const selectedObservedNodeIds = arrayOrEmpty(
++    coverage.selectedObservedNodeIds,
++  );
++  const completeCoverage =
++    coverage.completeCoverage === true ||
++    coverage.snapshotCoverageComplete === true;
++  const rawContract =
++    coverage.progressContract || asRecord(coverage.progress).progressContract;
++  const selectedSnapshotError = firstText(
++    coverage.selectedSnapshotError,
++    coverage.selectedError,
++    coverage.selectedSnapshotReachabilityError,
++    coverage.selectedReachabilityError,
++  );
++  const progressContract = normalizeActiveGateSnapshotProgressContract({
++    completeCoverage,
++    coverage,
++    rawContract,
++    selectedSnapshotError,
++  });
++  const result = {
++    snapshotCoverageComplete: completeCoverage,
++    snapshotCoverageNodeCount: firstFiniteNumber(
++      coverage.bestCoverageNodeCount,
++      coverage.snapshotCoverageNodeCount,
++      selectedObservedNodeIds.length,
++    ),
++    expectedNodeCount: firstFiniteNumber(
++      coverage.expectedNodeCount,
++      coverage.bestCoverageNodeCount,
++      selectedObservedNodeIds.length,
++    ),
++    selectedSnapshotNodeId: firstText(
++      coverage.selectedSnapshotNodeId,
++      coverage.selectedNodeId,
++    ),
++    selectedSnapshotAdminReady: coverage.selectedSnapshotAdminReady,
++    selectedSnapshotReachableBy: firstText(
++      coverage.selectedSnapshotReachableBy,
++      coverage.selectedReachableBy,
++    ),
++    selectedSnapshotError,
++    selectedSnapshotTimeoutMs: firstFiniteNumber(
++      coverage.selectedSnapshotTimeoutMs,
++      coverage.selectedTimeoutMs,
++    ),
++    selectedSnapshotObservationMode: firstText(
++      coverage.selectedSnapshotObservationMode,
++    ),
++    selectedSnapshotObservationState: firstText(
++      coverage.selectedSnapshotObservationState,
++      coverage.selectedSnapshotRevisionState,
++    ),
++    selectedSnapshotObservationContractState: firstText(
++      coverage.selectedSnapshotObservationContractState,
++    ),
++    selectedSnapshotObservationRefreshState: firstText(
++      coverage.selectedSnapshotObservationRefreshState,
++    ),
++    selectedSnapshotObservationNextAction: firstText(
++      coverage.selectedSnapshotObservationNextAction,
++    ),
++    selectedSnapshotObservationReasonCodes: arrayOrEmpty(
++      coverage.selectedSnapshotObservationReasonCodes,
++    ),
++    selectedSnapshotRepairDeferred:
++      isActiveGateSnapshotRepairDeferred(coverage),
++    selectedPublishedActiveNodeIds: arrayOrEmpty(
++      coverage.selectedPublishedActiveNodeIds,
++    ),
++    selectedMissingPublishedNodeIds: arrayOrEmpty(
++      coverage.selectedMissingPublishedNodeIds,
++    ),
++  };
++
++  if (progressContract) {
++    result.progressContract = progressContract;
++  }
++  return result;
++}
++
++function normalizeActiveGateSnapshotProgressContract({
++  completeCoverage,
++  coverage,
++  rawContract,
++  selectedSnapshotError,
++}) {
++  if (!rawContract) {
++    return undefined;
++  }
++  return normalizeProgressContract(rawContract, {
++    owner: OWNER.ACTIVE_GATE,
++    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
++    state: selectActiveGateSnapshotFallbackState(
++      completeCoverage,
++      coverage,
++      selectedSnapshotError,
++    ),
++    reason: selectActiveGateSnapshotFallbackReason(
++      completeCoverage,
++      selectedSnapshotError,
++    ),
++    nextAction: completeCoverage ?
++      ACTIVE_GATE_SNAPSHOT_PROGRESS_NEXT_ACTION_NONE :
++      firstText(
++        coverage.selectedSnapshotObservationNextAction,
++        ACTIVE_GATE_SNAPSHOT_PROGRESS_NEXT_ACTION_RETRY,
++      ),
++    wakeSource: completeCoverage ?
++      ACTIVE_GATE_SNAPSHOT_PROGRESS_WAKE_SOURCE_NONE :
++      ACTIVE_GATE_SNAPSHOT_PROGRESS_WAKE_SOURCE_ACTIVE_GATE,
++    retryAfterMs: completeCoverage ?
++      SOURCE_ORDER_BASE :
++      selectActiveGateSnapshotRetryAfterMs(coverage),
++    terminalState: ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_SATISFIED,
++    evidencePath: ABSENT_VALUE,
++    blockingDependency:
++      ACTIVE_GATE_SNAPSHOT_PROGRESS_BLOCKING_DEPENDENCY_NONE,
++  });
++}
++
++function isActiveGateSnapshotRepairDeferred(coverage) {
++  return coverage.selectedSnapshotRepairDeferred === true ||
++    coverage.selectedSnapshotObservationMode ===
++      ACTIVE_GATE_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED;
++}
++
++function selectActiveGateSnapshotFallbackState(
++  completeCoverage,
++  coverage,
++  selectedSnapshotError,
++) {
++  if (completeCoverage) {
++    return ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_SATISFIED;
++  }
++  if (isActiveGateSnapshotRepairDeferred(coverage)) {
++    return ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_DEFERRED;
++  }
++  return selectedSnapshotError !== UNKNOWN_VALUE ?
++    ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_BLOCKED :
++    ACTIVE_GATE_SNAPSHOT_PROGRESS_STATE_DEFERRED;
++}
++
++function selectActiveGateSnapshotFallbackReason(
++  completeCoverage,
++  selectedSnapshotError,
++) {
++  if (completeCoverage) {
++    return ACTIVE_GATE_SNAPSHOT_PROGRESS_REASON_COMPLETE;
++  }
++  return selectedSnapshotError !== UNKNOWN_VALUE ?
++    `${ACTIVE_GATE_SNAPSHOT_PROGRESS_REASON_INCOMPLETE}: ${selectedSnapshotError}` :
++    ACTIVE_GATE_SNAPSHOT_PROGRESS_REASON_INCOMPLETE;
++}
++
++function selectActiveGateSnapshotRetryAfterMs(coverage) {
++  return typeof coverage.selectedSnapshotObservationRetryAfterMs ===
++    TYPE_NUMBER ?
++    coverage.selectedSnapshotObservationRetryAfterMs :
++    ACTIVE_GATE_SNAPSHOT_PROGRESS_DEFAULT_RETRY_AFTER_MS;
++}
+diff --git a/src/diagnostics/topology-convergence-constants.js b/src/diagnostics/topology-convergence-constants.js
+index 734694b8..350832fb 100644
+--- a/src/diagnostics/topology-convergence-constants.js
++++ b/src/diagnostics/topology-convergence-constants.js
+@@ -1,5 +1,4 @@
+ import {
+-  cloneDecisionTableRows as cloneTopologyDecisionTableRows,
+   glossaryEntries as buildGlossaryEntries,
+ } from './topology-convergence-constant-helpers.js';
+ 
+@@ -66,10 +65,22 @@ export const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
+ export const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
+ export const READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
+ export const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
++export const READINESS_PROJECTION_EXCLUDED_SOURCE =
++  'publicationConvergence.projectionDiagnostics';
+ export const READINESS_SOURCE_UNKNOWN = 'unknown';
+ export const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
+ export const READINESS_CAUSE_NONE = 'none';
+ export const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
++export const READINESS_SUPPORT_PROGRESS_STATE_SATISFIED = 'satisfied';
++export const READINESS_SUPPORT_PROGRESS_REASON_SATISFIED =
++  'readiness_support_satisfied';
++export const READINESS_SUPPORT_PROGRESS_NEXT_ACTION_NONE = 'none';
++export const READINESS_SUPPORT_PROGRESS_WAKE_SOURCE_NONE = 'none';
++export const READINESS_SUPPORT_PROGRESS_BLOCKING_DEPENDENCY_NONE = 'none';
++export const READINESS_SUPPORT_TIMELINE_MODE = 'readiness_timeline';
++export const READINESS_SUPPORT_TIMELINE_CLASS_CODE = 'readiness_satisfied';
++export const READINESS_SUPPORT_TIMELINE_SOURCE =
++  'lastReadinessTimelineEntry';
+ export const TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_GRAPH = 'topology_convergence_graph';
+ export const TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_ARTIFACT =
+   'topology_convergence_artifact';
+@@ -252,6 +263,8 @@ export const SOURCE_PATH = Object.freeze({
+     'failureBundle.controlPlane.activeGateProgress',
+   FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_SNAPSHOT_COVERAGE:
+     'failureBundle.controlPlane.activeGateSnapshotCoverage',
++  FAILURE_BUNDLE_READINESS: 'failureBundle.readiness',
++  TRIAGE_READINESS: 'triageSummary.readiness',
+   PRIORITY_RECOVERY_PROGRESS_CLASSES:
+     'publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses',
+   PRIORITY_RECOVERY_PROGRESS_SUMMARY:
+@@ -455,6 +468,7 @@ export const DECISION_INPUT = Object.freeze({
+   ACTIVE_GATE_READY: 'activeGate.ready',
+   ACTIVE_GATE_STATE: 'activeGate.state',
+   SNAPSHOT_COVERAGE_COMPLETE: 'snapshotCoverageComplete',
++  READINESS_READY: 'readiness.ready',
+   READINESS_RECOVERABILITY: 'readiness.recoverability',
+   TOP_REASONS: 'topReasons',
+   POST_REBALANCE_CLOSURE: 'postRebalanceClosure',
+@@ -488,6 +502,8 @@ export const DECISION_CONDITION = Object.freeze({
+   ACTIVE_GATE_COVERAGE_DEFERRED:
+     'active gate progress exists but snapshot coverage is incomplete',
+   READINESS_ACTIVE_GATE_READY: 'active gate readiness is already satisfied',
++  READINESS_SUPPORT_READY:
++    'explicit startup readiness support evidence is satisfied',
+   READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS:
+     'readiness no-progress is inherited from active-gate no-progress',
+   READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
+@@ -503,205 +519,9 @@ export const DECISION_CONDITION = Object.freeze({
+ export const READINESS_SUPPORT_PATH = Object.freeze({
+   READINESS_FAILURE: 'readiness_failure',
+   INHERITED_ACTIVE_GATE_NO_PROGRESS: 'inherited_active_gate_no_progress',
++  EXPLICIT_SUPPORT_EVIDENCE: 'explicit_support_evidence',
+ });
+ 
+-export const DECISION_TABLE_ROWS = Object.freeze([
+-  Object.freeze({
+-    edgeId: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+-    owner: OWNER.TOPOLOGY_PUBLICATION,
+-    boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
+-    evidenceInputs: Object.freeze([
+-      DECISION_INPUT.PUBLICATION_STATUS,
+-      DECISION_INPUT.PENDING_ACK_COUNT,
+-      DECISION_INPUT.BLOCKED_NODE_COUNT,
+-      DECISION_INPUT.MISSING_PUBLISHED_COUNT,
+-      DECISION_INPUT.MISSING_PUBLISHED_NODE_IDS,
+-      DECISION_INPUT.PRIORITY_SPREAD_PENDING,
+-    ]),
+-    outcomes: Object.freeze([
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PUBLICATION_PENDING_ACKS,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([
+-          REASON.PUBLICATION_PENDING,
+-          REASON.PENDING_ACKS,
+-        ]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PUBLICATION_BLOCKED_NODES,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([
+-          REASON.PUBLICATION_PENDING,
+-          REASON.BLOCKED_NODES,
+-        ]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PUBLICATION_PENDING_EVIDENCE,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
+-      }),
+-      Object.freeze({
+-        condition:
+-          DECISION_CONDITION
+-            .PUBLICATION_MISSING_PUBLISHED_WITHOUT_PRIORITY_SPREAD,
+-        state: EDGE_STATE.DEFERRED,
+-        reasons: Object.freeze([
+-          REASON.PUBLICATION_PUBLISHED,
+-          REASON.MISSING_PUBLISHED,
+-        ]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PUBLICATION_CLOSED,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.PUBLICATION_PUBLISHED]),
+-      }),
+-    ]),
+-  }),
+-  Object.freeze({
+-    edgeId: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+-    owner: OWNER.PRIORITY_RECOVERY,
+-    boundary: BOUNDARY.WORKFLOW_PROGRESS,
+-    evidenceInputs: Object.freeze([
+-      DECISION_INPUT.UNRESOLVED_SEMANTIC_STATE_IDS,
+-      DECISION_INPUT.PRIORITY_BLOCKED_PARTITION_COUNT,
+-    ]),
+-    outcomes: Object.freeze([
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_SATISFIED]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PRIORITY_ONLY_RECOVERING_IN_FLIGHT,
+-        state: EDGE_STATE.RETRYABLE,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
+-      }),
+-      Object.freeze({
+-        condition:
+-          DECISION_CONDITION.PRIORITY_PARTITION_WITNESS_EVENT_DRIVEN_WAIT,
+-        state: EDGE_STATE.RETRYABLE,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PRIORITY_BLOCKED_PARTITIONS,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PRIORITY_RECOVERING_IN_FLIGHT,
+-        state: EDGE_STATE.RETRYABLE,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
+-      }),
+-    ]),
+-  }),
+-  Object.freeze({
+-    edgeId: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+-    owner: OWNER.ACTIVE_GATE,
+-    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+-    evidenceInputs: Object.freeze([
+-      DECISION_INPUT.ACTIVE_GATE_READY,
+-      DECISION_INPUT.ACTIVE_GATE_STATE,
+-      DECISION_INPUT.SNAPSHOT_COVERAGE_COMPLETE,
+-    ]),
+-    outcomes: Object.freeze([
+-      Object.freeze({
+-        condition: DECISION_CONDITION.ACTIVE_GATE_READY_OR_COVERED,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.ACTIVE_GATE_READY]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.ACTIVE_GATE_TIMED_OUT_INCOMPLETE,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([
+-          REASON.ACTIVE_GATE_TIMED_OUT,
+-          REASON.SNAPSHOT_COVERAGE_INCOMPLETE,
+-        ]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.ACTIVE_GATE_PROGRESS_MISSING,
+-        state: EDGE_STATE.UNKNOWN,
+-        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.ACTIVE_GATE_COVERAGE_DEFERRED,
+-        state: EDGE_STATE.DEFERRED,
+-        reasons: Object.freeze([REASON.SNAPSHOT_COVERAGE_INCOMPLETE]),
+-      }),
+-    ]),
+-  }),
+-  Object.freeze({
+-    edgeId: EDGE_ID.READINESS_STARTUP_SUPPORT,
+-    owner: OWNER.READINESS,
+-    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+-    evidenceInputs: Object.freeze([
+-      DECISION_INPUT.ACTIVE_GATE_READY,
+-      DECISION_INPUT.READINESS_RECOVERABILITY,
+-    ]),
+-    outcomes: Object.freeze([
+-      Object.freeze({
+-        condition: DECISION_CONDITION.READINESS_ACTIVE_GATE_READY,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.READINESS_SATISFIED]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+-        state: EDGE_STATE.DEFERRED,
+-        reasons: Object.freeze([
+-          REASON.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+-        ]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.READINESS_TERMINAL_FAILURE,
+-        state: EDGE_STATE.TERMINAL_FAILED,
+-        reasons: Object.freeze([REASON.READINESS_TERMINAL]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.READINESS_EVIDENCE_MISSING,
+-        state: EDGE_STATE.UNKNOWN,
+-        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.READINESS_RETRYABLE_FAILURE,
+-        state: EDGE_STATE.RETRYABLE,
+-        reasons: Object.freeze([REASON.READINESS_RETRYABLE]),
+-      }),
+-    ]),
+-  }),
+-  Object.freeze({
+-    edgeId: EDGE_ID.TOP_FAILURE_REASONS,
+-    owner: OWNER.FAILURE_CLASSIFIER,
+-    boundary: BOUNDARY.FAILURE_REASON_RANKING,
+-    evidenceInputs: Object.freeze([
+-      DECISION_INPUT.TOP_REASONS,
+-      DECISION_INPUT.POST_REBALANCE_CLOSURE,
+-    ]),
+-    outcomes: Object.freeze([
+-      Object.freeze({
+-        condition:
+-          DECISION_CONDITION
+-            .TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE,
+-        state: EDGE_STATE.BLOCKED,
+-        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.TOP_FAILURES_PRESENT,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
+-      }),
+-      Object.freeze({
+-        condition: DECISION_CONDITION.TOP_FAILURES_ABSENT,
+-        state: EDGE_STATE.SATISFIED,
+-        reasons: Object.freeze([REASON.TOP_FAILURES_ABSENT]),
+-      }),
+-    ]),
+-  }),
+-]);
+-
+ export const PUBLICATION_STATE_RULES = Object.freeze([
+   Object.freeze({
+     state: EDGE_STATE.BLOCKED,
+@@ -841,7 +661,3 @@ export const NODE_DEFINITIONS = Object.freeze([
+ export function glossaryEntries(values) {
+   return buildGlossaryEntries(values);
+ }
+-
+-export function cloneDecisionTableRows() {
+-  return cloneTopologyDecisionTableRows(DECISION_TABLE_ROWS);
+-}
+diff --git a/src/diagnostics/topology-convergence-core-normalizers.js b/src/diagnostics/topology-convergence-core-normalizers.js
+index f67d3f90..c528e6e1 100644
+--- a/src/diagnostics/topology-convergence-core-normalizers.js
++++ b/src/diagnostics/topology-convergence-core-normalizers.js
+@@ -9,6 +9,9 @@ import {
+   SOURCE_FIELD,
+ } from './topology-convergence-constants.js';
+ 
++const EMPTY_TEXT = '';
++const TYPE_NUMBER = 'number';
++
+ // Base Normalizers & Utilities
+ export function asRecord(value) {
+   if (value && typeof value === TYPE_OBJECT && !Array.isArray(value)) {
+@@ -163,3 +166,38 @@ export function isTopologyOperatorWitnessPresent(witness) {
+     textOrUnknown(witness[SOURCE_FIELD.NEXT_ACTION]) !== UNKNOWN_VALUE
+   );
+ }
++
++export function normalizeProgressContract(rawContract, fallback = {}) {
++  const contract = asRecord(rawContract);
++  const toText = (value, fallbackValue) => {
++    const candidateValue = value === ABSENT_VALUE ? EMPTY_TEXT : value;
++    const text = String(
++      candidateValue || fallbackValue || EMPTY_TEXT,
++    ).trim();
++    return text.length > SOURCE_ORDER_BASE ? text : ABSENT_VALUE;
++  };
++  return {
++    owner: toText(contract.owner, fallback.owner),
++    boundary: toText(contract.boundary, fallback.boundary),
++    state: toText(contract.state || contract.contractState, fallback.state),
++    reason: toText(contract.reason, fallback.reason),
++    nextAction: toText(
++      contract.nextAction || contract.progressNextAction,
++      fallback.nextAction,
++    ),
++    wakeSource: toText(contract.wakeSource, fallback.wakeSource),
++    retryAfterMs: typeof contract.retryAfterMs === TYPE_NUMBER ?
++      contract.retryAfterMs :
++      (
++        typeof fallback.retryAfterMs === TYPE_NUMBER ?
++          fallback.retryAfterMs :
++          SOURCE_ORDER_BASE
++      ),
++    terminalState: toText(contract.terminalState, fallback.terminalState),
++    evidencePath: toText(contract.evidencePath, fallback.evidencePath),
++    blockingDependency: toText(
++      contract.blockingDependency,
++      fallback.blockingDependency,
++    ),
++  };
++}
+diff --git a/src/diagnostics/topology-convergence-decision-table.js b/src/diagnostics/topology-convergence-decision-table.js
+new file mode 100644
+index 00000000..92a6009d
+--- /dev/null
++++ b/src/diagnostics/topology-convergence-decision-table.js
+@@ -0,0 +1,220 @@
++import {
++  cloneDecisionTableRows as cloneTopologyDecisionTableRows,
++} from './topology-convergence-constant-helpers.js';
++
++import {
++  EDGE_ID,
++  OWNER,
++  BOUNDARY,
++  DECISION_INPUT,
++  DECISION_CONDITION,
++  EDGE_STATE,
++  REASON,
++} from './topology-convergence-constants.js';
++
++export const DECISION_TABLE_ROWS = Object.freeze([
++  Object.freeze({
++    edgeId: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
++    owner: OWNER.TOPOLOGY_PUBLICATION,
++    boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.PUBLICATION_STATUS,
++      DECISION_INPUT.PENDING_ACK_COUNT,
++      DECISION_INPUT.BLOCKED_NODE_COUNT,
++      DECISION_INPUT.MISSING_PUBLISHED_COUNT,
++      DECISION_INPUT.MISSING_PUBLISHED_NODE_IDS,
++      DECISION_INPUT.PRIORITY_SPREAD_PENDING,
++    ]),
++    outcomes: Object.freeze([
++      Object.freeze({
++        condition: DECISION_CONDITION.PUBLICATION_PENDING_ACKS,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([
++          REASON.PUBLICATION_PENDING,
++          REASON.PENDING_ACKS,
++        ]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PUBLICATION_BLOCKED_NODES,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([
++          REASON.PUBLICATION_PENDING,
++          REASON.BLOCKED_NODES,
++        ]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PUBLICATION_PENDING_EVIDENCE,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
++      }),
++      Object.freeze({
++        condition:
++          DECISION_CONDITION
++            .PUBLICATION_MISSING_PUBLISHED_WITHOUT_PRIORITY_SPREAD,
++        state: EDGE_STATE.DEFERRED,
++        reasons: Object.freeze([
++          REASON.PUBLICATION_PUBLISHED,
++          REASON.MISSING_PUBLISHED,
++        ]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PUBLICATION_CLOSED,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.PUBLICATION_PUBLISHED]),
++      }),
++    ]),
++  }),
++  Object.freeze({
++    edgeId: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
++    owner: OWNER.PRIORITY_RECOVERY,
++    boundary: BOUNDARY.WORKFLOW_PROGRESS,
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.UNRESOLVED_SEMANTIC_STATE_IDS,
++      DECISION_INPUT.PRIORITY_BLOCKED_PARTITION_COUNT,
++    ]),
++    outcomes: Object.freeze([
++      Object.freeze({
++        condition: DECISION_CONDITION.PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_SATISFIED]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PRIORITY_ONLY_RECOVERING_IN_FLIGHT,
++        state: EDGE_STATE.RETRYABLE,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
++      }),
++      Object.freeze({
++        condition:
++          DECISION_CONDITION.PRIORITY_PARTITION_WITNESS_EVENT_DRIVEN_WAIT,
++        state: EDGE_STATE.RETRYABLE,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PRIORITY_BLOCKED_PARTITIONS,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PRIORITY_RECOVERING_IN_FLIGHT,
++        state: EDGE_STATE.RETRYABLE,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
++      }),
++    ]),
++  }),
++  Object.freeze({
++    edgeId: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
++    owner: OWNER.ACTIVE_GATE,
++    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.ACTIVE_GATE_READY,
++      DECISION_INPUT.ACTIVE_GATE_STATE,
++      DECISION_INPUT.SNAPSHOT_COVERAGE_COMPLETE,
++    ]),
++    outcomes: Object.freeze([
++      Object.freeze({
++        condition: DECISION_CONDITION.ACTIVE_GATE_READY_OR_COVERED,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.ACTIVE_GATE_READY]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.ACTIVE_GATE_TIMED_OUT_INCOMPLETE,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([
++          REASON.ACTIVE_GATE_TIMED_OUT,
++          REASON.SNAPSHOT_COVERAGE_INCOMPLETE,
++        ]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.ACTIVE_GATE_PROGRESS_MISSING,
++        state: EDGE_STATE.UNKNOWN,
++        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.ACTIVE_GATE_COVERAGE_DEFERRED,
++        state: EDGE_STATE.DEFERRED,
++        reasons: Object.freeze([REASON.SNAPSHOT_COVERAGE_INCOMPLETE]),
++      }),
++    ]),
++  }),
++  Object.freeze({
++    edgeId: EDGE_ID.READINESS_STARTUP_SUPPORT,
++    owner: OWNER.READINESS,
++    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.ACTIVE_GATE_READY,
++      DECISION_INPUT.READINESS_READY,
++      DECISION_INPUT.READINESS_RECOVERABILITY,
++    ]),
++    outcomes: Object.freeze([
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_ACTIVE_GATE_READY,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.READINESS_SATISFIED]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_SUPPORT_READY,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.READINESS_SATISFIED]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
++        state: EDGE_STATE.DEFERRED,
++        reasons: Object.freeze([
++          REASON.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
++        ]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_TERMINAL_FAILURE,
++        state: EDGE_STATE.TERMINAL_FAILED,
++        reasons: Object.freeze([REASON.READINESS_TERMINAL]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_EVIDENCE_MISSING,
++        state: EDGE_STATE.UNKNOWN,
++        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.READINESS_RETRYABLE_FAILURE,
++        state: EDGE_STATE.RETRYABLE,
++        reasons: Object.freeze([REASON.READINESS_RETRYABLE]),
++      }),
++    ]),
++  }),
++  Object.freeze({
++    edgeId: EDGE_ID.TOP_FAILURE_REASONS,
++    owner: OWNER.FAILURE_CLASSIFIER,
++    boundary: BOUNDARY.FAILURE_REASON_RANKING,
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.TOP_REASONS,
++      DECISION_INPUT.POST_REBALANCE_CLOSURE,
++    ]),
++    outcomes: Object.freeze([
++      Object.freeze({
++        condition:
++          DECISION_CONDITION
++            .TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.TOP_FAILURES_PRESENT,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
++      }),
++      Object.freeze({
++        condition: DECISION_CONDITION.TOP_FAILURES_ABSENT,
++        state: EDGE_STATE.SATISFIED,
++        reasons: Object.freeze([REASON.TOP_FAILURES_ABSENT]),
++      }),
++    ]),
++  }),
++]);
++
++export function cloneDecisionTableRows() {
++  return cloneTopologyDecisionTableRows(DECISION_TABLE_ROWS);
++}
+diff --git a/src/diagnostics/topology-convergence-graph.js b/src/diagnostics/topology-convergence-graph.js
+index 922c278a..82b08166 100644
+--- a/src/diagnostics/topology-convergence-graph.js
++++ b/src/diagnostics/topology-convergence-graph.js
+@@ -17,14 +17,18 @@ import {
+   EDGE_STATE,
+   SOURCE_ORDER_BASE,
+   ABSENT_VALUE,
++  UNKNOWN_VALUE,
+   REASON_SEPARATOR,
+   OWNER_WITNESS_FIELD,
+   TYPE_OBJECT,
+   TYPE_STRING,
+   glossaryEntries,
+-  cloneDecisionTableRows,
+ } from './topology-convergence-constants.js';
+ 
++import {
++  cloneDecisionTableRows,
++} from './topology-convergence-decision-table.js';
++
+ import {
+   firstText,
+   textOrUnknown,
+@@ -107,6 +111,7 @@ const RUNTIME_PROMOTION_GUARD_REASON =
+   'active_gate_runtime_promotion_requires_non_repeated_contract';
+ const OWNER_DIAGNOSTICS = 'diagnostics_owner';
+ const BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK = 'causal_analysis_framework';
++const POST_REBALANCE_CLOSURE_STATE_OPEN = 'open';
+ const PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD = Object.freeze({
+   ACTIVE_GATE: 'activeGate',
+   NEXT_ACTION: 'nextAction',
+@@ -545,24 +550,20 @@ function buildActiveGateRuntimePromotionGuard({
+ }
+ 
+ function buildReadinessEdge(normalized) {
+-  const readiness = normalizeReadinessSupportEvidence(
+-    normalized.readinessFailure,
++  const readinessSelection = selectReadinessEvidence(normalized);
++  const readiness = readinessSelection.record;
++  const reasons = createTopologyConvergenceReasonList();
++  const state = resolveReadinessEdgeState(
++    readiness,
+     normalized.activeGate,
++    reasons,
+   );
+-  const reasons = createTopologyConvergenceReasonList();
+-  const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
+ 
+-  const rawContract =
+-    (normalized.readiness && normalized.readiness.progressContract) ||
+-    (
+-      normalized.readinessFailure &&
+-      normalized.readinessFailure.progressContract
+-    ) ||
+-    (readiness && readiness.progressContract);
++  const rawContract = readiness.progressContract;
+   const progressContract = normalizeProgressContract(rawContract, {
+     owner: OWNER.READINESS,
+     boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+-    evidencePath: normalized.evidencePath.readinessFailure,
++    evidencePath: readinessSelection.evidencePath,
+   });
+ 
+   return buildEdge({
+@@ -572,7 +573,8 @@ function buildReadinessEdge(normalized) {
+     state,
+     owner: progressContract.owner || OWNER.READINESS,
+     boundary: progressContract.boundary || BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+-    evidencePath: progressContract.evidencePath || normalized.evidencePath.readinessFailure,
++    evidencePath: progressContract.evidencePath ||
++      readinessSelection.evidencePath,
+     source: {
+       mode: textOrUnknown(readiness.mode),
+       classCode: textOrUnknown(readiness.classCode),
+@@ -591,6 +593,31 @@ function buildReadinessEdge(normalized) {
+   });
+ }
+ 
++function selectReadinessEvidence(normalized) {
++  const readinessFailure = normalizeReadinessSupportEvidence(
++    normalized.readinessFailure,
++    normalized.activeGate,
++  );
++  if (Object.keys(readinessFailure).length > SOURCE_ORDER_BASE) {
++    return {
++      record: readinessFailure,
++      evidencePath: normalized.evidencePath.readinessFailure,
++    };
++  }
++  return {
++    record: asRecord(normalized.readiness),
++    evidencePath: normalized.evidencePath.readiness,
++  };
++}
++
++function resolveReadinessEdgeState(readiness, activeGate, reasons) {
++  if (readiness.ready === true) {
++    reasons.push(REASON.READINESS_SATISFIED);
++    return EDGE_STATE.SATISFIED;
++  }
++  return resolveReadinessState(readiness, activeGate, reasons);
++}
++
+ function buildTopFailureReasonsEdge(normalized) {
+   const hasTopReasons = normalized.topReasons.length > SOURCE_ORDER_BASE;
+   const hasPostRebalanceClosure =
+@@ -648,7 +675,7 @@ function hasOpenPostRebalanceClosure(postRebalanceClosure) {
+   if (Object.keys(closure).length === SOURCE_ORDER_BASE) {
+     return false;
+   }
+-  return textOrUnknown(closure.state) === 'open' ||
++  return textOrUnknown(closure.state) === POST_REBALANCE_CLOSURE_STATE_OPEN ||
+     arrayOrEmpty(closure.blockers).length > SOURCE_ORDER_BASE;
+ }
+ 
+@@ -656,7 +683,7 @@ function collectPostRebalanceBlockerIds(postRebalanceClosure) {
+   const closure = asRecord(postRebalanceClosure);
+   return arrayOrEmpty(closure.blockers)
+     .map((blocker) => textOrUnknown(asRecord(blocker).id))
+-    .filter((blockerId) => blockerId !== 'unknown');
++    .filter((blockerId) => blockerId !== UNKNOWN_VALUE);
+ }
+ 
+ function buildEdge(edge) {
+diff --git a/src/diagnostics/topology-convergence-normalizers.js b/src/diagnostics/topology-convergence-normalizers.js
+index 4100a9ce..7e53a7d5 100644
+--- a/src/diagnostics/topology-convergence-normalizers.js
++++ b/src/diagnostics/topology-convergence-normalizers.js
+@@ -4,25 +4,9 @@ import {
+   SOURCE_ORDER_BASE,
+   FIRST_FRONTIER_INDEX,
+   TOPOLOGY_CONVERGENCE_EMPTY_REASON_LIST,
+-  PUBLICATION_STATUS_PUBLISHED,
+-  PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING,
+-  PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION,
+-  PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
+-  PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
+-  PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
+-  PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+-  PUBLICATION_OWNER_REVISION_STATE_CURRENT,
+-  PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
+-  PUBLICATION_PENDING_STATUS_SET,
+-  TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL,
+   SOURCE_PATH,
+   SOURCE_FIELD,
+-  READINESS_SUPPORT_PATH,
+-  READINESS_RECOVERABILITY_RULES,
+-  READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES,
+   LIST_SEPARATOR,
+-  OWNER,
+-  BOUNDARY,
+ } from './topology-convergence-constants.js';
+ 
+ import {
+@@ -31,10 +15,6 @@ import {
+   firstText,
+   textOrUnknown,
+   numberOrZero,
+-  numberOrUnknown,
+-  booleanVariant,
+-  parseBooleanVariant,
+-  firstFiniteNumber,
+   flattenEvidencePath,
+   firstRecord,
+   firstArray,
+@@ -42,9 +22,22 @@ import {
+   arrayCandidate,
+   firstRecordWithSource,
+   firstArrayWithSource,
+-  isTopologyOperatorWitnessPresent,
+ } from './topology-convergence-core-normalizers.js';
+ 
++import {
++  normalizeActiveGateSnapshotCoverageProgress,
++} from './topology-convergence-active-gate-normalizers.js';
++
++import {
++  buildReplayablePublicationActiveGateHandoffFromOwnerEvidence,
++  hasPublicationActiveGateHandoffContract,
++} from './topology-convergence-publication-normalizers.js';
++
++import {
++  deriveProjectionReadinessFailure,
++  normalizeExplicitReadinessSupportEvidence,
++} from './topology-convergence-readiness-normalizers.js';
++
+ export {
+   asRecord,
+   arrayOrEmpty,
+@@ -64,8 +57,40 @@ export {
+   firstRecordWithSource,
+   firstArrayWithSource,
+   isTopologyOperatorWitnessPresent,
++  normalizeProgressContract,
+ } from './topology-convergence-core-normalizers.js';
+ 
++export {
++  normalizeActiveGateSnapshotCoverageProgress,
++} from './topology-convergence-active-gate-normalizers.js';
++
++export {
++  isClosedPublicationOwnerAckState,
++  normalizePublicationOwnerStreamEvidence,
++  isNonTerminalTopologyOperatorWitness,
++  normalizePublicationEvidence,
++  buildTopologyOperatorWitnessDiagnosticSource,
++  isPublicationPendingEvidence,
++  isPublicationConsumerLagEvidence,
++  hasPublicationMissingPublishedEvidence,
++  isPublicationMissingPublishedEvidence,
++  hasPublicationActiveGateHandoffContract,
++  hasReplayableNoDebtPublicationPendingOwnerEvidence,
++  buildReplayablePublicationActiveGateHandoffFromOwnerEvidence,
++} from './topology-convergence-publication-normalizers.js';
++
++export {
++  resolveReadinessSupportPath,
++  resolveReadinessRecoverability,
++  normalizeReadinessSupportEvidence,
++  normalizeExplicitReadinessSupportEvidence,
++  deriveProjectionReadinessFailure,
++} from './topology-convergence-readiness-normalizers.js';
++
++export {
++  READINESS_PROJECTION_EXCLUDED_SOURCE,
++} from './topology-convergence-constants.js';
++
+ export {
+   selectTopologyOperatorWitness,
+   normalizePriorityRecoveryPartitionWitnesses,
+@@ -83,26 +108,6 @@ export {
+   normalizePriorityRecoveryEvidence,
+ } from './topology-convergence-priority-recovery-normalizers.js';
+ 
+-
+-import {
+-  buildPublicationActiveGateHandoffContract,
+-} from '../control-plane/publication-active-gate-handoff-contract.js';
+-
+-const READINESS_PROJECTION_EXCLUDED_CLASS_CODE =
+-  'readiness_projection_excluded';
+-export const READINESS_PROJECTION_EXCLUDED_SOURCE =
+-  'publicationConvergence.projectionDiagnostics';
+-const READINESS_PROJECTION_EXCLUDED_CAUSE =
+-  'readiness_projection_excluded';
+-const READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE =
+-  'cluster_member_unhealthy';
+-const READINESS_PROJECTION_PROGRESS_STATE = 'readiness_retryable';
+-const READINESS_PROJECTION_PROGRESS_NEXT_ACTION =
+-  'wait_for_readiness_support';
+-const READINESS_PROJECTION_PROGRESS_TERMINAL_STATE = 'satisfied';
+-const READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY =
+-  'cluster_member_health';
+-
+ // Scenarios & Reports
+ export function firstScenario(report) {
+   const scenarios = arrayOrEmpty(report.scenarios);
+@@ -176,241 +181,6 @@ export function firstFailureBundleEvidenceRecordWithSource(...candidates) {
+   };
+ }
+ 
+-// Publication normalizers
+-export function isClosedPublicationOwnerAckState(ackState) {
+-  return ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED ||
+-    ackState === PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED;
+-}
+-
+-export function normalizePublicationOwnerStreamEvidence(publication) {
+-  const publicationOwnerStream = asRecord(publication.publicationOwnerStream);
+-  const revision = asRecord(publicationOwnerStream.revision);
+-  return {
+-    ackState: textOrUnknown(
+-      publication.ackState || publicationOwnerStream.ackState,
+-    ),
+-    freshnessFence: textOrUnknown(
+-      publication.freshnessFence || publicationOwnerStream.freshnessFence,
+-    ),
+-    recoveryOutcome: textOrUnknown(
+-      publication.recoveryOutcome || publicationOwnerStream.recoveryOutcome,
+-    ),
+-    revisionState: textOrUnknown(revision.state),
+-    streamOutcome: textOrUnknown(
+-      publication.streamOutcome || publicationOwnerStream.streamOutcome,
+-    ),
+-  };
+-}
+-
+-export function isNonTerminalTopologyOperatorWitness(witness) {
+-  const record = asRecord(witness);
+-  if (!isTopologyOperatorWitnessPresent(record)) {
+-    return false;
+-  }
+-  return textOrUnknown(record[SOURCE_FIELD.CURRENT_STEP_STATE]) !==
+-    TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL;
+-}
+-
+-export function normalizePublicationEvidence(publication) {
+-  const ownerStreamEvidence =
+-    normalizePublicationOwnerStreamEvidence(publication);
+-  const topologyOperatorWitness = asRecord(
+-    publication[SOURCE_FIELD.TOPOLOGY_OPERATOR_WITNESS],
+-  );
+-  return {
+-    publicationStatus: textOrUnknown(publication.publicationStatus),
+-    publicationPending: publication.publicationPending === true,
+-    recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
+-    pendingAckCount: numberOrZero(publication.pendingAckCount),
+-    blockedNodeCount: numberOrZero(publication.blockedNodeCount),
+-    missingPublishedCount: numberOrZero(publication.missingPublishedCount),
+-    missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
+-    prioritySpreadPending: publication.prioritySpreadPending === true,
+-    topologyOperatorWitness,
+-    ...ownerStreamEvidence,
+-    source: {
+-      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
+-      publicationStatus: textOrUnknown(publication.publicationStatus),
+-      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
+-      pendingAckCount: numberOrUnknown(publication.pendingAckCount),
+-      blockedNodeCount: numberOrUnknown(publication.blockedNodeCount),
+-      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
+-      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
+-      missingPublishedCount: numberOrUnknown(publication.missingPublishedCount),
+-      publicationPending: booleanVariant(publication.publicationPending),
+-      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
+-      prioritySpreadPending: booleanVariant(publication.prioritySpreadPending),
+-      publicationOwnerAckState: ownerStreamEvidence.ackState,
+-      publicationOwnerFreshnessFence: ownerStreamEvidence.freshnessFence,
+-      publicationOwnerRecoveryOutcome: ownerStreamEvidence.recoveryOutcome,
+-      publicationOwnerRevisionState: ownerStreamEvidence.revisionState,
+-      publicationOwnerStreamOutcome: ownerStreamEvidence.streamOutcome,
+-      ...buildTopologyOperatorWitnessDiagnosticSource(
+-        topologyOperatorWitness,
+-      ),
+-    },
+-  };
+-}
+-
+-export function buildTopologyOperatorWitnessDiagnosticSource(witness) {
+-  const record = asRecord(witness);
+-  if (!isTopologyOperatorWitnessPresent(record)) {
+-    return {};
+-  }
+-  return {
+-    topologyOperatorId: textOrUnknown(record[SOURCE_FIELD.OPERATOR_ID]),
+-    topologyOperatorKind: textOrUnknown(record[SOURCE_FIELD.KIND]),
+-    topologyOperatorCurrentStepId: textOrUnknown(
+-      record[SOURCE_FIELD.CURRENT_STEP_ID],
+-    ),
+-    topologyOperatorCurrentStepState: textOrUnknown(
+-      record[SOURCE_FIELD.CURRENT_STEP_STATE],
+-    ),
+-    topologyOperatorNextAction: textOrUnknown(
+-      record[SOURCE_FIELD.NEXT_ACTION],
+-    ),
+-  };
+-}
+-
+-export function isPublicationPendingEvidence(evidence) {
+-  return (
+-    (evidence.publicationPending === true &&
+-      evidence.missingPublishedCount === SOURCE_ORDER_BASE) ||
+-    PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
+-    evidence.recoveryProtocolState ===
+-      PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING
+-  );
+-}
+-
+-export function isPublicationConsumerLagEvidence(evidence) {
+-  return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
+-    evidence.pendingAckCount === SOURCE_ORDER_BASE &&
+-    isClosedPublicationOwnerAckState(evidence.ackState) &&
+-    evidence.revisionState === PUBLICATION_OWNER_REVISION_STATE_CURRENT &&
+-    evidence.streamOutcome === PUBLICATION_OWNER_STREAM_OUTCOME_STALE &&
+-    evidence.freshnessFence ===
+-      PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG &&
+-    evidence.recoveryOutcome ===
+-      PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER;
+-}
+-
+-export function hasPublicationMissingPublishedEvidence(evidence) {
+-  return evidence.missingPublishedCount > SOURCE_ORDER_BASE ||
+-    evidence.missingPublishedNodeIds.length > SOURCE_ORDER_BASE;
+-}
+-
+-export function isPublicationMissingPublishedEvidence(evidence) {
+-  return hasPublicationMissingPublishedEvidence(evidence) &&
+-    evidence.prioritySpreadPending !== true &&
+-    isPublicationConsumerLagEvidence(evidence) !== true;
+-}
+-
+-// Readiness Normalizers
+-export function resolveReadinessSupportPath(readiness, activeGate) {
+-  const snapshot = {
+-    activeGateState: textOrUnknown(asRecord(activeGate).state),
+-    classCode: textOrUnknown(readiness.classCode),
+-    terminalReason: textOrUnknown(readiness.terminalReason),
+-    source: textOrUnknown(readiness.source),
+-    cause: textOrUnknown(readiness.cause),
+-  };
+-  if (READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES.some((rule) =>
+-    rule.matches(snapshot),
+-  )) {
+-    return READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS;
+-  }
+-  return READINESS_SUPPORT_PATH.READINESS_FAILURE;
+-}
+-
+-export function resolveReadinessRecoverability(readiness) {
+-  const snapshot = {
+-    recoverability: textOrUnknown(readiness.recoverability),
+-    classCode: textOrUnknown(readiness.classCode),
+-    terminalReason: textOrUnknown(readiness.terminalReason),
+-  };
+-  const decision = READINESS_RECOVERABILITY_RULES.find((rule) =>
+-    rule.matches(snapshot),
+-  );
+-  return decision.recoverability;
+-}
+-
+-export function normalizeReadinessSupportEvidence(readinessFailure, activeGate) {
+-  const readiness = asRecord(readinessFailure);
+-  if (Object.keys(readiness).length === SOURCE_ORDER_BASE) {
+-    return {};
+-  }
+-  const recoverability = resolveReadinessRecoverability(readiness);
+-  const supportPath = resolveReadinessSupportPath(readiness, activeGate);
+-  return {
+-    ...readiness,
+-    recoverability,
+-    supportPath,
+-  };
+-}
+-
+-export function deriveProjectionReadinessFailure(publication) {
+-  const projectionDiagnostics = asRecord(publication.projectionDiagnostics);
+-  const missingPublishedNodeIds = arrayOrEmpty(
+-    publication.missingPublishedNodeIds,
+-  );
+-  const readinessExcludedNodeIds = arrayOrEmpty(
+-    projectionDiagnostics.readinessExcludedNodeIds,
+-  );
+-  const unhealthyExcludedNodeIds = arrayOrEmpty(
+-    projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
+-  );
+-  const excludedNodeIdSet = new Set([
+-    ...readinessExcludedNodeIds,
+-    ...unhealthyExcludedNodeIds,
+-  ]);
+-  const blockedNodeIds = missingPublishedNodeIds
+-    .filter((nodeId) => excludedNodeIdSet.has(nodeId))
+-    .sort();
+-  if (blockedNodeIds.length === SOURCE_ORDER_BASE) {
+-    return {};
+-  }
+-  const unhealthyNodeIdSet = new Set(unhealthyExcludedNodeIds);
+-  const nodeReasonsByNodeId = {};
+-  for (const nodeId of blockedNodeIds) {
+-    nodeReasonsByNodeId[nodeId] = unhealthyNodeIdSet.has(nodeId) ?
+-      [
+-        READINESS_PROJECTION_EXCLUDED_CAUSE,
+-        READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE,
+-      ] :
+-      [READINESS_PROJECTION_EXCLUDED_CAUSE];
+-  }
+-  const hasUnhealthyBlockedNode = blockedNodeIds.some((nodeId) =>
+-    unhealthyNodeIdSet.has(nodeId),
+-  );
+-  const cause = hasUnhealthyBlockedNode ?
+-    READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE :
+-    READINESS_PROJECTION_EXCLUDED_CAUSE;
+-  return {
+-    mode: textOrUnknown(projectionDiagnostics.readinessDecisionMode),
+-    classCode: READINESS_PROJECTION_EXCLUDED_CLASS_CODE,
+-    terminalReason: UNKNOWN_VALUE,
+-    source: READINESS_PROJECTION_EXCLUDED_SOURCE,
+-    cause,
+-    nodeReasonsByNodeId,
+-    progressSignal: {
+-      attemptsSinceProgress: UNKNOWN_VALUE,
+-      maxAttempts: UNKNOWN_VALUE,
+-      stalled: false,
+-    },
+-    progressContract: {
+-      owner: OWNER.READINESS,
+-      boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+-      state: READINESS_PROJECTION_PROGRESS_STATE,
+-      reason: cause,
+-      nextAction: READINESS_PROJECTION_PROGRESS_NEXT_ACTION,
+-      wakeSource: READINESS_PROJECTION_EXCLUDED_SOURCE,
+-      retryAfterMs: SOURCE_ORDER_BASE,
+-      terminalState: READINESS_PROJECTION_PROGRESS_TERMINAL_STATE,
+-      blockingDependency: READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY,
+-    },
+-  };
+-}
+-
+ // Top Reasons Normalizer
+ export function normalizeTopReasons(topReasons) {
+   return arrayOrEmpty(topReasons).map((entry) => ({
+@@ -419,171 +189,6 @@ export function normalizeTopReasons(topReasons) {
+   }));
+ }
+ 
+-// Replayable Contract
+-export function hasPublicationActiveGateHandoffContract(handoff) {
+-  const record = asRecord(handoff);
+-  return textOrUnknown(record.state) !== UNKNOWN_VALUE ||
+-    textOrUnknown(record.reasonCode) !== UNKNOWN_VALUE ||
+-    textOrUnknown(record.nextAction) !== UNKNOWN_VALUE;
+-}
+-
+-export function hasReplayableNoDebtPublicationPendingOwnerEvidence(publication) {
+-  return parseBooleanVariant(publication.publicationPending) === true &&
+-    textOrUnknown(publication.recoveryProtocolState) ===
+-      PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION &&
+-    numberOrZero(publication.pendingAckCount) === SOURCE_ORDER_BASE &&
+-    arrayOrEmpty(publication.pendingAckNodeIds).length === SOURCE_ORDER_BASE &&
+-    numberOrZero(publication.missingPublishedCount) === SOURCE_ORDER_BASE &&
+-    arrayOrEmpty(publication.missingPublishedNodeIds).length ===
+-      SOURCE_ORDER_BASE &&
+-    parseBooleanVariant(publication.prioritySpreadPending) !== true;
+-}
+-
+-export function buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
+-  publicationActiveGateHandoff,
+-  publication,
+-  progress,
+-}) {
+-  if (hasPublicationActiveGateHandoffContract(publicationActiveGateHandoff)) {
+-    return publicationActiveGateHandoff;
+-  }
+-  if (!hasReplayableNoDebtPublicationPendingOwnerEvidence(publication)) {
+-    return publicationActiveGateHandoff;
+-  }
+-  return buildPublicationActiveGateHandoffContract({
+-    publicationConvergence: {
+-      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
+-      publicationStatus: textOrUnknown(publication.publicationStatus),
+-      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
+-      publicationPending: parseBooleanVariant(publication.publicationPending),
+-      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
+-      pendingAckCount: numberOrZero(publication.pendingAckCount),
+-      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
+-      missingPublishedCount: numberOrZero(publication.missingPublishedCount),
+-      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
+-      prioritySpreadPending:
+-        parseBooleanVariant(publication.prioritySpreadPending),
+-    },
+-    activeGateProgress: progress,
+-  });
+-}
+-
+-export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
+-  const coverage = asRecord(snapshotCoverage);
+-  if (Object.keys(coverage).length === SOURCE_ORDER_BASE) {
+-    return {};
+-  }
+-  const selectedObservedNodeIds = arrayOrEmpty(
+-    coverage.selectedObservedNodeIds,
+-  );
+-  const completeCoverage =
+-    coverage.completeCoverage === true ||
+-    coverage.snapshotCoverageComplete === true;
+-  const rawContract = coverage.progressContract || coverage.progress?.progressContract;
+-
+-  const isRepairDeferred =
+-    coverage.selectedSnapshotRepairDeferred === true ||
+-    coverage.selectedSnapshotObservationMode === 'repair_deferred';
+-  const selectedSnapshotError = firstText(
+-    coverage.selectedSnapshotError,
+-    coverage.selectedError,
+-    coverage.selectedSnapshotReachabilityError,
+-    coverage.selectedReachabilityError,
+-  );
+-  const fallbackState = completeCoverage ?
+-    'satisfied' :
+-    isRepairDeferred ?
+-      'deferred' :
+-      selectedSnapshotError ?
+-        'blocked' :
+-        'deferred';
+-  const fallbackReason = completeCoverage ?
+-    'snapshot_coverage_complete' :
+-    selectedSnapshotError ?
+-      `snapshot_coverage_incomplete: ${selectedSnapshotError}` :
+-      'snapshot_coverage_incomplete';
+-  const fallbackNextAction = completeCoverage ? 'none' : (coverage.selectedSnapshotObservationNextAction || 'retry');
+-  const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
+-  const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof coverage.selectedSnapshotObservationRetryAfterMs === 'number' ? coverage.selectedSnapshotObservationRetryAfterMs : 1000);
+-  const fallbackTerminalState = 'satisfied';
+-  const fallbackBlockingDependency = 'none';
+-
+-  let progressContract;
+-  if (rawContract) {
+-    progressContract = normalizeProgressContract(rawContract, {
+-      owner: OWNER.ACTIVE_GATE,
+-      boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+-      state: fallbackState,
+-      reason: fallbackReason,
+-      nextAction: fallbackNextAction,
+-      wakeSource: fallbackWakeSource,
+-      retryAfterMs: fallbackRetryAfterMs,
+-      terminalState: fallbackTerminalState,
+-      evidencePath: ABSENT_VALUE,
+-      blockingDependency: fallbackBlockingDependency,
+-    });
+-  }
+-
+-  const result = {
+-    snapshotCoverageComplete: completeCoverage,
+-    snapshotCoverageNodeCount: firstFiniteNumber(
+-      coverage.bestCoverageNodeCount,
+-      coverage.snapshotCoverageNodeCount,
+-      selectedObservedNodeIds.length,
+-    ),
+-    expectedNodeCount: firstFiniteNumber(
+-      coverage.expectedNodeCount,
+-      coverage.bestCoverageNodeCount,
+-      selectedObservedNodeIds.length,
+-    ),
+-    selectedSnapshotNodeId: firstText(
+-      coverage.selectedSnapshotNodeId,
+-      coverage.selectedNodeId,
+-    ),
+-    selectedSnapshotAdminReady: coverage.selectedSnapshotAdminReady,
+-    selectedSnapshotReachableBy: firstText(
+-      coverage.selectedSnapshotReachableBy,
+-      coverage.selectedReachableBy,
+-    ),
+-    selectedSnapshotError,
+-    selectedSnapshotTimeoutMs: firstFiniteNumber(
+-      coverage.selectedSnapshotTimeoutMs,
+-      coverage.selectedTimeoutMs,
+-    ),
+-    selectedSnapshotObservationMode: firstText(
+-      coverage.selectedSnapshotObservationMode,
+-    ),
+-    selectedSnapshotObservationState: firstText(
+-      coverage.selectedSnapshotObservationState,
+-      coverage.selectedSnapshotRevisionState,
+-    ),
+-    selectedSnapshotObservationContractState: firstText(
+-      coverage.selectedSnapshotObservationContractState,
+-    ),
+-    selectedSnapshotObservationRefreshState: firstText(
+-      coverage.selectedSnapshotObservationRefreshState,
+-    ),
+-    selectedSnapshotObservationNextAction: firstText(
+-      coverage.selectedSnapshotObservationNextAction,
+-    ),
+-    selectedSnapshotObservationReasonCodes: arrayOrEmpty(
+-      coverage.selectedSnapshotObservationReasonCodes,
+-    ),
+-    selectedSnapshotRepairDeferred: isRepairDeferred,
+-    selectedPublishedActiveNodeIds: arrayOrEmpty(
+-      coverage.selectedPublishedActiveNodeIds,
+-    ),
+-    selectedMissingPublishedNodeIds: arrayOrEmpty(
+-      coverage.selectedMissingPublishedNodeIds,
+-    ),
+-  };
+-
+-  if (progressContract) {
+-    result.progressContract = progressContract;
+-  }
+-  return result;
+-}
+-
+ // Master input normalizer
+ export function normalizeTopologyConvergenceInput(input = {}) {
+   const report = selectReportRecord(input);
+@@ -856,6 +461,23 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+     recordCandidate(triageSummary.readiness?.failure, SOURCE_PATH.READINESS_FAILURE),
+   );
+   const readinessFailure = readinessFailureEvidence.record;
++  const readinessEvidence = firstRecordWithSource(
++    recordCandidate(
++      normalizeExplicitReadinessSupportEvidence(
++        failureBundle.readiness,
++        SOURCE_PATH.FAILURE_BUNDLE_READINESS,
++      ),
++      SOURCE_PATH.FAILURE_BUNDLE_READINESS,
++    ),
++    recordCandidate(
++      normalizeExplicitReadinessSupportEvidence(
++        triageSummary.readiness,
++        SOURCE_PATH.TRIAGE_READINESS,
++      ),
++      SOURCE_PATH.TRIAGE_READINESS,
++    ),
++  );
++  const readiness = readinessEvidence.record;
+ 
+   return {
+     scenario: firstText(
+@@ -881,6 +503,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+     progressSummary,
+     topologyOperatorWitness: topologyOperatorWitnessEvidence.record,
+     priorityRecoveryPartitionWitnesses,
++    readiness,
+     readinessFailure,
+     postRebalanceClosure: postRebalanceClosureEvidence.record,
+     evidencePath: {
+@@ -905,6 +528,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+       activeGateProgress: progressEvidence.sourcePath,
+       publicationActiveGateHandoff:
+         publicationActiveGateHandoffSourcePath,
++      readiness: readinessEvidence.sourcePath,
+       readinessFailure: readinessFailureEvidence.sourcePath,
+       postRebalanceClosure: postRebalanceClosureEvidence.sourcePath,
+     },
+@@ -995,27 +619,3 @@ export function joinValues(values) {
+   }
+   return values.map((value) => String(value)).join(LIST_SEPARATOR);
+ }
+-
+-export function normalizeProgressContract(rawContract, fallback = {}) {
+-  const contract = asRecord(rawContract);
+-  const toText = (val, fallbackVal) => {
+-    let checkVal = val;
+-    if (checkVal === 'absent') {
+-      checkVal = '';
+-    }
+-    const s = String(checkVal || fallbackVal || '').trim();
+-    return s.length > 0 ? s : 'absent';
+-  };
+-  return {
+-    owner: toText(contract.owner, fallback.owner),
+-    boundary: toText(contract.boundary, fallback.boundary),
+-    state: toText(contract.state || contract.contractState, fallback.state),
+-    reason: toText(contract.reason, fallback.reason),
+-    nextAction: toText(contract.nextAction || contract.progressNextAction, fallback.nextAction),
+-    wakeSource: toText(contract.wakeSource, fallback.wakeSource),
+-    retryAfterMs: typeof contract.retryAfterMs === 'number' ? contract.retryAfterMs : (typeof fallback.retryAfterMs === 'number' ? fallback.retryAfterMs : 0),
+-    terminalState: toText(contract.terminalState, fallback.terminalState),
+-    evidencePath: toText(contract.evidencePath, fallback.evidencePath),
+-    blockingDependency: toText(contract.blockingDependency, fallback.blockingDependency),
+-  };
+-}
+diff --git a/src/diagnostics/topology-convergence-publication-normalizers.js b/src/diagnostics/topology-convergence-publication-normalizers.js
+new file mode 100644
+index 00000000..0e8cede8
+--- /dev/null
++++ b/src/diagnostics/topology-convergence-publication-normalizers.js
+@@ -0,0 +1,209 @@
++import {
++  PUBLICATION_STATUS_PUBLISHED,
++  PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING,
++  PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION,
++  PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
++  PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
++  PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
++  PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
++  PUBLICATION_OWNER_REVISION_STATE_CURRENT,
++  PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
++  PUBLICATION_PENDING_STATUS_SET,
++  TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL,
++  SOURCE_ORDER_BASE,
++  UNKNOWN_VALUE,
++  SOURCE_FIELD,
++} from './topology-convergence-constants.js';
++
++import {
++  asRecord,
++  arrayOrEmpty,
++  booleanVariant,
++  isTopologyOperatorWitnessPresent,
++  numberOrUnknown,
++  numberOrZero,
++  parseBooleanVariant,
++  textOrUnknown,
++} from './topology-convergence-core-normalizers.js';
++
++import {
++  buildPublicationActiveGateHandoffContract,
++} from '../control-plane/publication-active-gate-handoff-contract.js';
++
++export function isClosedPublicationOwnerAckState(ackState) {
++  return ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED ||
++    ackState === PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED;
++}
++
++export function normalizePublicationOwnerStreamEvidence(publication) {
++  const publicationOwnerStream = asRecord(publication.publicationOwnerStream);
++  const revision = asRecord(publicationOwnerStream.revision);
++  return {
++    ackState: textOrUnknown(
++      publication.ackState || publicationOwnerStream.ackState,
++    ),
++    freshnessFence: textOrUnknown(
++      publication.freshnessFence || publicationOwnerStream.freshnessFence,
++    ),
++    recoveryOutcome: textOrUnknown(
++      publication.recoveryOutcome || publicationOwnerStream.recoveryOutcome,
++    ),
++    revisionState: textOrUnknown(revision.state),
++    streamOutcome: textOrUnknown(
++      publication.streamOutcome || publicationOwnerStream.streamOutcome,
++    ),
++  };
++}
++
++export function isNonTerminalTopologyOperatorWitness(witness) {
++  const record = asRecord(witness);
++  if (!isTopologyOperatorWitnessPresent(record)) {
++    return false;
++  }
++  return textOrUnknown(record[SOURCE_FIELD.CURRENT_STEP_STATE]) !==
++    TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL;
++}
++
++export function normalizePublicationEvidence(publication) {
++  const ownerStreamEvidence =
++    normalizePublicationOwnerStreamEvidence(publication);
++  const topologyOperatorWitness = asRecord(
++    publication[SOURCE_FIELD.TOPOLOGY_OPERATOR_WITNESS],
++  );
++  return {
++    publicationStatus: textOrUnknown(publication.publicationStatus),
++    publicationPending: publication.publicationPending === true,
++    recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
++    pendingAckCount: numberOrZero(publication.pendingAckCount),
++    blockedNodeCount: numberOrZero(publication.blockedNodeCount),
++    missingPublishedCount: numberOrZero(publication.missingPublishedCount),
++    missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
++    prioritySpreadPending: publication.prioritySpreadPending === true,
++    topologyOperatorWitness,
++    ...ownerStreamEvidence,
++    source: {
++      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
++      publicationStatus: textOrUnknown(publication.publicationStatus),
++      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
++      pendingAckCount: numberOrUnknown(publication.pendingAckCount),
++      blockedNodeCount: numberOrUnknown(publication.blockedNodeCount),
++      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
++      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
++      missingPublishedCount: numberOrUnknown(publication.missingPublishedCount),
++      publicationPending: booleanVariant(publication.publicationPending),
++      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
++      prioritySpreadPending: booleanVariant(publication.prioritySpreadPending),
++      publicationOwnerAckState: ownerStreamEvidence.ackState,
++      publicationOwnerFreshnessFence: ownerStreamEvidence.freshnessFence,
++      publicationOwnerRecoveryOutcome: ownerStreamEvidence.recoveryOutcome,
++      publicationOwnerRevisionState: ownerStreamEvidence.revisionState,
++      publicationOwnerStreamOutcome: ownerStreamEvidence.streamOutcome,
++      ...buildTopologyOperatorWitnessDiagnosticSource(
++        topologyOperatorWitness,
++      ),
++    },
++  };
++}
++
++export function buildTopologyOperatorWitnessDiagnosticSource(witness) {
++  const record = asRecord(witness);
++  if (!isTopologyOperatorWitnessPresent(record)) {
++    return {};
++  }
++  return {
++    topologyOperatorId: textOrUnknown(record[SOURCE_FIELD.OPERATOR_ID]),
++    topologyOperatorKind: textOrUnknown(record[SOURCE_FIELD.KIND]),
++    topologyOperatorCurrentStepId: textOrUnknown(
++      record[SOURCE_FIELD.CURRENT_STEP_ID],
++    ),
++    topologyOperatorCurrentStepState: textOrUnknown(
++      record[SOURCE_FIELD.CURRENT_STEP_STATE],
++    ),
++    topologyOperatorNextAction: textOrUnknown(
++      record[SOURCE_FIELD.NEXT_ACTION],
++    ),
++  };
++}
++
++export function isPublicationPendingEvidence(evidence) {
++  return (
++    (evidence.publicationPending === true &&
++      evidence.missingPublishedCount === SOURCE_ORDER_BASE) ||
++    PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
++    evidence.recoveryProtocolState ===
++      PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING
++  );
++}
++
++export function isPublicationConsumerLagEvidence(evidence) {
++  return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
++    evidence.pendingAckCount === SOURCE_ORDER_BASE &&
++    isClosedPublicationOwnerAckState(evidence.ackState) &&
++    evidence.revisionState === PUBLICATION_OWNER_REVISION_STATE_CURRENT &&
++    evidence.streamOutcome === PUBLICATION_OWNER_STREAM_OUTCOME_STALE &&
++    evidence.freshnessFence ===
++      PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG &&
++    evidence.recoveryOutcome ===
++      PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER;
++}
++
++export function hasPublicationMissingPublishedEvidence(evidence) {
++  return evidence.missingPublishedCount > SOURCE_ORDER_BASE ||
++    evidence.missingPublishedNodeIds.length > SOURCE_ORDER_BASE;
++}
++
++export function isPublicationMissingPublishedEvidence(evidence) {
++  return hasPublicationMissingPublishedEvidence(evidence) &&
++    evidence.prioritySpreadPending !== true &&
++    isPublicationConsumerLagEvidence(evidence) !== true;
++}
++
++export function hasPublicationActiveGateHandoffContract(handoff) {
++  const record = asRecord(handoff);
++  return textOrUnknown(record.state) !== UNKNOWN_VALUE ||
++    textOrUnknown(record.reasonCode) !== UNKNOWN_VALUE ||
++    textOrUnknown(record.nextAction) !== UNKNOWN_VALUE;
++}
++
++export function hasReplayableNoDebtPublicationPendingOwnerEvidence(
++  publication,
++) {
++  return parseBooleanVariant(publication.publicationPending) === true &&
++    textOrUnknown(publication.recoveryProtocolState) ===
++      PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION &&
++    numberOrZero(publication.pendingAckCount) === SOURCE_ORDER_BASE &&
++    arrayOrEmpty(publication.pendingAckNodeIds).length === SOURCE_ORDER_BASE &&
++    numberOrZero(publication.missingPublishedCount) === SOURCE_ORDER_BASE &&
++    arrayOrEmpty(publication.missingPublishedNodeIds).length ===
++      SOURCE_ORDER_BASE &&
++    parseBooleanVariant(publication.prioritySpreadPending) !== true;
++}
++
++export function buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
++  publicationActiveGateHandoff,
++  publication,
++  progress,
++}) {
++  if (hasPublicationActiveGateHandoffContract(publicationActiveGateHandoff)) {
++    return publicationActiveGateHandoff;
++  }
++  if (!hasReplayableNoDebtPublicationPendingOwnerEvidence(publication)) {
++    return publicationActiveGateHandoff;
++  }
++  return buildPublicationActiveGateHandoffContract({
++    publicationConvergence: {
++      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
++      publicationStatus: textOrUnknown(publication.publicationStatus),
++      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
++      publicationPending: parseBooleanVariant(publication.publicationPending),
++      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
++      pendingAckCount: numberOrZero(publication.pendingAckCount),
++      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
++      missingPublishedCount: numberOrZero(publication.missingPublishedCount),
++      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
++      prioritySpreadPending:
++        parseBooleanVariant(publication.prioritySpreadPending),
++    },
++    activeGateProgress: progress,
++  });
++}
+diff --git a/src/diagnostics/topology-convergence-readiness-normalizers.js b/src/diagnostics/topology-convergence-readiness-normalizers.js
+new file mode 100644
+index 00000000..a5004bb0
+--- /dev/null
++++ b/src/diagnostics/topology-convergence-readiness-normalizers.js
+@@ -0,0 +1,258 @@
++import {
++  UNKNOWN_VALUE,
++  SOURCE_ORDER_BASE,
++  READINESS_SUPPORT_PATH,
++  READINESS_RECOVERABILITY_RULES,
++  READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES,
++  READINESS_PROJECTION_EXCLUDED_SOURCE,
++  READINESS_CAUSE_NONE,
++  READINESS_SUPPORT_PROGRESS_STATE_SATISFIED,
++  READINESS_SUPPORT_PROGRESS_REASON_SATISFIED,
++  READINESS_SUPPORT_PROGRESS_NEXT_ACTION_NONE,
++  READINESS_SUPPORT_PROGRESS_WAKE_SOURCE_NONE,
++  READINESS_SUPPORT_PROGRESS_BLOCKING_DEPENDENCY_NONE,
++  READINESS_SUPPORT_TIMELINE_MODE,
++  READINESS_SUPPORT_TIMELINE_CLASS_CODE,
++  READINESS_SUPPORT_TIMELINE_SOURCE,
++  OWNER,
++  BOUNDARY,
++} from './topology-convergence-constants.js';
++
++import {
++  asRecord,
++  arrayOrEmpty,
++  textOrUnknown,
++  normalizeProgressContract,
++} from './topology-convergence-core-normalizers.js';
++
++const READINESS_PROJECTION_EXCLUDED_CLASS_CODE =
++  'readiness_projection_excluded';
++const READINESS_PROJECTION_EXCLUDED_CAUSE =
++  'readiness_projection_excluded';
++const READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE =
++  'cluster_member_unhealthy';
++const READINESS_PROJECTION_PROGRESS_STATE = 'readiness_retryable';
++const READINESS_PROJECTION_PROGRESS_NEXT_ACTION =
++  'wait_for_readiness_support';
++const READINESS_PROJECTION_PROGRESS_TERMINAL_STATE = 'satisfied';
++const READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY =
++  'cluster_member_health';
++const EXPLICIT_READINESS_SUPPORT_KIND_PROGRESS_CONTRACT =
++  'progress_contract';
++const EXPLICIT_READINESS_SUPPORT_KIND_READY_FLAG = 'ready_flag';
++const EXPLICIT_READINESS_SUPPORT_KIND_ZERO_REASON_TIMELINE =
++  'zero_reason_timeline';
++const EXPLICIT_READINESS_SUPPORT_RULES = Object.freeze([
++  Object.freeze({
++    kind: EXPLICIT_READINESS_SUPPORT_KIND_PROGRESS_CONTRACT,
++    matches: (evidence) =>
++      evidence.progressContractState ===
++      READINESS_SUPPORT_PROGRESS_STATE_SATISFIED,
++  }),
++  Object.freeze({
++    kind: EXPLICIT_READINESS_SUPPORT_KIND_READY_FLAG,
++    matches: (evidence) => evidence.ready === true,
++  }),
++  Object.freeze({
++    kind: EXPLICIT_READINESS_SUPPORT_KIND_ZERO_REASON_TIMELINE,
++    matches: (evidence) =>
++      evidence.timelineNodeReasonCountsPresent === true &&
++      evidence.timelineNodeReasonCountsZero === true,
++  }),
++]);
++
++export function resolveReadinessSupportPath(readiness, activeGate) {
++  const snapshot = {
++    activeGateState: textOrUnknown(asRecord(activeGate).state),
++    classCode: textOrUnknown(readiness.classCode),
++    terminalReason: textOrUnknown(readiness.terminalReason),
++    source: textOrUnknown(readiness.source),
++    cause: textOrUnknown(readiness.cause),
++  };
++  if (READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES.some((rule) =>
++    rule.matches(snapshot),
++  )) {
++    return READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS;
++  }
++  return READINESS_SUPPORT_PATH.READINESS_FAILURE;
++}
++
++export function resolveReadinessRecoverability(readiness) {
++  const snapshot = {
++    recoverability: textOrUnknown(readiness.recoverability),
++    classCode: textOrUnknown(readiness.classCode),
++    terminalReason: textOrUnknown(readiness.terminalReason),
++  };
++  const decision = READINESS_RECOVERABILITY_RULES.find((rule) =>
++    rule.matches(snapshot),
++  );
++  return decision.recoverability;
++}
++
++export function normalizeReadinessSupportEvidence(readinessFailure, activeGate) {
++  const readiness = asRecord(readinessFailure);
++  if (Object.keys(readiness).length === SOURCE_ORDER_BASE) {
++    return {};
++  }
++  const recoverability = resolveReadinessRecoverability(readiness);
++  const supportPath = resolveReadinessSupportPath(readiness, activeGate);
++  return {
++    ...readiness,
++    recoverability,
++    supportPath,
++  };
++}
++
++export function normalizeExplicitReadinessSupportEvidence(
++  readinessInput,
++  evidencePath,
++) {
++  const evidence = buildExplicitReadinessSupportEvidence(
++    readinessInput,
++    evidencePath,
++  );
++  const rule = EXPLICIT_READINESS_SUPPORT_RULES.find((entry) =>
++    entry.matches(evidence),
++  );
++  return rule ?
++    buildExplicitReadinessSupportRecord(evidence, rule) :
++    {};
++}
++
++function buildExplicitReadinessSupportEvidence(readinessInput, evidencePath) {
++  const readiness = asRecord(readinessInput);
++  const rawProgressContract = asRecord(readiness.progressContract);
++  const progressContract =
++    Object.keys(rawProgressContract).length > SOURCE_ORDER_BASE ?
++      normalizeProgressContract(
++        rawProgressContract,
++        buildSatisfiedReadinessProgressContract(evidencePath),
++      ) :
++      {};
++  const timeline = asRecord(readiness.lastReadinessTimelineEntry);
++  const nodeReasonCounts = Object.values(
++    asRecord(timeline.nodeReasonCountsByNodeId),
++  );
++  return {
++    readiness,
++    rawProgressContract,
++    progressContract,
++    progressContractState: progressContract.state,
++    evidencePath,
++    ready: readiness.ready === true,
++    timelineNodeReasonCountsPresent:
++      nodeReasonCounts.length > SOURCE_ORDER_BASE,
++    timelineNodeReasonCountsZero: nodeReasonCounts.every((count) =>
++      Number.isFinite(count) && count === SOURCE_ORDER_BASE,
++    ),
++  };
++}
++
++function buildExplicitReadinessSupportRecord(evidence, rule) {
++  const progressContract =
++    Object.keys(evidence.progressContract).length > SOURCE_ORDER_BASE ?
++      evidence.progressContract :
++      normalizeProgressContract(
++        evidence.rawProgressContract,
++        buildSatisfiedReadinessProgressContract(
++          evidence.evidencePath,
++        ),
++      );
++  const timelineFields =
++    rule.kind === EXPLICIT_READINESS_SUPPORT_KIND_ZERO_REASON_TIMELINE ?
++      {
++        mode: READINESS_SUPPORT_TIMELINE_MODE,
++        classCode: READINESS_SUPPORT_TIMELINE_CLASS_CODE,
++        recoverability: READINESS_SUPPORT_PROGRESS_STATE_SATISFIED,
++        terminalReason: READINESS_SUPPORT_PROGRESS_REASON_SATISFIED,
++        cause: READINESS_CAUSE_NONE,
++        source: READINESS_SUPPORT_TIMELINE_SOURCE,
++      } :
++      {};
++  return {
++    ...evidence.readiness,
++    ...timelineFields,
++    ready: true,
++    supportPath: evidence.readiness.supportPath ||
++      READINESS_SUPPORT_PATH.EXPLICIT_SUPPORT_EVIDENCE,
++    progressContract,
++  };
++}
++
++function buildSatisfiedReadinessProgressContract(evidencePath) {
++  return {
++    owner: OWNER.READINESS,
++    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
++    state: READINESS_SUPPORT_PROGRESS_STATE_SATISFIED,
++    reason: READINESS_SUPPORT_PROGRESS_REASON_SATISFIED,
++    nextAction: READINESS_SUPPORT_PROGRESS_NEXT_ACTION_NONE,
++    wakeSource: READINESS_SUPPORT_PROGRESS_WAKE_SOURCE_NONE,
++    retryAfterMs: SOURCE_ORDER_BASE,
++    terminalState: READINESS_SUPPORT_PROGRESS_STATE_SATISFIED,
++    evidencePath,
++    blockingDependency: READINESS_SUPPORT_PROGRESS_BLOCKING_DEPENDENCY_NONE,
++  };
++}
++
++export function deriveProjectionReadinessFailure(publication) {
++  const projectionDiagnostics = asRecord(publication.projectionDiagnostics);
++  const missingPublishedNodeIds = arrayOrEmpty(
++    publication.missingPublishedNodeIds,
++  );
++  const readinessExcludedNodeIds = arrayOrEmpty(
++    projectionDiagnostics.readinessExcludedNodeIds,
++  );
++  const unhealthyExcludedNodeIds = arrayOrEmpty(
++    projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
++  );
++  const excludedNodeIdSet = new Set([
++    ...readinessExcludedNodeIds,
++    ...unhealthyExcludedNodeIds,
++  ]);
++  const blockedNodeIds = missingPublishedNodeIds
++    .filter((nodeId) => excludedNodeIdSet.has(nodeId))
++    .sort();
++  if (blockedNodeIds.length === SOURCE_ORDER_BASE) {
++    return {};
++  }
++  const unhealthyNodeIdSet = new Set(unhealthyExcludedNodeIds);
++  const nodeReasonsByNodeId = {};
++  for (const nodeId of blockedNodeIds) {
++    nodeReasonsByNodeId[nodeId] = unhealthyNodeIdSet.has(nodeId) ?
++      [
++        READINESS_PROJECTION_EXCLUDED_CAUSE,
++        READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE,
++      ] :
++      [READINESS_PROJECTION_EXCLUDED_CAUSE];
++  }
++  const hasUnhealthyBlockedNode = blockedNodeIds.some((nodeId) =>
++    unhealthyNodeIdSet.has(nodeId),
++  );
++  const cause = hasUnhealthyBlockedNode ?
++    READINESS_CLUSTER_MEMBER_UNHEALTHY_CAUSE :
++    READINESS_PROJECTION_EXCLUDED_CAUSE;
++  return {
++    mode: textOrUnknown(projectionDiagnostics.readinessDecisionMode),
++    classCode: READINESS_PROJECTION_EXCLUDED_CLASS_CODE,
++    terminalReason: UNKNOWN_VALUE,
++    source: READINESS_PROJECTION_EXCLUDED_SOURCE,
++    cause,
++    nodeReasonsByNodeId,
++    progressSignal: {
++      attemptsSinceProgress: UNKNOWN_VALUE,
++      maxAttempts: UNKNOWN_VALUE,
++      stalled: false,
++    },
++    progressContract: {
++      owner: OWNER.READINESS,
++      boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
++      state: READINESS_PROJECTION_PROGRESS_STATE,
++      reason: cause,
++      nextAction: READINESS_PROJECTION_PROGRESS_NEXT_ACTION,
++      wakeSource: READINESS_PROJECTION_EXCLUDED_SOURCE,
++      retryAfterMs: SOURCE_ORDER_BASE,
++      terminalState: READINESS_PROJECTION_PROGRESS_TERMINAL_STATE,
++      blockingDependency: READINESS_PROJECTION_PROGRESS_BLOCKING_DEPENDENCY,
++    },
++  };
++}
+diff --git a/test/diagnostics/topology-convergence-readiness-support-evidence.test.js b/test/diagnostics/topology-convergence-readiness-support-evidence.test.js
+new file mode 100644
+index 00000000..3673e641
+--- /dev/null
++++ b/test/diagnostics/topology-convergence-readiness-support-evidence.test.js
+@@ -0,0 +1,186 @@
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  EDGE_STATE,
++  buildTopologyConvergenceGraphFromArtifacts,
++} from '../../src/diagnostics/topology-convergence-graph.js';
++
++const TEST_SCENARIO = 'fixture-readiness-support';
++const TEST_EDGE_READINESS = 'readiness_startup_support';
++const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
++const TEST_RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
++const TEST_ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
++const TEST_READINESS_FAILURE_MODE = 'startup';
++const TEST_READINESS_FAILURE_CLASS = 'snapshot_reachability_timeout';
++const TEST_READINESS_FAILURE_RECOVERABILITY = 'terminal';
++const TEST_READINESS_FAILURE_CAUSE = 'snapshot_reachability_timeout';
++const TEST_READINESS_FAILURE_SOURCE = 'selectedSnapshotReachabilityError';
++const TEST_READINESS_SATISFIED_REASON = 'readiness_satisfied';
++const TEST_READINESS_EVIDENCE_MISSING_REASON = 'evidence_missing';
++const TEST_READINESS_SUPPORT_PATH_EXPLICIT = 'explicit_support_evidence';
++const TEST_READINESS_SUPPORT_EVIDENCE_PATH = 'failureBundle.readiness';
++const TEST_READINESS_FAILURE_EVIDENCE_PATH = 'summary.readinessFailure';
++const TEST_NODE_A = 'node-a';
++const TEST_NODE_B = 'node-b';
++const TEST_ZERO_COUNT = 0;
++const TEST_ONE_COUNT = 1;
++const TEST_NEGATIVE_ONE_COUNT = -TEST_ONE_COUNT;
++const TEST_EXPECTED_NODE_COUNT = 5;
++
++test('topology convergence consumes explicit zero-reason readiness support',
++  () => {
++    const graph = buildTopologyConvergenceGraphFromArtifacts({
++      failureBundle: {
++        ...buildBaseFailureBundle(),
++        readiness: {
++          lastReadinessTimelineEntry: {
++            nodeReasonCountsByNodeId: {
++              [TEST_NODE_A]: TEST_ZERO_COUNT,
++              [TEST_NODE_B]: TEST_ZERO_COUNT,
++            },
++          },
++        },
++      },
++    });
++    const readinessEdge = findEdge(graph.edges, TEST_EDGE_READINESS);
++
++    assert.equal(readinessEdge.state, EDGE_STATE.SATISFIED);
++    assert.deepEqual(
++      readinessEdge.reasons,
++      [TEST_READINESS_SATISFIED_REASON],
++    );
++    assert.equal(
++      readinessEdge.evidencePath,
++      TEST_READINESS_SUPPORT_EVIDENCE_PATH,
++    );
++    assert.equal(
++      readinessEdge.source.supportPath,
++      TEST_READINESS_SUPPORT_PATH_EXPLICIT,
++    );
++    assert.equal(readinessEdge.source.progressContract.state, 'satisfied');
++    assert.equal(graph.frontier.length, TEST_ZERO_COUNT);
++    assertNoNullOrUndefined(graph);
++  });
++
++test('topology convergence prefers readiness failure over explicit support',
++  () => {
++    const graph = buildTopologyConvergenceGraphFromArtifacts({
++      failureBundle: {
++        ...buildBaseFailureBundle(),
++        summary: {
++          readinessFailure: buildReadinessFailure(),
++        },
++        readiness: {
++          lastReadinessTimelineEntry: {
++            nodeReasonCountsByNodeId: {
++              [TEST_NODE_A]: TEST_ZERO_COUNT,
++              [TEST_NODE_B]: TEST_ZERO_COUNT,
++            },
++          },
++        },
++      },
++    });
++    const readinessEdge = findEdge(graph.edges, TEST_EDGE_READINESS);
++
++    assert.equal(readinessEdge.state, EDGE_STATE.TERMINAL_FAILED);
++    assert.equal(
++      readinessEdge.evidencePath,
++      TEST_READINESS_FAILURE_EVIDENCE_PATH,
++    );
++    assert.equal(
++      readinessEdge.source.progressContract.evidencePath,
++      TEST_READINESS_FAILURE_EVIDENCE_PATH,
++    );
++    assert.notEqual(
++      readinessEdge.source.supportPath,
++      TEST_READINESS_SUPPORT_PATH_EXPLICIT,
++    );
++    assertNoNullOrUndefined(graph);
++  });
++
++test('topology convergence rejects nonzero readiness support reason counts',
++  () => {
++    const graph = buildTopologyConvergenceGraphFromArtifacts({
++      failureBundle: {
++        ...buildBaseFailureBundle(),
++        readiness: {
++          lastReadinessTimelineEntry: {
++            nodeReasonCountsByNodeId: {
++              [TEST_NODE_A]: TEST_ONE_COUNT,
++              [TEST_NODE_B]: TEST_NEGATIVE_ONE_COUNT,
++            },
++          },
++        },
++      },
++    });
++    const readinessEdge = findEdge(graph.edges, TEST_EDGE_READINESS);
++
++    assert.equal(readinessEdge.state, EDGE_STATE.UNKNOWN);
++    assert.deepEqual(
++      readinessEdge.reasons,
++      [TEST_READINESS_EVIDENCE_MISSING_REASON],
++    );
++    assert.equal(graph.summary.firstFrontierEdgeId, TEST_EDGE_READINESS);
++    assertNoNullOrUndefined(graph);
++  });
++
++function buildBaseFailureBundle() {
++  return {
++    scenario: TEST_SCENARIO,
++    summary: {},
++    publicationConvergence: {
++      publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
++      pendingAckCount: TEST_ZERO_COUNT,
++      blockedNodeCount: TEST_ZERO_COUNT,
++      missingPublishedCount: TEST_ZERO_COUNT,
++      recoveryProtocolState: TEST_RECOVERY_PROTOCOL_STEADY_PUBLISHED,
++      prioritySpreadPending: false,
++      activeGate: {
++        state: TEST_ACTIVE_GATE_STATE_TIMED_OUT,
++        ready: false,
++        progress: {
++          expectedNodeCount: TEST_EXPECTED_NODE_COUNT,
++          snapshotCoverageNodeCount: TEST_EXPECTED_NODE_COUNT,
++          snapshotCoverageComplete: true,
++          priorityBlockedPartitionCount: TEST_ZERO_COUNT,
++          priorityRecoveryProgressClasses: {
++            unresolvedSemanticStateIds: [],
++            blockedPartitionIds: [],
++          },
++          blockers: [],
++        },
++      },
++    },
++  };
++}
++
++function buildReadinessFailure() {
++  return {
++    mode: TEST_READINESS_FAILURE_MODE,
++    classCode: TEST_READINESS_FAILURE_CLASS,
++    recoverability: TEST_READINESS_FAILURE_RECOVERABILITY,
++    cause: TEST_READINESS_FAILURE_CAUSE,
++    source: TEST_READINESS_FAILURE_SOURCE,
++  };
++}
++
++function findEdge(edges, edgeId) {
++  return edges.find((edge) => edge.id === edgeId);
++}
++
++function assertNoNullOrUndefined(value) {
++  assert.notEqual(value, null);
++  assert.notEqual(value, undefined);
++  if (Array.isArray(value)) {
++    for (const item of value) {
++      assertNoNullOrUndefined(item);
++    }
++    return;
++  }
++  if (typeof value === 'object') {
++    for (const childValue of Object.values(value)) {
++      assertNoNullOrUndefined(childValue);
++    }
++  }
++}
