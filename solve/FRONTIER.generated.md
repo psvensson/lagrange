@@ -61,11 +61,18 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 3
+## Open quests — 10
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
+| dst-cost-model-fidelity-spike | product | 0 | 0 | — |
+| l-write-membership-deferred-seed | product | 0 | 0 | — |
+| lagrange-devops-onboarding | product | 0 | 0 | — |
 | membership-publication-drain-determinism | product | 0 | 0 | CL-001 |
-| non-docker-validation-green | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |
+| rolling-restart-run4-critical-spread | product | 1 | 0 | — |
+| rolling-restart-run4-join-runtime-activation | product | 2 | 0 | — |
+| rolling-restart-run4-observer-staleness | product | 1 | 0 | — |
+| rolling-restart-run4-operation-drain | product | 1 | 0 | — |
+| rolling-restart-run4-publication-visibility-run2 | product | 0 | 0 | — |
 
