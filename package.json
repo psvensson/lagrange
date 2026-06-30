@@ -134,6 +134,8 @@
     "trace": "node scripts/solve.js trace",
     "gate": "bash scripts/rolling-restart-stat-gate.sh",
     "repro": "node scripts/run-closure-repro.js",
+    "dt:prove": "node scripts/dt-prove.js",
+    "session-worktree": "node scripts/session-worktree.js",
     "solve:new": "node scripts/solve.js new",
     "solve:run": "node scripts/solve.js run",
     "solve:status": "node scripts/solve.js status",
