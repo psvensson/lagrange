@@ -47,6 +47,18 @@ const WORKFLOW_ACTION_ADVANCE_EXISTING_OPERATION =
   'advance_existing_operation';
 const WORKFLOW_ACTUATION_PERSISTED_NOT_DISPATCHED =
   'persisted_not_dispatched';
+const CONVERGENCE_TIMEOUT_REASON = 'convergence_timeout';
+const POST_REBALANCE_CLOSURE_OPEN_STATE = 'open';
+const POST_REBALANCE_OPERATION_DRAIN_BLOCKER = 'operation_drain_open';
+const POST_REBALANCE_NO_OVER_TARGET_BLOCKER = 'no_over_target_open';
+const POST_REBALANCE_OPERATION_DRAIN_DIMENSION = 'operation_drain';
+const POST_REBALANCE_NO_OVER_TARGET_DIMENSION = 'no_over_target';
+const POST_REBALANCE_IN_FLIGHT_REASON = 'in_flight_replica_operations';
+const POST_REBALANCE_OVERTARGET_REASON = 'current_overtarget_voters';
+const POST_REBALANCE_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATIONS = 4;
+const POST_REBALANCE_OBSERVED_IN_FLIGHT_REPLICA_OPERATIONS = 7;
+const POST_REBALANCE_OVERTARGET_DURATION_MS = 10945;
+const POST_REBALANCE_PARTITION_ID = 'sql_write_operations-p1';
 
 function readJsonArtifact(artifactPath) {
   return JSON.parse(fs.readFileSync(artifactPath, ENCODING_UTF8));
@@ -118,6 +130,86 @@ function buildPassedRollingRestartReport() {
             },
           },
         },
+      },
+    ],
+  };
+}
+
+function buildPostRebalanceClosureBlockedReport() {
+  const report = buildPassedRollingRestartReport();
+  const scenario = firstScenario(report);
+  const postRebalanceClosure = {
+    state: POST_REBALANCE_CLOSURE_OPEN_STATE,
+    blockers: [
+      {
+        id: POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
+        dimension: POST_REBALANCE_OPERATION_DRAIN_DIMENSION,
+        reasonCodes: [POST_REBALANCE_IN_FLIGHT_REASON],
+      },
+      {
+        id: POST_REBALANCE_NO_OVER_TARGET_BLOCKER,
+        dimension: POST_REBALANCE_NO_OVER_TARGET_DIMENSION,
+        reasonCodes: [POST_REBALANCE_OVERTARGET_REASON],
+      },
+    ],
+  };
+
+  return {
+    summary: {
+      passed: REPORT_COUNT_PASSED,
+      failed: REPORT_COUNT_FAILED,
+    },
+    scenarios: [
+      {
+        ...scenario,
+        passed: false,
+        publicationConvergence: {
+          ...scenario.publicationConvergence,
+          activeGate: {
+            ...scenario.publicationConvergence.activeGate,
+            state: ACTIVE_GATE_TIMED_OUT_STATE,
+            ready: false,
+          },
+        },
+        summary: {
+          passed: false,
+          dominantReason: CONVERGENCE_TIMEOUT_REASON,
+          topReasons: [
+            {
+              reason: CONVERGENCE_TIMEOUT_REASON,
+              count: REPORT_COUNT_FAILED,
+            },
+          ],
+        },
+        failureClassification: {
+          failureBarrier: 'convergence',
+          failureBarrierReason: CONVERGENCE_TIMEOUT_REASON,
+          postRebalanceClosure,
+          signals: [
+            {
+              kind: 'postRebalanceClosureState',
+              value: POST_REBALANCE_CLOSURE_OPEN_STATE,
+            },
+            {
+              kind: 'postRebalanceBlocker',
+              value: POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
+            },
+          ],
+        },
+        details: {
+          diagnostics: {
+            postRebalanceClosure,
+            effectiveInFlightReplicaOperationCount:
+              POST_REBALANCE_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATIONS,
+            observedInFlightReplicaOperationCount:
+              POST_REBALANCE_OBSERVED_IN_FLIGHT_REPLICA_OPERATIONS,
+            overTargetDurations: {
+              [POST_REBALANCE_PARTITION_ID]:
+                POST_REBALANCE_OVERTARGET_DURATION_MS,
+            },
+          },
+        },
+        readiness: {},
       },
     ],
   };
@@ -280,6 +372,7 @@ export {
   buildCurrentTimeoutCascadeReport,
   buildDirectStalledActiveGateReport,
   buildPassedRollingRestartReport,
+  buildPostRebalanceClosureBlockedReport,
   buildSelectedSnapshotTimeoutReport,
   buildTerminalBudgetReport,
   fixturePath,

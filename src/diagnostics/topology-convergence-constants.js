@@ -239,9 +239,15 @@ export const SOURCE_PATH = Object.freeze({
   REPORT_SCENARIO: 'report.scenarios[0]',
   REPORT_SCENARIO_FAILURE_BUNDLE: 'report.scenarios[0].failureBundle',
   REPORT_SCENARIO_PUBLICATION: 'report.scenarios[0].publicationConvergence',
+  REPORT_SCENARIO_DIAGNOSTICS: 'report.scenarios[0].details.diagnostics',
+  REPORT_SCENARIO_FAILURE_CLASSIFICATION:
+    'report.scenarios[0].failureClassification',
   REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION:
     'report.scenarios[0].priorityRecoveryObservation',
   REPORT_SCENARIO_READINESS_FAILURE: 'report.scenarios[0].readinessFailure',
+  FAILURE_BUNDLE_DIAGNOSTICS: 'failureBundle.details.diagnostics',
+  FAILURE_BUNDLE_FAILURE_CLASSIFICATION:
+    'failureBundle.failureClassification',
   FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_PROGRESS:
     'failureBundle.controlPlane.activeGateProgress',
   FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_SNAPSHOT_COVERAGE:
@@ -281,6 +287,7 @@ export const SOURCE_FIELD = Object.freeze({
   TOPOLOGY_OPERATOR_WITNESS: TOPOLOGY_OPERATOR_WITNESS_FIELD_NAME,
   READINESS_FAILURE: 'readinessFailure',
   PARTITION_ID: 'partitionId',
+  POST_REBALANCE_CLOSURE: 'postRebalanceClosure',
   SEMANTIC_STATE_ID: 'semanticStateId',
   WAIT_MODE: 'waitMode',
   NEXT_REQUIRED_ACTION: 'nextRequiredAction',
@@ -450,6 +457,7 @@ export const DECISION_INPUT = Object.freeze({
   SNAPSHOT_COVERAGE_COMPLETE: 'snapshotCoverageComplete',
   READINESS_RECOVERABILITY: 'readiness.recoverability',
   TOP_REASONS: 'topReasons',
+  POST_REBALANCE_CLOSURE: 'postRebalanceClosure',
 });
 
 export const DECISION_CONDITION = Object.freeze({
@@ -485,7 +493,10 @@ export const DECISION_CONDITION = Object.freeze({
   READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
   READINESS_EVIDENCE_MISSING: 'readiness failure evidence is missing',
   READINESS_RETRYABLE_FAILURE: 'readiness failure evidence is retryable',
-  TOP_FAILURES_PRESENT: 'top failure reasons are present',
+  TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE:
+    'top failure reasons include open post-rebalance closure blockers',
+  TOP_FAILURES_PRESENT:
+    'top failure reasons are present without post-rebalance closure blockers',
   TOP_FAILURES_ABSENT: 'top failure reasons are absent',
 });
 
@@ -665,8 +676,18 @@ export const DECISION_TABLE_ROWS = Object.freeze([
     edgeId: EDGE_ID.TOP_FAILURE_REASONS,
     owner: OWNER.FAILURE_CLASSIFIER,
     boundary: BOUNDARY.FAILURE_REASON_RANKING,
-    evidenceInputs: Object.freeze([DECISION_INPUT.TOP_REASONS]),
+    evidenceInputs: Object.freeze([
+      DECISION_INPUT.TOP_REASONS,
+      DECISION_INPUT.POST_REBALANCE_CLOSURE,
+    ]),
     outcomes: Object.freeze([
+      Object.freeze({
+        condition:
+          DECISION_CONDITION
+            .TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
+      }),
       Object.freeze({
         condition: DECISION_CONDITION.TOP_FAILURES_PRESENT,
         state: EDGE_STATE.SATISFIED,

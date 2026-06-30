@@ -1,0 +1,41 @@
+{
+  "id": "rolling-restart-run4-postrebalance-diagnostics-routing",
+  "statement": "Topology and causal diagnostics route failed rolling-restart reports with concrete post-rebalance closure blockers to the post-rebalance/top-failure surface instead of stopping at absent readiness evidence; run4 run15 analysis no longer reports insufficient evidence when operation_drain_open/no_over_target_open evidence is present.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "closure": "Deterministic topology and causal-analysis tests prove failed reports with absent readiness evidence but concrete post-rebalance closure blockers route to the top-failure/post-rebalance surface, and live run4 run15 causal analysis no longer returns evidence_incomplete/ask_human.",
+    "oracle": "solve/oracle/rolling-restart-run4-postrebalance-diagnostics-routing.json"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-postrebalance-diagnostics-routing.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-postrebalance-diagnostics-routing-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-run4-postrebalance-diagnostics-routing.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

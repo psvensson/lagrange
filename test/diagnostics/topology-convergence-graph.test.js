@@ -10,7 +10,13 @@ import {
   buildTopologyConvergenceGraphFromArtifacts,
   selectTopologyConvergenceDominantWitness,
 } from '../../src/diagnostics/topology-convergence-graph.js';
-import { CONTRACT_FIELD, OWNER_WITNESS_FIELD } from '../../src/diagnostics/topology-convergence-constants.js';
+import {
+  CONTRACT_FIELD,
+  OWNER_WITNESS_FIELD,
+} from '../../src/diagnostics/topology-convergence-constants.js';
+import {
+  buildPostRebalanceClosureBlockedReport,
+} from './causal-analysis-fixtures.js';
 
 const FIXTURE_SCENARIO = 'fixture-rolling-restart';
 const FIXTURE_PUBLICATION_EPOCH = 4;
@@ -138,6 +144,12 @@ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_NEXT_ACTION_WAIT = 'wait';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_EVENT =
   'operation_lifecycle_event';
+const TOP_FAILURES_PRESENT_REASON = 'top_failures_present';
+const POST_REBALANCE_CLOSURE_OPEN_STATE = 'open';
+const POST_REBALANCE_OPERATION_DRAIN_BLOCKER = 'operation_drain_open';
+const POST_REBALANCE_BLOCKER_LIST =
+  'operation_drain_open,no_over_target_open';
+const DECISION_INPUT_POST_REBALANCE_CLOSURE = 'postRebalanceClosure';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_REBALANCER_TIMER =
   'rebalancer_timer';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_RETRY_AFTER_MS = 1000;
@@ -596,8 +608,11 @@ describe('TopologyConvergenceGraph', () => {
 
   it('keeps absent readiness evidence missing after active-gate coverage is satisfied', () => {
     const fixture = buildHealthyFixtureFailureBundle();
-    const {readinessFailure: _readinessFailure, ...summaryWithoutReadiness} =
-      fixture.summary;
+    const {
+      readinessFailure: _readinessFailure,
+      topReasons: _topReasons,
+      ...summaryWithoutReadiness
+    } = fixture.summary;
     const graph = buildTopologyConvergenceGraphFromArtifacts({
       failureBundle: {
         ...fixture,
@@ -621,6 +636,34 @@ describe('TopologyConvergenceGraph', () => {
     assert.notEqual(readinessEdge.reasons[0], 'readiness_retryable');
     assert.equal(graph.summary.firstFrontierEdgeId, EDGE_READINESS);
     assert.equal(graph.summary.firstFrontierReason, EVIDENCE_MISSING_REASON);
+    assertNoNullOrUndefined(graph);
+  });
+
+  it('routes post-rebalance closure blockers past absent readiness evidence', () => {
+    const graph = buildTopologyConvergenceGraph(
+      buildPostRebalanceClosureBlockedReport(),
+    );
+    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
+    const topFailureEdge = findEdge(graph.edges, EDGE_TOP_FAILURE_REASONS);
+
+    assert.equal(readinessEdge.state, EDGE_STATE.UNKNOWN);
+    assert.deepEqual(readinessEdge.reasons, [EVIDENCE_MISSING_REASON]);
+    assert.equal(topFailureEdge.state, EDGE_STATE.BLOCKED);
+    assert.deepEqual(topFailureEdge.reasons, [TOP_FAILURES_PRESENT_REASON]);
+    assert.equal(
+      topFailureEdge.source.postRebalanceClosureState,
+      POST_REBALANCE_CLOSURE_OPEN_STATE,
+    );
+    assert.equal(
+      topFailureEdge.source.postRebalanceBlockers,
+      POST_REBALANCE_BLOCKER_LIST,
+    );
+    assert.equal(
+      topFailureEdge.source.postRebalancePrimaryBlocker,
+      POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
+    );
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_TOP_FAILURE_REASONS);
+    assert.equal(graph.summary.firstFrontierReason, TOP_FAILURES_PRESENT_REASON);
     assertNoNullOrUndefined(graph);
   });
 
@@ -1912,6 +1955,13 @@ describe('TopologyConvergenceGraph', () => {
     const priorityRecoveryRow = decisionTable.transitions.find((row) =>
       row.edgeId === EDGE_PRIORITY_RECOVERY,
     );
+    const topFailureRow = decisionTable.transitions.find((row) =>
+      row.edgeId === EDGE_TOP_FAILURE_REASONS,
+    );
+    const postRebalanceOutcome = topFailureRow.outcomes.find((outcome) =>
+      outcome.state === EDGE_STATE.BLOCKED &&
+      outcome.reasons.includes(TOP_FAILURES_PRESENT_REASON),
+    );
 
     assert.equal(
       findEdge(graph.edges, EDGE_PRIORITY_RECOVERY).owner,
@@ -1919,6 +1969,12 @@ describe('TopologyConvergenceGraph', () => {
     );
     assert.equal(priorityRecoveryRow.owner, OWNER_OPERATION_WORKFLOW);
     assert.equal(priorityRecoveryRow.boundary, BOUNDARY_WORKFLOW_PROGRESS);
+    assert.ok(
+      topFailureRow.evidenceInputs.includes(
+        DECISION_INPUT_POST_REBALANCE_CLOSURE,
+      ),
+    );
+    assert.equal(postRebalanceOutcome.state, EDGE_STATE.BLOCKED);
   });
 
   it('converges to an empty frontier when all blocker edges are satisfied', () => {
@@ -2007,7 +2063,9 @@ describe('TopologyConvergenceGraph', () => {
       failureBundle: fixture,
     });
 
-    const witness = graph.ownerWitnesses.find(w => w[OWNER_WITNESS_FIELD.EDGE_ID] === 'publication_ack_convergence');
+    const witness = graph.ownerWitnesses.find((entry) =>
+      entry[OWNER_WITNESS_FIELD.EDGE_ID] === EDGE_PUBLICATION_ACK_CONVERGENCE,
+    );
     assert.ok(witness);
     assert.equal(witness[CONTRACT_FIELD.OWNER], 'explicit_publication_owner');
     assert.equal(witness[CONTRACT_FIELD.BOUNDARY], 'explicit_publication_boundary');

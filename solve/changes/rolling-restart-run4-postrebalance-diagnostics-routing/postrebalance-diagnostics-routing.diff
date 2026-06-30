@@ -1,0 +1,830 @@
+diff --git a/src/diagnostics/causal-analysis-schema.js b/src/diagnostics/causal-analysis-schema.js
+index d9416456..6fda94ac 100644
+--- a/src/diagnostics/causal-analysis-schema.js
++++ b/src/diagnostics/causal-analysis-schema.js
+@@ -120,6 +120,7 @@ const FAILURE_CLASS = Object.freeze({
+   STARTUP_READINESS_BLOCKED: 'startup_readiness_blocked',
+   PRIORITY_RECOVERY_EVENT_WAIT: 'priority_recovery_event_wait',
+   PUBLICATION_ACK_BLOCKED: 'publication_ack_blocked',
++  POST_REBALANCE_CLOSURE_BLOCKED: 'post_rebalance_closure_blocked',
+   BUDGET_TIMEOUT_CASCADE: 'budget_timeout_cascade',
+   EVIDENCE_INCOMPLETE: 'evidence_incomplete',
+   HEALTHY: 'healthy',
+@@ -233,6 +234,8 @@ const FAILURE_CLASS_RESOLUTION_TABLE = Object.freeze({
+     RESOLUTION_STRATEGY.ACCEPT_CLASSIFIED_BACKPRESSURE,
+   [FAILURE_CLASS.PUBLICATION_ACK_BLOCKED]:
+     RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX,
++  [FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED]:
++    RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX,
+   [FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE]:
+     RESOLUTION_STRATEGY.WIDEN_ARCHITECTURE_WORK,
+   [FAILURE_CLASS.EVIDENCE_INCOMPLETE]: RESOLUTION_STRATEGY.ASK_HUMAN,
+diff --git a/src/diagnostics/failure-class-taxonomy.js b/src/diagnostics/failure-class-taxonomy.js
+index 506a44e7..812f52f1 100644
+--- a/src/diagnostics/failure-class-taxonomy.js
++++ b/src/diagnostics/failure-class-taxonomy.js
+@@ -22,15 +22,20 @@ const EDGE_PUBLICATION_ACK = 'publication_ack_convergence';
+ const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
+ const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
+ const EDGE_READINESS_STARTUP_SUPPORT = 'readiness_startup_support';
++const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
+ const REASON_SNAPSHOT_COVERAGE_INCOMPLETE = 'snapshot_coverage_incomplete';
+ const REASON_STARTUP_READINESS_BLOCKED = 'startup_readiness_blocked';
+ const REASON_EVENT_DRIVEN_WAIT = 'event_driven_wait';
+ const REASON_PUBLICATION_ACK_BLOCKED = 'publication_ack_blocked';
++const REASON_POST_REBALANCE_CLOSURE_BLOCKED =
++  'post_rebalance_closure_blocked';
+ const REASON_BUDGET_CASCADE = 'budget_cascade';
+ const REASON_EVIDENCE_INCOMPLETE = 'evidence_incomplete';
+ const REASON_NO_FAILURE = 'no_failure';
+ const WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+ const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
++const POST_REBALANCE_CLOSURE_STATE_OPEN = 'open';
++const POST_REBALANCE_NODE_ID_PREFIX = 'post_rebalance:';
+ const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
+ const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
+ const READINESS_SOURCE_UNKNOWN = 'unknown';
+@@ -41,6 +46,16 @@ const READINESS_CLASSIFICATION_DECISION = Object.freeze({
+ });
+ const EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS =
+   'publicationConvergence.priorityRecoveryProgressSummary.dominantWitness';
++const EVIDENCE_PATH_FAILURE_BUNDLE_POST_REBALANCE_CLOSURE =
++  'failureBundle.failureClassification.postRebalanceClosure';
++const EVIDENCE_PATH_FAILURE_BUNDLE_DIAGNOSTICS_POST_REBALANCE_CLOSURE =
++  'failureBundle.details.diagnostics.postRebalanceClosure';
++const EVIDENCE_PATH_SCENARIO_POST_REBALANCE_CLOSURE =
++  'failureClassification.postRebalanceClosure';
++const EVIDENCE_PATH_SCENARIO_DIAGNOSTICS_POST_REBALANCE_CLOSURE =
++  'details.diagnostics.postRebalanceClosure';
++const EVIDENCE_PATH_SUMMARY_POST_REBALANCE_CLOSURE =
++  'summary.failureClassification.postRebalanceClosure';
+ const EVIDENCE_PATH_BUDGET_CASCADES = 'budgetAccounting.cascades';
+ const EVIDENCE_PATH_CAUSAL_GRAPH_NODES = 'causalGraph.nodes';
+ const READINESS_CLASSIFICATION_RULES = Object.freeze([
+@@ -125,6 +140,9 @@ const FAILURE_RULES = Object.freeze([
+   Object.freeze({
+     classify: ({normalized, graph}) => classifyReadiness(normalized, graph),
+   }),
++  Object.freeze({
++    classify: ({normalized}) => classifyPostRebalanceClosure(normalized),
++  }),
+   Object.freeze({
+     classify: ({budgetAccounting}) => classifyBudgetCascade(budgetAccounting),
+   }),
+@@ -237,6 +255,11 @@ function classifyEvidenceIncomplete(graph, normalized) {
+   if (normalized.reportOutcome === REPORT_OUTCOME.PASSED) {
+     return [];
+   }
++  if (hasOpenPostRebalanceClosure(
++    selectPostRebalanceClosureEvidence(normalized).record,
++  )) {
++    return [];
++  }
+   const unknownNodes = graph.nodes.filter((node) => node.state === 'unknown');
+   if (unknownNodes.length === ZERO_COUNT) {
+     return [];
+@@ -251,6 +274,89 @@ function classifyEvidenceIncomplete(graph, normalized) {
+   })];
+ }
+ 
++function classifyPostRebalanceClosure(normalized) {
++  if (normalized.reportOutcome === REPORT_OUTCOME.PASSED) {
++    return [];
++  }
++  const evidence = selectPostRebalanceClosureEvidence(normalized);
++  if (hasOpenPostRebalanceClosure(evidence.record) !== true) {
++    return [];
++  }
++  const blockerIds = collectPostRebalanceBlockerIds(evidence.record);
++  return [buildClass({
++    failureClass: FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
++    reason: blockerIds[ZERO_COUNT] || REASON_POST_REBALANCE_CLOSURE_BLOCKED,
++    owner: OWNER.OPERATION_WORKFLOW,
++    boundary: BOUNDARY.WORKFLOW_PROGRESS,
++    evidencePath: evidence.evidencePath,
++    causalNodeIds: blockerIds.length > ZERO_COUNT ?
++      blockerIds.map((blockerId) => `${POST_REBALANCE_NODE_ID_PREFIX}${blockerId}`) :
++      [`topology:${EDGE_TOP_FAILURE_REASONS}`],
++  })];
++}
++
++function selectPostRebalanceClosureEvidence(normalized) {
++  const failureBundleDiagnostics = asRecord(
++    asRecord(normalized.failureBundle.details).diagnostics,
++  );
++  const scenarioDiagnostics = asRecord(
++    asRecord(normalized.scenarioRecord.details).diagnostics,
++  );
++  const candidates = [
++    {
++      record: asRecord(
++        asRecord(normalized.failureBundle.failureClassification)
++          .postRebalanceClosure,
++      ),
++      evidencePath: EVIDENCE_PATH_FAILURE_BUNDLE_POST_REBALANCE_CLOSURE,
++    },
++    {
++      record: asRecord(failureBundleDiagnostics.postRebalanceClosure),
++      evidencePath:
++        EVIDENCE_PATH_FAILURE_BUNDLE_DIAGNOSTICS_POST_REBALANCE_CLOSURE,
++    },
++    {
++      record: asRecord(
++        asRecord(normalized.scenarioRecord.failureClassification)
++          .postRebalanceClosure,
++      ),
++      evidencePath: EVIDENCE_PATH_SCENARIO_POST_REBALANCE_CLOSURE,
++    },
++    {
++      record: asRecord(scenarioDiagnostics.postRebalanceClosure),
++      evidencePath: EVIDENCE_PATH_SCENARIO_DIAGNOSTICS_POST_REBALANCE_CLOSURE,
++    },
++    {
++      record: asRecord(
++        asRecord(normalized.summary.failureClassification)
++          .postRebalanceClosure,
++      ),
++      evidencePath: EVIDENCE_PATH_SUMMARY_POST_REBALANCE_CLOSURE,
++    },
++  ];
++  return candidates.find((candidate) =>
++    Object.keys(candidate.record).length > ZERO_COUNT,
++  ) || {
++    record: {},
++    evidencePath: ABSENT_VALUE,
++  };
++}
++
++function hasOpenPostRebalanceClosure(postRebalanceClosure) {
++  const closure = asRecord(postRebalanceClosure);
++  if (Object.keys(closure).length === ZERO_COUNT) {
++    return false;
++  }
++  return textOrUnknown(closure.state) === POST_REBALANCE_CLOSURE_STATE_OPEN ||
++    arrayOrEmpty(closure.blockers).length > ZERO_COUNT;
++}
++
++function collectPostRebalanceBlockerIds(postRebalanceClosure) {
++  return arrayOrEmpty(asRecord(postRebalanceClosure).blockers)
++    .map((blocker) => textOrUnknown(asRecord(blocker).id))
++    .filter((blockerId) => blockerId !== 'unknown');
++}
++
+ function findTopologyNode(graph, edgeId) {
+   return graph.nodes.find((node) => node.id === `topology:${edgeId}`);
+ }
+diff --git a/src/diagnostics/stop-condition-decision.js b/src/diagnostics/stop-condition-decision.js
+index 235ba15c..ab5a09df 100644
+--- a/src/diagnostics/stop-condition-decision.js
++++ b/src/diagnostics/stop-condition-decision.js
+@@ -22,6 +22,7 @@ const REASON_INSUFFICIENT_EVIDENCE = 'insufficient_evidence';
+ const LOCAL_BLOCKER_FAILURE_CLASSES = Object.freeze([
+   FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
+   FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
++  FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
+ ]);
+ const STOP_CONDITION_RULES = Object.freeze([
+   Object.freeze({
+diff --git a/src/diagnostics/topology-convergence-constants.js b/src/diagnostics/topology-convergence-constants.js
+index 7bbfbd75..734694b8 100644
+--- a/src/diagnostics/topology-convergence-constants.js
++++ b/src/diagnostics/topology-convergence-constants.js
+@@ -239,9 +239,15 @@ export const SOURCE_PATH = Object.freeze({
+   REPORT_SCENARIO: 'report.scenarios[0]',
+   REPORT_SCENARIO_FAILURE_BUNDLE: 'report.scenarios[0].failureBundle',
+   REPORT_SCENARIO_PUBLICATION: 'report.scenarios[0].publicationConvergence',
++  REPORT_SCENARIO_DIAGNOSTICS: 'report.scenarios[0].details.diagnostics',
++  REPORT_SCENARIO_FAILURE_CLASSIFICATION:
++    'report.scenarios[0].failureClassification',
+   REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION:
+     'report.scenarios[0].priorityRecoveryObservation',
+   REPORT_SCENARIO_READINESS_FAILURE: 'report.scenarios[0].readinessFailure',
++  FAILURE_BUNDLE_DIAGNOSTICS: 'failureBundle.details.diagnostics',
++  FAILURE_BUNDLE_FAILURE_CLASSIFICATION:
++    'failureBundle.failureClassification',
+   FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_PROGRESS:
+     'failureBundle.controlPlane.activeGateProgress',
+   FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_SNAPSHOT_COVERAGE:
+@@ -281,6 +287,7 @@ export const SOURCE_FIELD = Object.freeze({
+   TOPOLOGY_OPERATOR_WITNESS: TOPOLOGY_OPERATOR_WITNESS_FIELD_NAME,
+   READINESS_FAILURE: 'readinessFailure',
+   PARTITION_ID: 'partitionId',
++  POST_REBALANCE_CLOSURE: 'postRebalanceClosure',
+   SEMANTIC_STATE_ID: 'semanticStateId',
+   WAIT_MODE: 'waitMode',
+   NEXT_REQUIRED_ACTION: 'nextRequiredAction',
+@@ -450,6 +457,7 @@ export const DECISION_INPUT = Object.freeze({
+   SNAPSHOT_COVERAGE_COMPLETE: 'snapshotCoverageComplete',
+   READINESS_RECOVERABILITY: 'readiness.recoverability',
+   TOP_REASONS: 'topReasons',
++  POST_REBALANCE_CLOSURE: 'postRebalanceClosure',
+ });
+ 
+ export const DECISION_CONDITION = Object.freeze({
+@@ -485,7 +493,10 @@ export const DECISION_CONDITION = Object.freeze({
+   READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
+   READINESS_EVIDENCE_MISSING: 'readiness failure evidence is missing',
+   READINESS_RETRYABLE_FAILURE: 'readiness failure evidence is retryable',
+-  TOP_FAILURES_PRESENT: 'top failure reasons are present',
++  TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE:
++    'top failure reasons include open post-rebalance closure blockers',
++  TOP_FAILURES_PRESENT:
++    'top failure reasons are present without post-rebalance closure blockers',
+   TOP_FAILURES_ABSENT: 'top failure reasons are absent',
+ });
+ 
+@@ -665,8 +676,18 @@ export const DECISION_TABLE_ROWS = Object.freeze([
+     edgeId: EDGE_ID.TOP_FAILURE_REASONS,
+     owner: OWNER.FAILURE_CLASSIFIER,
+     boundary: BOUNDARY.FAILURE_REASON_RANKING,
+-    evidenceInputs: Object.freeze([DECISION_INPUT.TOP_REASONS]),
++    evidenceInputs: Object.freeze([
++      DECISION_INPUT.TOP_REASONS,
++      DECISION_INPUT.POST_REBALANCE_CLOSURE,
++    ]),
+     outcomes: Object.freeze([
++      Object.freeze({
++        condition:
++          DECISION_CONDITION
++            .TOP_FAILURES_PRESENT_WITH_POST_REBALANCE_CLOSURE,
++        state: EDGE_STATE.BLOCKED,
++        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
++      }),
+       Object.freeze({
+         condition: DECISION_CONDITION.TOP_FAILURES_PRESENT,
+         state: EDGE_STATE.SATISFIED,
+diff --git a/src/diagnostics/topology-convergence-graph.js b/src/diagnostics/topology-convergence-graph.js
+index 69823cf9..922c278a 100644
+--- a/src/diagnostics/topology-convergence-graph.js
++++ b/src/diagnostics/topology-convergence-graph.js
+@@ -30,6 +30,7 @@ import {
+   textOrUnknown,
+   numberOrUnknown,
+   arrayOrEmpty,
++  asRecord,
+   booleanVariant,
+   compareNumber,
+   normalizeTopologyConvergenceInput,
+@@ -69,8 +70,7 @@ import {
+ 
+ import {
+   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+-  selectPublicationActiveGateHandoffContract as
+-    selectControlPlanePublicationActiveGateHandoffContract,
++  selectPublicationActiveGateHandoffContract as selectControlPlanePublicationActiveGateHandoffContract,
+ } from '../control-plane/publication-active-gate-handoff-contract.js';
+ 
+ const NODE_DEFINITIONS = Object.freeze([
+@@ -235,8 +235,9 @@ function buildPublicationEdge(normalized) {
+   const reasons = createTopologyConvergenceReasonList();
+   const state = resolvePublicationState(evidence, reasons);
+ 
+-  const rawContract = normalized.publication.progressContract ||
+-                      (normalized.publication.progress && normalized.publication.progress.progressContract);
++  const rawContract =
++    normalized.publication.progressContract ||
++    normalized.publication.progress?.progressContract;
+   const progressContract = normalizeProgressContract(rawContract, {
+     owner: OWNER.TOPOLOGY_PUBLICATION,
+     boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
+@@ -268,10 +269,11 @@ function buildPriorityRecoveryEdge(normalized) {
+   const reasons = createTopologyConvergenceReasonList();
+   const state = resolvePriorityRecoveryState(evidence, reasons);
+ 
+-  const rawContract = (normalized.progress && normalized.progress.progressContract) || 
+-                      (normalized.progressSummary && normalized.progressSummary.progressContract) || 
+-                      evidence.progressContract ||
+-                      (normalized.progress && normalized.progress.priorityRecoveryProgressSummary && normalized.progress.priorityRecoveryProgressSummary.progressContract);
++  const rawContract =
++    normalized.progress?.progressContract ||
++    normalized.progressSummary?.progressContract ||
++    evidence.progressContract ||
++    normalized.progress?.priorityRecoveryProgressSummary?.progressContract;
+   const progressContract = normalizeProgressContract(rawContract, {
+     owner: evidence.owner,
+     boundary: evidence.boundary,
+@@ -321,15 +323,26 @@ function buildActiveGateSnapshotEdge(normalized) {
+     reasons,
+   );
+ 
+-  const rawContract = (progress && progress.progressContract) || 
+-                      (normalized.activeGate && normalized.activeGate.progressContract) || 
+-                      (normalized.activeGate && normalized.activeGate.progress && normalized.activeGate.progress.progressContract);
+-
+-  const completeCoverage = progress.snapshotCoverageComplete === true || normalized.activeGate.ready === true;
+-  const isRepairDeferred = progress.selectedSnapshotRepairDeferred === true || progress.selectedSnapshotObservationMode === 'repair_deferred';
+-  const fallbackState = completeCoverage ? 'satisfied' : (isRepairDeferred ? 'deferred' : state);
+-  const fallbackReason = completeCoverage ? 'snapshot_coverage_complete' : (reasons[0] || 'snapshot_coverage_incomplete');
+-  const fallbackNextAction = completeCoverage ? 'none' : (progress.selectedSnapshotObservationNextAction || 'retry');
++  const rawContract =
++    progress?.progressContract ||
++    normalized.activeGate?.progressContract ||
++    normalized.activeGate?.progress?.progressContract;
++
++  const completeCoverage =
++    progress.snapshotCoverageComplete === true ||
++    normalized.activeGate.ready === true;
++  const isRepairDeferred =
++    progress.selectedSnapshotRepairDeferred === true ||
++    progress.selectedSnapshotObservationMode === 'repair_deferred';
++  const fallbackState = completeCoverage ?
++    'satisfied' :
++    (isRepairDeferred ? 'deferred' : state);
++  const fallbackReason = completeCoverage ?
++    'snapshot_coverage_complete' :
++    (reasons[0] || 'snapshot_coverage_incomplete');
++  const fallbackNextAction = completeCoverage ?
++    'none' :
++    (progress.selectedSnapshotObservationNextAction || 'retry');
+   const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
+   const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof progress.selectedSnapshotObservationRetryAfterMs === 'number' ? progress.selectedSnapshotObservationRetryAfterMs : 1000);
+   const fallbackTerminalState = 'satisfied';
+@@ -579,38 +592,73 @@ function buildReadinessEdge(normalized) {
+ }
+ 
+ function buildTopFailureReasonsEdge(normalized) {
+-  const reasons = normalized.topReasons.length > SOURCE_ORDER_BASE ?
++  const hasTopReasons = normalized.topReasons.length > SOURCE_ORDER_BASE;
++  const hasPostRebalanceClosure =
++    hasOpenPostRebalanceClosure(normalized.postRebalanceClosure);
++  const postRebalanceBlockerIds = collectPostRebalanceBlockerIds(
++    normalized.postRebalanceClosure,
++  );
++  const reasons = hasTopReasons ?
+     [REASON.TOP_FAILURES_PRESENT] :
+     [REASON.TOP_FAILURES_ABSENT];
++  const state = hasTopReasons && hasPostRebalanceClosure ?
++    EDGE_STATE.BLOCKED :
++    EDGE_STATE.SATISFIED;
+ 
+   const rawContract = normalized.topFailures && normalized.topFailures.progressContract;
+   const progressContract = normalizeProgressContract(rawContract, {
+     owner: OWNER.FAILURE_CLASSIFIER,
+     boundary: BOUNDARY.FAILURE_REASON_RANKING,
+-    evidencePath: SOURCE_PATH.TOP_REASONS,
++    evidencePath: hasPostRebalanceClosure ?
++      normalized.evidencePath.postRebalanceClosure :
++      SOURCE_PATH.TOP_REASONS,
+   });
+ 
+   return buildEdge({
+     id: EDGE_ID.TOP_FAILURE_REASONS,
+     from: NODE_ID.TOP_FAILURE_REASONS,
+     to: NODE_ID.TOP_FAILURE_REASONS,
+-    state: EDGE_STATE.SATISFIED,
++    state,
+     owner: progressContract.owner || OWNER.FAILURE_CLASSIFIER,
+     boundary: progressContract.boundary || BOUNDARY.FAILURE_REASON_RANKING,
+-    evidencePath: progressContract.evidencePath || SOURCE_PATH.TOP_REASONS,
++    evidencePath: progressContract.evidencePath ||
++      normalized.evidencePath.postRebalanceClosure ||
++      SOURCE_PATH.TOP_REASONS,
+     source: {
+       topReasons: normalized.topReasons.map((entry) => entry.reason).join(REASON_SEPARATOR) ||
+         ABSENT_VALUE,
++      postRebalanceClosureState: textOrUnknown(
++        normalized.postRebalanceClosure.state,
++      ),
++      postRebalanceBlockers: joinValues(postRebalanceBlockerIds),
++      postRebalancePrimaryBlocker:
++        postRebalanceBlockerIds[FIRST_FRONTIER_INDEX] || ABSENT_VALUE,
+       progressContract,
+     },
+     progressContract,
+     reasons,
+     rank: RANK.TOP_FAILURES,
+-    dependencies: [EDGE_ID.READINESS_STARTUP_SUPPORT],
++    dependencies: [EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE],
+     projectionHint: PROJECTION_HINT.TOP_REASONS,
+   });
+ }
+ 
++function hasOpenPostRebalanceClosure(postRebalanceClosure) {
++  const closure = asRecord(postRebalanceClosure);
++  if (Object.keys(closure).length === SOURCE_ORDER_BASE) {
++    return false;
++  }
++  return textOrUnknown(closure.state) === 'open' ||
++    arrayOrEmpty(closure.blockers).length > SOURCE_ORDER_BASE;
++}
++
++function collectPostRebalanceBlockerIds(postRebalanceClosure) {
++  const closure = asRecord(postRebalanceClosure);
++  return arrayOrEmpty(closure.blockers)
++    .map((blocker) => textOrUnknown(asRecord(blocker).id))
++    .filter((blockerId) => blockerId !== 'unknown');
++}
++
+ function buildEdge(edge) {
+   return {
+     id: edge.id,
+diff --git a/src/diagnostics/topology-convergence-normalizers.js b/src/diagnostics/topology-convergence-normalizers.js
+index ee3c6e68..4100a9ce 100644
+--- a/src/diagnostics/topology-convergence-normalizers.js
++++ b/src/diagnostics/topology-convergence-normalizers.js
+@@ -601,6 +601,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+   const failureBundle = failureBundleEvidence.record;
+   const controlPlane = asRecord(failureBundle.controlPlane);
+   const triageSummary = asRecord(input.triageSummary || input.triage);
++  const failureBundleDiagnostics = asRecord(asRecord(failureBundle.details).diagnostics);
+   const diagnostics = asRecord(asRecord(scenario.details).diagnostics);
+   const controlPlaneDiagnostics = asRecord(diagnostics.controlPlaneDiagnostics);
+   const priorityRecoveryObservation = asRecord(scenario.priorityRecoveryObservation);
+@@ -624,6 +625,36 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+     report.summary,
+   );
+   const topFailures = firstRecord(failureBundle.topFailures, triageSummary.topFailures);
++  const postRebalanceClosureEvidence = firstRecordWithSource(
++    recordCandidate(
++      asRecord(failureBundle.failureClassification).postRebalanceClosure,
++      flattenEvidencePath(
++        SOURCE_PATH.FAILURE_BUNDLE_FAILURE_CLASSIFICATION,
++        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
++      ),
++    ),
++    recordCandidate(
++      failureBundleDiagnostics.postRebalanceClosure,
++      flattenEvidencePath(
++        SOURCE_PATH.FAILURE_BUNDLE_DIAGNOSTICS,
++        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
++      ),
++    ),
++    recordCandidate(
++      asRecord(scenario.failureClassification).postRebalanceClosure,
++      flattenEvidencePath(
++        SOURCE_PATH.REPORT_SCENARIO_FAILURE_CLASSIFICATION,
++        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
++      ),
++    ),
++    recordCandidate(
++      diagnostics.postRebalanceClosure,
++      flattenEvidencePath(
++        SOURCE_PATH.REPORT_SCENARIO_DIAGNOSTICS,
++        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
++      ),
++    ),
++  );
+   const publicationEvidence = firstRecordWithSource(
+     recordCandidate(failureBundle.publicationConvergence, SOURCE_PATH.FAILURE_BUNDLE_PUBLICATION),
+     recordCandidate(triageSummary.publicationConvergence, SOURCE_PATH.TRIAGE_PUBLICATION),
+@@ -851,6 +882,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+     topologyOperatorWitness: topologyOperatorWitnessEvidence.record,
+     priorityRecoveryPartitionWitnesses,
+     readinessFailure,
++    postRebalanceClosure: postRebalanceClosureEvidence.record,
+     evidencePath: {
+       publication: publicationEvidence.sourcePath,
+       priorityRecoveryProgressClasses: progressEvidence.sourcePath === ABSENT_VALUE ?
+@@ -874,6 +906,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
+       publicationActiveGateHandoff:
+         publicationActiveGateHandoffSourcePath,
+       readinessFailure: readinessFailureEvidence.sourcePath,
++      postRebalanceClosure: postRebalanceClosureEvidence.sourcePath,
+     },
+     topReasons: normalizeTopReasons(firstArray(summary.topReasons, topFailures.topReasons)),
+   };
+diff --git a/test/diagnostics/causal-analysis-fixtures.js b/test/diagnostics/causal-analysis-fixtures.js
+index 2f00d86d..0a41fe74 100644
+--- a/test/diagnostics/causal-analysis-fixtures.js
++++ b/test/diagnostics/causal-analysis-fixtures.js
+@@ -47,6 +47,18 @@ const WORKFLOW_ACTION_ADVANCE_EXISTING_OPERATION =
+   'advance_existing_operation';
+ const WORKFLOW_ACTUATION_PERSISTED_NOT_DISPATCHED =
+   'persisted_not_dispatched';
++const CONVERGENCE_TIMEOUT_REASON = 'convergence_timeout';
++const POST_REBALANCE_CLOSURE_OPEN_STATE = 'open';
++const POST_REBALANCE_OPERATION_DRAIN_BLOCKER = 'operation_drain_open';
++const POST_REBALANCE_NO_OVER_TARGET_BLOCKER = 'no_over_target_open';
++const POST_REBALANCE_OPERATION_DRAIN_DIMENSION = 'operation_drain';
++const POST_REBALANCE_NO_OVER_TARGET_DIMENSION = 'no_over_target';
++const POST_REBALANCE_IN_FLIGHT_REASON = 'in_flight_replica_operations';
++const POST_REBALANCE_OVERTARGET_REASON = 'current_overtarget_voters';
++const POST_REBALANCE_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATIONS = 4;
++const POST_REBALANCE_OBSERVED_IN_FLIGHT_REPLICA_OPERATIONS = 7;
++const POST_REBALANCE_OVERTARGET_DURATION_MS = 10945;
++const POST_REBALANCE_PARTITION_ID = 'sql_write_operations-p1';
+ 
+ function readJsonArtifact(artifactPath) {
+   return JSON.parse(fs.readFileSync(artifactPath, ENCODING_UTF8));
+@@ -123,6 +135,86 @@ function buildPassedRollingRestartReport() {
+   };
+ }
+ 
++function buildPostRebalanceClosureBlockedReport() {
++  const report = buildPassedRollingRestartReport();
++  const scenario = firstScenario(report);
++  const postRebalanceClosure = {
++    state: POST_REBALANCE_CLOSURE_OPEN_STATE,
++    blockers: [
++      {
++        id: POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
++        dimension: POST_REBALANCE_OPERATION_DRAIN_DIMENSION,
++        reasonCodes: [POST_REBALANCE_IN_FLIGHT_REASON],
++      },
++      {
++        id: POST_REBALANCE_NO_OVER_TARGET_BLOCKER,
++        dimension: POST_REBALANCE_NO_OVER_TARGET_DIMENSION,
++        reasonCodes: [POST_REBALANCE_OVERTARGET_REASON],
++      },
++    ],
++  };
++
++  return {
++    summary: {
++      passed: REPORT_COUNT_PASSED,
++      failed: REPORT_COUNT_FAILED,
++    },
++    scenarios: [
++      {
++        ...scenario,
++        passed: false,
++        publicationConvergence: {
++          ...scenario.publicationConvergence,
++          activeGate: {
++            ...scenario.publicationConvergence.activeGate,
++            state: ACTIVE_GATE_TIMED_OUT_STATE,
++            ready: false,
++          },
++        },
++        summary: {
++          passed: false,
++          dominantReason: CONVERGENCE_TIMEOUT_REASON,
++          topReasons: [
++            {
++              reason: CONVERGENCE_TIMEOUT_REASON,
++              count: REPORT_COUNT_FAILED,
++            },
++          ],
++        },
++        failureClassification: {
++          failureBarrier: 'convergence',
++          failureBarrierReason: CONVERGENCE_TIMEOUT_REASON,
++          postRebalanceClosure,
++          signals: [
++            {
++              kind: 'postRebalanceClosureState',
++              value: POST_REBALANCE_CLOSURE_OPEN_STATE,
++            },
++            {
++              kind: 'postRebalanceBlocker',
++              value: POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
++            },
++          ],
++        },
++        details: {
++          diagnostics: {
++            postRebalanceClosure,
++            effectiveInFlightReplicaOperationCount:
++              POST_REBALANCE_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATIONS,
++            observedInFlightReplicaOperationCount:
++              POST_REBALANCE_OBSERVED_IN_FLIGHT_REPLICA_OPERATIONS,
++            overTargetDurations: {
++              [POST_REBALANCE_PARTITION_ID]:
++                POST_REBALANCE_OVERTARGET_DURATION_MS,
++            },
++          },
++        },
++        readiness: {},
++      },
++    ],
++  };
++}
++
+ function buildTerminalBudgetReport() {
+   return {
+     scenario: SCENARIO_ROLLING_RESTART,
+@@ -280,6 +372,7 @@ export {
+   buildCurrentTimeoutCascadeReport,
+   buildDirectStalledActiveGateReport,
+   buildPassedRollingRestartReport,
++  buildPostRebalanceClosureBlockedReport,
+   buildSelectedSnapshotTimeoutReport,
+   buildTerminalBudgetReport,
+   fixturePath,
+diff --git a/test/diagnostics/causal-graph-builder.test.js b/test/diagnostics/causal-graph-builder.test.js
+index 07f12b60..2e835939 100644
+--- a/test/diagnostics/causal-graph-builder.test.js
++++ b/test/diagnostics/causal-graph-builder.test.js
+@@ -135,10 +135,10 @@ describe('CausalGraphBuilder', () => {
+     assert.equal(
+       findTopologyDependency(
+         graph,
+-        EDGE_READINESS_STARTUP_SUPPORT,
++        EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
+         EDGE_TOP_FAILURE_REASONS,
+       ).dependencyKind,
+-      DEPENDENCY_KIND.READINESS,
++      DEPENDENCY_KIND.SNAPSHOT_COVERAGE,
+     );
+   });
+ });
+diff --git a/test/diagnostics/failure-class-taxonomy.test.js b/test/diagnostics/failure-class-taxonomy.test.js
+index 965e4059..2928150b 100644
+--- a/test/diagnostics/failure-class-taxonomy.test.js
++++ b/test/diagnostics/failure-class-taxonomy.test.js
+@@ -4,6 +4,7 @@ import {classifyFailures} from '../../src/diagnostics/failure-class-taxonomy.js'
+ import {FAILURE_CLASS, RESOLUTION_STRATEGY} from '../../src/diagnostics/causal-analysis-schema.js';
+ import {
+   buildPassedRollingRestartReport,
++  buildPostRebalanceClosureBlockedReport,
+   buildSelectedSnapshotTimeoutReport,
+   readActivePriorityBackpressureReport,
+   readPriorityBackpressureReport,
+@@ -100,6 +101,26 @@ describe('FailureClassTaxonomy', () => {
+     assertNoNullOrUndefined(taxonomy);
+   });
+ 
++  it('classifies post-rebalance closure blockers before evidence incompleteness', () => {
++    const taxonomy = classifyFailures(buildPostRebalanceClosureBlockedReport());
++    const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
++
++    assert.equal(
++      typeof FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
++      'string',
++    );
++    assert.ok(
++      failureClasses.includes(FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED),
++    );
++    assert.equal(
++      taxonomy.dominantFailureClass,
++      FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
++    );
++    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
++    assert.equal(failureClasses.includes(FAILURE_CLASS.EVIDENCE_INCOMPLETE), false);
++    assertNoNullOrUndefined(taxonomy);
++  });
++
+   it('classifies a passed rolling-restart report without blockers as healthy', () => {
+     const taxonomy = classifyFailures(buildPassedRollingRestartReport());
+ 
+diff --git a/test/diagnostics/stop-condition-decision.test.js b/test/diagnostics/stop-condition-decision.test.js
+index a861cc60..87aa9ba1 100644
+--- a/test/diagnostics/stop-condition-decision.test.js
++++ b/test/diagnostics/stop-condition-decision.test.js
+@@ -14,6 +14,7 @@ import {
+ import {
+   buildActiveGateDominantWithReadinessBlockerReport,
+   buildPassedRollingRestartReport,
++  buildPostRebalanceClosureBlockedReport,
+   buildSelectedSnapshotTimeoutReport,
+   fixturePath,
+   readActivePriorityBackpressureArtifact,
+@@ -156,7 +157,38 @@ describe('StopConditionDecision', () => {
+     ]);
+     assert.equal(artifact.summary.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+     assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
+-    assert.equal(artifact.failureTaxonomy.dominantFailureClass, FAILURE_CLASS.PUBLICATION_ACK_BLOCKED);
++    assert.equal(
++      artifact.failureTaxonomy.dominantFailureClass,
++      FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
++    );
++    assertNoNullOrUndefined(artifact);
++  });
++
++  it('continues locally for post-rebalance closure blockers despite absent readiness evidence', () => {
++    const artifact = buildCausalAnalysis(
++      buildPostRebalanceClosureBlockedReport(),
++    );
++    const failureClasses = artifact.failureTaxonomy.classes.map((entry) =>
++      entry.failureClass,
++    );
++
++    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
++    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
++    assert.deepEqual(artifact.stopDecision.reasons, [
++      LOCAL_RUNTIME_OWNER_BLOCKER_REASON,
++    ]);
++    assert.equal(artifact.summary.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
++    assert.equal(
++      artifact.failureTaxonomy.dominantFailureClass,
++      FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
++    );
++    assert.ok(
++      failureClasses.includes(FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED),
++    );
++    assert.equal(
++      failureClasses.includes(FAILURE_CLASS.EVIDENCE_INCOMPLETE),
++      false,
++    );
+     assertNoNullOrUndefined(artifact);
+   });
+ 
+diff --git a/test/diagnostics/topology-convergence-graph.test.js b/test/diagnostics/topology-convergence-graph.test.js
+index 938c7c1d..12d96e91 100644
+--- a/test/diagnostics/topology-convergence-graph.test.js
++++ b/test/diagnostics/topology-convergence-graph.test.js
+@@ -10,7 +10,13 @@ import {
+   buildTopologyConvergenceGraphFromArtifacts,
+   selectTopologyConvergenceDominantWitness,
+ } from '../../src/diagnostics/topology-convergence-graph.js';
+-import { CONTRACT_FIELD, OWNER_WITNESS_FIELD } from '../../src/diagnostics/topology-convergence-constants.js';
++import {
++  CONTRACT_FIELD,
++  OWNER_WITNESS_FIELD,
++} from '../../src/diagnostics/topology-convergence-constants.js';
++import {
++  buildPostRebalanceClosureBlockedReport,
++} from './causal-analysis-fixtures.js';
+ 
+ const FIXTURE_SCENARIO = 'fixture-rolling-restart';
+ const FIXTURE_PUBLICATION_EPOCH = 4;
+@@ -138,6 +144,12 @@ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
+ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_NEXT_ACTION_WAIT = 'wait';
+ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_EVENT =
+   'operation_lifecycle_event';
++const TOP_FAILURES_PRESENT_REASON = 'top_failures_present';
++const POST_REBALANCE_CLOSURE_OPEN_STATE = 'open';
++const POST_REBALANCE_OPERATION_DRAIN_BLOCKER = 'operation_drain_open';
++const POST_REBALANCE_BLOCKER_LIST =
++  'operation_drain_open,no_over_target_open';
++const DECISION_INPUT_POST_REBALANCE_CLOSURE = 'postRebalanceClosure';
+ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_REBALANCER_TIMER =
+   'rebalancer_timer';
+ const PRIORITY_RECOVERY_PROGRESS_CONTRACT_RETRY_AFTER_MS = 1000;
+@@ -596,8 +608,11 @@ describe('TopologyConvergenceGraph', () => {
+ 
+   it('keeps absent readiness evidence missing after active-gate coverage is satisfied', () => {
+     const fixture = buildHealthyFixtureFailureBundle();
+-    const {readinessFailure: _readinessFailure, ...summaryWithoutReadiness} =
+-      fixture.summary;
++    const {
++      readinessFailure: _readinessFailure,
++      topReasons: _topReasons,
++      ...summaryWithoutReadiness
++    } = fixture.summary;
+     const graph = buildTopologyConvergenceGraphFromArtifacts({
+       failureBundle: {
+         ...fixture,
+@@ -624,6 +639,34 @@ describe('TopologyConvergenceGraph', () => {
+     assertNoNullOrUndefined(graph);
+   });
+ 
++  it('routes post-rebalance closure blockers past absent readiness evidence', () => {
++    const graph = buildTopologyConvergenceGraph(
++      buildPostRebalanceClosureBlockedReport(),
++    );
++    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
++    const topFailureEdge = findEdge(graph.edges, EDGE_TOP_FAILURE_REASONS);
++
++    assert.equal(readinessEdge.state, EDGE_STATE.UNKNOWN);
++    assert.deepEqual(readinessEdge.reasons, [EVIDENCE_MISSING_REASON]);
++    assert.equal(topFailureEdge.state, EDGE_STATE.BLOCKED);
++    assert.deepEqual(topFailureEdge.reasons, [TOP_FAILURES_PRESENT_REASON]);
++    assert.equal(
++      topFailureEdge.source.postRebalanceClosureState,
++      POST_REBALANCE_CLOSURE_OPEN_STATE,
++    );
++    assert.equal(
++      topFailureEdge.source.postRebalanceBlockers,
++      POST_REBALANCE_BLOCKER_LIST,
++    );
++    assert.equal(
++      topFailureEdge.source.postRebalancePrimaryBlocker,
++      POST_REBALANCE_OPERATION_DRAIN_BLOCKER,
++    );
++    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_TOP_FAILURE_REASONS);
++    assert.equal(graph.summary.firstFrontierReason, TOP_FAILURES_PRESENT_REASON);
++    assertNoNullOrUndefined(graph);
++  });
++
+   it('contracts current zero-attempt startup readiness no-progress to inherited support evidence', () => {
+     const report = readJsonArtifact(ACTIVE_GATE_SNAPSHOT_FIXTURE_PATH);
+     const graph = buildTopologyConvergenceGraph(report);
+@@ -1912,6 +1955,13 @@ describe('TopologyConvergenceGraph', () => {
+     const priorityRecoveryRow = decisionTable.transitions.find((row) =>
+       row.edgeId === EDGE_PRIORITY_RECOVERY,
+     );
++    const topFailureRow = decisionTable.transitions.find((row) =>
++      row.edgeId === EDGE_TOP_FAILURE_REASONS,
++    );
++    const postRebalanceOutcome = topFailureRow.outcomes.find((outcome) =>
++      outcome.state === EDGE_STATE.BLOCKED &&
++      outcome.reasons.includes(TOP_FAILURES_PRESENT_REASON),
++    );
+ 
+     assert.equal(
+       findEdge(graph.edges, EDGE_PRIORITY_RECOVERY).owner,
+@@ -1919,6 +1969,12 @@ describe('TopologyConvergenceGraph', () => {
+     );
+     assert.equal(priorityRecoveryRow.owner, OWNER_OPERATION_WORKFLOW);
+     assert.equal(priorityRecoveryRow.boundary, BOUNDARY_WORKFLOW_PROGRESS);
++    assert.ok(
++      topFailureRow.evidenceInputs.includes(
++        DECISION_INPUT_POST_REBALANCE_CLOSURE,
++      ),
++    );
++    assert.equal(postRebalanceOutcome.state, EDGE_STATE.BLOCKED);
+   });
+ 
+   it('converges to an empty frontier when all blocker edges are satisfied', () => {
+@@ -2007,7 +2063,9 @@ describe('TopologyConvergenceGraph', () => {
+       failureBundle: fixture,
+     });
+ 
+-    const witness = graph.ownerWitnesses.find(w => w[OWNER_WITNESS_FIELD.EDGE_ID] === 'publication_ack_convergence');
++    const witness = graph.ownerWitnesses.find((entry) =>
++      entry[OWNER_WITNESS_FIELD.EDGE_ID] === EDGE_PUBLICATION_ACK_CONVERGENCE,
++    );
+     assert.ok(witness);
+     assert.equal(witness[CONTRACT_FIELD.OWNER], 'explicit_publication_owner');
+     assert.equal(witness[CONTRACT_FIELD.BOUNDARY], 'explicit_publication_boundary');

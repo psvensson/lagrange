@@ -601,6 +601,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
   const failureBundle = failureBundleEvidence.record;
   const controlPlane = asRecord(failureBundle.controlPlane);
   const triageSummary = asRecord(input.triageSummary || input.triage);
+  const failureBundleDiagnostics = asRecord(asRecord(failureBundle.details).diagnostics);
   const diagnostics = asRecord(asRecord(scenario.details).diagnostics);
   const controlPlaneDiagnostics = asRecord(diagnostics.controlPlaneDiagnostics);
   const priorityRecoveryObservation = asRecord(scenario.priorityRecoveryObservation);
@@ -624,6 +625,36 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     report.summary,
   );
   const topFailures = firstRecord(failureBundle.topFailures, triageSummary.topFailures);
+  const postRebalanceClosureEvidence = firstRecordWithSource(
+    recordCandidate(
+      asRecord(failureBundle.failureClassification).postRebalanceClosure,
+      flattenEvidencePath(
+        SOURCE_PATH.FAILURE_BUNDLE_FAILURE_CLASSIFICATION,
+        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
+      ),
+    ),
+    recordCandidate(
+      failureBundleDiagnostics.postRebalanceClosure,
+      flattenEvidencePath(
+        SOURCE_PATH.FAILURE_BUNDLE_DIAGNOSTICS,
+        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
+      ),
+    ),
+    recordCandidate(
+      asRecord(scenario.failureClassification).postRebalanceClosure,
+      flattenEvidencePath(
+        SOURCE_PATH.REPORT_SCENARIO_FAILURE_CLASSIFICATION,
+        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
+      ),
+    ),
+    recordCandidate(
+      diagnostics.postRebalanceClosure,
+      flattenEvidencePath(
+        SOURCE_PATH.REPORT_SCENARIO_DIAGNOSTICS,
+        SOURCE_FIELD.POST_REBALANCE_CLOSURE,
+      ),
+    ),
+  );
   const publicationEvidence = firstRecordWithSource(
     recordCandidate(failureBundle.publicationConvergence, SOURCE_PATH.FAILURE_BUNDLE_PUBLICATION),
     recordCandidate(triageSummary.publicationConvergence, SOURCE_PATH.TRIAGE_PUBLICATION),
@@ -851,6 +882,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     topologyOperatorWitness: topologyOperatorWitnessEvidence.record,
     priorityRecoveryPartitionWitnesses,
     readinessFailure,
+    postRebalanceClosure: postRebalanceClosureEvidence.record,
     evidencePath: {
       publication: publicationEvidence.sourcePath,
       priorityRecoveryProgressClasses: progressEvidence.sourcePath === ABSENT_VALUE ?
@@ -874,6 +906,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
       publicationActiveGateHandoff:
         publicationActiveGateHandoffSourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
+      postRebalanceClosure: postRebalanceClosureEvidence.sourcePath,
     },
     topReasons: normalizeTopReasons(firstArray(summary.topReasons, topFailures.topReasons)),
   };

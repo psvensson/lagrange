@@ -135,10 +135,10 @@ describe('CausalGraphBuilder', () => {
     assert.equal(
       findTopologyDependency(
         graph,
-        EDGE_READINESS_STARTUP_SUPPORT,
+        EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
         EDGE_TOP_FAILURE_REASONS,
       ).dependencyKind,
-      DEPENDENCY_KIND.READINESS,
+      DEPENDENCY_KIND.SNAPSHOT_COVERAGE,
     );
   });
 });

@@ -22,15 +22,20 @@ const EDGE_PUBLICATION_ACK = 'publication_ack_convergence';
 const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
 const EDGE_READINESS_STARTUP_SUPPORT = 'readiness_startup_support';
+const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const REASON_SNAPSHOT_COVERAGE_INCOMPLETE = 'snapshot_coverage_incomplete';
 const REASON_STARTUP_READINESS_BLOCKED = 'startup_readiness_blocked';
 const REASON_EVENT_DRIVEN_WAIT = 'event_driven_wait';
 const REASON_PUBLICATION_ACK_BLOCKED = 'publication_ack_blocked';
+const REASON_POST_REBALANCE_CLOSURE_BLOCKED =
+  'post_rebalance_closure_blocked';
 const REASON_BUDGET_CASCADE = 'budget_cascade';
 const REASON_EVIDENCE_INCOMPLETE = 'evidence_incomplete';
 const REASON_NO_FAILURE = 'no_failure';
 const WAIT_MODE_EVENT_DRIVEN = 'event_driven';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const POST_REBALANCE_CLOSURE_STATE_OPEN = 'open';
+const POST_REBALANCE_NODE_ID_PREFIX = 'post_rebalance:';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
 const READINESS_SOURCE_UNKNOWN = 'unknown';
@@ -41,6 +46,16 @@ const READINESS_CLASSIFICATION_DECISION = Object.freeze({
 });
 const EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS =
   'publicationConvergence.priorityRecoveryProgressSummary.dominantWitness';
+const EVIDENCE_PATH_FAILURE_BUNDLE_POST_REBALANCE_CLOSURE =
+  'failureBundle.failureClassification.postRebalanceClosure';
+const EVIDENCE_PATH_FAILURE_BUNDLE_DIAGNOSTICS_POST_REBALANCE_CLOSURE =
+  'failureBundle.details.diagnostics.postRebalanceClosure';
+const EVIDENCE_PATH_SCENARIO_POST_REBALANCE_CLOSURE =
+  'failureClassification.postRebalanceClosure';
+const EVIDENCE_PATH_SCENARIO_DIAGNOSTICS_POST_REBALANCE_CLOSURE =
+  'details.diagnostics.postRebalanceClosure';
+const EVIDENCE_PATH_SUMMARY_POST_REBALANCE_CLOSURE =
+  'summary.failureClassification.postRebalanceClosure';
 const EVIDENCE_PATH_BUDGET_CASCADES = 'budgetAccounting.cascades';
 const EVIDENCE_PATH_CAUSAL_GRAPH_NODES = 'causalGraph.nodes';
 const READINESS_CLASSIFICATION_RULES = Object.freeze([
@@ -124,6 +139,9 @@ const FAILURE_RULES = Object.freeze([
   }),
   Object.freeze({
     classify: ({normalized, graph}) => classifyReadiness(normalized, graph),
+  }),
+  Object.freeze({
+    classify: ({normalized}) => classifyPostRebalanceClosure(normalized),
   }),
   Object.freeze({
     classify: ({budgetAccounting}) => classifyBudgetCascade(budgetAccounting),
@@ -237,6 +255,11 @@ function classifyEvidenceIncomplete(graph, normalized) {
   if (normalized.reportOutcome === REPORT_OUTCOME.PASSED) {
     return [];
   }
+  if (hasOpenPostRebalanceClosure(
+    selectPostRebalanceClosureEvidence(normalized).record,
+  )) {
+    return [];
+  }
   const unknownNodes = graph.nodes.filter((node) => node.state === 'unknown');
   if (unknownNodes.length === ZERO_COUNT) {
     return [];
@@ -249,6 +272,89 @@ function classifyEvidenceIncomplete(graph, normalized) {
     evidencePath: EVIDENCE_PATH_CAUSAL_GRAPH_NODES,
     causalNodeIds: unknownNodes.map((node) => node.id),
   })];
+}
+
+function classifyPostRebalanceClosure(normalized) {
+  if (normalized.reportOutcome === REPORT_OUTCOME.PASSED) {
+    return [];
+  }
+  const evidence = selectPostRebalanceClosureEvidence(normalized);
+  if (hasOpenPostRebalanceClosure(evidence.record) !== true) {
+    return [];
+  }
+  const blockerIds = collectPostRebalanceBlockerIds(evidence.record);
+  return [buildClass({
+    failureClass: FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
+    reason: blockerIds[ZERO_COUNT] || REASON_POST_REBALANCE_CLOSURE_BLOCKED,
+    owner: OWNER.OPERATION_WORKFLOW,
+    boundary: BOUNDARY.WORKFLOW_PROGRESS,
+    evidencePath: evidence.evidencePath,
+    causalNodeIds: blockerIds.length > ZERO_COUNT ?
+      blockerIds.map((blockerId) => `${POST_REBALANCE_NODE_ID_PREFIX}${blockerId}`) :
+      [`topology:${EDGE_TOP_FAILURE_REASONS}`],
+  })];
+}
+
+function selectPostRebalanceClosureEvidence(normalized) {
+  const failureBundleDiagnostics = asRecord(
+    asRecord(normalized.failureBundle.details).diagnostics,
+  );
+  const scenarioDiagnostics = asRecord(
+    asRecord(normalized.scenarioRecord.details).diagnostics,
+  );
+  const candidates = [
+    {
+      record: asRecord(
+        asRecord(normalized.failureBundle.failureClassification)
+          .postRebalanceClosure,
+      ),
+      evidencePath: EVIDENCE_PATH_FAILURE_BUNDLE_POST_REBALANCE_CLOSURE,
+    },
+    {
+      record: asRecord(failureBundleDiagnostics.postRebalanceClosure),
+      evidencePath:
+        EVIDENCE_PATH_FAILURE_BUNDLE_DIAGNOSTICS_POST_REBALANCE_CLOSURE,
+    },
+    {
+      record: asRecord(
+        asRecord(normalized.scenarioRecord.failureClassification)
+          .postRebalanceClosure,
+      ),
+      evidencePath: EVIDENCE_PATH_SCENARIO_POST_REBALANCE_CLOSURE,
+    },
+    {
+      record: asRecord(scenarioDiagnostics.postRebalanceClosure),
+      evidencePath: EVIDENCE_PATH_SCENARIO_DIAGNOSTICS_POST_REBALANCE_CLOSURE,
+    },
+    {
+      record: asRecord(
+        asRecord(normalized.summary.failureClassification)
+          .postRebalanceClosure,
+      ),
+      evidencePath: EVIDENCE_PATH_SUMMARY_POST_REBALANCE_CLOSURE,
+    },
+  ];
+  return candidates.find((candidate) =>
+    Object.keys(candidate.record).length > ZERO_COUNT,
+  ) || {
+    record: {},
+    evidencePath: ABSENT_VALUE,
+  };
+}
+
+function hasOpenPostRebalanceClosure(postRebalanceClosure) {
+  const closure = asRecord(postRebalanceClosure);
+  if (Object.keys(closure).length === ZERO_COUNT) {
+    return false;
+  }
+  return textOrUnknown(closure.state) === POST_REBALANCE_CLOSURE_STATE_OPEN ||
+    arrayOrEmpty(closure.blockers).length > ZERO_COUNT;
+}
+
+function collectPostRebalanceBlockerIds(postRebalanceClosure) {
+  return arrayOrEmpty(asRecord(postRebalanceClosure).blockers)
+    .map((blocker) => textOrUnknown(asRecord(blocker).id))
+    .filter((blockerId) => blockerId !== 'unknown');
 }
 
 function findTopologyNode(graph, edgeId) {

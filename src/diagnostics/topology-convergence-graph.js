@@ -30,6 +30,7 @@ import {
   textOrUnknown,
   numberOrUnknown,
   arrayOrEmpty,
+  asRecord,
   booleanVariant,
   compareNumber,
   normalizeTopologyConvergenceInput,
@@ -69,8 +70,7 @@ import {
 
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
-  selectPublicationActiveGateHandoffContract as
-    selectControlPlanePublicationActiveGateHandoffContract,
+  selectPublicationActiveGateHandoffContract as selectControlPlanePublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 
 const NODE_DEFINITIONS = Object.freeze([
@@ -235,8 +235,9 @@ function buildPublicationEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolvePublicationState(evidence, reasons);
 
-  const rawContract = normalized.publication.progressContract ||
-                      (normalized.publication.progress && normalized.publication.progress.progressContract);
+  const rawContract =
+    normalized.publication.progressContract ||
+    normalized.publication.progress?.progressContract;
   const progressContract = normalizeProgressContract(rawContract, {
     owner: OWNER.TOPOLOGY_PUBLICATION,
     boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
@@ -268,10 +269,11 @@ function buildPriorityRecoveryEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolvePriorityRecoveryState(evidence, reasons);
 
-  const rawContract = (normalized.progress && normalized.progress.progressContract) || 
-                      (normalized.progressSummary && normalized.progressSummary.progressContract) || 
-                      evidence.progressContract ||
-                      (normalized.progress && normalized.progress.priorityRecoveryProgressSummary && normalized.progress.priorityRecoveryProgressSummary.progressContract);
+  const rawContract =
+    normalized.progress?.progressContract ||
+    normalized.progressSummary?.progressContract ||
+    evidence.progressContract ||
+    normalized.progress?.priorityRecoveryProgressSummary?.progressContract;
   const progressContract = normalizeProgressContract(rawContract, {
     owner: evidence.owner,
     boundary: evidence.boundary,
@@ -321,15 +323,26 @@ function buildActiveGateSnapshotEdge(normalized) {
     reasons,
   );
 
-  const rawContract = (progress && progress.progressContract) || 
-                      (normalized.activeGate && normalized.activeGate.progressContract) || 
-                      (normalized.activeGate && normalized.activeGate.progress && normalized.activeGate.progress.progressContract);
+  const rawContract =
+    progress?.progressContract ||
+    normalized.activeGate?.progressContract ||
+    normalized.activeGate?.progress?.progressContract;
 
-  const completeCoverage = progress.snapshotCoverageComplete === true || normalized.activeGate.ready === true;
-  const isRepairDeferred = progress.selectedSnapshotRepairDeferred === true || progress.selectedSnapshotObservationMode === 'repair_deferred';
-  const fallbackState = completeCoverage ? 'satisfied' : (isRepairDeferred ? 'deferred' : state);
-  const fallbackReason = completeCoverage ? 'snapshot_coverage_complete' : (reasons[0] || 'snapshot_coverage_incomplete');
-  const fallbackNextAction = completeCoverage ? 'none' : (progress.selectedSnapshotObservationNextAction || 'retry');
+  const completeCoverage =
+    progress.snapshotCoverageComplete === true ||
+    normalized.activeGate.ready === true;
+  const isRepairDeferred =
+    progress.selectedSnapshotRepairDeferred === true ||
+    progress.selectedSnapshotObservationMode === 'repair_deferred';
+  const fallbackState = completeCoverage ?
+    'satisfied' :
+    (isRepairDeferred ? 'deferred' : state);
+  const fallbackReason = completeCoverage ?
+    'snapshot_coverage_complete' :
+    (reasons[0] || 'snapshot_coverage_incomplete');
+  const fallbackNextAction = completeCoverage ?
+    'none' :
+    (progress.selectedSnapshotObservationNextAction || 'retry');
   const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
   const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof progress.selectedSnapshotObservationRetryAfterMs === 'number' ? progress.selectedSnapshotObservationRetryAfterMs : 1000);
   const fallbackTerminalState = 'satisfied';
@@ -579,36 +592,71 @@ function buildReadinessEdge(normalized) {
 }
 
 function buildTopFailureReasonsEdge(normalized) {
-  const reasons = normalized.topReasons.length > SOURCE_ORDER_BASE ?
+  const hasTopReasons = normalized.topReasons.length > SOURCE_ORDER_BASE;
+  const hasPostRebalanceClosure =
+    hasOpenPostRebalanceClosure(normalized.postRebalanceClosure);
+  const postRebalanceBlockerIds = collectPostRebalanceBlockerIds(
+    normalized.postRebalanceClosure,
+  );
+  const reasons = hasTopReasons ?
     [REASON.TOP_FAILURES_PRESENT] :
     [REASON.TOP_FAILURES_ABSENT];
+  const state = hasTopReasons && hasPostRebalanceClosure ?
+    EDGE_STATE.BLOCKED :
+    EDGE_STATE.SATISFIED;
 
   const rawContract = normalized.topFailures && normalized.topFailures.progressContract;
   const progressContract = normalizeProgressContract(rawContract, {
     owner: OWNER.FAILURE_CLASSIFIER,
     boundary: BOUNDARY.FAILURE_REASON_RANKING,
-    evidencePath: SOURCE_PATH.TOP_REASONS,
+    evidencePath: hasPostRebalanceClosure ?
+      normalized.evidencePath.postRebalanceClosure :
+      SOURCE_PATH.TOP_REASONS,
   });
 
   return buildEdge({
     id: EDGE_ID.TOP_FAILURE_REASONS,
     from: NODE_ID.TOP_FAILURE_REASONS,
     to: NODE_ID.TOP_FAILURE_REASONS,
-    state: EDGE_STATE.SATISFIED,
+    state,
     owner: progressContract.owner || OWNER.FAILURE_CLASSIFIER,
     boundary: progressContract.boundary || BOUNDARY.FAILURE_REASON_RANKING,
-    evidencePath: progressContract.evidencePath || SOURCE_PATH.TOP_REASONS,
+    evidencePath: progressContract.evidencePath ||
+      normalized.evidencePath.postRebalanceClosure ||
+      SOURCE_PATH.TOP_REASONS,
     source: {
       topReasons: normalized.topReasons.map((entry) => entry.reason).join(REASON_SEPARATOR) ||
         ABSENT_VALUE,
+      postRebalanceClosureState: textOrUnknown(
+        normalized.postRebalanceClosure.state,
+      ),
+      postRebalanceBlockers: joinValues(postRebalanceBlockerIds),
+      postRebalancePrimaryBlocker:
+        postRebalanceBlockerIds[FIRST_FRONTIER_INDEX] || ABSENT_VALUE,
       progressContract,
     },
     progressContract,
     reasons,
     rank: RANK.TOP_FAILURES,
-    dependencies: [EDGE_ID.READINESS_STARTUP_SUPPORT],
+    dependencies: [EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE],
     projectionHint: PROJECTION_HINT.TOP_REASONS,
   });
+}
+
+function hasOpenPostRebalanceClosure(postRebalanceClosure) {
+  const closure = asRecord(postRebalanceClosure);
+  if (Object.keys(closure).length === SOURCE_ORDER_BASE) {
+    return false;
+  }
+  return textOrUnknown(closure.state) === 'open' ||
+    arrayOrEmpty(closure.blockers).length > SOURCE_ORDER_BASE;
+}
+
+function collectPostRebalanceBlockerIds(postRebalanceClosure) {
+  const closure = asRecord(postRebalanceClosure);
+  return arrayOrEmpty(closure.blockers)
+    .map((blocker) => textOrUnknown(asRecord(blocker).id))
+    .filter((blockerId) => blockerId !== 'unknown');
 }
 
 function buildEdge(edge) {

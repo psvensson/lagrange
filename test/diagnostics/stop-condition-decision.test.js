@@ -14,6 +14,7 @@ import {
 import {
   buildActiveGateDominantWithReadinessBlockerReport,
   buildPassedRollingRestartReport,
+  buildPostRebalanceClosureBlockedReport,
   buildSelectedSnapshotTimeoutReport,
   fixturePath,
   readActivePriorityBackpressureArtifact,
@@ -156,7 +157,38 @@ describe('StopConditionDecision', () => {
     ]);
     assert.equal(artifact.summary.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
     assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
-    assert.equal(artifact.failureTaxonomy.dominantFailureClass, FAILURE_CLASS.PUBLICATION_ACK_BLOCKED);
+    assert.equal(
+      artifact.failureTaxonomy.dominantFailureClass,
+      FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
+    );
+    assertNoNullOrUndefined(artifact);
+  });
+
+  it('continues locally for post-rebalance closure blockers despite absent readiness evidence', () => {
+    const artifact = buildCausalAnalysis(
+      buildPostRebalanceClosureBlockedReport(),
+    );
+    const failureClasses = artifact.failureTaxonomy.classes.map((entry) =>
+      entry.failureClass,
+    );
+
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
+    assert.deepEqual(artifact.stopDecision.reasons, [
+      LOCAL_RUNTIME_OWNER_BLOCKER_REASON,
+    ]);
+    assert.equal(artifact.summary.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.equal(
+      artifact.failureTaxonomy.dominantFailureClass,
+      FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
+    );
+    assert.ok(
+      failureClasses.includes(FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED),
+    );
+    assert.equal(
+      failureClasses.includes(FAILURE_CLASS.EVIDENCE_INCOMPLETE),
+      false,
+    );
     assertNoNullOrUndefined(artifact);
   });
 

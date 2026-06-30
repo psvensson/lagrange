@@ -4,6 +4,7 @@ import {classifyFailures} from '../../src/diagnostics/failure-class-taxonomy.js'
 import {FAILURE_CLASS, RESOLUTION_STRATEGY} from '../../src/diagnostics/causal-analysis-schema.js';
 import {
   buildPassedRollingRestartReport,
+  buildPostRebalanceClosureBlockedReport,
   buildSelectedSnapshotTimeoutReport,
   readActivePriorityBackpressureReport,
   readPriorityBackpressureReport,
@@ -97,6 +98,26 @@ describe('FailureClassTaxonomy', () => {
     assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
     assert.equal(taxonomy.dominantFailureClass, FAILURE_CLASS.PUBLICATION_ACK_BLOCKED);
     assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
+    assertNoNullOrUndefined(taxonomy);
+  });
+
+  it('classifies post-rebalance closure blockers before evidence incompleteness', () => {
+    const taxonomy = classifyFailures(buildPostRebalanceClosureBlockedReport());
+    const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.equal(
+      typeof FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
+      'string',
+    );
+    assert.ok(
+      failureClasses.includes(FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED),
+    );
+    assert.equal(
+      taxonomy.dominantFailureClass,
+      FAILURE_CLASS.POST_REBALANCE_CLOSURE_BLOCKED,
+    );
+    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
+    assert.equal(failureClasses.includes(FAILURE_CLASS.EVIDENCE_INCOMPLETE), false);
     assertNoNullOrUndefined(taxonomy);
   });
 
