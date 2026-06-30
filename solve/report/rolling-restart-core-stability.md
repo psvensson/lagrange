@@ -24,6 +24,7 @@
 - Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
 - Next move: continue supervised step for rolling-restart-core-stability-main
+- No longer current: Do not claim parent statistical closure from the leadership-quiescence child; do not reopen prior run4 spread/drain/join theories from this retained leadership sample.
 
 ## Continuation
 - Status: blocked-scope
@@ -429,6 +430,7 @@
 - **rolling-restart-core-stability-main**: SOLVED (operator-attested, 2026-06-28). The sealed doneWhen (docs/convergence-donewhen-metric.md §5) is MET outright at a full N=15 window with margin — cert gate 20260628T064848Z: SAFETY floor NODE_EXIT 0/15 + CORRUPT 0/15 (binding gap closed), CONVERGENCE Wilson LB 0.357 >= T(5)=0.109 (3.3x) and provably above baseline LB 0.109 (passRate 0.267->0.600). Closed against this evidence per operator decision. T(5) RE-SEALED upward to 0.357 (q_target 0.812) per the metric-doc re-seal rule. Closure is operator-attested (no harness probe expresses the Wilson/SAFE aggregate; legacy consecutive:3 probe left unmuted, NOT faked; Solver machine status honestly open). Residual non-blocking = run4 drain/in-flight family (all 6 fails). What moved it: A1 (5cdb1880) + B1 (522e3def), both DT red-on-revert + safety-verified, no gate spent to find them; their 3 heads absent from all 15 runs. Certification recorded in metric-doc §6.
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 100 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 1 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-core-stability-main**: Latest retained run4 leadership_unstable sample stat-gate-20260630T173805Z-run3 is now split to and deterministically addressed by rolling-restart-run4-leadership-quiescence-signature (commit 6e39ff16). This does not claim parent Wilson/statistical closure for rolling-restart-core-stability; it only removes the deterministic stable-window accounting residual from the next run4 measurement frontier. (rules out: Do not claim parent statistical closure from the leadership-quiescence child; do not reopen prior run4 spread/drain/join theories from this retained leadership sample.) [solve/report/rolling-restart-run4-leadership-quiescence-signature.md]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence

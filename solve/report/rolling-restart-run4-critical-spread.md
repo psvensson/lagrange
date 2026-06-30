@@ -22,7 +22,7 @@
 - Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: none
 - Next move: continue supervised step for rolling-restart-run4-critical-spread-main
-- No longer current: PASS; Do not keep adjusting post-restart critical-spread quorum for this sample; split the next frontier to NODE_EXIT / partition service activation runtime initialization.
+- No longer current: PASS; Do not treat stat-gate-20260630T173805Z-run3 as a critical-spread residual after the leadership-quiescence child closure.
 
 ## Continuation
 - Status: blocked-theory
@@ -57,6 +57,7 @@
 - **rolling-restart-run4-critical-spread-main**: Fresh post-patch N=3 gate stat-gate-20260630T002604Z removes the critical_system_spread_open residual: TOPOLOGY_BLOCKED=0, missingPublishedCount=0 in all three runs, staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0. The gate is not clean because run2 is NODE_EXIT: joiner 8be8d30f exited with code 1 during querying_state after fatal 'Partition service activation requires initialized runtime for replica_operations-p1-r5'. This is a new join/runtime activation blocker, not a critical-system spread residual. (rules out: Do not keep adjusting post-restart critical-spread quorum for this sample; split the next frontier to NODE_EXIT / partition service activation runtime initialization.) [test-output/reports/stat-gate-20260630T002604Z.json; test-output/reports/stat-gate-20260630T002604Z-run1.report.json; test-output/reports/stat-gate-20260630T002604Z-run2.report.json; test-output/reports/stat-gate-20260630T002604Z-run3.report.json; test-output/reports/.playback/stat-gate-20260630T002604Z-run2/rolling-restart/failure-bundle.json]
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 3 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-critical-spread-main**: Latest leadership_unstable residual from stat-gate-20260630T173805Z-run3 is now split to and deterministically addressed by rolling-restart-run4-leadership-quiescence-signature (commit 6e39ff16). For this sample, publication, priority spread, critical-system spread, active-gate coverage, readiness, and effective in-flight drain were already satisfied; do not reopen the critical-spread theory from the retained leadership-quiescence shape. Next evidence for this Quest should be fresh post-fix measurement or the sealed consecutive proof, not another patch to critical-system spread. (rules out: Do not treat stat-gate-20260630T173805Z-run3 as a critical-spread residual after the leadership-quiescence child closure.) [solve/report/rolling-restart-run4-leadership-quiescence-signature.md]
 
 ## Theories
 _(none recorded)_

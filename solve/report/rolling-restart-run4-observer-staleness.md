@@ -24,7 +24,7 @@
 - Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: theory-20260629-active-gate-observer-staleness-contract
 - Next move: continue supervised step for rolling-restart-run4-observer-staleness-main
-- No longer current: convergence_timeout
+- No longer current: convergence_timeout; Do not treat stat-gate-20260630T173805Z-run3 as an observer-staleness residual after the leadership-quiescence child closure.
 
 ## Continuation
 - Status: blocked-theory
@@ -58,6 +58,7 @@
 - **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T020210Z-run15.report.json. Metric: 3 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
 - **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 2 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-observer-staleness-main**: Latest leadership_unstable residual from stat-gate-20260630T173805Z-run3 is now split to and deterministically addressed by rolling-restart-run4-leadership-quiescence-signature (commit 6e39ff16). The retained sample was not an observer-staleness/publication-epoch regression shape; do not reopen the observer selector from this evidence. Next evidence for this Quest should be fresh post-fix measurement or the sealed consecutive proof. (rules out: Do not treat stat-gate-20260630T173805Z-run3 as an observer-staleness residual after the leadership-quiescence child closure.) [solve/report/rolling-restart-run4-leadership-quiescence-signature.md]
 
 ## Theories
 - **theory-20260629-active-gate-observer-staleness-contract** [supported] frontier, frontier rolling-restart-run4-observer-staleness-main, layer observation, mechanism The rolling-restart terminal observer can classify stale or regressed readiness/authority samples as nodeSlotUnavailable, publication visibility, or observer lag after the monotonic active-gate evidence already reached full published-active coverage, pendingAck=0, missingPublished=0, priority spread ready, and blockers ready., owner startup_active_gate_owner, boundary terminal_observer_evidence, modelGate npm run model:contracts
