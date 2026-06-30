@@ -1,0 +1,282 @@
+diff --git a/scripts/rolling-restart-liveness-classifier.js b/scripts/rolling-restart-liveness-classifier.js
+index 5b74e95a..af1fc047 100644
+--- a/scripts/rolling-restart-liveness-classifier.js
++++ b/scripts/rolling-restart-liveness-classifier.js
+@@ -11,6 +11,7 @@ const SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1 =
+ 
+ const ABSENT_VALUE = 'absent';
+ const EMPTY_TEXT = '';
++const LIST_SEPARATOR = ',';
+ const TYPEOF_OBJECT = 'object';
+ const TYPEOF_STRING = 'string';
+ const NUM_ZERO = 0;
+@@ -68,6 +69,8 @@ const ACTION_EVENT_RECONCILE_STARTED = 'reconcile_started';
+ const ACTION_EVENT_RECONCILE_COMPLETED = 'reconcile_completed';
+ const ACTION_EVENT_PUBLICATION_WRITTEN = 'publication_written';
+ const ACTION_STATE_EXECUTED = 'executed';
++const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
++  'spread_satisfied_in_flight';
+ 
+ const WITNESS_STATE_OBSERVED = 'observed';
+ const QUEUE_STATE_OBSERVED = 'observed';
+@@ -183,6 +186,9 @@ const ROLLING_RESTART_LIVENESS_VERDICT = Object.freeze({
+   STUCK_DOWNSTREAM_WORKFLOW_PROGRESS: 'stuck_downstream_workflow_progress',
+   INSUFFICIENT_EVIDENCE: 'insufficient_evidence',
+ });
++const NON_BLOCKING_PRIORITY_RECOVERY_SEMANTIC_STATES = Object.freeze(new Set([
++  SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
++]));
+ 
+ const REQUIRED_VERDICTS = Object.freeze([
+   ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
+@@ -588,11 +594,13 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
+   const priorityEdge = graph.edges.find(
+     (edge) => edge.id === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+   );
++  const hasBlockingDominantWitness =
++    isBlockingPriorityRecoveryDominantWitness(dominantWitness);
+   const blocked = missingPublishedCount === NUM_ZERO &&
+     (
+       blockedPartitionCount > NUM_ZERO ||
+       unresolvedSemanticStateCount > NUM_ZERO ||
+-      isRecord(dominantWitness)
++      hasBlockingDominantWitness
+     );
+   if (!blocked) {
+     return {
+@@ -632,6 +640,23 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
+   };
+ }
+ 
++function isBlockingPriorityRecoveryDominantWitness(witness) {
++  if (!isRecord(witness)) {
++    return false;
++  }
++  const progressClassIds = normalizeTextArray(witness.progressClassIds);
++  const blockerReasonCodes = normalizeTextArray(witness.blockerReasonCodes);
++  if (
++    progressClassIds.length > NUM_ZERO ||
++    blockerReasonCodes.length > NUM_ZERO
++  ) {
++    return true;
++  }
++  return NON_BLOCKING_PRIORITY_RECOVERY_SEMANTIC_STATES.has(
++    textValue(witness.semanticStateId),
++  ) !== true;
++}
++
+ function buildDownstreamWorkflowWitness({
+   prioritySummary,
+   dominantWitness,
+@@ -870,6 +895,18 @@ function firstArray(...values) {
+   return values.find(Array.isArray) || [];
+ }
+ 
++function normalizeTextArray(value) {
++  if (Array.isArray(value)) {
++    return value
++      .map((entry) => textValue(entry))
++      .filter((entry) => entry.length > NUM_ZERO);
++  }
++  return textValue(value)
++    .split(LIST_SEPARATOR)
++    .map((entry) => entry.trim())
++    .filter((entry) => entry.length > NUM_ZERO);
++}
++
+ function isRecord(value) {
+   return Boolean(value) &&
+     typeof value === TYPEOF_OBJECT &&
+diff --git a/test/scripts/analyze-rolling-restart-liveness.test.js b/test/scripts/analyze-rolling-restart-liveness.test.js
+index d24b960a..54557707 100644
+--- a/test/scripts/analyze-rolling-restart-liveness.test.js
++++ b/test/scripts/analyze-rolling-restart-liveness.test.js
+@@ -27,8 +27,18 @@ const REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
+ const OUTCOME_RECONCILE_TIMED_OUT = 'reconcile-timed-out';
+ const MSG_CONVERGENCE_DECISION_TRACE = 'convergence decision trace';
+ const TEMP_PREFIX = 'rolling-restart-liveness-';
+-const RUN1_REPORT_PATH =
+-  'test-output/reports/stat-gate-20260629T045155Z-run1.report.json';
++const NONBLOCKING_PRIORITY_FIXTURE_SOURCE =
++  'synthetic-spread-satisfied-nonblocking-priority';
++const PRIORITY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT =
++  'spread_satisfied_in_flight';
++const PRIORITY_ACTION_ADVANCE_EXISTING_OPERATION =
++  'advance_existing_operation';
++const PRIORITY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
++const PRIORITY_ACTUATION_PERSISTED_NOT_DISPATCHED =
++  'persisted_not_dispatched';
++const PRIORITY_WORKFLOW_PHASE_DISPATCH_PENDING = 'dispatch_pending';
++const PRIORITY_WORKFLOW_STEP_AGE_MS = 74143;
++const PRIORITY_WORKFLOW_STEP_TIMEOUT_MS = 30000;
+ const ENQUEUE_BACKLOG_FIXTURE_PATH =
+   `${FIXTURE_DIRECTORY}/enqueue-backlog-no-progress.fixture.json`;
+ const SLOW_PROGRESS_FIXTURE_PATH =
+@@ -59,8 +69,30 @@ describe('rolling restart liveness classifier', () => {
+     ]);
+   });
+ 
+-  it('classifies latest publication_missing_active_node run from full logs', () => {
+-    const verdict = runAnalyzer(RUN1_REPORT_PATH);
++  it('classifies publication visibility stall from full logs', () => {
++    const reportPath = writeFullLogReport({
++      createFullLogs: true,
++      logLines: [
++        decisionTraceLine({
++          time: '2026-06-29T05:00:50.000Z',
++          decision: 'drive',
++          reason: 'driven',
++          outcome: OUTCOME_RECONCILE_TIMED_OUT,
++          publicationEpoch: 7,
++          missingPublishedCount: 1,
++        }),
++        decisionTraceLine({
++          time: '2026-06-29T05:00:58.642Z',
++          decision: 'drive',
++          reason: 'driven',
++          outcome: OUTCOME_RECONCILE_TIMED_OUT,
++          publicationEpoch: 7,
++          missingPublishedCount: 1,
++        }),
++      ],
++    });
++
++    const verdict = runAnalyzer(reportPath);
+ 
+     assert.equal(
+       verdict.verdict,
+@@ -81,15 +113,15 @@ describe('rolling restart liveness classifier', () => {
+       '2026-06-29T05:00:58.642Z',
+     );
+     assert.equal(verdict.queueState.state, 'observed');
+-    assert.equal(verdict.queueState.pendingWrites, 3);
++    assert.equal(verdict.queueState.pendingWrites, 2);
+     assert.equal(verdict.publicationDelta.toMissingPublishedCount, 1);
+     assert.equal(verdict.publicationDelta.changed, false);
+     assert.equal(
+       verdict.fullLogReplay.state,
+       'complete',
+     );
+-    assert.equal(verdict.fullLogReplay.filesScanned, 5);
+-    assert.equal(verdict.fullLogReplay.matchedSampleCount, 3);
++    assert.equal(verdict.fullLogReplay.filesScanned, 1);
++    assert.equal(verdict.fullLogReplay.matchedSampleCount, 2);
+     assert.equal(verdict.downstreamWorkflow.state, 'absent');
+     assert.equal(verdict.evidenceGaps.length, 0);
+   });
+@@ -177,6 +209,20 @@ describe('rolling restart liveness classifier', () => {
+     assert.equal(verdict.downstreamWorkflow.stepTimeoutMs, 30000);
+   });
+ 
++  it('does not promote spread-satisfied priority telemetry to a downstream stall', () => {
++    const verdict = buildRollingRestartLivenessVerdict(
++      buildNonBlockingPriorityRecoveryReport(),
++      {sourceArtifact: NONBLOCKING_PRIORITY_FIXTURE_SOURCE},
++    );
++
++    assert.notEqual(
++      verdict.verdict,
++      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
++    );
++    assert.equal(verdict.downstreamWorkflow.state, 'absent');
++    assert.equal(verdict.topologyFrontier.edgeId, 'readiness_startup_support');
++  });
++
+   it('prints the same verdict through the CLI', () => {
+     const output = execFileSync(
+       NODE_BIN,
+@@ -345,6 +391,56 @@ function basePublicationProgress() {
+   };
+ }
+ 
++function buildNonBlockingPriorityRecoveryReport() {
++  return {
++    scenarios: [
++      {
++        scenario: SCENARIO_ROLLING_RESTART,
++        passed: false,
++        publicationConvergence: {
++          publicationStatus: 'PUBLISHED',
++          pendingAckCount: 0,
++          blockedNodeCount: 0,
++          missingPublishedCount: 0,
++          prioritySpreadPending: false,
++          activeGate: {
++            state: 'unknown',
++            ready: false,
++            progress: {
++              expectedNodeCount: 5,
++              snapshotCoverageNodeCount: 5,
++              snapshotCoverageComplete: true,
++              priorityRecoveryProgressClasses: {
++                unresolvedSemanticStateIds: [],
++                blockedPartitionIds: [],
++              },
++              blockers: [],
++            },
++          },
++          priorityRecoveryProgressSummary: {
++            partitionCount: 5,
++            dominantWitness: {
++              partitionId: 'sql_transactions-p1',
++              semanticStateId: PRIORITY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
++              progressClassIds: [],
++              blockerReasonCodes: [],
++              currentOwner: 'operation_workflow_owner',
++              blockingBoundary: 'workflow_progress',
++              nextRequiredAction: PRIORITY_ACTION_ADVANCE_EXISTING_OPERATION,
++              waitMode: PRIORITY_WAIT_MODE_EVENT_DRIVEN,
++              workflowProgressPhaseId:
++                PRIORITY_WORKFLOW_PHASE_DISPATCH_PENDING,
++              actuationState: PRIORITY_ACTUATION_PERSISTED_NOT_DISPATCHED,
++              stepAgeMs: PRIORITY_WORKFLOW_STEP_AGE_MS,
++              stepTimeoutMs: PRIORITY_WORKFLOW_STEP_TIMEOUT_MS,
++            },
++          },
++        },
++      },
++    ],
++  };
++}
++
+ function decisionTraceLine({
+   time,
+   decision,
+diff --git a/solve/oracle/rolling-restart-run4-liveness-residual-agreement.json b/solve/oracle/rolling-restart-run4-liveness-residual-agreement.json
+new file mode 100644
+index 00000000..7a33b37c
+--- /dev/null
++++ b/solve/oracle/rolling-restart-run4-liveness-residual-agreement.json
+@@ -0,0 +1,32 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "diagnostics-normalized",
++  "evidence": {
++    "source": "scripts/rolling-restart-liveness-classifier.js",
++    "test": "test/scripts/analyze-rolling-restart-liveness.test.js",
++    "liveReport": "test-output/reports/stat-gate-20260630T051118Z-run1.report.json",
++    "subagent": "019f1706-e20e-7032-abf4-b8d229b154e7"
++  },
++  "observed": {
++    "focusedTest": "spread_satisfied_in_flight with empty progressClassIds/blockerReasonCodes does not produce stuck_downstream_workflow_progress",
++    "blockedFixture": "priority-workflow-timeout-transition-deferred still produces stuck_downstream_workflow_progress",
++    "liveLivenessVerdict": "stuck_no_enabled_action",
++    "liveDownstreamWorkflowState": "absent",
++    "livePriorityResidualWitnesses": 0
++  },
++  "validations": {
++    "node-test": "node --test test/scripts/analyze-rolling-restart-liveness.test.js",
++    "live-liveness": "npm --silent run analyze:rolling-restart-liveness -- test-output/reports/stat-gate-20260630T051118Z-run1.report.json",
++    "live-priority-residuals": "npm run analyze:priority-recovery-residuals -- test-output/reports/stat-gate-20260630T051118Z-run1.report.json --markdown",
++    "eslint": "npx eslint scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "metrics": "npm run test:metrics:scoped -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "file-size": "npm run audit:file-size -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "runtime-grammar": "npm run audit:runtime-grammar:file -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "literals": "npm run audit:guideline:literals -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "decision-boundaries": "npm run audit:guideline:decision-boundaries -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "constant-names": "npm run guard:guideline:constant-names:file -- scripts/rolling-restart-liveness-classifier.js test/scripts/analyze-rolling-restart-liveness.test.js",
++    "diff-check": "git diff --check"
++  }
++}

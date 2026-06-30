@@ -11,6 +11,7 @@ const SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1 =
 
 const ABSENT_VALUE = 'absent';
 const EMPTY_TEXT = '';
+const LIST_SEPARATOR = ',';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const NUM_ZERO = 0;
@@ -68,6 +69,8 @@ const ACTION_EVENT_RECONCILE_STARTED = 'reconcile_started';
 const ACTION_EVENT_RECONCILE_COMPLETED = 'reconcile_completed';
 const ACTION_EVENT_PUBLICATION_WRITTEN = 'publication_written';
 const ACTION_STATE_EXECUTED = 'executed';
+const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
 
 const WITNESS_STATE_OBSERVED = 'observed';
 const QUEUE_STATE_OBSERVED = 'observed';
@@ -183,6 +186,9 @@ const ROLLING_RESTART_LIVENESS_VERDICT = Object.freeze({
   STUCK_DOWNSTREAM_WORKFLOW_PROGRESS: 'stuck_downstream_workflow_progress',
   INSUFFICIENT_EVIDENCE: 'insufficient_evidence',
 });
+const NON_BLOCKING_PRIORITY_RECOVERY_SEMANTIC_STATES = Object.freeze(new Set([
+  SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+]));
 
 const REQUIRED_VERDICTS = Object.freeze([
   ROLLING_RESTART_LIVENESS_VERDICT.OBSERVED_PROGRESSING_BUDGET_EXHAUSTED,
@@ -588,11 +594,13 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
   const priorityEdge = graph.edges.find(
     (edge) => edge.id === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
   );
+  const hasBlockingDominantWitness =
+    isBlockingPriorityRecoveryDominantWitness(dominantWitness);
   const blocked = missingPublishedCount === NUM_ZERO &&
     (
       blockedPartitionCount > NUM_ZERO ||
       unresolvedSemanticStateCount > NUM_ZERO ||
-      isRecord(dominantWitness)
+      hasBlockingDominantWitness
     );
   if (!blocked) {
     return {
@@ -630,6 +638,23 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
     evidencePath: EVIDENCE_PATH_PRIORITY_RECOVERY,
     witness,
   };
+}
+
+function isBlockingPriorityRecoveryDominantWitness(witness) {
+  if (!isRecord(witness)) {
+    return false;
+  }
+  const progressClassIds = normalizeTextArray(witness.progressClassIds);
+  const blockerReasonCodes = normalizeTextArray(witness.blockerReasonCodes);
+  if (
+    progressClassIds.length > NUM_ZERO ||
+    blockerReasonCodes.length > NUM_ZERO
+  ) {
+    return true;
+  }
+  return NON_BLOCKING_PRIORITY_RECOVERY_SEMANTIC_STATES.has(
+    textValue(witness.semanticStateId),
+  ) !== true;
 }
 
 function buildDownstreamWorkflowWitness({
@@ -868,6 +893,18 @@ function firstRecord(...values) {
 
 function firstArray(...values) {
   return values.find(Array.isArray) || [];
+}
+
+function normalizeTextArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => textValue(entry))
+      .filter((entry) => entry.length > NUM_ZERO);
+  }
+  return textValue(value)
+    .split(LIST_SEPARATOR)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > NUM_ZERO);
 }
 
 function isRecord(value) {

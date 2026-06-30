@@ -27,8 +27,18 @@ const REASON_OWNER_RECONCILE_PENDING = 'owner_reconcile_pending';
 const OUTCOME_RECONCILE_TIMED_OUT = 'reconcile-timed-out';
 const MSG_CONVERGENCE_DECISION_TRACE = 'convergence decision trace';
 const TEMP_PREFIX = 'rolling-restart-liveness-';
-const RUN1_REPORT_PATH =
-  'test-output/reports/stat-gate-20260629T045155Z-run1.report.json';
+const NONBLOCKING_PRIORITY_FIXTURE_SOURCE =
+  'synthetic-spread-satisfied-nonblocking-priority';
+const PRIORITY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PRIORITY_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
+const PRIORITY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const PRIORITY_ACTUATION_PERSISTED_NOT_DISPATCHED =
+  'persisted_not_dispatched';
+const PRIORITY_WORKFLOW_PHASE_DISPATCH_PENDING = 'dispatch_pending';
+const PRIORITY_WORKFLOW_STEP_AGE_MS = 74143;
+const PRIORITY_WORKFLOW_STEP_TIMEOUT_MS = 30000;
 const ENQUEUE_BACKLOG_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/enqueue-backlog-no-progress.fixture.json`;
 const SLOW_PROGRESS_FIXTURE_PATH =
@@ -59,8 +69,30 @@ describe('rolling restart liveness classifier', () => {
     ]);
   });
 
-  it('classifies latest publication_missing_active_node run from full logs', () => {
-    const verdict = runAnalyzer(RUN1_REPORT_PATH);
+  it('classifies publication visibility stall from full logs', () => {
+    const reportPath = writeFullLogReport({
+      createFullLogs: true,
+      logLines: [
+        decisionTraceLine({
+          time: '2026-06-29T05:00:50.000Z',
+          decision: 'drive',
+          reason: 'driven',
+          outcome: OUTCOME_RECONCILE_TIMED_OUT,
+          publicationEpoch: 7,
+          missingPublishedCount: 1,
+        }),
+        decisionTraceLine({
+          time: '2026-06-29T05:00:58.642Z',
+          decision: 'drive',
+          reason: 'driven',
+          outcome: OUTCOME_RECONCILE_TIMED_OUT,
+          publicationEpoch: 7,
+          missingPublishedCount: 1,
+        }),
+      ],
+    });
+
+    const verdict = runAnalyzer(reportPath);
 
     assert.equal(
       verdict.verdict,
@@ -81,15 +113,15 @@ describe('rolling restart liveness classifier', () => {
       '2026-06-29T05:00:58.642Z',
     );
     assert.equal(verdict.queueState.state, 'observed');
-    assert.equal(verdict.queueState.pendingWrites, 3);
+    assert.equal(verdict.queueState.pendingWrites, 2);
     assert.equal(verdict.publicationDelta.toMissingPublishedCount, 1);
     assert.equal(verdict.publicationDelta.changed, false);
     assert.equal(
       verdict.fullLogReplay.state,
       'complete',
     );
-    assert.equal(verdict.fullLogReplay.filesScanned, 5);
-    assert.equal(verdict.fullLogReplay.matchedSampleCount, 3);
+    assert.equal(verdict.fullLogReplay.filesScanned, 1);
+    assert.equal(verdict.fullLogReplay.matchedSampleCount, 2);
     assert.equal(verdict.downstreamWorkflow.state, 'absent');
     assert.equal(verdict.evidenceGaps.length, 0);
   });
@@ -175,6 +207,20 @@ describe('rolling restart liveness classifier', () => {
     assert.equal(verdict.downstreamWorkflow.actuationState, 'transition_deferred');
     assert.equal(verdict.downstreamWorkflow.stepAgeMs, 74121);
     assert.equal(verdict.downstreamWorkflow.stepTimeoutMs, 30000);
+  });
+
+  it('does not promote spread-satisfied priority telemetry to a downstream stall', () => {
+    const verdict = buildRollingRestartLivenessVerdict(
+      buildNonBlockingPriorityRecoveryReport(),
+      {sourceArtifact: NONBLOCKING_PRIORITY_FIXTURE_SOURCE},
+    );
+
+    assert.notEqual(
+      verdict.verdict,
+      ROLLING_RESTART_LIVENESS_VERDICT.STUCK_DOWNSTREAM_WORKFLOW_PROGRESS,
+    );
+    assert.equal(verdict.downstreamWorkflow.state, 'absent');
+    assert.equal(verdict.topologyFrontier.edgeId, 'readiness_startup_support');
   });
 
   it('prints the same verdict through the CLI', () => {
@@ -342,6 +388,56 @@ function basePublicationProgress() {
       pendingWrites: 2,
       pendingWriteGrowthCount: 3,
     },
+  };
+}
+
+function buildNonBlockingPriorityRecoveryReport() {
+  return {
+    scenarios: [
+      {
+        scenario: SCENARIO_ROLLING_RESTART,
+        passed: false,
+        publicationConvergence: {
+          publicationStatus: 'PUBLISHED',
+          pendingAckCount: 0,
+          blockedNodeCount: 0,
+          missingPublishedCount: 0,
+          prioritySpreadPending: false,
+          activeGate: {
+            state: 'unknown',
+            ready: false,
+            progress: {
+              expectedNodeCount: 5,
+              snapshotCoverageNodeCount: 5,
+              snapshotCoverageComplete: true,
+              priorityRecoveryProgressClasses: {
+                unresolvedSemanticStateIds: [],
+                blockedPartitionIds: [],
+              },
+              blockers: [],
+            },
+          },
+          priorityRecoveryProgressSummary: {
+            partitionCount: 5,
+            dominantWitness: {
+              partitionId: 'sql_transactions-p1',
+              semanticStateId: PRIORITY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
+              progressClassIds: [],
+              blockerReasonCodes: [],
+              currentOwner: 'operation_workflow_owner',
+              blockingBoundary: 'workflow_progress',
+              nextRequiredAction: PRIORITY_ACTION_ADVANCE_EXISTING_OPERATION,
+              waitMode: PRIORITY_WAIT_MODE_EVENT_DRIVEN,
+              workflowProgressPhaseId:
+                PRIORITY_WORKFLOW_PHASE_DISPATCH_PENDING,
+              actuationState: PRIORITY_ACTUATION_PERSISTED_NOT_DISPATCHED,
+              stepAgeMs: PRIORITY_WORKFLOW_STEP_AGE_MS,
+              stepTimeoutMs: PRIORITY_WORKFLOW_STEP_TIMEOUT_MS,
+            },
+          },
+        },
+      },
+    ],
   };
 }
 
