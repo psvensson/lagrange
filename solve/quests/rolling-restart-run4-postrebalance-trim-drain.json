@@ -1,0 +1,57 @@
+{
+  "id": "rolling-restart-run4-postrebalance-trim-drain",
+  "statement": "Run3-shaped post-rebalance closure has deterministic local owner proof: publication/readiness are closed, priority residual witnesses are absent, spread_satisfied_in_flight priority progress no longer blocks membership steady-trim retirement, and the remaining operation_workflow_owner wait is represented without broad ACTIVE discounts or parent Wilson closure.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "closure": "Focused deterministic coverage proves the stat-gate-20260630T143856Z-run3 post-rebalance shape: publication/readiness and priority residual witnesses are closed, spread_satisfied_in_flight priority progress does not by itself keep a stale published node in membership steady-trim debt, and any remaining operation_workflow_owner wait stays represented as workflow progress without broad ACTIVE discounts or parent Wilson closure.",
+    "oracle": "solve/oracle/rolling-restart-run4-postrebalance-trim-drain.json"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-postrebalance-trim-drain.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-postrebalance-trim-drain-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-run4-postrebalance-trim-drain.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-stat-gate-closure",
+      "statement": "Do not run or require a rolling-restart statistical gate for this child Quest; prove the run3 trim/drain shape with focused deterministic evidence."
+    },
+    {
+      "id": "no-parent-closure-claim",
+      "statement": "Do not claim the parent rolling-restart run4 Wilson closure bar from this Quest."
+    },
+    {
+      "id": "no-broad-active-discount",
+      "statement": "Do not solve this Quest by broadly discounting ACTIVE replica operations or hiding operation_workflow_owner workflow progress."
+    },
+    {
+      "id": "owner-normalized-priority-consumption",
+      "statement": "Membership publication must consume the priority-recovery owner's normalized closure/semantic outcome; do not locally reinterpret lower-layer raw spread fragments when deciding steady trim."
+    }
+  ]
+}

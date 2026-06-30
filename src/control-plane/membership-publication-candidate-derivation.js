@@ -14,6 +14,8 @@ import {
 } from './system-row-normalizers.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
+import {buildPrioritySpreadDecision} from
+  './publication-recovery-priority-spread.js';
 import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
   buildMembershipEpochFence,
@@ -142,6 +144,15 @@ function shouldAllowRecoveryEligibleProjection(options = {}, helperFns = {}) {
   );
 }
 
+function resolveMembershipPublicationPrioritySpreadPending(options = {}) {
+  const prioritySpreadDecision = buildPrioritySpreadDecision({
+    priorityPartitionSummary: options.priorityPartitionSummary,
+    priorityRecoveryDecisionSnapshots: options.priorityRecoveryDecisionSnapshots,
+    priorityRecoveryClosureWitness: options.priorityRecoveryClosureWitness,
+  });
+  return prioritySpreadDecision.prioritySpreadPending === true;
+}
+
 function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) {
   if (options.preferAuthoritativeRead === true || options.requireAuthoritative === true) {
     return true;
@@ -242,10 +253,20 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityRecoverySpreadGapPending = hasPriorityRecoverySpreadGap(
-    latestPublicationRow?.priorityPartitionSummary ||
-      latestPublishedPublicationRow?.priorityPartitionSummary,
-  );
+  const priorityRecoverySpreadGapPending =
+    resolveMembershipPublicationPrioritySpreadPending({
+      priorityPartitionSummary:
+        latestPublicationRow?.priorityPartitionSummary ||
+        latestPublishedPublicationRow?.priorityPartitionSummary,
+      priorityRecoveryDecisionSnapshots:
+        planningSnapshot.priorityRecoveryDecisionSnapshots ||
+        planningSnapshot.priorityRecoveryPlanningSnapshot
+          ?.priorityRecoveryDecisionSnapshots,
+      priorityRecoveryClosureWitness:
+        planningSnapshot.priorityRecoveryClosureWitness ||
+        planningSnapshot.priorityRecoveryPlanningSnapshot
+          ?.priorityRecoveryClosureWitness,
+    });
   const allowPrioritySpreadLivenessFallbackProjection =
     allowRecoveryEligibleProjection &&
     (priorityRecoverySpreadGapPending || observedRecoveryProjectionGap);
@@ -385,6 +406,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         publicationAckTargetSnapshot.publishableRecoveryActiveNodeIds,
       observedActiveNodeIds,
       priorityRecoverySpreadGapPending,
+      priorityRecoverySpreadPending: priorityRecoverySpreadGapPending,
       observedRecoveryProjectionGap,
       membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
     },

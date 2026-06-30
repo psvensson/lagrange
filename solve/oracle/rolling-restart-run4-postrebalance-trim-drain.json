@@ -1,0 +1,60 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "post-rebalance-membership-trim-owner-normalized-priority-proven",
+  "evidence": {
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "childQuest": "rolling-restart-run4-postrebalance-trim-drain",
+    "sourceOnlyRedCheck": "npm test -- test/control-plane/membership-count-neutral-steady-trim.test.js failed with source-only revert: target selection stayed recovery_cohort, decision-snapshot candidate retained stale D, closure-only candidate retained stale D, and publication epoch stayed 7",
+    "focusedGreenTest": "npm test -- test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "adjacentGreenTest": "npm test -- test/control-plane/membership-publication-coordinator-candidate-fixtures.js",
+    "runtimeGrammar": "npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-candidate-derivation.js src/control-plane/membership-publication-target-selection.js test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "literals": "npm run audit:guideline:literals -- src/control-plane/membership-publication-candidate-derivation.js src/control-plane/membership-publication-target-selection.js test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "scopedMetrics": "npm run test:metrics:scoped -- src/control-plane/membership-publication-candidate-derivation.js src/control-plane/membership-publication-target-selection.js test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "modelContracts": "npm run model:contracts",
+    "fileSize": "npm run audit:file-size",
+    "diffCheck": "git diff --check"
+  },
+  "observed": {
+    "sourceReport": "test-output/reports/stat-gate-20260630T143856Z-run3.report.json",
+    "run3PostRebalanceClosureState": "open",
+    "run3Blockers": [
+      "operation_drain_open",
+      "membership_trim_open"
+    ],
+    "publicationVisibilityState": "closed",
+    "priorityRecoveryResidualWitnesses": 0,
+    "dominantPriorityWitnessSemanticStateId": "spread_satisfied_in_flight",
+    "dominantPriorityWitnessBoundary": "workflow_progress",
+    "dominantPriorityWitnessWaitMode": "event_driven",
+    "causalModelDominantFailureClass": "post_rebalance_closure_blocked",
+    "causalModelOwner": "operation_workflow_owner",
+    "causalModelBoundary": "workflow_progress",
+    "causalModelOutcome": "continue_local_fix",
+    "topologyPrimaryPostRebalanceBlocker": "operation_drain_open",
+    "membershipTrimDebtShape": "stale published node remained after priority residual witnesses were absent",
+    "implementedOwnerBoundary": "membership publication steady trim consumes priority-recovery owner normalized decision snapshots or closure-only witness evidence before deciding whether stale published membership can retire"
+  },
+  "validations": {
+    "targetSelectionFixture": "owner-normalized spread closure lets steady trim retire stale publication",
+    "candidateDerivationFixture": "candidate derivation consumes owner-normalized priority closure for stale trims",
+    "closureOnlyCandidateDerivationFixture": "candidate derivation consumes closure-only owner evidence for stale trims",
+    "regressionHoldFixture": "spread-gap pending holds the trim -> stale node stays published",
+    "redCheckFailures": [
+      "owner-normalized spread closure test expected projected_steady_trim but got recovery_cohort",
+      "candidate derivation test expected retained nodes A,B,C but got stale node D",
+      "closure-only candidate derivation test expected retained nodes A,B,C but got stale node D",
+      "candidate derivation tests expected epoch 8 but got epoch 7"
+    ],
+    "scopedMetricsResidual": "check exits 0 while reporting pre-existing complexity debt in membership-publication-candidate-derivation.js",
+    "fileSizeResidual": "check exits 0 while reporting existing oversized-file ratchet debt outside this patch"
+  },
+  "rulesOut": [
+    "parent rolling-restart Wilson statistical closure",
+    "another rolling-restart statistical gate for this child Quest",
+    "broad ACTIVE replica-operation discounting",
+    "local reinterpretation of priority spread fragments inside membership publication",
+    "hiding the remaining operation_workflow_owner event-driven wait"
+  ]
+}

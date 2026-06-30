@@ -106,9 +106,13 @@ function buildMembershipPublicationTargetEvidence(options = {}, helperFns = {}) 
     publishedBaselineNodeIds.some(
       (nodeId) => !projectedServingNodeIdSet.has(nodeId),
     );
+  const priorityRecoverySpreadPending =
+    typeof options.priorityRecoverySpreadPending === TYPEOF.BOOLEAN ?
+      options.priorityRecoverySpreadPending :
+      options.priorityRecoverySpreadGapPending === true;
   const canPublishSteadyTrim =
     publishedTrimDebt &&
-    options.priorityRecoverySpreadGapPending !== true &&
+    priorityRecoverySpreadPending !== true &&
     options.observedRecoveryProjectionGap !== true &&
     options.membershipFreezeActive !== true;
   return {
