@@ -15,6 +15,9 @@ import {
   RuntimeServiceHandlerSetup,
 } from './shared/runtime-service-handler-setup.js';
 import {
+  attachRuntimeServiceRebalancerOwner,
+} from './shared/runtime-service-rebalancer-setup.js';
+import {
   MessageGroupServiceHandlerSetup,
 } from './shared/message-group-service-handler-setup.js';
 import {
@@ -141,6 +144,32 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
       if (result) {
         this.runtimeServiceHandler = result.runtimeServiceHandler;
       }
+
+      this.attachRuntimeServiceRebalancerOwner();
+    },
+
+    /**
+     * Attach the runtime-service rebalancer owner, gated on `service_definitions-p1`
+     * leadership, so runtime-service replicas (e.g. the Postgres-wire endpoint)
+     * are placed by the node that leads the desired-state table. Idempotent: the
+     * prior handle is detached before re-attaching.
+     * @private
+     */
+    attachRuntimeServiceRebalancerOwner() {
+      if (this.runtimeServiceRebalancerOwnerHandle) {
+        this.runtimeServiceRebalancerOwnerHandle.detach();
+        this.runtimeServiceRebalancerOwnerHandle = null;
+      }
+      this.runtimeServiceRebalancerOwnerHandle =
+        attachRuntimeServiceRebalancerOwner({
+          nodeId: this.nodeId,
+          systemTableCache: this.getSystemTableCache(),
+          cdcIntegrationService: this.cdcIntegrationService,
+          tablePolicyService: this.tablePolicyService,
+          messageRouter: this.messageRouter,
+          rebalanceCoordinator: this.rebalanceCoordinator,
+          partitionServices: this.partitionServices,
+        });
     },
 
     /**

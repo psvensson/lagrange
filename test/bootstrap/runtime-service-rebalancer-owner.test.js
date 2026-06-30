@@ -16,6 +16,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   RuntimeServiceRebalancerOwner,
+  attachRuntimeServiceRebalancerOwner,
 } from '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -190,5 +191,54 @@ test('RuntimeServiceRebalancerOwner', async (t) => {
     };
     owner.shutdown();
     t.equal(record[1].shutdownCalls, 1, 'second rebalancer still torn down');
+  });
+});
+
+test('attachRuntimeServiceRebalancerOwner', async (t) => {
+  t.beforeEach(initEnv);
+
+  function makeAttachOptions(partitionServices) {
+    return {
+      nodeId: 'node-1',
+      systemTableCache: {filter: () => []},
+      cdcIntegrationService: {sqlQueryEngine: {}},
+      tablePolicyService: {},
+      messageRouter: {},
+      rebalanceCoordinator: {},
+      partitionServices,
+      createRebalancer: () => ({
+        initialize() {},
+        setLeader() {},
+        shutdown() {},
+      }),
+    };
+  }
+
+  await t.test('binds owner to service_definitions-p1 leadership', async (t) => {
+    const partitionService = {
+      partitionId: 'service_definitions-p1',
+      sink: null,
+      setRebalancerLeadershipSink(sink) {
+        this.sink = sink;
+      },
+    };
+    const partitionServices = new Map([
+      ['service_definitions-p1-r1', partitionService],
+    ]);
+    const handle = attachRuntimeServiceRebalancerOwner(
+      makeAttachOptions(partitionServices),
+    );
+    t.equal(partitionService.sink, handle.owner, 'owner attached as the sink');
+    handle.detach();
+    t.equal(partitionService.sink, null, 'detach clears the sink');
+  });
+
+  await t.test('inert (no throw) when the partition service is absent', async (t) => {
+    const handle = attachRuntimeServiceRebalancerOwner(
+      makeAttachOptions(new Map()),
+    );
+    t.ok(handle.owner, 'owner still constructed');
+    t.equal(handle.partitionService, null, 'no partition service bound');
+    handle.detach();
   });
 });

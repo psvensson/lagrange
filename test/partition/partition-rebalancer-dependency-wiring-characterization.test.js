@@ -610,6 +610,79 @@ test('leader gate — rebalancer setLeader receives false when ' +
   await shutdownPartitionService(ps);
 });
 
+// ── 4b. secondary rebalancer-leadership sink ───────────────────────
+//
+// Lock the behavior that an attached leadership sink (used to gate the
+// RUNTIME_SERVICE rebalancer owner on service_definitions-p1 leadership) is
+// driven in lockstep with the partition's own rebalancer leadership.
+
+function createFakeSink() {
+  return {
+    leaderCalls: [],
+    setLeader(value) {
+      this.leaderCalls.push(value);
+    },
+  };
+}
+
+test('leadership sink — driven true when leader and background ready',
+  async (t) => {
+    const ps = createPartitionService();
+    wireAllDependencies(ps);
+    const sink = createFakeSink();
+    ps.setRebalancerLeadershipSink(sink); // drives once on attach
+    ps.updateRebalancerLeadership();
+    t.ok(
+      sink.leaderCalls.length >= 1 &&
+        sink.leaderCalls[sink.leaderCalls.length - 1] === true,
+      'sink last driven true when partition is leader+ready',
+    );
+    await shutdownPartitionService(ps);
+  });
+
+test('leadership sink — driven false when partition not leader',
+  async (t) => {
+    const ps = createPartitionService();
+    wireAllDependencies(ps);
+    const sink = createFakeSink();
+    ps.setRebalancerLeadershipSink(sink);
+    ps.isLeader = false;
+    ps.updateRebalancerLeadership();
+    t.equal(
+      sink.leaderCalls[sink.leaderCalls.length - 1], false,
+      'sink driven false when partition loses leadership',
+    );
+    await shutdownPartitionService(ps);
+  });
+
+test('leadership sink — quiesced (false) on partition shutdown',
+  async (t) => {
+    const ps = createPartitionService();
+    wireAllDependencies(ps);
+    const sink = createFakeSink();
+    ps.setRebalancerLeadershipSink(sink);
+    await shutdownPartitionService(ps); // shutdown() -> quiesceRebalancing()
+    t.equal(
+      sink.leaderCalls[sink.leaderCalls.length - 1], false,
+      'sink driven false when the partition shuts down',
+    );
+  });
+
+test('leadership sink — detached sink is no longer driven', async (t) => {
+  const ps = createPartitionService();
+  wireAllDependencies(ps);
+  const sink = createFakeSink();
+  ps.setRebalancerLeadershipSink(sink);
+  ps.setRebalancerLeadershipSink(null);
+  const callsAfterDetach = sink.leaderCalls.length;
+  ps.updateRebalancerLeadership();
+  t.equal(
+    sink.leaderCalls.length, callsAfterDetach,
+    'no further sink driving after detach',
+  );
+  await shutdownPartitionService(ps);
+});
+
 // ── 5. maybeInitializeRebalancer dependency propagation ────────────
 //
 // Lock the behavior that maybeInitializeRebalancer propagates

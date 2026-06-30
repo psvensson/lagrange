@@ -189,6 +189,7 @@ class PartitionServiceRebalancerMethods {
       ) {
         this.rebalancer.setLeader(desiredLeadership);
       }
+      this.driveRebalancerLeadershipSink();
       return;
     }
     if (!backgroundReady || !this.isLeader) {
@@ -268,6 +269,7 @@ class PartitionServiceRebalancerMethods {
     });
     this.rebalancer.initialize();
     this.rebalancer.setLeader(this.resolveRebalancerLeadership());
+    this.driveRebalancerLeadershipSink();
   }
 }
 

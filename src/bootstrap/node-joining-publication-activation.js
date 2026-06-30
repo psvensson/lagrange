@@ -1,5 +1,8 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
+import {
+  attachRuntimeServiceRebalancerOwner,
+} from './shared/runtime-service-rebalancer-setup.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -488,7 +491,32 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     if (result) {
       this.runtimeServiceHandler = result.runtimeServiceHandler;
     }
+    this.attachRuntimeServiceRebalancerOwner();
   }
+
+  /**
+   * Attach the runtime-service rebalancer owner, gated on `service_definitions-p1`
+   * leadership, so runtime-service replicas (e.g. the Postgres-wire endpoint) are
+   * placed by the node that leads the desired-state table. Idempotent.
+   * @private
+   */
+  attachRuntimeServiceRebalancerOwner() {
+    if (this.runtimeServiceRebalancerOwnerHandle) {
+      this.runtimeServiceRebalancerOwnerHandle.detach();
+      this.runtimeServiceRebalancerOwnerHandle = null;
+    }
+    this.runtimeServiceRebalancerOwnerHandle =
+      attachRuntimeServiceRebalancerOwner({
+        nodeId: this.nodeId,
+        systemTableCache: NodeService.getInstance().getSystemTableCache(),
+        cdcIntegrationService: this.cdcIntegrationService,
+        tablePolicyService: this.tablePolicyService,
+        messageRouter: this.messageRouter,
+        rebalanceCoordinator: this.rebalanceCoordinator,
+        partitionServices: this.partitionServices,
+      });
+  }
+
   /**
    * Initialize the MessageGroupServiceHandler for control-plane
    * message-group replica operations.

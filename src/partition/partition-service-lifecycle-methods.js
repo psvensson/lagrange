@@ -50,6 +50,13 @@ class PartitionServiceLifecycleMethods {
    * @return {Promise<void>}
    */
   async quiesceRebalancing() {
+    if (
+      this.rebalancerLeadershipSink &&
+      typeof this.rebalancerLeadershipSink.setLeader ===
+        PARTITION_SERVICE_TYPE.FUNCTION
+    ) {
+      this.rebalancerLeadershipSink.setLeader(false);
+    }
     if (this.rebalancer) {
       if (
         typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION

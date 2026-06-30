@@ -474,14 +474,40 @@ class PartitionServiceCoreBase extends EventEmitter {
     }
     return true;
   }
+  /**
+   * Attach a secondary leadership sink driven in lockstep with this partition's
+   * own rebalancer leadership. Used to gate a non-partition reconciler (e.g. the
+   * RUNTIME_SERVICE rebalancer owner bound to `service_definitions-p1`) on this
+   * partition's raft leadership, so it starts/quiesces with the partition leader
+   * and inherits the same drain hysteresis. Pass `null` to detach. A no-op for
+   * every partition that has no sink attached.
+   * @param {?{setLeader: function(boolean): void}} sink
+   */
+  setRebalancerLeadershipSink(sink) {
+    this.rebalancerLeadershipSink =
+      sink && typeof sink.setLeader === PARTITION_SERVICE_TYPE.FUNCTION ?
+        sink :
+        null;
+    this.driveRebalancerLeadershipSink();
+  }
+
+  /** @private */
+  driveRebalancerLeadershipSink() {
+    if (this.rebalancerLeadershipSink) {
+      this.rebalancerLeadershipSink.setLeader(this.resolveRebalancerLeadership());
+    }
+  }
+
   updateRebalancerLeadership() {
     if (!this.rebalancer) {
       this.maybeInitializeRebalancer();
+      this.driveRebalancerLeadershipSink();
       return;
     }
     if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
       this.rebalancer.setLeader(this.resolveRebalancerLeadership());
     }
+    this.driveRebalancerLeadershipSink();
   }
   cancelLeaderOwnedActivation() {
     this.leaderActivationGate.cancel({clearActivatedTerm: true});

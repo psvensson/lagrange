@@ -23,7 +23,10 @@
  */
 
 import {UnifiedRebalancer} from '../../rebalancer/unified-rebalancer.js';
-import {SYSTEM_TABLE_NAME} from '../system-table-schemas-constants.js';
+import {
+  SYSTEM_TABLE_NAME,
+  INITIAL_PARTITION_IDS,
+} from '../system-table-schemas-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../../constants/unified-service-lifecycle.js';
 import {
   WASM_SERVICE_DEFINITION_STATUS,
@@ -59,6 +62,9 @@ const LOG_MSG = Object.freeze({
   STARTED: 'Started runtime-service rebalancer for active service',
   STOPPED: 'Stopped runtime-service rebalancer for removed service',
   TEARDOWN_FAILED: 'Runtime-service rebalancer teardown failed',
+  PARTITION_SERVICE_MISSING:
+    'service_definitions partition service not found; ' +
+    'runtime-service owner will not be leadership-gated (inert)',
 });
 
 class RuntimeServiceRebalancerOwner {
@@ -237,4 +243,60 @@ class RuntimeServiceRebalancerOwner {
   }
 }
 
-export {RuntimeServiceRebalancerOwner};
+/**
+ * @param {Object} partitionServices - Map of replicaId -> PartitionService.
+ * @param {string} partitionId
+ * @return {?Object} The first PartitionService for partitionId, or null.
+ */
+function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {
+  if (!partitionServices ||
+      typeof partitionServices.values !== 'function') {
+    return null;
+  }
+  for (const service of partitionServices.values()) {
+    if (service && service.partitionId === partitionId) {
+      return service;
+    }
+  }
+  return null;
+}
+
+/**
+ * Construct the runtime-service rebalancer owner and bind it to the
+ * `service_definitions-p1` partition's leadership, so it plans only on the node
+ * that leads the desired-state table (the proven cluster-singleton, off the
+ * priority lane). Idempotent enough to call once per node on the seed and join
+ * paths after the runtime-service handler is set up.
+ *
+ * @param {Object} options - RuntimeServiceRebalancerOwner deps plus
+ *   {Object} options.partitionServices.
+ * @return {{owner: RuntimeServiceRebalancerOwner,
+ *   partitionService: ?Object, detach: function(): void}}
+ */
+function attachRuntimeServiceRebalancerOwner(options = {}) {
+  const owner = new RuntimeServiceRebalancerOwner(options);
+  const partitionId =
+    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS];
+  const partitionService = resolvePartitionServiceByPartitionId(
+    options.partitionServices, partitionId,
+  );
+  if (partitionService &&
+      typeof partitionService.setRebalancerLeadershipSink === 'function') {
+    partitionService.setRebalancerLeadershipSink(owner);
+  } else {
+    owner.logger.warn(LOG_MSG.PARTITION_SERVICE_MISSING, {partitionId});
+  }
+  return {
+    owner,
+    partitionService: partitionService || null,
+    detach() {
+      if (partitionService &&
+          typeof partitionService.setRebalancerLeadershipSink === 'function') {
+        partitionService.setRebalancerLeadershipSink(null);
+      }
+      owner.shutdown();
+    },
+  };
+}
+
+export {RuntimeServiceRebalancerOwner, attachRuntimeServiceRebalancerOwner};
