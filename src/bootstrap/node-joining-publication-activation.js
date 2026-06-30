@@ -75,6 +75,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     await this.triggerJoinReconciler(
       JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
     );
+    await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
     await this.activateJoinPartitionServiceRows(
       restorePlans.map(({replicaId}) => replicaId),
     );
@@ -92,6 +93,32 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       },
     );
     return restorePlans;
+  }
+  /**
+   * Ensure the restore batch has concrete local runtimes before publication.
+   * The generic reconciler records action failures without throwing; durable
+   * rejoin owns this exact-runtime invariant before activating service rows.
+   * @param {Object[]} restorePlans
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureDurableRejoinPartitionRuntimes(restorePlans = []) {
+    for (const restorePlan of restorePlans) {
+      const replicaId = restorePlan?.replicaId;
+      if (typeof replicaId !== TYPEOF.STRING || replicaId.length === NUM.ZERO) {
+        continue;
+      }
+      const partition = this.partitionServices.get(replicaId);
+      if (partition && partition.initialized !== false) {
+        continue;
+      }
+      await this.createJoinPartitionReplica({replicaOptions: restorePlan});
+      const readyPartition = this.partitionServices.get(replicaId);
+      assertCritical(
+        readyPartition && readyPartition.initialized !== false,
+        `Durable rejoin restore requires initialized partition runtime for ${replicaId}`,
+      );
+    }
   }
   /**
    * Start elections for restored durable partition replicas once the batch
