@@ -2,27 +2,20 @@
 
 Status: active
 
-## ⏸️ RESUME HERE — RUNTIME_SERVICE owner wiring HELD (2026-06-30)
+## ▶️ RESUME HERE — RUNTIME_SERVICE owner LANDED (2026-06-30)
 
-**Decision (operator): option (b)** — keep the owner *wiring* parked until the parallel
-rolling-restart convergence work reaches a checkpoint, then land it + finish the residuals. The
-wiring activates runtime-service placement on every cluster and would skew the parallel convergence
-gates, so it is NOT on `main`.
-
-LANDED on `main` (all inert/safe — do nothing until the wiring drives them):
+The owner + wiring are now on `main`. Runtime services are first-class replicated entities placed by
+the unified rebalancer. Commits:
 - `6903b2ff` step 1 entity-aware `getRuntimeServicePolicy` (desired = `replica_count`)
-- `6c7e324a` step 2 `RuntimeServiceRebalancerOwner` module (+ attach fn was added later, now in the held set)
+- `6c7e324a` step 2 `RuntimeServiceRebalancerOwner` module
 - `badae79f` descriptor fix (snake→camel `runtime_kind`; runtime-service create ALWAYS failed without it)
+- `90cb4da3` steps 3-5 wiring (leadership-sink on PartitionService + attach to `service_definitions-p1`)
 
-HELD (steps 3-5 wiring, BUILT + TESTED 109/109+23/23 + LIVE-PROVEN to drive pgwire ADD placement):
-- Stash: `git stash list` → the entry messaged "RUNTIME_SERVICE owner WIRING (steps 3-5)".
-- Durable backup (stash can shift in a shared repo): `memory/lagrange-owner-wiring.patch` (8 files, 279+/-2).
-- **Restore:** `git stash pop` (preferred) OR `git apply <memory>/lagrange-owner-wiring.patch`.
-- Files: bootstrap seed+join attach calls, `runtime-service-rebalancer-setup.js` attach fn, partition
-  core-base (leadership-sink hook), partition lifecycle (quiesce sink), partition rebalancer-methods
-  (drive sink from `maybeInitializeRebalancer`), + the owner/partition sink tests.
+Live-proven: owner attaches, gains leadership, plans+dispatches pgwire ADD ops (placement attempted;
+W0b: never). Tests green (owner+attach 23/23, partition characterization 109/109, no regression).
+Convergence-safe: off the priority lane; the formation stall is the pre-existing one, not owner-caused.
 
-RESIDUALS to finish when landing:
+REMAINING WORK (the next session picks up here):
 1. **Formation budget**: runtime-services are non-priority, so the global in-flight move budget starves
    them (`budget_exceeded`) until the control plane settles past the pre-existing formation stall
    (`snapshot_coverage_unavailable`, SAME as W0b — owner did NOT cause it). On a settled cluster pgwire
