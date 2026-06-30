@@ -16,15 +16,16 @@
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: leadership_unstable
+- Owner: operation_workflow_owner
+- Boundary: workflow_progress
+- Dominant reason: priority_recovery_workflow_progress_event_driven
 - Mechanism: transition_gap
-- Movement: same blocker remains: leadership_unstable
-- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
-- Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
-- Next move: continue supervised step for rolling-restart-core-stability-main
-- No longer current: Do not claim parent statistical closure from the leadership-quiescence child; do not reopen prior run4 spread/drain/join theories from this retained leadership sample.
+- Movement: narrowed: leadership_unstable -> operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven
+- Latest evidence: test-output/reports/stat-gate-20260630T205718Z-run3.report.json
+- Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for rolling-restart-core-stability-main
+- Oscillation: blocker "operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven" revisited 3x (whack-a-mole; change strategy)
+- No longer current: leadership_unstable; Do not claim parent statistical closure from the leadership-quiescence child; do not reopen prior run4 spread/drain/join theories from this retained leadership sample.
 
 ## Continuation
 - Status: blocked-scope
@@ -431,6 +432,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 100 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 1 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-core-stability-main**: Latest retained run4 leadership_unstable sample stat-gate-20260630T173805Z-run3 is now split to and deterministically addressed by rolling-restart-run4-leadership-quiescence-signature (commit 6e39ff16). This does not claim parent Wilson/statistical closure for rolling-restart-core-stability; it only removes the deterministic stable-window accounting residual from the next run4 measurement frontier. (rules out: Do not claim parent statistical closure from the leadership-quiescence child; do not reopen prior run4 spread/drain/join theories from this retained leadership sample.) [solve/report/rolling-restart-run4-leadership-quiescence-signature.md]
+- **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T205718Z-run3.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: priority_recovery_workflow_progress_event_driven. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T205718Z-run3.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -534,7 +536,7 @@
 - **theory-20260618-final-consistency-forced-repair-bounded-fallback** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism Forced final consistency probes can be downgraded by the admin bounded snapshot deadline into raw local-cache publication observations, so stale publication epochs are compared as final truth., owner test/distributed/harness,src/admin, boundary final_consistency_authoritative_observation, modelGate npm run model:contracts
 - **theory-20260618-combined-cache-stale-replica-op-repair-scope** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism Forced authoritative repair scopes combined cache_stale_watermark plus stale_replica_operations_in_flight down to replica_operations only, leaving stale partition leader authority rows visible to final consistency., owner src/admin, boundary authoritative_discovery_repair_table_scope, modelGate npm run model:contracts
 - **theory-20260618-join-failure-early-admin-runtime-cleanup** [active] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism A retry or second join incarnation after a join failure can keep the early local admin runtime bound to port 8081 because the join failure branch shuts down BootstrapAPI but does not shut down the admin runtime composition created by notifyLocalAdminRuntimeReady; the next join attempt reaches admin runtime initialization and fails with EADDRINUSE, killing the joiner and surfacing as publication_missing_active_node., owner src/bootstrap, boundary join_failure_runtime_cleanup, modelGate npm run model:contracts
-- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak** [supported] frontier, frontier rolling-restart-core-stability-main, layer topology, mechanism The analyzer projects publication_missing_active_node under operation_workflow_owner/workflow_progress, but the cited run's primary hard event is a joiner NODE_EXIT: the second join attempt starts early local admin runtime and fails with EADDRINUSE on 0.0.0.0:8081 because the previous unsuccessful join only shut down BootstrapAPI, leaving the early admin runtime bound. The missing active node and publication topology blocker are downstream of that joiner process exit., owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak** [falsified] frontier, frontier rolling-restart-core-stability-main, layer topology, mechanism The analyzer projects publication_missing_active_node under operation_workflow_owner/workflow_progress, but the cited run's primary hard event is a joiner NODE_EXIT: the second join attempt starts early local admin runtime and fails with EADDRINUSE on 0.0.0.0:8081 because the previous unsuccessful join only shut down BootstrapAPI, leaving the early admin runtime bound. The missing active node and publication topology blocker are downstream of that joiner process exit., owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 
 ## Selected Theories
 - **rolling-restart-core-stability-main**: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
@@ -754,6 +756,7 @@
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260619T112313Z-run1.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260619T112313Z-run2.report.json]
 - **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: supported (scenario=improved, theory=supported, movement=same) [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260630T205718Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

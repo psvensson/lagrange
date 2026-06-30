@@ -9,7 +9,6 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_BLOCKER_REASON,
-  PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ABSENT_SOURCE_STATE_BY_WORKFLOW_STEP,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES,
@@ -188,8 +187,12 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     completionState,
     priorityRecoveryContext,
   ) {
+    const completionAccepted =
+      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
+        completionState,
+      );
     const targetSatisfied =
-      completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED &&
+      completionAccepted &&
       this.isPriorityRecoveryAddOperationDrainTargetSatisfied(
         operation,
         priorityRecoveryContext,
