@@ -1342,6 +1342,175 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
     );
   });
 
+  test(
+    'Unit: waitForControlPlaneQuiescence extends near-closed stable window',
+    async () => {
+      const STABLE_WINDOW_MS = 100;
+      const TIMEOUT_MS = 105;
+      const PROBE_START_MS = 1000;
+      const NEAR_READY_ADVANCE_MS = 95;
+      const DEADLINE_CROSSING_ADVANCE_MS = 900;
+      const PARTITION_ID = 'replica_operations-p1';
+      const NODE_ID = 'seed-a';
+
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      let currentNowMs = PROBE_START_MS;
+      let probeCallCount = 0;
+      let sleepCallCount = 0;
+      cluster._probeControlPlaneQuiescenceSnapshot = async () => {
+        probeCallCount += 1;
+        return {
+          nodeId: NODE_ID,
+          capturedAtMs: currentNowMs,
+          inFlightCount: 0,
+          staleInFlightCount: 0,
+          cacheVisibleSatisfiedPriorityRecoveryOperationCount: 0,
+          additionalInFlightDiscountCount: 0,
+          partitionGroupInFlight: {},
+          leaderSignature: JSON.stringify([[PARTITION_ID, NODE_ID]]),
+          leaderCount: 1,
+          operationTimelineSignature: JSON.stringify([]),
+          replicaOperationRows: [],
+          inFlightOperationIds: [],
+          operationTimelineById: {},
+          controlPlaneDiagnostics: {},
+          cdcProjectionVisibleSatisfied: true,
+          controlPlanePressureSignals: [],
+          error: null,
+        };
+      };
+      cluster._probeCriticalSystemTopology = async () => ({
+        enabled: true,
+        ready: true,
+        observationState: 'available',
+        readyTableCount: 1,
+        snapshotLaneUnavailableTableCount: 0,
+        requiredDistinctNodeCount: 1,
+        totalSpreadGap: 0,
+        tables: [],
+      });
+      cluster._sleep = async () => {
+        sleepCallCount += 1;
+        currentNowMs += sleepCallCount === 1 ?
+          NEAR_READY_ADVANCE_MS :
+          DEADLINE_CROSSING_ADVANCE_MS;
+      };
+      cluster._collectFailureLogs = async () => {
+        throw new Error('near-closed stable window should not fail');
+      };
+
+      const originalDateNow = Date.now;
+      Date.now = () => currentNowMs;
+      try {
+        const result = await cluster.waitForControlPlaneQuiescence({
+          stableWindowMs: STABLE_WINDOW_MS,
+          timeoutMs: TIMEOUT_MS,
+          noProgressTimeoutMs: 0,
+          maxInFlightCount: 0,
+          ignoreStaleInFlightReplicaOperations: true,
+        });
+
+        assert.equal(result.stableElapsedMs, 995);
+        assert.equal(result.leaderQuietElapsedMs, 995);
+        assert.equal(probeCallCount, 3);
+      } finally {
+        Date.now = originalDateNow;
+      }
+    },
+  );
+
+  test(
+    'Unit: waitForControlPlaneQuiescence does not extend absent leaders',
+    async () => {
+      const STABLE_WINDOW_MS = 100;
+      const TIMEOUT_MS = 105;
+      const PROBE_START_MS = 1000;
+      const NEAR_READY_ADVANCE_MS = 95;
+      const DEADLINE_CROSSING_ADVANCE_MS = 900;
+      const NODE_ID = 'seed-a';
+
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      let currentNowMs = PROBE_START_MS;
+      let probeCallCount = 0;
+      let sleepCallCount = 0;
+      cluster._probeControlPlaneQuiescenceSnapshot = async () => {
+        probeCallCount += 1;
+        return {
+          nodeId: NODE_ID,
+          capturedAtMs: currentNowMs,
+          inFlightCount: 0,
+          staleInFlightCount: 0,
+          cacheVisibleSatisfiedPriorityRecoveryOperationCount: 0,
+          additionalInFlightDiscountCount: 0,
+          partitionGroupInFlight: {},
+          leaderSignature: JSON.stringify([]),
+          leaderCount: 0,
+          operationTimelineSignature: JSON.stringify([]),
+          replicaOperationRows: [],
+          inFlightOperationIds: [],
+          operationTimelineById: {},
+          controlPlaneDiagnostics: {},
+          cdcProjectionVisibleSatisfied: true,
+          controlPlanePressureSignals: [],
+          error: null,
+        };
+      };
+      cluster._probeCriticalSystemTopology = async () => ({
+        enabled: true,
+        ready: true,
+        observationState: 'available',
+        readyTableCount: 1,
+        snapshotLaneUnavailableTableCount: 0,
+        requiredDistinctNodeCount: 1,
+        totalSpreadGap: 0,
+        tables: [],
+      });
+      cluster._sleep = async () => {
+        sleepCallCount += 1;
+        currentNowMs += sleepCallCount === 1 ?
+          NEAR_READY_ADVANCE_MS :
+          DEADLINE_CROSSING_ADVANCE_MS;
+      };
+      let collected = false;
+      cluster._collectFailureLogs = async () => {
+        collected = true;
+      };
+
+      const originalDateNow = Date.now;
+      Date.now = () => currentNowMs;
+      try {
+        await assert.rejects(
+          async () => cluster.waitForControlPlaneQuiescence({
+            stableWindowMs: STABLE_WINDOW_MS,
+            timeoutMs: TIMEOUT_MS,
+            noProgressTimeoutMs: 0,
+            maxInFlightCount: 0,
+            ignoreStaleInFlightReplicaOperations: true,
+          }),
+          (error) => {
+            assert.ok(collected, 'should collect failure logs before throwing');
+            assert.match(error.message, /Control plane did not quiesce/i);
+            assert.equal(probeCallCount, 2);
+            assert.equal(error.quiescence.leaderQuietElapsedMs, 95);
+            return true;
+          },
+        );
+      } finally {
+        Date.now = originalDateNow;
+      }
+    },
+  );
+
   test('Unit: waitForControlPlaneQuiescence surfaces timeout diagnostics',
     async () => {
       const STALE_IN_FLIGHT_COUNT = 1;
@@ -1959,11 +2128,11 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
                 effectiveInFlight: row.effectiveInFlight,
               }),
             ), [{
-            operationId: QUIESCENCE_RESET_OPERATION_ID,
-            partitionId: QUIESCENCE_RESET_PARTITION_ID,
-            stale: true,
-            effectiveInFlight: false,
-          }]);
+              operationId: QUIESCENCE_RESET_OPERATION_ID,
+              partitionId: QUIESCENCE_RESET_PARTITION_ID,
+              stale: true,
+              effectiveInFlight: false,
+            }]);
             return true;
           },
         );

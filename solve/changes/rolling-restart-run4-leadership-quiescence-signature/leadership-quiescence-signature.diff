@@ -1,0 +1,413 @@
+diff --git a/test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js b/test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js
+index 9e6b44ab..e4aa4952 100644
+--- a/test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js
+@@ -1342,6 +1342,175 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
+     );
+   });
+ 
++  test(
++    'Unit: waitForControlPlaneQuiescence extends near-closed stable window',
++    async () => {
++      const STABLE_WINDOW_MS = 100;
++      const TIMEOUT_MS = 105;
++      const PROBE_START_MS = 1000;
++      const NEAR_READY_ADVANCE_MS = 95;
++      const DEADLINE_CROSSING_ADVANCE_MS = 900;
++      const PARTITION_ID = 'replica_operations-p1';
++      const NODE_ID = 'seed-a';
++
++      const cluster = createCluster({
++        size: 3,
++        docker: {socketPath: '/var/run/docker.sock'},
++        image: 'distributed-db:test',
++      });
++
++      let currentNowMs = PROBE_START_MS;
++      let probeCallCount = 0;
++      let sleepCallCount = 0;
++      cluster._probeControlPlaneQuiescenceSnapshot = async () => {
++        probeCallCount += 1;
++        return {
++          nodeId: NODE_ID,
++          capturedAtMs: currentNowMs,
++          inFlightCount: 0,
++          staleInFlightCount: 0,
++          cacheVisibleSatisfiedPriorityRecoveryOperationCount: 0,
++          additionalInFlightDiscountCount: 0,
++          partitionGroupInFlight: {},
++          leaderSignature: JSON.stringify([[PARTITION_ID, NODE_ID]]),
++          leaderCount: 1,
++          operationTimelineSignature: JSON.stringify([]),
++          replicaOperationRows: [],
++          inFlightOperationIds: [],
++          operationTimelineById: {},
++          controlPlaneDiagnostics: {},
++          cdcProjectionVisibleSatisfied: true,
++          controlPlanePressureSignals: [],
++          error: null,
++        };
++      };
++      cluster._probeCriticalSystemTopology = async () => ({
++        enabled: true,
++        ready: true,
++        observationState: 'available',
++        readyTableCount: 1,
++        snapshotLaneUnavailableTableCount: 0,
++        requiredDistinctNodeCount: 1,
++        totalSpreadGap: 0,
++        tables: [],
++      });
++      cluster._sleep = async () => {
++        sleepCallCount += 1;
++        currentNowMs += sleepCallCount === 1 ?
++          NEAR_READY_ADVANCE_MS :
++          DEADLINE_CROSSING_ADVANCE_MS;
++      };
++      cluster._collectFailureLogs = async () => {
++        throw new Error('near-closed stable window should not fail');
++      };
++
++      const originalDateNow = Date.now;
++      Date.now = () => currentNowMs;
++      try {
++        const result = await cluster.waitForControlPlaneQuiescence({
++          stableWindowMs: STABLE_WINDOW_MS,
++          timeoutMs: TIMEOUT_MS,
++          noProgressTimeoutMs: 0,
++          maxInFlightCount: 0,
++          ignoreStaleInFlightReplicaOperations: true,
++        });
++
++        assert.equal(result.stableElapsedMs, 995);
++        assert.equal(result.leaderQuietElapsedMs, 995);
++        assert.equal(probeCallCount, 3);
++      } finally {
++        Date.now = originalDateNow;
++      }
++    },
++  );
++
++  test(
++    'Unit: waitForControlPlaneQuiescence does not extend absent leaders',
++    async () => {
++      const STABLE_WINDOW_MS = 100;
++      const TIMEOUT_MS = 105;
++      const PROBE_START_MS = 1000;
++      const NEAR_READY_ADVANCE_MS = 95;
++      const DEADLINE_CROSSING_ADVANCE_MS = 900;
++      const NODE_ID = 'seed-a';
++
++      const cluster = createCluster({
++        size: 3,
++        docker: {socketPath: '/var/run/docker.sock'},
++        image: 'distributed-db:test',
++      });
++
++      let currentNowMs = PROBE_START_MS;
++      let probeCallCount = 0;
++      let sleepCallCount = 0;
++      cluster._probeControlPlaneQuiescenceSnapshot = async () => {
++        probeCallCount += 1;
++        return {
++          nodeId: NODE_ID,
++          capturedAtMs: currentNowMs,
++          inFlightCount: 0,
++          staleInFlightCount: 0,
++          cacheVisibleSatisfiedPriorityRecoveryOperationCount: 0,
++          additionalInFlightDiscountCount: 0,
++          partitionGroupInFlight: {},
++          leaderSignature: JSON.stringify([]),
++          leaderCount: 0,
++          operationTimelineSignature: JSON.stringify([]),
++          replicaOperationRows: [],
++          inFlightOperationIds: [],
++          operationTimelineById: {},
++          controlPlaneDiagnostics: {},
++          cdcProjectionVisibleSatisfied: true,
++          controlPlanePressureSignals: [],
++          error: null,
++        };
++      };
++      cluster._probeCriticalSystemTopology = async () => ({
++        enabled: true,
++        ready: true,
++        observationState: 'available',
++        readyTableCount: 1,
++        snapshotLaneUnavailableTableCount: 0,
++        requiredDistinctNodeCount: 1,
++        totalSpreadGap: 0,
++        tables: [],
++      });
++      cluster._sleep = async () => {
++        sleepCallCount += 1;
++        currentNowMs += sleepCallCount === 1 ?
++          NEAR_READY_ADVANCE_MS :
++          DEADLINE_CROSSING_ADVANCE_MS;
++      };
++      let collected = false;
++      cluster._collectFailureLogs = async () => {
++        collected = true;
++      };
++
++      const originalDateNow = Date.now;
++      Date.now = () => currentNowMs;
++      try {
++        await assert.rejects(
++          async () => cluster.waitForControlPlaneQuiescence({
++            stableWindowMs: STABLE_WINDOW_MS,
++            timeoutMs: TIMEOUT_MS,
++            noProgressTimeoutMs: 0,
++            maxInFlightCount: 0,
++            ignoreStaleInFlightReplicaOperations: true,
++          }),
++          (error) => {
++            assert.ok(collected, 'should collect failure logs before throwing');
++            assert.match(error.message, /Control plane did not quiesce/i);
++            assert.equal(probeCallCount, 2);
++            assert.equal(error.quiescence.leaderQuietElapsedMs, 95);
++            return true;
++          },
++        );
++      } finally {
++        Date.now = originalDateNow;
++      }
++    },
++  );
++
+   test('Unit: waitForControlPlaneQuiescence surfaces timeout diagnostics',
+     async () => {
+       const STALE_IN_FLIGHT_COUNT = 1;
+@@ -1959,11 +2128,11 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
+                 effectiveInFlight: row.effectiveInFlight,
+               }),
+             ), [{
+-            operationId: QUIESCENCE_RESET_OPERATION_ID,
+-            partitionId: QUIESCENCE_RESET_PARTITION_ID,
+-            stale: true,
+-            effectiveInFlight: false,
+-          }]);
++              operationId: QUIESCENCE_RESET_OPERATION_ID,
++              partitionId: QUIESCENCE_RESET_PARTITION_ID,
++              stale: true,
++              effectiveInFlight: false,
++            }]);
+             return true;
+           },
+         );
+diff --git a/test/distributed/harness/cluster-class-quiescence.js b/test/distributed/harness/cluster-class-quiescence.js
+index 5bb1e49d..1e8209c5 100644
+--- a/test/distributed/harness/cluster-class-quiescence.js
++++ b/test/distributed/harness/cluster-class-quiescence.js
+@@ -5,6 +5,7 @@ import {
+ import {
+   buildControlPlaneQuiescenceCandidateWindowReset,
+   buildControlPlaneQuiescenceSnapshot,
++  CONTROL_PLANE_QUIESCENCE_REASON,
+ } from './control-plane-quiescence-snapshot.js';
+ import {
+   buildOracleBlindFailureMessage,
+@@ -63,6 +64,10 @@ import {ClusterLoadOrchestration} from './cluster-class-load-orchestration.js';
+ const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
+ const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
+ const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
++const QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS = 100;
++const QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_NUMERATOR = 1;
++const QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_DENOMINATOR = 10;
++const QUIESCENCE_STABLE_WINDOW_EXTENSION_MIN_REMAINING_MS = 1;
+ 
+ function normalizeQuiescenceOperationIdSet(operationIds) {
+   return new Set(
+@@ -104,6 +109,79 @@ function hasCompleteQuiescenceReplicaOperationDrainRowCoverage(
+   );
+ }
+ 
++function buildQuiescenceStableWindowDeadlineExtension({
++  deadline,
++  intervalMs,
++  lastResult,
++  stableWindowMs,
++}) {
++  if (
++    !lastResult ||
++    lastResult.criticalSystemTopology?.ready !== true ||
++    lastResult.effectiveInFlightCount !== ZERO ||
++    !Number.isInteger(lastResult.leaderCount) ||
++    lastResult.leaderCount <= ZERO ||
++    Array.isArray(lastResult.controlPlanePressureSignals) &&
++      lastResult.controlPlanePressureSignals.length > ZERO
++  ) {
++    return null;
++  }
++  const reasonCodes = Array.isArray(lastResult.reasonCodes) ?
++    lastResult.reasonCodes :
++    [];
++  const onlyStableWindowReasons =
++    reasonCodes.length > ZERO &&
++    reasonCodes.every((reasonCode) =>
++      reasonCode === CONTROL_PLANE_QUIESCENCE_REASON.LEADERSHIP_UNSTABLE,
++    );
++  if (onlyStableWindowReasons !== true) {
++    return null;
++  }
++  const stableElapsedMs = Number.isFinite(lastResult.stableElapsedMs) ?
++    Math.floor(lastResult.stableElapsedMs) :
++    ZERO;
++  const leaderQuietElapsedMs = Number.isFinite(lastResult.leaderQuietElapsedMs) ?
++    Math.floor(lastResult.leaderQuietElapsedMs) :
++    ZERO;
++  const remainingStableWindowMs = Math.max(
++    ZERO,
++    stableWindowMs - stableElapsedMs,
++  );
++  const remainingLeaderWindowMs = Math.max(
++    ZERO,
++    stableWindowMs - leaderQuietElapsedMs,
++  );
++  const effectiveRemainingStableWindowMs = stableElapsedMs > ZERO ?
++    remainingStableWindowMs :
++    remainingLeaderWindowMs;
++  const nowMs = Date.now();
++  const deadlineOvershootMs = Math.max(ZERO, nowMs - deadline);
++  const extensionWindowMs = intervalMs +
++    QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS;
++  const nearClosedWindowMs = Math.max(
++    QUIESCENCE_STABLE_WINDOW_EXTENSION_MIN_REMAINING_MS,
++    Math.ceil(
++      stableWindowMs *
++        QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_NUMERATOR /
++        QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_DENOMINATOR,
++    ),
++  );
++  if (
++    effectiveRemainingStableWindowMs === ZERO ||
++    effectiveRemainingStableWindowMs > extensionWindowMs ||
++    effectiveRemainingStableWindowMs > nearClosedWindowMs ||
++    remainingLeaderWindowMs > extensionWindowMs ||
++    remainingLeaderWindowMs > nearClosedWindowMs ||
++    deadlineOvershootMs > extensionWindowMs
++  ) {
++    return null;
++  }
++  const extendedDeadline = nowMs +
++    effectiveRemainingStableWindowMs +
++    QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS;
++  return {deadline: extendedDeadline};
++}
++
+ function buildQuiescenceReplicaOperationDrainRows(
+   snapshotProbe,
+   criticalSystemTopology,
+@@ -234,6 +312,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+     let maxLeaderQuietElapsedMs = ZERO;
+     let lowestCriticalSystemSpreadGap = Number.POSITIVE_INFINITY;
+     let highestCriticalSystemReadyTableCount = ZERO;
++    let lastCriticalSystemProgressAtMs = Date.now();
+     let lastOperationTimelineSignature = null;
+     let lastOperationProgressAtMs = Date.now();
+     let candidateWindowReset = null;
+@@ -351,14 +430,13 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+             adjustedSnapshotProbe.operationTimelineSignature !== null &&
+             adjustedSnapshotProbe.operationTimelineSignature !==
+               lastOperationTimelineSignature;
+-          const candidateWindowStartedAtMs =
+-            stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs;
+           let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+             snapshotProbe: adjustedSnapshotProbe,
+             criticalSystemTopology,
+             leaderQuietElapsedMs,
+             nowMs,
+-            stableWindowStartedAtMs: candidateWindowStartedAtMs,
++            stableWindowStartedAtMs:
++              stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs,
+             stableWindowMs,
+             maxInFlightCount,
+             ignoreStaleInFlightReplicaOperations:
+@@ -374,26 +452,46 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+           const operationProgressObserved =
+             progressInFlightCount < lowestInFlightCount ||
+             operationTimelineChanged;
+-          if (operationProgressObserved) {
+-            quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+-              snapshotProbe: adjustedSnapshotProbe,
+-              criticalSystemTopology,
+-              leaderQuietElapsedMs,
+-              nowMs,
+-              stableWindowStartedAtMs: candidateWindowStartedAtMs,
+-              stableWindowMs,
+-              maxInFlightCount,
+-              ignoreStaleInFlightReplicaOperations:
+-                options.ignoreStaleInFlightReplicaOperations === true,
+-              operationNoProgressElapsedMs: ZERO,
+-              operationNoProgressTimeoutMs: noProgressTimeoutMs,
+-              candidateWindowReset,
+-            });
+-          }
++          const criticalSystemSpreadProgressObserved =
++            criticalSystemTopology.enabled === true &&
++            (
++              criticalSystemTopology.totalSpreadGap <
++                lowestCriticalSystemSpreadGap ||
++              criticalSystemTopology.readyTableCount >
++                highestCriticalSystemReadyTableCount
++            );
++          const inferredStableWindowStartedAtMs =
++            stableWindowStartedAtMs === null ?
++              Math.max(
++                lastLeaderChangeAtMs,
++                lastOperationProgressAtMs,
++                lastCriticalSystemProgressAtMs,
++              ) :
++              stableWindowStartedAtMs;
++          const stableWindowProgressObserved =
++            operationProgressObserved || criticalSystemSpreadProgressObserved;
++          const candidateStableWindowStartedAtMs =
++            stableWindowProgressObserved ? nowMs : inferredStableWindowStartedAtMs;
++          quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
++            snapshotProbe: adjustedSnapshotProbe,
++            criticalSystemTopology,
++            leaderQuietElapsedMs,
++            nowMs,
++            stableWindowStartedAtMs: candidateStableWindowStartedAtMs,
++            stableWindowMs,
++            maxInFlightCount,
++            ignoreStaleInFlightReplicaOperations:
++              options.ignoreStaleInFlightReplicaOperations === true,
++            operationNoProgressElapsedMs: operationProgressObserved ?
++              ZERO :
++              nowMs - lastOperationProgressAtMs,
++            operationNoProgressTimeoutMs: noProgressTimeoutMs,
++            candidateWindowReset,
++          });
+ 
+           if (quiescenceSnapshot.ready) {
+             if (stableWindowStartedAtMs === null) {
+-              stableWindowStartedAtMs = nowMs;
++              stableWindowStartedAtMs = candidateStableWindowStartedAtMs;
+             }
+           } else {
+             stableWindowStartedAtMs = null;
+@@ -449,6 +547,9 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+                 criticalSystemTopology.readyTableCount;
+               progressObserved = true;
+             }
++            if (criticalSystemSpreadProgressObserved) {
++              lastCriticalSystemProgressAtMs = nowMs;
++            }
+           }
+           if (progressObserved) {
+             lastProgressAtMs = nowMs;
+@@ -540,6 +641,13 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+         },
+         isSuccess: (result) =>
+           result.ready === true && result.stableElapsedMs >= stableWindowMs,
++        extendDeadline: ({deadline: currentDeadline, lastResult}) =>
++          buildQuiescenceStableWindowDeadlineExtension({
++            deadline: currentDeadline,
++            intervalMs: ACTIVE_POLL_INTERVAL_MS,
++            lastResult,
++            stableWindowMs,
++          }),
+         onAttempt: ({lastResult}) => {
+           for (const reason of lastResult?.reasons || []) {
+             instabilitySummaryCounts.set(

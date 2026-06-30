@@ -5,6 +5,7 @@ import {
 import {
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
+  CONTROL_PLANE_QUIESCENCE_REASON,
 } from './control-plane-quiescence-snapshot.js';
 import {
   buildOracleBlindFailureMessage,
@@ -63,6 +64,10 @@ import {ClusterLoadOrchestration} from './cluster-class-load-orchestration.js';
 const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
+const QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS = 100;
+const QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_NUMERATOR = 1;
+const QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_DENOMINATOR = 10;
+const QUIESCENCE_STABLE_WINDOW_EXTENSION_MIN_REMAINING_MS = 1;
 
 function normalizeQuiescenceOperationIdSet(operationIds) {
   return new Set(
@@ -102,6 +107,79 @@ function hasCompleteQuiescenceReplicaOperationDrainRowCoverage(
   return [...canonicalInFlightOperationIds].every((operationId) =>
     coveredOperationIds.has(operationId),
   );
+}
+
+function buildQuiescenceStableWindowDeadlineExtension({
+  deadline,
+  intervalMs,
+  lastResult,
+  stableWindowMs,
+}) {
+  if (
+    !lastResult ||
+    lastResult.criticalSystemTopology?.ready !== true ||
+    lastResult.effectiveInFlightCount !== ZERO ||
+    !Number.isInteger(lastResult.leaderCount) ||
+    lastResult.leaderCount <= ZERO ||
+    Array.isArray(lastResult.controlPlanePressureSignals) &&
+      lastResult.controlPlanePressureSignals.length > ZERO
+  ) {
+    return null;
+  }
+  const reasonCodes = Array.isArray(lastResult.reasonCodes) ?
+    lastResult.reasonCodes :
+    [];
+  const onlyStableWindowReasons =
+    reasonCodes.length > ZERO &&
+    reasonCodes.every((reasonCode) =>
+      reasonCode === CONTROL_PLANE_QUIESCENCE_REASON.LEADERSHIP_UNSTABLE,
+    );
+  if (onlyStableWindowReasons !== true) {
+    return null;
+  }
+  const stableElapsedMs = Number.isFinite(lastResult.stableElapsedMs) ?
+    Math.floor(lastResult.stableElapsedMs) :
+    ZERO;
+  const leaderQuietElapsedMs = Number.isFinite(lastResult.leaderQuietElapsedMs) ?
+    Math.floor(lastResult.leaderQuietElapsedMs) :
+    ZERO;
+  const remainingStableWindowMs = Math.max(
+    ZERO,
+    stableWindowMs - stableElapsedMs,
+  );
+  const remainingLeaderWindowMs = Math.max(
+    ZERO,
+    stableWindowMs - leaderQuietElapsedMs,
+  );
+  const effectiveRemainingStableWindowMs = stableElapsedMs > ZERO ?
+    remainingStableWindowMs :
+    remainingLeaderWindowMs;
+  const nowMs = Date.now();
+  const deadlineOvershootMs = Math.max(ZERO, nowMs - deadline);
+  const extensionWindowMs = intervalMs +
+    QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS;
+  const nearClosedWindowMs = Math.max(
+    QUIESCENCE_STABLE_WINDOW_EXTENSION_MIN_REMAINING_MS,
+    Math.ceil(
+      stableWindowMs *
+        QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_NUMERATOR /
+        QUIESCENCE_STABLE_WINDOW_EXTENSION_MAX_REMAINING_DENOMINATOR,
+    ),
+  );
+  if (
+    effectiveRemainingStableWindowMs === ZERO ||
+    effectiveRemainingStableWindowMs > extensionWindowMs ||
+    effectiveRemainingStableWindowMs > nearClosedWindowMs ||
+    remainingLeaderWindowMs > extensionWindowMs ||
+    remainingLeaderWindowMs > nearClosedWindowMs ||
+    deadlineOvershootMs > extensionWindowMs
+  ) {
+    return null;
+  }
+  const extendedDeadline = nowMs +
+    effectiveRemainingStableWindowMs +
+    QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS;
+  return {deadline: extendedDeadline};
 }
 
 function buildQuiescenceReplicaOperationDrainRows(
@@ -234,6 +312,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     let maxLeaderQuietElapsedMs = ZERO;
     let lowestCriticalSystemSpreadGap = Number.POSITIVE_INFINITY;
     let highestCriticalSystemReadyTableCount = ZERO;
+    let lastCriticalSystemProgressAtMs = Date.now();
     let lastOperationTimelineSignature = null;
     let lastOperationProgressAtMs = Date.now();
     let candidateWindowReset = null;
@@ -351,14 +430,13 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
             adjustedSnapshotProbe.operationTimelineSignature !== null &&
             adjustedSnapshotProbe.operationTimelineSignature !==
               lastOperationTimelineSignature;
-          const candidateWindowStartedAtMs =
-            stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs;
           let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
             snapshotProbe: adjustedSnapshotProbe,
             criticalSystemTopology,
             leaderQuietElapsedMs,
             nowMs,
-            stableWindowStartedAtMs: candidateWindowStartedAtMs,
+            stableWindowStartedAtMs:
+              stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs,
             stableWindowMs,
             maxInFlightCount,
             ignoreStaleInFlightReplicaOperations:
@@ -374,26 +452,46 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
           const operationProgressObserved =
             progressInFlightCount < lowestInFlightCount ||
             operationTimelineChanged;
-          if (operationProgressObserved) {
-            quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
-              snapshotProbe: adjustedSnapshotProbe,
-              criticalSystemTopology,
-              leaderQuietElapsedMs,
-              nowMs,
-              stableWindowStartedAtMs: candidateWindowStartedAtMs,
-              stableWindowMs,
-              maxInFlightCount,
-              ignoreStaleInFlightReplicaOperations:
-                options.ignoreStaleInFlightReplicaOperations === true,
-              operationNoProgressElapsedMs: ZERO,
-              operationNoProgressTimeoutMs: noProgressTimeoutMs,
-              candidateWindowReset,
-            });
-          }
+          const criticalSystemSpreadProgressObserved =
+            criticalSystemTopology.enabled === true &&
+            (
+              criticalSystemTopology.totalSpreadGap <
+                lowestCriticalSystemSpreadGap ||
+              criticalSystemTopology.readyTableCount >
+                highestCriticalSystemReadyTableCount
+            );
+          const inferredStableWindowStartedAtMs =
+            stableWindowStartedAtMs === null ?
+              Math.max(
+                lastLeaderChangeAtMs,
+                lastOperationProgressAtMs,
+                lastCriticalSystemProgressAtMs,
+              ) :
+              stableWindowStartedAtMs;
+          const stableWindowProgressObserved =
+            operationProgressObserved || criticalSystemSpreadProgressObserved;
+          const candidateStableWindowStartedAtMs =
+            stableWindowProgressObserved ? nowMs : inferredStableWindowStartedAtMs;
+          quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+            snapshotProbe: adjustedSnapshotProbe,
+            criticalSystemTopology,
+            leaderQuietElapsedMs,
+            nowMs,
+            stableWindowStartedAtMs: candidateStableWindowStartedAtMs,
+            stableWindowMs,
+            maxInFlightCount,
+            ignoreStaleInFlightReplicaOperations:
+              options.ignoreStaleInFlightReplicaOperations === true,
+            operationNoProgressElapsedMs: operationProgressObserved ?
+              ZERO :
+              nowMs - lastOperationProgressAtMs,
+            operationNoProgressTimeoutMs: noProgressTimeoutMs,
+            candidateWindowReset,
+          });
 
           if (quiescenceSnapshot.ready) {
             if (stableWindowStartedAtMs === null) {
-              stableWindowStartedAtMs = nowMs;
+              stableWindowStartedAtMs = candidateStableWindowStartedAtMs;
             }
           } else {
             stableWindowStartedAtMs = null;
@@ -448,6 +546,9 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
               highestCriticalSystemReadyTableCount =
                 criticalSystemTopology.readyTableCount;
               progressObserved = true;
+            }
+            if (criticalSystemSpreadProgressObserved) {
+              lastCriticalSystemProgressAtMs = nowMs;
             }
           }
           if (progressObserved) {
@@ -540,6 +641,13 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         },
         isSuccess: (result) =>
           result.ready === true && result.stableElapsedMs >= stableWindowMs,
+        extendDeadline: ({deadline: currentDeadline, lastResult}) =>
+          buildQuiescenceStableWindowDeadlineExtension({
+            deadline: currentDeadline,
+            intervalMs: ACTIVE_POLL_INTERVAL_MS,
+            lastResult,
+            stableWindowMs,
+          }),
         onAttempt: ({lastResult}) => {
           for (const reason of lastResult?.reasons || []) {
             instabilitySummaryCounts.set(

@@ -1,0 +1,33 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "leadership-quiescence-signature-deterministic-proof",
+  "evidence": {
+    "retainedReport": "test-output/reports/stat-gate-20260630T173805Z-run3.report.json",
+    "deterministicProof": "waitForControlPlaneQuiescence now starts the stable window from the latest observed prerequisite movement when no current prerequisite moves, and grants a bounded deadline extension only when the last quiescence snapshot is critical-system ready, effective in-flight is zero, a positive leaderCount is observed, no control-plane pressure is present, and every reason code is leadership_unstable with both effective stable-window remaining and leader-window remaining near closed. The extension deadline is based on the current timeout-observation time, capped by one poll interval plus margin, so a normal ACTIVE poll sleep cannot discard the extension before the follow-up probe.",
+    "redOnRevert": "With the implementation patch reversed and the regression test retained, npx tap --grep \"extends near-closed stable window\" test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js fails because the original code times out and collects failure logs.",
+    "greenProof": "With the implementation restored, the focused grep for \"extends near-closed stable window|does not extend absent leaders|surfaces timeout diagnostics\" passes, and npm test -- test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js passes 61/61.",
+    "guardrails": [
+      "npx eslint test/distributed/harness/cluster-class-quiescence.js test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js",
+      "npm run audit:file-size -- test/distributed/harness/cluster-class-quiescence.js test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js",
+      "npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-class-quiescence.js test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js",
+      "npm run guard:guideline:constant-names:file -- test/distributed/harness/cluster-class-quiescence.js test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js",
+      "npm run model:contracts",
+      "git diff --check"
+    ]
+  },
+  "observed": {
+    "latestDominantReason": "leadership_unstable",
+    "publication": "satisfied",
+    "priorityRecovery": "satisfied",
+    "activeGateSnapshotCoverage": "satisfied",
+    "readiness": "satisfied",
+    "criticalSystemSpread": "satisfied",
+    "effectiveInFlightCount": 0,
+    "leaderQuietElapsedMs": 14885,
+    "stableWindowMs": 15000,
+    "remainingLeaderWindowMs": 115,
+    "extensionScope": "explicit leadership_unstable only; positive leaderCount; no pressure; effective in-flight zero; critical-system topology ready; remaining window within one poll plus margin and the final tenth of the stable window; no extension for absent leaders"
+  }
+}
