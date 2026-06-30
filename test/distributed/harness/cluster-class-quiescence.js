@@ -23,6 +23,7 @@ const {
   CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
   CONTAINER_RUNNING_STATUS,
   CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+  DATA_DIR_PATH,
   DOCKER_HOST_CONFIG_BINDS_KEY,
   HTTP_METHOD_GET,
   HTTP_OK_LOWER,
@@ -39,8 +40,7 @@ const {
   PLAYBACK_SCOPE_LOAD,
   PLAYBACK_SCOPE_NODE,
   PORTS,
-  REUSE_ENTRYPOINT,
-  REUSE_START_COMMAND_ARGS,
+  REUSE_CONTAINER_ABI_VERSION,
   STARTUP_GATE_WAITING_EVENT_INTERVAL,
   TIMEOUTS,
   UNKNOWN_PHASE,
@@ -1091,24 +1091,33 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     const provider = this._providers[providerIdx];
     const reuseContainers = this._isContainerReuseEnabled();
     const containerName = this._buildContainerName(nodeId, nodeIndex);
+    const reusableDataBind = reuseContainers ?
+      this._getReusableDataBind(containerName) :
+      '';
+    const reusableImageId = reuseContainers ?
+      await this._resolveReusableImageId(provider) :
+      '';
 
     const env = this._buildNodeEnv(nodeId, containerName, seedIp);
-    if (reuseContainers) {
-      await this._markReusableContainerForDataReset(containerName);
-    }
 
     const labels = {
       [LABELS.CLUSTER]: this._clusterId,
       [LABELS.NODE_ID]: nodeId,
       [LABELS.ROLE]: role,
     };
-    const dockerBinds = Array.isArray(this._config?.docker?.binds) ?
+    if (reuseContainers) {
+      labels[LABELS.REUSE_ABI] = REUSE_CONTAINER_ABI_VERSION;
+    }
+    let dockerBinds = Array.isArray(this._config?.docker?.binds) ?
       this._config.docker.binds.filter(
         (entry) => typeof entry === 'string' && entry.length > 0,
       ) :
       [];
     if (reuseContainers) {
-      dockerBinds.push(this._getReusableControlBind(containerName));
+      dockerBinds = dockerBinds.filter((entry) =>
+        !String(entry).split(':').slice(1).includes(DATA_DIR_PATH),
+      );
+      dockerBinds.push(reusableDataBind);
     }
     if (this._isFileLoggingEnabled()) {
       // Bind a host dir for the node's file-based log (non-perturbing capture).
@@ -1128,7 +1137,11 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       } catch (_inspectErr) {
         existing = null;
       }
-      if (existing && this._shouldRecreateReusableContainer(existing, env)) {
+      if (existing && this._shouldRecreateReusableContainer(existing, env, {
+        dataBind: reusableDataBind,
+        imageId: reusableImageId,
+        reuseAbiVersion: REUSE_CONTAINER_ABI_VERSION,
+      })) {
         const existingContainerId = existing.Id || existing.id || containerName;
         try {
           await provider.removeContainer(existingContainerId);
@@ -1159,6 +1172,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
               }
             }
           }
+          await this._resetReusableDataDir(containerName);
           await provider.startContainer(containerId, startTimeout);
 
           let refreshed = await provider.inspectContainer(containerId);
@@ -1215,6 +1229,9 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
 
     let result;
     try {
+      if (reuseContainers) {
+        await this._resetReusableDataDir(containerName);
+      }
       result = await provider.createContainer({
         name: containerName,
         image: this._config.image,
@@ -1224,12 +1241,6 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         resourceLimits: this._config.resourceLimits || {},
         startTimeout,
         hostConfigExtras,
-        ...(reuseContainers ?
-          {
-            entrypoint: REUSE_ENTRYPOINT,
-            command: REUSE_START_COMMAND_ARGS,
-          } :
-          {}),
       });
     } catch (err) {
       await this._collectFailureLogs();

@@ -23,10 +23,30 @@ import {
   RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 
-const REUSE_START_COMMAND =
+const REUSE_IMAGE_ENTRYPOINT = Object.freeze(['/nodejs/bin/node']);
+const REUSE_IMAGE_CMD = Object.freeze([
+  '--max-old-space-size=1536',
+  'src/index.js',
+]);
+const REUSE_CONTAINER_ABI_VERSION = 'shell-free-host-data-v1';
+const LEGACY_REUSE_START_COMMAND =
   'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
   'rm -f /harness-control/reset-data-on-start; fi; ' +
   'exec node --max-old-space-size=1536 /app/src/index.js';
+
+function buildReuseDataDir(containerName) {
+  return resolvePath('.tmp', 'reuse-data', containerName);
+}
+
+function buildReuseDataBind(containerName) {
+  return buildReuseDataDir(containerName) + ':/data';
+}
+
+function buildReuseLabels() {
+  return {
+    [LABELS.REUSE_ABI]: REUSE_CONTAINER_ABI_VERSION,
+  };
+}
 
 /**
  * Feature: distributed-testing-framework
@@ -204,8 +224,15 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
 
   // _buildNodeId now returns a deterministic UUID for reuse mode
   const reuseNodeId = cluster._buildNodeId(0);
+  const reuseContainerName = 'ddb-test-reuse-1-1';
+  const reuseDataDir = buildReuseDataDir(reuseContainerName);
+  const staleDataFile = resolvePath(reuseDataDir, 'stale.db');
+  await fs.rm(reuseDataDir, {recursive: true, force: true});
+  await fs.mkdir(reuseDataDir, {recursive: true});
+  await fs.writeFile(staleDataFile, 'stale', 'utf8');
 
   const provider = cluster._providers[0];
+  provider.inspectImage = async () => null;
   let inspectedContainerName = null;
   const stopContainerCalls = [];
   let startContainerCalls = 0;
@@ -223,8 +250,12 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
           'TRANSPORT_WS_HOST=0.0.0.0',
           `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
         ],
-        Entrypoint: ['sh', '-lc'],
-        Cmd: [REUSE_START_COMMAND],
+        Labels: buildReuseLabels(),
+        Entrypoint: REUSE_IMAGE_ENTRYPOINT,
+        Cmd: REUSE_IMAGE_CMD,
+      },
+      HostConfig: {
+        Binds: [buildReuseDataBind(reuseContainerName)],
       },
       NetworkSettings: {
         Networks: {
@@ -269,7 +300,7 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
 
   assert.strictEqual(
     inspectedContainerName,
-    'ddb-test-reuse-1-1',
+    reuseContainerName,
     'reuse mode should use deterministic container naming',
   );
   assert.strictEqual(
@@ -287,15 +318,12 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
   assert.strictEqual(node.containerId, 'existing-container-id');
   assert.strictEqual(node.ip, '10.0.0.44');
   await assert.doesNotReject(
-    fs.access(
-      resolvePath(
-        '.tmp',
-        'reuse-control',
-        'ddb-test-reuse-1-1',
-        'reset-data-on-start',
-      ),
-    ),
-    'reused containers should be marked for one-time data reset before scenario start',
+    fs.access(reuseDataDir),
+    'reused containers should keep a host-managed data directory',
+  );
+  await assert.rejects(
+    fs.access(staleDataFile),
+    'reused containers should be reset by clearing the host data directory',
   );
   assert.strictEqual(
     connectToNetworkArgs,
@@ -303,6 +331,211 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
     'already-connected reusable containers should not be reconnected',
   );
 });
+
+test('Unit: _startNode recreates legacy shell reusable container',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    cluster._networkName = 'ddb-test-net-reuse-local-1';
+    cluster._networkId = 'net-reuse-1';
+
+    const reuseNodeId = cluster._buildNodeId(0);
+    const reuseContainerName = 'ddb-test-reuse-1-1';
+    const provider = cluster._providers[0];
+    let removeContainerId = null;
+    let createContainerOptions = null;
+    provider.inspectContainerIfExists = async () => ({
+      Id: 'legacy-shell-container-id',
+      State: {Status: 'exited'},
+      Config: {
+        Env: [
+          `NODE_ID=${reuseNodeId}`,
+          'DATA_DIR=/data',
+          `NODE_ADDRESS=${reuseContainerName}:8080`,
+          'TRANSPORT_WS_HOST=0.0.0.0',
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+        ],
+        Labels: buildReuseLabels(),
+        Entrypoint: ['sh', '-lc'],
+        Cmd: [LEGACY_REUSE_START_COMMAND],
+      },
+      HostConfig: {
+        Binds: [buildReuseDataBind(reuseContainerName)],
+      },
+    });
+    provider.removeContainer = async (containerId) => {
+      removeContainerId = containerId;
+    };
+    provider.createContainer = async (options) => {
+      createContainerOptions = options;
+      return {
+        containerId: 'new-shell-free-container-id',
+        ip: '10.0.0.61',
+        name: options.name,
+      };
+    };
+
+    const node = await cluster._startNode(
+      reuseNodeId,
+      NODE_ROLES.SEED,
+      null,
+      0,
+    );
+
+    assert.strictEqual(
+      removeContainerId,
+      'legacy-shell-container-id',
+      'legacy reusable container with shell launch should be recreated',
+    );
+    assert.ok(createContainerOptions);
+    assert.strictEqual(
+      createContainerOptions.labels[LABELS.REUSE_ABI],
+      REUSE_CONTAINER_ABI_VERSION,
+    );
+    assert.strictEqual(createContainerOptions.entrypoint, undefined);
+    assert.strictEqual(createContainerOptions.command, undefined);
+    assert.strictEqual(node.containerId, 'new-shell-free-container-id');
+  });
+
+test('Unit: _startNode recreates reusable container on data bind mismatch',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    cluster._networkName = 'ddb-test-net-reuse-local-1';
+    cluster._networkId = 'net-reuse-1';
+
+    const reuseNodeId = cluster._buildNodeId(0);
+    const provider = cluster._providers[0];
+    let removeContainerId = null;
+    let createContainerOptions = null;
+    provider.inspectContainerIfExists = async () => ({
+      Id: 'wrong-data-bind-container-id',
+      State: {Status: 'exited'},
+      Config: {
+        Env: [
+          `NODE_ID=${reuseNodeId}`,
+          'DATA_DIR=/data',
+          'NODE_ADDRESS=ddb-test-reuse-1-1:8080',
+          'TRANSPORT_WS_HOST=0.0.0.0',
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+        ],
+        Labels: buildReuseLabels(),
+        Entrypoint: REUSE_IMAGE_ENTRYPOINT,
+        Cmd: REUSE_IMAGE_CMD,
+      },
+      HostConfig: {
+        Binds: ['/tmp/old-reuse-data:/data'],
+      },
+    });
+    provider.removeContainer = async (containerId) => {
+      removeContainerId = containerId;
+    };
+    provider.createContainer = async (options) => {
+      createContainerOptions = options;
+      return {
+        containerId: 'new-data-bind-container-id',
+        ip: '10.0.0.62',
+        name: options.name,
+      };
+    };
+
+    const node = await cluster._startNode(
+      reuseNodeId,
+      NODE_ROLES.SEED,
+      null,
+      0,
+    );
+
+    assert.strictEqual(removeContainerId, 'wrong-data-bind-container-id');
+    assert.ok(
+      createContainerOptions.hostConfigExtras?.Binds?.includes(
+        buildReuseDataBind('ddb-test-reuse-1-1'),
+      ),
+      'recreated reusable container should mount the expected data bind',
+    );
+    assert.strictEqual(node.containerId, 'new-data-bind-container-id');
+  });
+
+test('Unit: _startNode recreates reusable container on image identity mismatch',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    cluster._networkName = 'ddb-test-net-reuse-local-1';
+    cluster._networkId = 'net-reuse-1';
+
+    const reuseNodeId = cluster._buildNodeId(0);
+    const reuseContainerName = 'ddb-test-reuse-1-1';
+    const provider = cluster._providers[0];
+    let removeContainerId = null;
+    let createContainerOptions = null;
+    provider.inspectImage = async () => ({Id: 'current-image-id'});
+    provider.inspectContainerIfExists = async () => ({
+      Id: 'old-image-container-id',
+      Image: 'old-image-id',
+      State: {Status: 'exited'},
+      Config: {
+        Env: [
+          `NODE_ID=${reuseNodeId}`,
+          'DATA_DIR=/data',
+          `NODE_ADDRESS=${reuseContainerName}:8080`,
+          'TRANSPORT_WS_HOST=0.0.0.0',
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+        ],
+        Labels: buildReuseLabels(),
+        Entrypoint: REUSE_IMAGE_ENTRYPOINT,
+        Cmd: REUSE_IMAGE_CMD,
+      },
+      HostConfig: {
+        Binds: [buildReuseDataBind(reuseContainerName)],
+      },
+    });
+    provider.removeContainer = async (containerId) => {
+      removeContainerId = containerId;
+    };
+    provider.createContainer = async (options) => {
+      createContainerOptions = options;
+      return {
+        containerId: 'new-image-container-id',
+        ip: '10.0.0.63',
+        name: options.name,
+      };
+    };
+
+    const node = await cluster._startNode(
+      reuseNodeId,
+      NODE_ROLES.SEED,
+      null,
+      0,
+    );
+
+    assert.strictEqual(removeContainerId, 'old-image-container-id');
+    assert.strictEqual(
+      createContainerOptions.labels[LABELS.REUSE_ABI],
+      REUSE_CONTAINER_ABI_VERSION,
+    );
+    assert.strictEqual(node.containerId, 'new-image-container-id');
+  });
 
 test('Unit: _startNode recreates reusable joiner container on timeout env mismatch',
   async () => {
@@ -341,7 +574,7 @@ test('Unit: _startNode recreates reusable joiner container on timeout env mismat
           `${ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS}=30000`,
         ],
         Entrypoint: ['sh', '-lc'],
-        Cmd: [REUSE_START_COMMAND],
+        Cmd: [LEGACY_REUSE_START_COMMAND],
       },
     });
     provider.removeContainer = async (containerId) => {
@@ -375,10 +608,20 @@ test('Unit: _startNode recreates reusable joiner container on timeout env mismat
     assert.ok(
       createContainerOptions.hostConfigExtras?.Binds?.some((entry) =>
         String(entry).endsWith(
-          ':/harness-control',
+          ':/data',
         ),
       ),
-      'recreated reusable joiner should mount the reuse-control bind',
+      'recreated reusable joiner should mount the host-managed data bind',
+    );
+    assert.strictEqual(
+      createContainerOptions.entrypoint,
+      undefined,
+      'recreated reusable joiner should use the image entrypoint',
+    );
+    assert.strictEqual(
+      createContainerOptions.command,
+      undefined,
+      'recreated reusable joiner should use the image CMD',
     );
     assert.strictEqual(
       createContainerOptions.env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
@@ -472,8 +715,12 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
         State: {Status: containerStateByName.get(name)},
         Config: {
           Env: env,
-          Entrypoint: ['sh', '-lc'],
-          Cmd: [REUSE_START_COMMAND],
+          Labels: buildReuseLabels(),
+          Entrypoint: REUSE_IMAGE_ENTRYPOINT,
+          Cmd: REUSE_IMAGE_CMD,
+        },
+        HostConfig: {
+          Binds: [buildReuseDataBind(name)],
         },
         NetworkSettings: {
           Networks: {
@@ -743,7 +990,9 @@ test('Unit: _startNode reconnects reusable container with hostname alias',
     cluster._networkId = 'net-reuse-1';
 
     const reuseNodeId = cluster._buildNodeId(0);
+    const reuseContainerName = 'ddb-test-reuse-1-1';
     const provider = cluster._providers[0];
+    provider.inspectImage = async () => null;
     let connectToNetworkArgs = null;
     let inspectAfterStartCalls = 0;
     provider.inspectContainerIfExists = async () => ({
@@ -757,8 +1006,12 @@ test('Unit: _startNode reconnects reusable container with hostname alias',
           'TRANSPORT_WS_HOST=0.0.0.0',
           `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
         ],
-        Entrypoint: ['sh', '-lc'],
-        Cmd: [REUSE_START_COMMAND],
+        Labels: buildReuseLabels(),
+        Entrypoint: REUSE_IMAGE_ENTRYPOINT,
+        Cmd: REUSE_IMAGE_CMD,
+      },
+      HostConfig: {
+        Binds: [buildReuseDataBind(reuseContainerName)],
       },
       NetworkSettings: {
         Networks: {

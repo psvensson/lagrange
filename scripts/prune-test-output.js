@@ -40,7 +40,8 @@ import {
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1B3UP = 'reports/report playbacks/legacy playbacks/run-like categories.';
+const PRUNE_TARGET_SUMMARY_TEXT =
+  'reports/report playbacks/legacy playbacks/run-like categories.';
 
 const TEST_OUTPUT_PRUNE_CATEGORY = Object.freeze({
   REPORTS: 'reports',
@@ -61,10 +62,12 @@ const TEST_OUTPUT_PRUNE_WORKSPACE_DIR = Object.freeze({
   TAP: '.tap',
   TEST_RESULTS: 'test-results',
   REUSE_CONTROL: 'reuse-control',
+  REUSE_DATA: 'reuse-data',
 });
 const TEST_OUTPUT_PRUNE_TMP_RESERVED_TOP_LEVEL = Object.freeze([
   TEST_OUTPUT_PATH.PLAYBACK_DIR,
   TEST_OUTPUT_PRUNE_WORKSPACE_DIR.REUSE_CONTROL,
+  TEST_OUTPUT_PRUNE_WORKSPACE_DIR.REUSE_DATA,
 ]);
 const TEST_OUTPUT_PRUNE_PLAYBACK_RESERVED_TOP_LEVEL = Object.freeze([
   TEST_OUTPUT_PATH.PLAYBACK_DIR,
@@ -624,7 +627,7 @@ async function main(argv) {
     `Policy: keep pinned names, keep items newer than ${options.keepDays} days, ` +
     `and keep at least ${options.keepReports}/${options.keepReportPlaybacks}/` +
     `${options.keepLegacyPlaybacks}/${options.keepTopLevel} recent items for ` +
-    LOCAL_STR_1B3UP +
+    PRUNE_TARGET_SUMMARY_TEXT +
     FILE_TEXT.NEWLINE,
   );
 }

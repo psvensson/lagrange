@@ -32,6 +32,10 @@
 # (SRC_FINGERPRINT env), so a code edit can never be measured against a stale
 # process. The working-tree fingerprint is stamped into the report below so every
 # gate result is attributable to an exact source tree.
+#
+# Runtime fidelity: the gate passes --no-fast-local so measurements exercise the
+# built runtime image entrypoint/CMD directly. Fast-local reusable containers are
+# for local iteration, not statistical release evidence.
 
 set -uo pipefail
 
@@ -174,6 +178,7 @@ for i in $(seq 1 "${N}"); do
     --scenario "${SCENARIO}" \
     --output "${RUN_REPORT}" \
     "${DEBUG_LOGS_ARGS[@]}" \
+    --no-fast-local \
     --verbose > "${RUN_LOG}" 2>&1 || true
   end_s=$(date +%s)
   wall_s=$(( end_s - start_s ))

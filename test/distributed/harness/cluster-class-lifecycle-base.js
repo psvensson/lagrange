@@ -25,6 +25,93 @@ import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
 // reuse run is bind-mounting live src yet lacks the fingerprint that protects it
 // from the stale-code trap.
 const FAST_LOCAL_SOURCE_BIND_TARGET = '/app/src';
+const DOCKER_BIND_SEPARATOR = ':';
+const LEGACY_REUSE_SHELL_ENTRYPOINTS = Object.freeze(['sh', 'bash']);
+const LEGACY_REUSE_SHELL_ARG = '-lc';
+const LEGACY_REUSE_CONTROL_PATH = '/harness-control';
+const LEGACY_REUSE_RESET_FLAG = 'reset-data-on-start';
+
+function parseDockerBind(bind) {
+  if (typeof bind !== 'string' || bind.length === 0) {
+    return null;
+  }
+  const parts = bind.split(DOCKER_BIND_SEPARATOR);
+  if (parts.length < 2) {
+    return null;
+  }
+  return Object.freeze({
+    source: parts[0],
+    target: parts[1],
+  });
+}
+
+function inspectHasExpectedBind(inspect, expectedBind) {
+  const binds = Array.isArray(inspect?.HostConfig?.Binds) ?
+    inspect.HostConfig.Binds :
+    [];
+  const expected = parseDockerBind(expectedBind);
+  if (!expected) {
+    return false;
+  }
+  return binds.some((bind) => {
+    const current = parseDockerBind(bind);
+    return Boolean(
+      current &&
+      current.source === expected.source &&
+      current.target === expected.target,
+    );
+  });
+}
+
+function normalizeEntrypointPart(value) {
+  const normalized = String(value || '').trim();
+  const slashIndex = normalized.lastIndexOf('/');
+  return slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+}
+
+function inspectHasLegacyReusableShellLaunch(inspect) {
+  const entrypoint = Array.isArray(inspect?.Config?.Entrypoint) ?
+    inspect.Config.Entrypoint :
+    [];
+  const entrypointParts = entrypoint.map(normalizeEntrypointPart);
+  if (
+    entrypointParts.some((part) =>
+      LEGACY_REUSE_SHELL_ENTRYPOINTS.includes(part),
+    ) ||
+    entrypoint.includes(LEGACY_REUSE_SHELL_ARG)
+  ) {
+    return true;
+  }
+
+  const cmd = Array.isArray(inspect?.Config?.Cmd) ? inspect.Config.Cmd : [];
+  return cmd.some((part) => {
+    const value = String(part || '');
+    return (
+      value.includes(LEGACY_REUSE_CONTROL_PATH) ||
+      value.includes(LEGACY_REUSE_RESET_FLAG)
+    );
+  });
+}
+
+function readContainerInspectLabelValue(inspect, labelName) {
+  const configLabels = inspect?.Config?.Labels;
+  if (
+    configLabels &&
+    typeof configLabels === 'object' &&
+    Object.hasOwn(configLabels, labelName)
+  ) {
+    return configLabels[labelName];
+  }
+  const labels = inspect?.Labels;
+  if (
+    labels &&
+    typeof labels === 'object' &&
+    Object.hasOwn(labels, labelName)
+  ) {
+    return labels[labelName];
+  }
+  return '';
+}
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -69,9 +156,7 @@ const {
   RAFT_PROVIDER_DEFAULTS,
   RAFT_PROVIDER_ENV_KEY,
   REUSE_CONTAINER_NAME_PREFIX,
-  REUSE_CONTROL_DIRNAME,
-  REUSE_CONTROL_MOUNT_PATH,
-  REUSE_ENTRYPOINT,
+  REUSE_DATA_DIRNAME,
   REUSE_LEASE_DIRNAME,
   REUSE_LEASE_FILE_PREFIX,
   REUSE_LEASE_MIN_TIMEOUT_MS,
@@ -79,8 +164,6 @@ const {
   REUSE_NETWORK_NAME_SUFFIX,
   REUSE_NODE_ID_NAMESPACE,
   REUSE_NODE_ID_PREFIX,
-  REUSE_RESET_FLAG_FILENAME,
-  REUSE_START_COMMAND_ARGS,
   StartupGate,
   TIMEOUTS,
   TraceArtifactRecorder,
@@ -446,7 +529,7 @@ class ClusterLifecycleBase {
     return hostDir + ':' + NODE_LOG_DIR_CONTAINER;
   }
 
-  _shouldRecreateReusableContainer(inspect, expectedEnv = {}) {
+  _shouldRecreateReusableContainer(inspect, expectedEnv = {}, expected = {}) {
     if (!inspect || typeof inspect !== 'object') {
       return true;
     }
@@ -457,21 +540,25 @@ class ClusterLifecycleBase {
       }
     }
 
-    const entrypoint = Array.isArray(inspect?.Config?.Entrypoint) ?
-      inspect.Config.Entrypoint :
-      [];
+    if (inspectHasLegacyReusableShellLaunch(inspect)) {
+      return true;
+    }
+
+    if (!inspectHasExpectedBind(inspect, expected.dataBind)) {
+      return true;
+    }
+
     if (
-      entrypoint.length !== REUSE_ENTRYPOINT.length ||
-      entrypoint[0] !== REUSE_ENTRYPOINT[0] ||
-      entrypoint[1] !== REUSE_ENTRYPOINT[1]
+      String(readContainerInspectLabelValue(inspect, LABELS.REUSE_ABI) || '') !==
+      String(expected.reuseAbiVersion || '')
     ) {
       return true;
     }
 
-    const cmd = Array.isArray(inspect?.Config?.Cmd) ? inspect.Config.Cmd : [];
     if (
-      cmd.length !== REUSE_START_COMMAND_ARGS.length ||
-      cmd[0] !== REUSE_START_COMMAND_ARGS[0]
+      typeof expected.imageId === 'string' &&
+      expected.imageId.length > ZERO &&
+      String(inspect?.Image || '') !== expected.imageId
     ) {
       return true;
     }
@@ -479,30 +566,39 @@ class ClusterLifecycleBase {
     return false;
   }
 
-  _getReusableControlDir(containerName) {
+  async _resolveReusableImageId(provider) {
+    if (typeof provider?.inspectImage !== 'function') {
+      return '';
+    }
+    try {
+      const imageInspect = await provider.inspectImage(this._config.image);
+      return String(imageInspect?.Id || imageInspect?.ID || '');
+    } catch (_err) {
+      return '';
+    }
+  }
+
+  _getReusableDataDir(containerName) {
     return resolvePath(
       REUSE_LEASE_DIRNAME,
-      REUSE_CONTROL_DIRNAME,
+      REUSE_DATA_DIRNAME,
       containerName,
     );
   }
 
-  _getReusableControlBind(containerName) {
+  _getReusableDataBind(containerName) {
     return (
-      this._getReusableControlDir(containerName) +
-      ':' +
-      REUSE_CONTROL_MOUNT_PATH
+      this._getReusableDataDir(containerName) +
+      DOCKER_BIND_SEPARATOR +
+      DATA_DIR_PATH
     );
   }
 
-  async _markReusableContainerForDataReset(containerName) {
-    const controlDir = this._getReusableControlDir(containerName);
-    await fs.mkdir(controlDir, {recursive: true});
-    await fs.writeFile(
-      resolvePath(controlDir, REUSE_RESET_FLAG_FILENAME),
-      '',
-      'utf8',
-    );
+  async _resetReusableDataDir(containerName) {
+    const dataDir = this._getReusableDataDir(containerName);
+    await fs.rm(dataDir, {recursive: true, force: true});
+    await fs.mkdir(dataDir, {recursive: true, mode: 0o777});
+    await fs.chmod(dataDir, 0o777);
   }
 
   async _quiesceReusableContainers() {

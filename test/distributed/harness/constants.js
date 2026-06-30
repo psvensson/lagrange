@@ -64,6 +64,7 @@ const LABEL_CLUSTER = `${LABEL_PREFIX}.cluster`;
 const LABEL_NODE_ID = `${LABEL_PREFIX}.node-id`;
 const LABEL_ROLE = `${LABEL_PREFIX}.role`;
 const LABEL_SCENARIO = `${LABEL_PREFIX}.scenario`;
+const LABEL_REUSE_ABI = `${LABEL_PREFIX}.reuse-abi`;
 
 const LABELS = Object.freeze({
   PREFIX: LABEL_PREFIX,
@@ -71,6 +72,7 @@ const LABELS = Object.freeze({
   NODE_ID: LABEL_NODE_ID,
   ROLE: LABEL_ROLE,
   SCENARIO: LABEL_SCENARIO,
+  REUSE_ABI: LABEL_REUSE_ABI,
 });
 
 // --- Convergence Defaults ---

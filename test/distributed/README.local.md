@@ -192,6 +192,9 @@ Fast-local mode does all of the following:
 1. Mounts host `src/` into node containers as `/app/src` (read-only).
 2. Reuses deterministic local containers and network across runs.
 3. Skips dirty-workspace image rebuilds when the image already exists.
+4. Resets each reusable node's `/data` through a host-managed
+   `.tmp/reuse-data/<container>` bind before startup; it does not require a
+   shell in the runtime image.
 
 Opt-out:
 
@@ -228,6 +231,8 @@ npm run distributed:stop-containers -- --processes-only
 
 Fast-local runs may start the reusable containers again. Use `--no-fast-local`
 on the scenario runner when you want a run to avoid reusable containers.
+The rolling-restart statistical gate passes `--no-fast-local` automatically so
+gate evidence exercises the built runtime image entrypoint and command directly.
 
 ## Config Files
 
@@ -599,6 +604,7 @@ If you want a completely fresh local state:
 ```bash
 docker ps -aq --filter "name=ddb-test-reuse-" | xargs -r docker rm -f
 docker network ls --format '{{.Name}}' | rg '^ddb-test-net-reuse-local-' | xargs -r docker network rm
+rm -rf .tmp/reuse-data
 ```
 
 ## Running All Distributed Scenarios

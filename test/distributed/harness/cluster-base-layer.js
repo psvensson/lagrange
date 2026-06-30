@@ -826,21 +826,8 @@ const REUSE_NETWORK_NAME_SUFFIX = 'reuse-local';
 const REUSE_NODE_ID_PREFIX = 'reuse-node-';
 const REUSE_NODE_ID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 const REUSE_CONTAINER_NAME_PREFIX = 'ddb-test-reuse';
-const REUSE_ENTRYPOINT = Object.freeze(['sh', '-lc']);
-const REUSE_CONTROL_DIRNAME = 'reuse-control';
-const REUSE_CONTROL_MOUNT_PATH = '/harness-control';
-const REUSE_RESET_FLAG_FILENAME = 'reset-data-on-start';
-const REUSE_START_COMMAND =
-  'if [ -f ' +
-  REUSE_CONTROL_MOUNT_PATH +
-  '/' +
-  REUSE_RESET_FLAG_FILENAME +
-  ' ]; then rm -rf /data/* && rm -f ' +
-  REUSE_CONTROL_MOUNT_PATH +
-  '/' +
-  REUSE_RESET_FLAG_FILENAME +
-  '; fi; exec node --max-old-space-size=1536 /app/src/index.js';
-const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
+const REUSE_DATA_DIRNAME = 'reuse-data';
+const REUSE_CONTAINER_ABI_VERSION = 'shell-free-host-data-v1';
 const REUSE_LEASE_DIRNAME = '.tmp';
 const REUSE_LEASE_FILE_PREFIX = 'distributed-harness-reuse';
 const REUSE_LEASE_POLL_INTERVAL_MS = 250;
@@ -1314,12 +1301,8 @@ export const CLUSTER_BASE_LAYER = {
   REUSE_NODE_ID_PREFIX,
   REUSE_NODE_ID_NAMESPACE,
   REUSE_CONTAINER_NAME_PREFIX,
-  REUSE_ENTRYPOINT,
-  REUSE_CONTROL_DIRNAME,
-  REUSE_CONTROL_MOUNT_PATH,
-  REUSE_RESET_FLAG_FILENAME,
-  REUSE_START_COMMAND,
-  REUSE_START_COMMAND_ARGS,
+  REUSE_DATA_DIRNAME,
+  REUSE_CONTAINER_ABI_VERSION,
   REUSE_LEASE_DIRNAME,
   REUSE_LEASE_FILE_PREFIX,
   REUSE_LEASE_POLL_INTERVAL_MS,
