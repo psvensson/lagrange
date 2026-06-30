@@ -20,21 +20,57 @@ const {
   normalizeNonNegativeCount,
   normalizePriorityPartitionSummary,
   orderPublicationConvergenceReasons,
+  LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
   resolveFailureDiagnostics,
   resolveLoadMetrics,
   resolveRelevantNodeIds,
   resolveRootCauseClass,
 } = foundation;
+
+function normalizeLoadMetricsFallback(loadMetricsFallback) {
+  return isRecord(loadMetricsFallback) ? loadMetricsFallback : null;
+}
+
+function hasPositiveConcreteLoadReason(loadReasonCounts) {
+  return Object.entries(loadReasonCounts || {}).some(([reason, count]) =>
+    reason !== LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE &&
+    Number.isFinite(Number(count)) &&
+    Number(count) > ZERO,
+  );
+}
+
+function resolveExistingFailureDominantReason(
+  existingFailure,
+  loadReasonCounts,
+  usedLoadMetricsFallback,
+) {
+  const dominantReason = String(
+    existingFailure?.dominantReason || EMPTY_STRING,
+  ).trim();
+  const shouldDropFallbackNodeSlotReason =
+    usedLoadMetricsFallback &&
+    dominantReason === LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE &&
+    hasPositiveConcreteLoadReason(loadReasonCounts);
+  if (shouldDropFallbackNodeSlotReason) {
+    return EMPTY_STRING;
+  }
+  return dominantReason.length > ZERO ? dominantReason : EMPTY_STRING;
+}
+
 export function buildFailureArtifact({
   entry,
   readiness,
   controlPlane,
   firstFaultTimeline,
+  loadMetricsFallback = null,
 }) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const hasExistingFailure = isRecord(diagnostics.failure);
   const existingFailure = hasExistingFailure ? diagnostics.failure : {};
-  const loadMetrics = resolveLoadMetrics(entry);
+  const entryLoadMetrics = resolveLoadMetrics(entry);
+  const fallbackLoadMetrics = normalizeLoadMetricsFallback(loadMetricsFallback);
+  const usedLoadMetricsFallback = !entryLoadMetrics && !!fallbackLoadMetrics;
+  const loadMetrics = entryLoadMetrics || fallbackLoadMetrics;
   const loadReasonCounts = deriveReasonCountsFromLoadMetrics(loadMetrics);
   const readinessReasonCounts = deriveReasonCountsFromReadiness(
     readiness?.nodeReasonsByNodeId,
@@ -125,9 +161,11 @@ export function buildFailureArtifact({
     ownerContractDominantReason ||
     dominantReasonOverride ||
     failureBarrier?.dominantReason ||
-    (typeof existingFailure.dominantReason === 'string' &&
-    existingFailure.dominantReason.length > ZERO ?
-      existingFailure.dominantReason :
+    (resolveExistingFailureDominantReason(
+      existingFailure,
+      loadReasonCounts,
+      usedLoadMetricsFallback,
+    ) ||
       progressDominantReason ||
         buildDominantReason(reasonCounts) ||
         timelineDominantReason ||

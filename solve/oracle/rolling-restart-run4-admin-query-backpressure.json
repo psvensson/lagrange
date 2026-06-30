@@ -1,0 +1,41 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "diagnostics-fallback-normalized",
+  "evidence": {
+    "source": [
+      "test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js",
+      "test/distributed/harness/failure-bundle-scenario-assembly.js"
+    ],
+    "test": "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "changeRef": "solve/changes/rolling-restart-run4-admin-query-backpressure/playback-load-metrics-fallback.diff",
+    "liveReportBasis": "test-output/reports/stat-gate-20260630T051118Z-run1.report.json",
+    "subagent": [
+      "019f174c-1ade-7512-b513-69741cf76371"
+    ]
+  },
+  "observed": {
+    "fallbackConcreteLoadReason": "entry.loadMetrics=null with playback waitReasons nodeSlotUnavailable=0, nodeAdmissionBlocked=639, retryableControlPlanePressure=49, timeoutWaits=10 classifies dominantReason=nodeAdmissionBlocked",
+    "fallbackTopReason": "topFailures.topReasons[0].reason=nodeAdmissionBlocked and topFailures.reasonCounts.nodeAdmissionBlocked=639",
+    "fallbackLoadMetricsPreserved": "topFailures.loadMetrics.waitReasons.nodeSlotUnavailable=0",
+    "greenPublicationSupport": "fixture publicationConvergence.missingPublishedCount=0 and pendingAckCount=0",
+    "soleNodeSlotPreserved": "fallback waitReasons with only nodeSlotUnavailable positive keeps dominantReason=nodeSlotUnavailable and reasonCounts.nodeSlotUnavailable=4",
+    "measuredEntryScopeGuard": "entry.loadMetrics present keeps retained dominantReason=nodeSlotUnavailable and selected entry waitReasons.nodeAdmissionBlocked=639",
+    "visibilityIntegrity": "transient Admin API participant-failure throws retry; clean reads with missing acknowledged ids and persistent unqueryable participants still fail distinctly"
+  },
+  "validations": {
+    "focused-test": "node --test test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "failure-bundle-suite": "node --test test/distributed/harness/__tests__/failure-bundle.test.js",
+    "adjacent-tests": "node --test test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js",
+    "eslint-focused": "npx eslint test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "literals": "npm run audit:guideline:literals -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "decision-boundaries": "npm run audit:guideline:decision-boundaries -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "runtime-grammar": "npm run audit:runtime-grammar:file -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "constant-names": "npm run guard:guideline:constant-names:file -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "file-size": "npm run audit:file-size -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "metrics": "npm run test:metrics:scoped -- test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js test/distributed/harness/failure-bundle-scenario-assembly.js test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js",
+    "model-contracts": "npm run model:contracts",
+    "diff-check": "git diff --check"
+  }
+}

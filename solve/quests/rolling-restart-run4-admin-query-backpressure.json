@@ -1,0 +1,41 @@
+{
+  "id": "rolling-restart-run4-admin-query-backpressure",
+  "statement": "Rolling-restart final acknowledged-write/admin observation no longer collapses an otherwise owner-green post-restart state into unowned nodeSlotUnavailable: deterministic retained-artifact and local Admin API pressure fixtures route persistent participant-failure readback to typed admin/query backpressure or evidence-incomplete diagnostics with retry/defer evidence, while clean reads with missing acknowledged IDs still fail as acknowledged-write loss and publication, priority, and readiness support remain satisfied.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "closure": "A deterministic retained-artifact regression derived from stat-gate-20260630T051118Z-run1 proves that a final acknowledged-write/admin participant-failure readback with green publication, priority, active-gate, and readiness support does not surface as unowned nodeSlotUnavailable when playback load metrics show nodeSlotUnavailable=0 and admission/backpressure evidence is available; clean reads with missing acknowledged IDs and persistent unqueryable admin reads still fail distinctly.",
+    "oracle": "solve/oracle/rolling-restart-run4-admin-query-backpressure.json"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-admin-query-backpressure.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-admin-query-backpressure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-run4-admin-query-backpressure.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -213,6 +213,11 @@ import {
   resolvePartitioningDiagnosticsForTriage,
 } from './failure-bundle-triage-summary.js';
 
+function resolvePlaybackLoadMetrics(logs) {
+  const metrics = logs?.playbackEventSummary?.load?.lastMetrics;
+  return isRecord(metrics) ? metrics : null;
+}
+
 function buildScenarioFailureBundle({
   entry,
   reportOutputPath,
@@ -240,6 +245,9 @@ function buildScenarioFailureBundle({
     entry,
     logs?.firstFaultTimeline || null,
   );
+  const entryLoadMetrics = resolveLoadMetrics(entry);
+  const loadMetricsFallback = resolvePlaybackLoadMetrics(logs);
+  const selectedLoadMetrics = entryLoadMetrics || loadMetricsFallback;
   const readinessFailure = resolveReadinessFailure(controlPlane);
   const readinessFailureGuidance =
     resolveReadinessFailureGuidance(readinessFailure);
@@ -248,11 +256,12 @@ function buildScenarioFailureBundle({
     readiness,
     controlPlane,
     firstFaultTimeline,
+    loadMetricsFallback,
   });
-  const failureReasonCounts = resolveFailureReasonCounts(
-    entry,
-    failure?.reasonCounts || null,
-  );
+  const failureReasonCounts =
+    !entryLoadMetrics && loadMetricsFallback && isRecord(failure?.reasonCounts) ?
+      failure.reasonCounts :
+      resolveFailureReasonCounts(entry, failure?.reasonCounts || null);
   const publicationConvergence =
     buildPublicationConvergenceSummary(controlPlane);
   const timelineCorrelationByNodeId = buildTimelineCorrelationByNodeId(
@@ -347,7 +356,7 @@ function buildScenarioFailureBundle({
       affectedNodeIds: Array.isArray(failure?.affectedNodeIds) ?
         failure.affectedNodeIds :
         [],
-      loadMetrics: entry.loadMetrics || null,
+      loadMetrics: selectedLoadMetrics || null,
     },
     nodeDiagnostics,
     logs,

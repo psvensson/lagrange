@@ -1,0 +1,338 @@
+diff --git a/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js b/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js
+new file mode 100644
+index 00000000..35f9243d
+--- /dev/null
++++ b/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js
+@@ -0,0 +1,202 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  FAILURE_BUNDLE_SCENARIO_ASSEMBLY,
++} from '../failure-bundle-scenario-assembly.js';
++
++const {
++  buildScenarioFailureBundle,
++} = FAILURE_BUNDLE_SCENARIO_ASSEMBLY;
++
++const SCENARIO = 'rolling-restart';
++const NODE_A = 'node-a';
++const NODE_B = 'node-b';
++const ROOT_CAUSE_LOAD = 'load';
++const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
++const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
++const REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
++const REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
++const REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
++  'retryableControlPlanePressure';
++const REASON_TIMEOUT_WAITS = 'timeoutWaits';
++const REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
++const MARKER_QUEUE_PRESSURE_ONSET = 'queuePressureOnset';
++const FINAL_VISIBILITY_ERROR =
++  'Could not complete acknowledged-write visibility query on node ' +
++  NODE_A +
++  ' within 30248ms: Admin API query failed for node ' +
++  NODE_A +
++  ' on lane default: ' +
++  'Distributed operation failed due to participant failures';
++
++function buildSatisfiedControlPlaneDiagnostics() {
++  return {
++    publicationConvergence: {
++      publicationEpoch: 37,
++      publicationStatus: PUBLICATION_STATUS_PUBLISHED,
++      recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
++      requiredAckNodeIds: [],
++      acknowledgedNodeIds: [NODE_A, NODE_B],
++      pendingAckNodeIds: [],
++      publishedActiveNodeIds: [NODE_A, NODE_B],
++      missingPublishedNodeIds: [],
++      missingPublishedCount: 0,
++      priorityRecoveryReasonCodes: [],
++    },
++  };
++}
++
++function buildScenarioEntry({loadMetrics = null} = {}) {
++  return {
++    scenario: SCENARIO,
++    passed: false,
++    error: FINAL_VISIBILITY_ERROR,
++    loadMetrics,
++    details: {
++      diagnostics: {
++        controlPlaneDiagnostics: buildSatisfiedControlPlaneDiagnostics(),
++        failure: {
++          rootCauseClass: ROOT_CAUSE_LOAD,
++          dominantReason: REASON_NODE_SLOT_UNAVAILABLE,
++          reasonCounts: {
++            [REASON_NODE_SLOT_UNAVAILABLE]: 1,
++          },
++          affectedNodeIds: [],
++        },
++      },
++    },
++  };
++}
++
++function buildLoadMetrics(waitReasons) {
++  return {
++    total: 846,
++    success: 846,
++    failed: 0,
++    errors: 0,
++    attemptErrors: 59,
++    waitReasons,
++    perNode: {},
++  };
++}
++
++function buildLogs(loadMetrics) {
++  return {
++    firstFaultTimeline: {
++      orderedMarkers: [
++        {
++          marker: MARKER_QUEUE_PRESSURE_ONSET,
++        },
++      ],
++    },
++    playbackEventSummary: {
++      load: {
++        lastMetrics: loadMetrics,
++      },
++    },
++  };
++}
++
++describe('failure bundle playback load-metrics fallback', () => {
++  it('uses playback wait reasons when scenario loadMetrics are absent', () => {
++    const bundle = buildScenarioFailureBundle({
++      entry: buildScenarioEntry(),
++      reportOutputPath: null,
++      reportSummary: null,
++      standardSummary: null,
++      benchmarkRegressionGate: null,
++      logs: buildLogs(buildLoadMetrics({
++        [REASON_NODE_SLOT_UNAVAILABLE]: 0,
++        [REASON_NODE_ADMISSION_BLOCKED]: 639,
++        [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 49,
++        [REASON_TIMEOUT_WAITS]: 10,
++        [REASON_QUEUE_CAPACITY_REJECTED]: 0,
++      })),
++    });
++
++    assert.equal(
++      bundle.summary.dominantReason,
++      REASON_NODE_ADMISSION_BLOCKED,
++    );
++    assert.notEqual(
++      bundle.summary.dominantReason,
++      REASON_NODE_SLOT_UNAVAILABLE,
++    );
++    assert.equal(
++      bundle.topFailures.reasonCounts[REASON_NODE_ADMISSION_BLOCKED],
++      639,
++    );
++    assert.equal(
++      bundle.topFailures.loadMetrics.waitReasons[
++        REASON_NODE_SLOT_UNAVAILABLE
++      ],
++      0,
++    );
++    assert.equal(
++      bundle.topFailures.topReasons[0].reason,
++      REASON_NODE_ADMISSION_BLOCKED,
++    );
++    assert.equal(bundle.publicationConvergence.missingPublishedCount, 0);
++    assert.equal(bundle.publicationConvergence.pendingAckCount, 0);
++  });
++
++  it('keeps nodeSlotUnavailable when it is the sole concrete load reason', () => {
++    const bundle = buildScenarioFailureBundle({
++      entry: buildScenarioEntry(),
++      reportOutputPath: null,
++      reportSummary: null,
++      standardSummary: null,
++      benchmarkRegressionGate: null,
++      logs: buildLogs(buildLoadMetrics({
++        [REASON_NODE_SLOT_UNAVAILABLE]: 3,
++        [REASON_NODE_ADMISSION_BLOCKED]: 0,
++        [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 0,
++        [REASON_TIMEOUT_WAITS]: 0,
++        [REASON_QUEUE_CAPACITY_REJECTED]: 0,
++      })),
++    });
++
++    assert.equal(
++      bundle.summary.dominantReason,
++      REASON_NODE_SLOT_UNAVAILABLE,
++    );
++    assert.equal(
++      bundle.topFailures.reasonCounts[REASON_NODE_SLOT_UNAVAILABLE],
++      4,
++    );
++  });
++
++  it('keeps retained nodeSlotUnavailable when scenario loadMetrics exist', () => {
++    const bundle = buildScenarioFailureBundle({
++      entry: buildScenarioEntry({
++        loadMetrics: buildLoadMetrics({
++          [REASON_NODE_SLOT_UNAVAILABLE]: 0,
++          [REASON_NODE_ADMISSION_BLOCKED]: 639,
++          [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 49,
++          [REASON_TIMEOUT_WAITS]: 10,
++          [REASON_QUEUE_CAPACITY_REJECTED]: 0,
++        }),
++      }),
++      reportOutputPath: null,
++      reportSummary: null,
++      standardSummary: null,
++      benchmarkRegressionGate: null,
++      logs: buildLogs(buildLoadMetrics({
++        [REASON_NODE_SLOT_UNAVAILABLE]: 0,
++        [REASON_NODE_ADMISSION_BLOCKED]: 999,
++        [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 0,
++        [REASON_TIMEOUT_WAITS]: 0,
++        [REASON_QUEUE_CAPACITY_REJECTED]: 0,
++      })),
++    });
++
++    assert.equal(
++      bundle.summary.dominantReason,
++      REASON_NODE_SLOT_UNAVAILABLE,
++    );
++    assert.equal(
++      bundle.topFailures.loadMetrics.waitReasons[REASON_NODE_ADMISSION_BLOCKED],
++      639,
++    );
++  });
++});
+diff --git a/test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js b/test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js
+index 791d90be..ded902f0 100644
+--- a/test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js
++++ b/test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js
+@@ -20,21 +20,57 @@ const {
+   normalizeNonNegativeCount,
+   normalizePriorityPartitionSummary,
+   orderPublicationConvergenceReasons,
++  LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+   resolveFailureDiagnostics,
+   resolveLoadMetrics,
+   resolveRelevantNodeIds,
+   resolveRootCauseClass,
+ } = foundation;
++
++function normalizeLoadMetricsFallback(loadMetricsFallback) {
++  return isRecord(loadMetricsFallback) ? loadMetricsFallback : null;
++}
++
++function hasPositiveConcreteLoadReason(loadReasonCounts) {
++  return Object.entries(loadReasonCounts || {}).some(([reason, count]) =>
++    reason !== LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE &&
++    Number.isFinite(Number(count)) &&
++    Number(count) > ZERO,
++  );
++}
++
++function resolveExistingFailureDominantReason(
++  existingFailure,
++  loadReasonCounts,
++  usedLoadMetricsFallback,
++) {
++  const dominantReason = String(
++    existingFailure?.dominantReason || EMPTY_STRING,
++  ).trim();
++  const shouldDropFallbackNodeSlotReason =
++    usedLoadMetricsFallback &&
++    dominantReason === LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE &&
++    hasPositiveConcreteLoadReason(loadReasonCounts);
++  if (shouldDropFallbackNodeSlotReason) {
++    return EMPTY_STRING;
++  }
++  return dominantReason.length > ZERO ? dominantReason : EMPTY_STRING;
++}
++
+ export function buildFailureArtifact({
+   entry,
+   readiness,
+   controlPlane,
+   firstFaultTimeline,
++  loadMetricsFallback = null,
+ }) {
+   const diagnostics = resolveFailureDiagnostics(entry);
+   const hasExistingFailure = isRecord(diagnostics.failure);
+   const existingFailure = hasExistingFailure ? diagnostics.failure : {};
+-  const loadMetrics = resolveLoadMetrics(entry);
++  const entryLoadMetrics = resolveLoadMetrics(entry);
++  const fallbackLoadMetrics = normalizeLoadMetricsFallback(loadMetricsFallback);
++  const usedLoadMetricsFallback = !entryLoadMetrics && !!fallbackLoadMetrics;
++  const loadMetrics = entryLoadMetrics || fallbackLoadMetrics;
+   const loadReasonCounts = deriveReasonCountsFromLoadMetrics(loadMetrics);
+   const readinessReasonCounts = deriveReasonCountsFromReadiness(
+     readiness?.nodeReasonsByNodeId,
+@@ -125,9 +161,11 @@ export function buildFailureArtifact({
+     ownerContractDominantReason ||
+     dominantReasonOverride ||
+     failureBarrier?.dominantReason ||
+-    (typeof existingFailure.dominantReason === 'string' &&
+-    existingFailure.dominantReason.length > ZERO ?
+-      existingFailure.dominantReason :
++    (resolveExistingFailureDominantReason(
++      existingFailure,
++      loadReasonCounts,
++      usedLoadMetricsFallback,
++    ) ||
+       progressDominantReason ||
+         buildDominantReason(reasonCounts) ||
+         timelineDominantReason ||
+diff --git a/test/distributed/harness/failure-bundle-scenario-assembly.js b/test/distributed/harness/failure-bundle-scenario-assembly.js
+index 3ac061d5..70259ff0 100644
+--- a/test/distributed/harness/failure-bundle-scenario-assembly.js
++++ b/test/distributed/harness/failure-bundle-scenario-assembly.js
+@@ -213,6 +213,11 @@ import {
+   resolvePartitioningDiagnosticsForTriage,
+ } from './failure-bundle-triage-summary.js';
+
++function resolvePlaybackLoadMetrics(logs) {
++  const metrics = logs?.playbackEventSummary?.load?.lastMetrics;
++  return isRecord(metrics) ? metrics : null;
++}
++
+ function buildScenarioFailureBundle({
+   entry,
+   reportOutputPath,
+@@ -240,6 +245,9 @@ function buildScenarioFailureBundle({
+     entry,
+     logs?.firstFaultTimeline || null,
+   );
++  const entryLoadMetrics = resolveLoadMetrics(entry);
++  const loadMetricsFallback = resolvePlaybackLoadMetrics(logs);
++  const selectedLoadMetrics = entryLoadMetrics || loadMetricsFallback;
+   const readinessFailure = resolveReadinessFailure(controlPlane);
+   const readinessFailureGuidance =
+     resolveReadinessFailureGuidance(readinessFailure);
+@@ -248,11 +256,12 @@ function buildScenarioFailureBundle({
+     readiness,
+     controlPlane,
+     firstFaultTimeline,
++    loadMetricsFallback,
+   });
+-  const failureReasonCounts = resolveFailureReasonCounts(
+-    entry,
+-    failure?.reasonCounts || null,
+-  );
++  const failureReasonCounts =
++    !entryLoadMetrics && loadMetricsFallback && isRecord(failure?.reasonCounts) ?
++      failure.reasonCounts :
++      resolveFailureReasonCounts(entry, failure?.reasonCounts || null);
+   const publicationConvergence =
+     buildPublicationConvergenceSummary(controlPlane);
+   const timelineCorrelationByNodeId = buildTimelineCorrelationByNodeId(
+@@ -347,7 +356,7 @@ function buildScenarioFailureBundle({
+       affectedNodeIds: Array.isArray(failure?.affectedNodeIds) ?
+         failure.affectedNodeIds :
+         [],
+-      loadMetrics: entry.loadMetrics || null,
++      loadMetrics: selectedLoadMetrics || null,
+     },
+     nodeDiagnostics,
+     logs,
