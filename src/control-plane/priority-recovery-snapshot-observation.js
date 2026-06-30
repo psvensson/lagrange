@@ -361,11 +361,17 @@ function selectNewestPriorityRecoveryOperationContext(operationContexts = []) {
   );
 }
 
-function isPriorityRecoveryDispatchPendingOperationContext(operationContext) {
+function isPriorityRecoveryOpenWorkflowOperationContext(operationContext) {
+  const workflowProgressPhaseId =
+    resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext);
   return (
     isPriorityRecoveryOperationContextTerminal(operationContext) !== true &&
-    resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) ===
-      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING
+    (
+      workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING ||
+      workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL
+    )
   );
 }
 
@@ -386,7 +392,7 @@ function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
   }
   return selectNewestPriorityRecoveryOperationContext(
     normalizedContexts.filter(
-      isPriorityRecoveryDispatchPendingOperationContext,
+      isPriorityRecoveryOpenWorkflowOperationContext,
     ),
   ) || newestContext;
 }
