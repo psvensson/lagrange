@@ -1,7 +1,4 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
+import {NUM, TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
 import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from '../bootstrap/system-partition-classification.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
@@ -68,6 +65,8 @@ function buildPriorityRecoverySemanticPartitionSetMap() {
 // Below this budget a still-promoting replacement keeps its optimistic
 // certification, so a transient not-yet-voter-ready op is never penalized.
 const PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS = 60000;
+const PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE = null;
+const PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION = Object.freeze([]);
 
 // Stall is anchored on the operation context's stepAgeMs (time in the current
 // workflow step, from steps_history), NOT on stepTimeoutMs: a wedged op whose
@@ -206,33 +205,79 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
   });
 }
 
+function normalizePriorityRecoveryOperationContextList(operationContexts = []) {
+  return Array.isArray(operationContexts) ? operationContexts.filter(
+    (operationContext) =>
+      operationContext && typeof operationContext === TYPEOF.OBJECT,
+  ) : [];
+}
+
+function resolvePriorityRecoveryOperationContextOperationId(operationContext) {
+  return String(operationContext?.operationId || LOCAL_STR_EMPTY).trim();
+}
+
+function resolvePriorityRecoveryOperationContextPartitionId(operationContext) {
+  return String(
+    operationContext?.partitionId || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+  ).trim();
+}
+
+function hasPriorityRecoverySeenOperationId(operationId, seenOperationIds) {
+  return operationId.length > NUM.ZERO && seenOperationIds.has(operationId);
+}
+
+function isPriorityRecoveryOperationIdSuperseded(
+  operationId,
+  supersededOperationIds,
+) {
+  return operationId.length > NUM.ZERO && supersededOperationIds.has(operationId);
+}
+
+function isPriorityRecoveryTerminalNonPlacementOperationContext(
+  operationContext,
+) {
+  return (
+    isPriorityRecoveryOperationContextTerminal(operationContext) !== false &&
+    isPriorityRecoveryCompletedPlacementOperationContext(operationContext) !==
+      true
+  );
+}
+
+function shouldSkipPriorityRecoverySpreadRelevantOperationContext(
+  operationContext,
+  operationId,
+  seenOperationIds,
+  supersededOperationIds,
+) {
+  return (
+    hasPriorityRecoverySeenOperationId(operationId, seenOperationIds) ||
+    isPriorityRecoveryOperationIdSuperseded(
+      operationId,
+      supersededOperationIds,
+    ) ||
+    isPriorityRecoveryTerminalNonPlacementOperationContext(operationContext)
+  );
+}
+
 function buildPriorityRecoverySpreadRelevantOperationContexts(
   operationContexts = [],
 ) {
   const spreadRelevantOperationContexts = [];
   const seenOperationIds = new Set();
+  const normalizedOperationContexts =
+    normalizePriorityRecoveryOperationContextList(operationContexts);
   const supersededOperationIds =
-    buildPriorityRecoverySupersededOperationIdSet(operationContexts);
-  for (const operationContext of Array.isArray(operationContexts) ?
-    operationContexts :
-    []) {
-    if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
-      continue;
-    }
-    const operationId = String(operationContext.operationId || '').trim();
-    if (operationId.length > NUM.ZERO && seenOperationIds.has(operationId)) {
-      continue;
-    }
+    buildPriorityRecoverySupersededOperationIdSet(normalizedOperationContexts);
+  for (const operationContext of normalizedOperationContexts) {
+    const operationId =
+      resolvePriorityRecoveryOperationContextOperationId(operationContext);
     if (
-      operationId.length > NUM.ZERO &&
-      supersededOperationIds.has(operationId)
-    ) {
-      continue;
-    }
-    if (
-      isPriorityRecoveryOperationContextTerminal(operationContext) !== false &&
-      isPriorityRecoveryCompletedPlacementOperationContext(operationContext) !==
-        true
+      shouldSkipPriorityRecoverySpreadRelevantOperationContext(
+        operationContext,
+        operationId,
+        seenOperationIds,
+        supersededOperationIds,
+      )
     ) {
       continue;
     }
@@ -258,6 +303,16 @@ function resolvePriorityRecoveryOperationContextFreshnessMs(operationContext) {
   return Math.max(...freshnessCandidates);
 }
 
+function isPriorityRecoveryDispatchPendingWorkflowStep(operationContext) {
+  const workflowStep = String(
+    operationContext?.workflowStep || LOCAL_STR_EMPTY,
+  ).toUpperCase();
+  return (
+    workflowStep === WORKFLOW_STEP.PENDING ||
+    workflowStep === WORKFLOW_STEP.SENDING
+  );
+}
+
 function isPriorityRecoverySupersedableInFlightOperationContext(
   operationContext,
 ) {
@@ -270,75 +325,121 @@ function isPriorityRecoverySupersedableInFlightOperationContext(
   if (isReplaceRemoveDispatchPhase(operationContext)) {
     return false;
   }
+  if (isPriorityRecoveryDispatchPendingWorkflowStep(operationContext)) {
+    return false;
+  }
   return (
     operationContext.targetVisibilityState !==
     PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
   );
 }
 
-function buildPriorityRecoverySupersededOperationIdSet(operationContexts = []) {
-  const normalizedOperationContexts = Array.isArray(operationContexts) ?
-    operationContexts.filter(
-      (operationContext) =>
-        operationContext && typeof operationContext === TYPEOF.OBJECT,
-    ) :
-    [];
+function shouldTrackPriorityRecoveryTerminalFreshness(operationContext) {
+  return (
+    isPriorityRecoveryOperationContextTerminal(operationContext) === true &&
+    isPriorityRecoveryCompletedPlacementOperationContext(operationContext) !==
+      true
+  );
+}
+
+function recordPriorityRecoveryTerminalFreshness(
+  latestTerminalFreshnessByPartitionId,
+  operationContext,
+) {
+  const partitionId =
+    resolvePriorityRecoveryOperationContextPartitionId(operationContext);
+  if (partitionId.length === NUM.ZERO) {
+    return;
+  }
+  const terminalFreshness =
+    resolvePriorityRecoveryOperationContextFreshnessMs(operationContext);
+  if (!Number.isFinite(terminalFreshness)) {
+    return;
+  }
+  const previousFreshness =
+    latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.ZERO;
+  if (terminalFreshness > previousFreshness) {
+    latestTerminalFreshnessByPartitionId.set(partitionId, terminalFreshness);
+  }
+}
+
+function buildPriorityRecoveryLatestTerminalFreshnessByPartitionId(
+  normalizedOperationContexts,
+) {
   const latestTerminalFreshnessByPartitionId = new Map();
   for (const operationContext of normalizedOperationContexts) {
-    if (isPriorityRecoveryOperationContextTerminal(operationContext) !== true) {
+    if (!shouldTrackPriorityRecoveryTerminalFreshness(operationContext)) {
       continue;
     }
-    if (
-      isPriorityRecoveryCompletedPlacementOperationContext(operationContext)
-    ) {
-      continue;
-    }
-    const partitionId = String(
-      operationContext.partitionId || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-    ).trim();
-    if (partitionId.length === NUM.ZERO) {
-      continue;
-    }
-    const terminalFreshness =
-      resolvePriorityRecoveryOperationContextFreshnessMs(operationContext);
-    if (!Number.isFinite(terminalFreshness)) {
-      continue;
-    }
-    const previousFreshness =
-      latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.ZERO;
-    if (terminalFreshness > previousFreshness) {
-      latestTerminalFreshnessByPartitionId.set(partitionId, terminalFreshness);
-    }
+    recordPriorityRecoveryTerminalFreshness(
+      latestTerminalFreshnessByPartitionId,
+      operationContext,
+    );
   }
+  return latestTerminalFreshnessByPartitionId;
+}
+
+function shouldSupersedePriorityRecoveryOperationContext(
+  operationContext,
+  latestTerminalFreshnessByPartitionId,
+) {
+  const partitionId =
+    resolvePriorityRecoveryOperationContextPartitionId(operationContext);
+  if (partitionId.length === NUM.ZERO) {
+    return false;
+  }
+  const operationFreshness =
+    resolvePriorityRecoveryOperationContextFreshnessMs(operationContext);
+  const latestTerminalFreshness =
+    latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.NEGATIVE_ONE;
+  return (
+    Number.isFinite(operationFreshness) &&
+    Number.isFinite(latestTerminalFreshness) &&
+    latestTerminalFreshness > operationFreshness
+  );
+}
+
+function collectPriorityRecoverySupersededOperationIdSet(
+  normalizedOperationContexts,
+  latestTerminalFreshnessByPartitionId,
+) {
   const supersededOperationIds = new Set();
   for (const operationContext of normalizedOperationContexts) {
+    const operationId =
+      resolvePriorityRecoveryOperationContextOperationId(operationContext);
+    if (operationId.length === NUM.ZERO) {
+      continue;
+    }
     if (
-      !isPriorityRecoverySupersedableInFlightOperationContext(operationContext)
+      !isPriorityRecoverySupersedableInFlightOperationContext(
+        operationContext,
+      )
     ) {
       continue;
     }
-    const operationId = String(
-      operationContext.operationId || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-    ).trim();
-    const partitionId = String(
-      operationContext.partitionId || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-    ).trim();
-    if (operationId.length === NUM.ZERO || partitionId.length === NUM.ZERO) {
-      continue;
-    }
-    const operationFreshness =
-      resolvePriorityRecoveryOperationContextFreshnessMs(operationContext);
-    const latestTerminalFreshness =
-      latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.NEGATIVE_ONE;
     if (
-      Number.isFinite(operationFreshness) &&
-      Number.isFinite(latestTerminalFreshness) &&
-      latestTerminalFreshness > operationFreshness
+      shouldSupersedePriorityRecoveryOperationContext(
+        operationContext,
+        latestTerminalFreshnessByPartitionId,
+      )
     ) {
       supersededOperationIds.add(operationId);
     }
   }
   return supersededOperationIds;
+}
+
+function buildPriorityRecoverySupersededOperationIdSet(operationContexts = []) {
+  const normalizedOperationContexts =
+    normalizePriorityRecoveryOperationContextList(operationContexts);
+  const latestTerminalFreshnessByPartitionId =
+    buildPriorityRecoveryLatestTerminalFreshnessByPartitionId(
+      normalizedOperationContexts,
+    );
+  return collectPriorityRecoverySupersededOperationIdSet(
+    normalizedOperationContexts,
+    latestTerminalFreshnessByPartitionId,
+  );
 }
 
 function resolvePriorityRecoverySemanticState(options = {}) {
@@ -383,6 +484,103 @@ function resolvePriorityRecoveryReasonCodesFromReadiness(readinessEntry) {
   );
 }
 
+function buildPriorityRecoveryPlannerReasons(spreadGap) {
+  return spreadGap > NUM.ZERO ?
+    [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP] :
+    [];
+}
+
+function buildPriorityRecoveryExclusionReasonCounts(partition) {
+  return partition?.exclusionReasonCounts &&
+    typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
+    {exclusionReasonCounts: {...partition.exclusionReasonCounts}} :
+    {};
+}
+
+function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
+  const partitionId = String(partition?.partitionId || '').trim();
+  if (partitionId.length === NUM.ZERO) {
+    return PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE;
+  }
+  const spreadGap = Math.max(
+    NUM.ZERO,
+    normalizePriorityRecoveryInteger(partition?.spreadGap) || NUM.ZERO,
+  );
+  return {
+    partitionId,
+    requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
+      partition?.requiredDistinctNodeCount,
+    ),
+    readyDistinctNodeCount: normalizePriorityRecoveryInteger(
+      partition?.readyDistinctNodeCount,
+    ),
+    readyReplicaCount: normalizePriorityRecoveryInteger(
+      partition?.readyReplicaCount,
+    ),
+    // CL-021 witness pass-through: why rows were excluded before diagnostics.
+    ...buildPriorityRecoveryExclusionReasonCounts(partition),
+    spreadGap,
+    ready: spreadGap === NUM.ZERO,
+    reasons: buildPriorityRecoveryPlannerReasons(spreadGap),
+  };
+}
+
+function appendPriorityRecoveryBlockedPartitionPlanner(
+  plannerByPartitionId,
+  partition,
+) {
+  const planner = buildPriorityRecoveryBlockedPartitionPlanner(partition);
+  if (!planner) {
+    return;
+  }
+  plannerByPartitionId[planner.partitionId] = planner;
+}
+
+function appendPriorityRecoveryPlannerReason(planner, reason) {
+  if (planner.reasons.includes(reason)) {
+    return;
+  }
+  planner.reasons.push(reason);
+}
+
+function buildPriorityRecoveryMissingPartitionPlanner(
+  partitionId,
+  normalizedSummary,
+) {
+  return {
+    partitionId,
+    requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
+      normalizedSummary?.requiredDistinctNodeCount,
+    ),
+    readyDistinctNodeCount: NUM.ZERO,
+    spreadGap:
+      normalizePriorityRecoveryInteger(
+        normalizedSummary?.requiredDistinctNodeCount,
+      ) || NUM.ONE,
+    ready: false,
+    reasons: [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING],
+  };
+}
+
+function appendPriorityRecoveryMissingPartitionPlanner(
+  plannerByPartitionId,
+  partitionId,
+  normalizedSummary,
+) {
+  if (plannerByPartitionId[partitionId]) {
+    appendPriorityRecoveryPlannerReason(
+      plannerByPartitionId[partitionId],
+      PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING,
+    );
+    return;
+  }
+  plannerByPartitionId[partitionId] =
+    buildPriorityRecoveryMissingPartitionPlanner(
+      partitionId,
+      normalizedSummary,
+    );
+}
+
 function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
   const normalizedSummary =
     priorityPartitionSummary &&
@@ -397,66 +595,14 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
   );
   const plannerByPartitionId = {};
   for (const partition of blockedPartitions) {
-    const partitionId = String(partition?.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
-      continue;
-    }
-    const spreadGap = Math.max(
-      NUM.ZERO,
-      normalizePriorityRecoveryInteger(partition?.spreadGap) || NUM.ZERO,
-    );
-    plannerByPartitionId[partitionId] = {
-      partitionId,
-      requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
-        partition?.requiredDistinctNodeCount,
-      ),
-      readyDistinctNodeCount: normalizePriorityRecoveryInteger(
-        partition?.readyDistinctNodeCount,
-      ),
-      readyReplicaCount: normalizePriorityRecoveryInteger(
-        partition?.readyReplicaCount,
-      ),
-      // CL-021 witness pass-through: WHY rows were excluded from the ready
-      // count (e.g. raft_role_missing) — without it the planner-blindness
-      // cause is stripped before reaching the rebalancer diagnostics.
-      ...(partition?.exclusionReasonCounts &&
-        typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
-        {exclusionReasonCounts: {...partition.exclusionReasonCounts}} :
-        {}),
-      spreadGap,
-      ready: spreadGap === NUM.ZERO,
-      reasons:
-        spreadGap > NUM.ZERO ?
-          [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP] :
-          [],
-    };
+    appendPriorityRecoveryBlockedPartitionPlanner(plannerByPartitionId, partition);
   }
   for (const partitionId of missingPartitionIds) {
-    if (plannerByPartitionId[partitionId]) {
-      if (
-        !plannerByPartitionId[partitionId].reasons.includes(
-          PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING,
-        )
-      ) {
-        plannerByPartitionId[partitionId].reasons.push(
-          PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING,
-        );
-      }
-      continue;
-    }
-    plannerByPartitionId[partitionId] = {
+    appendPriorityRecoveryMissingPartitionPlanner(
+      plannerByPartitionId,
       partitionId,
-      requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
-        normalizedSummary?.requiredDistinctNodeCount,
-      ),
-      readyDistinctNodeCount: NUM.ZERO,
-      spreadGap:
-        normalizePriorityRecoveryInteger(
-          normalizedSummary?.requiredDistinctNodeCount,
-        ) || NUM.ONE,
-      ready: false,
-      reasons: [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING],
-    };
+      normalizedSummary,
+    );
   }
   return plannerByPartitionId;
 }
@@ -464,11 +610,11 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
 function buildUnknownPriorityRecoveryPlanner(partitionId) {
   return {
     partitionId,
-    requiredDistinctNodeCount: null,
-    readyDistinctNodeCount: null,
-    spreadGap: null,
-    ready: null,
-    reasons: [],
+    requiredDistinctNodeCount: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
+    readyDistinctNodeCount: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
+    spreadGap: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
+    ready: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
+    reasons: PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION,
   };
 }
 
@@ -509,10 +655,10 @@ function buildPriorityRecoveryPlannerEntry(
     requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
       normalizedSummary.requiredDistinctNodeCount,
     ),
-    readyDistinctNodeCount: null,
+    readyDistinctNodeCount: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
     spreadGap: NUM.ZERO,
     ready: true,
-    reasons: [],
+    reasons: PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION,
   };
 }
 
@@ -551,6 +697,21 @@ function buildPriorityRecoveryDecisionPartitionIdSet(decisionSnapshots = null) {
   if (!decisionSnapshots || typeof decisionSnapshots !== TYPEOF.OBJECT) {
     return partitionIds;
   }
+  addPriorityRecoveryDecisionSnapshotPartitionIds(
+    partitionIds,
+    decisionSnapshots,
+  );
+  addPriorityRecoveryDecisionSemanticPartitionIds(
+    partitionIds,
+    decisionSnapshots,
+  );
+  return partitionIds;
+}
+
+function addPriorityRecoveryDecisionSnapshotPartitionIds(
+  partitionIds,
+  decisionSnapshots,
+) {
   for (const snapshot of Array.isArray(decisionSnapshots.snapshots) ?
     decisionSnapshots.snapshots :
     []) {
@@ -559,6 +720,12 @@ function buildPriorityRecoveryDecisionPartitionIdSet(decisionSnapshots = null) {
       partitionIds.add(partitionId);
     }
   }
+}
+
+function addPriorityRecoveryDecisionSemanticPartitionIds(
+  partitionIds,
+  decisionSnapshots,
+) {
   const partitionIdsBySemanticState =
     decisionSnapshots.partitionIdsBySemanticState &&
     typeof decisionSnapshots.partitionIdsBySemanticState === TYPEOF.OBJECT ?
@@ -573,7 +740,6 @@ function buildPriorityRecoveryDecisionPartitionIdSet(decisionSnapshots = null) {
       partitionIds.add(partitionId);
     }
   }
-  return partitionIds;
 }
 
 function isPriorityRecoveryTrackedPartitionId(partitionId) {

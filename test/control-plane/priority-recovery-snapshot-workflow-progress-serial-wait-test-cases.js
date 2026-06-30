@@ -49,7 +49,6 @@ export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
     PRIORITY_RECOVERY_PROGRESS_EVIDENCE_OPERATION_CONTEXT,
     PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
-    PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
     PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
     PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
@@ -79,6 +78,7 @@ export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(
     PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
     PUBLICATION_PRIORITY_PARTITION_ID,
     REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+    resolvePriorityRecoveryWorkflowStepAgeMs,
     SQL_TRANSACTION_PRIORITY_PARTITION_ID,
     test,
   } = context;
@@ -954,6 +954,23 @@ export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(
           PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
         ),
         'the progress contract should preserve workflow-state evidence',
+      );
+    });
+
+  test('priority recovery workflow step age falls back to row age when target progress time is unusable',
+    async (t) => {
+      const fallbackAgeMs = PRIORITY_RECOVERY_PENDING_TIMEOUT_MS;
+      const progressAtMs = PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS;
+
+      t.equal(
+        resolvePriorityRecoveryWorkflowStepAgeMs({
+          workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+          targetServiceProgressAtMs: progressAtMs,
+          updatedAtMs: progressAtMs,
+          ageMs: fallbackAgeMs,
+        }, progressAtMs - PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT),
+        fallbackAgeMs,
+        'target progress contexts should keep row age when elapsed age is not computable',
       );
     });
 

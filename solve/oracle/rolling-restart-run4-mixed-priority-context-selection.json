@@ -1,0 +1,45 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "mixed-dispatch-pending-context-selection-green",
+  "evidence": {
+    "focusedRegression": "buildPriorityRecoveryDecisionSnapshots keeps mixed terminal sibling evidence on the still-open dispatch-pending operation",
+    "ageFallbackRegression": "priority recovery workflow step age falls back to row age when target progress time is unusable",
+    "subagents": [
+      "019f183a-7d83-7153-93cf-33919cadea7f"
+    ]
+  },
+  "observed": {
+    "mixedContextFixture": "sql_transactions-p1 has an open PENDING REPLACE row plus a newer terminal REMOVED sibling",
+    "selectedOperationId": "PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT",
+    "latestOperationWorkflowStep": "PENDING",
+    "latestOperationStatus": "pending",
+    "actuationOwner": "operation_workflow_owner",
+    "actuationState": "persisted_not_dispatched",
+    "workflowProgressPhaseId": "dispatch_pending",
+    "progressAction": "advance_existing_operation",
+    "blockingBoundary": "workflow_progress",
+    "terminalSiblingBehavior": "newer terminal-only rows still remain terminal evidence; they are not re-driven",
+    "ageFallbackBehavior": "target progress contexts use row ageMs when elapsed target-progress age is not computable"
+  },
+  "rulesOut": [
+    "parent rolling-restart Wilson statistical closure",
+    "broad ACTIVE, failed-only, or terminal-only priority recovery discounts",
+    "terminal REMOVED or FAILED row re-dispatch",
+    "helper extraction that makes row ageMs unreachable for target-progress contexts"
+  ],
+  "validations": {
+    "redGreen": "mixed terminal sibling regression failed before source changes with REMOVED/terminal evidence, then passed after ingress and observation fixes",
+    "focusedRegression": "npm test -- test/control-plane/priority-recovery-snapshot.test.js --grep \"workflow step age falls back|mixed terminal sibling\"",
+    "snapshotSuite": "npm test -- test/control-plane/priority-recovery-snapshot.test.js",
+    "eslint": "npx eslint src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "metrics": "npm run test:metrics:scoped -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "fileSize": "npm run audit:file-size -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "runtimeGrammar": "npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "literals": "npm run audit:guideline:literals -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "decisionBoundaries": "npm run audit:guideline:decision-boundaries -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "constantNames": "npm run guard:guideline:constant-names:file -- src/control-plane/priority-recovery-snapshot-ingress.js src/control-plane/priority-recovery-snapshot-observation.js ./test/control-plane/priority-recovery-snapshot-supplemental-dispatch-pending-owner-progress-test-cases.js ./test/control-plane/priority-recovery-snapshot-workflow-progress-serial-wait-test-cases.js ./test/control-plane/priority-recovery-snapshot.test.js",
+    "diffCheck": "git diff --check"
+  }
+}

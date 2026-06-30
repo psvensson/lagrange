@@ -29,6 +29,28 @@ import {
 } from './priority-recovery-snapshot-contract.js';
 import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
 
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_BY_STEP = Object.freeze(
+  new Map([
+    [
+      WORKFLOW_STEP.PENDING,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    ],
+    [
+      WORKFLOW_STEP.SENDING,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    ],
+    [
+      WORKFLOW_STEP.CREATING,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+    ],
+    [
+      WORKFLOW_STEP.SYNCING,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+    ],
+  ]),
+);
+const PRIORITY_RECOVERY_ACTUATION_FIELD_UNAVAILABLE = null;
+
 function resolvePriorityRecoveryWorkflowState(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
@@ -113,6 +135,12 @@ function resolvePriorityRecoveryOperationProgressTimestampMs(operationContext) {
     NUM.ZERO;
 }
 
+function resolvePriorityRecoverySourceRemovalProgressPhase(operationContext) {
+  return isReplaceRemoveDispatchPhase(operationContext) ?
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL :
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.UNKNOWN;
+}
+
 function resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) {
   if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
     return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.NONE;
@@ -120,30 +148,32 @@ function resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) {
   const workflowStep = String(
     operationContext?.workflowStep || '',
   ).toUpperCase();
-  if (
-    workflowStep === WORKFLOW_STEP.PENDING ||
-    workflowStep === WORKFLOW_STEP.SENDING
-  ) {
-    return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING;
-  }
-  if (workflowStep === WORKFLOW_STEP.CREATING) {
-    return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION;
-  }
-  if (workflowStep === WORKFLOW_STEP.SYNCING) {
-    return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC;
+  const directPhase =
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_BY_STEP.get(workflowStep);
+  if (directPhase) {
+    return directPhase;
   }
   if (
     workflowStep === WORKFLOW_STEP.ACTIVE ||
     workflowStep === WORKFLOW_STEP.STOPPING
   ) {
-    return isReplaceRemoveDispatchPhase(operationContext) ?
-      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL :
-      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.UNKNOWN;
+    return resolvePriorityRecoverySourceRemovalProgressPhase(operationContext);
   }
   if (isPriorityRecoveryOperationContextTerminal(operationContext) === true) {
     return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL;
   }
   return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.UNKNOWN;
+}
+
+function resolvePriorityRecoveryAgeSinceMs(referenceNowMs, progressAtMs) {
+  if (
+    !Number.isFinite(referenceNowMs) ||
+    !Number.isFinite(progressAtMs) ||
+    referenceNowMs < progressAtMs
+  ) {
+    return null;
+  }
+  return Math.max(NUM.ZERO, referenceNowMs - progressAtMs);
 }
 
 function resolvePriorityRecoveryWorkflowStepAgeMs(
@@ -158,25 +188,21 @@ function resolvePriorityRecoveryWorkflowStepAgeMs(
     resolvePriorityRecoveryOperationProgressTimestampMs(operationContext);
   if (
     Number.isFinite(targetServiceProgressAtMs) &&
-    targetServiceProgressAtMs > NUM.ZERO &&
-    Number.isFinite(referenceNowMs) &&
-    Number.isFinite(progressAtMs) &&
-    referenceNowMs >= progressAtMs
+    targetServiceProgressAtMs > NUM.ZERO
   ) {
-    return Math.max(NUM.ZERO, referenceNowMs - progressAtMs);
+    const targetProgressAgeMs = resolvePriorityRecoveryAgeSinceMs(
+      referenceNowMs,
+      progressAtMs,
+    );
+    if (Number.isFinite(targetProgressAgeMs)) {
+      return targetProgressAgeMs;
+    }
   }
   const ageMs = normalizePriorityRecoveryInteger(operationContext?.ageMs);
   if (Number.isFinite(ageMs) && ageMs >= NUM.ZERO) {
     return ageMs;
   }
-  if (
-    Number.isFinite(referenceNowMs) &&
-    Number.isFinite(progressAtMs) &&
-    referenceNowMs >= progressAtMs
-  ) {
-    return Math.max(NUM.ZERO, referenceNowMs - progressAtMs);
-  }
-  return null;
+  return resolvePriorityRecoveryAgeSinceMs(referenceNowMs, progressAtMs);
 }
 
 function resolvePriorityRecoveryWorkflowStepTimeoutMs(
@@ -315,6 +341,34 @@ function arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions(
   );
 }
 
+function comparePriorityRecoveryOperationContextProgress(left, right) {
+  const timestampDifference =
+    resolvePriorityRecoveryOperationProgressTimestampMs(right) -
+    resolvePriorityRecoveryOperationProgressTimestampMs(left);
+  if (timestampDifference !== NUM.ZERO) {
+    return timestampDifference;
+  }
+  return String(left?.operationId || LOCAL_STR_EMPTY).localeCompare(
+    String(right?.operationId || LOCAL_STR_EMPTY),
+  );
+}
+
+function selectNewestPriorityRecoveryOperationContext(operationContexts = []) {
+  return (
+    operationContexts.slice().sort(
+      comparePriorityRecoveryOperationContextProgress,
+    )[NUM.ZERO] || null
+  );
+}
+
+function isPriorityRecoveryDispatchPendingOperationContext(operationContext) {
+  return (
+    isPriorityRecoveryOperationContextTerminal(operationContext) !== true &&
+    resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING
+  );
+}
+
 function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
@@ -325,14 +379,16 @@ function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
   if (normalizedContexts.length === NUM.ZERO) {
     return null;
   }
-  return (
-    normalizedContexts.slice().sort((left, right) => {
-      return (
-        resolvePriorityRecoveryOperationProgressTimestampMs(right) -
-        resolvePriorityRecoveryOperationProgressTimestampMs(left)
-      );
-    })[NUM.ZERO] || null
-  );
+  const newestContext =
+    selectNewestPriorityRecoveryOperationContext(normalizedContexts);
+  if (isPriorityRecoveryOperationContextTerminal(newestContext) !== true) {
+    return newestContext;
+  }
+  return selectNewestPriorityRecoveryOperationContext(
+    normalizedContexts.filter(
+      isPriorityRecoveryDispatchPendingOperationContext,
+    ),
+  ) || newestContext;
 }
 
 function hasPriorityRecoveryScheduledRetry(retryAfterMs) {
@@ -381,36 +437,54 @@ function buildPriorityRecoveryProgressEvidenceSourceIds(options = {}) {
   return Object.freeze(normalizePriorityRecoveryStringList(evidenceSourceIds));
 }
 
+function resolvePriorityRecoveryObjectOption(value) {
+  return value && typeof value === TYPEOF.OBJECT ? value : null;
+}
+
+function resolvePriorityRecoveryLatestOperationValue(
+  latestOperationContext,
+  fieldName,
+) {
+  const value = latestOperationContext?.[fieldName];
+  return typeof value === TYPEOF.STRING ?
+    value.trim() :
+    PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE;
+}
+
+function buildPriorityRecoveryLatestOperationConditions(
+  latestOperationContext,
+) {
+  const latestOperationWorkflowStep =
+    resolvePriorityRecoveryLatestOperationValue(
+      latestOperationContext,
+      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.WORKFLOWSTEP,
+    );
+  const latestOperationStatus =
+    resolvePriorityRecoveryLatestOperationValue(
+      latestOperationContext,
+      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.STATUS,
+    );
+  return Object.freeze({
+    ...(latestOperationWorkflowStep.length > NUM.ZERO ?
+      {latestOperationWorkflowStep} :
+      {}),
+    ...(latestOperationStatus.length > NUM.ZERO ? {latestOperationStatus} : {}),
+  });
+}
+
 function buildPriorityRecoveryConditionsContract(options = {}) {
-  const observation =
-    options.observation && typeof options.observation === TYPEOF.OBJECT ?
-      options.observation :
-      null;
-  const assessment =
-    options.assessment && typeof options.assessment === TYPEOF.OBJECT ?
-      options.assessment :
-      null;
-  const admission =
-    options.admission && typeof options.admission === TYPEOF.OBJECT ?
-      options.admission :
-      null;
-  const latestOperationContext =
-    options.latestOperationContext &&
-    typeof options.latestOperationContext === TYPEOF.OBJECT ?
-      options.latestOperationContext :
-      null;
+  const observation = resolvePriorityRecoveryObjectOption(options.observation);
+  const assessment = resolvePriorityRecoveryObjectOption(options.assessment);
+  const admission = resolvePriorityRecoveryObjectOption(options.admission);
+  const latestOperationContext = resolvePriorityRecoveryObjectOption(
+    options.latestOperationContext,
+  );
   const pressure = buildPriorityRecoveryPressureConditions(options.logsTable);
   const visibilityState = String(
     observation?.visibilityState || PRIORITY_RECOVERY_VISIBILITY_STATE.NONE,
   ).trim();
-  const latestOperationWorkflowStep =
-    typeof latestOperationContext?.workflowStep === TYPEOF.STRING ?
-      latestOperationContext.workflowStep.trim() :
-      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE;
-  const latestOperationStatus =
-    typeof latestOperationContext?.status === TYPEOF.STRING ?
-      latestOperationContext.status.trim() :
-      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE;
+  const latestOperationConditions =
+    buildPriorityRecoveryLatestOperationConditions(latestOperationContext);
   return Object.freeze({
     visibilityState,
     authoritativeOperationReadDeferred:
@@ -422,10 +496,7 @@ function buildPriorityRecoveryConditionsContract(options = {}) {
       normalizePriorityRecoveryStringList(admission?.blockingReasons),
     ),
     pressure,
-    ...(latestOperationWorkflowStep.length > NUM.ZERO ?
-      {latestOperationWorkflowStep} :
-      {}),
-    ...(latestOperationStatus.length > NUM.ZERO ? {latestOperationStatus} : {}),
+    ...latestOperationConditions,
   });
 }
 
@@ -480,7 +551,7 @@ function resolvePriorityRecoveryInFlightActuationState(
     workflowState !== PRIORITY_RECOVERY_WORKFLOW_STATE.IN_FLIGHT &&
     workflowState !== PRIORITY_RECOVERY_WORKFLOW_STATE.REMOVE_PHASE
   ) {
-    return null;
+    return PRIORITY_RECOVERY_ACTUATION_FIELD_UNAVAILABLE;
   }
   return resolvePriorityRecoveryDispatchedActuationState(
     latestOperationContext,
@@ -500,7 +571,7 @@ function resolvePriorityRecoveryDispatchedActuationState(
 
 function resolvePriorityRecoveryFollowupActuationState(options = {}) {
   if (options.missingFollowupOperation !== true) {
-    return null;
+    return PRIORITY_RECOVERY_ACTUATION_FIELD_UNAVAILABLE;
   }
   if (options.blocksCriticalRecoveryActuation === true) {
     return PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED;

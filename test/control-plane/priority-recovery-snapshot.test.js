@@ -25,6 +25,8 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {buildPriorityRecoveryObservationSnapshot} from
   '../../src/control-plane/priority-recovery-observation-snapshot.js';
+import {resolvePriorityRecoveryWorkflowStepAgeMs} from
+  '../../src/control-plane/priority-recovery-snapshot-observation.js';
 import {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_EXPECTED,
   buildPriorityRecoveryActuationDecisionInput,
@@ -615,19 +617,36 @@ const priorityRecoverySnapshotTestContext = {
   PUBLICATION_PRIORITY_PARTITION_ID,
   REPLICA_OPERATION_PRIORITY_PARTITION_ID,
   resolvePriorityRecoveryAdmissionPlanFromPublication,
+  resolvePriorityRecoveryWorkflowStepAgeMs,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   SQL_TRANSACTION_PRIORITY_PARTITION_ID,
   test,
 };
 
-registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotProgressContractOwnershipTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotCurrencyReconciliationTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotObservationCurrencyActuationPressureTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotInFlightReplaceClassificationTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(priorityRecoverySnapshotTestContext);
-registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests(priorityRecoverySnapshotTestContext);
+registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotProgressContractOwnershipTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotCurrencyReconciliationTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotObservationCurrencyActuationPressureTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotInFlightReplaceClassificationTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(
+  priorityRecoverySnapshotTestContext,
+);
+registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests(
+  priorityRecoverySnapshotTestContext,
+);
 registerPriorityRecoverySnapshotSupplementalTests(
   priorityRecoverySnapshotTestContext,
 );
