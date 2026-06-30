@@ -1,0 +1,122 @@
+diff --git a/test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js b/test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js
+new file mode 100644
+index 00000000..eee7b5db
+--- /dev/null
++++ b/test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js
+@@ -0,0 +1,116 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import assert from 'node:assert/strict';
++import {LoadGenerator} from '../load-generator.js';
++
++const ZERO = 0;
++const ONE = 1;
++const ADMISSION_BACKOFF_MS = 30;
++const PRESSURE_RETRY_AFTER_MS = 120;
++const LOAD_OPS_PER_SEC = 220;
++const LOAD_DURATION_MS = 180;
++const BREAKER_OWNER_NODE_CLIENT = 'node-client';
++const NODE_CLIENT_ERROR_CODE_OPERATION = 'operation_error';
++const PRIORITY_RECOVERY_REASON = 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
++const PRESSURE_NODE_ID = 'priority-recovery-pressure-node';
++const HEALTHY_NODE_ID = 'healthy-load-node';
++
++test('priority recovery load admission pressure stays bounded and retryable',
++  async () => {
++    let pressureNodeCalls = ZERO;
++    let healthyNodeCalls = ZERO;
++    const nodes = [
++      {
++        id: PRESSURE_NODE_ID,
++        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
++        async query(_sql) {
++          pressureNodeCalls += ONE;
++          const error = new Error(
++            'serve not ready: load lane admission denied on node ' +
++              PRESSURE_NODE_ID +
++              ' (serveEligible=false, reasons=' +
++              PRIORITY_RECOVERY_REASON +
++              ')',
++          );
++          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
++          error.deferRetry = true;
++          error.retryAfterMs = PRESSURE_RETRY_AFTER_MS;
++          error.adminDetails = {
++            loadLaneAdmission: {
++              serveEligible: false,
++              reasonCodes: [PRIORITY_RECOVERY_REASON],
++            },
++          };
++          throw error;
++        },
++      },
++      {
++        id: HEALTHY_NODE_ID,
++        async query(_sql) {
++          healthyNodeCalls += ONE;
++          return {rows: []};
++        },
++      },
++    ];
++
++    const gen = new LoadGenerator(nodes, {
++      opsPerSec: LOAD_OPS_PER_SEC,
++      duration: LOAD_DURATION_MS,
++      admissionBackoffMs: ADMISSION_BACKOFF_MS,
++    });
++    const run = gen.start();
++    try {
++      const metrics = await run.waitComplete();
++      assert.ok(
++        pressureNodeCalls > ZERO,
++        'expected priority recovery admission pressure to be exercised',
++      );
++      assert.ok(
++        healthyNodeCalls > ZERO,
++        'expected healthy load node to continue serving traffic',
++      );
++      assert.ok(
++        metrics.success > ZERO,
++        'expected bounded admission pressure not to stop successful work',
++      );
++      assert.equal(
++        metrics.failed,
++        ZERO,
++        'expected priority recovery load pressure to avoid operation failures',
++      );
++      assert.equal(
++        metrics.errors,
++        ZERO,
++        'expected priority recovery load pressure to avoid operation errors',
++      );
++      assert.ok(
++        metrics.attemptErrors > ZERO,
++        'expected bounded retry pressure to remain visible in attemptErrors',
++      );
++      assert.ok(
++        Number(metrics.waitReasons.retryableControlPlanePressure) > ZERO,
++        'expected retryable control-plane pressure wait reason',
++      );
++      assert.ok(
++        Number(metrics.waitReasons.nodeAdmissionBlocked) > ZERO,
++        'expected scheduler-level node admission blocking after backoff',
++      );
++      assert.equal(
++        Number(metrics.waitReasons.nodeSlotUnavailable),
++        ZERO,
++        'expected priority recovery admission pressure not to be node-slot saturation',
++      );
++      assert.equal(
++        Number(metrics.waitReasons.queueCapacityRejected),
++        ZERO,
++        'expected priority recovery admission pressure not to be queue shedding',
++      );
++      assert.ok(
++        metrics.distinctErrors.some((message) =>
++          message.includes(PRIORITY_RECOVERY_REASON),
++        ),
++        'expected retained error evidence to include the recovery reason',
++      );
++    } finally {
++      run.cancel();
++    }
++  });

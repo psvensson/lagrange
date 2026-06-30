@@ -1,0 +1,26 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "load-lane-owner-reproducer-green",
+  "evidence": {
+    "basis": "Parent finding commit 12533a55 and child commit 39f27a38 show retained run1 load evidence as source=playback, completeness=playback_completed, loadEvidenceClass=product_load_lane_pressure, dominantWaitReason=nodeAdmissionBlocked, nodeAdmissionBlocked=639, retryableControlPlanePressure=49, timeoutWaits=10, nodeSlotUnavailable=0.",
+    "source": [
+      "test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js"
+    ],
+    "adjacentOwnerSuites": [
+      "test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js",
+      "test/admin/admin-websocket-api.test.js"
+    ]
+  },
+  "observed": {
+    "ownerReproducer": "The focused load-generator test composes the load-lane pressure error shape with the scheduler metrics path: a priority-recovery pressure node throws a retryable load-lane admission denial containing PRIORITY_CONTROL_PLANE_RECOVERY_PENDING while a healthy node continues serving load.",
+    "boundedPressure": "The reproducer asserts success>0, failed=0, errors=0, attemptErrors>0, retryableControlPlanePressure>0, nodeAdmissionBlocked>0, nodeSlotUnavailable=0, queueCapacityRejected=0, and retained distinctErrors include PRIORITY_CONTROL_PLANE_RECOVERY_PENDING.",
+    "ownerBoundary": "No runtime source, readiness-support, operation-workflow, validation-matrix, stat-gate semantics, or historical test-output artifacts were changed; the proof stays at the load-generator/admin admission owner boundary.",
+    "counterargumentHandled": "Because the reproducer generates the same load-metrics signature deterministically below the gate, the retained run1 playback-derived evidence is compatible with the owned load-generator wait-reason grammar; this does not by itself prove a live admin node emitted the retained run's exact error."
+  },
+  "validations": {
+    "load-generator-priority-recovery-pressure": "npm test -- test/distributed/harness/__tests__/load-generator-priority-recovery-admission-pressure.test.js",
+    "admin-websocket-api": "npm test -- test/admin/admin-websocket-api.test.js"
+  }
+}
