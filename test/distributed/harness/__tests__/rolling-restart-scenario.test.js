@@ -15,6 +15,7 @@ const CALL_WAIT_FOR_CONSISTENCY_CONVERGENCE =
 const ZERO = 0;
 const PRE_LOAD_READINESS_CALL_COUNT = 1;
 const POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT = ZERO;
+const POST_RESTART_CRITICAL_SYSTEM_REQUIRED_DISTINCT_NODE_COUNT = 2;
 const DEFAULT_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 8;
 const DEFAULT_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
 const DEFAULT_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
@@ -238,6 +239,8 @@ describe('rolling-restart scenario', () => {
         maxInFlightCount: POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT,
         ignoreStaleInFlightReplicaOperations: true,
         requireCriticalSystemSpread: true,
+        criticalSystemRequiredDistinctNodeCount:
+          POST_RESTART_CRITICAL_SYSTEM_REQUIRED_DISTINCT_NODE_COUNT,
       }]);
       assert.equal(
         loadReadinessOptions[ZERO].noProgressMaxAttempts,
@@ -485,6 +488,8 @@ describe('rolling-restart scenario', () => {
         maxInFlightCount: POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT,
         ignoreStaleInFlightReplicaOperations: true,
         requireCriticalSystemSpread: true,
+        criticalSystemRequiredDistinctNodeCount:
+          POST_RESTART_CRITICAL_SYSTEM_REQUIRED_DISTINCT_NODE_COUNT,
       }]);
       assert.deepEqual(
         loadReadinessOptions.slice(PRE_LOAD_READINESS_CALL_COUNT),
