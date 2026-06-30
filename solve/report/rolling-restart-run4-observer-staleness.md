@@ -18,18 +18,18 @@
 - Frontier: rolling-restart-run4-observer-staleness-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: convergence_timeout
+- Dominant reason: leadership_unstable
 - Mechanism: transition_gap
-- Movement: narrowed: PASS -> convergence_timeout
-- Latest evidence: test-output/reports/stat-gate-20260630T020210Z-run15.report.json
+- Movement: narrowed: convergence_timeout -> leadership_unstable
+- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: theory-20260629-active-gate-observer-staleness-contract
 - Next move: continue supervised step for rolling-restart-run4-observer-staleness-main
-- No longer current: PASS; Do not continue source edits in the observer-staleness Quest; do not patch dispatch_pending or source_removal broadly from this N=3 sample without a fresh discriminator.
+- No longer current: convergence_timeout
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for rolling-restart-run4-observer-staleness-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: run the 3-run consecutive proof for rolling-restart-run4-observer-staleness-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
+- Blocker: theory result required when metric is 0 but done is false
 
 ## Scope Pressure
 - Changed files: 2
@@ -40,7 +40,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-observer-staleness-main** [open] rung 1, attempts 1, metric 3 -> 2 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-observer-staleness-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-observer-staleness-main**: This child Quest splits from parent rolling-restart-run4-drain-residual because the parent frontier is honestly parked/exhausted and refused reopen, while N=15 stat-gate-20260629T200727Z exposed a new observation-layer residual: stale/regressed terminal active/readiness evidence can surface nodeSlotUnavailable, publication visibility, or observer-authority lag after monotonic best progress was already green. Work here must stay below-gate until deterministic retained-report and unit coverage falsifies or supports that observation contract. (rules out: Do not patch the exhausted parent frontier directly. Do not weaken SAFE bars or hide acknowledged-write readback failures; stale observer handling must preserve real missing publication and real ack/readback failures.) [solve/report/rolling-restart-run4-drain-residual.md; test-output/reports/stat-gate-20260629T200727Z.json; subagent:019f1565-448e-7250-9fad-15ab0cb148f2; subagent:019f1565-4550-7842-8899-f39038b26039]
@@ -56,6 +56,8 @@
 - **rolling-restart-run4-observer-staleness-main**: Parallel subagent split verification completed after stat-gate-20260629T222417Z: target_creation dispatched_waiting_progress is a real stale priority witness, dispatch_pending persisted_not_dispatched is a distinct but non-binding residue because N=3 runs 2/3 passed with it, and ACTIVE/source_removal from parent run7 should be postponed. Full-log replay shows the run1 representative target_creation operation 434ac3bb-c216-42f1-b7f0-ccfa948bac66 later reached ACTIVE, source removal, drain settlement, and Operation completed; the terminal failure bundle instead has an effective in-flight ACTIVE REPLACE row a3d54c47-50db-44b9-aa7f-869b8f6b4b28 on service_timers-p1 plus a coordinator_created_remote_handoff error on sql_write_operations-p1 operation 6a6e16e7-b894-4359-8f4f-bed8582cac12. Split further work to a new operation-drain Quest. (rules out: Do not continue source edits in the observer-staleness Quest; do not patch dispatch_pending or source_removal broadly from this N=3 sample without a fresh discriminator.) [subagent:019f1599-ecfd-7e33-86da-cfdc9b874f93; subagent:019f159a-0199-7a52-8fe9-85e484c909e4; subagent:019f159a-1b17-7c12-b5ed-56d63c3d91fe; test-output/reports/stat-gate-20260629T222417Z-run1.report.json; test-output/reports/.playback/stat-gate-20260629T222417Z-run1/rolling-restart/failure-bundle.json]
 - **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T020210Z-run15.report.json. Metric: 3 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
 - **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T020210Z-run15.report.json. Metric: 3 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
+- **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 2 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-observer-staleness-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Theories
 - **theory-20260629-active-gate-observer-staleness-contract** [supported] frontier, frontier rolling-restart-run4-observer-staleness-main, layer observation, mechanism The rolling-restart terminal observer can classify stale or regressed readiness/authority samples as nodeSlotUnavailable, publication visibility, or observer lag after the monotonic active-gate evidence already reached full published-active coverage, pendingAck=0, missingPublished=0, priority spread ready, and blockers ready., owner startup_active_gate_owner, boundary terminal_observer_evidence, modelGate npm run model:contracts
@@ -73,6 +75,7 @@
 - **theory-20260629-active-gate-observer-staleness-contract**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T222417Z-run3.report.json]
 - **theory-20260629-active-gate-observer-staleness-contract**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260629T222417Z.json]
 - **theory-20260629-active-gate-observer-staleness-contract**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
+- **theory-20260629-active-gate-observer-staleness-contract**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

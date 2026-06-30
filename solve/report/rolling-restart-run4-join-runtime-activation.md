@@ -16,19 +16,18 @@
 - Frontier: rolling-restart-run4-join-runtime-activation-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: convergence_timeout
+- Dominant reason: leadership_unstable
 - Mechanism: transition_gap
-- Movement: narrowed: startup_readiness_owner / startup_support_evidence / publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a -> convergence_timeout
-- Latest evidence: test-output/reports/stat-gate-20260630T020210Z-run15.report.json
+- Movement: narrowed: convergence_timeout -> leadership_unstable
+- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: startup-readiness-support-evidence-handoff-residual
 - Next move: continue supervised step for rolling-restart-run4-join-runtime-activation-main
-- Oscillation: blocker "convergence_timeout" revisited 3x (whack-a-mole; change strategy)
-- No longer current: startup_readiness_owner / startup_support_evidence / publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a; Do not widen the durable rejoin runtime patch to chase N=15 residuals: repeated completed-run analyses classify them under startup_readiness_owner/startup_support_evidence, membership-publication owner reconcile/handoff, convergence_timeout operation drain/over-target, or publication_missing_active_node; priority residual witnesses are zero in analyzed non-pass runs.; Do not describe run15 itself as a publication_missing_active_node failure; keep the durable rejoin runtime activation fix separate because no current evidence points back to initialized partition runtime activation.
+- No longer current: convergence_timeout; Do not describe run15 itself as a publication_missing_active_node failure; keep the durable rejoin runtime activation fix separate because no current evidence points back to initialized partition runtime activation.
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for rolling-restart-run4-join-runtime-activation-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: run the 15-run consecutive proof for rolling-restart-run4-join-runtime-activation-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
+- Blocker: theory result required when metric is 0 but done is false
 
 ## Scope Pressure
 - Changed files: 4
@@ -40,7 +39,7 @@
 - Signals: none
 
 ## Frontiers
-- **rolling-restart-run4-join-runtime-activation-main** [open] rung 2, attempts 2, metric 3 -> 2 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-join-runtime-activation-main** [open] rung 2, attempts 2, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T002604Z-run1.report.json. Metric: unknown -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T002604Z-run1.report.json]
@@ -81,6 +80,8 @@
 - **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T020210Z-run15.report.json. Metric: 2 -> 2. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
 - **rolling-restart-run4-join-runtime-activation-main**: N=15 gate stat-gate-20260630T020210Z ran on current source fingerprint cd96daef72c3653b with staleSourceRuns=0, NODE_EXIT=0, CORRUPT=0, ORACLE_BLIND=0, and a full-log fatal scan across all runs found no 'Partition service activation requires initialized runtime', no join failure text, and no fatal/uncaught markers. This gives full-window support that the durable rejoin initialized-runtime NODE_EXIT target is removed. The sealed consecutive:15 doneWhen remains false (8/15 CONVERGED, 2 STALLED, 5 TOPOLOGY_BLOCKED; latest live probe metric=2 done=false) because residual failures are startup-readiness, membership-publication handoff, operation-drain/over-target, or publication-missing-active-node shapes outside the durable rejoin runtime activation fix. (rules out: Do not widen the durable rejoin runtime patch to chase N=15 residuals: repeated completed-run analyses classify them under startup_readiness_owner/startup_support_evidence, membership-publication owner reconcile/handoff, convergence_timeout operation drain/over-target, or publication_missing_active_node; priority residual witnesses are zero in analyzed non-pass runs.) [test-output/reports/stat-gate-20260630T020210Z.md; test-output/reports/stat-gate-20260630T020210Z.json; test-output/reports/stat-gate-20260630T020210Z-run1.report.json..run15.report.json; node scripts/solve.js probe --probe scenario-harness --scenario rolling-restart --consecutive 15 --metric priority; zgrep fatal scan over test-output/reports/.playback/stat-gate-20260630T020210Z-run*/.full-logs/rolling-restart/*.log.gz; analyzers for runs 1,4,9,12,13,14]
 - **rolling-restart-run4-join-runtime-activation-main**: Subagent residual-theory verification supports the fresh startup-readiness-support-evidence-handoff-residual theory: N=15 aggregate evidence is clean for NODE_EXIT and initialized-runtime fatal text, latest run15 is topology/convergence_timeout with topology frontier readiness_startup_support owned by startup_readiness_owner/startup_support_evidence plus operation_drain/no_over_target evidence, and runs 1/4/12/13/14 repeat the readiness-support frontier across nodeSlotUnavailable, readiness timeout, convergence_timeout, and publication_missing_active_node shapes. The verifier caveat is that membership-publication handoff is strongest in runs 1 and 14, while run15 itself has publication witness satisfied and should be cited as readiness plus operation drain/no-over-target. (rules out: Do not describe run15 itself as a publication_missing_active_node failure; keep the durable rejoin runtime activation fix separate because no current evidence points back to initialized partition runtime activation.) [subagent:019f16a5-20cc-7090-aa17-9b8add926e60; test-output/reports/stat-gate-20260630T020210Z.md; test-output/reports/stat-gate-20260630T020210Z-run15.report.json; npm run analyze:topology-convergence -- test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
+- **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 2 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Theories
 - **durable-rejoin-runtime-proof-after-reconciler** [falsified] frontier, frontier rolling-restart-run4-join-runtime-activation-main, layer ownership, mechanism Durable rejoin restore treated a completed reconciler cycle as proof that exact local partition runtimes were initialized, but ServiceReconciler records per-action failures without throwing, so explicit restore activation can still see stale initialized=false PartitionService entries., owner NodeJoiningPublicationActivation durable-rejoin restore owner, boundary restoreDurableRejoinLocalPartitionServices -> activateJoinPartitionServiceRows, modelGate npm run model:contracts
@@ -110,6 +111,7 @@
 - **durable-rejoin-runtime-proof-after-reconciler**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260630T020210Z-run14.report.json]
 - **durable-rejoin-runtime-proof-after-reconciler**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
 - **startup-readiness-support-evidence-handoff-residual**: supported (scenario=failed, theory=supported, movement=narrowed) [npm run model:contracts; npm run analyze:topology-convergence -- test-output/reports/stat-gate-20260630T020210Z-run15.report.json; npm run analyze:priority-recovery-residuals -- test-output/reports/stat-gate-20260630T020210Z-run15.report.json]
+- **startup-readiness-support-evidence-handoff-residual**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

@@ -16,18 +16,18 @@
 - Frontier: rolling-restart-run4-critical-spread-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: observation_gap
-- Movement: solved: startup_readiness_owner / startup_support_evidence / admin_not_ready=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect EHOSTUNREACH 172.18.0.6:8081 -> PASS
-- Latest evidence: test-output/reports/stat-gate-20260630T002604Z-run3.report.json
+- Dominant reason: leadership_unstable
+- Mechanism: transition_gap
+- Movement: narrowed: PASS -> leadership_unstable
+- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: none
 - Next move: continue supervised step for rolling-restart-run4-critical-spread-main
-- No longer current: startup_readiness_owner / startup_support_evidence / admin_not_ready=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect EHOSTUNREACH 172.18.0.6:8081; Do not keep adjusting post-restart critical-spread quorum for this sample; split the next frontier to NODE_EXIT / partition service activation runtime initialization.
+- No longer current: PASS; Do not keep adjusting post-restart critical-spread quorum for this sample; split the next frontier to NODE_EXIT / partition service activation runtime initialization.
 
 ## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
+- Status: blocked-theory
+- Next action: run the 15-run consecutive proof for rolling-restart-run4-critical-spread-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
+- Blocker: theory result required when metric is 0 but done is false
 
 ## Scope Pressure
 - Changed files: 2
@@ -39,7 +39,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-critical-spread-main** [solved] rung 1, attempts 1, metric 3 -> 3
+- **rolling-restart-run4-critical-spread-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260629T232437Z-run1.report.json. Metric: unknown -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: critical_system_spread_open. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T232437Z-run1.report.json]
@@ -55,6 +55,8 @@
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T002604Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T002604Z-run3.report.json]
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T002604Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T002604Z-run3.report.json]
 - **rolling-restart-run4-critical-spread-main**: Fresh post-patch N=3 gate stat-gate-20260630T002604Z removes the critical_system_spread_open residual: TOPOLOGY_BLOCKED=0, missingPublishedCount=0 in all three runs, staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0. The gate is not clean because run2 is NODE_EXIT: joiner 8be8d30f exited with code 1 during querying_state after fatal 'Partition service activation requires initialized runtime for replica_operations-p1-r5'. This is a new join/runtime activation blocker, not a critical-system spread residual. (rules out: Do not keep adjusting post-restart critical-spread quorum for this sample; split the next frontier to NODE_EXIT / partition service activation runtime initialization.) [test-output/reports/stat-gate-20260630T002604Z.json; test-output/reports/stat-gate-20260630T002604Z-run1.report.json; test-output/reports/stat-gate-20260630T002604Z-run2.report.json; test-output/reports/stat-gate-20260630T002604Z-run3.report.json; test-output/reports/.playback/stat-gate-20260630T002604Z-run2/rolling-restart/failure-bundle.json]
+- **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 3 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Theories
 _(none recorded)_

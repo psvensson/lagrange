@@ -18,18 +18,18 @@
 - Frontier: rolling-restart-run4-operation-drain-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: unknown
+- Dominant reason: leadership_unstable
 - Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/stat-gate-20260629T232437Z-run2.report.json
+- Movement: unknown: PASS -> leadership_unstable
+- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
 - Selected theory: theory-20260629-operation-workflow-remote-settle-effective-inflight
 - Next move: continue supervised step for rolling-restart-run4-operation-drain-main
-- No longer current: PASS; Do not keep widening row-shaped steps_history normalization for this observed run1 residual; completeOperation/failOperation row-shaped handling is a latent separate directed-repro candidate, while the live residual is critical_system_spread_open / topology spread.; Do not treat the PASS reports' compact satisfiedInvariants list as a regression of publication_converged or priority_spread_settled; split the remaining critical_system_spread_open residual instead.
+- No longer current: PASS; Do not treat the PASS reports' compact satisfiedInvariants list as a regression of publication_converged or priority_spread_settled; split the remaining critical_system_spread_open residual instead.
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for rolling-restart-run4-operation-drain-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: run the 15-run consecutive proof for rolling-restart-run4-operation-drain-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
+- Blocker: theory result required when metric is 0 but done is false
 
 ## Scope Pressure
 - Changed files: 2
@@ -41,7 +41,7 @@
 - Signals: none
 
 ## Frontiers
-- **rolling-restart-run4-operation-drain-main** [open] rung 1, attempts 1, metric 3 -> 3 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-operation-drain-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260629T222417Z-run1.report.json. Metric: unknown -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: replica_operations_in_flight. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T222417Z-run1.report.json]
@@ -57,6 +57,8 @@
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260629T232437Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T232437Z-run3.report.json]
 - **rolling-restart-run4-operation-drain-main**: Fresh post-patch gate stat-gate-20260629T232437Z is safety-clean and removes the previous effective operation-drain blocker: 3/3 runs are CONVERGED with staleSource/CORRUPT/ORACLE_BLIND/NODE_EXIT=0 and missing=0, while doneWhen remains false for the sealed N>=15 bar. Run1 is a residual critical-system spread/topology failure, not another row-history operation-workflow failure: failure-bundle quiescence shows effectiveInFlightCount=0, staleInFlightCount=1 discounted, and criticalSystemTopology totalSpreadGap=4 across replica_operations/sql_transactions/sql_transaction_participants/sql_write_operations (each 2/3 ready distinct nodes); priority residual analyzer has witnessCount=0, and subagent 019f15c8-716e-7bf2-995a-8da27c4ff8b5 refuted the operation-workflow residual theory after full-log checks showed the stale source_removal witness operations completed. (rules out: Do not keep widening row-shaped steps_history normalization for this observed run1 residual; completeOperation/failOperation row-shaped handling is a latent separate directed-repro candidate, while the live residual is critical_system_spread_open / topology spread.) [test-output/reports/stat-gate-20260629T232437Z-run1.report.json; test-output/reports/stat-gate-20260629T232437Z-run2.report.json; test-output/reports/stat-gate-20260629T232437Z-run3.report.json; test-output/reports/.playback/stat-gate-20260629T232437Z-run1/rolling-restart/failure-bundle.json; /tmp/run1-liveness.out; /tmp/run1-topology.json; /tmp/run1-priority-residuals.out; subagent:019f15c8-716e-7bf2-995a-8da27c4ff8b5]
 - **rolling-restart-run4-operation-drain-main**: Fresh post-patch PASS samples do not restate publication_converged or priority_spread_settled labels because PASS evidence is summarized as scenario_passed/no_invariant_breaches; the run1 failure report and stat-gate aggregate show missingPublishedCount=0 and priority spread settled, so these labels were not abandoned. The live blocker is split to critical_system_spread_open. (rules out: Do not treat the PASS reports' compact satisfiedInvariants list as a regression of publication_converged or priority_spread_settled; split the remaining critical_system_spread_open residual instead.) [test-output/reports/stat-gate-20260629T232437Z.json; test-output/reports/stat-gate-20260629T232437Z-run1.report.json; test-output/reports/stat-gate-20260629T232437Z-run2.report.json; test-output/reports/stat-gate-20260629T232437Z-run3.report.json; subagent:019f15c8-58bc-77f3-bbb7-23d0545f07d7; subagent:019f15c8-3f65-72b1-883c-3a0bf3d1fb62]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 3 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Theories
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight** [supported] frontier, frontier rolling-restart-run4-operation-drain-main, layer scheduling, mechanism A coordinator-created operation workflow can keep terminal quiescence blocked after publication and active-gate coverage are satisfied because stale priority summaries and/or remote handoff retry paths leave an ACTIVE/effective-in-flight row or repeated remote-settle loop instead of recording a terminal operation drain., owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
@@ -72,6 +74,7 @@
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/stat-gate-20260629T232437Z-run1.report.json]
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T232437Z-run3.report.json]
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260629T232437Z-run2.report.json]
+- **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=improved, theory=supported, movement=unknown) [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
