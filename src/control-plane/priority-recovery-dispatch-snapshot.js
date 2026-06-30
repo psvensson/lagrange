@@ -495,6 +495,21 @@ function recordPriorityRecoveryDecisionSnapshotSummary(
   }
 }
 
+function stripInheritedPriorityRecoveryOperationOwnerObservation(snapshot) {
+  const sanitizedSnapshot = {...snapshot};
+  delete sanitizedSnapshot.operationOwnerObservation;
+  delete sanitizedSnapshot.progressContract;
+  if (isPriorityRecoverySnapshotObject(sanitizedSnapshot.progress)) {
+    sanitizedSnapshot.progress = {...sanitizedSnapshot.progress};
+    delete sanitizedSnapshot.progress.progressContract;
+  }
+  if (isPriorityRecoverySnapshotObject(sanitizedSnapshot.progressSummary)) {
+    sanitizedSnapshot.progressSummary = {...sanitizedSnapshot.progressSummary};
+    delete sanitizedSnapshot.progressSummary.progressContract;
+  }
+  return sanitizedSnapshot;
+}
+
 function appendPriorityRecoveryPartitionSnapshots(
   snapshots,
   partitionSnapshot,
@@ -513,8 +528,12 @@ function appendPriorityRecoveryPartitionSnapshots(
       operationId && byOperationId[operationId] ?
         byOperationId[operationId] :
         null;
+    const operationSnapshotBase =
+      stripInheritedPriorityRecoveryOperationOwnerObservation(
+        partitionSnapshot,
+      );
     const snapshotWithOperationContext = {
-      ...partitionSnapshot,
+      ...operationSnapshotBase,
       operationId,
       correlationKey: buildPriorityRecoveryCorrelationKey(
         partitionId,

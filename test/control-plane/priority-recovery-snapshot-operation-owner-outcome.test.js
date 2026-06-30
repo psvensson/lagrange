@@ -16,6 +16,7 @@ import {
 import {
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryDecisionSnapshots,
+  buildPriorityRecoveryCorrelationKey,
   buildPriorityRecoveryOperationContextFromRecord,
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
@@ -186,6 +187,11 @@ function assertOperationOwnerObservation(t, normalizedSnapshot, expected) {
     },
     expected.message,
   );
+}
+
+function requirePriorityRecoverySnapshot(t, snapshot, message) {
+  t.ok(snapshot, message);
+  return snapshot || {};
 }
 
 test('priority recovery consumes serial wait operation-owner outcome',
@@ -441,6 +447,15 @@ test('priority recovery decision snapshots attach owner observation for ' +
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
     'diagnostic snapshots should keep owner advancement as the requested action',
   );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.correlationKey,
+    buildPriorityRecoveryCorrelationKey(
+      TEST_PARTITION_ID,
+      TEST_PUBLICATION_EPOCH,
+      TEST_OPERATION_ID,
+    ),
+    'per-operation snapshots should not inherit synthetic operation_unknown owner observation keys',
+  );
   t.same(
     targetSnapshot?.blockerReasons,
     [],
@@ -521,47 +536,61 @@ test('direct priority recovery decision snapshots attach owner observation ' +
     operationId: TEST_OPERATION_ID,
     operationContext,
   });
+  const {
+    conditions = {},
+    admission = {},
+    coordinator = {},
+    operationOwnerObservation = {},
+    blockerReasons,
+    semanticState,
+    actuation,
+    progress,
+  } = requirePriorityRecoverySnapshot(
+    t,
+    targetSnapshot,
+    'coordinator-excludes dispatch fixture should build a snapshot',
+  );
 
   t.equal(
-    targetSnapshot?.conditions?.latestOperationWorkflowStep,
+    conditions.latestOperationWorkflowStep,
     TEST_WORKFLOW_STEP_PENDING,
     'the direct fixture should preserve the durable PENDING workflow step',
   );
   t.same(
-    targetSnapshot?.admission?.effectiveEligibleNodeIds,
+    admission.effectiveEligibleNodeIds,
     [TEST_SOURCE_NODE_ID],
     'the fixture should keep the target outside the effective eligible cohort',
   );
   t.equal(
-    targetSnapshot?.coordinator?.operation?.targetNodeId,
+    coordinator.operation?.targetNodeId,
     TEST_TARGET_NODE_ID,
     'the focused operation should still target the excluded node',
   );
   t.equal(
-    targetSnapshot?.operationOwnerObservation?.outcome,
+    operationOwnerObservation.outcome,
     OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
     'coordinator-excludes dispatch diagnostics should carry owner advancement observation',
   );
   t.equal(
-    targetSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+    operationOwnerObservation.requestedOwnerAction,
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
     'coordinator-excludes dispatch diagnostics should request existing operation advance',
   );
   t.same(
-    targetSnapshot?.blockerReasons,
+    blockerReasons,
     [],
     'owner-observed coordinator-excludes diagnostics should clear stale blockers',
   );
   t.equal(
-    targetSnapshot?.semanticState,
+    semanticState,
     PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
     'owner-observed coordinator-excludes diagnostics should stay in flight',
   );
-  t.match(targetSnapshot?.actuation, {
+  t.match(actuation, {
     owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
   });
-  t.match(targetSnapshot?.progress, {
+  t.match(progress, {
     currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     nextRequiredAction:
       PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
