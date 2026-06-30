@@ -200,28 +200,7 @@ for i in $(seq 1 "${N}"); do
     # CL-031: an oracle-blind run is UNJUDGEABLE on its face (the harness
     # could not read snapshot evidence), so it must never be folded into
     # STALLED — that misattributes a harness/transport defect to the cluster.
-    rec=$(jq -c '.scenarios[0] as $sc
-      | ($sc.invariantBreaches.hardCount // 0) as $hard
-      | ($sc.publicationConvergence.missingPublishedCount) as $missing
-      | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
-      | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
-      | ($sc.details.diagnostics.activeGate.state // "") as $gstate
-      | ($sc.classification
-         // (if (($sc.details.diagnostics.unexpectedNodeExits // []) | length) > 0
-             then "unexpected_node_exit" else null end)
-         // $sc.details.diagnostics.oracleBlind.classification
-         // "") as $oblind
-      | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
-         cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
-         oracleBlind:($oblind=="oracle_blind"),
-         unexpectedNodeExit:($oblind=="unexpected_node_exit"),
-         reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
-         class:(if $hard>0 then "CORRUPT"
-                elif $oblind=="unexpected_node_exit" then "NODE_EXIT"
-                elif $missing==0 then "CONVERGED"
-                elif $oblind=="oracle_blind" then "ORACLE_BLIND"
-                elif ($fnp==true or $cyc>=10 or $gstate=="stalled") then "STALLED"
-                else "SLOW" end)}' "${RUN_REPORT}" 2>/dev/null)
+    rec=$(node scripts/rolling-restart-stat-gate-summary.js classify-run "${RUN_REPORT}")
   else
     rec=""
   fi
@@ -248,6 +227,7 @@ jq -s '
     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
     oracleBlindCount: ([.[] | select(.class=="ORACLE_BLIND")] | length),
     nodeExitCount: ([.[] | select(.class=="NODE_EXIT")] | length),
+    topologyBlockedCount: ([.[] | select(.class=="TOPOLOGY_BLOCKED")] | length),
     convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
     stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
     healthyRate: ( (([.[] | select(.class=="CONVERGED" or .class=="SLOW")] | length) ) / (length) ),
@@ -272,6 +252,7 @@ jq -s '
     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
     "- **ORACLE_BLIND (unjudgeable — snapshot transport failed, CL-031): \(.oracleBlindCount)**",
     "- **NODE_EXIT (unexpected node death — read its exit evidence, CL-030): \(.nodeExitCount)**",
+    "- **TOPOLOGY_BLOCKED (scenario failed after publication convergence): \(.topologyBlockedCount)**",
     "- stallRate (frozen / gave up): \(.stallRate)",
     "- healthyRate (converged or progressing): \(.healthyRate)",
     "- convergeRate (missing=0): \(.convergeRate)",

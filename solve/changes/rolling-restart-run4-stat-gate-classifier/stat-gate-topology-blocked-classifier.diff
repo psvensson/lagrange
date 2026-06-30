@@ -1,0 +1,385 @@
+diff --git a/scripts/rolling-restart-stat-gate-summary.js b/scripts/rolling-restart-stat-gate-summary.js
+new file mode 100644
+index 00000000..817b4e7b
+--- /dev/null
++++ b/scripts/rolling-restart-stat-gate-summary.js
+@@ -0,0 +1,138 @@
++#!/usr/bin/env node
++
++import fs from 'node:fs';
++import process from 'node:process';
++import {fileURLToPath} from 'node:url';
++
++const CLASS_CORRUPT = 'CORRUPT';
++const CLASS_NODE_EXIT = 'NODE_EXIT';
++const CLASS_ORACLE_BLIND = 'ORACLE_BLIND';
++const CLASS_CONVERGED = 'CONVERGED';
++const CLASS_TOPOLOGY_BLOCKED = 'TOPOLOGY_BLOCKED';
++const CLASS_STALLED = 'STALLED';
++const CLASS_SLOW = 'SLOW';
++
++function hasOwn(value, key) {
++  return Object.prototype.hasOwnProperty.call(value || {}, key);
++}
++
++function asNumber(value, fallback = null) {
++  return typeof value === 'number' && Number.isFinite(value) ?
++    value :
++    fallback;
++}
++
++function normalizePassed(scenario) {
++  return hasOwn(scenario, 'passed') ? scenario.passed : null;
++}
++
++function classifyOracleBlind(scenario) {
++  const diagnostics = scenario?.details?.diagnostics || {};
++  return scenario?.classification ||
++    (((diagnostics.unexpectedNodeExits || []).length > 0) ?
++      'unexpected_node_exit' :
++      null) ||
++    diagnostics.oracleBlind?.classification ||
++    '';
++}
++
++function isTopologyBlockedScenario(scenario) {
++  const quiescence = scenario?.details?.diagnostics?.quiescence || {};
++  return scenario?.verdict === 'BLOCK_TOPOLOGY_CONVERGENCE' ||
++    scenario?.verdictReason === 'topology_progress_blocked' ||
++    scenario?.dominantReason === 'critical_system_spread_open' ||
++    quiescence.canonicalBlocker === 'critical_system_spread_open' ||
++    quiescence.state === 'critical_spread_open';
++}
++
++export function classifyStatGateScenario(scenario = {}) {
++  const activeGate = scenario?.details?.diagnostics?.activeGate || {};
++  const hardBreaches = asNumber(scenario?.invariantBreaches?.hardCount, 0);
++  const missing = asNumber(
++    scenario?.publicationConvergence?.missingPublishedCount,
++    null,
++  );
++  const failedNoProgress = activeGate.failedNoProgress;
++  const cyclesNoProgress = asNumber(
++    activeGate.coordinatorCyclesSinceProgress,
++    0,
++  );
++  const gateState = activeGate.state || '';
++  const oracleBlindClassification = classifyOracleBlind(scenario);
++  const passed = normalizePassed(scenario);
++
++  let classification = CLASS_SLOW;
++  if (hardBreaches > 0) {
++    classification = CLASS_CORRUPT;
++  } else if (oracleBlindClassification === 'unexpected_node_exit') {
++    classification = CLASS_NODE_EXIT;
++  } else if (oracleBlindClassification === 'oracle_blind') {
++    classification = CLASS_ORACLE_BLIND;
++  } else if (passed === false) {
++    classification = isTopologyBlockedScenario(scenario) ?
++      CLASS_TOPOLOGY_BLOCKED :
++      CLASS_STALLED;
++  } else if (missing === 0) {
++    classification = CLASS_CONVERGED;
++  } else if (
++    failedNoProgress === true ||
++    cyclesNoProgress >= 10 ||
++    gateState === 'stalled'
++  ) {
++    classification = CLASS_STALLED;
++  }
++
++  return {
++    passed,
++    missing,
++    hardBreaches,
++    cyclesNoProgress,
++    failedNoProgress,
++    gateState,
++    oracleBlind: oracleBlindClassification === 'oracle_blind',
++    unexpectedNodeExit: oracleBlindClassification === 'unexpected_node_exit',
++    reason: scenario?.dominantReason || 'none',
++    duration: asNumber(scenario?.duration, null),
++    class: classification,
++  };
++}
++
++export function classifyRunReport(report = {}) {
++  return classifyStatGateScenario(report.scenarios?.[0] || {});
++}
++
++function runCli(argv) {
++  const [command, file] = argv;
++  if (command !== 'classify-run' || !file) {
++    return {
++      ok: false,
++      output: 'usage: rolling-restart-stat-gate-summary.js classify-run <report.json>',
++    };
++  }
++  const report = JSON.parse(fs.readFileSync(file, 'utf8'));
++  return {
++    ok: true,
++    output: JSON.stringify(classifyRunReport(report)),
++  };
++}
++
++function isDirectRun() {
++  return process.argv[1] === fileURLToPath(import.meta.url);
++}
++
++if (isDirectRun()) {
++  const result = runCli(process.argv.slice(2));
++  (result.ok ? process.stdout : process.stderr).write(`${result.output}\n`);
++  process.exitCode = result.ok ? 0 : 1;
++}
++
++export {
++  CLASS_CONVERGED,
++  CLASS_CORRUPT,
++  CLASS_NODE_EXIT,
++  CLASS_ORACLE_BLIND,
++  CLASS_SLOW,
++  CLASS_STALLED,
++  CLASS_TOPOLOGY_BLOCKED,
++  runCli,
++};
+diff --git a/scripts/rolling-restart-stat-gate.sh b/scripts/rolling-restart-stat-gate.sh
+index a4748172..b7599c25 100755
+--- a/scripts/rolling-restart-stat-gate.sh
++++ b/scripts/rolling-restart-stat-gate.sh
+@@ -200,28 +200,7 @@ for i in $(seq 1 "${N}"); do
+     # CL-031: an oracle-blind run is UNJUDGEABLE on its face (the harness
+     # could not read snapshot evidence), so it must never be folded into
+     # STALLED — that misattributes a harness/transport defect to the cluster.
+-    rec=$(jq -c '.scenarios[0] as $sc
+-      | ($sc.invariantBreaches.hardCount // 0) as $hard
+-      | ($sc.publicationConvergence.missingPublishedCount) as $missing
+-      | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
+-      | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
+-      | ($sc.details.diagnostics.activeGate.state // "") as $gstate
+-      | ($sc.classification
+-         // (if (($sc.details.diagnostics.unexpectedNodeExits // []) | length) > 0
+-             then "unexpected_node_exit" else null end)
+-         // $sc.details.diagnostics.oracleBlind.classification
+-         // "") as $oblind
+-      | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
+-         cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
+-         oracleBlind:($oblind=="oracle_blind"),
+-         unexpectedNodeExit:($oblind=="unexpected_node_exit"),
+-         reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
+-         class:(if $hard>0 then "CORRUPT"
+-                elif $oblind=="unexpected_node_exit" then "NODE_EXIT"
+-                elif $missing==0 then "CONVERGED"
+-                elif $oblind=="oracle_blind" then "ORACLE_BLIND"
+-                elif ($fnp==true or $cyc>=10 or $gstate=="stalled") then "STALLED"
+-                else "SLOW" end)}' "${RUN_REPORT}" 2>/dev/null)
++    rec=$(node scripts/rolling-restart-stat-gate-summary.js classify-run "${RUN_REPORT}")
+   else
+     rec=""
+   fi
+@@ -248,6 +227,7 @@ jq -s '
+     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
+     oracleBlindCount: ([.[] | select(.class=="ORACLE_BLIND")] | length),
+     nodeExitCount: ([.[] | select(.class=="NODE_EXIT")] | length),
++    topologyBlockedCount: ([.[] | select(.class=="TOPOLOGY_BLOCKED")] | length),
+     convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
+     stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
+     healthyRate: ( (([.[] | select(.class=="CONVERGED" or .class=="SLOW")] | length) ) / (length) ),
+@@ -272,6 +252,7 @@ jq -s '
+     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
+     "- **ORACLE_BLIND (unjudgeable — snapshot transport failed, CL-031): \(.oracleBlindCount)**",
+     "- **NODE_EXIT (unexpected node death — read its exit evidence, CL-030): \(.nodeExitCount)**",
++    "- **TOPOLOGY_BLOCKED (scenario failed after publication convergence): \(.topologyBlockedCount)**",
+     "- stallRate (frozen / gave up): \(.stallRate)",
+     "- healthyRate (converged or progressing): \(.healthyRate)",
+     "- convergeRate (missing=0): \(.convergeRate)",
+diff --git a/solve/oracle/rolling-restart-run4-stat-gate-classifier.json b/solve/oracle/rolling-restart-run4-stat-gate-classifier.json
+new file mode 100644
+index 00000000..52df558e
+--- /dev/null
++++ b/solve/oracle/rolling-restart-run4-stat-gate-classifier.json
+@@ -0,0 +1,12 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "deterministic-test",
++  "evidence": [
++    "node test/scripts/rolling-restart-stat-gate-summary.test.js",
++    "node scripts/rolling-restart-stat-gate-summary.js classify-run test-output/reports/stat-gate-20260629T232437Z-run1.report.json",
++    "bash -n scripts/rolling-restart-stat-gate.sh",
++    "git diff --check"
++  ]
++}
+diff --git a/solve/quests/rolling-restart-run4-stat-gate-classifier.json b/solve/quests/rolling-restart-run4-stat-gate-classifier.json
+new file mode 100644
+index 00000000..afaed8ae
+--- /dev/null
++++ b/solve/quests/rolling-restart-run4-stat-gate-classifier.json
+@@ -0,0 +1,37 @@
++{
++  "id": "rolling-restart-run4-stat-gate-classifier",
++  "statement": "Rolling-restart stat-gate tooling classification preserves per-scenario passed:false and does not label missing=0 topology-blocked runs as CONVERGED, so run4 evidence summaries cannot mask critical_system_spread_open failures.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": null,
++    "closesCL": [],
++    "parentQuest": "rolling-restart-run4-operation-drain",
++    "planDoc": "solve/epics/topology-convergence-hardening.md"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/rolling-restart-run4-stat-gate-classifier.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "rolling-restart-run4-stat-gate-classifier-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/rolling-restart-run4-stat-gate-classifier.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/scripts/rolling-restart-stat-gate-summary.test.js b/test/scripts/rolling-restart-stat-gate-summary.test.js
+new file mode 100644
+index 00000000..f68c10ca
+--- /dev/null
++++ b/test/scripts/rolling-restart-stat-gate-summary.test.js
+@@ -0,0 +1,124 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  CLASS_CONVERGED,
++  CLASS_CORRUPT,
++  CLASS_NODE_EXIT,
++  CLASS_ORACLE_BLIND,
++  CLASS_STALLED,
++  CLASS_TOPOLOGY_BLOCKED,
++  classifyRunReport,
++  classifyStatGateScenario,
++} from '../../scripts/rolling-restart-stat-gate-summary.js';
++
++function scenario(overrides = {}) {
++  return {
++    passed: true,
++    invariantBreaches: {hardCount: 0},
++    publicationConvergence: {missingPublishedCount: 0},
++    details: {diagnostics: {activeGate: {}}},
++    dominantReason: null,
++    duration: 123,
++    ...overrides,
++  };
++}
++
++test('classifyStatGateScenario preserves passed:false and does not converge topology blocks', (t) => {
++  const result = classifyStatGateScenario(scenario({
++    passed: false,
++    verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
++    verdictReason: 'topology_progress_blocked',
++    dominantReason: 'critical_system_spread_open',
++    details: {
++      diagnostics: {
++        quiescence: {
++          state: 'critical_spread_open',
++          canonicalBlocker: 'critical_system_spread_open',
++        },
++      },
++    },
++  }));
++
++  t.equal(result.passed, false, 'false is preserved, not coerced to null');
++  t.equal(result.missing, 0, 'publication convergence remains visible');
++  t.equal(
++    result.class,
++    CLASS_TOPOLOGY_BLOCKED,
++    'scenario failure is not classified as CONVERGED',
++  );
++  t.end();
++});
++
++test('classifyStatGateScenario keeps successful missing=0 runs converged', (t) => {
++  const result = classifyStatGateScenario(scenario());
++
++  t.equal(result.passed, true);
++  t.equal(result.class, CLASS_CONVERGED);
++  t.end();
++});
++
++test('classifyStatGateScenario stays backward compatible for reports without passed', (t) => {
++  const sample = scenario();
++  delete sample.passed;
++
++  const result = classifyStatGateScenario(sample);
++
++  t.equal(result.passed, null);
++  t.equal(result.class, CLASS_CONVERGED);
++  t.end();
++});
++
++test('classifyStatGateScenario prioritizes correctness and oracle classifications', (t) => {
++  t.equal(
++    classifyStatGateScenario(scenario({
++      invariantBreaches: {hardCount: 1},
++      passed: false,
++    })).class,
++    CLASS_CORRUPT,
++    'hard breach wins',
++  );
++  t.equal(
++    classifyStatGateScenario(scenario({
++      classification: 'unexpected_node_exit',
++      passed: false,
++    })).class,
++    CLASS_NODE_EXIT,
++    'unexpected node exit wins',
++  );
++  t.equal(
++    classifyStatGateScenario(scenario({
++      details: {
++        diagnostics: {
++          oracleBlind: {classification: 'oracle_blind'},
++        },
++      },
++      passed: false,
++    })).class,
++    CLASS_ORACLE_BLIND,
++    'oracle blindness wins',
++  );
++  t.end();
++});
++
++test('classifyStatGateScenario classifies non-topology scenario failures as stalled', (t) => {
++  const result = classifyStatGateScenario(scenario({
++    passed: false,
++    dominantReason: 'publication_missing_active_node',
++  }));
++
++  t.equal(result.class, CLASS_STALLED);
++  t.end();
++});
++
++test('classifyRunReport reads the first scenario from a report', (t) => {
++  const result = classifyRunReport({
++    scenarios: [
++      scenario({
++        passed: false,
++        verdictReason: 'topology_progress_blocked',
++      }),
++    ],
++  });
++
++  t.equal(result.class, CLASS_TOPOLOGY_BLOCKED);
++  t.end();
++});

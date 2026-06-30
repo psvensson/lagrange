@@ -1,0 +1,37 @@
+{
+  "id": "rolling-restart-run4-stat-gate-classifier",
+  "statement": "Rolling-restart stat-gate tooling classification preserves per-scenario passed:false and does not label missing=0 topology-blocked runs as CONVERGED, so run4 evidence summaries cannot mask critical_system_spread_open failures.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-operation-drain",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-stat-gate-classifier.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-stat-gate-classifier-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-run4-stat-gate-classifier.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
