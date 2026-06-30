@@ -207,8 +207,13 @@ Each is independently verifiable. `W0` is a prerequisite falsification and runs 
 - **WS-HELLO — Hello-world service example (NEW).** A minimal deployable service + its manifest in
   `examples/`, deployed via WS-API. Accept: following the doc, the operator deploys it and reaches
   its endpoint. Doubles as the canonical "run your own service on Lagrange" lesson.
-- **W1 — Image published.** Tagged build pushes multi-arch `ghcr.io/<org>/lagrange`; a CI job
-  pulls it and `docker run --rm <img> --version` prints the version, `--dry-run` exits clean.
+- **W1 — Image published.** PARTIAL (parallel session, 2026-06-30): the Dockerfile is now multi-stage +
+  **distroless** runtime (`gcr.io/distroless/nodejs22-debian12`, `4f1c8b38`/`16df6b24`, 377→287MB) — the
+  image-slim half is done. REMAINING W1 = publish multi-arch to `ghcr.io/<org>/lagrange` + a CI job that
+  pulls and runs `--version`/`--dry-run`, and **fix the still-stale `EXPOSE 8080 8081 9080`** →
+  `8080 8081 8082 5432` (R4). NOTE the distroless runtime has **no shell and no wget/curl** — compose/k8s
+  healthchecks and any verification cannot `docker exec ... sh`/`wget`; use HTTP probes hit from the host
+  (or a node-based healthcheck). My W0b repro `docker exec ... sh -c` will NOT work on this image.
 - **W2 — Compose cluster.** `docker compose up -d` ⇒ all three `/readyz` 200; **start the `pgsql`
   service via WS-API** (5432 opens); `psql` to the seed runs `CREATE TABLE / INSERT / SELECT`
   round-trip; after `docker compose restart` data and NODE_IDs are unchanged and the cluster
@@ -392,7 +397,7 @@ missing piece is a *planning leader* (no `UnifiedRebalancer` is constructed for 
 - Planner already branches: `getRuntimeServicePolicy()` (`unified-rebalancer-policy-scheduler-methods.js:24-26,53-55`).
 - Replica discovery already handles it: `getCurrentReplicas()` (`unified-rebalancer-replica-state.js:238-251`, reads the `services` table).
 - Dispatch already routes RUNTIME_SERVICE ops (`replica-dispatch-service-dispatch-observation-methods.js:31-33`).
-- Executor handler already built behind the pgwire gate on both paths (`bootstrap-service-control-plane-runtime-methods.js:119`, `node-joining-publication-activation.js:441`).
+- Executor handler already built behind the pgwire gate on both paths (`bootstrap-service-control-plane-runtime-methods.js:119`, `node-joining-publication-activation.js:468`).
 
 `UnifiedRebalancer` constructor contract (`unified-rebalancer-lifecycle-base.js:39-284`): required
 `entityId, entityType, systemTableCache, cdcIntegrationService, tablePolicyService, nodeId, messageRouter,
@@ -415,7 +420,7 @@ Ordered steps:
    `service_definitions` cache/CDC change so user services get owners too).
 3. **Construct at seed** — call from `bootstrap-service-control-plane-runtime-methods.js:119-144` right after
    `initializeRuntimeServiceHandler()`; store handle for teardown.
-4. **Construct at join** — same from `node-joining-publication-activation.js:441-464`.
+4. **Construct at join** — same from `node-joining-publication-activation.js` `initializeRuntimeServiceHandler()` (:468 at HEAD; line shifts with parallel work — grep the method name, don't trust the number).
 5. **Leadership** — drive `setLeader` from the raft-role/readiness hooks the message-group owner uses
    (`resolveRebalancerLeadership()`); strictly leader-only (else duplicate ADD storm).
 6. **Teardown** — `quiesceRebalancing()`/`shutdown()` (already shutdown-aware) per entity; NO re-arming
