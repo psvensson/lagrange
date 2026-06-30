@@ -539,9 +539,13 @@ function buildReadinessEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
 
-  const rawContract = (normalized.readiness && normalized.readiness.progressContract) || 
-                      (normalized.readinessFailure && normalized.readinessFailure.progressContract) ||
-                      (readiness && readiness.progressContract);
+  const rawContract =
+    (normalized.readiness && normalized.readiness.progressContract) ||
+    (
+      normalized.readinessFailure &&
+      normalized.readinessFailure.progressContract
+    ) ||
+    (readiness && readiness.progressContract);
   const progressContract = normalizeProgressContract(rawContract, {
     owner: OWNER.READINESS,
     boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
@@ -563,7 +567,7 @@ function buildReadinessEdge(normalized) {
       terminalReason: textOrUnknown(readiness.terminalReason),
       cause: textOrUnknown(readiness.cause),
       source: textOrUnknown(readiness.source),
-      supportPath: readiness.supportPath,
+      supportPath: textOrUnknown(readiness.supportPath),
       progressContract,
     },
     progressContract,

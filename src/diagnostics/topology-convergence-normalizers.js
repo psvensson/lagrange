@@ -336,6 +336,9 @@ export function resolveReadinessRecoverability(readiness) {
 
 export function normalizeReadinessSupportEvidence(readinessFailure, activeGate) {
   const readiness = asRecord(readinessFailure);
+  if (Object.keys(readiness).length === SOURCE_ORDER_BASE) {
+    return {};
+  }
   const recoverability = resolveReadinessRecoverability(readiness);
   const supportPath = resolveReadinessSupportPath(readiness, activeGate);
   return {

@@ -114,6 +114,7 @@ const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const PRIORITY_RECOVERY_RETRYABLE_REASON =
   'priority_recovery_event_driven_wait';
 const PRIORITY_RECOVERY_SATISFIED_REASON = 'priority_recovery_satisfied';
+const EVIDENCE_MISSING_REASON = 'evidence_missing';
 const READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON =
   'readiness_inherited_active_gate_no_progress';
 const READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS =
@@ -590,6 +591,36 @@ describe('TopologyConvergenceGraph', () => {
     assert.deepEqual(readinessEdge.reasons, [
       READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
     ]);
+    assertNoNullOrUndefined(graph);
+  });
+
+  it('keeps absent readiness evidence missing after active-gate coverage is satisfied', () => {
+    const fixture = buildHealthyFixtureFailureBundle();
+    const {readinessFailure: _readinessFailure, ...summaryWithoutReadiness} =
+      fixture.summary;
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: {
+        ...fixture,
+        summary: summaryWithoutReadiness,
+        publicationConvergence: {
+          ...fixture.publicationConvergence,
+          activeGate: {
+            ...fixture.publicationConvergence.activeGate,
+            state: ACTIVE_GATE_STATE_TIMED_OUT,
+            ready: false,
+          },
+        },
+        readiness: {},
+      },
+    });
+    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
+
+    assert.equal(readinessEdge.state, EDGE_STATE.UNKNOWN);
+    assert.deepEqual(readinessEdge.reasons, [EVIDENCE_MISSING_REASON]);
+    assert.notEqual(readinessEdge.state, EDGE_STATE.RETRYABLE);
+    assert.notEqual(readinessEdge.reasons[0], 'readiness_retryable');
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_READINESS);
+    assert.equal(graph.summary.firstFrontierReason, EVIDENCE_MISSING_REASON);
     assertNoNullOrUndefined(graph);
   });
 
