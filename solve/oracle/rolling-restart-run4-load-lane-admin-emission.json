@@ -1,0 +1,27 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "admin-emission-reproducer-green",
+  "evidence": {
+    "basis": "Parent Quest has already retired stale nodeSlotUnavailable provenance debt and the child owner reproducer at commit 6c0ff447 proved the load-generator can map priority-recovery load-lane pressure into nodeAdmissionBlocked/retryableControlPlanePressure without failures.",
+    "source": [
+      "test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js"
+    ],
+    "adjacentOwnerSuites": [
+      "test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js",
+      "test/admin/admin-websocket-api-messaging-and-errors.test.js",
+      "test/admin/admin-websocket-api.test.js"
+    ]
+  },
+  "observed": {
+    "adminEmission": "A focused in-process WebSocket test connects with lane=load while a real ControlPlaneReadinessService reads an ACK_PENDING membership publication planning snapshot, marks priority recovery active, closes serveEligible, and causes the admin load lane to emit a query_result admin error before SQL execution.",
+    "boundedPressure": "The emitted response preserves errorCode=INTERNAL_ERROR, deferRetry=true, retryAfterMs=250, loadLaneAdmission.reasonCodes including PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, serveEligible=false, runtimeAuthority.state=confirmed, and runtimeAuthority.reasonCodes including publication_epoch_pending.",
+    "ownerBoundary": "No readiness-owner, load-generator, validation-matrix, operation workflow, stat-gate semantics, or historical test-output artifacts were changed; the proof stays at the live admin WebSocket load-lane emission boundary.",
+    "counterargumentHandled": "This proves the admin load-lane path can emit the retained priority-recovery pressure shape through fresh readiness evidence; it does not prove that the retained rolling-restart run's exact node generated the exact snapshot without a fresh live sample."
+  },
+  "validations": {
+    "admin-websocket-load-lane-emission": "npm test -- test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js",
+    "admin-websocket-api-regression": "npm test -- test/admin/admin-websocket-api-messaging-and-errors.test.js test/admin/admin-websocket-api.test.js"
+  }
+}
