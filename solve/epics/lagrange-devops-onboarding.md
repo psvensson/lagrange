@@ -418,13 +418,25 @@ Ordered steps:
    construct one `UnifiedRebalancer` per `serviceId`; `initialize()` + leadership-gated `setLeader(...)`;
    return a handle with `quiesceAll()` + a discovery-refresh subscription (refresh per-entity set on
    `service_definitions` cache/CDC change so user services get owners too).
-3. **Construct at seed** — call from `bootstrap-service-control-plane-runtime-methods.js:119-144` right after
-   `initializeRuntimeServiceHandler()`; store handle for teardown.
-4. **Construct at join** — same from `node-joining-publication-activation.js` `initializeRuntimeServiceHandler()` (:468 at HEAD; line shifts with parallel work — grep the method name, don't trust the number).
-5. **Leadership** — drive `setLeader` from the raft-role/readiness hooks the message-group owner uses
-   (`resolveRebalancerLeadership()`); strictly leader-only (else duplicate ADD storm).
-6. **Teardown** — `quiesceRebalancing()`/`shutdown()` (already shutdown-aware) per entity; NO re-arming
-   discovery timer (use cache/CDC subscription, unsubscribe on shutdown — avoids the integration-suite hang class).
+3-5. **Leadership wiring — VALIDATED 2026-06-30 (subagent a8d1a910).** Gate the owner on
+   **`service_definitions-p1` partition leadership** (that partition holds the desired-state table;
+   its raft leader is the proven cluster-singleton and its local cache is the authoritative
+   `getRuntimeServicePolicy` reader). Do NOT wire at the bootstrap RuntimeServiceHandler site (runs on
+   every node as a local executor → every-node-planner / ADD-storm risk). Reuse the
+   `wireMigrationRecoveryOnLeaderElection` precedent (`src/migration/migration-recovery-trigger.js:49-189`):
+   resolve the service via `resolvePartitionServiceByPartitionId(partitionServices, 'service_definitions-p1')`
+   (`entrypoint-runtime-admin-composition.js:73-87`), subscribe to `PARTITION_SERVICE_EVENT.LEADER_ELECTED`
+   (`partition-service-core-base.js:518`) to `setLeader(true)`/start, and drive `setLeader(service.resolveRebalancerLeadership())`
+   from the partition's leadership-transition points (`updateRebalancerLeadership` :477-485, onFollower/
+   onCandidate quiesce, `quiesceRebalancing` shutdown) so handoff + shutdown are covered in lockstep with
+   the partition's own rebalancer (drain hysteresis inherited).
+   CONVERGENCE-SAFE: `service_definitions` is a system table but **NOT** a priority control-plane table
+   (`system-partition-classification.js:17-23`) → the owner is already OFF the priority lane the
+   rolling-restart work tunes; no explicit non-priority flag needed, and `replica_count=0` plans zero
+   moves (safe to land before any non-zero scale).
+6. **Teardown** — `setLeader(false)` + `shutdown()` (already shutdown-aware; scheduler clears timers on
+   LEADER_STOP) per entity; NO re-arming discovery timer (use cache/CDC subscription, unsubscribe on
+   shutdown — avoids the integration-suite hang class).
 
 Risks: keep runtime-service owners NON-priority so they don't compete with the ~1s control-plane-priority
 cadence the live convergence work depends on (with `replica_count=0` shipped, pgwire plans zero moves → ~nil
