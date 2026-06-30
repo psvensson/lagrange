@@ -16,20 +16,21 @@
 
 ## Current Blocker
 - Frontier: rolling-restart-run4-operation-drain-main
-- Owner: operation_workflow_owner
-- Boundary: workflow_progress
-- Dominant reason: priority_recovery_workflow_progress_event_driven
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: narrowed: leadership_unstable -> operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven
-- Latest evidence: test-output/reports/stat-gate-20260630T205718Z-run3.report.json
+- Movement: solved: leadership_unstable -> PASS
+- Latest evidence: test-output/reports/stat-gate-20260630T214238Z-run3.report.json
 - Selected theory: theory-20260629-operation-workflow-remote-settle-effective-inflight
-- Next move: rolling-restart-run4-operation-drain-main: advance_existing_operation
-- No longer current: leadership_unstable; Do not reopen leadership-quiescence, publication visibility, critical spread, or join-runtime activation from this gate; the fresh blocker is post-publication operation workflow progress/drain.; Do not generalize this to REPLACE without source-retirement evidence; existing spread-satisfied REPLACE regressions still fail stale drain rather than complete. solve step is currently blocked by the Quest's historical doneWhen declaration mismatch (first declared consecutive=3, JSON now consecutive=15), so this finding records the source-level attempt while preserving that goalpost violation.
+- Next move: continue supervised step for rolling-restart-run4-operation-drain-main
+- Oscillation: blocker "leadership_unstable" revisited 2x (whack-a-mole; change strategy)
+- No longer current: leadership_unstable; Do not reopen spread_satisfied ADD completion acceptance from this gate; the remaining operation residual is REPLACE/source-retirement or terminal workflow-progress observation, and run2 is a separate startup/leadership visibility residual.
 
 ## Continuation
-- Status: blocked-theory
-- Next action: run the 15-run consecutive proof for rolling-restart-run4-operation-drain-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
-- Blocker: theory result required when metric is 0 but done is false
+- Status: allowed
+- Next action: continue supervised step for rolling-restart-run4-operation-drain-main
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 2
@@ -41,7 +42,7 @@
 - Signals: none
 
 ## Frontiers
-- **rolling-restart-run4-operation-drain-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-operation-drain-main** [open] rung 1, attempts 1, metric 3 -> 3 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260629T222417Z-run1.report.json. Metric: unknown -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: replica_operations_in_flight. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T222417Z-run1.report.json]
@@ -64,6 +65,11 @@
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T205718Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: priority_recovery_workflow_progress_event_driven. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T205718Z-run3.report.json]
 - **rolling-restart-run4-operation-drain-main**: Fresh post-leadership-fix N=3 gate stat-gate-20260630T205718Z is safety-clean but not closure evidence: staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, TOPOLOGY_BLOCKED=3/3, missingPublishedCount=0 in every run, and satisfied invariants include publication_converged, priority_spread_settled, and no_invariant_breaches. The retained leadership_unstable residual is gone; all three fresh failures route to operation_workflow_owner/workflow_progress at priority_recovery_partition_progress. Run1 is wait_for_operation_progress on sql_transaction_participants-p1 with effectiveInFlightReplicaOperationCount=1; run2 is convergence_timeout/source_removal dispatched_waiting_progress with effectiveInFlightReplicaOperationCount=2; run3 is priority_recovery_workflow_progress_event_driven with replica_operations-p1 ADD operation 815697b8-45e5-490f-9626-c556ccebcb2d in dispatch_pending, actuationState persisted_not_dispatched, stepAgeMs=266671 > stepTimeoutMs=30000, enabled action advance_existing_operation. (rules out: Do not reopen leadership-quiescence, publication visibility, critical spread, or join-runtime activation from this gate; the fresh blocker is post-publication operation workflow progress/drain.) [test-output/reports/stat-gate-20260630T205718Z.md; test-output/reports/stat-gate-20260630T205718Z-run1.report.json; test-output/reports/stat-gate-20260630T205718Z-run2.report.json; test-output/reports/stat-gate-20260630T205718Z-run3.report.json; npm run analyze:topology-convergence -- run1/run2/run3; npm run analyze:rolling-restart-liveness -- run1/run2/run3; npm run analyze:priority-recovery-residuals -- run1/run2/run3]
 - **rolling-restart-run4-operation-drain-main**: Deterministic ADD drain discriminator is red/green for the fresh run3 operation_workflow_owner/workflow_progress blocker: a spread_satisfied_in_flight ADD with target-active evidence returned false and did not complete before the patch, then completed via complete_priority_recovery_drain after ADD drain acceptance was changed to use the shared priority-recovery operation-drain completion-state set. This targets the stat-gate-20260630T205718Z-run3 replica_operations-p1 ADD persisted_not_dispatched witness without changing REPLACE source-retirement requirements. (rules out: Do not generalize this to REPLACE without source-retirement evidence; existing spread-satisfied REPLACE regressions still fail stale drain rather than complete. solve step is currently blocked by the Quest's historical doneWhen declaration mismatch (first declared consecutive=3, JSON now consecutive=15), so this finding records the source-level attempt while preserving that goalpost violation.) [solve/changes/rolling-restart-run4-operation-drain/add-spread-satisfied-add-drain.diff; red: node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js before source patch (2 assertion failures in spread-satisfied ADD target progress drains); green: node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js; npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-recovery-drain.js; npm run model:contracts; npx eslint src/rebalancer/operation-workflow-recovery-drain.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; git diff --check]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T214238Z-run1.report.json. Metric: 0 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: priority_recovery_workflow_progress_event_driven. Owner: startup_readiness_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run1.report.json]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T214238Z-run2.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run2.report.json]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T214238Z-run3.report.json. Metric: 1 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run3.report.json]
+- **rolling-restart-run4-operation-drain-main**: Fresh post-ADD-drain-fix gate stat-gate-20260630T214238Z is safety-clean but not closure evidence: staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, missingPublishedCount=0 in all 3 runs, with 1/3 CONVERGED and 2/3 TOPOLOGY_BLOCKED. The prior replica_operations-p1 ADD persisted_not_dispatched blocker from stat-gate-20260630T205718Z-run3 did not recur. Run1 still exposes operation_workflow_owner/workflow_progress on REPLACE terminal/wait_for_operation_progress witnesses for control_plane_publications-p1 and sql_transaction_participants-p1; run2 has priority recovery satisfied and fails as leadership_unstable/startup_active_gate publication_visibility progress-budget exhaustion; run3 passes. Next deterministic work should not reopen the ADD drain predicate, and the mixed residuals should be split before any N>=15 promotion gate. (rules out: Do not reopen spread_satisfied ADD completion acceptance from this gate; the remaining operation residual is REPLACE/source-retirement or terminal workflow-progress observation, and run2 is a separate startup/leadership visibility residual.) [test-output/reports/stat-gate-20260630T214238Z.md; test-output/reports/stat-gate-20260630T214238Z-run1.report.json; test-output/reports/stat-gate-20260630T214238Z-run2.report.json; test-output/reports/stat-gate-20260630T214238Z-run3.report.json; npm run analyze:topology-convergence -- run1/run2/run3; npm run analyze:rolling-restart-liveness -- run1/run2; npm run analyze:priority-recovery-residuals -- run1/run2/run3; node scripts/solve.js probe --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --consecutive 3 --metric priority]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260630T214238Z-run3.report.json. Metric: 3 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run3.report.json]
 
 ## Theories
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight** [supported] frontier, frontier rolling-restart-run4-operation-drain-main, layer scheduling, mechanism A coordinator-created operation workflow can keep terminal quiescence blocked after publication and active-gate coverage are satisfied because stale priority summaries and/or remote handoff retry paths leave an ACTIVE/effective-in-flight row or repeated remote-settle loop instead of recording a terminal operation drain., owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
@@ -82,6 +88,9 @@
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=improved, theory=supported, movement=unknown) [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260630T205718Z-run3.report.json]
 - **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=needs-rerun, theory=supported-deterministic, movement=deterministic-proof-after-fresh-gate) [solve/changes/rolling-restart-run4-operation-drain/add-spread-satisfied-add-drain.diff]
+- **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=failed, theory=partial, movement=moved_owner) [test-output/reports/stat-gate-20260630T214238Z-run1.report.json]
+- **theory-20260629-operation-workflow-remote-settle-effective-inflight**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260630T214238Z-run2.report.json]
+- **theory-20260629-operation-workflow-remote-settle-effective-inflight**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/stat-gate-20260630T214238Z-run3.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
