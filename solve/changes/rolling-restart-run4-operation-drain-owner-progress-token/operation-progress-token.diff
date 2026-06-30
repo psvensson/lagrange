@@ -1,10 +1,15 @@
 diff --git a/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson b/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson
 new file mode 100644
-index 00000000..8c37b48c
+index 00000000..9ef2af1a
 --- /dev/null
 +++ b/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson
-@@ -0,0 +1 @@
+@@ -0,0 +1,6 @@
 +{"ts":"2026-06-30T16:27:21.457Z","type":"quest-declared","sealed":{"doneWhen":{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}},"frontierMetrics":[{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}}]}}
++{"ts":"2026-06-30T16:41:33.888Z","type":"violation","frontier":"rolling-restart-run4-operation-drain-owner-progress-token-main","violations":["metricBefore/metricAfter must be finite numbers from a probe","null metrics require invalidSample=true"],"attempt":{"type":"attempt","frontier":"rolling-restart-run4-operation-drain-owner-progress-token-main","rung":"observe","rungIndex":0,"prevRungIndex":0,"hypothesis":"operation drain no-progress token observes effective owner workflow progress without timestamp churn","changeRef":"diff:solve/changes/rolling-restart-run4-operation-drain-owner-progress-token/operation-progress-token.diff","metricBefore":null,"metricAfter":0,"metricDirection":"lower-is-better","invalidSample":false,"done":true,"evidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","beforeEvidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","beforeEvidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":false,"size":null,"mtimeMs":null,"sha256":null,"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:27:21.459Z","fingerprint":"b74fd59d833f63ab5db7e8309ee72f622399883695b42eeb3febb36090c9a9d5"},"beforeEvidenceFingerprint":"b74fd59d833f63ab5db7e8309ee72f622399883695b42eeb3febb36090c9a9d5","evidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":true,"size":4742,"mtimeMs":1782837551438.6057,"sha256":"c38ac7763c6fb3ed94398391c15bf6fac6e917566cd9c917335b96648708e79b","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:41:33.887Z","fingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"},"evidenceFingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b","probeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","beforeProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","afterProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","metricKind":null,"theoryRef":null,"expectedMovement":null,"negativeResultMeans":null,"modelRef":null,"modelNotApplicable":null,"blockerBefore":null,"blockerAfter":null,"blockerMovement":"no_evidence","diagnosticMovement":"no evidence recorded","satisfiedInvariants":null,"nodeExit":null,"discrimination":null}}
++{"ts":"2026-06-30T16:41:33.888Z","type":"attempt","frontier":"rolling-restart-run4-operation-drain-owner-progress-token-main","rung":"observe","rungIndex":1,"prevRungIndex":0,"hypothesis":"operation drain no-progress token observes effective owner workflow progress without timestamp churn","changeRef":"diff:solve/changes/rolling-restart-run4-operation-drain-owner-progress-token/operation-progress-token.diff","metricBefore":null,"metricAfter":0,"metricDirection":"lower-is-better","invalidSample":false,"done":true,"evidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","beforeEvidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","beforeEvidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":false,"size":null,"mtimeMs":null,"sha256":null,"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:27:21.459Z","fingerprint":"b74fd59d833f63ab5db7e8309ee72f622399883695b42eeb3febb36090c9a9d5"},"beforeEvidenceFingerprint":"b74fd59d833f63ab5db7e8309ee72f622399883695b42eeb3febb36090c9a9d5","evidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":true,"size":4742,"mtimeMs":1782837551438.6057,"sha256":"c38ac7763c6fb3ed94398391c15bf6fac6e917566cd9c917335b96648708e79b","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:41:33.887Z","fingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"},"evidenceFingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b","probeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","beforeProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","afterProbeKey":"{\"args\":{\"file\":\"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json\"},\"probe\":\"oracle\"}","metricKind":null,"theoryRef":null,"expectedMovement":null,"negativeResultMeans":null,"modelRef":null,"modelNotApplicable":null,"blockerBefore":null,"blockerAfter":null,"blockerMovement":"no_evidence","diagnosticMovement":"no evidence recorded","satisfiedInvariants":null,"nodeExit":null,"discrimination":null}
++{"ts":"2026-06-30T16:41:33.888Z","type":"solved","frontier":"rolling-restart-run4-operation-drain-owner-progress-token-main","evidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","evidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":true,"size":4742,"mtimeMs":1782837551438.6057,"sha256":"c38ac7763c6fb3ed94398391c15bf6fac6e917566cd9c917335b96648708e79b","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:41:33.887Z","fingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"},"evidenceFingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"}
++{"ts":"2026-06-30T16:41:33.888Z","type":"quest","status":"solved","evidence":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","evidenceIdentity":{"path":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","resolvedPath":"/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json","exists":true,"size":4742,"mtimeMs":1782837551438.6057,"sha256":"c38ac7763c6fb3ed94398391c15bf6fac6e917566cd9c917335b96648708e79b","probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"},"observedAt":"2026-06-30T16:41:33.888Z","fingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"},"evidenceFingerprint":"e3704ed182d067bf922804e8dad49a263c55faea1438be76f4389113dbeb433b"}
++{"ts":"2026-06-30T16:43:28.803Z","type":"finding","frontier":"rolling-restart-run4-operation-drain-owner-progress-token-main","claim":"Subagent verifier 019f195e-8bd7-7fa0-90f8-fd2c6d5d5158 found no blockers after the updated diff removed updatedAt from the operation-progress token; timestamp-only retry churn no longer resets the no-progress token, and stale, additional-discount, and partial-coverage rows remain excluded.","evidence":"subagent:019f195e-8bd7-7fa0-90f8-fd2c6d5d5158","rulesOut":null,"regressionClassification":null,"scopePressureClassification":null}
 diff --git a/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json b/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json
 new file mode 100644
 index 00000000..13e399df
@@ -93,7 +98,7 @@ index 00000000..13e399df
 +}
 diff --git a/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json b/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json
 new file mode 100644
-index 00000000..94086d0f
+index 00000000..7d203f57
 --- /dev/null
 +++ b/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json
 @@ -0,0 +1,57 @@
@@ -101,7 +106,7 @@ index 00000000..94086d0f
 +  "id": "rolling-restart-run4-operation-drain-owner-progress-token",
 +  "statement": "Run3-shaped post-rebalance no-progress detection treats operation_workflow_owner workflow-step progress on effective in-flight replica operations as convergence progress while still ignoring leader-only churn; focused deterministic token evidence is green, and parent rolling-restart Wilson/statistical closure remains outside this child Quest.",
 +  "priority": 1,
-+  "class": "process",
++  "class": "product",
 +  "links": {
 +    "roadmapRow": "RM-0.1-fs-rolling-restart",
 +    "specRef": "membership-lifecycle-placement-hard-cutover",
@@ -164,7 +169,7 @@ index 60c81d91..09bbc2e3 100644
  const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
 +const REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY = '';
 +const REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR = ':';
- 
+
  function buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics) {
    return new Set(
 @@ -206,13 +208,18 @@ function buildReplicaOperationDrainDiscountCounts({
@@ -184,7 +189,7 @@ index 60c81d91..09bbc2e3 100644
 +      replicaOperationDrainRows,
 +      drainRowCoverageComplete,
 +    );
- 
+
    return {
      staleInFlightReplicaOperationCount: drainRowCoverageComplete ?
 @@ -222,9 +229,56 @@ function buildReplicaOperationDrainDiscountCounts({
@@ -194,7 +199,7 @@ index 60c81d91..09bbc2e3 100644
 +    effectiveInFlightReplicaOperationProgress,
    };
  }
- 
+
 +function isEffectiveInFlightReplicaOperationDrainRow(row) {
 +  return (
 +    row?.inFlight === true &&
@@ -296,7 +301,7 @@ index 60c81d91..09bbc2e3 100644
 @@ -1512,8 +1573,19 @@ function buildConvergenceProgressToken(fields) {
    });
  }
- 
+
 +function normalizeConvergenceProgressTokenEntries(entries) {
 +  if (!Array.isArray(entries)) {
 +    return [];
@@ -320,19 +325,19 @@ index 1fece9e6..20437c91 100644
 @@ -20,7 +20,10 @@ import {
    ASSERTIONS_CONVERGENCE_WAIT,
  } from './assertions-convergence-wait.js';
- 
+
 -const {buildConvergenceProgressToken} = ASSERTIONS_CONVERGENCE_WAIT;
 +const {
 +  buildConvergenceProgressToken,
 +  buildEffectiveInFlightReplicaOperationProgress,
 +} = ASSERTIONS_CONVERGENCE_WAIT;
- 
+
  function frozenFields(overrides = {}) {
    return {
 @@ -60,6 +63,80 @@ test('a draining op IS progress: fewer in-flight ops changes the token', (t) =>
    t.end();
  });
- 
+
 +test('operation-owner workflow progress IS progress even when the in-flight ' +
 +  'count is unchanged', (t) => {
 +  const beforeProgress = buildEffectiveInFlightReplicaOperationProgress([
@@ -413,7 +418,7 @@ index 1fece9e6..20437c91 100644
 @@ -70,6 +147,59 @@ test('a surplus draining (over-target clears) IS progress', (t) => {
    t.end();
  });
- 
+
 +test('operation progress token includes only effective in-flight rows', (t) => {
 +  const progress = buildEffectiveInFlightReplicaOperationProgress([
 +    {
