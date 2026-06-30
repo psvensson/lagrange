@@ -1,6 +1,39 @@
 # Epic: Lagrange DevOps Onboarding (Docker + Kubernetes try-it path)
 
 Status: active
+
+## ⏸️ RESUME HERE — RUNTIME_SERVICE owner wiring HELD (2026-06-30)
+
+**Decision (operator): option (b)** — keep the owner *wiring* parked until the parallel
+rolling-restart convergence work reaches a checkpoint, then land it + finish the residuals. The
+wiring activates runtime-service placement on every cluster and would skew the parallel convergence
+gates, so it is NOT on `main`.
+
+LANDED on `main` (all inert/safe — do nothing until the wiring drives them):
+- `6903b2ff` step 1 entity-aware `getRuntimeServicePolicy` (desired = `replica_count`)
+- `6c7e324a` step 2 `RuntimeServiceRebalancerOwner` module (+ attach fn was added later, now in the held set)
+- `badae79f` descriptor fix (snake→camel `runtime_kind`; runtime-service create ALWAYS failed without it)
+
+HELD (steps 3-5 wiring, BUILT + TESTED 109/109+23/23 + LIVE-PROVEN to drive pgwire ADD placement):
+- Stash: `git stash list` → the entry messaged "RUNTIME_SERVICE owner WIRING (steps 3-5)".
+- Durable backup (stash can shift in a shared repo): `memory/lagrange-owner-wiring.patch` (8 files, 279+/-2).
+- **Restore:** `git stash pop` (preferred) OR `git apply <memory>/lagrange-owner-wiring.patch`.
+- Files: bootstrap seed+join attach calls, `runtime-service-rebalancer-setup.js` attach fn, partition
+  core-base (leadership-sink hook), partition lifecycle (quiesce sink), partition rebalancer-methods
+  (drive sink from `maybeInitializeRebalancer`), + the owner/partition sink tests.
+
+RESIDUALS to finish when landing:
+1. **Formation budget**: runtime-services are non-priority, so the global in-flight move budget starves
+   them (`budget_exceeded`) until the control plane settles past the pre-existing formation stall
+   (`snapshot_coverage_unavailable`, SAME as W0b — owner did NOT cause it). On a settled cluster pgwire
+   places. Re-verify on a fully-converged cluster.
+2. **Joiner-attach ordering**: joiners log "partition service not found" (owner inert there) — robustness
+   gap if `service_definitions-p1` leadership moves off the seed. Re-attach on the joiner gaining the
+   partition, or attach later in the join flow.
+3. **Scope**: ALL active `service_definitions` rows place → `sys-admin-meta`/`sys-wasm-meta` also come up
+   (they ship `replica_count=3`). Intended (uniform first-class services); ship `replica_count=0` to
+   suppress any we don't want auto-started, including pgwire for the D2 "start it" onboarding narrative.
+
 Roadmap: Phase 0.5 — External Usability › Cluster Deployment Experience
 Primary roadmap row: `RM-0.5-cde-helm-chart` (also advances `RM-0.5-cde-docker-compose`,
 `RM-0.5-cde-dockerfile` image-publish, and `RM-0.5-dw-getting-started`)
