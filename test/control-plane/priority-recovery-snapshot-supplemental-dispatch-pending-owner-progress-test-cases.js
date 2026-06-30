@@ -30,6 +30,122 @@ function buildPriorityRecoverySnapshotOperationOwnerOutcome(overrides = {}) {
   });
 }
 
+function findPriorityRecoverySnapshotByOperation(
+  decisionSnapshots,
+  partitionId,
+  operationId,
+) {
+  const snapshots = Array.isArray(decisionSnapshots?.snapshots) ?
+    decisionSnapshots.snapshots :
+    [];
+  return snapshots.find((entry) =>
+    entry.partitionId === partitionId && entry.operationId === operationId,
+  );
+}
+
+function assertPriorityRecoveryMixedOpenDispatchSnapshot(
+  t,
+  snapshot,
+  expected,
+) {
+  const conditions = snapshot?.conditions || {};
+  const actuation = snapshot?.actuation || {};
+  const progress = snapshot?.progress || {};
+  t.equal(
+    conditions.latestOperationWorkflowStep,
+    expected.workflowStep,
+    'mixed terminal siblings should not hide the open PENDING workflow step',
+  );
+  t.equal(
+    conditions.latestOperationStatus,
+    expected.status,
+    'mixed terminal siblings should not hide the open PENDING status',
+  );
+  t.match(
+    actuation,
+    {
+      owner: expected.workflowOwner,
+      state: expected.persistedNotDispatchedState,
+      workflowProgressPhaseId: expected.dispatchPendingPhase,
+      latestOperationId: expected.operationId,
+      lastProgressAtMs: expected.lastProgressAtMs,
+    },
+    'mixed terminal siblings should keep actuation on the open dispatch-pending row',
+  );
+  t.match(
+    progress,
+    {
+      currentOwner: expected.workflowOwner,
+      nextRequiredAction: expected.advanceExistingOperationAction,
+      blockingBoundary: expected.workflowBoundary,
+      waitMode: expected.eventDrivenWait,
+      workflowProgressPhaseId: expected.dispatchPendingPhase,
+      lastProgressAtMs: expected.lastProgressAtMs,
+    },
+    'mixed terminal siblings should re-enter owner progress for the open dispatch-pending row',
+  );
+  t.equal(
+    snapshot?.operationOwnerObservation?.outcome,
+    expected.ownerOutcome,
+    'owner observation should target the open dispatch-pending operation',
+  );
+  t.equal(
+    snapshot?.coordinator?.operation?.operationId,
+    expected.operationId,
+    'operation-specific snapshots should keep the pending row as coordinator evidence',
+  );
+}
+
+function assertPriorityRecoveryMixedTerminalSiblingSnapshot(
+  t,
+  snapshot,
+  expected,
+) {
+  const conditions = snapshot?.conditions || {};
+  const actuation = snapshot?.actuation || {};
+  const progress = snapshot?.progress || {};
+  t.equal(
+    conditions.latestOperationWorkflowStep,
+    expected.workflowStep,
+    'terminal sibling snapshots should keep the terminal workflow step',
+  );
+  t.equal(
+    conditions.latestOperationStatus,
+    expected.status,
+    'terminal sibling snapshots should keep the terminal status',
+  );
+  t.match(
+    actuation,
+    {
+      owner: expected.rebalancerOwner,
+      state: expected.actionRequiredState,
+      latestOperationId: expected.operationId,
+    },
+    'terminal sibling snapshots should not inherit pending-row actuation',
+  );
+  t.match(
+    progress,
+    {
+      contractState: expected.pendingContractState,
+      nextAction: expected.waitNextAction,
+      currentOwner: expected.rebalancerOwner,
+      nextRequiredAction: expected.createOperationAction,
+      blockingBoundary: expected.schedulingBoundary,
+      waitMode: expected.eventDrivenWait,
+    },
+    'terminal sibling snapshots should not inherit pending-row workflow progress',
+  );
+  t.notOk(
+    snapshot?.operationOwnerObservation,
+    'terminal sibling snapshots should not retain a pending owner observation',
+  );
+  t.equal(
+    snapshot?.coordinator?.operation?.operationId,
+    expected.operationId,
+    'terminal sibling snapshots should keep the terminal row as coordinator evidence',
+  );
+}
+
 export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwnerProgressTests(
   context,
 ) {
@@ -40,6 +156,7 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
     OPERATION_WORKFLOW_OUTCOME_VALUES,
     OPERATION_WORKFLOW_REASON_CODE_VALUES,
     PRIORITY_RECOVERY_ACTIVE_SOURCE_REMOVAL_AGE_MS,
+    PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED,
     PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
     PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
     PRIORITY_RECOVERY_ACTUATION_STATE_TRANSITION_DEFERRED,
@@ -55,13 +172,16 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
     PRIORITY_RECOVERY_PENDING_OPERATION_UPDATED_AT_MS,
     PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
     PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+    PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
     PRIORITY_RECOVERY_PROGRESS_ACTION_RECONCILE_STALE_OPERATION,
     PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+    PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW_TIMEOUT,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+    PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
     PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
     PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
     PRIORITY_RECOVERY_PROGRESS_PHASE_SOURCE_REMOVAL,
@@ -587,57 +707,47 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
         serviceRows: [],
       });
 
-      const appendedSnapshot = decisionSnapshots.snapshots.find((entry) =>
-        entry.partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID &&
-        entry.operationId === PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+      const appendedSnapshot = findPriorityRecoverySnapshotByOperation(
+        decisionSnapshots,
+        SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
       );
 
-      t.equal(
-        appendedSnapshot?.conditions?.latestOperationWorkflowStep,
-        PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
-        'mixed terminal siblings should not hide the open PENDING workflow step',
+      assertPriorityRecoveryMixedOpenDispatchSnapshot(t, appendedSnapshot, {
+        advanceExistingOperationAction:
+          PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        dispatchPendingPhase: PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+        eventDrivenWait: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        lastProgressAtMs: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+        ownerOutcome:
+          OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+        persistedNotDispatchedState:
+          PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+        status: PRIORITY_RECOVERY_STATUS_PENDING,
+        workflowBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        workflowOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+        workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+      });
+
+      const terminalSnapshot = findPriorityRecoverySnapshotByOperation(
+        decisionSnapshots,
+        SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
       );
-      t.equal(
-        appendedSnapshot?.conditions?.latestOperationStatus,
-        PRIORITY_RECOVERY_STATUS_PENDING,
-        'mixed terminal siblings should not hide the open PENDING status',
-      );
-      t.match(
-        appendedSnapshot?.actuation,
-        {
-          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-          state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
-          workflowProgressPhaseId:
-            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
-          latestOperationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
-          lastProgressAtMs: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-        },
-        'mixed terminal siblings should keep actuation on the open dispatch-pending row',
-      );
-      t.match(
-        appendedSnapshot?.progress,
-        {
-          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-          nextRequiredAction:
-            PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
-          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
-          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
-          workflowProgressPhaseId:
-            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
-          lastProgressAtMs: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-        },
-        'mixed terminal siblings should re-enter owner progress for the open dispatch-pending row',
-      );
-      t.equal(
-        appendedSnapshot?.operationOwnerObservation?.outcome,
-        OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
-        'owner observation should target the open dispatch-pending operation',
-      );
-      t.equal(
-        appendedSnapshot?.coordinator?.operation?.operationId,
-        PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
-        'operation-specific snapshots should keep the pending row as coordinator evidence',
-      );
+
+      assertPriorityRecoveryMixedTerminalSiblingSnapshot(t, terminalSnapshot, {
+        actionRequiredState: PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED,
+        createOperationAction: PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
+        eventDrivenWait: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
+        pendingContractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+        rebalancerOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+        schedulingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
+        status: PRIORITY_RECOVERY_STATUS_REMOVED,
+        waitNextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+        workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+      });
     },
   );
 

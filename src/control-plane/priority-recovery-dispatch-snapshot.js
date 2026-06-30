@@ -510,6 +510,122 @@ function stripInheritedPriorityRecoveryOperationOwnerObservation(snapshot) {
   return sanitizedSnapshot;
 }
 
+function resolvePriorityRecoveryOperationSnapshotCapturedAt(snapshot) {
+  return normalizePriorityRecoveryInteger(
+    snapshot?.observation?.provenance?.capturedAt,
+  );
+}
+
+function resolvePriorityRecoveryOperationSnapshotLearnerPromotion(snapshot) {
+  return isPriorityRecoverySnapshotObject(snapshot?.readiness?.learnerPromotion) ?
+    snapshot.readiness.learnerPromotion :
+    null;
+}
+
+function buildPriorityRecoveryOperationSnapshotAssessment(
+  snapshot,
+  operationContexts,
+  capturedAt,
+) {
+  return buildPriorityRecoveryPartitionAssessment({
+    partitionId: snapshot.partitionId,
+    planner: snapshot.planner,
+    admission: snapshot.admission,
+    learnerPromotion:
+      resolvePriorityRecoveryOperationSnapshotLearnerPromotion(snapshot),
+    operationContexts,
+    nowMs: capturedAt,
+  });
+}
+
+function preservePriorityRecoveryOperationSnapshotPressure(
+  conditions,
+  snapshot,
+) {
+  if (!isPriorityRecoverySnapshotObject(snapshot?.conditions?.pressure)) {
+    return conditions;
+  }
+  return Object.freeze({
+    ...conditions,
+    pressure: snapshot.conditions.pressure,
+  });
+}
+
+function buildPriorityRecoveryOperationSpecificSnapshotBase(
+  partitionSnapshot,
+  operationContext,
+) {
+  const sanitizedSnapshot =
+    stripInheritedPriorityRecoveryOperationOwnerObservation(
+      partitionSnapshot,
+    );
+  if (!isPriorityRecoverySnapshotObject(operationContext)) {
+    return sanitizedSnapshot;
+  }
+  const operationContexts = [operationContext];
+  const capturedAt =
+    resolvePriorityRecoveryOperationSnapshotCapturedAt(sanitizedSnapshot);
+  const authoritativeOperationReadDeferred =
+    sanitizedSnapshot.conditions?.authoritativeOperationReadDeferred === true;
+  const assessment = buildPriorityRecoveryOperationSnapshotAssessment(
+    sanitizedSnapshot,
+    operationContexts,
+    capturedAt,
+  );
+  const completion =
+    isPriorityRecoverySnapshotObject(sanitizedSnapshot.completion) ?
+      sanitizedSnapshot.completion :
+      buildPriorityRecoveryCompletion({
+        assessment,
+        authoritativeOperationReadDeferred,
+      });
+  const observation = buildPriorityRecoveryPartitionObservation({
+    capturedAt,
+    assessment,
+    completion,
+    operationContexts,
+    authoritativeOperationReadDeferred,
+  });
+  const conditions = preservePriorityRecoveryOperationSnapshotPressure(
+    buildPriorityRecoveryConditionsContract({
+      observation,
+      assessment,
+      admission: sanitizedSnapshot.admission,
+      latestOperationContext: operationContext,
+      authoritativeOperationReadDeferred,
+    }),
+    sanitizedSnapshot,
+  );
+  const actuation = buildPriorityRecoveryActuationContract({
+    completion,
+    observation,
+    assessment,
+    admission: sanitizedSnapshot.admission,
+    conditions,
+    operationContexts,
+    latestOperationContext: operationContext,
+    nowMs: capturedAt,
+    authoritativeOperationReadDeferred,
+  });
+  const progress = buildPriorityRecoveryProgressContract({
+    completion,
+    observation,
+    assessment,
+    actuation,
+    operationContexts,
+    latestOperationContext: operationContext,
+    nowMs: capturedAt,
+    authoritativeOperationReadDeferred,
+  });
+  return {
+    ...sanitizedSnapshot,
+    observation,
+    conditions,
+    actuation,
+    progress,
+  };
+}
+
 function appendPriorityRecoveryPartitionSnapshots(
   snapshots,
   partitionSnapshot,
@@ -529,8 +645,9 @@ function appendPriorityRecoveryPartitionSnapshots(
         byOperationId[operationId] :
         null;
     const operationSnapshotBase =
-      stripInheritedPriorityRecoveryOperationOwnerObservation(
+      buildPriorityRecoveryOperationSpecificSnapshotBase(
         partitionSnapshot,
+        operationContext,
       );
     const snapshotWithOperationContext = {
       ...operationSnapshotBase,
