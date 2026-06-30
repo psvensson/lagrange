@@ -178,6 +178,22 @@ function isOperationWorkflowOwnerDispatchPendingTargetProgressReady(
     );
 }
 
+function isOperationWorkflowOwnerTargetSyncActiveProgressReady(
+  snapshot,
+  targetVisibilityState,
+) {
+  return snapshot?.actuation?.workflowProgressPhaseId ===
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC &&
+    snapshot?.progress?.workflowProgressPhaseId ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC &&
+    snapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
+      true &&
+    targetVisibilityState ===
+      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
+}
+
 function isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) {
   return OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
     snapshot?.actuation?.workflowProgressPhaseId,
@@ -204,6 +220,58 @@ function isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot) {
       true;
 }
 
+function isOperationWorkflowOwnerProgressOwnedByOperationWorkflow(snapshot) {
+  return snapshot?.actuation?.owner ===
+    PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    snapshot?.progress?.currentOwner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER;
+}
+
+function isOperationWorkflowOwnerTargetProgressWaitEligible(
+  snapshot,
+  representativeRerunRoute,
+  dispatchPendingTargetProgressWait,
+  sourceRemovalProgressWait,
+) {
+  return representativeRerunRoute !== 'blocked_model_route' && (
+    isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
+    dispatchPendingTargetProgressWait === true ||
+    sourceRemovalProgressWait === true
+  );
+}
+
+function isOperationWorkflowOwnerTargetServiceTerminalOrReady(
+  snapshot,
+  operation,
+  dispatchPendingTargetProgressWait,
+  targetSyncActiveProgressWait,
+  sourceRemovalProgressWait,
+) {
+  return snapshot?.coordinator?.operation?.targetServiceTerminalState ===
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
+    operation?.targetServiceTerminalState ===
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
+    dispatchPendingTargetProgressWait === true ||
+    targetSyncActiveProgressWait === true ||
+    sourceRemovalProgressWait === true;
+}
+
+function isOperationWorkflowOwnerRemoteOwnerAvailable(
+  owner,
+  operation,
+  ownerNodeId,
+) {
+  const ownerNodeKnown =
+    typeof ownerNodeId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
+    ownerNodeId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
+    ownerNodeId !== owner.nodeId;
+  // Remote owners that are no longer repair-eligible must not be woken.
+  const ownerUnavailable =
+    typeof owner.isPriorityRecoveryDrainOwnerUnavailable === 'function' &&
+    owner.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation);
+  return ownerNodeKnown === true && ownerUnavailable !== true;
+}
+
 function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
   owner,
   snapshot,
@@ -221,6 +289,11 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       snapshot,
       targetVisibilityState,
     );
+  const targetSyncActiveProgressWait =
+    isOperationWorkflowOwnerTargetSyncActiveProgressReady(
+      snapshot,
+      targetVisibilityState,
+    );
   const sourceRemovalProgressWait =
     isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot);
   const representativeRerunRoute =
@@ -230,36 +303,26 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
   return Object.freeze({
     operationAvailable: Boolean(operationId),
     operationWorkflowOwner:
-      snapshot?.actuation?.owner ===
-        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-      snapshot?.progress?.currentOwner ===
-        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-    targetProgressWait:
-      representativeRerunRoute !== 'blocked_model_route' && (
-        isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
-        dispatchPendingTargetProgressWait === true ||
-        sourceRemovalProgressWait === true
-      ),
-    targetServiceTerminal:
-      snapshot?.coordinator?.operation?.targetServiceTerminalState ===
-        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
-      operation?.targetServiceTerminalState ===
-        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
-      dispatchPendingTargetProgressWait === true ||
-      sourceRemovalProgressWait === true,
+      isOperationWorkflowOwnerProgressOwnedByOperationWorkflow(snapshot),
+    targetProgressWait: isOperationWorkflowOwnerTargetProgressWaitEligible(
+      snapshot,
+      representativeRerunRoute,
+      dispatchPendingTargetProgressWait,
+      sourceRemovalProgressWait,
+    ),
+    targetServiceTerminal: isOperationWorkflowOwnerTargetServiceTerminalOrReady(
+      snapshot,
+      operation,
+      dispatchPendingTargetProgressWait,
+      targetSyncActiveProgressWait,
+      sourceRemovalProgressWait,
+    ),
     locallyOwned: owner.repository.isOperationLocallyOwned(operation),
-    remoteOwnerAvailable:
-      typeof ownerNodeId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
-      ownerNodeId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
-      ownerNodeId !== owner.nodeId &&
-      // A remote owner that is no longer repair-eligible (not routable) must not
-      // be woken: dispatching its REPLICA_OPERATION_DISPATCH replays a source
-      // removal against an unavailable owner instead of letting the drain settle
-      // the released operation locally.
-      !(
-        typeof owner.isPriorityRecoveryDrainOwnerUnavailable === 'function' &&
-        owner.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation)
-      ),
+    remoteOwnerAvailable: isOperationWorkflowOwnerRemoteOwnerAvailable(
+      owner,
+      operation,
+      ownerNodeId,
+    ),
     ownerLaneHeld:
       Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
   });

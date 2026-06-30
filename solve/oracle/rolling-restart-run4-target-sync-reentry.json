@@ -1,0 +1,7 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "target-sync-active-operational-reentry-green",
+  "evidence": "Focused deterministic test red before source fix and green after: TARGET_SYNC/SYNCING REPLACE with active_operational non-terminal target re-enters reconcileObservedProgressOperation. Verified operation-workflow-progress-event-driven-reentry, adjacent owner/visibility suites, eslint, git diff --check, scoped metrics; subagent 019f16d8-20e0-71b1-9eeb-afe8f141fb81 rubber-duck confirmed exact target and red/green theory."
+}

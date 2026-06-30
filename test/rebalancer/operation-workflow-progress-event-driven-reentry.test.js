@@ -136,6 +136,8 @@ const TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'remote target-service terminal progress snapshots wake the workflow owner';
 const TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'dispatch-pending active target progress snapshots re-enter workflow progress';
+const TEST_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY_TEST_NAME =
+  'target-sync active target progress snapshots re-enter workflow progress';
 const TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME =
   'source-removal workflow progress snapshots re-enter workflow progress';
 const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
@@ -157,6 +159,9 @@ const TEST_ASSERT_TARGET_PROGRESS_PHASE =
 const TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY =
   'dispatch-pending active target progress should re-enter the ' +
   'observed-progress owner lane';
+const TEST_ASSERT_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY =
+  'target-sync active target progress should re-enter the observed-progress ' +
+  'owner lane';
 const TEST_ASSERT_SOURCE_REMOVAL_PROGRESS_REENTRY =
   'source-removal workflow progress should re-enter the observed-progress ' +
   'owner lane';
@@ -1791,6 +1796,98 @@ test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         representativeRerunRoute: TEST_PROGRESS_CONTRACT_ELIGIBLE_ROUTE,
       },
       TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const observedProgressOperationIds = [];
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_SQL_WRITE_OPERATION_ID,
+    partitionId: TEST_SQL_WRITE_PARTITION_ID,
+    entityId: TEST_SQL_WRITE_PARTITION_ID,
+    replicaId: TEST_SQL_WRITE_REPLICA_ID,
+    status: ReplicaStatus.SYNCING,
+    workflowStep: WORKFLOW_STEP.SYNCING,
+    targetNodeId: TEST_OBSERVER_NODE_ID,
+  });
+  const operationWithTargetProgress = Object.freeze({
+    ...operation,
+    targetVisibilityState:
+      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    operation_id: TEST_SQL_WRITE_OPERATION_ID,
+    partition_id: TEST_SQL_WRITE_PARTITION_ID,
+    entity_id: TEST_SQL_WRITE_PARTITION_ID,
+    replica_id: TEST_SQL_WRITE_REPLICA_ID,
+    status: ReplicaStatus.SYNCING,
+    workflow_step: WORKFLOW_STEP.SYNCING,
+    target_node_id: TEST_OBSERVER_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      partitionId: TEST_SQL_WRITE_PARTITION_ID,
+      operationId: TEST_SQL_WRITE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.SYNCING,
+      latestOperationStatus: ReplicaStatus.SYNCING,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      coordinatorOperation: operationWithTargetProgress,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.reconcileObservedProgressOperation =
+      async (operationId) => {
+        observedProgressOperationIds.push(operationId);
+        return true;
+      };
+
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operationWithTargetProgress],
+        buildEventDrivenPlanningSnapshot({
+          partitionId: TEST_SQL_WRITE_PARTITION_ID,
+          operationId: TEST_SQL_WRITE_OPERATION_ID,
+          workflowStep: WORKFLOW_STEP.SYNCING,
+          latestOperationStatus: ReplicaStatus.SYNCING,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+          coordinatorOperation: operationWithTargetProgress,
+        }),
+      );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+      'target-sync active target fixture should preserve target-sync phase',
+    );
+    t.same(
+      observedProgressOperationIds,
+      [operation.operationId],
+      TEST_ASSERT_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY,
     );
   } finally {
     Date.now = originalDateNow;
