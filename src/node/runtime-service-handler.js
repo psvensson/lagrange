@@ -277,6 +277,15 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
         ...definition,
+        // service_definitions rows are stored snake_case, but the runtime
+        // descriptor validator (and adapter) read camelCase. Provide the
+        // camelCase runtime fields additively so a placed replica validates;
+        // without this every runtime-service create fails "runtime_kind is
+        // required". (Accept an already-camelCase definition too.)
+        runtimeKind: definition.runtime_kind ?? definition.runtimeKind ?? null,
+        runtimeRef: definition.runtime_ref ?? definition.runtimeRef ?? null,
+        runtimeConfig:
+          definition.runtime_config ?? definition.runtimeConfig ?? null,
       };
 
       await this.serviceLifecycleManager.createReplica(

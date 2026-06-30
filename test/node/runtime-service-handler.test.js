@@ -21,6 +21,9 @@ import {
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  validateRuntimeDescriptor,
+} from '../../src/wasm-service/runtime-descriptor-validator.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
 const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-1';
@@ -291,6 +294,17 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       assert.equal(lifecycle.calls.length, 2);
       assert.equal(lifecycle.calls[0].method, 'createReplica');
       assert.equal(lifecycle.calls[1].method, 'startReplica');
+
+      // Red-on-revert: the descriptor built from a snake_case service_definitions
+      // row must carry camelCase runtime fields so it passes the runtime
+      // descriptor validator. Without the handler's camelCase mapping this
+      // fails "runtime_kind is required" and no runtime-service replica places.
+      const descriptor = lifecycle.calls[0].definition;
+      assert.equal(descriptor.runtimeKind, 'native_js');
+      assert.equal(
+        validateRuntimeDescriptor(descriptor).valid, true,
+        'placed-replica descriptor validates',
+      );
 
       const replica = handler.getLocalReplica('sys-postgres-wire-r1');
       assert.equal(replica.status, ReplicaStatus.ACTIVE);
