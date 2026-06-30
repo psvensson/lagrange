@@ -4,21 +4,27 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     PRIORITY_RECOVERY_ACTIVE_SOURCE_REMOVAL_AGE_MS,
     PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
     PRIORITY_RECOVERY_ACTUATION_STATE_NO_ACTION_NEEDED,
+    PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
     PRIORITY_RECOVERY_COMPLETION_STATE,
     PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
     PRIORITY_RECOVERY_NODE_ID_A,
     PRIORITY_RECOVERY_NODE_ID_B,
     PRIORITY_RECOVERY_NODE_ID_C,
     PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+    PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE,
+    PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
     PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY,
     PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET,
     PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
     PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+    PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+    PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
     PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
     PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+    PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
     PRIORITY_RECOVERY_PROGRESS_PHASE_SOURCE_REMOVAL,
     PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
     PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_ADDRESS,
@@ -38,12 +44,14 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLICA_ID,
     PRIORITY_RECOVERY_STATUS_ACTIVE,
     PRIORITY_RECOVERY_STATUS_COMPLETED,
+    PRIORITY_RECOVERY_STATUS_FAILED,
     PRIORITY_RECOVERY_STATUS_PENDING,
     PRIORITY_RECOVERY_STATUS_SYNCING,
     PRIORITY_RECOVERY_TOTAL_PRIORITY_PARTITION_COUNT,
     PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
     PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
     PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+    PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
     PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
     PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
     PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING,
@@ -225,6 +233,145 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
       decisionSnapshots.unresolvedSemanticStateIds,
       [],
       'planner-ready PENDING work should not keep priority recovery unresolved',
+    );
+  });
+
+  test('priority recovery decision snapshots keep failed publication workflow ' +
+  'evidence unresolved while owner dispatch remains open', async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS +
+        PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+      publicationConvergence: {
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          readyEligibleNodeCount: PRIORITY_RECOVERY_READY_ELIGIBLE_NODE_COUNT,
+          totalPriorityPartitionCount:
+          PRIORITY_RECOVERY_TOTAL_PRIORITY_PARTITION_COUNT,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          locallyEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      stepTimeoutMsByWorkflowStep: {
+        [PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING]:
+        PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+      },
+      replicaOperationRows: [{
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+        partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_PENDING,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+        replica_id: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_REPLICA_ID,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+      }, {
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE,
+        partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_FAILED,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        replica_id: PRIORITY_RECOVERY_REPLICA_ID_SYNCING,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+        completed_at: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          [PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT]: [{
+            step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+            status: PRIORITY_RECOVERY_STATUS_PENDING,
+            inFlight: true,
+          }],
+          [PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE]: [{
+            step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+            status: PRIORITY_RECOVERY_STATUS_FAILED,
+            inFlight: false,
+          }],
+        },
+      },
+      serviceRows: [],
+    });
+
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+      [],
+      'terminal failed publication workflow evidence should not leave the partition spread-satisfied while owner dispatch remains open',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT
+      ],
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'owner-dispatch normalization should keep the failed publication workflow shape unresolved as in-flight recovery',
+    );
+    t.same(
+      decisionSnapshots.unresolvedSemanticStateIds,
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT],
+      'failed workflow evidence should keep priority recovery unresolved',
+    );
+
+    const pendingSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === PUBLICATION_PRIORITY_PARTITION_ID &&
+      entry.operationId === PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+    );
+    t.ok(pendingSnapshot, 'pending owner workflow snapshot should exist');
+    t.not(
+      pendingSnapshot.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'planner-ready spread should not mask a failed workflow sibling as resolved',
+    );
+    t.match(
+      pendingSnapshot.progress,
+      {
+        currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+        nextRequiredAction:
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        workflowProgressPhaseId:
+        PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+      },
+      'open owner dispatch should remain the progress owner',
+    );
+    t.match(
+      pendingSnapshot.actuation,
+      {
+        owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+        state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+        workflowProgressPhaseId:
+        PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+      },
+      'open owner dispatch should remain the actuation owner',
     );
   });
 
@@ -801,6 +948,19 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
           replica_id: 'sql_write_operations-p1-r4',
           created_at: 1000,
           updated_at: 2000,
+        }, {
+          operation_id: PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE,
+          partition_id: 'sql_write_operations-p1',
+          entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+          operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+          status: PRIORITY_RECOVERY_STATUS_FAILED,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+          source_node_id: 'node-a',
+          target_node_id: 'node-b',
+          replica_id: 'sql_write_operations-p1-r5',
+          created_at: 1000,
+          updated_at: 2500,
+          completed_at: 2500,
         }],
         replicaOperations: {
           operationTimelineById: {
@@ -808,6 +968,11 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
               {step: 'PENDING', status: 'pending', inFlight: true},
               {step: 'SENDING', status: 'pending', inFlight: true},
             ],
+            [PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE]: [{
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+              status: PRIORITY_RECOVERY_STATUS_FAILED,
+              inFlight: false,
+            }],
           },
         },
         serviceRows: [],

@@ -1,8 +1,10 @@
 import {
   NUM,
   TYPEOF,
+  WORKFLOW_STEP,
 } from '../constants/index.js';
 import {buildActiveMembershipSnapshot as buildPriorityRecoveryPublicationContext} from './active-node-projection.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
@@ -241,6 +243,12 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
   const activeOperationContexts = spreadRelevantOperationContexts.filter(
     (context) => !isPriorityRecoveryOperationContextTerminal(context),
   );
+  const hasFailedOperationContext = operationContexts.some(
+    isPriorityRecoveryFailedOperationContext,
+  );
+  const hasOpenNonFailedOperationContext = activeOperationContexts.some(
+    (context) => isPriorityRecoveryFailedOperationContext(context) !== true,
+  );
   const spreadCompletion = buildPriorityRecoverySpreadCompletion({
     plannerReady: planner.ready === true,
     activeOperationContexts: spreadRelevantOperationContexts,
@@ -330,23 +338,53 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
       PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
     );
   }
-  const semanticState = resolvePriorityRecoverySemanticState({
+  const failedWorkflowOpen =
+    hasActiveOperationContexts &&
+    hasFailedOperationContext &&
+    hasOpenNonFailedOperationContext;
+  const resolvedSemanticState = resolvePriorityRecoverySemanticState({
     blockerReasons,
     plannerReady: planner.ready === true,
     hasActiveOperationContexts,
     spreadCompletion,
   });
+  const semanticState =
+    failedWorkflowOpen &&
+    resolvedSemanticState ===
+      PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT ?
+      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED :
+      resolvedSemanticState;
   return {
     planner,
     spreadCompletion,
     blockerReasons,
     semanticState,
     activeOperationContexts,
+    hasFailedOperationContext,
+    hasOpenNonFailedOperationContext,
     serialWaitOperationContexts,
     ineligibleNodeIds,
     recoveryEligibleExcludedNodeIds,
     publicationRecoveryEligibleButCoordinatorExcludesNode,
   };
+}
+
+function isPriorityRecoveryFailedOperationContext(operationContext) {
+  const status = String(operationContext?.status || '').toLowerCase();
+  const workflowStep = String(operationContext?.workflowStep || '')
+    .toUpperCase();
+  const latestTimelineStatus = String(
+    operationContext?.latestTimelineStatus || '',
+  ).toLowerCase();
+  const latestTimelineStep = String(
+    operationContext?.latestTimelineStep || '',
+  ).toUpperCase();
+  return (
+    status === ReplicaStatus.FAILED ||
+    latestTimelineStatus === ReplicaStatus.FAILED ||
+    workflowStep === WORKFLOW_STEP.FAILED ||
+    latestTimelineStep === WORKFLOW_STEP.FAILED
+  );
 }
 
 function buildPriorityRecoveryOperationAssessment(options = {}) {
