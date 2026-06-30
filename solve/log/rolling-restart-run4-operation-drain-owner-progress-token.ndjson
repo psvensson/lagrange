@@ -1,0 +1,1 @@
+{"ts":"2026-06-30T16:27:21.457Z","type":"quest-declared","sealed":{"doneWhen":{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}},"frontierMetrics":[{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}}]}}

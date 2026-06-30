@@ -13,10 +13,13 @@ RUN apt-get update && \
          node_modules/node-sql-parser/build \
          node_modules/node-sql-parser/*.map && \
   find node_modules/leveldown/prebuilds -mindepth 1 -maxdepth 1 \
-         ! -name 'linux-x64' -exec rm -rf {} +
+         ! -name 'linux-x64' -exec rm -rf {} + && \
+  rm -rf node_modules/better-sqlite3/deps \
+         node_modules/better-sqlite3/src \
+         node_modules/better-sqlite3/binding.gyp
 
-# ---- runtime: clean base, no build toolchain ----
-FROM node:22-slim AS runtime
+# ---- runtime: distroless (no shell/apt/npm), node is the entrypoint ----
+FROM gcr.io/distroless/nodejs22-debian12 AS runtime
 
 WORKDIR /app
 
@@ -26,4 +29,5 @@ COPY src/ ./src/
 
 EXPOSE 8080 8081 9080
 
-ENTRYPOINT ["node", "--max-old-space-size=1536", "src/index.js"]
+# distroless ENTRYPOINT is ["/nodejs/bin/node"]; these args are appended to it.
+CMD ["--max-old-space-size=1536", "src/index.js"]

@@ -128,6 +128,8 @@ const FINAL_ADJUDICATION_POLL_INTERVAL_MS = 100;
 const FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT = 0;
 const FINAL_ADJUDICATION_FORCE_REPAIR = true;
 const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
+const REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY = '';
+const REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR = ':';
 
 function buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics) {
   return new Set(
@@ -206,13 +208,18 @@ function buildReplicaOperationDrainDiscountCounts({
     hasCompleteReplicaOperationDrainRowCoverage(
       replicaOperationDrainRows,
       canonicalInFlightOperationIds,
-  );
+    );
   const drainStaleInFlightReplicaOperationCount =
     replicaOperationDrainRows.filter((row) => row.staleDiscountApplied).length;
   const drainAdditionalInFlightDiscountCount =
     replicaOperationDrainRows.filter((row) =>
       row.additionalInFlightDiscountEligible,
     ).length;
+  const effectiveInFlightReplicaOperationProgress =
+    buildEffectiveInFlightReplicaOperationProgress(
+      replicaOperationDrainRows,
+      drainRowCoverageComplete,
+    );
 
   return {
     staleInFlightReplicaOperationCount: drainRowCoverageComplete ?
@@ -222,7 +229,54 @@ function buildReplicaOperationDrainDiscountCounts({
         drainStaleInFlightReplicaOperationCount,
       ),
     additionalInFlightDiscountCount: drainAdditionalInFlightDiscountCount,
+    effectiveInFlightReplicaOperationProgress,
   };
+}
+
+function isEffectiveInFlightReplicaOperationDrainRow(row) {
+  return (
+    row?.inFlight === true &&
+    row?.staleDiscountApplied !== true &&
+    row?.additionalInFlightDiscountEligible !== true
+  );
+}
+
+function normalizeReplicaOperationProgressTokenPart(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY
+  ) {
+    return VALUE_UNKNOWN;
+  }
+  return String(value);
+}
+
+function formatReplicaOperationProgressTokenEntry(row) {
+  return [
+    row?.operationId,
+    row?.partitionId,
+    row?.type,
+    row?.status,
+    row?.workflowStep,
+  ]
+    .map((part) => normalizeReplicaOperationProgressTokenPart(part))
+    .join(REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR);
+}
+
+function buildEffectiveInFlightReplicaOperationProgress(
+  replicaOperationDrainRows,
+  drainRowCoverageComplete,
+) {
+  if (drainRowCoverageComplete !== true) {
+    return [];
+  }
+  return (Array.isArray(replicaOperationDrainRows) ?
+    replicaOperationDrainRows :
+    [])
+    .filter((row) => isEffectiveInFlightReplicaOperationDrainRow(row))
+    .map((row) => formatReplicaOperationProgressTokenEntry(row))
+    .sort();
 }
 
 async function queryNodeConsistencyStateViaSql(node) {
@@ -808,6 +862,7 @@ async function waitForConvergence(nodes, options = {}) {
     const {
       staleInFlightReplicaOperationCount,
       additionalInFlightDiscountCount,
+      effectiveInFlightReplicaOperationProgress,
     } = buildReplicaOperationDrainDiscountCounts({
       controlPlaneDiagnostics: latestControlPlaneDiagnostics,
       operationRows: latestOperationRows,
@@ -896,6 +951,7 @@ async function waitForConvergence(nodes, options = {}) {
         cdcProjectionVisibleSatisfied,
         expectedPartitionIds: [...latestExpectedPartitionIds].sort(),
         snapshotRevision: latestSnapshotRevision,
+        effectiveInFlightReplicaOperationProgress,
       });
       if (progressToken !== lastProgressToken) {
         lastProgressToken = progressToken;
@@ -1487,13 +1543,14 @@ async function runFinalAdjudication(nodes) {
  *
  * "Progress" means the cluster is advancing toward its SETTLED state — voters at
  * target, no in-flight replica operations, no blocking over-target, CDC
- * projection visible, the expected partitions present, and the snapshot revision
- * advancing. Raft LEADER identity and the leader-change COUNT are deliberately
- * EXCLUDED: a frozen cluster whose surplus voter never drains but whose leaders
- * flap (re-elections) would otherwise keep mutating the token and reset the
- * no-progress timer forever, so the convergence wait sat out its FULL budget
- * (~105s of pure idle) instead of failing fast as "stalled"
- * (gate stat-gate-20260624T134940Z run1: 4 incidental leader changes masked a
+ * projection visible, the expected partitions present, the snapshot revision
+ * advancing, and operation_workflow_owner progress for the effective in-flight
+ * operation set. Raft LEADER identity and the leader-change COUNT are
+ * deliberately EXCLUDED: a frozen cluster whose surplus voter never drains but
+ * whose leaders flap (re-elections) would otherwise keep mutating the token and
+ * reset the no-progress timer forever, so the convergence wait sat out its FULL
+ * budget (~105s of pure idle) instead of failing fast as "stalled" (gate
+ * stat-gate-20260624T134940Z run1: 4 incidental leader changes masked a
  * genuinely idle cluster). Leadership churn is not convergence progress.
  *
  * @param {Object} fields
@@ -1504,6 +1561,10 @@ function buildConvergenceProgressToken(fields) {
     voterCounts: fields.voterCounts,
     effectiveInFlightReplicaOperationCount:
       fields.effectiveInFlightReplicaOperationCount,
+    effectiveInFlightReplicaOperationProgress:
+      normalizeConvergenceProgressTokenEntries(
+        fields.effectiveInFlightReplicaOperationProgress,
+      ),
     hasBlockingOverTarget: fields.hasBlockingOverTarget,
     hasInFlightReplicaOperations: fields.hasInFlightReplicaOperations,
     cdcProjectionVisibleSatisfied: fields.cdcProjectionVisibleSatisfied,
@@ -1512,8 +1573,19 @@ function buildConvergenceProgressToken(fields) {
   });
 }
 
+function normalizeConvergenceProgressTokenEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  return entries
+    .map((entry) => String(entry || '').trim())
+    .filter((entry) => entry.length > 0)
+    .sort();
+}
+
 export const ASSERTIONS_CONVERGENCE_WAIT = {
   buildConvergenceProgressToken,
+  buildEffectiveInFlightReplicaOperationProgress,
   TIMEOUTS,
   SERVICES_QUERY,
   NODES_QUERY,

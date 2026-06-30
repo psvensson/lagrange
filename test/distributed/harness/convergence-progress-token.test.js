@@ -20,7 +20,10 @@ import {
   ASSERTIONS_CONVERGENCE_WAIT,
 } from './assertions-convergence-wait.js';
 
-const {buildConvergenceProgressToken} = ASSERTIONS_CONVERGENCE_WAIT;
+const {
+  buildConvergenceProgressToken,
+  buildEffectiveInFlightReplicaOperationProgress,
+} = ASSERTIONS_CONVERGENCE_WAIT;
 
 function frozenFields(overrides = {}) {
   return {
@@ -60,6 +63,80 @@ test('a draining op IS progress: fewer in-flight ops changes the token', (t) => 
   t.end();
 });
 
+test('operation-owner workflow progress IS progress even when the in-flight ' +
+  'count is unchanged', (t) => {
+  const beforeProgress = buildEffectiveInFlightReplicaOperationProgress([
+    {
+      operationId: 'op-1',
+      partitionId: 'sql_transactions-p1',
+      type: 'REMOVE',
+      status: 'pending',
+      workflowStep: 'PENDING',
+      updatedAt: 1000,
+      inFlight: true,
+    },
+  ], true);
+  const afterProgress = buildEffectiveInFlightReplicaOperationProgress([
+    {
+      operationId: 'op-1',
+      partitionId: 'sql_transactions-p1',
+      type: 'REMOVE',
+      status: 'pending',
+      workflowStep: 'SENDING',
+      updatedAt: 1221,
+      inFlight: true,
+    },
+  ], true);
+  const before = buildConvergenceProgressToken(frozenFields({
+    effectiveInFlightReplicaOperationProgress: beforeProgress,
+  }));
+  const afterOwnerProgress = buildConvergenceProgressToken(frozenFields({
+    effectiveInFlightReplicaOperationProgress: afterProgress,
+  }));
+
+  t.not(afterOwnerProgress, before,
+    'workflow-step progress for the effective in-flight operation mutates the ' +
+    'token without relying on leader churn or aggregate count changes');
+  t.end();
+});
+
+test('updatedAt-only operation churn is NOT owner workflow progress', (t) => {
+  const first = buildEffectiveInFlightReplicaOperationProgress([
+    {
+      operationId: 'op-1',
+      partitionId: 'sql_transactions-p1',
+      type: 'REMOVE',
+      status: 'pending',
+      workflowStep: 'SENDING',
+      updatedAt: 1221,
+      inFlight: true,
+    },
+  ], true);
+  const retryChurn = buildEffectiveInFlightReplicaOperationProgress([
+    {
+      operationId: 'op-1',
+      partitionId: 'sql_transactions-p1',
+      type: 'REMOVE',
+      status: 'pending',
+      workflowStep: 'SENDING',
+      updatedAt: 2222,
+      inFlight: true,
+    },
+  ], true);
+
+  t.same(retryChurn, first,
+    're-persisting the same step/status with a newer timestamp is not progress');
+  t.equal(
+    buildConvergenceProgressToken(frozenFields({
+      effectiveInFlightReplicaOperationProgress: retryChurn,
+    })),
+    buildConvergenceProgressToken(frozenFields({
+      effectiveInFlightReplicaOperationProgress: first,
+    })),
+    'updatedAt-only churn does not reset the no-progress token');
+  t.end();
+});
+
 test('a surplus draining (over-target clears) IS progress', (t) => {
   const before = buildConvergenceProgressToken(frozenFields());
   const afterDrain = buildConvergenceProgressToken(frozenFields({
@@ -67,6 +144,59 @@ test('a surplus draining (over-target clears) IS progress', (t) => {
     voterCounts: [['replica_operations-p1', 3], ['sql_transactions-p1', 3]],
   }));
   t.not(afterDrain, before, 'the surplus voter draining is real convergence progress');
+  t.end();
+});
+
+test('operation progress token includes only effective in-flight rows', (t) => {
+  const progress = buildEffectiveInFlightReplicaOperationProgress([
+    {
+      operationId: 'stale-op',
+      partitionId: 'replica_operations-p1',
+      type: 'REPLACE',
+      status: 'pending',
+      workflowStep: 'PENDING',
+      updatedAt: 1000,
+      inFlight: true,
+      staleDiscountApplied: true,
+    },
+    {
+      operationId: 'discounted-op',
+      partitionId: 'services-p1',
+      type: 'REMOVE',
+      status: 'active',
+      workflowStep: 'ACTIVE',
+      updatedAt: 1200,
+      inFlight: true,
+      additionalInFlightDiscountEligible: true,
+    },
+    {
+      operationId: 'effective-op',
+      partitionId: 'sql_transactions-p1',
+      type: 'REMOVE',
+      status: 'pending',
+      workflowStep: 'SENDING',
+      updatedAt: 1221,
+      inFlight: true,
+    },
+  ], true);
+
+  t.same(progress, [
+    'effective-op:sql_transactions-p1:REMOVE:pending:SENDING',
+  ]);
+  t.same(
+    buildEffectiveInFlightReplicaOperationProgress([
+      {
+        operationId: 'partial-row',
+        partitionId: 'sql_transactions-p1',
+        type: 'REMOVE',
+        status: 'pending',
+        workflowStep: 'SENDING',
+        updatedAt: 1221,
+        inFlight: true,
+      },
+    ], false),
+    [],
+    'partial drain-row coverage does not invent owner-progress resets');
   t.end();
 });
 

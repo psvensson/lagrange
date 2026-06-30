@@ -1,0 +1,472 @@
+diff --git a/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson b/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson
+new file mode 100644
+index 00000000..8c37b48c
+--- /dev/null
++++ b/solve/log/rolling-restart-run4-operation-drain-owner-progress-token.ndjson
+@@ -0,0 +1 @@
++{"ts":"2026-06-30T16:27:21.457Z","type":"quest-declared","sealed":{"doneWhen":{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}},"frontierMetrics":[{"probe":"oracle","args":{"file":"solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"}}]}}
+diff --git a/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json b/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json
+new file mode 100644
+index 00000000..13e399df
+--- /dev/null
++++ b/solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json
+@@ -0,0 +1,80 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "post-rebalance-operation-drain-owner-progress-token-proven",
++  "evidence": {
++    "parentQuest": "rolling-restart-run4-drain-residual",
++    "childQuest": "rolling-restart-run4-operation-drain-owner-progress-token",
++    "retainedReport": "test-output/reports/stat-gate-20260630T143856Z-run3.report.json",
++    "redCheck": "npm test -- test/distributed/harness/convergence-progress-token.test.js failed before source change because operation-owner workflow progress with unchanged effective in-flight count produced the same convergence progress token",
++    "focusedGreenTest": "npm test -- test/distributed/harness/convergence-progress-token.test.js",
++    "adjacentGreenTests": [
++      "npm test -- test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js",
++      "npm test -- test/distributed/harness/__tests__/assertions-convergence-settle-test-cases.js",
++      "npm test -- test/distributed/harness/__tests__/assertions-convergence-snapshot-test-cases.js"
++    ],
++    "eslint": "npx eslint test/distributed/harness/assertions-convergence-wait.js test/distributed/harness/convergence-progress-token.test.js",
++    "diffCheck": "git diff --check",
++    "runtimeGrammar": "npm run audit:runtime-grammar:file -- test/distributed/harness/assertions-convergence-wait.js test/distributed/harness/convergence-progress-token.test.js",
++    "constantNames": "npm run guard:guideline:constant-names:file -- test/distributed/harness/assertions-convergence-wait.js test/distributed/harness/convergence-progress-token.test.js",
++    "scopedMetrics": "npm run test:metrics:scoped -- test/distributed/harness/assertions-convergence-wait.js test/distributed/harness/convergence-progress-token.test.js",
++    "fileSize": "npm run audit:file-size -- test/distributed/harness/assertions-convergence-wait.js test/distributed/harness/convergence-progress-token.test.js",
++    "subagentVerifier": "019f195e-8bd7-7fa0-90f8-fd2c6d5d5158"
++  },
++  "observed": {
++    "run3PostRebalanceClosureState": "open",
++    "run3BlockersBeforeChild": [
++      "operation_drain_open",
++      "membership_trim_open"
++    ],
++    "run3EffectiveInFlightReplicaOperationCount": 1,
++    "run3FreshEffectiveOperation": "d17c3ee2-ced1-44d7-9fd8-5fbc97af773b:sql_transactions-p1:REMOVE:pending:SENDING",
++    "run3FreshEffectiveOperationStepProgress": "PENDING -> SENDING",
++    "operationProgressTokenSource": "canonical complete post-rebalance drain diagnostics",
++    "operationProgressTokenIncludes": [
++      "operationId",
++      "partitionId",
++      "type",
++      "status",
++      "workflowStep"
++    ],
++    "operationProgressTokenExcludes": [
++      "updatedAt",
++      "leader identity",
++      "leaderChanges"
++    ],
++    "leaderOnlyChurnIgnored": true,
++    "updatedAtOnlyChurnIgnored": true,
++    "staleRowsExcluded": true,
++    "additionalDiscountRowsExcluded": true,
++    "partialDrainCoverageProgressEntries": 0,
++    "priorityRecoveryResidualWitnesses": 0,
++    "publicationVisibilityState": "closed",
++    "membershipTrimResidual": "handled by child rolling-restart-run4-postrebalance-trim-drain; this child preserves operation_drain_open visibility and only fixes no-progress owner-progress observation"
++  },
++  "validations": {
++    "workflowStepProgressChangesToken": true,
++    "effectiveCountUnchangedCanStillShowOwnerProgress": true,
++    "timestampOnlyRetryChurnDoesNotChangeToken": true,
++    "leaderOnlyChurnDoesNotChangeToken": true,
++    "staleOrDiscountedRowsDoNotResetNoProgress": true,
++    "missingCanonicalDrainCoverageDoesNotInventProgress": true,
++    "subagentVerifierResult": "no blockers"
++  },
++  "residuals": {
++    "parentWilsonClosure": "not claimed",
++    "guidelineLiterals": "whole-file scan reports pre-existing assertions-convergence-wait.js literal debt; JSON spot check found no violations in the new formatter block",
++    "guidelineDecisionBoundaries": "whole-file scan reports pre-existing assertions-convergence-wait.js decision-boundary debt; JSON spot check found no violations in the new formatter block",
++    "scopedMetrics": "command exits 0 while reporting pre-existing complexity debt in assertions-convergence-wait.js",
++    "fileSize": "command exits 0 while reporting existing oversized-file ratchet debt for assertions-convergence-wait.js"
++  },
++  "rulesOut": [
++    "parent rolling-restart Wilson statistical closure",
++    "another rolling-restart statistical gate for this child Quest",
++    "leader identity or leader-change count as no-progress reset evidence",
++    "updatedAt-only retry churn as owner workflow progress",
++    "stale or additionally discounted replica-operation rows hiding a real operation_drain_open blocker",
++    "broad ACTIVE replica-operation discounting"
++  ]
++}
+diff --git a/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json b/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json
+new file mode 100644
+index 00000000..94086d0f
+--- /dev/null
++++ b/solve/quests/rolling-restart-run4-operation-drain-owner-progress-token.json
+@@ -0,0 +1,57 @@
++{
++  "id": "rolling-restart-run4-operation-drain-owner-progress-token",
++  "statement": "Run3-shaped post-rebalance no-progress detection treats operation_workflow_owner workflow-step progress on effective in-flight replica operations as convergence progress while still ignoring leader-only churn; focused deterministic token evidence is green, and parent rolling-restart Wilson/statistical closure remains outside this child Quest.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": "RM-0.1-fs-rolling-restart",
++    "specRef": "membership-lifecycle-placement-hard-cutover",
++    "closesCL": [],
++    "parentQuest": "rolling-restart-run4-drain-residual",
++    "planDoc": "solve/epics/topology-convergence-hardening.md"
++  },
++  "doneWhenSealed": {
++    "closure": "Focused deterministic coverage proves the stat-gate-20260630T143856Z-run3 post-rebalance no-progress shape: with the effective in-flight replica-operation count unchanged, operation_workflow_owner workflow progress on an effective in-flight operation changes the convergence progress token and resets the no-progress timer, while leader-only churn remains ignored. Parent Wilson/statistical closure remains outside this child Quest.",
++    "oracle": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "rolling-restart-run4-operation-drain-owner-progress-token-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "no-stat-gate-closure",
++      "statement": "Do not run or require a rolling-restart statistical gate for this child Quest; prove the run3 operation-progress observation shape with focused deterministic evidence."
++    },
++    {
++      "id": "no-parent-closure-claim",
++      "statement": "Do not claim the parent rolling-restart run4 Wilson closure bar from this Quest."
++    },
++    {
++      "id": "leader-churn-still-ignored",
++      "statement": "Do not reintroduce leader identity or leader-change counts into the convergence progress token as no-progress-reset evidence."
++    },
++    {
++      "id": "effective-operation-progress-only",
++      "statement": "Only operation_workflow_owner progress for effective in-flight replica operations should reset the convergence no-progress token; stale/discounted rows must not hide a real operation_drain_open blocker."
++    }
++  ]
++}
+diff --git a/test/distributed/harness/assertions-convergence-wait.js b/test/distributed/harness/assertions-convergence-wait.js
+index 60c81d91..09bbc2e3 100644
+--- a/test/distributed/harness/assertions-convergence-wait.js
++++ b/test/distributed/harness/assertions-convergence-wait.js
+@@ -128,6 +128,8 @@ const FINAL_ADJUDICATION_POLL_INTERVAL_MS = 100;
+ const FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT = 0;
+ const FINAL_ADJUDICATION_FORCE_REPAIR = true;
+ const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
++const REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY = '';
++const REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR = ':';
+ 
+ function buildCanonicalInFlightOperationIdSet(controlPlaneDiagnostics) {
+   return new Set(
+@@ -206,13 +208,18 @@ function buildReplicaOperationDrainDiscountCounts({
+     hasCompleteReplicaOperationDrainRowCoverage(
+       replicaOperationDrainRows,
+       canonicalInFlightOperationIds,
+-  );
++    );
+   const drainStaleInFlightReplicaOperationCount =
+     replicaOperationDrainRows.filter((row) => row.staleDiscountApplied).length;
+   const drainAdditionalInFlightDiscountCount =
+     replicaOperationDrainRows.filter((row) =>
+       row.additionalInFlightDiscountEligible,
+     ).length;
++  const effectiveInFlightReplicaOperationProgress =
++    buildEffectiveInFlightReplicaOperationProgress(
++      replicaOperationDrainRows,
++      drainRowCoverageComplete,
++    );
+ 
+   return {
+     staleInFlightReplicaOperationCount: drainRowCoverageComplete ?
+@@ -222,9 +229,56 @@ function buildReplicaOperationDrainDiscountCounts({
+         drainStaleInFlightReplicaOperationCount,
+       ),
+     additionalInFlightDiscountCount: drainAdditionalInFlightDiscountCount,
++    effectiveInFlightReplicaOperationProgress,
+   };
+ }
+ 
++function isEffectiveInFlightReplicaOperationDrainRow(row) {
++  return (
++    row?.inFlight === true &&
++    row?.staleDiscountApplied !== true &&
++    row?.additionalInFlightDiscountEligible !== true
++  );
++}
++
++function normalizeReplicaOperationProgressTokenPart(value) {
++  if (
++    value === null ||
++    value === undefined ||
++    value === REPLICA_OPERATION_PROGRESS_TOKEN_EMPTY
++  ) {
++    return VALUE_UNKNOWN;
++  }
++  return String(value);
++}
++
++function formatReplicaOperationProgressTokenEntry(row) {
++  return [
++    row?.operationId,
++    row?.partitionId,
++    row?.type,
++    row?.status,
++    row?.workflowStep,
++  ]
++    .map((part) => normalizeReplicaOperationProgressTokenPart(part))
++    .join(REPLICA_OPERATION_PROGRESS_TOKEN_SEPARATOR);
++}
++
++function buildEffectiveInFlightReplicaOperationProgress(
++  replicaOperationDrainRows,
++  drainRowCoverageComplete,
++) {
++  if (drainRowCoverageComplete !== true) {
++    return [];
++  }
++  return (Array.isArray(replicaOperationDrainRows) ?
++    replicaOperationDrainRows :
++    [])
++    .filter((row) => isEffectiveInFlightReplicaOperationDrainRow(row))
++    .map((row) => formatReplicaOperationProgressTokenEntry(row))
++    .sort();
++}
++
+ async function queryNodeConsistencyStateViaSql(node) {
+   const [nodesResult, partResult, svcResult] = await Promise.all([
+     node.query(NODES_QUERY),
+@@ -808,6 +862,7 @@ async function waitForConvergence(nodes, options = {}) {
+     const {
+       staleInFlightReplicaOperationCount,
+       additionalInFlightDiscountCount,
++      effectiveInFlightReplicaOperationProgress,
+     } = buildReplicaOperationDrainDiscountCounts({
+       controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+       operationRows: latestOperationRows,
+@@ -896,6 +951,7 @@ async function waitForConvergence(nodes, options = {}) {
+         cdcProjectionVisibleSatisfied,
+         expectedPartitionIds: [...latestExpectedPartitionIds].sort(),
+         snapshotRevision: latestSnapshotRevision,
++        effectiveInFlightReplicaOperationProgress,
+       });
+       if (progressToken !== lastProgressToken) {
+         lastProgressToken = progressToken;
+@@ -1487,13 +1543,14 @@ async function runFinalAdjudication(nodes) {
+  *
+  * "Progress" means the cluster is advancing toward its SETTLED state — voters at
+  * target, no in-flight replica operations, no blocking over-target, CDC
+- * projection visible, the expected partitions present, and the snapshot revision
+- * advancing. Raft LEADER identity and the leader-change COUNT are deliberately
+- * EXCLUDED: a frozen cluster whose surplus voter never drains but whose leaders
+- * flap (re-elections) would otherwise keep mutating the token and reset the
+- * no-progress timer forever, so the convergence wait sat out its FULL budget
+- * (~105s of pure idle) instead of failing fast as "stalled"
+- * (gate stat-gate-20260624T134940Z run1: 4 incidental leader changes masked a
++ * projection visible, the expected partitions present, the snapshot revision
++ * advancing, and operation_workflow_owner progress for the effective in-flight
++ * operation set. Raft LEADER identity and the leader-change COUNT are
++ * deliberately EXCLUDED: a frozen cluster whose surplus voter never drains but
++ * whose leaders flap (re-elections) would otherwise keep mutating the token and
++ * reset the no-progress timer forever, so the convergence wait sat out its FULL
++ * budget (~105s of pure idle) instead of failing fast as "stalled" (gate
++ * stat-gate-20260624T134940Z run1: 4 incidental leader changes masked a
+  * genuinely idle cluster). Leadership churn is not convergence progress.
+  *
+  * @param {Object} fields
+@@ -1504,6 +1561,10 @@ function buildConvergenceProgressToken(fields) {
+     voterCounts: fields.voterCounts,
+     effectiveInFlightReplicaOperationCount:
+       fields.effectiveInFlightReplicaOperationCount,
++    effectiveInFlightReplicaOperationProgress:
++      normalizeConvergenceProgressTokenEntries(
++        fields.effectiveInFlightReplicaOperationProgress,
++      ),
+     hasBlockingOverTarget: fields.hasBlockingOverTarget,
+     hasInFlightReplicaOperations: fields.hasInFlightReplicaOperations,
+     cdcProjectionVisibleSatisfied: fields.cdcProjectionVisibleSatisfied,
+@@ -1512,8 +1573,19 @@ function buildConvergenceProgressToken(fields) {
+   });
+ }
+ 
++function normalizeConvergenceProgressTokenEntries(entries) {
++  if (!Array.isArray(entries)) {
++    return [];
++  }
++  return entries
++    .map((entry) => String(entry || '').trim())
++    .filter((entry) => entry.length > 0)
++    .sort();
++}
++
+ export const ASSERTIONS_CONVERGENCE_WAIT = {
+   buildConvergenceProgressToken,
++  buildEffectiveInFlightReplicaOperationProgress,
+   TIMEOUTS,
+   SERVICES_QUERY,
+   NODES_QUERY,
+diff --git a/test/distributed/harness/convergence-progress-token.test.js b/test/distributed/harness/convergence-progress-token.test.js
+index 1fece9e6..20437c91 100644
+--- a/test/distributed/harness/convergence-progress-token.test.js
++++ b/test/distributed/harness/convergence-progress-token.test.js
+@@ -20,7 +20,10 @@ import {
+   ASSERTIONS_CONVERGENCE_WAIT,
+ } from './assertions-convergence-wait.js';
+ 
+-const {buildConvergenceProgressToken} = ASSERTIONS_CONVERGENCE_WAIT;
++const {
++  buildConvergenceProgressToken,
++  buildEffectiveInFlightReplicaOperationProgress,
++} = ASSERTIONS_CONVERGENCE_WAIT;
+ 
+ function frozenFields(overrides = {}) {
+   return {
+@@ -60,6 +63,80 @@ test('a draining op IS progress: fewer in-flight ops changes the token', (t) =>
+   t.end();
+ });
+ 
++test('operation-owner workflow progress IS progress even when the in-flight ' +
++  'count is unchanged', (t) => {
++  const beforeProgress = buildEffectiveInFlightReplicaOperationProgress([
++    {
++      operationId: 'op-1',
++      partitionId: 'sql_transactions-p1',
++      type: 'REMOVE',
++      status: 'pending',
++      workflowStep: 'PENDING',
++      updatedAt: 1000,
++      inFlight: true,
++    },
++  ], true);
++  const afterProgress = buildEffectiveInFlightReplicaOperationProgress([
++    {
++      operationId: 'op-1',
++      partitionId: 'sql_transactions-p1',
++      type: 'REMOVE',
++      status: 'pending',
++      workflowStep: 'SENDING',
++      updatedAt: 1221,
++      inFlight: true,
++    },
++  ], true);
++  const before = buildConvergenceProgressToken(frozenFields({
++    effectiveInFlightReplicaOperationProgress: beforeProgress,
++  }));
++  const afterOwnerProgress = buildConvergenceProgressToken(frozenFields({
++    effectiveInFlightReplicaOperationProgress: afterProgress,
++  }));
++
++  t.not(afterOwnerProgress, before,
++    'workflow-step progress for the effective in-flight operation mutates the ' +
++    'token without relying on leader churn or aggregate count changes');
++  t.end();
++});
++
++test('updatedAt-only operation churn is NOT owner workflow progress', (t) => {
++  const first = buildEffectiveInFlightReplicaOperationProgress([
++    {
++      operationId: 'op-1',
++      partitionId: 'sql_transactions-p1',
++      type: 'REMOVE',
++      status: 'pending',
++      workflowStep: 'SENDING',
++      updatedAt: 1221,
++      inFlight: true,
++    },
++  ], true);
++  const retryChurn = buildEffectiveInFlightReplicaOperationProgress([
++    {
++      operationId: 'op-1',
++      partitionId: 'sql_transactions-p1',
++      type: 'REMOVE',
++      status: 'pending',
++      workflowStep: 'SENDING',
++      updatedAt: 2222,
++      inFlight: true,
++    },
++  ], true);
++
++  t.same(retryChurn, first,
++    're-persisting the same step/status with a newer timestamp is not progress');
++  t.equal(
++    buildConvergenceProgressToken(frozenFields({
++      effectiveInFlightReplicaOperationProgress: retryChurn,
++    })),
++    buildConvergenceProgressToken(frozenFields({
++      effectiveInFlightReplicaOperationProgress: first,
++    })),
++    'updatedAt-only churn does not reset the no-progress token');
++  t.end();
++});
++
+ test('a surplus draining (over-target clears) IS progress', (t) => {
+   const before = buildConvergenceProgressToken(frozenFields());
+   const afterDrain = buildConvergenceProgressToken(frozenFields({
+@@ -70,6 +147,59 @@ test('a surplus draining (over-target clears) IS progress', (t) => {
+   t.end();
+ });
+ 
++test('operation progress token includes only effective in-flight rows', (t) => {
++  const progress = buildEffectiveInFlightReplicaOperationProgress([
++    {
++      operationId: 'stale-op',
++      partitionId: 'replica_operations-p1',
++      type: 'REPLACE',
++      status: 'pending',
++      workflowStep: 'PENDING',
++      updatedAt: 1000,
++      inFlight: true,
++      staleDiscountApplied: true,
++    },
++    {
++      operationId: 'discounted-op',
++      partitionId: 'services-p1',
++      type: 'REMOVE',
++      status: 'active',
++      workflowStep: 'ACTIVE',
++      updatedAt: 1200,
++      inFlight: true,
++      additionalInFlightDiscountEligible: true,
++    },
++    {
++      operationId: 'effective-op',
++      partitionId: 'sql_transactions-p1',
++      type: 'REMOVE',
++      status: 'pending',
++      workflowStep: 'SENDING',
++      updatedAt: 1221,
++      inFlight: true,
++    },
++  ], true);
++
++  t.same(progress, [
++    'effective-op:sql_transactions-p1:REMOVE:pending:SENDING',
++  ]);
++  t.same(
++    buildEffectiveInFlightReplicaOperationProgress([
++      {
++        operationId: 'partial-row',
++        partitionId: 'sql_transactions-p1',
++        type: 'REMOVE',
++        status: 'pending',
++        workflowStep: 'SENDING',
++        updatedAt: 1221,
++        inFlight: true,
++      },
++    ], false),
++    [],
++    'partial drain-row coverage does not invent owner-progress resets');
++  t.end();
++});
++
+ test('snapshot revision advancing IS progress; CDC becoming visible IS progress',
+   (t) => {
+     const base = buildConvergenceProgressToken(frozenFields());

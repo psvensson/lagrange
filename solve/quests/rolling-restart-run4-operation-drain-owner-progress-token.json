@@ -1,0 +1,57 @@
+{
+  "id": "rolling-restart-run4-operation-drain-owner-progress-token",
+  "statement": "Run3-shaped post-rebalance no-progress detection treats operation_workflow_owner workflow-step progress on effective in-flight replica operations as convergence progress while still ignoring leader-only churn; focused deterministic token evidence is green, and parent rolling-restart Wilson/statistical closure remains outside this child Quest.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-run4-drain-residual",
+    "planDoc": "solve/epics/topology-convergence-hardening.md"
+  },
+  "doneWhenSealed": {
+    "closure": "Focused deterministic coverage proves the stat-gate-20260630T143856Z-run3 post-rebalance no-progress shape: with the effective in-flight replica-operation count unchanged, operation_workflow_owner workflow progress on an effective in-flight operation changes the convergence progress token and resets the no-progress timer, while leader-only churn remains ignored. Parent Wilson/statistical closure remains outside this child Quest.",
+    "oracle": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-run4-operation-drain-owner-progress-token-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/rolling-restart-run4-operation-drain-owner-progress-token.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-stat-gate-closure",
+      "statement": "Do not run or require a rolling-restart statistical gate for this child Quest; prove the run3 operation-progress observation shape with focused deterministic evidence."
+    },
+    {
+      "id": "no-parent-closure-claim",
+      "statement": "Do not claim the parent rolling-restart run4 Wilson closure bar from this Quest."
+    },
+    {
+      "id": "leader-churn-still-ignored",
+      "statement": "Do not reintroduce leader identity or leader-change counts into the convergence progress token as no-progress-reset evidence."
+    },
+    {
+      "id": "effective-operation-progress-only",
+      "statement": "Only operation_workflow_owner progress for effective in-flight replica operations should reset the convergence no-progress token; stale/discounted rows must not hide a real operation_drain_open blocker."
+    }
+  ]
+}
