@@ -17,9 +17,18 @@ const TRANSIENT_OVERTARGET_MS = 50;
 const RAW_IN_FLIGHT_REPLICA_OPERATION_COUNT = 1;
 const EFFECTIVE_CLOSED_REPLICA_OPERATION_COUNT = 0;
 const NO_REPLICA_OPERATION_COUNT = 0;
+const RUN15_IN_FLIGHT_REPLICA_OPERATION_COUNT = 6;
+const RUN15_STALE_IN_FLIGHT_REPLICA_OPERATION_COUNT = 3;
+const RUN15_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATION_COUNT = 2;
+const RUN15_ADDITIONAL_IN_FLIGHT_DISCOUNT_COUNT = 1;
+const RUN15_MAX_OVERTARGET_MS = 59240;
+const RUN15_SECONDARY_OVERTARGET_MS = 16543;
+const RUN15_MAX_SUSTAINED_OVERTARGET_MS = 120000;
 const PARTITION_ONE = 'control_plane_publications-p1';
 const PARTITION_TWO = 'sql_transactions-p1';
 const PARTITION_THREE = 'sql_write_operations-p1';
+const RUN15_OVERTARGET_PARTITION_ONE = 'module_dependency_locks-p1';
+const RUN15_OVERTARGET_PARTITION_TWO = 'wasm_operations-p1';
 const NODE_ONE = 'node-1';
 const NODE_TWO = 'node-2';
 const NODE_THREE = 'node-3';
@@ -30,6 +39,7 @@ const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const MEMBERSHIP_FREEZE_REASON_BROAD_SUSPICION = 'broad_suspicion';
 const MEMBERSHIP_TRIM_OPEN_BLOCKER_ID = 'membership_trim_open';
 const NO_OVER_TARGET_OPEN_BLOCKER_ID = 'no_over_target_open';
+const OPERATION_DRAIN_OPEN_BLOCKER_ID = 'operation_drain_open';
 const MEMBERSHIP_TRIM_SOFT_CLOSED_ID = 'membership_trim_soft_closed';
 const NO_OVER_TARGET_SOFT_CLOSED_ID = 'no_over_target_soft_closed';
 const OPERATION_DRAIN_SOFT_CLOSED_ID = 'operation_drain_soft_closed';
@@ -102,6 +112,10 @@ const TARGET_VOTER_COUNTS = Object.freeze({
   [PARTITION_ONE]: TARGET_VOTER_COUNT,
   [PARTITION_TWO]: TARGET_VOTER_COUNT,
   [PARTITION_THREE]: TARGET_VOTER_COUNT,
+});
+const RUN15_OVERTARGET_DURATIONS = Object.freeze({
+  [RUN15_OVERTARGET_PARTITION_ONE]: RUN15_MAX_OVERTARGET_MS,
+  [RUN15_OVERTARGET_PARTITION_TWO]: RUN15_SECONDARY_OVERTARGET_MS,
 });
 const OWNER_COVERED_MISSING_PARTITION_IDS = Object.freeze([
   PARTITION_TWO,
@@ -190,6 +204,112 @@ test('post-rebalance closure classifies durable over-target trim debt after oper
         POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET
       ].reasonCodes,
       [POST_REBALANCE_CLOSURE_REASON.OVERTARGET_BUDGET_EXCEEDED],
+    );
+  });
+
+test('post-rebalance closure keeps run15 effective in-flight operation drain open',
+  async () => {
+    const closure = buildPostRebalanceClosureSnapshot({
+      expectedPartitionIds: EXPECTED_PARTITION_IDS,
+      leaders: STABLE_LEADERS,
+      voterCounts: TARGET_VOTER_COUNTS,
+      overTargetDurations: RUN15_OVERTARGET_DURATIONS,
+      maxOverTargetMs: RUN15_MAX_OVERTARGET_MS,
+      maxSustainedOverTargetMs: RUN15_MAX_SUSTAINED_OVERTARGET_MS,
+      targetVoterCount: TARGET_VOTER_COUNT,
+      inFlightReplicaOperationCount:
+        RUN15_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+      staleInFlightReplicaOperationCount:
+        RUN15_STALE_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+      additionalInFlightDiscountCount:
+        RUN15_ADDITIONAL_IN_FLIGHT_DISCOUNT_COUNT,
+      effectiveInFlightReplicaOperationCount:
+        RUN15_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+      ignoreStaleInFlightReplicaOperations: true,
+      publishedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
+      projectedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
+        },
+        activeNodeViews: {
+          projectedNodeIds: ACTIVE_NODE_IDS_FIVE,
+        },
+      },
+    });
+    const operationDrain =
+      closure.dimensions[POST_REBALANCE_CLOSURE_DIMENSION.OPERATION_DRAIN];
+
+    assert.strictEqual(closure.state, POST_REBALANCE_CLOSURE_STATE.OPEN);
+    assert.deepStrictEqual(
+      closure.blockers.map((blocker) => blocker.id).sort(),
+      [
+        NO_OVER_TARGET_OPEN_BLOCKER_ID,
+        OPERATION_DRAIN_OPEN_BLOCKER_ID,
+      ],
+    );
+    assert.strictEqual(
+      operationDrain.state,
+      POST_REBALANCE_CLOSURE_STATE.OPEN,
+    );
+    assert.deepStrictEqual(
+      operationDrain.reasonCodes,
+      [POST_REBALANCE_CLOSURE_REASON.IN_FLIGHT_REPLICA_OPERATIONS],
+    );
+    assert.strictEqual(
+      operationDrain.evidence.inFlightReplicaOperationCount,
+      RUN15_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+    assert.strictEqual(
+      operationDrain.evidence.staleInFlightReplicaOperationCount,
+      RUN15_STALE_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+    assert.strictEqual(
+      operationDrain.evidence.additionalInFlightDiscountCount,
+      RUN15_ADDITIONAL_IN_FLIGHT_DISCOUNT_COUNT,
+    );
+    assert.strictEqual(
+      operationDrain.evidence.staleDiscountCount,
+      RUN15_STALE_IN_FLIGHT_REPLICA_OPERATION_COUNT +
+        RUN15_ADDITIONAL_IN_FLIGHT_DISCOUNT_COUNT,
+    );
+    assert.strictEqual(
+      operationDrain.evidence.effectiveInFlightReplicaOperationCount,
+      RUN15_EFFECTIVE_IN_FLIGHT_REPLICA_OPERATION_COUNT,
+    );
+    assert.strictEqual(
+      operationDrain.evidence.publicationVisibilityState,
+      POST_REBALANCE_CLOSURE_STATE.CLOSED,
+    );
+    assert.strictEqual(
+      closure.dimensions[POST_REBALANCE_CLOSURE_DIMENSION.PUBLICATION_VISIBLE].state,
+      POST_REBALANCE_CLOSURE_STATE.CLOSED,
+    );
+    assert.strictEqual(
+      closure.dimensions[
+        POST_REBALANCE_CLOSURE_DIMENSION.CDC_PROJECTION_VISIBLE
+      ].state,
+      POST_REBALANCE_CLOSURE_STATE.CLOSED,
+    );
+    assert.strictEqual(
+      closure.dimensions[POST_REBALANCE_CLOSURE_DIMENSION.MEMBERSHIP_TRIM].state,
+      POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
+    );
+    assert.deepStrictEqual(
+      closure.dimensions[
+        POST_REBALANCE_CLOSURE_DIMENSION.MEMBERSHIP_TRIM
+      ].reasonCodes,
+      [
+        POST_REBALANCE_CLOSURE_REASON
+          .MEMBERSHIP_TRIM_BLOCKED_BY_OPERATION_DRAIN,
+      ],
+    );
+    assert.deepStrictEqual(
+      closure.dimensions[
+        POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET
+      ].reasonCodes,
+      [POST_REBALANCE_CLOSURE_REASON.CURRENT_OVERTARGET_VOTERS],
     );
   });
 
