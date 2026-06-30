@@ -1,0 +1,401 @@
+diff --git a/scripts/summarize-distributed-failure-report.sh b/scripts/summarize-distributed-failure-report.sh
+index eb48626e..2ffc4aff 100755
+--- a/scripts/summarize-distributed-failure-report.sh
++++ b/scripts/summarize-distributed-failure-report.sh
+@@ -3,6 +3,14 @@ set -euo pipefail
+
+ DEFAULT_REPORT_GLOB="test-output/reports/*.report.json"
+ DEFAULT_SCENARIO_INDEX=0
++tmp_files=()
++
++cleanup_tmp_files() {
++  if [[ ${#tmp_files[@]} -gt 0 ]]; then
++    rm -f "${tmp_files[@]}"
++  fi
++}
++trap cleanup_tmp_files EXIT
+
+ usage() {
+   cat <<'EOF'
+@@ -54,6 +62,24 @@ print_section() {
+   printf '\n== %s ==\n' "$title"
+ }
+
++resolve_existing_path() {
++  local candidate="$1"
++  local base_path="$2"
++  local base_dir
++  if [[ -z "$candidate" ]]; then
++    return 0
++  fi
++  if [[ -f "$candidate" ]]; then
++    echo "$candidate"
++    return 0
++  fi
++  base_dir="$(dirname "$base_path")"
++  if [[ -f "$base_dir/$candidate" ]]; then
++    echo "$base_dir/$candidate"
++    return 0
++  fi
++}
++
+ report_path=""
+ scenario_name=""
+
+@@ -108,10 +134,11 @@ fi
+ # Detect shape (2) and wrap it into the canonical multi-scenario shape so the existing jq
+ # extracts work unchanged. The original path is still shown in the Report section.
+ display_path="$report_path"
++normalized_from_bundle=false
+ if ! jq -e '(.scenarios | type) == "array"' "$report_path" >/dev/null 2>&1; then
+   if jq -e '(.scenario | type) == "string" and has("diagnostics")' "$report_path" >/dev/null 2>&1; then
+     normalized_report="$(mktemp)"
+-    trap 'rm -f "$normalized_report"' EXIT
++    tmp_files+=("$normalized_report")
+     jq '{
+       summary: (.reportSummary // .summary // {}),
+       scenarios: [
+@@ -126,6 +153,7 @@ if ! jq -e '(.scenarios | type) == "array"' "$report_path" >/dev/null 2>&1; then
+       ]
+     }' "$report_path" > "$normalized_report"
+     report_path="$normalized_report"
++    normalized_from_bundle=true
+   fi
+ fi
+
+@@ -141,6 +169,54 @@ if [[ -n "$scenario_name" ]]; then
+   }
+ fi
+
++load_metrics_json="$(mktemp)"
++tmp_files+=("$load_metrics_json")
++failure_bundle_candidate=""
++failure_bundle_path=""
++load_metrics_source="absent"
++load_metrics_completeness="absent"
++if [[ "$normalized_from_bundle" == "true" ]]; then
++  failure_bundle_path="$display_path"
++else
++  failure_bundle_candidate="$(jq -r --argjson i "$scenario_index" '
++    .scenarios[$i].failureBundle.jsonPath // empty
++  ' "$report_path")"
++  failure_bundle_path="$(resolve_existing_path "$failure_bundle_candidate" "$display_path")"
++fi
++
++if jq -e --argjson i "$scenario_index" '
++  ((.scenarios[$i].loadMetrics // .scenarios[$i].details.diagnostics.loadMetrics) | type) == "object"
++' "$report_path" >/dev/null 2>&1; then
++  jq --argjson i "$scenario_index" '
++    .scenarios[$i].loadMetrics // .scenarios[$i].details.diagnostics.loadMetrics
++  ' "$report_path" > "$load_metrics_json"
++  load_metrics_source="report"
++  load_metrics_completeness="report_metrics"
++elif [[ -n "$failure_bundle_path" ]] &&
++    jq -e '
++      ((.topFailures.loadMetrics // .logs.playbackEventSummary.load.lastMetrics) | type) == "object"
++    ' "$failure_bundle_path" >/dev/null 2>&1; then
++  jq '
++    .topFailures.loadMetrics // .logs.playbackEventSummary.load.lastMetrics
++  ' "$failure_bundle_path" > "$load_metrics_json"
++  load_metrics_source="$(jq -r '
++    .topFailures.loadMetricsProvenance.source //
++      (if ((.logs.playbackEventSummary.load.lastMetrics // null) | type) == "object"
++       then "playback"
++       else "failure_bundle"
++       end)
++  ' "$failure_bundle_path")"
++  load_metrics_completeness="$(jq -r '
++    .topFailures.loadMetricsProvenance.completeness //
++      (if .logs.playbackEventSummary.load.completedAtMs != null
++       then "playback_completed"
++       else "playback_last_observed"
++       end)
++  ' "$failure_bundle_path")"
++else
++  jq -n '{}' > "$load_metrics_json"
++fi
++
+ print_section "Report"
+ jq -r --argjson i "$scenario_index" --arg dpath "$display_path" '
+   "path=\($dpath)",
+@@ -178,8 +254,44 @@ jq -r --argjson i "$scenario_index" '
+ ' "$report_path"
+
+ print_section "Load Metrics"
+-jq -r --argjson i "$scenario_index" '
+-  .scenarios[$i].details.diagnostics.loadMetrics as $m |
++jq -r \
++  --arg source "$load_metrics_source" \
++  --arg completeness "$load_metrics_completeness" '
++  . as $m |
++  def positive_waits:
++    ($m.waitReasons // {})
++    | to_entries
++    | map(select((.value // 0) > 0));
++  def pressure_waits:
++    positive_waits
++    | map(select(
++        .key == "nodeAdmissionBlocked" or
++        .key == "retryableControlPlanePressure" or
++        .key == "timeoutWaits" or
++        .key == "queueCapacityRejected"
++      ));
++  def dominant_wait:
++    if (pressure_waits | length) > 0 then
++      (pressure_waits | max_by(.value).key)
++    elif (positive_waits | length) > 0 then
++      (positive_waits | max_by(.value).key)
++    else
++      "n/a"
++    end;
++  "source=\($source)",
++  "completeness=\($completeness)",
++  "loadEvidenceClass=\(
++    if $source == "absent" then
++      "harness_evidence_incomplete"
++    elif (pressure_waits | length) > 0 then
++      "product_load_lane_pressure"
++    elif (($m.waitReasons.nodeSlotUnavailable // 0) > 0) then
++      "node_slot_unavailable_only"
++    else
++      "load_metrics_present_no_pressure"
++    end
++  )",
++  "dominantWaitReason=\(dominant_wait)",
+   "total=\($m.total // "n/a")",
+   "success=\($m.success // "n/a")",
+   "failed=\($m.failed // "n/a")",
+@@ -189,11 +301,23 @@ jq -r --argjson i "$scenario_index" '
+   "targetOperations=\($m.targetOperations // "n/a")",
+   "dispatchedOperations=\($m.dispatchedOperations // "n/a")",
+   "undispatchedOperations=\($m.undispatchedOperations // "n/a")"
+-' "$report_path"
++' "$load_metrics_json"
++
++echo "waitReasons:"
++jq -r '
++  .waitReasons // {}
++  | to_entries
++  | if length == 0 then
++      ["  (none)"]
++    else
++      map("  \(.key): \(.value)")
++    end
++  | .[]
++' "$load_metrics_json"
+
+ echo "perNode (sorted by attemptErrors desc):"
+-jq -r --argjson i "$scenario_index" '
+-  .scenarios[$i].details.diagnostics.loadMetrics.perNode // {}
++jq -r '
++  .perNode // {}
+   | to_entries
+   | sort_by(.value.attemptErrors // 0)
+   | reverse
+@@ -205,7 +329,7 @@ jq -r --argjson i "$scenario_index" '
+       )
+     end
+   | .[]
+-' "$report_path"
++' "$load_metrics_json"
+
+ print_section "Channel Metrics"
+ jq -r --argjson i "$scenario_index" '
+diff --git a/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js b/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js
+index 35f9243d..25a3ed17 100644
+--- a/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js
++++ b/test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js
+@@ -21,6 +21,12 @@ const REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
+ const REASON_TIMEOUT_WAITS = 'timeoutWaits';
+ const REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
+ const MARKER_QUEUE_PRESSURE_ONSET = 'queuePressureOnset';
++const LOAD_METRICS_SOURCE_PLAYBACK = 'playback';
++const LOAD_METRICS_SOURCE_SCENARIO = 'scenario';
++const LOAD_METRICS_SOURCE_ABSENT = 'absent';
++const LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED = 'playback_completed';
++const LOAD_METRICS_COMPLETENESS_SCENARIO = 'scenario_metrics';
++const LOAD_METRICS_COMPLETENESS_ABSENT = 'absent';
+ const FINAL_VISIBILITY_ERROR =
+   'Could not complete acknowledged-write visibility query on node ' +
+   NODE_A +
+@@ -91,6 +97,8 @@ function buildLogs(loadMetrics) {
+     },
+     playbackEventSummary: {
+       load: {
++        completedAtMs: 30248,
++        progressEventCount: 11,
+         lastMetrics: loadMetrics,
+       },
+     },
+@@ -136,6 +144,18 @@ describe('failure bundle playback load-metrics fallback', () => {
+       bundle.topFailures.topReasons[0].reason,
+       REASON_NODE_ADMISSION_BLOCKED,
+     );
++    assert.deepEqual(bundle.topFailures.loadMetricsProvenance, {
++      source: LOAD_METRICS_SOURCE_PLAYBACK,
++      completeness: LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED,
++      playbackCompleted: true,
++      playbackProgressEventCount: 11,
++      pressureWaitReasons: {
++        [REASON_NODE_ADMISSION_BLOCKED]: 639,
++        [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 49,
++        [REASON_TIMEOUT_WAITS]: 10,
++      },
++      nodeSlotUnavailable: 0,
++    });
+     assert.equal(bundle.publicationConvergence.missingPublishedCount, 0);
+     assert.equal(bundle.publicationConvergence.pendingAckCount, 0);
+   });
+@@ -198,5 +218,39 @@ describe('failure bundle playback load-metrics fallback', () => {
+       bundle.topFailures.loadMetrics.waitReasons[REASON_NODE_ADMISSION_BLOCKED],
+       639,
+     );
++    assert.equal(
++      bundle.topFailures.loadMetricsProvenance.source,
++      LOAD_METRICS_SOURCE_SCENARIO,
++    );
++    assert.equal(
++      bundle.topFailures.loadMetricsProvenance.completeness,
++      LOAD_METRICS_COMPLETENESS_SCENARIO,
++    );
+   });
++
++  it('marks load metrics absent when neither scenario nor playback provide them',
++    () => {
++      const bundle = buildScenarioFailureBundle({
++        entry: buildScenarioEntry(),
++        reportOutputPath: null,
++        reportSummary: null,
++        standardSummary: null,
++        benchmarkRegressionGate: null,
++        logs: buildLogs(null),
++      });
++
++      assert.equal(bundle.topFailures.loadMetrics, null);
++      assert.equal(
++        bundle.topFailures.loadMetricsProvenance.source,
++        LOAD_METRICS_SOURCE_ABSENT,
++      );
++      assert.equal(
++        bundle.topFailures.loadMetricsProvenance.completeness,
++        LOAD_METRICS_COMPLETENESS_ABSENT,
++      );
++      assert.deepEqual(
++        bundle.topFailures.loadMetricsProvenance.pressureWaitReasons,
++        {},
++      );
++    });
+ });
+diff --git a/test/distributed/harness/failure-bundle-scenario-assembly.js b/test/distributed/harness/failure-bundle-scenario-assembly.js
+index 70259ff0..50cfc7d1 100644
+--- a/test/distributed/harness/failure-bundle-scenario-assembly.js
++++ b/test/distributed/harness/failure-bundle-scenario-assembly.js
+@@ -213,9 +213,79 @@ import {
+   resolvePartitioningDiagnosticsForTriage,
+ } from './failure-bundle-triage-summary.js';
+
+-function resolvePlaybackLoadMetrics(logs) {
+-  const metrics = logs?.playbackEventSummary?.load?.lastMetrics;
+-  return isRecord(metrics) ? metrics : null;
++const LOAD_METRICS_SOURCE_SCENARIO = 'scenario';
++const LOAD_METRICS_SOURCE_PLAYBACK = 'playback';
++const LOAD_METRICS_SOURCE_ABSENT = 'absent';
++const LOAD_METRICS_COMPLETENESS_SCENARIO = 'scenario_metrics';
++const LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED = 'playback_completed';
++const LOAD_METRICS_COMPLETENESS_PLAYBACK_LAST_OBSERVED =
++  'playback_last_observed';
++const LOAD_METRICS_COMPLETENESS_ABSENT = 'absent';
++
++function collectPositiveWaitReasons(loadMetrics, reasonKeys) {
++  const waitReasons = isRecord(loadMetrics?.waitReasons) ?
++    loadMetrics.waitReasons :
++    {};
++  const positiveReasons = {};
++  for (const reasonKey of reasonKeys) {
++    const count = normalizeNonNegativeCount(waitReasons[reasonKey]) || ZERO;
++    if (count > ZERO) {
++      positiveReasons[reasonKey] = count;
++    }
++  }
++  return positiveReasons;
++}
++
++function resolveLoadMetricsSelection(entryLoadMetrics, logs) {
++  const playbackLoadSummary = isRecord(logs?.playbackEventSummary?.load) ?
++    logs.playbackEventSummary.load :
++    {};
++  const playbackMetrics = isRecord(playbackLoadSummary.lastMetrics) ?
++    playbackLoadSummary.lastMetrics :
++    null;
++  const playbackCompleted =
++    playbackLoadSummary.completedAtMs !== null &&
++    playbackLoadSummary.completedAtMs !== undefined &&
++    Number.isFinite(Number(playbackLoadSummary.completedAtMs));
++  const progressEventCount =
++    normalizeNonNegativeCount(playbackLoadSummary.progressEventCount) || ZERO;
++  const entryMetricsAvailable = isRecord(entryLoadMetrics);
++  const playbackMetricsAvailable = isRecord(playbackMetrics);
++
++  let metrics = null;
++  let source = LOAD_METRICS_SOURCE_ABSENT;
++  let completeness = LOAD_METRICS_COMPLETENESS_ABSENT;
++  if (entryMetricsAvailable) {
++    metrics = entryLoadMetrics;
++    source = LOAD_METRICS_SOURCE_SCENARIO;
++    completeness = LOAD_METRICS_COMPLETENESS_SCENARIO;
++  } else if (playbackMetricsAvailable) {
++    metrics = playbackMetrics;
++    source = LOAD_METRICS_SOURCE_PLAYBACK;
++    completeness = playbackCompleted ?
++      LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED :
++      LOAD_METRICS_COMPLETENESS_PLAYBACK_LAST_OBSERVED;
++  }
++
++  return {
++    metrics,
++    provenance: {
++      source,
++      completeness,
++      playbackCompleted,
++      playbackProgressEventCount: progressEventCount,
++      pressureWaitReasons: collectPositiveWaitReasons(metrics, [
++        LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED,
++        LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
++        LOAD_WAIT_REASON_TIMEOUT_WAITS,
++        LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
++      ]),
++      nodeSlotUnavailable:
++        collectPositiveWaitReasons(metrics, [
++          LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
++        ])[LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE] || ZERO,
++    },
++  };
+ }
+
+ function buildScenarioFailureBundle({
+@@ -246,8 +316,15 @@ function buildScenarioFailureBundle({
+     logs?.firstFaultTimeline || null,
+   );
+   const entryLoadMetrics = resolveLoadMetrics(entry);
+-  const loadMetricsFallback = resolvePlaybackLoadMetrics(logs);
+-  const selectedLoadMetrics = entryLoadMetrics || loadMetricsFallback;
++  const loadMetricsSelection = resolveLoadMetricsSelection(
++    entryLoadMetrics,
++    logs,
++  );
++  const selectedLoadMetrics = loadMetricsSelection.metrics;
++  const loadMetricsFallback =
++    loadMetricsSelection.provenance.source === LOAD_METRICS_SOURCE_PLAYBACK ?
++      selectedLoadMetrics :
++      null;
+   const readinessFailure = resolveReadinessFailure(controlPlane);
+   const readinessFailureGuidance =
+     resolveReadinessFailureGuidance(readinessFailure);
+@@ -357,6 +434,7 @@ function buildScenarioFailureBundle({
+         failure.affectedNodeIds :
+         [],
+       loadMetrics: selectedLoadMetrics || null,
++      loadMetricsProvenance: loadMetricsSelection.provenance,
+     },
+     nodeDiagnostics,
+     logs,

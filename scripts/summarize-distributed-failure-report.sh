@@ -3,6 +3,14 @@ set -euo pipefail
 
 DEFAULT_REPORT_GLOB="test-output/reports/*.report.json"
 DEFAULT_SCENARIO_INDEX=0
+tmp_files=()
+
+cleanup_tmp_files() {
+  if [[ ${#tmp_files[@]} -gt 0 ]]; then
+    rm -f "${tmp_files[@]}"
+  fi
+}
+trap cleanup_tmp_files EXIT
 
 usage() {
   cat <<'EOF'
@@ -52,6 +60,24 @@ latest_report_path() {
 print_section() {
   local title="$1"
   printf '\n== %s ==\n' "$title"
+}
+
+resolve_existing_path() {
+  local candidate="$1"
+  local base_path="$2"
+  local base_dir
+  if [[ -z "$candidate" ]]; then
+    return 0
+  fi
+  if [[ -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+  base_dir="$(dirname "$base_path")"
+  if [[ -f "$base_dir/$candidate" ]]; then
+    echo "$base_dir/$candidate"
+    return 0
+  fi
 }
 
 report_path=""
@@ -108,10 +134,11 @@ fi
 # Detect shape (2) and wrap it into the canonical multi-scenario shape so the existing jq
 # extracts work unchanged. The original path is still shown in the Report section.
 display_path="$report_path"
+normalized_from_bundle=false
 if ! jq -e '(.scenarios | type) == "array"' "$report_path" >/dev/null 2>&1; then
   if jq -e '(.scenario | type) == "string" and has("diagnostics")' "$report_path" >/dev/null 2>&1; then
     normalized_report="$(mktemp)"
-    trap 'rm -f "$normalized_report"' EXIT
+    tmp_files+=("$normalized_report")
     jq '{
       summary: (.reportSummary // .summary // {}),
       scenarios: [
@@ -126,6 +153,7 @@ if ! jq -e '(.scenarios | type) == "array"' "$report_path" >/dev/null 2>&1; then
       ]
     }' "$report_path" > "$normalized_report"
     report_path="$normalized_report"
+    normalized_from_bundle=true
   fi
 fi
 
@@ -139,6 +167,54 @@ if [[ -n "$scenario_name" ]]; then
     echo "Scenario not found in report: $scenario_name" >&2
     exit 1
   }
+fi
+
+load_metrics_json="$(mktemp)"
+tmp_files+=("$load_metrics_json")
+failure_bundle_candidate=""
+failure_bundle_path=""
+load_metrics_source="absent"
+load_metrics_completeness="absent"
+if [[ "$normalized_from_bundle" == "true" ]]; then
+  failure_bundle_path="$display_path"
+else
+  failure_bundle_candidate="$(jq -r --argjson i "$scenario_index" '
+    .scenarios[$i].failureBundle.jsonPath // empty
+  ' "$report_path")"
+  failure_bundle_path="$(resolve_existing_path "$failure_bundle_candidate" "$display_path")"
+fi
+
+if jq -e --argjson i "$scenario_index" '
+  ((.scenarios[$i].loadMetrics // .scenarios[$i].details.diagnostics.loadMetrics) | type) == "object"
+' "$report_path" >/dev/null 2>&1; then
+  jq --argjson i "$scenario_index" '
+    .scenarios[$i].loadMetrics // .scenarios[$i].details.diagnostics.loadMetrics
+  ' "$report_path" > "$load_metrics_json"
+  load_metrics_source="report"
+  load_metrics_completeness="report_metrics"
+elif [[ -n "$failure_bundle_path" ]] &&
+    jq -e '
+      ((.topFailures.loadMetrics // .logs.playbackEventSummary.load.lastMetrics) | type) == "object"
+    ' "$failure_bundle_path" >/dev/null 2>&1; then
+  jq '
+    .topFailures.loadMetrics // .logs.playbackEventSummary.load.lastMetrics
+  ' "$failure_bundle_path" > "$load_metrics_json"
+  load_metrics_source="$(jq -r '
+    .topFailures.loadMetricsProvenance.source //
+      (if ((.logs.playbackEventSummary.load.lastMetrics // null) | type) == "object"
+       then "playback"
+       else "failure_bundle"
+       end)
+  ' "$failure_bundle_path")"
+  load_metrics_completeness="$(jq -r '
+    .topFailures.loadMetricsProvenance.completeness //
+      (if .logs.playbackEventSummary.load.completedAtMs != null
+       then "playback_completed"
+       else "playback_last_observed"
+       end)
+  ' "$failure_bundle_path")"
+else
+  jq -n '{}' > "$load_metrics_json"
 fi
 
 print_section "Report"
@@ -178,8 +254,44 @@ jq -r --argjson i "$scenario_index" '
 ' "$report_path"
 
 print_section "Load Metrics"
-jq -r --argjson i "$scenario_index" '
-  .scenarios[$i].details.diagnostics.loadMetrics as $m |
+jq -r \
+  --arg source "$load_metrics_source" \
+  --arg completeness "$load_metrics_completeness" '
+  . as $m |
+  def positive_waits:
+    ($m.waitReasons // {})
+    | to_entries
+    | map(select((.value // 0) > 0));
+  def pressure_waits:
+    positive_waits
+    | map(select(
+        .key == "nodeAdmissionBlocked" or
+        .key == "retryableControlPlanePressure" or
+        .key == "timeoutWaits" or
+        .key == "queueCapacityRejected"
+      ));
+  def dominant_wait:
+    if (pressure_waits | length) > 0 then
+      (pressure_waits | max_by(.value).key)
+    elif (positive_waits | length) > 0 then
+      (positive_waits | max_by(.value).key)
+    else
+      "n/a"
+    end;
+  "source=\($source)",
+  "completeness=\($completeness)",
+  "loadEvidenceClass=\(
+    if $source == "absent" then
+      "harness_evidence_incomplete"
+    elif (pressure_waits | length) > 0 then
+      "product_load_lane_pressure"
+    elif (($m.waitReasons.nodeSlotUnavailable // 0) > 0) then
+      "node_slot_unavailable_only"
+    else
+      "load_metrics_present_no_pressure"
+    end
+  )",
+  "dominantWaitReason=\(dominant_wait)",
   "total=\($m.total // "n/a")",
   "success=\($m.success // "n/a")",
   "failed=\($m.failed // "n/a")",
@@ -189,11 +301,23 @@ jq -r --argjson i "$scenario_index" '
   "targetOperations=\($m.targetOperations // "n/a")",
   "dispatchedOperations=\($m.dispatchedOperations // "n/a")",
   "undispatchedOperations=\($m.undispatchedOperations // "n/a")"
-' "$report_path"
+' "$load_metrics_json"
+
+echo "waitReasons:"
+jq -r '
+  .waitReasons // {}
+  | to_entries
+  | if length == 0 then
+      ["  (none)"]
+    else
+      map("  \(.key): \(.value)")
+    end
+  | .[]
+' "$load_metrics_json"
 
 echo "perNode (sorted by attemptErrors desc):"
-jq -r --argjson i "$scenario_index" '
-  .scenarios[$i].details.diagnostics.loadMetrics.perNode // {}
+jq -r '
+  .perNode // {}
   | to_entries
   | sort_by(.value.attemptErrors // 0)
   | reverse
@@ -205,7 +329,7 @@ jq -r --argjson i "$scenario_index" '
       )
     end
   | .[]
-' "$report_path"
+' "$load_metrics_json"
 
 print_section "Channel Metrics"
 jq -r --argjson i "$scenario_index" '

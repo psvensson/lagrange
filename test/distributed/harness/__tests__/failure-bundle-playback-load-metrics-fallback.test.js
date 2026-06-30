@@ -21,6 +21,12 @@ const REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
 const REASON_TIMEOUT_WAITS = 'timeoutWaits';
 const REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
 const MARKER_QUEUE_PRESSURE_ONSET = 'queuePressureOnset';
+const LOAD_METRICS_SOURCE_PLAYBACK = 'playback';
+const LOAD_METRICS_SOURCE_SCENARIO = 'scenario';
+const LOAD_METRICS_SOURCE_ABSENT = 'absent';
+const LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED = 'playback_completed';
+const LOAD_METRICS_COMPLETENESS_SCENARIO = 'scenario_metrics';
+const LOAD_METRICS_COMPLETENESS_ABSENT = 'absent';
 const FINAL_VISIBILITY_ERROR =
   'Could not complete acknowledged-write visibility query on node ' +
   NODE_A +
@@ -91,6 +97,8 @@ function buildLogs(loadMetrics) {
     },
     playbackEventSummary: {
       load: {
+        completedAtMs: 30248,
+        progressEventCount: 11,
         lastMetrics: loadMetrics,
       },
     },
@@ -136,6 +144,18 @@ describe('failure bundle playback load-metrics fallback', () => {
       bundle.topFailures.topReasons[0].reason,
       REASON_NODE_ADMISSION_BLOCKED,
     );
+    assert.deepEqual(bundle.topFailures.loadMetricsProvenance, {
+      source: LOAD_METRICS_SOURCE_PLAYBACK,
+      completeness: LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED,
+      playbackCompleted: true,
+      playbackProgressEventCount: 11,
+      pressureWaitReasons: {
+        [REASON_NODE_ADMISSION_BLOCKED]: 639,
+        [REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: 49,
+        [REASON_TIMEOUT_WAITS]: 10,
+      },
+      nodeSlotUnavailable: 0,
+    });
     assert.equal(bundle.publicationConvergence.missingPublishedCount, 0);
     assert.equal(bundle.publicationConvergence.pendingAckCount, 0);
   });
@@ -198,5 +218,39 @@ describe('failure bundle playback load-metrics fallback', () => {
       bundle.topFailures.loadMetrics.waitReasons[REASON_NODE_ADMISSION_BLOCKED],
       639,
     );
+    assert.equal(
+      bundle.topFailures.loadMetricsProvenance.source,
+      LOAD_METRICS_SOURCE_SCENARIO,
+    );
+    assert.equal(
+      bundle.topFailures.loadMetricsProvenance.completeness,
+      LOAD_METRICS_COMPLETENESS_SCENARIO,
+    );
   });
+
+  it('marks load metrics absent when neither scenario nor playback provide them',
+    () => {
+      const bundle = buildScenarioFailureBundle({
+        entry: buildScenarioEntry(),
+        reportOutputPath: null,
+        reportSummary: null,
+        standardSummary: null,
+        benchmarkRegressionGate: null,
+        logs: buildLogs(null),
+      });
+
+      assert.equal(bundle.topFailures.loadMetrics, null);
+      assert.equal(
+        bundle.topFailures.loadMetricsProvenance.source,
+        LOAD_METRICS_SOURCE_ABSENT,
+      );
+      assert.equal(
+        bundle.topFailures.loadMetricsProvenance.completeness,
+        LOAD_METRICS_COMPLETENESS_ABSENT,
+      );
+      assert.deepEqual(
+        bundle.topFailures.loadMetricsProvenance.pressureWaitReasons,
+        {},
+      );
+    });
 });

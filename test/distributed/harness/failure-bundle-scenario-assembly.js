@@ -213,9 +213,79 @@ import {
   resolvePartitioningDiagnosticsForTriage,
 } from './failure-bundle-triage-summary.js';
 
-function resolvePlaybackLoadMetrics(logs) {
-  const metrics = logs?.playbackEventSummary?.load?.lastMetrics;
-  return isRecord(metrics) ? metrics : null;
+const LOAD_METRICS_SOURCE_SCENARIO = 'scenario';
+const LOAD_METRICS_SOURCE_PLAYBACK = 'playback';
+const LOAD_METRICS_SOURCE_ABSENT = 'absent';
+const LOAD_METRICS_COMPLETENESS_SCENARIO = 'scenario_metrics';
+const LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED = 'playback_completed';
+const LOAD_METRICS_COMPLETENESS_PLAYBACK_LAST_OBSERVED =
+  'playback_last_observed';
+const LOAD_METRICS_COMPLETENESS_ABSENT = 'absent';
+
+function collectPositiveWaitReasons(loadMetrics, reasonKeys) {
+  const waitReasons = isRecord(loadMetrics?.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
+  const positiveReasons = {};
+  for (const reasonKey of reasonKeys) {
+    const count = normalizeNonNegativeCount(waitReasons[reasonKey]) || ZERO;
+    if (count > ZERO) {
+      positiveReasons[reasonKey] = count;
+    }
+  }
+  return positiveReasons;
+}
+
+function resolveLoadMetricsSelection(entryLoadMetrics, logs) {
+  const playbackLoadSummary = isRecord(logs?.playbackEventSummary?.load) ?
+    logs.playbackEventSummary.load :
+    {};
+  const playbackMetrics = isRecord(playbackLoadSummary.lastMetrics) ?
+    playbackLoadSummary.lastMetrics :
+    null;
+  const playbackCompleted =
+    playbackLoadSummary.completedAtMs !== null &&
+    playbackLoadSummary.completedAtMs !== undefined &&
+    Number.isFinite(Number(playbackLoadSummary.completedAtMs));
+  const progressEventCount =
+    normalizeNonNegativeCount(playbackLoadSummary.progressEventCount) || ZERO;
+  const entryMetricsAvailable = isRecord(entryLoadMetrics);
+  const playbackMetricsAvailable = isRecord(playbackMetrics);
+
+  let metrics = null;
+  let source = LOAD_METRICS_SOURCE_ABSENT;
+  let completeness = LOAD_METRICS_COMPLETENESS_ABSENT;
+  if (entryMetricsAvailable) {
+    metrics = entryLoadMetrics;
+    source = LOAD_METRICS_SOURCE_SCENARIO;
+    completeness = LOAD_METRICS_COMPLETENESS_SCENARIO;
+  } else if (playbackMetricsAvailable) {
+    metrics = playbackMetrics;
+    source = LOAD_METRICS_SOURCE_PLAYBACK;
+    completeness = playbackCompleted ?
+      LOAD_METRICS_COMPLETENESS_PLAYBACK_COMPLETED :
+      LOAD_METRICS_COMPLETENESS_PLAYBACK_LAST_OBSERVED;
+  }
+
+  return {
+    metrics,
+    provenance: {
+      source,
+      completeness,
+      playbackCompleted,
+      playbackProgressEventCount: progressEventCount,
+      pressureWaitReasons: collectPositiveWaitReasons(metrics, [
+        LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED,
+        LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
+        LOAD_WAIT_REASON_TIMEOUT_WAITS,
+        LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+      ]),
+      nodeSlotUnavailable:
+        collectPositiveWaitReasons(metrics, [
+          LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+        ])[LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE] || ZERO,
+    },
+  };
 }
 
 function buildScenarioFailureBundle({
@@ -246,8 +316,15 @@ function buildScenarioFailureBundle({
     logs?.firstFaultTimeline || null,
   );
   const entryLoadMetrics = resolveLoadMetrics(entry);
-  const loadMetricsFallback = resolvePlaybackLoadMetrics(logs);
-  const selectedLoadMetrics = entryLoadMetrics || loadMetricsFallback;
+  const loadMetricsSelection = resolveLoadMetricsSelection(
+    entryLoadMetrics,
+    logs,
+  );
+  const selectedLoadMetrics = loadMetricsSelection.metrics;
+  const loadMetricsFallback =
+    loadMetricsSelection.provenance.source === LOAD_METRICS_SOURCE_PLAYBACK ?
+      selectedLoadMetrics :
+      null;
   const readinessFailure = resolveReadinessFailure(controlPlane);
   const readinessFailureGuidance =
     resolveReadinessFailureGuidance(readinessFailure);
@@ -357,6 +434,7 @@ function buildScenarioFailureBundle({
         failure.affectedNodeIds :
         [],
       loadMetrics: selectedLoadMetrics || null,
+      loadMetricsProvenance: loadMetricsSelection.provenance,
     },
     nodeDiagnostics,
     logs,
