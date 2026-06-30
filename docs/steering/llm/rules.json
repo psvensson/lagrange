@@ -121,15 +121,35 @@
       "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
       "domain": "testing",
       "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
+      "domain": "governance",
+      "priority": 100
     }
   ],
   "stats": {
-    "candidateCount": 308,
-    "dedupedRuleCount": 300,
-    "exportedRuleCount": 300,
+    "candidateCount": 312,
+    "dedupedRuleCount": 304,
+    "exportedRuleCount": 304,
     "aliasRuleCount": 4,
-    "masterRuleCount": 296,
-    "estimatedAllRulesTokens": 11500
+    "masterRuleCount": 300,
+    "estimatedAllRulesTokens": 11794
   },
   "rules": [
     {
@@ -4494,6 +4514,21 @@
       ]
     },
     {
+      "id": "GOV-0076",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "When the user asks for a plan, design, or review with no implementation-truth change requested, you MUST deliver only that and MUST NOT write files or commit unless explicitly told — the Commit-On-Completion posture authorizes committing finished IMPLEMENTATION work, NEVER design or planning deliverables.",
+      "score": 172,
+      "sources": [
+        {
+          "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
       "id": "TEST-0074",
       "domain": "testing",
       "strength": "must_not",
@@ -4528,7 +4563,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4637,7 +4672,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4652,7 +4687,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4667,7 +4702,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4682,7 +4717,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4699,7 +4734,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4714,7 +4749,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4778,7 +4813,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4793,7 +4828,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4808,7 +4843,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4823,7 +4858,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4838,7 +4873,39 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Before presenting any hypothesis, root-cause theory, or proposed lever to the operator, you MUST adversarially vet it with an independent subagent — finding a falsifier, confirming the cited file:line references are still current, and confirming it would move the real in-cluster binding observable — and surface only what survives that vetting.",
+      "score": 154,
+      "sources": [
+        {
+          "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0089",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "Before re-deriving an expensive analysis by hand, you MUST first sort the candidate artifacts by modification time and read the freshest precomputed result, reusing a costly scan already on disk rather than re-running it for a different slice.",
+      "score": 154,
+      "sources": [
+        {
+          "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4853,7 +4920,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4883,7 +4950,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4898,7 +4965,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4928,7 +4995,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4945,7 +5012,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4960,7 +5027,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4977,7 +5044,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4994,7 +5061,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -5009,7 +5076,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5024,7 +5091,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5039,7 +5106,25 @@
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
+    },
+    {
+      "id": "GOV-0101",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [
+        "ownership",
+        "testing"
+      ],
+      "rule": "When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, owner-boundary-aligned thinking over the fewest-lines or fastest-to-write change, because the thorough solution is cheaper here over the life of the system.",
+      "score": 122,
+      "sources": [
+        {
+          "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
     }
   ],
-  "generatedAt": "2026-06-29T07:08:55.249Z"
+  "generatedAt": "2026-06-30T18:40:53.938Z"
 }

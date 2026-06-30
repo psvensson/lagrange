@@ -14,7 +14,7 @@ Load for roadmap and edition-scope checks.
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
-> **Priority subset — showing 30 of 97 governance rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 67 lower-priority rules are omitted. For every governance rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain governance`.
+> **Priority subset — showing 30 of 101 governance rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 71 lower-priority rules are omitted. For every governance rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain governance`.
 
 ## Rules
 

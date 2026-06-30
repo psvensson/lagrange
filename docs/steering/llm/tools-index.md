@@ -21,6 +21,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
+- `session-worktree` — `node scripts/session-worktree.js`
 - `solve` — `node scripts/solve.js`
 - `start` — `node src/index.js`
 - `test` — `tap`
@@ -81,6 +82,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `distributed:all` — Run distributed scenarios with verbose output.
 - `distributed:rerun-failed` — Re-run only the distributed scenarios that failed in the last run.
 - `distributed:stop-containers` — Stop local Docker containers and Node processes created by the distributed harness.
+
+## dt
+
+- `dt:prove` — `node scripts/dt-prove.js`
 
 ## frontier
 
@@ -221,4 +226,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-146 scripts indexed; 65 have a curated description, 81 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+148 scripts indexed; 65 have a curated description, 83 fall back to their raw command. Improve coverage in the two sources named in the header comment.

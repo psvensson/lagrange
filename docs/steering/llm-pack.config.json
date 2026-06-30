@@ -127,6 +127,26 @@
       "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
       "domain": "testing",
       "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
+      "domain": "governance",
+      "priority": 100
+    },
+    {
+      "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
+      "domain": "governance",
+      "priority": 100
     }
   ],
   "outputs": [
