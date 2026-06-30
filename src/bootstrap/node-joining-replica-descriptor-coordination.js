@@ -175,7 +175,10 @@ class NodeJoiningReplicaDescriptorCoordination extends NodeJoiningAdmissionReadi
           this.serviceLifecycleManager.getReplicaState(handle),
       });
     }
-    for (const replicaId of this.partitionServices.keys()) {
+    for (const [replicaId, partition] of this.partitionServices.entries()) {
+      if (partition?.initialized === false) {
+        continue;
+      }
       const handle = this.createJoinServiceDescriptor(
         UNIFIED_SERVICE_TYPE.PARTITION,
         replicaId,

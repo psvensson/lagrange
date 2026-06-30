@@ -36,8 +36,18 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const options =
       directOptions ||
       this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION);
-    if (this.partitionServices.has(options.replicaId)) {
+    const existingPartition = this.partitionServices.get(options.replicaId);
+    if (existingPartition && existingPartition.initialized !== false) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    }
+    if (existingPartition) {
+      await this.stopJoinPartitionReplica(
+        {
+          [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: options.replicaId,
+          [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: options.replicaId,
+        },
+        {replicaOptions: options},
+      );
     }
     if (options.createDelayMs > NUM.ZERO) {
       await this.sleep(options.createDelayMs);
