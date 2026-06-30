@@ -4,9 +4,9 @@
 
 **Class:** product · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/operation-workflow-drain-redrive.json
 
-**Attempts:** 0
+**Attempts:** 1
 
 ## Links
 - roadmap row: RM-0.1-fs-rolling-restart
@@ -28,17 +28,19 @@
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for operation-workflow-drain-redrive-main
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 0
-- Owner areas: none
-- Categories: none
+- Changed files: 3
+- Owner areas: solve
+- Categories: workflow
+- Split plan:
+  - solve: 3 file(s)
 - Signals: none
 
 ## Frontiers
-- **operation-workflow-drain-redrive-main** [open] rung 0, attempts 0, metric ? -> 0
+- **operation-workflow-drain-redrive-main** [solved] rung 1, attempts 1, metric 0 -> 0
 
 ## Findings
 - **operation-workflow-drain-redrive-main**: Ingested evidence from operation-workflow-drain-redrive.json. Metric: unknown -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/operation-workflow-drain-redrive.json]
@@ -64,3 +66,4 @@ _(none recorded)_
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-06-30T05:09:22.507Z | operation-workflow-drain-redrive-main | observe | 0 -> 0 | flat | solved |  | diff:solve/changes/operation-workflow-drain-redrive/solver-closure-bookkeeping.diff |
