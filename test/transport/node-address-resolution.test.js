@@ -26,6 +26,87 @@ test('resolveAdvertisedWebSocketAddress preserves explicit websocket address',
   });
 
 test(
+  'resolveAdvertisedWebSocketAddress keeps an explicit hostname under ' +
+    'wildcard bind (name-first addressing)',
+  async (t) => {
+    // Name-first: an operator advertises a STABLE hostname so that a restart
+    // which changes the node's IP is transparent to peers (the OS re-resolves
+    // the name on each connect). The routable-local-IP substitution that fires
+    // for wildcard (0.0.0.0) binds must NOT clobber an explicitly configured
+    // name -- otherwise the cluster silently advertises a raw IP.
+    const advertisedAddress = resolveAdvertisedWebSocketAddress({
+      advertisedAddress: 'node-b.svc.cluster.local:8082',
+      nodeAddress: 'node-b-internal:8080',
+      wsPort: 8082,
+      wsHost: '0.0.0.0',
+    });
+
+    t.equal(
+      advertisedAddress,
+      'ws://node-b.svc.cluster.local:8082',
+      'explicit hostname must be preserved even when bound to the wildcard host',
+    );
+  });
+
+test(
+  'resolveAdvertisedWebSocketAddress preserves an explicit ws:// hostname URL ' +
+    'under wildcard bind',
+  async (t) => {
+    const advertisedAddress = resolveAdvertisedWebSocketAddress({
+      advertisedAddress: 'ws://node-b.svc.cluster.local:8082',
+      wsHost: '0.0.0.0',
+    });
+
+    t.equal(
+      advertisedAddress,
+      'ws://node-b.svc.cluster.local:8082',
+      'explicit ws:// hostname URL must be preserved under wildcard bind',
+    );
+  });
+
+test(
+  'resolveNodeWebSocketAddress resolves a peer by hostname from node_endpoints',
+  async (t) => {
+    // Peers dial the advertised value verbatim; when it is a hostname the dial
+    // (new WebSocket(name)) re-resolves it per connect, so a changed backing IP
+    // behind the same name is picked up transparently.
+    const resolvedAddress = resolveNodeWebSocketAddress({
+      targetNodeId: 'node-2',
+      systemTableCache: {
+        filter(tableName, predicate) {
+          if (tableName !== 'node_endpoints') {
+            return [];
+          }
+          return [
+            {
+              endpoint_id: 'ep-node-2-ws',
+              node_id: 'node-2',
+              transport_type: 'ws',
+              address: 'ws://node-2.svc.cluster.local:8082',
+              priority: 0,
+              status: 'active',
+            },
+          ].filter(predicate);
+        },
+      },
+    });
+
+    t.same(
+      resolvedAddress,
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+        address: 'ws://node-2.svc.cluster.local:8082',
+        authority:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+            .CANONICAL_NODE_ENDPOINT,
+        evidenceSource:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE,
+      },
+      'a hostname advertised into node_endpoints resolves verbatim (no IP substitution)',
+    );
+  });
+
+test(
   'resolveAdvertisedWebSocketAddress prefers routable local interface for ' +
     'wildcard-bound hostname nodes',
   async (t) => {
