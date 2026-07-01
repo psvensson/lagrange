@@ -1,0 +1,609 @@
+diff --git a/src/rebalancer/replica-operation-repository-row-methods.js b/src/rebalancer/replica-operation-repository-row-methods.js
+index b85fe690..bc764ce4 100644
+--- a/src/rebalancer/replica-operation-repository-row-methods.js
++++ b/src/rebalancer/replica-operation-repository-row-methods.js
+@@ -6,6 +6,13 @@ const PRIORITY_LOCAL_PROGRESS_LITERAL = Object.freeze({
+   UPSERT: 'UPSERT',
+   CAUSE_PREFIX: 'priority-local-progress:',
+ });
++const READ_ONLY_CACHE_WRITE_FRAGMENT = 'not available on read-only cache';
++
++function isReadOnlyCacheWriteViolation(error) {
++  return String(error?.message || '').includes(
++    READ_ONLY_CACHE_WRITE_FRAGMENT,
++  );
++}
+ 
+ function assignReplicaOperationRepositoryRowMethods(
+   ReplicaOperationRepository,
+@@ -16,7 +23,6 @@ function assignReplicaOperationRepositoryRowMethods(
+     OPERATION_METADATA_KEY,
+     OperationType,
+     REBALANCE_COORDINATOR_LOG_MSG,
+-    REPLICA_OPERATION_REPOSITORY_LITERAL,
+     REPLICA_OPERATION_SEMANTIC_PHASE,
+     ReplicaOperationField,
+     SERVICE_TYPE,
+@@ -40,139 +46,139 @@ function assignReplicaOperationRepositoryRowMethods(
+    * @param {object} row
+    * @return {object}
+    */
+-  rowToOperation(row) {
+-    let stepsHistory = [];
+-    if (row.steps_history) {
+-      try {
+-        stepsHistory = JSON.parse(row.steps_history);
+-      } catch (error) {
+-        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
+-          operationId: row.operation_id,
+-          error: error.message,
+-        });
+-        stepsHistory = [];
++    rowToOperation(row) {
++      let stepsHistory = [];
++      if (row.steps_history) {
++        try {
++          stepsHistory = JSON.parse(row.steps_history);
++        } catch (error) {
++          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
++            operationId: row.operation_id,
++            error: error.message,
++          });
++          stepsHistory = [];
++        }
+       }
++      const operation = {
++        operationId: row.operation_id,
++        type: row.type,
++        partitionId: row.partition_id,
++        entityType: row.entity_type || SERVICE_TYPE.PARTITION,
++        entityId: row.entity_id || row.partition_id,
++        replicaId: row.replica_id,
++        sourceNodeId: row.source_node_id,
++        targetNodeId: row.target_node_id,
++        status: row.status,
++        workflowStep: row.workflow_step,
++        createdAt: row.created_at,
++        updatedAt: row.updated_at,
++        completedAt: row.completed_at,
++        errorMessage: row.error_message,
++        stepsHistory,
++      };
++      operation.semanticPhase = resolveReplicaOperationSemanticPhase(
++        operation.type,
++        operation.workflowStep,
++        operation.status,
++      );
++      operation.witnesses = buildReplicaOperationSemanticWitnesses(
++        operation.type,
++        operation.workflowStep,
++        operation.status,
++      );
++      operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
++      const replicaIds = getOperationMetadataStringArray(
++        stepsHistory,
++        OPERATION_METADATA_KEY.REPLICA_IDS,
++      );
++      if (replicaIds.length > NUM.ZERO) {
++        operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
++      }
++      const peerAddresses = getOperationMetadataStringArray(
++        stepsHistory,
++        OPERATION_METADATA_KEY.PEER_ADDRESSES,
++      );
++      if (peerAddresses.length > NUM.ZERO) {
++        operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
++      }
++      const bootstrapTableMetadata = getOperationMetadataObject(
++        stepsHistory,
++        OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
++      );
++      if (bootstrapTableMetadata) {
++        operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] = bootstrapTableMetadata;
++      }
++      const bootstrapPartitionMetadata = getOperationMetadataObject(
++        stepsHistory,
++        OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
++      );
++      if (bootstrapPartitionMetadata) {
++        operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
++      }
++      return operation;
+     }
+-    const operation = {
+-      operationId: row.operation_id,
+-      type: row.type,
+-      partitionId: row.partition_id,
+-      entityType: row.entity_type || SERVICE_TYPE.PARTITION,
+-      entityId: row.entity_id || row.partition_id,
+-      replicaId: row.replica_id,
+-      sourceNodeId: row.source_node_id,
+-      targetNodeId: row.target_node_id,
+-      status: row.status,
+-      workflowStep: row.workflow_step,
+-      createdAt: row.created_at,
+-      updatedAt: row.updated_at,
+-      completedAt: row.completed_at,
+-      errorMessage: row.error_message,
+-      stepsHistory,
+-    };
+-    operation.semanticPhase = resolveReplicaOperationSemanticPhase(
+-      operation.type,
+-      operation.workflowStep,
+-      operation.status,
+-    );
+-    operation.witnesses = buildReplicaOperationSemanticWitnesses(
+-      operation.type,
+-      operation.workflowStep,
+-      operation.status,
+-    );
+-    operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+-    const replicaIds = getOperationMetadataStringArray(
+-      stepsHistory,
+-      OPERATION_METADATA_KEY.REPLICA_IDS,
+-    );
+-    if (replicaIds.length > NUM.ZERO) {
+-      operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
+-    }
+-    const peerAddresses = getOperationMetadataStringArray(
+-      stepsHistory,
+-      OPERATION_METADATA_KEY.PEER_ADDRESSES,
+-    );
+-    if (peerAddresses.length > NUM.ZERO) {
+-      operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
+-    }
+-    const bootstrapTableMetadata = getOperationMetadataObject(
+-      stepsHistory,
+-      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
+-    );
+-    if (bootstrapTableMetadata) {
+-      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] = bootstrapTableMetadata;
+-    }
+-    const bootstrapPartitionMetadata = getOperationMetadataObject(
+-      stepsHistory,
+-      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
+-    );
+-    if (bootstrapPartitionMetadata) {
+-      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
+-    }
+-    return operation;
+-  }
+-  /**
++    /**
+    * Check whether an operation is in a terminal state.
+    * Accepts both translated operation objects and raw rows.
+    * @param {object} operation
+    * @return {boolean}
+    */
+-  isOperationTerminal(operation) {
+-    if (!operation) {
+-      return false;
++    isOperationTerminal(operation) {
++      if (!operation) {
++        return false;
++      }
++      return isTerminalReplicaOperationRecord(operation);
+     }
+-    return isTerminalReplicaOperationRecord(operation);
+-  }
+-  /**
++    /**
+    * Resolve the owner node ID from an operation or raw row.
+    * @param {object} operation
+    * @return {string|null}
+    */
+-  resolveOperationOwnerNodeId(operation) {
+-    const partitionId = String(operation?.partitionId || operation?.partition_id || '');
+-    const sourceNodeId = String(operation?.sourceNodeId || operation?.source_node_id || '');
+-    const targetNodeId = String(operation?.targetNodeId || operation?.target_node_id || '');
+-    const semanticPhase =
++    resolveOperationOwnerNodeId(operation) {
++      const partitionId = String(operation?.partitionId || operation?.partition_id || '');
++      const sourceNodeId = String(operation?.sourceNodeId || operation?.source_node_id || '');
++      const targetNodeId = String(operation?.targetNodeId || operation?.target_node_id || '');
++      const semanticPhase =
+       operation?.semanticPhase ||
+       resolveReplicaOperationSemanticPhase(
+         operation?.type || null,
+         operation?.workflowStep || operation?.workflow_step || null,
+         operation?.status || null,
+       );
+-    const isUnsettledReplace =
++      const isUnsettledReplace =
+       operation?.type === OperationType.REPLACE &&
+       targetNodeId.length > NUM.ZERO &&
+       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED &&
+       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
+-    const isSystemReplace =
++      const isSystemReplace =
+       isUnsettledReplace &&
+       isSystemTablePartition({partitionId});
+-    const isPriorityReplace =
++      const isPriorityReplace =
+       isUnsettledReplace &&
+       isPriorityControlPlanePartition({partitionId});
+-    if (isSystemReplace || isPriorityReplace) {
++      if (isSystemReplace || isPriorityReplace) {
+       // Keep canonical ownership on the target from initial dispatch through
+       // source removal so the replacement host can survive transient source
+       // loss without handing ownership back to a degraded source.
+-      return targetNodeId;
+-    }
+-    if (sourceNodeId.length > NUM.ZERO) {
+-      return sourceNodeId;
+-    }
+-    if (targetNodeId.length > NUM.ZERO) {
+-      return targetNodeId;
++        return targetNodeId;
++      }
++      if (sourceNodeId.length > NUM.ZERO) {
++        return sourceNodeId;
++      }
++      if (targetNodeId.length > NUM.ZERO) {
++        return targetNodeId;
++      }
++      return null;
+     }
+-    return null;
+-  }
+-  /**
++    /**
+    * Check whether an operation is owned by this node.
+    * @param {object} operation
+    * @return {boolean}
+    */
+-  isOperationLocallyOwned(operation) {
+-    return this.resolveOperationOwnerNodeId(operation) === this.nodeId;
+-  }
+-  /**
++    isOperationLocallyOwned(operation) {
++      return this.resolveOperationOwnerNodeId(operation) === this.nodeId;
++    }
++    /**
+    * Seed the owner's locally-decided operation-row truth into the LOCAL cache
+    * when the durable replica_operations write defers under formation/recovery
+    * pressure (the write routes through the very control-plane partition being
+@@ -193,135 +199,161 @@ function assignReplicaOperationRepositoryRowMethods(
+    * @param {object} operation - Projected operation snapshot to seed.
+    * @return {boolean} Whether the local row was applied.
+    */
+-  applyLocalPriorityOperationProgressRow(operation) {
+-    if (
+-      !operation ||
++    applyLocalPriorityOperationProgressRow(operation) {
++      if (
++        !operation ||
+       !operation.operationId ||
+       !operation.partitionId ||
+       !this.systemTableCache ||
+-      typeof this.systemTableCache.applySystemTableChange !== TYPEOF.FUNCTION ||
+       !isPriorityControlPlanePartition({partitionId: operation.partitionId}) ||
+       !this.isOperationLocallyOwned(operation)
+-    ) {
+-      return false;
++      ) {
++        return false;
++      }
++      let applySystemTableChange;
++      try {
++        applySystemTableChange = this.systemTableCache.applySystemTableChange;
++      } catch (error) {
++        if (isReadOnlyCacheWriteViolation(error)) {
++          return false;
++        }
++        throw error;
++      }
++      if (typeof applySystemTableChange !== TYPEOF.FUNCTION) {
++        return false;
++      }
++      try {
++        applySystemTableChange.call(
++          this.systemTableCache,
++          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
++          PRIORITY_LOCAL_PROGRESS_LITERAL.UPSERT,
++          this.buildReplicaOperationRow(operation),
++          {causeId: `${PRIORITY_LOCAL_PROGRESS_LITERAL.CAUSE_PREFIX}${operation.operationId}`},
++        );
++      } catch (error) {
++        if (isReadOnlyCacheWriteViolation(error)) {
++          return false;
++        }
++        throw error;
++      }
++      return true;
+     }
+-    this.systemTableCache.applySystemTableChange(
+-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+-      PRIORITY_LOCAL_PROGRESS_LITERAL.UPSERT,
+-      this.buildReplicaOperationRow(operation),
+-      {causeId: `${PRIORITY_LOCAL_PROGRESS_LITERAL.CAUSE_PREFIX}${operation.operationId}`},
+-    );
+-    return true;
+-  }
+-  /**
++    /**
+    * Extract the source replica ID for a REPLACE operation.
+    * @param {object} operation
+    * @return {string|null}
+    */
+-  getReplaceSourceReplicaId(operation) {
+-    if (!operation || operation.type !== OperationType.REPLACE) {
+-      return null;
+-    }
+-    if (operation.sourceReplicaId) {
+-      return operation.sourceReplicaId;
+-    }
+-    if (!Array.isArray(operation.stepsHistory)) {
+-      return null;
++    getReplaceSourceReplicaId(operation) {
++      if (!operation || operation.type !== OperationType.REPLACE) {
++        return null;
++      }
++      if (operation.sourceReplicaId) {
++        return operation.sourceReplicaId;
++      }
++      if (!Array.isArray(operation.stepsHistory)) {
++        return null;
++      }
++      return getOperationMetadataString(
++        operation.stepsHistory,
++        OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
++      );
+     }
+-    return getOperationMetadataString(
+-      operation.stepsHistory,
+-      OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
+-    );
+-  }
+-  /**
++    /**
+    * Check whether a REPLACE operation is in the remove phase.
+    * @param {object} operation
+    * @return {boolean}
+    */
+-  isReplaceRemovePhase(operation) {
+-    return (
+-      operation?.type === OperationType.REPLACE && operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+-    );
+-  }
+-  /**
++    isReplaceRemovePhase(operation) {
++      return (
++        operation?.type === OperationType.REPLACE &&
++        operation?.workflowStep === WORKFLOW_STEP.ACTIVE
++      );
++    }
++    /**
+    * Check whether a REPLACE operation is currently dispatching source removal.
+    * This includes the initial ACTIVE dispatch and STOPPING reconciliation
+    * re-dispatch while removal completion is still being observed.
+    * @param {object} operation
+    * @return {boolean}
+    */
+-  isReplaceRemoveDispatchPhase(operation) {
+-    return isReplaceRemoveDispatchPhase(operation);
+-  }
+-  /**
++    isReplaceRemoveDispatchPhase(operation) {
++      return isReplaceRemoveDispatchPhase(operation);
++    }
++    /**
+    * Extract the target replica ID for a REPLACE operation.
+    * @param {object} operation
+    * @return {string|null}
+    */
+-  getReplaceTargetReplicaId(operation) {
+-    if (operation?.type !== OperationType.REPLACE) {
+-      return null;
+-    }
+-    const sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+-    if (typeof sourceReplicaId !== TYPEOF.STRING || sourceReplicaId.length === NUM.ZERO) {
+-      return null;
+-    }
+-    if (typeof operation?.replicaId !== TYPEOF.STRING || operation.replicaId.length === NUM.ZERO) {
+-      return null;
+-    }
+-    if (operation.replicaId === sourceReplicaId) {
+-      return null;
+-    }
+-    return operation.replicaId;
+-  } // ── Cache Read Methods ──────────────────────────────────────────
+-  /**
++    getReplaceTargetReplicaId(operation) {
++      if (operation?.type !== OperationType.REPLACE) {
++        return null;
++      }
++      const sourceReplicaId = this.getReplaceSourceReplicaId(operation);
++      if (
++        typeof sourceReplicaId !== TYPEOF.STRING ||
++        sourceReplicaId.length === NUM.ZERO
++      ) {
++        return null;
++      }
++      if (
++        typeof operation?.replicaId !== TYPEOF.STRING ||
++        operation.replicaId.length === NUM.ZERO
++      ) {
++        return null;
++      }
++      if (operation.replicaId === sourceReplicaId) {
++        return null;
++      }
++      return operation.replicaId;
++    } // ── Cache Read Methods ──────────────────────────────────────────
++    /**
+    * Get a single replica_operations row from cache by operation ID.
+    * @param {string} operationId
+    * @return {object|null}
+    */
+-  getReplicaOperationRowFromCache(operationId) {
+-    if (!this.systemTableCache || !operationId) {
++    getReplicaOperationRowFromCache(operationId) {
++      if (!this.systemTableCache || !operationId) {
++        return null;
++      }
++      if (typeof this.systemTableCache.get === TYPEOF.FUNCTION) {
++        return this.systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId) || null;
++      }
++      if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
++        const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
++        return rows.find((row) => row?.operation_id === operationId) || null;
++      }
+       return null;
+     }
+-    if (typeof this.systemTableCache.get === TYPEOF.FUNCTION) {
+-      return this.systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId) || null;
+-    }
+-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+-      const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
+-      return rows.find((row) => row?.operation_id === operationId) || null;
+-    }
+-    return null;
+-  }
+-  /**
++    /**
+    * Filter replica_operations rows from cache using a predicate.
+    * @param {Function} predicate
+    * @return {Array|null} null when cache is unavailable
+    */
+-  filterReplicaOperationRowsFromCache(predicate) {
+-    if (!this.systemTableCache || typeof predicate !== TYPEOF.FUNCTION) {
++    filterReplicaOperationRowsFromCache(predicate) {
++      if (!this.systemTableCache || typeof predicate !== TYPEOF.FUNCTION) {
++        return null;
++      }
++      if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
++        return this.systemTableCache.filter(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, predicate) || [];
++      }
++      if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
++        const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
++        return rows.filter(predicate);
++      }
+       return null;
+     }
+-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+-      return this.systemTableCache.filter(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, predicate) || [];
+-    }
+-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+-      const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
+-      return rows.filter(predicate);
+-    }
+-    return null;
+-  }
+-  /**
++    /**
+    * Return true when one cache observation boundary exists for
+    * replica_operations.
+    * @return {boolean}
+    */
+-  hasReplicaOperationCacheObservationBoundary() {
+-    return Boolean(
+-      this.systemTableCache &&
++    hasReplicaOperationCacheObservationBoundary() {
++      return Boolean(
++        this.systemTableCache &&
+       (typeof this.systemTableCache.filter === TYPEOF.FUNCTION ||
+         typeof this.systemTableCache.getAll === TYPEOF.FUNCTION),
+-    );
+-  }
++      );
++    }
+   }
+ 
+   for (
+diff --git a/test/rebalancer/replica-operation-repository.test.js b/test/rebalancer/replica-operation-repository.test.js
+index bf7942b6..fda38c94 100644
+--- a/test/rebalancer/replica-operation-repository.test.js
++++ b/test/rebalancer/replica-operation-repository.test.js
+@@ -32,6 +32,7 @@ import {
+   PRIORITY_RECOVERY_COMPLETION_STATE,
+ } from '../../src/control-plane/priority-recovery-completion.js';
+ import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../../src/cdc/cdc-integration-service.js';
++import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
+ import {
+   OperationType,
+   REPLICA_OPERATION_SEMANTIC_PHASE,
+@@ -61,6 +62,8 @@ const TEST_REPLICA_ID = 'partition-1-r1';
+ const TEST_TARGET_NODE_ID = 'node-2';
+ const TEST_SOURCE_OWNER_NODE_ID = 'src-node';
+ const TEST_TARGET_OWNER_NODE_ID = 'tgt-node';
++const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
++const TEST_PRIORITY_REPLICA_ID = 'sql_write_operations-p1-r4';
+ const TEST_NON_PRIORITY_SYSTEM_PARTITION_ID = 'service_timers-p1';
+ const TEST_USER_REPLACE_PARTITION_ID = 'user_partition-p1';
+ const TEST_ENTITY_TYPE = SERVICE_TYPE.PARTITION;
+@@ -180,6 +183,27 @@ function makeRow(overrides = {}) {
+   };
+ }
+ 
++function makePriorityOperation(overrides = {}) {
++  return {
++    operationId: 'priority-op-1',
++    type: OperationType.ADD,
++    partitionId: TEST_PRIORITY_PARTITION_ID,
++    replicaId: TEST_PRIORITY_REPLICA_ID,
++    sourceNodeId: TEST_NODE_ID,
++    targetNodeId: TEST_TARGET_NODE_ID,
++    status: 'in_progress',
++    workflowStep: WORKFLOW_STEP.SENDING,
++    createdAt: 1,
++    updatedAt: 2,
++    completedAt: null,
++    errorMessage: null,
++    stepsHistory: [],
++    entityType: TEST_ENTITY_TYPE,
++    entityId: TEST_PRIORITY_PARTITION_ID,
++    ...overrides,
++  };
++}
++
+ test('buildOperationMutationQueryOptions scopes replica operation writes by owner id',
+   async (t) => {
+     const repo = createTestRepository();
+@@ -519,6 +543,46 @@ test('isOperationLocallyOwned returns false for remote node', async (t) => {
+   t.notOk(repo.isOperationLocallyOwned(op));
+ });
+ 
++// ── applyLocalPriorityOperationProgressRow ──────────────────────
++
++test('applyLocalPriorityOperationProgressRow ignores read-only cache seed boundary', async (t) => {
++  const readOnlyCache = createReadOnlyCache({
++    get: () => null,
++    getAll: () => [],
++    filter: () => [],
++  });
++  const repo = createTestRepository({systemTableCache: readOnlyCache});
++
++  const applied = repo.applyLocalPriorityOperationProgressRow(
++    makePriorityOperation(),
++  );
++
++  t.equal(
++    applied,
++    false,
++    'read-only cache instances should leave the best-effort local seed unapplied',
++  );
++});
++
++test('applyLocalPriorityOperationProgressRow rethrows unexpected cache failures', async (t) => {
++  const repo = createTestRepository({
++    systemTableCache: {
++      get: () => null,
++      getAll: () => [],
++      filter: () => [],
++      applySystemTableChange() {
++        throw new Error('cache backend failed');
++      },
++    },
++  });
++
++  t.throws(
++    () => repo.applyLocalPriorityOperationProgressRow(makePriorityOperation()),
++    /cache backend failed/,
++    'unexpected cache failures should not be hidden',
++  );
++});
++
+ // ── REPLACE operation helpers ────────────────────────────────────
+ 
+ test('getReplaceSourceReplicaId extracts from stepsHistory', async (t) => {

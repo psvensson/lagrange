@@ -32,6 +32,7 @@ import {
   PRIORITY_RECOVERY_COMPLETION_STATE,
 } from '../../src/control-plane/priority-recovery-completion.js';
 import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../../src/cdc/cdc-integration-service.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
@@ -61,6 +62,8 @@ const TEST_REPLICA_ID = 'partition-1-r1';
 const TEST_TARGET_NODE_ID = 'node-2';
 const TEST_SOURCE_OWNER_NODE_ID = 'src-node';
 const TEST_TARGET_OWNER_NODE_ID = 'tgt-node';
+const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_PRIORITY_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_NON_PRIORITY_SYSTEM_PARTITION_ID = 'service_timers-p1';
 const TEST_USER_REPLACE_PARTITION_ID = 'user_partition-p1';
 const TEST_ENTITY_TYPE = SERVICE_TYPE.PARTITION;
@@ -176,6 +179,27 @@ function makeRow(overrides = {}) {
     steps_history: '[]',
     entity_type: TEST_ENTITY_TYPE,
     entity_id: TEST_PARTITION_ID,
+    ...overrides,
+  };
+}
+
+function makePriorityOperation(overrides = {}) {
+  return {
+    operationId: 'priority-op-1',
+    type: OperationType.ADD,
+    partitionId: TEST_PRIORITY_PARTITION_ID,
+    replicaId: TEST_PRIORITY_REPLICA_ID,
+    sourceNodeId: TEST_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    status: 'in_progress',
+    workflowStep: WORKFLOW_STEP.SENDING,
+    createdAt: 1,
+    updatedAt: 2,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: [],
+    entityType: TEST_ENTITY_TYPE,
+    entityId: TEST_PRIORITY_PARTITION_ID,
     ...overrides,
   };
 }
@@ -517,6 +541,46 @@ test('isOperationLocallyOwned returns false for remote node', async (t) => {
   const repo = createTestRepository();
   const op = {sourceNodeId: 'other-node'};
   t.notOk(repo.isOperationLocallyOwned(op));
+});
+
+// ── applyLocalPriorityOperationProgressRow ──────────────────────
+
+test('applyLocalPriorityOperationProgressRow ignores read-only cache seed boundary', async (t) => {
+  const readOnlyCache = createReadOnlyCache({
+    get: () => null,
+    getAll: () => [],
+    filter: () => [],
+  });
+  const repo = createTestRepository({systemTableCache: readOnlyCache});
+
+  const applied = repo.applyLocalPriorityOperationProgressRow(
+    makePriorityOperation(),
+  );
+
+  t.equal(
+    applied,
+    false,
+    'read-only cache instances should leave the best-effort local seed unapplied',
+  );
+});
+
+test('applyLocalPriorityOperationProgressRow rethrows unexpected cache failures', async (t) => {
+  const repo = createTestRepository({
+    systemTableCache: {
+      get: () => null,
+      getAll: () => [],
+      filter: () => [],
+      applySystemTableChange() {
+        throw new Error('cache backend failed');
+      },
+    },
+  });
+
+  t.throws(
+    () => repo.applyLocalPriorityOperationProgressRow(makePriorityOperation()),
+    /cache backend failed/,
+    'unexpected cache failures should not be hidden',
+  );
 });
 
 // ── REPLACE operation helpers ────────────────────────────────────
