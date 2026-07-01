@@ -257,6 +257,29 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 
 ## Decision log
 
+- 2026-07-01 (latest — **candidate over-replication fix IMPLEMENTED → safety-verified UNSAFE → REVERTED**;
+  verifier `ae363920` + own verification at `active-node-projection.js:721`). Fix tried: widen the
+  deficit-gate liveness guard (`getReadyNodeOccupiedReplicas`, budget-planning.js) from READY nodes
+  (`getAvailableNodes`) to PRESENT = `getAvailableNodes ∪ getPublishedActiveNodeIdSet()`, so a
+  restarting-but-published member counts and the over-replicating ADD is deferred. Blast radius was
+  CLEAN (full rebalancer suite 151/154; the 3 fails pre-existing/baseline-identical; pinned dead-node +
+  ready-learner tests green) and RED-ON-REVERT was proven (a new restarting-node test defers with the
+  fix, ADDs on revert). **BUT safety verification found a real AVAILABILITY-SAFETY hole:** MEMBERSHIP
+  FREEZE (`active-node-projection.js:703-721`) deliberately RETAINS missing/dead nodes in the
+  published-active set during exactly the rolling-restart profile (published≥3, missing≥2,
+  missing/published≥0.5); `effectiveActiveNodeIds = [...authoritativeActiveNodeIds]` (`:721`) keeps
+  them. Because `getHealthyReplicas` was NOT widened, the fix would count a frozen-retained DEAD node as
+  occupied and SUPPRESS its replacement → strand a critical partition UNDER serve-target (unbounded if
+  the control-plane publisher is itself impaired) — INVERTING the safety asymmetry (safe
+  over-replication → unsafe under-replication). Reverted; tree clean. **DEEPER INSIGHT:** a RESTARTING
+  node and a DEAD node are BOTH "missing" (published-but-not-serving, `missingProjectedNodeIds`
+  `:678-682`), so neither raw published-active NOR projected-serving distinguishes them — the correct
+  liveness signal needs RECENTLY-SEEN / retention-grace (`active-node-projection.js:494-553`
+  `retentionGraceMisses`): count a not-ready published node only if within retention grace (restarting),
+  not freeze-retained-only (dead). That is a more involved fix touching the diffuse membership
+  machinery. NET: the over-replication bug is fully understood; the correct fix is a
+  retention-grace-gated liveness widening — a real, bounded-value (convergence-RATE, not safety) quest.
+  Do NOT ship the raw published-active union.
 - 2026-07-01 (**C-2 NON-ENGAGEMENT MYSTERY RESOLVED + real over-replication trigger found**;
   subagent `a9a7cbbe` + own verification of the two pivotal claims). The over-replication ADD is
   **NOT** the load-rank `calculatePartitionPlacement` path C-2 patched. It is a SECOND, independent
