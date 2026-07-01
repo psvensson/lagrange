@@ -82,7 +82,7 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES =
     PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
   ]));
 
-const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_ACTIONS =
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_ACTIONS =
   Object.freeze(new Set([
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
@@ -170,7 +170,7 @@ function isOperationWorkflowOwnerDispatchPendingTargetProgressReady(
       PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
     isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
       true &&
-    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_ACTIONS.has(
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_ACTIONS.has(
       snapshot?.progress?.nextRequiredAction,
     ) &&
     OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES.has(
@@ -201,8 +201,9 @@ function isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) {
     OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
       snapshot?.progress?.workflowProgressPhaseId,
     ) &&
-    snapshot?.progress?.nextRequiredAction ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_ACTIONS.has(
+      snapshot?.progress?.nextRequiredAction,
+    ) &&
     isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
       true;
 }
