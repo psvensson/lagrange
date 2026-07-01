@@ -1,0 +1,18 @@
+{
+  "metric": 0,
+  "done": true,
+  "verdict": "bounded-no-breach",
+  "quest": "dt-drain-safety-overremoval-hunt",
+  "target": "T1 — projectQuorumAfterRemoval COMPLETION_SAFE_FLOOR optimistic over-removal seam (T2 dropped: already covered by cl-038)",
+  "summary": "The pure-predicate over-removal accept is real (the completion-safe count floor can count a not-yet-voter-ready projected node toward minReplicaCount), but it provably cannot cause a persistent under-quorum / data-loss breach. The candidate strict-floor fix was IMPLEMENTED and REFUTED by blast radius (it breaks deliberately-tested optimistic-dispatch behavior); reverted. Two independent guards + a recoverable execution model close the safety question.",
+  "evidence": {
+    "gate1_dispatch_authorization": "operation-workflow-remove-safety-evaluator.js:513-533 — on the REPLACE remove ACTIVE (initial) dispatch, the completion-safe path requires isVoterReadyReplicaTopology(replacementReplicaRow); that returns false for a learner / non-voter-ready status (priority-publication-safety-topology.js:122-134); false => DEFER. So a learner target is deferred BEFORE the optimistic count floor matters. Verified by own read.",
+    "gate1_scope": "isReplaceRemoveInitialDispatch = REPLACE + workflowStep ACTIVE (replica-operation-repository-row-methods.js:266-271). STOPPING re-dispatch (dispatch-response-reconcile.js:314-318) returns SAFE early at evaluator.js:367 and only RETRANSMITS an already-ACTIVE-authorized removal (reached only after the source returned INITIATED/IN_PROGRESS to the Gate-1-authorized ACTIVE dispatch) — not a fresh below-quorum authorization. Re-entry does NOT bypass Gate 1 to authorize a new removal.",
+    "gate2_execution_recoverable": "The dispatched REMOVE_REPLICA runs on the SOURCE node (removeReplicaAsync -> cleanupRemovedReplicaLocalRuntime -> service.shutdown, replica-handler-runtime-methods.js:33-47): a local non-leader voter self-shutdown, no removeVoter RPC / no joint-consensus config change (liferaft leave() is a local splice, index.js:862-883). liferaft majority() (index.js:443-444) recomputes over live self-excluded peers, so a 3->2 non-leader reduction keeps committing (no hard stall); the rebalancer under-replication placement loop re-adds if the target never catches up.",
+    "residual": "The only residual is a LATENCY / availability tail (transiently reduced fault tolerance until the target promotes or a replica is re-added) — the same CPU-latency tail the run4 census already characterized as irreducibly statistical, NOT a persistent safety breach."
+  },
+  "candidateFixRefuted": "The documented strict-floor fix (require projectedVoterReadyCount>=min on COMPLETION_SAFE_FLOOR) was implemented + run: it breaks 3 rebalancer test files of INTENDED optimistic-dispatch behavior (quorum-conditioned-remove-safety.test.js 'dispatches priority REPLACE source removal when spread-satisfied in flight and source is not leader'). Reverted; working tree clean (201/201 pass).",
+  "recommendation": "Close the T1 hunt as bounded-no-breach (will-not-fix): the optimism is a deliberate, guarded, recoverable liveness tradeoff, not a safety bug. Do NOT ship a predicate-level strict-floor fix. If the self-documented evaluator.js:42-45 branch is ever wired, it should only harden diagnostics/spread, not block the intended optimistic dispatch.",
+  "verificationChain": "subagent a18bfa45 (predicate over-removal mechanism) + a56f28ab (execution-gating trace) + a70d66587 (adversarial refutation of both re-entry-bypass and recoverability attacks, SOUND) + own reads of evaluator.js:503-534 and priority-publication-safety-topology.js:118-136.",
+  "verifiedBy": "a70d66587d26fcc30"
+}
