@@ -1,7 +1,7 @@
 ---
 id: dst-cost-model-circle
 roadmapRow: null
-status: discussing
+status: resolved-option-b-refuted-pivot-to-a
 graduatesTo: null
 links:
   quests: [dst-cost-model-fidelity-spike, dt-drain-safety-overremoval-hunt]
@@ -199,3 +199,19 @@ kept off the deterministic-only path.
   recommended lane if/when the Option-B spike EXHAUSTS, and it is independent of the cost model, so it
   can proceed in parallel (it makes no fidelity claim). Verifier `ad280a7` confirmed 3 of 4 tempting
   drain safety invariants are already guarded — hence the single-seam scope.
+- 2026-07-01 — **KILL-GATE RESOLVED: EXHAUSTED / Option B REFUTED. The epic's chosen option flips from
+  B to A.** The fidelity-spike's own findings 6-13 (+ the census) settle it: the CPU-saturation root
+  class is NOT faithfully reproducible by a per-op cost model — real calibrated sink cost × frequency
+  is <0.03% of the 120s budget, the earlier repro used ~1725× inflated coefficients, both re-aims
+  (snapshot-build, CDC row-fetch) were refuted, and 99.94% of the rejoiner's blocking is UNATTRIBUTED
+  synchronous work the model cannot charge. Forensics (finding 13) unify it: the saturation is the
+  **leadership-flap limit-cycle re-sync storm — coordination churn, not per-op CPU cost** ("the cost
+  model was the wrong tool"). The bar was NOT relaxed (kill-gate-no-goalpost-move honored); it was left
+  unmet (spike metric stays 2, done=false) and the sealed refuted branch recorded (operator-attested;
+  `solve/oracle/dst-cost-model-fidelity-spike.json` killGateResolution). **Consequence:** do NOT build
+  the cost model or start Phase 1+. Pivot to **Option A (logical circle / bug-finding, cost model NOT
+  required)** — first hunt `dt-drain-safety-overremoval-hunt` already SOLVED (bounded-no-breach). The
+  highest-value future Option-A target is the **leadership-flap limit cycle** itself (a coordination
+  dynamic the DT6 substrate can host + PCT-race), which is also the true root of the run4 latency tail.
+  This epic's cost-model program (Phases 1-4) is shelved; Option A continues under the DT bug-finding
+  motive (`docs/deterministic-directed-testing-plan.md`).
