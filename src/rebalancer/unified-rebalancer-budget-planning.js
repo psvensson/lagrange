@@ -361,10 +361,20 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   // promote at all). The priority-recovery deficit gate uses this so a pile of
   // settled-but-unpromoted learners — which getHealthyReplicas excludes by role,
   // making the partition look perpetually under-replicated — is not re-minted as
-  // a fresh ADD every plan tick (the over-replication storm). A learner on a
-  // NOT-ready node is still excluded (the readyNodeIds filter is the liveness
-  // guard), so this never suppresses the legitimate re-placement of a genuinely
-  // dead replica.
+  // a fresh ADD every plan tick (the over-replication storm).
+  //
+  // Liveness guard = ready OR process-alive, NOT merely ready. A member counts if
+  // its node is either serve-ready (getAvailableNodes) OR process-alive — up and
+  // reporting runtime authority but transiently not-yet-serve-ready (a rejoiner
+  // mid-restart whose replica just materialized). The old ready-only filter
+  // treated such a restarting node like a dead one and re-minted an ADD every tick
+  // while its replica terminalized-but-settled (invisible to both this
+  // ready-occupied count and the transitional in-flight-ADD count) — the residual
+  // over-replication that survived the count-aware gate. A genuinely dead/evicted
+  // node — INCLUDING one retained in the published membership by a membership
+  // freeze — is NOT process-alive (processAlive reflects live runtime evidence,
+  // not membership-list retention), so it is still excluded and its replica is
+  // re-placed. That is why the guard keys on processAlive, not published-active.
   getReadyNodeOccupiedReplicas(replicas) {
     const activeReplicas = replicas.filter((replica) => {
       const status = replica.status || ReplicaStatus.ACTIVE;
@@ -380,7 +390,8 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       (replica) =>
         replica?.node_id &&
         replica?.address &&
-        readyNodeIds.has(replica.node_id),
+        (readyNodeIds.has(replica.node_id) ||
+          this.isNodeProcessAlive(replica.node_id)),
     );
   }
 

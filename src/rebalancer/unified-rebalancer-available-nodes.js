@@ -338,6 +338,37 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   /**
+   * Runtime-liveness probe (NOT serve-readiness): is the node's process alive
+   * and reporting runtime authority right now? A node mid-restart that has
+   * materialized a replica is process-alive but may not yet satisfy the stricter
+   * serve/placement readiness dimension getAvailableNodes uses. A genuinely
+   * dead/evicted node — including one retained in the published membership list
+   * by a membership freeze — is NOT process-alive, because processAlive reflects
+   * live runtime-authority evidence, not membership-list retention. The
+   * over-replication deficit gate uses this to count a settling replica on a
+   * restarting node (defer the redundant ADD) while still re-placing a replica on
+   * a genuinely dead node.
+   * @param {string} nodeId
+   * @return {boolean}
+   */
+  isNodeProcessAlive(nodeId) {
+    const readinessService = this.controlPlaneReadinessService;
+    if (
+      !readinessService ||
+      typeof readinessService.getNodeReadinessSync !== TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const readiness = readinessService.getNodeReadinessSync(nodeId, {
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+    });
+    return this.isReadinessDimensionSatisfied(
+      readiness,
+      CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+    );
+  }
+
+  /**
    * Resolve the current priority-recovery planning assessment for one
    * in-flight operation when it belongs to the startup-critical control-plane
    * lane.
