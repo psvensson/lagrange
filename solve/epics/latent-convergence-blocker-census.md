@@ -1,7 +1,7 @@
 ---
 id: latent-convergence-blocker-census
 roadmapRow: RM-0.1-fs-rolling-restart
-status: sharpening
+status: graduated
 graduatesTo: topology-convergence-hardening
 ---
 

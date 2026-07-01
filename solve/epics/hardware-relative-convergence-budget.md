@@ -1,5 +1,7 @@
 # Epic: Hardware-relative convergence budget (OQ1 resolution)
 
+Status: resolved
+
 ## Intent
 
 The rolling-restart gate's work-bound budgets (`settleTimeoutMs`,

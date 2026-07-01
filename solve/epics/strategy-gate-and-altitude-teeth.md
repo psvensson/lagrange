@@ -1,5 +1,7 @@
 # Epic: Strategy gate + altitude teeth — make high-level thinking gate behavior
 
+Status: discussing
+
 ## Intent
 
 Three autonomous runs on `rolling-restart-core-stability` independently reached the

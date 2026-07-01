@@ -1,7 +1,7 @@
 ---
 id: continuous-ai-workflow-landscape
 roadmapRow: null
-status: discussing
+status: resolved
 graduatesTo: null
 ---
 

@@ -1,7 +1,7 @@
 ---
 id: convergence-timeout-leadership-settle
 roadmapRow: RM-0.1-fs-rolling-restart
-status: discussing
+status: resolved
 graduatesTo: null
 links:
   quests: [rolling-restart-core-stability]

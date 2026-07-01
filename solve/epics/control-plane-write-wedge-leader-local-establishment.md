@@ -1,7 +1,7 @@
 ---
 id: control-plane-write-wedge-leader-local-establishment
 roadmapRow: RM-0.1-fs-rolling-restart
-status: active
+status: resolved
 graduatesTo: null
 ---
 
