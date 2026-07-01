@@ -228,3 +228,34 @@ closure is **operator-attested**: recorded here, in the quest log
 (`solve/log/rolling-restart-core-stability.ndjson`), and in external memory; the
 Solver machine status is left honestly open. A future `convergence-passrate`
 probe could mechanize it.
+
+## 7. Proxy retired + drain-residual closed (2026-07-01)
+
+Two housekeeping decisions that supersede the loose ends above.
+
+**7a. The consecutive-N scenario-harness probe is RETIRED as a closure signal.**
+The legacy `scenario-harness consecutive:3` (and the run4 quests' later
+`consecutive:15`) probe is **liveness-only** — a cheap "does it still pass
+sometimes" heartbeat, never a convergence verdict. This was already argued in §1
+and flagged at §6 ("must not be faked"); it is now stated as policy: the **only**
+sealed closure for rolling-restart convergence is §5 — SAFETY floor (0 every run)
++ CONVERGENCE (Wilson-95 lower bound ≥ the sealed `T(5) = 0.357`). Do not author
+or resurrect a rolling-restart `doneWhen` whose goal is "N consecutive PASS";
+any such probe is a liveness signal, and treating it as closure is a goalpost
+violation. A `convergence-passrate` probe (Wilson-LB over a window) is the
+mechanized form of §5 and the only kind that should gate this scenario.
+
+**7b. The run4 drain/in-flight residual (§6 "documented future work") is CLOSED
+— will-not-fix via structural discrimination.** A bounded PASS/FAIL census over
+the existing report corpus (quest `rolling-restart-run4-passfail-discriminator-census`,
+SOLVED `no-separator`; `scripts/census/`, subagent-verified) proved the run4
+`replica_operations_in_flight` / drain residual is **not a structural condition
+that separates PASS from FAIL**: leadership concentration is ~identical in PASS
+(mean 30.74/34) and FAIL (30.89/34), best-split balanced accuracy 0.551 (chance);
+rejoiner-identity and drain-at-terminal likewise chance-level. It is an
+irreducibly-statistical **CPU-latency tail** (PASS 73.2% overlaps FAIL 74.9%),
+exactly the variance §1 built this metric to absorb — not a sealable stricter
+bar. Consequently the drain residual **does not reopen the §6 certification** and
+must not spawn further per-witness `operation_workflow_owner` patching (the ~8h
+whack-a-mole of 2026-06-30 → 07-01, blocker-oscillation=high, confirmed this is a
+dead lever). rolling-restart convergence remains SOLVED against §5.

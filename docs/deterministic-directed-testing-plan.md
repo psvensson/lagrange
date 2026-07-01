@@ -21,6 +21,25 @@ and DT6 STEP 7 (the publication commit made a REAL QUORUM-GATED raft-log commit 
 landed; DT6 (full multi-node DST) proceeds as a gated program (see below).
 Author: analysis of the convergence loop + harness, 2026-06-16.
 
+> **MOTIVE (reframed 2026-07-01) — this program exists to FIND BUGS, not to
+> reproduce a scenario's pass-rate.** The purpose of the deterministic tier is to
+> make *message-ordering / interleaving safety bugs* deterministically
+> reproducible and minimizable (a failing seed → the smallest interleaving that
+> breaks an invariant), so a fix is causally tied to a real defect. It is **NOT**
+> a tool for reproducing the rolling-restart Docker PASS/FAIL rate. That rate is
+> an irreducibly-statistical **CPU-latency tail** (quest
+> `rolling-restart-run4-passfail-discriminator-census`, SOLVED `no-separator`):
+> the virtual clock/network determinizes message and timer ordering, **not CPU
+> contention**, so virtualizing the scenario would *delete* the very race and any
+> "make the seeded sweep bracket the ~41% Docker rate" fidelity goal is
+> curve-fitting a modeled CPU cost to the answer. Do not scope a DT quest around
+> scenario-rate fidelity. Legitimate DT `doneWhen`s are of the form "this seed
+> deterministically reproduces safety-invariant breach X, and red-on-revert
+> proves the fix" — never "the sweep pass-rate equals the Docker gate." Rolling-
+> restart convergence is closed on the statistical Wilson-95 bar
+> (`docs/convergence-donewhen-metric.md` §5/§7), which is the correct primary
+> posture for a latency-tail race — not a fallback after determinization.
+
 > **Implementation status (2026-06-16).**
 > - **DT7 (model-check the design class) — DONE.** `models/leadership-failback/LeadershipFailback.tla`
 >   (+ `_bug.cfg`/`_fixed.cfg`) models CL-039: TLC shows the lost-failback as a
