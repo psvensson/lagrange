@@ -430,7 +430,22 @@ function resolveNodeWebSocketAddressResult(options = {}) {
   }
 
   const bootstrapResponse = options.bootstrapResponse;
-  if (targetNodeId === bootstrapResponse?.seedNodeId &&
+  const systemTableCache = options.systemTableCache;
+  const cacheEndpointRows =
+    getCacheEndpointRows(systemTableCache, targetNodeId);
+  const cacheEndpointAddress = cacheEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
+  const hasCanonicalCacheRow =
+    typeof cacheEndpointAddress === TYPEOF.STRING &&
+    cacheEndpointAddress.length > NUM.ZERO;
+
+  // The seed pin (bootstrapResponse.seedNodeWsAddress) and the canonical
+  // node_endpoints cache row are the SAME self-advertised value; the pin is a
+  // point-in-time bootstrap snapshot while the cache row is CDC-updated. When a
+  // seed restarts with a new address, a peer's held bootstrapResponse goes
+  // stale, so the fresher canonical cache row must win. The seed pin remains the
+  // authority only during cold start, before CDC has populated the cache.
+  if (!hasCanonicalCacheRow &&
+      targetNodeId === bootstrapResponse?.seedNodeId &&
       typeof bootstrapResponse?.seedNodeWsAddress === TYPEOF.STRING &&
       bootstrapResponse.seedNodeWsAddress.length > NUM.ZERO) {
     return Object.freeze({
@@ -445,12 +460,7 @@ function resolveNodeWebSocketAddressResult(options = {}) {
     });
   }
 
-  const systemTableCache = options.systemTableCache;
-  const cacheEndpointRows =
-    getCacheEndpointRows(systemTableCache, targetNodeId);
-  const cacheEndpointAddress = cacheEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
-  if (typeof cacheEndpointAddress === TYPEOF.STRING &&
-      cacheEndpointAddress.length > NUM.ZERO) {
+  if (hasCanonicalCacheRow) {
     return Object.freeze({
       state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
       address:

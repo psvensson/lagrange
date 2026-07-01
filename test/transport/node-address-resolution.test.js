@@ -179,3 +179,86 @@ test('resolveNodeWebSocketAddress reads canonical websocket metadata from cache'
       'cache-backed node_endpoints rows should resolve peer websocket addresses',
     );
   });
+
+test(
+  'canonical cache row beats a stale bootstrap seed pin for the seed node',
+  async (t) => {
+    // A seed node that restarts with a NEW address republishes its endpoint via
+    // heartbeat -> node_endpoints (the canonical cache), but a peer holding an
+    // OLD bootstrapResponse still carries the seed's stale advertised address in
+    // seedNodeWsAddress. The seed pin and the cache row are the same
+    // self-advertised value differing only in freshness, so the fresher cache
+    // row must win; otherwise the peer keeps dialing the dead old seed address.
+    const resolvedAddress = resolveNodeWebSocketAddress({
+      targetNodeId: 'seed-node',
+      bootstrapResponse: {
+        seedNodeId: 'seed-node',
+        seedNodeWsAddress: 'ws://172.20.0.5:8082',
+      },
+      systemTableCache: {
+        filter(tableName, predicate) {
+          if (tableName !== 'node_endpoints') {
+            return [];
+          }
+          return [
+            {
+              endpoint_id: 'ep-seed-node-ws',
+              node_id: 'seed-node',
+              transport_type: 'ws',
+              address: 'ws://172.20.0.99:8082',
+              priority: 0,
+              status: 'active',
+            },
+          ].filter(predicate);
+        },
+      },
+    });
+
+    t.same(
+      resolvedAddress,
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+        address: 'ws://172.20.0.99:8082',
+        authority:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+            .CANONICAL_NODE_ENDPOINT,
+        evidenceSource:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE,
+      },
+      'fresher canonical node_endpoints row should beat the stale seed pin',
+    );
+  });
+
+test(
+  'bootstrap seed pin still resolves the seed when no canonical cache row exists',
+  async (t) => {
+    // Cold-start fallthrough: during initial join, before CDC populates the
+    // cache, the seed pin remains the resolution authority.
+    const resolvedAddress = resolveNodeWebSocketAddress({
+      targetNodeId: 'seed-node',
+      bootstrapResponse: {
+        seedNodeId: 'seed-node',
+        seedNodeWsAddress: 'ws://172.20.0.5:8082',
+      },
+      systemTableCache: {
+        filter() {
+          return [];
+        },
+      },
+    });
+
+    t.same(
+      resolvedAddress,
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+        address: 'ws://172.20.0.5:8082',
+        authority:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+            .NORMALIZED_BOOTSTRAP_SEED,
+        evidenceSource:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
+            .BOOTSTRAP_SEED_INGRESS,
+      },
+      'seed pin should remain authoritative when the cache has no seed row',
+    );
+  });
