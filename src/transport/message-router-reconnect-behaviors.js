@@ -316,9 +316,12 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     }
     existing.lastAdHocAttemptAtMs = nowMs;
   }
-  // Rate-limit delivery-triggered reconnect attempts toward a single owner so a
-  // saturated seed is not hammered by an unbounded storm; defer (return null,
-  // caller backs off) when the per-owner budget is exhausted. Default-off.
+  // Rate-limit delivery-triggered reconnect attempts toward a single target so a
+  // saturated node is not hammered by an unbounded storm; defer (return null,
+  // caller backs off with retryAfterMs) when the per-target budget is exhausted.
+  // Engages by default (OwnerRetryBudget token bucket); the deferred delivery is
+  // retried and the background scheduleReconnect timer still reconnects a genuinely
+  // down node, so this never permanently starves a legitimate reconnect.
   if (
     router.ownerRetryBudget &&
     typeof router.ownerRetryBudget.tryConsume === TRANSPORT_TYPEOF.FUNCTION &&

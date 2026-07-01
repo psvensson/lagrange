@@ -244,7 +244,10 @@ class MessageRouter extends EventEmitter {
       options.resolveQueryMessageGroupService || null;
     this.pendingNodeConnections = /* @__PURE__ */ new Map();
     // Bounds the rate of delivery-triggered reconnect attempts toward a single
-    // owner so a saturated seed is not hammered (opt-in, default off).
+    // target so a briefly-disconnected/saturated node is not hammered into a
+    // reconnect storm. Engages by default via OwnerRetryBudget's per-target token
+    // bucket; the independent scheduleReconnect timer still reconnects a genuinely
+    // down node even when the delivery-triggered budget is exhausted.
     this.ownerRetryBudget =
       options.ownerRetryBudget || new OwnerRetryBudget();
     this.transportPressureMetrics = {
