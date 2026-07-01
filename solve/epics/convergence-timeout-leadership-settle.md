@@ -257,7 +257,25 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 
 ## Decision log
 
-- 2026-07-01 (latest — **candidate over-replication fix IMPLEMENTED → safety-verified UNSAFE → REVERTED**;
+- 2026-07-01 (latest — **retention-grace-gated over-replication fix LANDED + safety-verified SOUND**;
+  commit `4700a47b`; verifier `a750b4d8` + own verification of the pivotal facts). The correct signal
+  for the earlier-reverted fix: not raw published-active (retains freeze-dead nodes) but **PROCESS-ALIVE**
+  = a live runtime status read (`processAlive = lifecycleState ∉ {failed,shutting_down,stopped}`,
+  `control-plane-readiness-runtime-authority-methods.js:230-233`), INDEPENDENT of published-membership
+  retention. Fix: `getReadyNodeOccupiedReplicas` now counts a critical-system ACTIVE replica if its node
+  is serve-ready OR `isNodeProcessAlive` (new helper querying the `PROCESS_ALIVE` readiness dimension) —
+  so a restarting-but-up rejoiner's settling replica occupies its slot (defer the redundant ADD) while a
+  genuinely-dead node (incl. a membership-freeze-retained one) is still re-placed. **Freeze hole CLOSED
+  by construction:** the freeze only builds a projection value (no NODES.status write); the failure
+  detector reaps a dead node's status to FAILED within a ~15-60s hard cap regardless of freeze →
+  processAlive=false → still re-placed. Pure OR-widening (never under-counts; only defers); non-critical
+  partitions unchanged; sole caller is the deficit gate. Red-on-revert test added (restarting node
+  defers / dead node still re-places, green both ways); full rebalancer suite 151/154 (3 pre-existing);
+  independent verify SOUND-TO-SHIP. Residual: a bounded ≤~60s re-placement delay for a genuinely-dead
+  slot, within the existing dead-member reaping envelope. This is the Head-A over-replication lever;
+  Head B (establishment-write wedge) still dominates PASS, so this reduces leadership churn / CPU
+  saturation but is not expected to flip the gate alone.
+- 2026-07-01 (**candidate over-replication fix IMPLEMENTED → safety-verified UNSAFE → REVERTED**;
   verifier `ae363920` + own verification at `active-node-projection.js:721`). Fix tried: widen the
   deficit-gate liveness guard (`getReadyNodeOccupiedReplicas`, budget-planning.js) from READY nodes
   (`getAvailableNodes`) to PRESENT = `getAvailableNodes ∪ getPublishedActiveNodeIdSet()`, so a
