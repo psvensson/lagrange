@@ -30,8 +30,6 @@ import {
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,
-  OPERATION_WORKFLOW_OWNER,
-  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
 } from './operation-workflow-owner-constants.js';
 import {
   OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
@@ -39,8 +37,8 @@ import {
 import {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
+  normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
-  shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry,
 } from './operation-workflow-owner-priority-recovery-reentry.js';
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
@@ -51,6 +49,7 @@ const OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_ERROR =
   'control_plane_pressure_degraded while local workflow owner initialization is pending';
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID = null;
+const OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_OBJECT_REFERENCE = Object.freeze({});
 const {
   OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION:
@@ -279,7 +278,7 @@ function hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
   return owner.hasActiveCreatedOperationHandoffRetry(operationId) === true ||
     (
       typeof owner.hasActiveOperationDispatchDeferredRetry ===
-        'function' &&
+        OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE &&
       owner.hasActiveOperationDispatchDeferredRetry(operationId) === true
     );
 }
@@ -425,46 +424,6 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
     },
   );
   return normalizedSnapshot;
-}
-
-function normalizePriorityRecoveryTargetProgressOwnerSnapshot(
-  owner,
-  snapshot,
-  operation,
-) {
-  if (
-    !shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
-      owner,
-      snapshot,
-      operation,
-    )
-  ) {
-    return snapshot;
-  }
-  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
-    snapshot,
-    buildPriorityRecoveryTargetProgressHandoffRetryOutcome(operation),
-  );
-}
-
-function buildPriorityRecoveryTargetProgressHandoffRetryOutcome(operation) {
-  const operationId = normalizeOperationWorkflowOwnerSnapshotOperationId(
-    operation,
-  );
-  return Object.freeze({
-    owner: OPERATION_WORKFLOW_OWNER,
-    boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
-    state:
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
-    outcome:
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
-    nextRequiredAction:
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
-    effectCommand:
-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
-    correlationKey: operationId,
-    sourceRevision: operation?.updatedAt || operation?.createdAt || null,
-  });
 }
 
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
@@ -754,7 +713,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
         operation,
       );
     const targetProgressNormalizedSnapshot =
-      normalizePriorityRecoveryTargetProgressOwnerSnapshot(
+      normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
         this,
         normalizedSnapshot,
         operation,
@@ -789,7 +748,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
         operation,
       );
     const targetProgressNormalizedSnapshot =
-      normalizePriorityRecoveryTargetProgressOwnerSnapshot(
+      normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
         this,
         normalizedSnapshot,
         operation,

@@ -16,16 +16,39 @@ import {
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
+} from '../control-plane/priority-recovery-snapshot.js';
+import {
   PRIORITY_RECOVERY_PROVENANCE_SOURCE,
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from '../control-plane/priority-recovery-snapshot-contract.js';
+import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+} from './operation-workflow-owner-constants.js';
 
 const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
+const OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME =
   PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_CACHE_OPERATION =
   PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
+const OPERATION_WORKFLOW_OWNER_REPRESENTATIVE_RERUN_ROUTE = Object.freeze({
+  ELIGIBLE: 'eligible',
+  BLOCKED_MODEL_ROUTE: 'blocked_model_route',
+});
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_STATE = Object.freeze({
+  AVAILABLE: 'target_progress_owner_outcome_available',
+  UNAVAILABLE: 'target_progress_owner_outcome_unavailable',
+});
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_UNAVAILABLE =
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_STATE.UNAVAILABLE,
+  });
 
 const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE = Object.freeze({
   OPERATION_UNAVAILABLE: 'operation_unavailable',
@@ -61,6 +84,38 @@ const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION_BY_STATE =
       OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.REMOTE_OWNER,
       OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
         .WAKE_REMOTE_OWNER,
+    ],
+  ]));
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_BY_ACTION =
+  Object.freeze(new Map([
+    [
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.RECONCILE_NOW,
+      Object.freeze({
+        outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+        effectCommand:
+          OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+            .ADVANCE_EXISTING_OPERATION_COMMAND,
+      }),
+    ],
+    [
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.WAKE_REMOTE_OWNER,
+      Object.freeze({
+        outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+        effectCommand:
+          OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+      }),
+    ],
+    [
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+        .RETRY_AFTER_OWNER_LANE,
+      Object.freeze({
+        outcome:
+          OPERATION_WORKFLOW_OUTCOME_VALUES
+            .WAIT_FOR_REBALANCER_HANDOFF_RETRY,
+        effectCommand: OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+          .NO_OPERATION_EFFECT,
+      }),
     ],
   ]));
 
@@ -193,8 +248,9 @@ function isOperationWorkflowOwnerTargetSyncActiveProgressReady(
     PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC &&
     snapshot?.progress?.workflowProgressPhaseId ===
       PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC &&
-    snapshot?.progress?.nextRequiredAction ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_ACTIONS.has(
+      snapshot?.progress?.nextRequiredAction,
+    ) &&
     isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
       true &&
     targetVisibilityState ===
@@ -222,8 +278,9 @@ function isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot) {
     OPERATION_WORKFLOW_OWNER_SOURCE_REMOVAL_PROGRESS_PHASES.has(
       snapshot?.progress?.workflowProgressPhaseId,
     ) &&
-    snapshot?.progress?.nextRequiredAction ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_ACTIONS.has(
+      snapshot?.progress?.nextRequiredAction,
+    ) &&
     isOperationWorkflowOwnerEventDrivenWorkflowProgressBoundary(snapshot) ===
       true;
 }
@@ -241,7 +298,8 @@ function isOperationWorkflowOwnerTargetProgressWaitEligible(
   dispatchPendingTargetProgressWait,
   sourceRemovalProgressWait,
 ) {
-  return representativeRerunRoute !== 'blocked_model_route' && (
+  return representativeRerunRoute !==
+    OPERATION_WORKFLOW_OWNER_REPRESENTATIVE_RERUN_ROUTE.BLOCKED_MODEL_ROUTE && (
     isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
     dispatchPendingTargetProgressWait === true ||
     sourceRemovalProgressWait === true
@@ -275,7 +333,8 @@ function isOperationWorkflowOwnerRemoteOwnerAvailable(
     ownerNodeId !== owner.nodeId;
   // Remote owners that are no longer repair-eligible must not be woken.
   const ownerUnavailable =
-    typeof owner.isPriorityRecoveryDrainOwnerUnavailable === 'function' &&
+    typeof owner.isPriorityRecoveryDrainOwnerUnavailable ===
+      OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE &&
     owner.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation);
   return ownerNodeKnown === true && ownerUnavailable !== true;
 }
@@ -290,7 +349,8 @@ function hasActiveOperationWorkflowOwnerTargetProgressHandoffRetry(
     (
       owner.hasActiveCreatedOperationHandoffRetry(operationId) === true ||
       (
-        typeof owner.hasActiveOperationDispatchDeferredRetry === 'function' &&
+        typeof owner.hasActiveOperationDispatchDeferredRetry ===
+          OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE &&
         owner.hasActiveOperationDispatchDeferredRetry(operationId) === true
       )
     );
@@ -323,7 +383,7 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
   const representativeRerunRoute =
     snapshot?.progressContract?.representativeRerunRoute ||
     snapshot?.progress?.progressContract?.representativeRerunRoute ||
-    'eligible';
+    OPERATION_WORKFLOW_OWNER_REPRESENTATIVE_RERUN_ROUTE.ELIGIBLE;
   return Object.freeze({
     operationAvailable: Boolean(operationId),
     operationWorkflowOwner:
@@ -381,6 +441,64 @@ function shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
   return resolveOperationWorkflowOwnerTargetProgressReentryState(evidence) ===
     OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
       .REBALANCER_HANDOFF_RETRY_ACTIVE;
+}
+
+function buildOperationWorkflowOwnerTargetProgressOwnerOutcome(
+  operation,
+  action,
+) {
+  const outcome =
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_BY_ACTION.get(action);
+  if (!outcome) {
+    return OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_UNAVAILABLE;
+  }
+  const operationId =
+    normalizeOperationWorkflowOwnerTargetProgressOperationId(operation);
+  return Object.freeze({
+    state: OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_STATE.AVAILABLE,
+    ownerOutcome: Object.freeze({
+      owner: OPERATION_WORKFLOW_OWNER,
+      boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+      state: outcome.outcome,
+      outcome: outcome.outcome,
+      nextRequiredAction: outcome.outcome,
+      effectCommand: outcome.effectCommand,
+      correlationKey: operationId,
+      sourceRevision: operation?.updatedAt || operation?.createdAt || null,
+    }),
+  });
+}
+
+function normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
+  owner,
+  snapshot,
+  operation,
+) {
+  const action =
+    shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
+      owner,
+      snapshot,
+      operation,
+    ) ?
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+        .RETRY_AFTER_OWNER_LANE :
+      resolveOperationWorkflowOwnerTargetProgressReentryAction(
+        owner,
+        snapshot,
+        operation,
+      );
+  const ownerOutcomeResult =
+    buildOperationWorkflowOwnerTargetProgressOwnerOutcome(operation, action);
+  if (
+    ownerOutcomeResult.state !==
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_OUTCOME_STATE.AVAILABLE
+  ) {
+    return snapshot;
+  }
+  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+    snapshot,
+    ownerOutcomeResult.ownerOutcome,
+  );
 }
 
 function resolveOperationWorkflowOwnerTargetProgressReentryAction(
@@ -458,8 +576,10 @@ function applyOperationWorkflowOwnerTargetProgressReentryAction(
 }
 
 export {
+  OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION,
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
+  normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
   shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry,
 };
