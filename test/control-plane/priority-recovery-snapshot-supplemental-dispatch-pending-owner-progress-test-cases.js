@@ -151,6 +151,7 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
 ) {
   const {
     buildPriorityRecoveryDecisionSnapshots,
+    buildPriorityRecoveryObservationSnapshot,
     normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
     OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
     OPERATION_WORKFLOW_OUTCOME_VALUES,
@@ -188,22 +189,27 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
     PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
     PRIORITY_RECOVERY_PROGRESS_WAIT_TIMEOUT_RECONCILE_DUE,
     PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+    PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
     PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
     PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
     PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
     PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
     PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
     PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
     PRIORITY_RECOVERY_STATUS_ACTIVE,
+    PRIORITY_RECOVERY_STATUS_FAILED,
     PRIORITY_RECOVERY_STATUS_PENDING,
     PRIORITY_RECOVERY_STATUS_REMOVED,
     PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
     PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
     PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+    PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
     PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
     PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+    PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING,
     SQL_TRANSACTION_PRIORITY_PARTITION_ID,
     test,
   } = context;
@@ -627,6 +633,139 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
           PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
         ),
         'closure inputs should clear the observed stalled state',
+      );
+    },
+  );
+
+  test(
+    'priority recovery partition witnesses prefer open dispatch over ' +
+      'terminal failed siblings',
+    async (t) => {
+      const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+        capturedAt: PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
+        stepTimeoutMsByWorkflowStep: {
+          [PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING]:
+            PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+        },
+        publicationConvergence: {
+          publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+          ],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              requiredDistinctNodeCount:
+                PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount: 1,
+              spreadGap: 2,
+            }],
+            missingPartitionIds: [
+              SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            ],
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          },
+          membershipLifecycleSummary: {
+            projectedServingNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+            locallyEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+          },
+        },
+        readinessByNodeId: {},
+        workflowAdmissionsByWorkflowId: {},
+        replicaOperationRows: [
+          {
+            operation_id: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
+            partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+            operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+            status: PRIORITY_RECOVERY_STATUS_FAILED,
+            workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+            source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+            target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+            created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+            updated_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
+            completed_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
+          },
+          {
+            operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+            partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+            operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+            status: PRIORITY_RECOVERY_STATUS_PENDING,
+            workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING,
+            source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+            target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+            replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
+            created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+            updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+          },
+        ],
+        serviceRows: [{
+          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          node_id: PRIORITY_RECOVERY_NODE_ID_B,
+          replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
+          status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+          raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
+          updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        }],
+      });
+
+      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+        priorityRecoveryDecisionSnapshots: decisionSnapshots,
+      });
+      const [witness] =
+        observationSnapshot.priorityRecoveryPartitionWitnesses;
+
+      t.equal(
+        witness?.partitionId,
+        SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        'mixed failed/open operation evidence should keep one partition witness',
+      );
+      t.equal(
+        witness?.semanticStateId,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
+        'the failed sibling should keep the unresolved partition state explicit',
+      );
+      t.equal(
+        witness?.latestOperationStatus,
+        PRIORITY_RECOVERY_STATUS_PENDING,
+        'partition witnesses should choose the open dispatch operation over the terminal failed sibling',
+      );
+      t.equal(
+        witness?.latestOperationWorkflowStep,
+        PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING,
+        'the selected witness should expose the open dispatch workflow step',
+      );
+      t.equal(
+        witness?.actuationState,
+        PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
+        'the selected witness should keep workflow actuation actionable',
+      );
+      t.equal(
+        witness?.currentOwner,
+        PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+        'the selected witness should retain workflow progress ownership',
+      );
+      t.equal(
+        witness?.nextRequiredAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'the selected witness should retain the owner advancement action',
+      );
+      t.equal(
+        witness?.blockingBoundary,
+        PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        'the selected witness should keep the workflow-progress boundary',
       );
     },
   );

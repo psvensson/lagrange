@@ -3,8 +3,11 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PRESSURE_STATE,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from './priority-recovery-diagnostics-constants.js';
 import {
@@ -175,6 +178,28 @@ function resolvePriorityRecoveryExplicitSemanticStateMatchRank(
     LOCAL_NUM_ZERO;
 }
 
+function resolvePriorityRecoveryProgressOwnerActionRank(snapshot) {
+  const progress = isRecord(snapshot?.progress) ? snapshot.progress : {};
+  const actuation = isRecord(snapshot?.actuation) ? snapshot.actuation : {};
+  const nextRequiredAction = String(
+    progress.nextRequiredAction || LOCAL_STR_EMPTY,
+  ).trim();
+  const workflowOwnedProgress =
+    progress.currentOwner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    nextRequiredAction.length > LOCAL_NUM_ZERO &&
+    nextRequiredAction !== PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.NONE;
+  if (workflowOwnedProgress) {
+    return LOCAL_NUM_TWO;
+  }
+  const workflowOwnedActuation =
+    actuation.owner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    actuation.state !== PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED &&
+    actuation.state !== PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_COMPLETED;
+  return workflowOwnedActuation ? LOCAL_NUM_ONE : LOCAL_NUM_ZERO;
+}
+
 function selectLatestPriorityRecoveryPartitionSnapshot(
   partitionSnapshots = [],
   decisionSnapshots = null,
@@ -206,6 +231,13 @@ function selectLatestPriorityRecoveryPartitionSnapshot(
         );
       if (leftExplicitMatchRank !== rightExplicitMatchRank) {
         return rightExplicitMatchRank - leftExplicitMatchRank;
+      }
+      const leftProgressOwnerActionRank =
+        resolvePriorityRecoveryProgressOwnerActionRank(left);
+      const rightProgressOwnerActionRank =
+        resolvePriorityRecoveryProgressOwnerActionRank(right);
+      if (leftProgressOwnerActionRank !== rightProgressOwnerActionRank) {
+        return rightProgressOwnerActionRank - leftProgressOwnerActionRank;
       }
       const leftEvidenceRank =
         resolvePriorityRecoverySnapshotEvidenceRank(left);
@@ -612,6 +644,7 @@ export {
   collectPriorityRecoveryRelatedSnapshots,
   resolvePriorityRecoveryEligibleNodeIds,
   resolvePriorityRecoveryOperationIds,
+  resolvePriorityRecoveryProgressOwnerActionRank,
   resolvePriorityRecoverySerialWaitOperationIds,
   resolvePriorityRecoverySerialWaitPartitionIds,
   resolvePriorityRecoverySnapshotEvidenceRank,
