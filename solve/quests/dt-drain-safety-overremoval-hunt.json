@@ -1,0 +1,61 @@
+{
+  "id": "dt-drain-safety-overremoval-hunt",
+  "statement": "Directed PCT interleaving hunt on the DT6-hosted REAL RebalanceCoordinator + OperationWorkflowOwner finds-or-bounds safety-invariant breaches on two targets: (1) the self-documented over-removal seam in projectQuorumAfterRemoval (the optimistic recoveryProjectionNodeIds node-union on the completion-safe floor path) and (2) source-removal-only-after-target-durably-active drain ordering. Terminal is BINARY: a minimized seed that deterministically breaches the invariant with red-on-revert proof, OR a bounded 'no breach at PCT depth <= D over >= N seeds' negative. This is the dst-cost-model-circle epic's Option-A (safety / design-bug) lane and makes NO scenario passRate / cost-model fidelity claim.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/dst-cost-model-circle.md"
+  },
+  "doneWhenSealed": {
+    "lane": "This is the dst-cost-model-circle epic's OPTION A (logical circle for the safety / design-bug class). It is the sibling of the Option-B kill-gate quest dst-cost-model-fidelity-spike; the two must not be conflated. This quest makes NO scenario passRate, root-cause-label, or cost-model FIDELITY claim of any kind - that is exclusively the fidelity-spike's concern.",
+    "stepA_seam": "Prerequisite: finish the DT6 substrate for the removal path - a real operation-store fixture + a messageRouter bridged to the virtual network, on top of the ALREADY-hosted real RebalanceCoordinator + OperationWorkflowOwner (test/convergence/dt6-rebalancer-timeout-orchestration-network.test.js, DT6 steps 9-11). Constructor-injection only, byte-identical Real* default, red-on-revert seam, no env flags.",
+    "stepB_targets": "Directed PCT hunt (src/time/pct-scheduler.js + test/distributed/harness/pct-search.js) on exactly two safety properties: (T1) the self-documented over-removal seam inside projectQuorumAfterRemoval (src/rebalancer/operation-workflow-remove-safety-evaluator.js) - the optimistic recoveryProjectionNodeIds node-union on the completion-safe floor path can it drop a partition below requiredDistinctNodeCount / minReplicaCount under an adversarial interleaving; (T2) source-removal-only-after-target-durably-active (operation-workflow-recovery-drain.js / -reconcile-shared.js) - a cross-state sequencing property no single synchronous predicate owns.",
+    "oracle": "Continuous mid-churn safety monitors from the existing invariant engine, sampled ONLY on settled state via driveNetworkFine (single-event deliver + flush-to-quiescence) + onSettled, per test/convergence/dt6-fine-drive-midchurn-safety.test.js. Drive-granularity violations are NOT bugs; the artifact filter already exists and MUST be used.",
+    "terminal": "BINARY. BUG-FOUND: a seed deterministically breaches T1 or T2, minimized via minimizePctDepth to the smallest schedule, red-on-revert proven via npm run dt:prove, then fixed + subagent-verified + (where model-checkable) encoded as a TLA+ config (DT7 pattern). BOUNDED-NEGATIVE: no breach at PCT depth <= D over >= N seeds for both targets - an honest, publishable result that the guards hold; STOP, do not widen depth indefinitely.",
+    "verdictArtifact": "solve/oracle/dt-drain-safety-overremoval-hunt.json carrying {done:true, verdict:'bug-found'|'bounded-no-breach', target, seed?, minimizedDepth?, redOnRevert?, D, N, recommendation}, subagent-verified before closure."
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/dt-drain-safety-overremoval-hunt.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "dt-drain-safety-overremoval-hunt-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/dt-drain-safety-overremoval-hunt.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "no-scenario-rate-or-cost-model-fidelity",
+      "statement": "This quest must not make or depend on any scenario passRate, root-cause-label, or cost-model fidelity claim. Reproducing the rolling-restart rate is REFUTED for the safety lane and is the fidelity-spike's exclusive concern. Any drift toward 'make the sweep match docker' is out of scope."
+    },
+    {
+      "id": "settled-sampling-artifact-filter",
+      "statement": "Invariant breaches may only be sampled on settled state via driveNetworkFine + onSettled. A violation observed mid-drive (drive-granularity artifact) is NOT a bug and must not be reported as one."
+    },
+    {
+      "id": "red-on-revert-or-bounded-negative",
+      "statement": "Every claimed breach must be minimized (minimizePctDepth) and red-on-revert proven (npm run dt:prove) before it is called a bug. A bounded 'no breach at depth <= D over >= N seeds' is a valid terminal; do not escalate depth without limit to manufacture a hit."
+    },
+    {
+      "id": "dedup-before-hunt",
+      "statement": "Before Step B, confirm no existing quest/test already covers the target seam: operation-workflow-drain-redrive (SOLVED; was drain re-drive UNMASK / liveness, not removal-safety) and membership-publication-drain-determinism (publication drain, not rebalancer removal). Do not re-run covered ground."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -4,7 +4,7 @@ roadmapRow: null
 status: discussing
 graduatesTo: null
 links:
-  quests: [dst-cost-model-fidelity-spike]
+  quests: [dst-cost-model-fidelity-spike, dt-drain-safety-overremoval-hunt]
   upstreamEpic: topology-convergence-hardening
   relatedEpic: convergence-timeout-leadership-settle
   relatedDoc: docs/deterministic-directed-testing-plan.md
@@ -183,3 +183,19 @@ kept off the deterministic-only path.
   calibrate-machine miscited; cost-model-before-hosting ordering; spike too weak). All corrections
   folded in above. Reframed Tier-2 to per-run root-cause-label agreement; docker retained as
   re-calibrator. Next action = the fidelity-spike kill-gate quest; nothing else starts before it resolves.
+- 2026-07-01 — Two new inputs from the run4 line. (i) **Census evidence for the Option-B kill-gate:**
+  quest `rolling-restart-run4-passfail-discriminator-census` SOLVED `no-separator` — the run4 PASS/FAIL
+  runs are STRUCTURALLY INDISTINGUISHABLE (leadership concentration ~equal, PASS 30.74/34 vs FAIL
+  30.89/34, BA 0.551); the failure is a pure CPU-latency tail. This CORROBORATES the "aggregate
+  passRate is unfalsifiable" trap and raises the bar for the fidelity-spike's reframed root-cause-LABEL
+  target too (recorded as a finding on `dst-cost-model-fidelity-spike`). It does NOT pre-decide the
+  spike — the label-agreement + red-on-revert target is more falsifiable than passRate — but it is the
+  strongest single input to that kill-gate. (ii) **Option A now has a quest.** The DT program was
+  reframed to bug-finding (`docs/deterministic-directed-testing-plan.md` MOTIVE banner, commit
+  `d6e30d61`); Option A ("logical circle for the safety / design-bug class") is instantiated as quest
+  **`dt-drain-safety-overremoval-hunt`** — a directed PCT hunt on the ONE self-documented over-removal
+  seam in `projectQuorumAfterRemoval` + the source-removal ordering property, reusing the already-hosted
+  DT6 coordinator (steps 9-11) and the existing `driveNetworkFine` artifact filter. It is the
+  recommended lane if/when the Option-B spike EXHAUSTS, and it is independent of the cost model, so it
+  can proceed in parallel (it makes no fidelity claim). Verifier `ad280a7` confirmed 3 of 4 tempting
+  drain safety invariants are already guarded — hence the single-seam scope.
