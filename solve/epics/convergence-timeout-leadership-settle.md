@@ -279,6 +279,29 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
   Caveats: Head B (establishment-write wedge) still dominates PASS regardless; and this is a
   LIVENESS/convergence limit cycle, **not a safety bug** (safety-floor clean throughout) — so it is
   NOT aligned with the DT bug-finding motive, it is a convergence-rate lever.
+- 2026-07-01 (later — **bug-vs-intended RESOLVED: it is BOTH — an intended availability-recovery CORE +
+  a REAL overshoot BUG (deficit-suppression counting gap)**; subagent `a346c756` + own verification of the
+  pivotal cutoffs). (i) INTENDED CORE: the follow-up ADD firing when voter-ready `healthy < target` during
+  a restart is deliberate availability-recovery — `getReadyNodeOccupiedReplicas` (budget-planning.js:368-385)
+  counts ACTIVE replicas ONLY on nodes in `getAvailableNodes()` (readiness-gated), so replicas on restarting
+  nodes don't count → the partition looks under-target → it adds a fresh replica to keep the critical-system
+  partition served. (ii) REAL BUG: the deficit-suppression `isPriorityRecoveryFollowUpDeficitSatisfiedByInFlightAdds`
+  (defer when `occupied + inFlightAddCount >= target`, `unified-rebalancer-follow-up-move.js:471-483`) has a
+  COUNTING GAP: `inFlightAddCount` counts an ADD only while transitional (`ADD_TRANSITIONAL_STATUSES` =
+  PENDING/CREATING/SYNCING, `in-flight-aware-replica-count.js:29-33`; `currentReplicas:[]` passed
+  intentionally so no ACTIVE-row recovery — both verified own read), and `occupiedReplicaCount` counts only
+  ready-node ACTIVE rows. So a just-added replica that TERMINALIZED (ACTIVE) but whose node is not yet in
+  `getAvailableNodes()` is counted by NEITHER term → the gate under-counts → re-adds a NEW replica though the
+  true member count already meets target → overshoot 3→5(→6). No third guard closes it (pending-target sets
+  feed only target selection, not the count). Corpus: `stat-gate-20260630T173805Z-run3` criticalSystemTopology
+  shows `readyReplicaCount:12 / totalReplicaCount:15` (+3 surplus = the gap population on not-ready nodes) under
+  `operation_drain_progressing`/`replica_operations_in_flight`. **So the flap is NOT a pure inherent tradeoff —
+  closing the gap removes the OVERSHOOT while preserving availability-recovery.** FIX SEAM: count
+  materialized-but-not-yet-ready members in the suppression (ACTIVE rows on nodes NOT in `getAvailableNodes()`,
+  or pass real `currentReplicas` so `computeInFlightAwareReplicaAccounting`'s occupied dedup catches the
+  terminalized row). FIX NUANCE (validate blast radius, per the drain-fix precedent): count only
+  plausibly-recoverable members — deferring an add for a genuinely-dead node's stale ACTIVE row would regress
+  the availability-recovery. This is a real, narrow, one-function convergence bug.
 - 2026-06-23 (C-2 GATE VERDICT — UNVALIDATED, did NOT engage) — N=3 flag-on gate
   `stat-gate-20260623T183833Z`: SAFE 3/3 (0 corrupt/stale/oracle-blind/node-exit, missing=0), PASS rose
   0/3→**1/3** (run3 clean; runs 1,2 `passed=false` dominant `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`),
