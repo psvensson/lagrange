@@ -55,7 +55,7 @@ import {
 
 // FD-upgrade (cutover §5 step 3): SWIM divergence probe that diffs the SWIM
 // detector's active set against the projection's published set. Emitted only when
-// a SWIM runtime is wired in (default-off flag); diagnostics-only. The shared
+// a SWIM runtime is wired in (default-on; opt out with the flag); diagnostics-only. The shared
 // divergence constants below (agree/kind/interval) back this probe.
 const MEMBERSHIP_SWIM_DIVERGENCE_MSG = 'MEMBERSHIP_SWIM_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
@@ -90,9 +90,9 @@ class MembershipPublicationCoordinatorReads {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
-    // FD-upgrade SWIM divergence probe: the runtime is null unless the bootstrap
-    // wired it in behind LAGRANGE_MEMBERSHIP_SWIM_DETECTOR (default-off), so this
-    // whole probe is inert on the default path.
+    // FD-upgrade SWIM divergence probe: the runtime is null only when the bootstrap
+    // opted out via LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=false (default-on since the N=8
+    // gate, commit b1434fe0), in which case this whole probe is inert.
     this.membershipSwimRuntime = options.membershipSwimRuntime || null;
     this._membershipSwimDivergenceLastState = null;
     this._membershipSwimDivergenceLastSnapshotMs = null;

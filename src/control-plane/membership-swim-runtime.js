@@ -4,8 +4,8 @@
 // into one lifecycle-managed object: the single thing the node bootstrap instantiates
 // (flag-gated) and the membership coordinator reads for the divergence emission. It
 // owns start/stop (registers the relay handler + starts the probe loop) and exposes
-// the verdict + the SWIM-derived active set. Default-off: nothing here is constructed
-// unless isMembershipSwimDetectorEnabled() is true at the wiring site.
+// the verdict + the SWIM-derived active set. Default-on (opt out with the flag):
+// nothing here is constructed when isMembershipSwimDetectorEnabled() is false at the wiring site.
 
 import {
   MembershipSwimDetector,

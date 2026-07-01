@@ -350,11 +350,11 @@ class ControlPlaneSetup {
         controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs,
       });
-    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime. Built ONLY
-    // when LAGRANGE_MEMBERSHIP_SWIM_DETECTOR is on (default-off => null => the whole
-    // probe is inert and the default path is byte-identical). It probes the published
-    // active set over the real transport and the coordinator emits its divergence vs
-    // the projection. Uses real time/random (no options) in production.
+    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime. Built unless
+    // LAGRANGE_MEMBERSHIP_SWIM_DETECTOR is opted out (=='false' => null => the whole
+    // probe is inert); default-on since the N=8 gate (commit b1434fe0). It probes the
+    // published active set over the real transport and the coordinator emits its
+    // divergence vs the projection. Uses real time/random (no options) in production.
     const membershipSwimRuntime = isMembershipSwimDetectorEnabled() ?
       new MembershipSwimRuntime({
         nodeId,
