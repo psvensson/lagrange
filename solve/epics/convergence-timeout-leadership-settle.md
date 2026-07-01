@@ -257,6 +257,28 @@ dead and the recency-window lever is refuted (see Head A). C-2 + W-1 break the A
 
 ## Decision log
 
+- 2026-07-01 (**C-2 NON-ENGAGEMENT MYSTERY RESOLVED + real over-replication trigger found**;
+  subagent `a9a7cbbe` + own verification of the two pivotal claims). The over-replication ADD is
+  **NOT** the load-rank `calculatePartitionPlacement` path C-2 patched. It is a SECOND, independent
+  ADD source: the **priority-recovery FOLLOW-UP path** (`unified-rebalancer-follow-up-move.js:493,521`),
+  whose target `selectPriorityRecoveryFollowUpTargetNodeId` (`:252-303`) filters to
+  `unusedEligibleNodeIds` that EXCLUDE current healthy+occupied replicas (`:277-284`) — so by
+  construction it adds a freshly-returned **NON-incumbent**, growing the cohort past target 3
+  (verified own read). Two fatal reasons C-2 left zero trace: (1) **WRONG PATH** — C-2's reservation
+  lives only in `calculatePartitionPlacement`'s `buildPlacementOwnerReservationResult`, which the
+  follow-up path never consults; (2) **DEAD CODE** — commit `dfde5bf2` (2026-06-25 "retire 12 feature
+  flags") deleted `isPriorityIncumbentStickinessEnabled`; `resolveIncumbentRetentionNodeIds`
+  (`placement-owner-evidence.js:161-163`) now always returns `[]` and the flag is absent from `src/`
+  (verified). So **C-2 is REFUTED-as-built**. FIXABLE-as-idea only at the follow-up path: suppress the
+  follow-up deficit ADD when `occupiedAliveReplicas >= targetReplicaCount` with healthy incumbents
+  (`unified-rebalancer-follow-up-move.js:471-493`; an in-flight-add suppression seam already exists
+  there). **OPEN (next determination, NOT resolved — do not ship a fix first):** is the follow-up
+  deficit ADD SPURIOUS (fires with 3 healthy incumbents already at target ⇒ bug) or a TRANSIENT-DEFICIT
+  recovery (a partition replica was briefly down during the restart ⇒ intended-but-suboptimal)? Owner:
+  `buildPriorityRecoveryClosureWitnessFollowUpEvidence` (`unified-rebalancer-follow-up-decision.js`).
+  Caveats: Head B (establishment-write wedge) still dominates PASS regardless; and this is a
+  LIVENESS/convergence limit cycle, **not a safety bug** (safety-floor clean throughout) — so it is
+  NOT aligned with the DT bug-finding motive, it is a convergence-rate lever.
 - 2026-06-23 (C-2 GATE VERDICT — UNVALIDATED, did NOT engage) — N=3 flag-on gate
   `stat-gate-20260623T183833Z`: SAFE 3/3 (0 corrupt/stale/oracle-blind/node-exit, missing=0), PASS rose
   0/3→**1/3** (run3 clean; runs 1,2 `passed=false` dominant `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`),
