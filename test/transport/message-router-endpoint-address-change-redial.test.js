@@ -161,4 +161,58 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
           `(got address=${conn?.address}, state=${conn?.state})`,
       );
     });
+
+  it('severs a stale-but-open INBOUND connection whose peer went silent',
+    async () => {
+      // node-a dials node-b, so node-b holds an INBOUND connection to node-a.
+      // If node-a dies without a clean TCP close (half-open socket), node-b must
+      // still detect it via its OWN keepalive on the inbound record and sever it
+      // -- the outbound dialer's keepalive does not help the inbound-holding
+      // side. Simulate a dead-but-open peer: node-a neither severs its own
+      // socket (clear its outbound keepalive) nor answers node-b's pings.
+      const peerAddr = 'ws://127.0.0.1:19831';
+      routerA = new MessageRouter({
+        nodeId: 'node-a',
+        inProcess: true,
+        wsPort: 19830,
+        resolveNodeAddress: (id) => (id === 'node-b' ? peerAddr : null),
+      });
+      routerB = new MessageRouter({
+        nodeId: 'node-b',
+        inProcess: true,
+        wsPort: 19831,
+      });
+      await routerA.initialize({startServer: true});
+      await routerB.initialize({startServer: true});
+
+      await routerA.connectToNode('node-b', peerAddr);
+      assert.ok(
+        await waitFor(
+          () => routerB.nodeConnections.get('node-a')?.state === 'connected',
+        ),
+        'node-b should adopt an inbound connection from node-a',
+      );
+
+      let closedOnB = 0;
+      routerB.on('connectionClosed', (event) => {
+        if (event.nodeId === 'node-a') {
+          closedOnB += 1;
+        }
+      });
+
+      // node-a goes dead-but-open: stop it severing (clear its own keepalive)
+      // and stop it answering node-b's pings (drop all inbound).
+      const aToB = routerA.nodeConnections.get('node-b');
+      if (aToB) {
+        routerA.clearPingInterval(aToB);
+      }
+      routerA.handleMessage = () => {};
+
+      const severed = await waitFor(() => closedOnB >= 1);
+      assert.ok(
+        severed,
+        'node-b must sever the stale-but-open INBOUND connection to node-a ' +
+          'via its own keepalive',
+      );
+    });
 });

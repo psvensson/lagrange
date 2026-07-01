@@ -208,6 +208,13 @@ class MessageRouterInboundDispatch {
           newKey: nodeId,
           localNodeId: this.nodeId,
         });
+        // Arm the keepalive on the adopted inbound connection. The outbound
+        // dialer pings this side; without a ping from this side too, a half-open
+        // inbound socket to a peer that died without a clean TCP close (e.g. a
+        // hard restart) would linger undetected here with no liveness probe and
+        // no re-dial. The adopted record carries a configuredAddress, so the
+        // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
+        this.startPingInterval(connection);
       } else {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,

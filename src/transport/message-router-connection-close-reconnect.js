@@ -236,6 +236,9 @@ class MessageRouterConnectionCloseReconnect {
    * @private
    */
   startPingInterval(connectionInfo) {
+    // Idempotent: an adopted inbound connection may be armed here and the same
+    // record can be re-armed after a reconnect; never leak a prior interval.
+    this.clearPingInterval(connectionInfo);
     connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
     connectionInfo.pingInterval = setInterval(() => {
       if (
