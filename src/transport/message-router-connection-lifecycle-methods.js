@@ -173,7 +173,18 @@ class MessageRouterConnectionLifecycleMethods {
    * @private
    */
   clearPingInterval(connectionInfo) {
-    if (!connectionInfo?.pingInterval) {
+    if (!connectionInfo) {
+      return;
+    }
+    if (connectionInfo.keepalivePongTimer) {
+      clearTimeout(connectionInfo.keepalivePongTimer);
+      connectionInfo.keepalivePongTimer = null;
+    }
+    if (connectionInfo.keepalivePingId) {
+      this.pendingPings.delete(connectionInfo.keepalivePingId);
+      connectionInfo.keepalivePingId = null;
+    }
+    if (!connectionInfo.pingInterval) {
       return;
     }
     clearInterval(connectionInfo.pingInterval);

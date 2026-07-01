@@ -13,6 +13,7 @@ const {
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
   WebSocket,
+  uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
 /**
@@ -235,18 +236,85 @@ class MessageRouterConnectionCloseReconnect {
    * @private
    */
   startPingInterval(connectionInfo) {
+    connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
     connectionInfo.pingInterval = setInterval(() => {
       if (
-        connectionInfo.ws &&
-        connectionInfo.ws.readyState === WebSocket.OPEN
+        !connectionInfo.ws ||
+        connectionInfo.ws.readyState !== WebSocket.OPEN
       ) {
-        this.sendRaw(connectionInfo.ws, {
-          type: RouterMessageType.PING,
-          timestamp: Date.now(),
-        });
+        return;
       }
+      // Each keepalive ping carries a pingId and arms a pong deadline. A live
+      // peer echoes the pingId (see inbound PONG handler), which clears the
+      // deadline and resets missedPings. Silence accumulates missed pings so a
+      // half-open socket to a departed/relocated peer is severed rather than
+      // pinned forever (the peer may have restarted on a new address).
+      const pingId = uuidv4();
+      const timeout = setTimeout(() => {
+        this.pendingPings.delete(pingId);
+        this.recordMissedKeepalivePing(connectionInfo);
+      }, this.pingTimeoutMs);
+      if (
+        typeof timeout.unref === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
+      ) {
+        timeout.unref();
+      }
+      this.pendingPings.set(pingId, {
+        timeout,
+        resolve: () => {
+          connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
+        },
+      });
+      // Track the outstanding keepalive so clearPingInterval can cancel it on
+      // close (interval >> timeout, so only one is outstanding at a time).
+      connectionInfo.keepalivePongTimer = timeout;
+      connectionInfo.keepalivePingId = pingId;
+      this.sendRaw(connectionInfo.ws, {
+        type: RouterMessageType.PING,
+        pingId,
+        timestamp: Date.now(),
+      });
     }, this.pingIntervalMs);
     connectionInfo.pingInterval.unref();
+  }
+  /**
+   * Account an unanswered keepalive ping and sever the connection once the
+   * peer has missed pingMaxMissed consecutive pings. Severing terminates the
+   * stale socket, whose close event drives handleConnectionClose ->
+   * scheduleReconnect, which re-resolves the peer's current address.
+   * @param {Object} connectionInfo - Connection information.
+   * @private
+   */
+  recordMissedKeepalivePing(connectionInfo) {
+    if (
+      this.isShuttingDown ||
+      !this.isCurrentConnection(connectionInfo) ||
+      !connectionInfo.ws ||
+      connectionInfo.state !== ConnectionState.CONNECTED
+    ) {
+      return;
+    }
+    connectionInfo.missedPings =
+      (connectionInfo.missedPings ?? TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
+    if (connectionInfo.missedPings < this.pingMaxMissed) {
+      return;
+    }
+    this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT, {
+      nodeId: connectionInfo.nodeId,
+      connectionId: connectionInfo.connectionId,
+      missedPings: connectionInfo.missedPings,
+    });
+    connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
+    const staleWs = connectionInfo.ws;
+    if (
+      typeof staleWs.terminate === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
+    ) {
+      staleWs.terminate();
+    } else if (
+      typeof staleWs.close === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
+    ) {
+      staleWs.close();
+    }
   }
 }
 

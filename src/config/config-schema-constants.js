@@ -112,6 +112,7 @@ const CONFIG_SCHEMA = {
         reconnectIntervalMs: {type: 'number', minimum: 100},
         reconnectMaxAttempts: {type: 'number', minimum: 1},
         pingIntervalMs: {type: 'number', minimum: 100},
+        pingMaxMissed: {type: 'number', minimum: 1},
         reconnectBackoffMultiplier: {type: 'number', minimum: 1},
         outboundQueueMaxConcurrent: {type: 'number', minimum: 1},
         connectionPoolTtlMs: {type: 'number', minimum: 1000},

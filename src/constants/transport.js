@@ -51,6 +51,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   RECONNECT_INTERVAL_MS: 'transport.reconnectIntervalMs',
   RECONNECT_MAX_ATTEMPTS: 'transport.reconnectMaxAttempts',
   PING_INTERVAL_MS: 'transport.pingIntervalMs',
+  PING_MAX_MISSED: 'transport.pingMaxMissed',
   RECONNECT_BACKOFF_MULTIPLIER: 'transport.reconnectBackoffMultiplier',
   OUTBOUND_QUEUE_MAX_CONCURRENT: 'transport.outboundQueueMaxConcurrent',
   OUTBOUND_QUEUE_MAX_PENDING: 'transport.outboundQueueMaxPending',
@@ -80,6 +81,11 @@ const TRANSPORT_DEFAULT = Object.freeze({
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,
   PING_INTERVAL_MS: 30000,
+  // Consecutive unanswered keepalive pings before a stale-but-open connection is
+  // severed. A peer that restarts on a new address can leave a half-open socket
+  // that never emits close; without this the peer's stored address is never
+  // re-resolved and reconnect never fires. 2 tolerates a single transient miss.
+  PING_MAX_MISSED: 2,
   RECONNECT_BACKOFF_MULTIPLIER: 1.5,
   OUTBOUND_QUEUE_CONCURRENCY: 32,
   OUTBOUND_QUEUE_MAX_PENDING: 64,
@@ -322,6 +328,8 @@ const WS_LOG_MSG = Object.freeze({
   IDENTIFICATION_RECEIVED: 'Received identification',
   MESSAGE_NOT_ACKED: 'Message not acknowledged',
   CONNECTION_CLOSED: 'Connection closed',
+  CONNECTION_PING_TIMEOUT:
+    'Severing stale-but-open connection: keepalive pings unanswered',
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',

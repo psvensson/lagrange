@@ -133,6 +133,9 @@ class MessageRouter extends EventEmitter {
     this.pingIntervalMs =
       config.get(TRANSPORT_CONFIG_KEY.PING_INTERVAL_MS) ||
       TRANSPORT_DEFAULT.PING_INTERVAL_MS;
+    this.pingMaxMissed =
+      config.get(TRANSPORT_CONFIG_KEY.PING_MAX_MISSED) ||
+      TRANSPORT_DEFAULT.PING_MAX_MISSED;
     this.reconnectBackoffMultiplier =
       config.get(TRANSPORT_CONFIG_KEY.RECONNECT_BACKOFF_MULTIPLIER) ||
       TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
