@@ -139,6 +139,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `solve:attempt` — Run a command through the Solver-owned measured-attempt path.
 - `solve:audit` — Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.
+- `solve:consistency` — `node scripts/solve/ledger-consistency.js`
 - `solve:finding` — Record durable Quest memory for a frontier.
 - `solve:health` — Report Quest loop-health, theory gates, divergence signals, and the next legal action.
 - `solve:ingest-evidence` — Record fresh probe evidence with a content fingerprint before the next attempt.
@@ -226,4 +227,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-148 scripts indexed; 65 have a curated description, 83 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+149 scripts indexed; 65 have a curated description, 84 fall back to their raw command. Improve coverage in the two sources named in the header comment.

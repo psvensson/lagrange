@@ -1,6 +1,11 @@
-# Epic: Lagrange DevOps Onboarding (Docker + Kubernetes try-it path)
+---
+id: lagrange-devops-onboarding
+roadmapRow: null
+status: active
+graduatesTo: null
+---
 
-Status: active
+# Epic: Lagrange DevOps Onboarding (Docker + Kubernetes try-it path)
 
 ## ▶️ RESUME HERE — RUNTIME_SERVICE owner LANDED (2026-06-30)
 

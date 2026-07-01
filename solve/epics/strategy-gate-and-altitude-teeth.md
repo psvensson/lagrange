@@ -1,6 +1,11 @@
-# Epic: Strategy gate + altitude teeth — make high-level thinking gate behavior
+---
+id: strategy-gate-and-altitude-teeth
+roadmapRow: null
+status: discussing
+graduatesTo: null
+---
 
-Status: discussing
+# Epic: Strategy gate + altitude teeth — make high-level thinking gate behavior
 
 ## Intent
 

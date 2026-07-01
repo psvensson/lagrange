@@ -150,6 +150,7 @@
     "solve:upgrade": "node scripts/solve.js upgrade",
     "solve:theory": "node scripts/solve.js theory",
     "solve:health": "node scripts/solve.js health",
+    "solve:consistency": "node scripts/solve/ledger-consistency.js",
     "quest:context": "node scripts/quest-context.js",
     "hooks:install": "node scripts/install-git-hooks.js",
     "test:unit": "find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap",

@@ -820,6 +820,35 @@ reports under `solve/report/` and attempt change artifacts under
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Do not rely on `solve/state/` as durable memory.
 
+## Ledger Consistency
+
+Summary metadata drifts from content unless it is refreshed in the same edit as the
+body. An audit (2026-07-01) found stale epic `status:` fields (a `discussing` epic
+whose body was landed+validated), quests recorded solved whose oracle-probe target
+was missing, and oracle verdicts marked done with no terminal state recorded. The
+bodies were accurate; the small structured fields lagged.
+
+Rule: when you advance an epic's decision log or a quest's outcome, update its
+structured metadata (`status:`, the oracle/state terminal) in the SAME change. A body
+that moved past its metadata is a defect.
+
+`npm run solve:consistency` ([`scripts/solve/ledger-consistency.js`](../../../scripts/solve/ledger-consistency.js))
+gates the machine-checkable half:
+
+- every epic (except `README.md`/`_template.md`) carries a frontmatter `status:` from
+  the known vocabulary (`discussing`/`sharpening`/`active`/`landed-default-off`/`resolved`/`graduated`, plus bespoke suffixes);
+- a quest recorded `solved` whose `doneWhen` is an oracle probe has that oracle file
+  present (else `solve status` re-reads it as undecided);
+- oracle-`done` vs recorded-terminal-state and latent unclosable oracle probes are
+  surfaced as warnings.
+
+It keys ONLY on structured fields (status, probe type, oracle `done`, state
+`questStatus`) — never on decision-log prose, because a body that merely *mentions* a
+terminal outcome about a sub-lever does not make the epic terminal (keyword scraping was
+verified to be a false-positive machine). Judgment-level staleness ("is this epic really
+resolved?") stays a human concern; the check enforces only the invariants that cannot be
+legitimately violated.
+
 ## Portfolio And Meta Ratio
 
 The Solver is a means, not the product. Most Quests are easy to author about the

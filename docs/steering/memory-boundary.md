@@ -28,6 +28,19 @@ conflicting copies.
   external auto-memory MUST link to it rather than restate it.
 - When external memory and in-repo steering disagree, in-repo steering wins (it is
   shared and CI-gated); fix the external note.
+- **Metadata is part of the diff.** When you substantively change a body / decision-log
+  (a memory file, an epic, a quest), refresh that file's summary metadata — frontmatter
+  `description:`/`status:` AND its index hook (`MEMORY.md` / `MEMORY-ARCHIVE.md` line) — in
+  the SAME edit. A body that advanced past its metadata is a defect, not staleness. An
+  audit (2026-07-01) found this is the single largest drift source: write-once summary
+  fields authored at creation and never refreshed as the body evolved over sessions. The
+  hand-written index hook is the source of truth for a memory's one-line summary; treat
+  `description:` as a derived caption, not an independent claim (do NOT regenerate the hook
+  from `description:` — the descriptions are what rot). For the in-repo Solver ledger the
+  structured half of this is machine-checked by `npm run solve:consistency`
+  ([`scripts/solve/ledger-consistency.js`](../../scripts/solve/ledger-consistency.js)):
+  epic `status:` presence/vocabulary + quest↔oracle↔state consistency. External
+  auto-memory has no gate, so for it this rule is the only guard.
 
 ## Why
 

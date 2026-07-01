@@ -1,6 +1,11 @@
-# Epic: Hardware-relative convergence budget (OQ1 resolution)
+---
+id: hardware-relative-convergence-budget
+roadmapRow: RM-0.1-fs-rolling-restart
+status: resolved
+graduatesTo: null
+---
 
-Status: resolved
+# Epic: Hardware-relative convergence budget (OQ1 resolution)
 
 ## Intent
 
