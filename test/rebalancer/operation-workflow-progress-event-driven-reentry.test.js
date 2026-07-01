@@ -143,6 +143,12 @@ const TEST_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'target-sync active target progress snapshots re-enter workflow progress';
 const TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME =
   'source-removal workflow progress snapshots re-enter workflow progress';
+const TEST_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT_TEST_NAME =
+  'source-removal dispatch retry snapshots expose a rebalancer handoff ' +
+  'retry contract';
+const TEST_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT_TEST_NAME =
+  'dispatch-pending dispatch retry snapshots expose a rebalancer handoff ' +
+  'retry contract';
 const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
   'locally owned coordinator-created priority PENDING rows retry after ' +
   'workflow owner initialization';
@@ -168,6 +174,12 @@ const TEST_ASSERT_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY =
 const TEST_ASSERT_SOURCE_REMOVAL_PROGRESS_REENTRY =
   'source-removal workflow progress should re-enter the observed-progress ' +
   'owner lane';
+const TEST_ASSERT_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT =
+  'active source-removal dispatch retry should surface as a rebalancer ' +
+  'handoff retry';
+const TEST_ASSERT_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT =
+  'active dispatch-pending dispatch retry should surface as a rebalancer ' +
+  'handoff retry';
 const TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT =
   'direct decision snapshot build should retain operation workflow progress ' +
   'contract';
@@ -488,6 +500,105 @@ function omitOperationOwnerObservation(snapshot) {
         key !== TEST_OPERATION_OWNER_OBSERVATION_FIELD,
       ),
     ),
+  );
+}
+
+function assertOperationDispatchRetryHandoffSnapshot(
+  t,
+  snapshot,
+  operation,
+  deliveries,
+  deferredTimers,
+  expectedWorkflowProgressPhaseId,
+  label,
+  assertMessage,
+) {
+  const actuation = snapshot.actuation;
+  const progress = snapshot.progress;
+  const coordinatorOperation = snapshot.coordinator.operation;
+  const ownerObservation = snapshot.operationOwnerObservation;
+  t.equal(
+    actuation.workflowProgressPhaseId,
+    expectedWorkflowProgressPhaseId,
+    `${label} dispatch retry fixture should preserve actuation phase`,
+  );
+  t.equal(
+    progress.workflowProgressPhaseId,
+    expectedWorkflowProgressPhaseId,
+    `${label} dispatch retry fixture should preserve progress phase`,
+  );
+  t.equal(
+    snapshot.operationId,
+    operation.operationId,
+    `${label} dispatch retry fixture should preserve operation id`,
+  );
+  t.equal(
+    coordinatorOperation.operationId,
+    operation.operationId,
+    `${label} dispatch retry fixture should preserve coordinator operation id`,
+  );
+  t.equal(
+    progress.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+    assertMessage,
+  );
+  t.equal(
+    progress.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+    assertMessage,
+  );
+  t.equal(
+    ownerObservation.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
+    assertMessage,
+  );
+  t.equal(
+    progress.progressContract.representativeRerunRoute,
+    'blocked_model_route',
+    assertMessage,
+  );
+  t.same(
+    [deliveries.length, deferredTimers.length],
+    [NUM.ZERO, NUM.ZERO],
+    `active ${label} dispatch retries should not duplicate remote wakes`,
+  );
+}
+
+function assertSourceRemovalDispatchRetrySnapshot(
+  t,
+  snapshot,
+  operation,
+  deliveries,
+  deferredTimers,
+) {
+  assertOperationDispatchRetryHandoffSnapshot(
+    t,
+    snapshot,
+    operation,
+    deliveries,
+    deferredTimers,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+    'source-removal',
+    TEST_ASSERT_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT,
+  );
+}
+
+function assertDispatchPendingDispatchRetrySnapshot(
+  t,
+  snapshot,
+  operation,
+  deliveries,
+  deferredTimers,
+) {
+  assertOperationDispatchRetryHandoffSnapshot(
+    t,
+    snapshot,
+    operation,
+    deliveries,
+    deferredTimers,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    'dispatch-pending',
+    TEST_ASSERT_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT,
   );
 }
 
@@ -2086,6 +2197,191 @@ test(TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME, async (t) => {
       [deliveries.length, deferredTimers.length],
       [NUM.ZERO, NUM.ZERO],
       'local source-removal re-entry should not wake the remote owner',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    status: ReplicaStatus.ACTIVE,
+    workflowStep: WORKFLOW_STEP.ACTIVE,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL,
+    targetVisibilityState:
+      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    status: ReplicaStatus.ACTIVE,
+    workflow_step: WORKFLOW_STEP.ACTIVE,
+    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      operationId: TEST_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+      latestOperationStatus: ReplicaStatus.ACTIVE,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      completionState:
+        PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+      spreadGap: NUM.ZERO,
+      coordinatorOperation: operation,
+      timeoutReconcileDue: false,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+    coordinator.workflowOwner.recordOperationDispatchDeferredRetry(
+      operation.operationId,
+      Object.freeze({
+        nextAttemptAt: TEST_CAPTURED_AT_MS + TEST_STEP_TIMEOUT_MS,
+        retryAfterMs: TEST_STEP_TIMEOUT_MS,
+      }),
+    );
+    t.equal(
+      coordinator.workflowOwner.hasActiveOperationDispatchDeferredRetry(
+        operation.operationId,
+      ),
+      true,
+      'dispatch retry fixture should arm owner-visible retry state',
+    );
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+          [operation],
+        );
+
+    assertSourceRemovalDispatchRetrySnapshot(
+      t,
+      snapshot,
+      operation,
+      deliveries,
+      deferredTimers,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      operationId: TEST_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.SENDING,
+      latestOperationStatus: ReplicaStatus.PENDING,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      completionState: 'blocked',
+      coordinatorOperation: operation,
+      timeoutReconcileDue: false,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+    coordinator.workflowOwner.recordOperationDispatchDeferredRetry(
+      operation.operationId,
+      Object.freeze({
+        nextAttemptAt: TEST_CAPTURED_AT_MS + TEST_STEP_TIMEOUT_MS,
+        retryAfterMs: TEST_STEP_TIMEOUT_MS,
+      }),
+    );
+    t.equal(
+      coordinator.workflowOwner.hasActiveOperationDispatchDeferredRetry(
+        operation.operationId,
+      ),
+      true,
+      'dispatch-pending retry fixture should arm owner-visible retry state',
+    );
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+          [operation],
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    assertDispatchPendingDispatchRetrySnapshot(
+      t,
+      snapshot,
+      operation,
+      deliveries,
+      deferredTimers,
     );
   } finally {
     Date.now = originalDateNow;

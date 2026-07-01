@@ -287,7 +287,13 @@ function hasActiveOperationWorkflowOwnerTargetProgressHandoffRetry(
   const operationId =
     normalizeOperationWorkflowOwnerTargetProgressOperationId(operation);
   return Boolean(operationId) &&
-    owner.hasActiveCreatedOperationHandoffRetry(operationId);
+    (
+      owner.hasActiveCreatedOperationHandoffRetry(operationId) === true ||
+      (
+        typeof owner.hasActiveOperationDispatchDeferredRetry === 'function' &&
+        owner.hasActiveOperationDispatchDeferredRetry(operationId) === true
+      )
+    );
 }
 
 function buildOperationWorkflowOwnerTargetProgressReentryEvidence(

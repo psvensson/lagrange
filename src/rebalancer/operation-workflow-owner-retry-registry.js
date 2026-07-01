@@ -77,6 +77,8 @@ class OperationWorkflowOwnerRetryRegistry {
     this.createdOperationHandoffRetryDeadlineMsByOperationId = new Map();
     this.createdOperationHandoffRetryAttemptByOperationId = new Map();
     this.createdOperationHandoffRetryTargetNodeByOperationId = new Map();
+    this.operationDispatchDeferredRetryDeadlineMsByOperationId = new Map();
+    this.operationDispatchDeferredRetrySnapshotByOperationId = new Map();
     this.transitionRetryTimerByOperationId = new Map();
     this.transitionRetryGraceDeadlineByOperationId = new Map();
     this.transitionRetryOperationSnapshotByOperationId = new Map();
@@ -144,6 +146,8 @@ class OperationWorkflowOwnerRetryRegistry {
     this.createdOperationHandoffRetryDeadlineMsByOperationId.clear();
     this.createdOperationHandoffRetryAttemptByOperationId.clear();
     this.createdOperationHandoffRetryTargetNodeByOperationId.clear();
+    this.operationDispatchDeferredRetryDeadlineMsByOperationId.clear();
+    this.operationDispatchDeferredRetrySnapshotByOperationId.clear();
     for (const timerHandle of this.transitionRetryTimerByOperationId.values()) {
       this.clearTimeoutFn(timerHandle);
     }
@@ -396,6 +400,95 @@ class OperationWorkflowOwnerRetryRegistry {
     );
     if (!Number.isFinite(deadlineMs) || deadlineMs <= now) {
       this.clearCreatedOperationHandoffRetry(operationId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * @param {Object} retry
+   * @param {number} now
+   * @return {number}
+   */
+  resolveOperationDispatchDeferredRetryDeadlineMs(retry = {}, now) {
+    const nextAttemptAt = Number(retry?.nextAttemptAt);
+    if (Number.isFinite(nextAttemptAt) && nextAttemptAt > now) {
+      return Math.floor(nextAttemptAt);
+    }
+    const retryAfterMs = Number(retry?.retryAfterMs);
+    return Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+      now + Math.floor(retryAfterMs) :
+      NUM.ZERO;
+  }
+
+  /**
+   * Record a dispatch-service deferred retry so priority recovery can surface
+   * it as a bounded rebalancer handoff wait.
+   * @param {string|null} operationId
+   * @param {Object} [retry={}]
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   */
+  recordOperationDispatchDeferredRetry(
+    operationId,
+    retry = {},
+    now = Date.now(),
+  ) {
+    if (!operationId) {
+      return false;
+    }
+    const deadlineMs =
+      this.resolveOperationDispatchDeferredRetryDeadlineMs(retry, now);
+    if (deadlineMs <= now) {
+      this.clearOperationDispatchDeferredRetry(operationId);
+      return false;
+    }
+    this.operationDispatchDeferredRetryDeadlineMsByOperationId.set(
+      operationId,
+      deadlineMs,
+    );
+    this.operationDispatchDeferredRetrySnapshotByOperationId.set(
+      operationId,
+      Object.freeze({
+        nextAttemptAt: deadlineMs,
+        retryAfterMs: Math.max(NUM.ONE, deadlineMs - now),
+        errorMessage: retry?.errorMessage || null,
+      }),
+    );
+    return true;
+  }
+
+  /**
+   * @param {string|null} operationId
+   */
+  clearOperationDispatchDeferredRetry(operationId) {
+    if (!operationId) {
+      return;
+    }
+    this.operationDispatchDeferredRetryDeadlineMsByOperationId.delete(
+      operationId,
+    );
+    this.operationDispatchDeferredRetrySnapshotByOperationId.delete(
+      operationId,
+    );
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   */
+  hasActiveOperationDispatchDeferredRetry(operationId, now = Date.now()) {
+    if (!operationId) {
+      return false;
+    }
+    const deadlineMs = Number(
+      this.operationDispatchDeferredRetryDeadlineMsByOperationId.get(
+        operationId,
+      ),
+    );
+    if (!Number.isFinite(deadlineMs) || deadlineMs <= now) {
+      this.clearOperationDispatchDeferredRetry(operationId);
       return false;
     }
     return true;

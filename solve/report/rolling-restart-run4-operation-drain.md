@@ -16,21 +16,21 @@
 
 ## Current Blocker
 - Frontier: rolling-restart-run4-operation-drain-main
-- Owner: operation_workflow_owner
-- Boundary: workflow_progress
-- Dominant reason: priority_recovery_workflow_progress_event_driven
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: convergence_timeout
 - Mechanism: transition_gap
-- Movement: same blocker remains: operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven
-- Latest evidence: test-output/reports/stat-gate-20260701T014902Z-run3.report.json
-- Selected theory: theory-20260701-target-progress-handoff-retry-contract (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for rolling-restart-run4-operation-drain-main
-- Oscillation: blocker "operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven" revisited 6x (whack-a-mole; change strategy)
-- No longer current: Do not keep widening target_creation active-handoff-retry normalization from this gate; the remaining measured blockers are source_removal wait_for_operation_progress, dispatch_pending persisted_not_dispatched, and a no-priority-witness replica_operations_in_flight sample.
+- Movement: narrowed: operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven -> convergence_timeout
+- Latest evidence: test-output/reports/stat-gate-20260701T024523Z-run3.report.json
+- Selected theory: theory-20260701-dispatch-pending-dispatch-retry-contract
+- Next move: continue supervised step for rolling-restart-run4-operation-drain-main
+- Oscillation: blocker "convergence_timeout" revisited 2x (whack-a-mole; change strategy)
+- No longer current: operation_workflow_owner / workflow_progress / priority_recovery_workflow_progress_event_driven; Do not keep widening source_removal dispatch retry normalization from this gate; generic historical source_removal snapshots still exist, but the selected live priority frontier is dispatch_pending advance_existing_operation and source_removal was satisfied/non-frontier in the fresh measurement.; Do not commit the earlier partial source_removal-only patch without the dispatch_pending dispatch-service retry contract; the verifier-confirmed patch includes both shapes.
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for rolling-restart-run4-operation-drain-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: allowed
+- Next action: continue supervised step for rolling-restart-run4-operation-drain-main
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 2
@@ -103,6 +103,10 @@
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260701T014902Z-run3.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: priority_recovery_workflow_progress_event_driven. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260701T014902Z-run3.report.json]
 - **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260701T014902Z-run3.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: priority_recovery_workflow_progress_event_driven. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/stat-gate-20260701T014902Z-run3.report.json]
 - **rolling-restart-run4-operation-drain-main**: Fresh post-target-progress-handoff-retry gate stat-gate-20260701T014902Z is safety-clean but not closure: 3/3 runs are TOPOLOGY_BLOCKED with staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, and missingPublishedCount=0 in every run. The exact pre-patch target_creation active-handoff-retry residual did not recur, but the broad operation_workflow_owner/workflow_progress family remains: run1 is sql_transaction_participants-p1 dispatch_pending persisted_not_dispatched with advance_existing_operation and not_executed owner effect; run2 has no priority residual witness and routes to replica_operations_in_flight/publication-convergence support; run3 is control_plane_publications-p1 REPLACE source_removal dispatched_waiting_progress with wait_for_operation_progress, stepAgeMs=416518, pendingWrites=2, and full-log replay outcomeCounts reconcile-committed=76. Therefore the target-progress retry patch is a valid deterministic fix but insufficient for the statistical gate; the next move must split or target source_removal wait-for-progress and dispatch_pending persisted-not-dispatched rather than reworking the active handoff retry normalization. (rules out: Do not keep widening target_creation active-handoff-retry normalization from this gate; the remaining measured blockers are source_removal wait_for_operation_progress, dispatch_pending persisted_not_dispatched, and a no-priority-witness replica_operations_in_flight sample.) [test-output/reports/stat-gate-20260701T014902Z.md; test-output/reports/stat-gate-20260701T014902Z-run1.report.json; test-output/reports/stat-gate-20260701T014902Z-run2.report.json; test-output/reports/stat-gate-20260701T014902Z-run3.report.json; npm run analyze:priority-recovery-residuals per run; npm run analyze:topology-convergence per run; npm run analyze:rolling-restart-liveness per run; node scripts/solve.js probe --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --metric priority]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260701T024523Z-run3.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260701T024523Z-run3.report.json]
+- **rolling-restart-run4-operation-drain-main**: Ingested evidence from stat-gate-20260701T024523Z-run3.report.json. Metric: 1 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: convergence_timeout. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260701T024523Z-run3.report.json]
+- **rolling-restart-run4-operation-drain-main**: Fresh post-source-removal-dispatch-retry gate stat-gate-20260701T024523Z is safety-clean but not closure: runs=3, staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, missing=0, and dominant reasons are convergence_timeout, operation_drain_stalled, and priority_recovery_workflow_progress_event_driven. The selected source_removal dispatch-retry residual is no longer the priority frontier; analyzer run2 now selects operation_workflow_owner/workflow_progress with REPLACE dispatch_pending planned, persisted_not_dispatched, enabled advance_existing_operation, no progress contract; run1 and run3 have priority_recovery_satisfied, with run3 blocked by post-rebalance membership_trim_open/cdc_projection_visible_open/no_over_target_open. Directed red/green tests prove ACTIVE REPLACE source_removal dispatch-service deferred retry is represented as wait_for_rebalancer_handoff_retry without duplicate owner wake, so the patch is a valid partial fix and the next theory should target dispatch_pending advance_existing_operation or the post-rebalance membership trim frontier, not widen source_removal retry normalization. (rules out: Do not keep widening source_removal dispatch retry normalization from this gate; generic historical source_removal snapshots still exist, but the selected live priority frontier is dispatch_pending advance_existing_operation and source_removal was satisfied/non-frontier in the fresh measurement.) [test-output/reports/stat-gate-20260701T024523Z.md; test-output/reports/stat-gate-20260701T024523Z-run1.report.json; test-output/reports/stat-gate-20260701T024523Z-run2.report.json; test-output/reports/stat-gate-20260701T024523Z-run3.report.json; npm run analyze:topology-convergence run1/run2/run3; npm run analyze:priority-recovery-residuals run2; npm run analyze:rolling-restart-liveness run2]
+- **rolling-restart-run4-operation-drain-main**: Subagent verifier approved the source changes after the dispatch-pending retry gap was fixed: operationDispatchDeferredRetry now feeds the owner retry budget, dispatch-pending remote retry detection, and target/source progress retry normalization; tests cover both source_removal and dispatch_pending rebalancer_handoff retry contracts with no duplicate remote wake/timer. (rules out: Do not commit the earlier partial source_removal-only patch without the dispatch_pending dispatch-service retry contract; the verifier-confirmed patch includes both shapes.) [subagent:019f1bb1-ac0b-7dc3-97f0-338791e5813e]
 
 ## Theories
 - **theory-20260630-dispatch-pending-owner-reentry-system** [supported] system, mechanism dispatch_pending_owner_reentry_effect_gap, owner operation_workflow_owner, modelGate npm run model:contracts
@@ -110,9 +114,11 @@
 - **theory-20260630-workflow-progress-multiphase-reentry** [supported] frontier, frontier rolling-restart-run4-operation-drain-main, layer ownership, mechanism operation_workflow_owner_multiphase_reentry_gap, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 - **theory-20260701-open-workflow-witness-preference** [falsified] frontier, frontier rolling-restart-run4-operation-drain-main, layer observation, mechanism priority_recovery_partition_witness_terminal_sibling_selection, owner priority_recovery_observation_owner, boundary partition_witness_selection, modelGate npm run model:contracts
 - **theory-20260701-target-progress-handoff-retry-contract** [falsified] frontier, frontier rolling-restart-run4-operation-drain-main, layer ownership, mechanism target_progress_remote_handoff_retry_contract_gap, owner operation_workflow_owner, boundary rebalancer_handoff, modelGate npm run model:contracts
+- **theory-20260701-source-removal-dispatch-retry-contract** [supported] frontier, frontier rolling-restart-run4-operation-drain-main, layer ownership, mechanism source_removal_dispatch_retry_contract_gap, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
+- **theory-20260701-dispatch-pending-dispatch-retry-contract** [supported] frontier, frontier rolling-restart-run4-operation-drain-main, layer ownership, mechanism dispatch_pending_dispatch_retry_contract_gap, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-run4-operation-drain-main**: theory-20260701-target-progress-handoff-retry-contract
+- **rolling-restart-run4-operation-drain-main**: theory-20260701-dispatch-pending-dispatch-retry-contract
 
 ## Theory Results
 - **theory-20260630-dispatch-pending-owner-reentry-system**: supported (scenario=needs-rerun, theory=supported-deterministic, movement=deterministic-proof-after-fresh-gate) [solve/changes/rolling-restart-run4-operation-drain/dispatch-owner-correlation-rebuild.diff; test-output/reports/stat-gate-20260630T221710Z-run2.report.json; test-output/reports/stat-gate-20260630T221710Z-run3.report.json]
@@ -152,6 +158,10 @@
 - **theory-20260701-open-workflow-witness-preference**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260701T010145Z-run3.report.json]
 - **theory-20260701-target-progress-handoff-retry-contract**: supported (scenario=needs-rerun, theory=supported-deterministic, movement=deterministic-proof-after-fresh-gate) [solve/changes/rolling-restart-run4-operation-drain/target-progress-handoff-retry-contract.diff; test-output/reports/stat-gate-20260701T010145Z-run3.report.json; subagent:019f1b59-4da0-71e0-9842-49f5166aac87]
 - **theory-20260701-target-progress-handoff-retry-contract**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/stat-gate-20260701T014902Z-run3.report.json]
+- **theory-20260701-source-removal-dispatch-retry-contract**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/stat-gate-20260701T024523Z-run3.report.json]
+- **theory-20260701-source-removal-dispatch-retry-contract**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260701T024523Z.md]
+- **theory-20260701-source-removal-dispatch-retry-contract**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/stat-gate-20260701T024523Z.md]
+- **theory-20260701-dispatch-pending-dispatch-retry-contract**: supported (scenario=needs-rerun, theory=supported-deterministic, movement=deterministic-proof-after-fresh-gate) [test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

@@ -215,6 +215,8 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
 
   const deliveries = [];
   const deferredTimers = [];
+  const workflowOwnerDispatchRetries = [];
+  const workflowOwnerClearedDispatchRetries = [];
   const service = createService({
     operationDispatchRetryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
     messageRouter: {
@@ -233,6 +235,15 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
       },
       isOperationLocallyOwned() {
         return false;
+      },
+      workflowOwner: {
+        recordOperationDispatchDeferredRetry(operationId, retry) {
+          workflowOwnerDispatchRetries.push({operationId, retry});
+          return true;
+        },
+        clearOperationDispatchDeferredRetry(operationId) {
+          workflowOwnerClearedDispatchRetries.push(operationId);
+        },
       },
     },
     setTimeoutFn(callback, delayMs) {
@@ -276,6 +287,21 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_AFTER_MS,
       DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER,
     );
+    t.equal(
+      workflowOwnerDispatchRetries.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      'acknowledged remote wake-up should publish the dispatch retry slot to the workflow owner',
+    );
+    t.equal(
+      workflowOwnerDispatchRetries[NUM.ZERO]?.operationId,
+      DIRECT_WAKEUP_VERIFICATION_OPERATION_ID,
+      'workflow-owner dispatch retry bridge should retain operation identity',
+    );
+    t.equal(
+      workflowOwnerDispatchRetries[NUM.ZERO]?.retry?.retryAfterMs,
+      DIRECT_WAKEUP_RETRY_AFTER_MS,
+      'workflow-owner dispatch retry bridge should retain retry delay',
+    );
 
     const retryEnqueues = [];
     const originalQueue = service.operationDispatchQueue;
@@ -287,6 +313,12 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
     };
 
     deferredTimers[NUM.ZERO].callback();
+
+    t.same(
+      workflowOwnerClearedDispatchRetries,
+      [DIRECT_WAKEUP_VERIFICATION_OPERATION_ID],
+      'verification retry re-entry should clear the workflow-owner dispatch retry slot',
+    );
 
     t.same(
       retryEnqueues,

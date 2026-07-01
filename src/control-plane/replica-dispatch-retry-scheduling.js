@@ -115,6 +115,61 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     return Math.max(NUM.ONE, Math.floor(numeric));
   }
 
+  /**
+   * Publish dispatch-service retry slots to the workflow owner so priority
+   * recovery can report them as bounded rebalancer handoff progress.
+   * @param {string} operationId
+   * @param {Object|null} deferredRetry
+   * @param {number|null} [retryAfterMs=null]
+   * @return {boolean}
+   * @private
+   */
+  recordWorkflowOwnerOperationDispatchDeferredRetry(
+    operationId,
+    deferredRetry,
+    retryAfterMs = null,
+  ) {
+    const workflowOwner = this.rebalanceCoordinator?.workflowOwner;
+    if (
+      !workflowOwner ||
+      typeof workflowOwner.recordOperationDispatchDeferredRetry !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const now = Date.now();
+    const nextAttemptAt = Number(deferredRetry?.nextAttemptAt);
+    const resolvedRetryAfterMs =
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        Math.floor(retryAfterMs) :
+        (Number.isFinite(nextAttemptAt) && nextAttemptAt > now ?
+          Math.max(NUM.ONE, Math.floor(nextAttemptAt - now)) :
+          NUM.ZERO);
+    return workflowOwner.recordOperationDispatchDeferredRetry(
+      operationId,
+      Object.freeze({
+        nextAttemptAt,
+        retryAfterMs: resolvedRetryAfterMs,
+        errorMessage: deferredRetry?.errorMessage || null,
+      }),
+      now,
+    );
+  }
+
+  /**
+   * @param {string} operationId
+   * @private
+   */
+  clearWorkflowOwnerOperationDispatchDeferredRetry(operationId) {
+    const workflowOwner = this.rebalanceCoordinator?.workflowOwner;
+    if (
+      workflowOwner &&
+      typeof workflowOwner.clearOperationDispatchDeferredRetry ===
+        TYPEOF.FUNCTION
+    ) {
+      workflowOwner.clearOperationDispatchDeferredRetry(operationId);
+    }
+  }
 
   /**
    * @param {*} errorLike
@@ -128,6 +183,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     }
     return applyBoundedJitter(this.operationDispatchRetryAfterMs);
   }
+
   /**
    * Defer one retryable operation-dispatch failure onto the existing owner queue.
    * @param {string} operationId
@@ -174,6 +230,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
           retryAfterMs,
         );
       }
+      this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+        operationId,
+        existing,
+      );
       return true;
     }
 
@@ -195,6 +255,11 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       retryAfterMs,
       error: errorMessage,
     });
+    this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+      operationId,
+      deferredRetry,
+      retryAfterMs,
+    );
     return true;
   }
 
@@ -230,6 +295,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         return;
       }
       this.operationDispatchDeferredRetries.delete(operationId);
+      this.clearWorkflowOwnerOperationDispatchDeferredRetry(operationId);
       const row = deferredRetry?.row ?
         this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
         null;
@@ -292,6 +358,11 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       ),
     };
     this.operationDispatchDeferredRetries.set(operationId, deferredRetry);
+    this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+      operationId,
+      deferredRetry,
+      retryAfterMs,
+    );
     return true;
   }
 
@@ -341,6 +412,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
       ] = true;
     }
+    this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+      operationId,
+      deferredRetry,
+    );
     return true;
   }
 
@@ -425,6 +500,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       this.clearTimeoutFn(deferredRetry.timeoutHandle);
     }
     this.operationDispatchDeferredRetries.delete(operationId);
+    this.clearWorkflowOwnerOperationDispatchDeferredRetry(operationId);
   }
 
   /**

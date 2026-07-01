@@ -379,6 +379,13 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
       operation,
       snapshot,
     );
+  const remoteRetryActive =
+    isPriorityRecoveryDispatchPendingRemoteRetryActive(
+      owner,
+      operation,
+      operationId,
+      remoteRetryRefreshDue,
+    );
   return Object.freeze({
     operationAvailable:
       operation &&
@@ -409,10 +416,7 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
     dispatchRetryable: owner.isDispatchRetryableWorkflowStep(operation),
     ownerLaneHeld: owner.isOperationOwnerLaneHeld(operationId),
     ownerLaneRetryAllowed: options.allowOwnerLaneRetry === true,
-    remoteRetryActive:
-      remoteRetryRefreshDue !== true &&
-      !owner.repository.isOperationLocallyOwned(operation) &&
-      owner.hasActiveCreatedOperationHandoffRetry(operationId),
+    remoteRetryActive,
     remoteRetryRefreshDue,
   });
 }
@@ -530,7 +534,38 @@ function hasPriorityRecoveryDispatchPendingRemoteRetryProgress(
   return (
     progress?.state === OPERATION_LIFECYCLE_STATE.RETRY_PENDING &&
     progress?.retryState === OPERATION_PROGRESS_RETRY_STATE.RETRY_REQUESTED &&
-    owner.hasActiveCreatedOperationHandoffRetry(operationId) === true
+    hasActivePriorityRecoveryDispatchPendingRemoteRetry(owner, operationId) ===
+      true
+  );
+}
+
+function hasActivePriorityRecoveryDispatchPendingRemoteRetry(
+  owner,
+  operationId,
+) {
+  return owner.hasActiveCreatedOperationHandoffRetry(operationId) === true ||
+    (
+      typeof owner.hasActiveOperationDispatchDeferredRetry ===
+        'function' &&
+      owner.hasActiveOperationDispatchDeferredRetry(operationId) === true
+    );
+}
+
+function isPriorityRecoveryDispatchPendingRemoteRetryActive(
+  owner,
+  operation,
+  operationId,
+  remoteRetryRefreshDue,
+) {
+  if (remoteRetryRefreshDue === true) {
+    return false;
+  }
+  if (owner.repository.isOperationLocallyOwned(operation)) {
+    return false;
+  }
+  return hasActivePriorityRecoveryDispatchPendingRemoteRetry(
+    owner,
+    operationId,
   );
 }
 

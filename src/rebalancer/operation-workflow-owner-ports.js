@@ -6,7 +6,6 @@ import {
   REPLICA_OPERATION_SEMANTIC_PHASE,
 } from './replica-status.js';
 import {
-  NUM,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
@@ -411,15 +410,27 @@ function buildOperationWorkflowOwnerPortTimeoutBudget(context) {
   });
 }
 
+function hasActiveOperationWorkflowOwnerPortRetry(owner, operationId, nowMs) {
+  return (
+    typeof owner.hasActiveCreatedOperationHandoffRetry ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId, nowMs)
+  ) || (
+    typeof owner.hasActiveOperationDispatchDeferredRetry ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+    owner.hasActiveOperationDispatchDeferredRetry(operationId, nowMs)
+  );
+}
+
 function buildOperationWorkflowOwnerPortRetryBudget(owner, operation) {
   const operationId = getOperationWorkflowOwnerPortOperationId(
     owner,
     operation,
   );
-  const retryScheduled =
-    typeof owner.hasActiveCreatedOperationHandoffRetry ===
-      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
-    owner.hasActiveCreatedOperationHandoffRetry(operationId);
+  const retryScheduled = hasActiveOperationWorkflowOwnerPortRetry(
+    owner,
+    operationId,
+  );
   return Object.freeze({
     budgetState: retryScheduled === true ?
       OPERATION_WORKFLOW_RETRY_BUDGET_STATE.AVAILABLE :
@@ -669,10 +680,11 @@ async function wakeOperationWorkflowRemoteOwner(
     owner,
     operation,
   );
-  const hasActiveHandoffRetry =
-    typeof owner.hasActiveCreatedOperationHandoffRetry ===
-      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
-    owner.hasActiveCreatedOperationHandoffRetry(operationId, nowMs);
+  const hasActiveHandoffRetry = hasActiveOperationWorkflowOwnerPortRetry(
+    owner,
+    operationId,
+    nowMs,
+  );
   if (hasActiveHandoffRetry) {
     return true;
   }
@@ -709,7 +721,10 @@ function createOperationWorkflowOwnerPorts(owner) {
     typeof originalNormalize ===
       OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE
   ) {
-    owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot = function (snapshot, operation) {
+    owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot = function(
+      snapshot,
+      operation,
+    ) {
       const result = originalNormalize.call(this, snapshot, operation);
       return attachPriorityRecoveryOperationOwnerProgressContract(result);
     };
