@@ -38,6 +38,7 @@ import {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
+  shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry,
 } from './operation-workflow-owner-priority-recovery-reentry.js';
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
@@ -417,6 +418,31 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   return normalizedSnapshot;
 }
 
+function normalizePriorityRecoveryTargetProgressOwnerSnapshot(
+  owner,
+  snapshot,
+  operation,
+) {
+  if (
+    !shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
+      owner,
+      snapshot,
+      operation,
+    )
+  ) {
+    return snapshot;
+  }
+  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+    snapshot,
+    owner.operationWorkflowOwnerAdapter.decide(
+      operation,
+      Object.freeze({
+        mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
+      }),
+    ),
+  );
+}
+
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
     super(options);
@@ -706,11 +732,17 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
         snapshot,
         operation,
       );
+    const targetProgressNormalizedSnapshot =
+      normalizePriorityRecoveryTargetProgressOwnerSnapshot(
+        this,
+        normalizedSnapshot,
+        operation,
+      );
     this.schedulePriorityRecoveryTargetProgressReentry(
-      normalizedSnapshot,
+      targetProgressNormalizedSnapshot,
       operations,
     );
-    return normalizedSnapshot;
+    return targetProgressNormalizedSnapshot;
   }
 
   normalizePriorityRecoveryDispatchPendingOwnerSnapshot(snapshot, operation) {

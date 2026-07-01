@@ -33,6 +33,7 @@ const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE = Object.freeze({
   NOT_TARGET_PROGRESS: 'not_target_progress',
   TARGET_NOT_TERMINAL: 'target_not_terminal',
   OWNER_UNAVAILABLE: 'owner_unavailable',
+  REBALANCER_HANDOFF_RETRY_ACTIVE: 'rebalancer_handoff_retry_active',
   REMOTE_OWNER: 'remote_owner',
   OWNER_LANE_HELD: 'owner_lane_held',
   REENTER: 'reenter',
@@ -120,6 +121,12 @@ const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.locallyOwned !== true &&
       evidence.remoteOwnerAvailable !== true,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+        .REBALANCER_HANDOFF_RETRY_ACTIVE,
+    matches: (evidence) => evidence.rebalancerHandoffRetryActive === true,
   }),
   Object.freeze({
     state: OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.REMOTE_OWNER,
@@ -273,6 +280,16 @@ function isOperationWorkflowOwnerRemoteOwnerAvailable(
   return ownerNodeKnown === true && ownerUnavailable !== true;
 }
 
+function hasActiveOperationWorkflowOwnerTargetProgressHandoffRetry(
+  owner,
+  operation,
+) {
+  const operationId =
+    normalizeOperationWorkflowOwnerTargetProgressOperationId(operation);
+  return Boolean(operationId) &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId);
+}
+
 function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
   owner,
   snapshot,
@@ -324,6 +341,11 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       operation,
       ownerNodeId,
     ),
+    rebalancerHandoffRetryActive:
+      hasActiveOperationWorkflowOwnerTargetProgressHandoffRetry(
+        owner,
+        operation,
+      ),
     ownerLaneHeld:
       Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
   });
@@ -338,6 +360,21 @@ function resolveOperationWorkflowOwnerTargetProgressReentryState(evidence) {
     OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
       .OPERATION_UNAVAILABLE
   );
+}
+
+function shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
+  owner,
+  snapshot,
+  operation,
+) {
+  const evidence = buildOperationWorkflowOwnerTargetProgressReentryEvidence(
+    owner,
+    snapshot,
+    operation,
+  );
+  return resolveOperationWorkflowOwnerTargetProgressReentryState(evidence) ===
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+      .REBALANCER_HANDOFF_RETRY_ACTIVE;
 }
 
 function resolveOperationWorkflowOwnerTargetProgressReentryAction(
@@ -418,4 +455,5 @@ export {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
+  shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry,
 };

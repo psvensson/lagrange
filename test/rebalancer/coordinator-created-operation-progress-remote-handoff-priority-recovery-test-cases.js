@@ -3,8 +3,22 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+} from '../../src/rebalancer/operation-workflow-owner-constants.js';
 import {PRIORITY_RECOVERY_COMPLETION_STATE} from
   '../../src/control-plane/priority-recovery-completion.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
+} from '../../src/control-plane/priority-recovery-snapshot-contract.js';
 import {
   buildRemotePriorityDispatchPendingOperation,
   buildRemotePriorityDispatchPendingPlanningSnapshot,
@@ -34,6 +48,7 @@ import {
   REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REPLICA_ID,
   REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID,
   REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS,
+  REMOTE_PRIORITY_TIMEOUT_OPERATION_ID,
   REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
   REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS,
   REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE,
@@ -364,6 +379,128 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
         snapshot?.operationOwnerObservation?.outcome,
         'wait_for_rebalancer_handoff_retry',
         'snapshot carries the canonical operation-owner handoff outcome',
+      );
+    } finally {
+      Date.now = originalDateNow;
+      await coordinator.shutdown();
+    }
+  });
+
+  test('workflowOwner priority recovery target-progress handoff retries use ' +
+    'the operation owner rebalancer-handoff outcome',
+  async (t) => {
+    const coordinator = createRemotePriorityVisibilityCoordinator();
+    const originalDateNow = Date.now;
+    const deliveries = [];
+    const targetProgressOperation = Object.freeze({
+      ...buildRemotePriorityTimeoutOperation(
+        REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS,
+      ),
+      status: ReplicaStatus.CREATING,
+      targetServiceTerminalState:
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
+    });
+    Date.now = () => REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS;
+    coordinator.initialize();
+    coordinator.messageRouter.deliver = async (target, payload, options) => {
+      deliveries.push({target, payload, options});
+      return {acknowledged: true};
+    };
+
+    coordinator.controlPlaneReadinessService
+      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+        const planning = buildRemotePriorityTimeoutPlanningSnapshot();
+        const snapshot =
+          planning.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+        return Object.freeze({
+          ...planning,
+          priorityRecoveryDecisionSnapshots: Object.freeze({
+            ...planning.priorityRecoveryDecisionSnapshots,
+            snapshots: [
+              Object.freeze({
+                ...snapshot,
+                blockerReasons: [],
+                semanticState:
+                  PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+                actuation: Object.freeze({
+                  ...snapshot.actuation,
+                  state:
+                    PRIORITY_RECOVERY_ACTUATION_STATE
+                      .DISPATCHED_WAITING_PROGRESS,
+                  workflowProgressPhaseId:
+                    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+                }),
+                progress: Object.freeze({
+                  ...snapshot.progress,
+                  contractState: 'pending',
+                  nextAction: 'wait',
+                  nextRequiredAction:
+                    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                      .ADVANCE_EXISTING_OPERATION,
+                  blockingBoundary:
+                    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+                  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+                  workflowProgressPhaseId:
+                    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+                }),
+              }),
+            ],
+          }),
+        });
+      };
+    coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+      async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: [targetProgressOperation],
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+    coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId.set(
+      REMOTE_PRIORITY_TIMEOUT_OPERATION_ID,
+      Object.freeze({}),
+    );
+    coordinator.workflowOwner.createdOperationHandoffRetryDeadlineMsByOperationId
+      .set(
+        REMOTE_PRIORITY_TIMEOUT_OPERATION_ID,
+        REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS +
+          REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
+      );
+
+    try {
+      const snapshot =
+        await coordinator.workflowOwner
+          .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+            REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+            [targetProgressOperation],
+          );
+
+      t.equal(
+        snapshot?.progress?.blockingBoundary,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+        'active target-progress handoff retries should use the rebalancer-handoff boundary',
+      );
+      t.equal(
+        snapshot?.progress?.waitMode,
+        PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+        'active target-progress handoff retries should expose retry-scheduled wait mode',
+      );
+      t.equal(
+        snapshot?.operationOwnerObservation?.outcome,
+        OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
+        'target-progress snapshots should carry the canonical operation-owner handoff outcome',
+      );
+      t.equal(
+        snapshot?.progress?.progressContract?.representativeRerunRoute,
+        'blocked_model_route',
+        'target-progress handoff retries should block representative rerun',
+      );
+      t.same(
+        deliveries,
+        [],
+        'active target-progress handoff retries should not duplicate remote owner wakes',
       );
     } finally {
       Date.now = originalDateNow;
