@@ -45,6 +45,18 @@ import {
 // overshoot). WITHOUT the guard that replica is invisible → an ADD is re-minted →
 // overCount > 0 (the over-replication limit cycle). So eventual stabilization of
 // THIS head holds BECAUSE the guard makes Φ monotone.
+//
+// SCOPE (honest boundary — do not over-read "self-stabilization proven"): the Φ
+// monotonicity is proven for a MONOTONE environment — the rejoiner goes serve-ready
+// once and stays, processAlive is constant true, learners only promote. The sweep
+// varies catch-up TIMING (rReadyAtTick × opCountdown), NOT ENV FLAP. An adversarial
+// process-alive flap (true→false→true) DOES mint one redundant ADD during the
+// believed-death window, but that ADD is correct-by-construction (a genuinely-down
+// node is re-placed), and the resulting bounded +1 surplus is reconciled by the
+// SEPARATE over-target surplus-drain path (move-planner-move-calculation-methods.js),
+// not by this ADD-only follow-up loop — so it is a bounded transient, not a sustained
+// cycle (a sustained cycle would require sub-op-latency FD flapping = a failure-
+// detector pathology, out of scope for this kernel). Verified 2026-07-01.
 // ---------------------------------------------------------------------------
 
 const {RAFT_ROLE, ReplicaStatus, NodeStatus, EntityType} =
