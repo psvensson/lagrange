@@ -5,6 +5,26 @@ status: active
 graduatesTo: null
 ---
 
+> # 🚦 UPDATE 2026-07-01 — NO ESTABLISHMENT-WRITE LEVER SURVIVES (Head-B EXHAUSTED). Frontier = validate the Head-A fix, NOT a write lever.
+>
+> Quest `rolling-restart-w1-priority-establishment-write-unwedge` step-1 (identify-first; subagent `aa7b8a6c`
+> + own verification) proved every recent rolling-restart FAIL has `publicationStatus=PUBLISHED`,
+> `missingPublishedCount=0`, `retryableDrainFailureCount=0`, and owner streams `committed==observed==desired`
+> (e.g. `032547Z-run3` =20). **The control-plane establishment writes durably LAND and are observed under
+> formation load.** The binding blocker is `prioritySpreadPending` / `priority_partitions_not_spread` /
+> `in_flight_replica_operations` / `operation_drain` — a DRAIN/spread/readiness LATENCY TAIL, NOT a write
+> wedge. This CONFIRMS the RE-GROUNDED banner below (lever-(a) refuted, query-engine fixed) and closes the
+> loop: there is no residual establishment-write wedge. **Do NOT scope a write-substrate lever.** The
+> residual highest-payoff head is the over-replication / surplus-drain family (Head A of
+> [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md)), now fixed by
+> commit `4700a47b` (process-alive occupied guard) — BUT all gate evidence PREDATES that fix (`4700a47b`
+> 12:23 local vs newest report 07:28). **The genuine next move is a post-`4700a47b` N≥15 VALIDATION GATE**
+> to measure whether the Head-A fix lifts the current-code Wilson-95 LB to/above the sealed `T(5)=0.357`
+> (a sanctioned statistical promotion verdict), NOT a new lever. Verdict:
+> `solve/oracle/rolling-restart-w1-priority-establishment-write-unwedge.json`.
+>
+> ---
+
 > # 🚦 START HERE — RE-GROUNDED 2026-06-24 (supersedes the "extend lever (a)" aim below)
 >
 > The reactivation banner below aimed the lever at "extend the owner-local-seed primitive
