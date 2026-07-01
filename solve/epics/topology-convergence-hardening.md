@@ -20,12 +20,24 @@ convergence Quests to the active closure-ledger records they must close, so
 
 ## Active work (the live frontier)
 
-> **CURRENT live sub-frontier (2026-06-23):**
+> **UPDATE 2026-07-01 (supersedes the 2026-06-23 sub-frontier below):** both coupled heads were worked
+> to terminal. Head A (`leadership_unstable` / over-replication) is root-fixed by the PROCESS_ALIVE
+> occupancy guard (`4700a47b`) and PROVEN convergent (self-stabilization Φ-proof `37175d73`). Head B
+> (`convergence_timeout` / establishment-write wedge) is EXHAUSTED — no write lever survives
+> ([`control-plane-write-wedge-leader-local-establishment.md`](control-plane-write-wedge-leader-local-establishment.md),
+> now `resolved`); the run3-class stale-IP stall closed with the transport fixes. So
+> [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) is `resolved`,
+> and the residual gate `TOPOLOGY_BLOCKED` is the bounded async LATENCY of a proven-convergent loop vs
+> the fixed window — **NOT a source bug; do not chase it as one on current HEAD.** The binding goal
+> `rolling-restart-core-stability` stays open only on the statistical Wilson-bar (an accept-or-invest
+> scenario decision), not on any remaining mechanism.
+
+> **(historical 2026-06-23 sub-frontier — SUPERSEDED by the update above):**
 > [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) — after the
 > slow-rejoiner remove-safety wedge was resolved (R1+R3 promoted default-ON, gate
 > `stat-gate-20260623T164130Z` SAFE 3/3), rolling-restart scenario-PASS peeled to two coupled heads:
 > `leadership_unstable` (rebalancer-leadership lockstep flap) + `convergence_timeout` (control-plane
-> write/establishment readiness-budget burn). START THERE for the next push.
+> write/establishment readiness-budget burn).
 
 Quests (see `npm run overview` / `solve trace`):
 

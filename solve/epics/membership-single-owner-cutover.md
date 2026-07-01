@@ -1,11 +1,32 @@
 ---
 id: membership-single-owner-cutover
 roadmapRow: null
-status: discussing
+status: resolved
 graduatesTo: membership-lifecycle-placement-hard-cutover
 ---
 
 # Membership single-owner cutover (altitude insight)
+
+> # 🚦 OUTCOME 2026-07-01 — THESIS REFUTED AS A LEVER (status: resolved). READ FIRST.
+>
+> The "active-membership truth has no owner / collapse the 7-source projection" thesis below was
+> **falsified by deterministic implementation**: the projection's ~7 input sources are ESSENTIAL
+> evidence integration (presence→trim, recovery cohort, ACK orchestration, epoch monotonicity, freeze
+> safety), NOT accidental race-papering. "Delete the projection" is a proven dead end — an owner-rule
+> equivalence test + an N=8 convergence gate PASSED, but making the minimal rule default-on broke ~45
+> coordinator tests of intended transient orchestration; the minimal rule structurally lacks the
+> presence evidence the projection integrates. Levers #2 (delete readiness guards) and #3 (rebalancer
+> triad consolidation) were likewise refuted on contact.
+>
+> The REAL win that came out of this line: the FD-protocol upgrade — a named **SWIM+Lifeguard failure
+> detector**, SHIPPED default-on (opt-out) commit `b1434fe0` after an N=8 gate (~5x pass rate,
+> node-exits eliminated), graduated into the `membership-lifecycle-placement-hard-cutover` spec (§5
+> step 3). Step 1 (always-on liveness phase) evolved into the PROCESS_ALIVE occupancy guard (`4700a47b`).
+>
+> **Do NOT re-open "single-owner cutover / delete the projection" as fresh work.** The Options and
+> Decision log below are retained as the historical altitude insight that (usefully) motivated the FD
+> upgrade — they are NOT a live plan. External-memory refutation trail:
+> `membership-single-owner-cutover-plan` (~/.claude memory).
 
 ## Intent (why now)
 
