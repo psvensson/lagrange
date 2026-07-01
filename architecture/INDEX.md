@@ -18,6 +18,7 @@ Use this index to choose the narrowest architecture domain file before reading i
 
 ## Supporting Documents
 
+- [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) - Logical-nodeId-vs-location identity, address resolution order, the three restart-with-new-IP recovery mechanisms, and name-first (hostname) addressing config.
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
 - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
 - [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence, default-off)** verifies an entry's optional `liveEvidence` predicate against the running system / a deterministic repro and derives HELD/BREACHED as a fold over the Solver event log — run `LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants --evaluate`; a BREACH means the doc no longer reflects the system (spec: [`solve/specs/standing-invariant-closure/`](../solve/specs/standing-invariant-closure/)).
