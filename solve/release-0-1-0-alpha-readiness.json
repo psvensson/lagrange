@@ -1,0 +1,13 @@
+{
+  "metric": 2,
+  "target": 0,
+  "note": "metric = count of outstanding 0.1.0-alpha release items; done when 0. Update as each lands. Platform: Forgejo Actions (Codeberg), workflows in .forgejo/workflows/.",
+  "items": {
+    "version-bump-0.1.0-experimental": true,
+    "changelog-and-release-doc-with-convergence-known-limitations": true,
+    "ci-workflow-test-gate-on-pr": true,
+    "release-workflow-on-tag-build-publish-docker-helm-sea": true,
+    "lagrange-node-helm-chart-renders": false,
+    "e2e-verify-clean-checkout-test-ci-docker-boot-sea-helm": false
+  }
+}

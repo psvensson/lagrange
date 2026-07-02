@@ -1,4 +1,8 @@
-const ENTRYPOINT_VERSION = '1.0.0';
+// Keep in lockstep with package.json "version"; the drift-guard in
+// test/release/version-single-source.test.js fails if they diverge. Held as a
+// literal (not a package.json read) so the SEA single-executable build, which
+// has no package.json on disk, still reports the right version.
+const ENTRYPOINT_VERSION = '0.1.0';
 
 const ENTRYPOINT_APP = Object.freeze({
   NAME: 'Distributed Database System',

@@ -1,0 +1,32 @@
+# Forgejo Actions CI — runs on Codeberg.
+# Syntax is GitHub-Actions-compatible. `runs-on: docker` targets Codeberg's
+# hosted runner label; adjust to match your registered runner if different.
+# Requires Codeberg Actions to be enabled for the repository.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      # test:gate = test:fast + test:static + model:contracts.
+      # The statistical rolling-restart convergence gate is deliberately NOT
+      # run here: its pass rate is variance-bounded (~25-33% per run) and a
+      # per-push pass/fail would be satisfiable or violable by chance alone.
+      # It is promoted only on a sealed Wilson-95 bar over N>=20 runs
+      # (see docs/convergence-donewhen-metric.md) and tracked as a trend.
+      - name: Gate (fast tests + static analysis + model contracts)
+        run: npm run test:gate

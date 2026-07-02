@@ -1,0 +1,39 @@
+{
+  "id": "release-0-1-0-alpha",
+  "statement": "Lagrange 0.1.0-alpha is releasable: version set to 0.1.0 and marked experimental; CHANGELOG.md + RELEASE.md exist with an honest convergence Known-Limitations section (eventual-stabilization proven, bounded-time rolling-restart convergence a documented latency tail near its statistical floor); CI wired (.github/workflows/ci.yml runs test:gate on PR/push; release.yml on v* tag runs test:ci then build:all, publishes the distroless Docker image, packages the lagrange-node Helm chart, and attaches SEA binaries + SHA256SUMS to the GitHub Release); a charts/lagrange-node Helm chart (StatefulSet + headless service, ports 8080/8081/9080) renders via helm template; and end-to-end verification on a clean checkout passes: test:ci green, Docker image boots opening 8080/8081/8082, SEA binary runs, helm template renders. Terminal evidence recorded, then annotated tag v0.1.0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/release-0-1-0-alpha-readiness.json",
+      "target": 0
+    }
+  },
+  "frontiers": [
+    {
+      "id": "release-0-1-0-alpha-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/release-0-1-0-alpha-readiness.json",
+          "target": 0
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
