@@ -30,7 +30,7 @@ Client SQL Query
                                                                          │
        ▼                                                                 │
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ SystemTableCache (src/system-cache/system-table-cache.js)               │
+│ SystemTableCache (src/cache/system-table-cache.js)                      │
 │ - Looks up table metadata                                                │
 │ - Finds partition IDs for the table                                      │
 │ - Logs: "Resolved partitions for SELECT/INSERT/UPDATE/DELETE"            │

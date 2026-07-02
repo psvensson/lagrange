@@ -20,7 +20,7 @@ Do not use this file for:
 
 For implementation work, use [`docs/steering/doctrine.md`](docs/steering/doctrine.md)
 as the canonical doctrine, then follow
-[`docs/steering/system guidelines.md`](docs/steering/system%20guidelines.md),
+[`docs/steering/system-guidelines.md`](docs/steering/system-guidelines.md),
 [`docs/steering/testing-guidelines.md`](docs/steering/testing-guidelines.md),
 and [`roadmap.md`](roadmap.md).
 

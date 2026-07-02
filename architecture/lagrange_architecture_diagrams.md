@@ -6,6 +6,9 @@ Lagrange distributed database and execution platform.
 GitHub supports **Mermaid diagrams**, so these will render automatically
 when viewed in the repository.
 
+Naming note: `SqlCore` in these diagrams is shorthand for the single SQL
+engine class `SQLQueryEngine` (`src/query/sql-query-engine.js`).
+
 ------------------------------------------------------------------------
 
 # 1. High Level Architecture

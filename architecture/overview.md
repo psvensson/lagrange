@@ -22,20 +22,21 @@ Do not use this file for:
 
 For those concerns, use:
 
-- [`docs/steering/doctrine.md`](docs/steering/doctrine.md)
-- [`docs/steering/system guidelines.md`](docs/steering/system%20guidelines.md)
-- [`docs/steering/testing-guidelines.md`](docs/steering/testing-guidelines.md)
-- [`docs/steering/roadmap.md`](docs/steering/roadmap.md)
-- [`roadmap.md`](roadmap.md)
+- [`docs/steering/doctrine.md`](../docs/steering/doctrine.md)
+- [`docs/steering/system-guidelines.md`](../docs/steering/system-guidelines.md)
+- [`docs/steering/testing-guidelines.md`](../docs/steering/testing-guidelines.md)
+- [`docs/steering/roadmap.md`](../docs/steering/roadmap.md)
+- [`roadmap.md`](../roadmap.md)
 
 This document describes the architecture of the distributed database system.
-It is the canonical root entrypoint for system description and should be
-updated as features are added or changed. Supporting architecture documents may
-live under `architecture/` and should be linked from here when needed.
+It is the first domain file of the architecture tree — [`INDEX.md`](INDEX.md)
+is the canonical entrypoint — and should be updated as features are added or
+changed. Supporting architecture documents live under `architecture/` and are
+linked from the index.
 
 Current owner-map supplement:
 
-- [`architecture/current-owner-maps.md`](architecture/current-owner-maps.md)
+- [`architecture/current-owner-maps.md`](current-owner-maps.md)
 
 ## Overview
 
