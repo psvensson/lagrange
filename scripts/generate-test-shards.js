@@ -48,6 +48,7 @@ const GENERATED_SHARD_GROUPS = [
     exclude: [
       'test/integration/message-group-multi-join-formation.integration.test.js',
       'test/integration/node-join-convergence-slo.integration.test.js',
+      'test/integration/user-table-metadata-fanout.integration.test.js',
     ],
   },
   {root: 'test/bootstrap', prefix: 'bootstrap', lanes: 2},

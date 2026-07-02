@@ -14,4 +14,4 @@ test/integration/replica-operations-owner-read-transport-readiness.integration.t
 test/integration/services-p1-self-referential-write.integration.test.js
 test/integration/strict-load-lane-table-probe.integration.test.js
 test/integration/three-node-seed-rebalance.integration.test.js
-test/integration/versioned-cdc-readiness-convergence.integration.test.js
+test/integration/websocket-create-replica-ack.integration.test.js

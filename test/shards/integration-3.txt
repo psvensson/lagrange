@@ -14,4 +14,3 @@ test/integration/seed-node-bootstrap.integration.test.js
 test/integration/sql-workflow.integration.test.js
 test/integration/strict-preload-pressure-reproducer.integration.test.js
 test/integration/user-table-local-cdc-readiness.integration.test.js
-test/integration/websocket-create-replica-ack.integration.test.js

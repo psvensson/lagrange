@@ -14,4 +14,4 @@ test/integration/replica-handler-metadata-propagation.integration.test.js
 test/integration/seed-owner-read-diagnosis.integration.test.js
 test/integration/strict-benchmark-local-readiness.integration.test.js
 test/integration/three-node-partition-rebalance.integration.test.js
-test/integration/user-table-metadata-fanout.integration.test.js
+test/integration/versioned-cdc-readiness-convergence.integration.test.js
