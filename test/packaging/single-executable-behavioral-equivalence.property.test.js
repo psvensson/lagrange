@@ -28,7 +28,7 @@ const pkgName = JSON.parse(
   readFileSync(join(projectRoot, 'package.json'), 'utf8'),
 ).name;
 
-const cliEntry = join(projectRoot, 'src/cli/bin/ddb-admin.js');
+const cliEntry = join(projectRoot, 'src/cli/bin/lagrange-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
 const adminCliDirectWorker = join(
   projectRoot,
@@ -154,7 +154,7 @@ test('Single Executable Behavioral Equivalence - Property Test', async (t) => {
       t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
     } else {
       t.ok(
-        out.includes('Usage: distributed-db'),
+        out.includes('Usage: lagrange'),
         `main help output includes Usage for ${flag}`,
       );
       t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);

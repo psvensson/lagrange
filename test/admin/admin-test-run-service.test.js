@@ -11,7 +11,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminTestRunService} from '../../src/admin/admin-test-run-service.js';
 
 const FILE_ENCODING = 'utf8';
-const TMP_PREFIX = 'ddb-admin-test-run-';
+const TMP_PREFIX = 'lagrange-admin-test-run-';
 const WAIT_INTERVAL_MS = 10;
 const WAIT_TIMEOUT_MS = 500;
 const REPORT_TIMESTAMP = '2026-02-14T12:34:56.000Z';

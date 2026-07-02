@@ -289,7 +289,7 @@ constraints rather than fake knobs.
   meta-command-handlers.js:197-201).
 - **The admin WS is unauthenticated.** `admin-auth-middleware.js` exists (`validateSecurityContext`,
   `authorizeAction`) but is wired only into debug-runtime + pgwire, **not** the admin-WS path.
-- The existing CLI (`src/cli/bin/ddb-admin.js`) is a **curses TUI**, not a subcommand CLI; it takes
+- The existing CLI (`src/cli/bin/lagrange-admin.js`) is a **curses TUI**, not a subcommand CLI; it takes
   only `[node-address]` + `--read-only/--help/--version`. Mutations follow
   `executeNodeManagementQuery` (`src/cli/admin-cli-action-methods.js:400-465`): build queryId →
   `connectionManager.sendQuery(queryId, sql, params)` → await `query:result` → check `affectedRows`

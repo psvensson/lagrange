@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * DDB Admin CLI - Terminal-based administration tool for the distributed database
+ * Lagrange Admin CLI - Terminal-based administration tool for the distributed database
  * Entry point for the CLI application
  */
 

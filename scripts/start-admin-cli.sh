@@ -24,4 +24,4 @@ echo "  Connecting to: $NODE_ADDRESS"
 echo ""
 
 # Run the admin CLI tool
-node "$PROJECT_ROOT/src/cli/bin/ddb-admin.js" "$NODE_ADDRESS"
+node "$PROJECT_ROOT/src/cli/bin/lagrange-admin.js" "$NODE_ADDRESS"

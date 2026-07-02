@@ -4,8 +4,8 @@ A terminal-based administration tool for Lagrange, inspired by K9s for
 Kubernetes. It provides real-time visibility into cluster state through the
 CDC-synchronized local cache.
 
-The canonical command is `lagrange-admin`. The legacy `ddb-admin` command is
-kept as a compatibility alias.
+The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was removed
+before the first release).
 
 ## System Requirements
 
@@ -82,7 +82,7 @@ Once connected, use these keys to navigate:
 
 ## Configuration
 
-Configuration is loaded from `~/.ddb-admin/config.json`:
+Configuration is loaded from `~/.lagrange-admin/config.json`:
 
 ```json
 {
@@ -97,8 +97,8 @@ Configuration is loaded from `~/.ddb-admin/config.json`:
 
 | Variable | Description |
 |----------|-------------|
-| `DDB_NODE_ADDRESS` | Default node address to connect to |
-| `DDB_REFRESH_INTERVAL` | Refresh interval in milliseconds |
+| `LAGRANGE_NODE_ADDRESS` | Default node address to connect to |
+| `LAGRANGE_REFRESH_INTERVAL` | Refresh interval in milliseconds |
 
 ### Command-Line Arguments
 

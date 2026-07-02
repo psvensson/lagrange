@@ -1,8 +1,8 @@
 import {NUM, STRING} from '../constants/index.js';
 
 const CLI_APP = Object.freeze({
-  NAME: 'DDB Admin CLI',
-  BIN: 'ddb-admin',
+  NAME: 'Lagrange Admin CLI',
+  BIN: 'lagrange-admin',
 });
 
 // Keep in lockstep with package.json "version"; the drift-guard in
@@ -12,9 +12,9 @@ const CLI_APP = Object.freeze({
 const CLI_VERSION = '0.1.0';
 
 const CLI_ENV = Object.freeze({
-  NODE_ADDRESS: 'DDB_NODE_ADDRESS',
-  REFRESH_INTERVAL: 'DDB_REFRESH_INTERVAL',
-  DEBUG: 'DDB_CLI_DEBUG',
+  NODE_ADDRESS: 'LAGRANGE_NODE_ADDRESS',
+  REFRESH_INTERVAL: 'LAGRANGE_REFRESH_INTERVAL',
+  DEBUG: 'LAGRANGE_CLI_DEBUG',
   DEBUG_ENABLED_VALUE: '1',
 });
 
@@ -27,12 +27,12 @@ const CLI_FLAG = Object.freeze({
 });
 
 const CLI_PATH = Object.freeze({
-  CONFIG_DIR_NAME: '.ddb-admin',
+  CONFIG_DIR_NAME: '.lagrange-admin',
   CONFIG_FILE: 'config.json',
   CACHE_FILE: 'cache.json',
   ERROR_LOG_FILE: 'error.log',
   QUERY_HISTORY_FILE: 'query_history.json',
-  DEBUG_LOG_FILE: '/tmp/ddb-cli-debug.log',
+  DEBUG_LOG_FILE: '/tmp/lagrange-cli-debug.log',
 });
 
 const CLI_COLOR_SCHEME = Object.freeze({
@@ -217,7 +217,7 @@ const CLI_HELP_TEXT = Object.freeze({
   ],
 });
 
-const CLI_VERSION_PREFIX = 'ddb-admin version ';
+const CLI_VERSION_PREFIX = 'lagrange-admin version ';
 
 export {
   CLI_APP,

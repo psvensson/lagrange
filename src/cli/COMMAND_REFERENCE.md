@@ -1,7 +1,7 @@
 # Lagrange Admin CLI Command Reference
 
-The canonical command is `lagrange-admin`. Existing `ddb-admin` examples remain
-valid as compatibility usage until the dedicated command migration is complete.
+The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was removed
+before the first release).
 
 Complete reference for all keyboard shortcuts, commands, configuration options, and command-line arguments.
 
@@ -290,7 +290,7 @@ Exit the application.
 
 ## Configuration Options
 
-Configuration file location: `~/.ddb-admin/config.json`
+Configuration file location: `~/.lagrange-admin/config.json`
 
 ### node_address
 
@@ -389,7 +389,7 @@ Path to cache file.
 |----------|-------|
 | Type | `string` |
 | Required | No |
-| Default | `~/.ddb-admin/cache.json` |
+| Default | `~/.lagrange-admin/cache.json` |
 
 **Example:**
 ```json
@@ -406,12 +406,12 @@ Path to error log file.
 |----------|-------|
 | Type | `string` |
 | Required | No |
-| Default | `~/.ddb-admin/error.log` |
+| Default | `~/.lagrange-admin/error.log` |
 
 **Example:**
 ```json
 {
-  "log_path": "/var/log/ddb-admin.log"
+  "log_path": "/var/log/lagrange-admin.log"
 }
 ```
 
@@ -479,8 +479,8 @@ Custom keybindings (advanced).
   "default_view": "nodes",
   "color_scheme": "default",
   "cache_persistence": true,
-  "cache_path": "~/.ddb-admin/cache.json",
-  "log_path": "~/.ddb-admin/error.log",
+  "cache_path": "~/.lagrange-admin/cache.json",
+  "log_path": "~/.lagrange-admin/error.log",
   "cdc_lag_threshold": 5000,
   "read_only_mode": false,
   "keybindings": {}
@@ -493,7 +493,7 @@ Custom keybindings (advanced).
 
 Environment variables override configuration file settings.
 
-### DDB_NODE_ADDRESS
+### LAGRANGE_NODE_ADDRESS
 
 Default node address to connect to.
 
@@ -505,11 +505,11 @@ Default node address to connect to.
 
 **Example:**
 ```bash
-export DDB_NODE_ADDRESS=localhost:8080
-ddb-admin
+export LAGRANGE_NODE_ADDRESS=localhost:8080
+lagrange-admin
 ```
 
-### DDB_REFRESH_INTERVAL
+### LAGRANGE_REFRESH_INTERVAL
 
 Refresh interval in milliseconds.
 
@@ -521,8 +521,8 @@ Refresh interval in milliseconds.
 
 **Example:**
 ```bash
-export DDB_REFRESH_INTERVAL=5000
-ddb-admin
+export LAGRANGE_REFRESH_INTERVAL=5000
+lagrange-admin
 ```
 
 ### Priority Order
@@ -530,7 +530,7 @@ ddb-admin
 Configuration is loaded in this order (later overrides earlier):
 
 1. Default values
-2. Configuration file (`~/.ddb-admin/config.json`)
+2. Configuration file (`~/.lagrange-admin/config.json`)
 3. Environment variables
 4. Command-line arguments
 
@@ -541,7 +541,7 @@ Configuration is loaded in this order (later overrides earlier):
 ### Usage
 
 ```
-ddb-admin [options] [node-address]
+lagrange-admin [options] [node-address]
 ```
 
 ### Options
@@ -551,8 +551,8 @@ ddb-admin [options] [node-address]
 Show help message and exit.
 
 ```bash
-ddb-admin --help
-ddb-admin -h
+lagrange-admin --help
+lagrange-admin -h
 ```
 
 #### --version, -v
@@ -560,8 +560,8 @@ ddb-admin -h
 Show version information and exit.
 
 ```bash
-ddb-admin --version
-ddb-admin -v
+lagrange-admin --version
+lagrange-admin -v
 ```
 
 #### --read-only
@@ -569,7 +569,7 @@ ddb-admin -v
 Enable read-only mode. Only SELECT queries are allowed.
 
 ```bash
-ddb-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8080
 ```
 
 #### --monochrome
@@ -577,7 +577,7 @@ ddb-admin --read-only localhost:8080
 Use monochrome color scheme (no colors).
 
 ```bash
-ddb-admin --monochrome localhost:8080
+lagrange-admin --monochrome localhost:8080
 ```
 
 #### --refresh <ms>
@@ -585,7 +585,7 @@ ddb-admin --monochrome localhost:8080
 Set refresh interval in milliseconds.
 
 ```bash
-ddb-admin --refresh 5000 localhost:8080
+lagrange-admin --refresh 5000 localhost:8080
 ```
 
 #### --view <name>
@@ -595,7 +595,7 @@ Start with a specific view.
 Valid values: `nodes`, `services`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts`
 
 ```bash
-ddb-admin --view tables localhost:8080
+lagrange-admin --view tables localhost:8080
 ```
 
 ### Positional Arguments
@@ -607,33 +607,33 @@ Node address to connect to (optional).
 Format: `host:port`
 
 ```bash
-ddb-admin localhost:8080
-ddb-admin 192.168.1.100:8080
+lagrange-admin localhost:8080
+lagrange-admin 192.168.1.100:8080
 ```
 
 ### Examples
 
 ```bash
 # Basic connection
-ddb-admin localhost:8080
+lagrange-admin localhost:8080
 
 # Read-only mode
-ddb-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8080
 
 # Custom refresh interval
-ddb-admin --refresh 10000 localhost:8080
+lagrange-admin --refresh 10000 localhost:8080
 
 # Start with tables view
-ddb-admin --view tables localhost:8080
+lagrange-admin --view tables localhost:8080
 
 # Monochrome mode
-ddb-admin --monochrome localhost:8080
+lagrange-admin --monochrome localhost:8080
 
 # Combined options
-ddb-admin --read-only --view sql --refresh 5000 localhost:8080
+lagrange-admin --read-only --view sql --refresh 5000 localhost:8080
 
 # Using environment variable
-DDB_NODE_ADDRESS=localhost:8080 ddb-admin --read-only
+LAGRANGE_NODE_ADDRESS=localhost:8080 lagrange-admin --read-only
 ```
 
 ---

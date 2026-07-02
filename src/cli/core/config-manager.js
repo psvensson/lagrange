@@ -1,6 +1,6 @@
 /**
  * ConfigManager - Configuration management with file, environment, and CLI overrides
- * Loads configuration from ~/.ddb-admin/config.json with environment and CLI overrides
+ * Loads configuration from ~/.lagrange-admin/config.json with environment and CLI overrides
  *
  * Requirements: 18.1, 18.2, 18.3, 18.4, 18.5
  */
@@ -217,12 +217,12 @@ export class ConfigManager {
    * Load configuration from environment variables
    */
   loadFromEnvironment() {
-    // DDB_NODE_ADDRESS
+    // LAGRANGE_NODE_ADDRESS
     if (process.env[CLI_ENV.NODE_ADDRESS]) {
       this.config.node_address = process.env[CLI_ENV.NODE_ADDRESS];
     }
 
-    // DDB_REFRESH_INTERVAL
+    // LAGRANGE_REFRESH_INTERVAL
     if (process.env[CLI_ENV.REFRESH_INTERVAL]) {
       const interval = parseInt(process.env[CLI_ENV.REFRESH_INTERVAL], 10);
       const validationResult = this.validateField('refresh_interval', interval);

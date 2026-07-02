@@ -9,7 +9,7 @@ Use this runbook on a running node to isolate:
 ## Prerequisites
 
 - Admin API is reachable at `http://127.0.0.1:8081`
-- `jq`, `watch`, and `ddb-admin` are available
+- `jq`, `watch`, and `lagrange-admin` are available
 
 ## 1. Start diagnostics polling (Terminal A)
 
@@ -28,7 +28,7 @@ watch -n 5 "curl -sS http://127.0.0.1:8081/api/admin/diagnostics/services | jq '
 
 ## 2. Open SQL control (Terminal B)
 
-1. Run: `ddb-admin localhost:8081`
+1. Run: `lagrange-admin localhost:8081`
 2. Press `6` for SQL view
 3. Run each SQL statement with `Ctrl+Enter`
 

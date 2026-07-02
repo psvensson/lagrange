@@ -416,10 +416,10 @@ export class HelpOverlay {
    */
   getUsageText() {
     return `
-ddb-admin - Distributed Database Administration CLI
+lagrange-admin - Distributed Database Administration CLI
 
 USAGE:
-  ddb-admin [OPTIONS] [NODE_ADDRESS]
+  lagrange-admin [OPTIONS] [NODE_ADDRESS]
 
 ARGUMENTS:
   NODE_ADDRESS    Address of node to connect to (e.g., localhost:8080)
@@ -434,13 +434,13 @@ OPTIONS:
   --monochrome            Disable colors for terminals without color support
 
 ENVIRONMENT VARIABLES:
-  DDB_NODE_ADDRESS        Default node address
-  DDB_REFRESH_INTERVAL    Default refresh interval
+  LAGRANGE_NODE_ADDRESS        Default node address
+  LAGRANGE_REFRESH_INTERVAL    Default refresh interval
 
 EXAMPLES:
-  ddb-admin localhost:8080
-  ddb-admin --view tables --read-only localhost:8080
-  DDB_NODE_ADDRESS=localhost:8080 ddb-admin
+  lagrange-admin localhost:8080
+  lagrange-admin --view tables --read-only localhost:8080
+  LAGRANGE_NODE_ADDRESS=localhost:8080 lagrange-admin
 
 For more information, see the documentation at:
   https://github.com/your-org/distributed-database/docs/admin-cli

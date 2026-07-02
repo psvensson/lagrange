@@ -18,7 +18,7 @@ module.exports = {
         orphan: true,
         pathNot: [
           '(^|/)src/index\\.js$',
-          '(^|/)src/cli/bin/ddb-admin\\.js$',
+          '(^|/)src/cli/bin/lagrange-admin\\.js$',
           '^test/',
           '^scripts/',
         ],

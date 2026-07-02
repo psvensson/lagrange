@@ -106,7 +106,7 @@ export class AdminCLI {
 
     // Get node address from args or environment
     const nodeAddress = args.find((arg) => !arg.startsWith('-')) ||
-      process.env.DDB_NODE_ADDRESS || 'localhost:8081';
+      process.env.LAGRANGE_NODE_ADDRESS || 'localhost:8081';
 
     // Initialize components
     this.initializeComponents();

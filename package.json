@@ -9,14 +9,13 @@
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "ddb-admin": "./src/cli/bin/ddb-admin.js",
-    "lagrange-admin": "./src/cli/bin/ddb-admin.js"
+    "lagrange-admin": "./src/cli/bin/lagrange-admin.js"
   },
   "scripts": {
     "start": "node src/index.js",
     "start:endpoint-sync": "node scripts/start-endpoint-sync-controller.js",
     "start:test-dashboard": "node scripts/start-test-run-dashboard.js",
-    "cli": "node src/cli/bin/ddb-admin.js",
+    "cli": "node src/cli/bin/lagrange-admin.js",
     "model:active-gate": "node scripts/model-active-gate.js",
     "model:tlc": "node scripts/model-tlc.js",
     "model:check": "npm run model:active-gate && npm run model:tlc",

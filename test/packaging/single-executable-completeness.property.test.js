@@ -27,7 +27,7 @@ const projectRoot = join(__dirname, '../..');
 const pkgVersion = JSON.parse(
   readFileSync(join(projectRoot, 'package.json'), 'utf8'),
 ).version;
-const cliEntry = join(projectRoot, 'src/cli/bin/ddb-admin.js');
+const cliEntry = join(projectRoot, 'src/cli/bin/lagrange-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
 
 test('Single Executable Completeness - Property Test', async (t) => {

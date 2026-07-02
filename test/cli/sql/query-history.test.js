@@ -283,6 +283,6 @@ test('QueryHistory', async (t) => {
   });
 
   t.test('DEFAULT_PERSIST_PATH constant is correct', async (t) => {
-    t.equal(DEFAULT_PERSIST_PATH, '~/.ddb-admin/query_history.json');
+    t.equal(DEFAULT_PERSIST_PATH, '~/.lagrange-admin/query_history.json');
   });
 });

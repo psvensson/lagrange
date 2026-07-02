@@ -12,7 +12,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## top-level
 
-- `cli` — `node src/cli/bin/ddb-admin.js`
+- `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the Quest-first command index with diagnostic, triage, and validation entrypoints.
 - `frontier` — Print the Solver frontier board.
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).

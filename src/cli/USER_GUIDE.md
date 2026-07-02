@@ -1,8 +1,8 @@
 # Lagrange Admin CLI User Guide
 
 This guide covers the Lagrange Admin CLI, a terminal-based administration tool
-for Lagrange. The canonical command is `lagrange-admin`; `ddb-admin` remains a
-compatibility alias.
+for Lagrange. The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was
+removed before the first release).
 
 ## Table of Contents
 
@@ -27,19 +27,19 @@ Note: the system admin WebSocket service listens on the fixed port `8081`.
 
 **Command line:**
 ```bash
-ddb-admin localhost:8081
-ddb-admin 192.168.1.100:8081
+lagrange-admin localhost:8081
+lagrange-admin 192.168.1.100:8081
 ```
 
 **Environment variable:**
 ```bash
-export DDB_NODE_ADDRESS=localhost:8081
-ddb-admin
+export LAGRANGE_NODE_ADDRESS=localhost:8081
+lagrange-admin
 ```
 
 **Interactive prompt:**
 ```bash
-ddb-admin
+lagrange-admin
 # Enter node address: localhost:8081
 ```
 
@@ -429,7 +429,7 @@ For write operations (INSERT/UPDATE/DELETE):
 
 **Read-only mode:**
 ```bash
-ddb-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8080
 ```
 In read-only mode, only SELECT queries are allowed.
 
@@ -554,7 +554,7 @@ Event color coding:
 - Or use SELECT queries only
 
 **"Invalid configuration":**
-- Check `~/.ddb-admin/config.json` syntax
+- Check `~/.lagrange-admin/config.json` syntax
 - Remove invalid entries
 - CLI will use defaults for invalid values
 
@@ -562,4 +562,4 @@ Event color coding:
 
 - Press `?` for keyboard shortcuts
 - Use `:help <command>` for command help
-- Check error log: `~/.ddb-admin/error.log`
+- Check error log: `~/.lagrange-admin/error.log`

@@ -41,8 +41,8 @@ echo "  ✓ CLI blob generated"
 echo ""
 echo "Step 3: Creating executable copies..."
 NODE_PATH=$(which node)
-cp "$NODE_PATH" "$DIST_DIR/distributed-db"
-cp "$NODE_PATH" "$DIST_DIR/ddb-cli"
+cp "$NODE_PATH" "$DIST_DIR/lagrange"
+cp "$NODE_PATH" "$DIST_DIR/lagrange-cli"
 echo "  ✓ Node.js binary copied"
 
 # Step 4: Inject SEA blobs using postject
@@ -55,12 +55,12 @@ if ! npx postject --help > /dev/null 2>&1; then
   npm install --save-dev postject
 fi
 
-npx postject "$DIST_DIR/distributed-db" NODE_SEA_BLOB "$DIST_DIR/sea-prep.blob" \
+npx postject "$DIST_DIR/lagrange" NODE_SEA_BLOB "$DIST_DIR/sea-prep.blob" \
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
   --overwrite
 echo "  ✓ Main system blob injected"
 
-npx postject "$DIST_DIR/ddb-cli" NODE_SEA_BLOB "$DIST_DIR/sea-cli-prep.blob" \
+npx postject "$DIST_DIR/lagrange-cli" NODE_SEA_BLOB "$DIST_DIR/sea-cli-prep.blob" \
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
   --overwrite
 echo "  ✓ CLI blob injected"
@@ -68,45 +68,45 @@ echo "  ✓ CLI blob injected"
 # Step 5: Make executables
 echo ""
 echo "Step 5: Setting executable permissions..."
-chmod +x "$DIST_DIR/distributed-db"
-chmod +x "$DIST_DIR/ddb-cli"
+chmod +x "$DIST_DIR/lagrange"
+chmod +x "$DIST_DIR/lagrange-cli"
 echo "  ✓ Permissions set"
 
 # Step 6: Verify executables
 echo ""
 echo "Step 6: Verifying executables..."
-if [ -f "$DIST_DIR/distributed-db" ] && [ -x "$DIST_DIR/distributed-db" ]; then
-  MAIN_SIZE=$(du -h "$DIST_DIR/distributed-db" | cut -f1)
-  echo "  ✓ distributed-db ($MAIN_SIZE)"
+if [ -f "$DIST_DIR/lagrange" ] && [ -x "$DIST_DIR/lagrange" ]; then
+  MAIN_SIZE=$(du -h "$DIST_DIR/lagrange" | cut -f1)
+  echo "  ✓ lagrange ($MAIN_SIZE)"
 else
-  echo "  ✗ distributed-db not found or not executable"
+  echo "  ✗ lagrange not found or not executable"
   exit 1
 fi
 
-if [ -f "$DIST_DIR/ddb-cli" ] && [ -x "$DIST_DIR/ddb-cli" ]; then
-  CLI_SIZE=$(du -h "$DIST_DIR/ddb-cli" | cut -f1)
-  echo "  ✓ ddb-cli ($CLI_SIZE)"
+if [ -f "$DIST_DIR/lagrange-cli" ] && [ -x "$DIST_DIR/lagrange-cli" ]; then
+  CLI_SIZE=$(du -h "$DIST_DIR/lagrange-cli" | cut -f1)
+  echo "  ✓ lagrange-cli ($CLI_SIZE)"
 else
-  echo "  ✗ ddb-cli not found or not executable"
+  echo "  ✗ lagrange-cli not found or not executable"
   exit 1
 fi
 
 echo ""
 echo "Step 7: Smoke-testing executables..."
-"$DIST_DIR/ddb-cli" --help > /dev/null
-echo "  ✓ ddb-cli --help"
-"$DIST_DIR/distributed-db" --help > /dev/null
-echo "  ✓ distributed-db --help"
-"$DIST_DIR/distributed-db" --dry-run > /dev/null
-echo "  ✓ distributed-db --dry-run"
+"$DIST_DIR/lagrange-cli" --help > /dev/null
+echo "  ✓ lagrange-cli --help"
+"$DIST_DIR/lagrange" --help > /dev/null
+echo "  ✓ lagrange --help"
+"$DIST_DIR/lagrange" --dry-run > /dev/null
+echo "  ✓ lagrange --dry-run"
 
 echo ""
 echo "=== Build Complete ==="
 echo ""
 echo "Executables created:"
-echo "  Main system: $DIST_DIR/distributed-db"
-echo "  CLI tool:    $DIST_DIR/ddb-cli"
+echo "  Main system: $DIST_DIR/lagrange"
+echo "  CLI tool:    $DIST_DIR/lagrange-cli"
 echo ""
 echo "To run without Node.js in PATH:"
-echo "  $DIST_DIR/distributed-db"
-echo "  $DIST_DIR/ddb-cli --help"
+echo "  $DIST_DIR/lagrange"
+echo "  $DIST_DIR/lagrange-cli --help"

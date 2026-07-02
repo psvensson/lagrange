@@ -56,7 +56,7 @@ const BUNDLES = [
     external: MAIN_RUNTIME_EXTERNALS,
   },
   {
-    entryPoint: join(projectRoot, 'src/cli/bin/ddb-admin.js'),
+    entryPoint: join(projectRoot, 'src/cli/bin/lagrange-admin.js'),
     outputFile: 'admin-cli.bundle.cjs',
     name: 'Admin CLI',
     external: CLI_RUNTIME_EXTERNALS,

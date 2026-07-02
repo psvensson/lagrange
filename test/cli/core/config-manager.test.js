@@ -6,7 +6,7 @@ import os from 'os';
 
 // Helper to create a temporary config directory
 function _createTempConfigDir() {
-  const tempDir = path.join(os.tmpdir(), `ddb-admin-test-${Date.now()}`);
+  const tempDir = path.join(os.tmpdir(), `lagrange-admin-test-${Date.now()}`);
   fs.mkdirSync(tempDir, {recursive: true});
   return tempDir;
 }
@@ -179,8 +179,8 @@ test('ConfigManager - load applies environment variables', async (t) => {
   const originalEnv = {...process.env};
 
   try {
-    process.env.DDB_NODE_ADDRESS = 'env-host:9090';
-    process.env.DDB_REFRESH_INTERVAL = '4000';
+    process.env.LAGRANGE_NODE_ADDRESS = 'env-host:9090';
+    process.env.LAGRANGE_REFRESH_INTERVAL = '4000';
 
     manager.load();
 
@@ -196,13 +196,13 @@ test('ConfigManager - load warns on invalid env refresh interval', async (t) => 
   const originalEnv = {...process.env};
 
   try {
-    process.env.DDB_REFRESH_INTERVAL = '100';
+    process.env.LAGRANGE_REFRESH_INTERVAL = '100';
 
     manager.load();
 
     t.equal(manager.get('refresh_interval'), 2000); // Default preserved
     t.ok(manager.hasWarnings());
-    t.ok(manager.getWarnings()[0].includes('DDB_REFRESH_INTERVAL'));
+    t.ok(manager.getWarnings()[0].includes('LAGRANGE_REFRESH_INTERVAL'));
   } finally {
     process.env = originalEnv;
   }
