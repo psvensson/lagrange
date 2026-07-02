@@ -15,7 +15,16 @@ const TEST_TIMEOUT_MS = 120000;
 const NODE_ONE_ID = '550e8400-e29b-41d4-a716-446655440231';
 const NODE_TWO_ID = '550e8400-e29b-41d4-a716-446655440232';
 
-test('concurrent MOVE_REPLICA bootstrap requests defer until the prior handoff stabilizes', {
+// Concurrent joins are intentionally NOT globally blocked while a
+// MOVE_REPLICA handoff is in flight: since fab1b6de the handler's global
+// admission gate (isMoveReplicaBootstrapAdmissionGloballyBlocked) is a
+// deliberate no-op, and safety is enforced per replica instead —
+// determineAndReserveMessageGroupAssignment runs under the reservation
+// lock and excludes already-reserved replicas from candidate selection
+// (move-replica-assignment-admission-blocking.js), so concurrent joiners
+// receive UNIQUE MOVE_REPLICA assignments and the same replica can never
+// be granted twice.
+test('concurrent MOVE_REPLICA bootstrap requests receive unique assignments', {
   timeout: TEST_TIMEOUT_MS,
 }, async (t) => {
   initializeTestEnvironment();
@@ -80,8 +89,8 @@ test('concurrent MOVE_REPLICA bootstrap requests defer until the prior handoff s
     t.equal(responseOne.statusCode, 200, 'first bootstrap request should succeed');
     t.equal(
       responseTwo.statusCode,
-      503,
-      'second bootstrap request should defer while the first MOVE_REPLICA handoff stabilizes',
+      200,
+      'second bootstrap request should also succeed with its own assignment',
     );
 
     const bodyOne = responseOne.json();
@@ -92,18 +101,36 @@ test('concurrent MOVE_REPLICA bootstrap requests defer until the prior handoff s
       'MOVE_REPLICA',
       'first join should use MOVE_REPLICA',
     );
+    t.equal(
+      bodyTwo.messageGroupAssignment?.strategy,
+      'MOVE_REPLICA',
+      'second join should use MOVE_REPLICA',
+    );
     t.ok(
       bodyOne.messageGroupAssignment?.replicaToMove,
       'first assignment should include replicaToMove',
     );
     t.ok(
-      (bodyTwo.reasons || []).includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
-      'second bootstrap should surface the handoff stabilization reason',
+      bodyTwo.messageGroupAssignment?.replicaToMove,
+      'second assignment should include replicaToMove',
     );
-    t.equal(
-      bodyTwo.messageGroupAssignment,
-      undefined,
-      'deferred bootstrap should not allocate a second MOVE_REPLICA assignment',
+    t.not(
+      bodyOne.messageGroupAssignment?.replicaToMove,
+      bodyTwo.messageGroupAssignment?.replicaToMove,
+      'concurrent joiners must receive unique MOVE_REPLICA replicas',
+    );
+    t.ok(
+      bodyOne.messageGroupAssignment?.assignmentId,
+      'first assignment should carry a reservation assignmentId',
+    );
+    t.ok(
+      bodyTwo.messageGroupAssignment?.assignmentId,
+      'second assignment should carry a reservation assignmentId',
+    );
+    t.not(
+      bodyOne.messageGroupAssignment?.assignmentId,
+      bodyTwo.messageGroupAssignment?.assignmentId,
+      'concurrent joiners must hold distinct reservations',
     );
   } finally {
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
