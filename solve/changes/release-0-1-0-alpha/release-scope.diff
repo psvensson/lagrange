@@ -1,0 +1,959 @@
+diff --git a/.forgejo/workflows/ci.yml b/.forgejo/workflows/ci.yml
+new file mode 100644
+index 00000000..cc18cbe1
+--- /dev/null
++++ b/.forgejo/workflows/ci.yml
+@@ -0,0 +1,32 @@
++# Forgejo Actions CI — runs on Codeberg.
++# Syntax is GitHub-Actions-compatible. `runs-on: docker` targets Codeberg's
++# hosted runner label; adjust to match your registered runner if different.
++# Requires Codeberg Actions to be enabled for the repository.
++name: ci
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++    branches: [main]
++
++jobs:
++  gate:
++    runs-on: docker
++    container:
++      image: node:22-bookworm
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Install dependencies
++        run: npm ci
++
++      # test:gate = test:fast + test:static + model:contracts.
++      # The statistical rolling-restart convergence gate is deliberately NOT
++      # run here: its pass rate is variance-bounded (~25-33% per run) and a
++      # per-push pass/fail would be satisfiable or violable by chance alone.
++      # It is promoted only on a sealed Wilson-95 bar over N>=20 runs
++      # (see docs/convergence-donewhen-metric.md) and tracked as a trend.
++      - name: Gate (fast tests + static analysis + model contracts)
++        run: npm run test:gate
+diff --git a/.forgejo/workflows/release.yml b/.forgejo/workflows/release.yml
+new file mode 100644
+index 00000000..47d8804e
+--- /dev/null
++++ b/.forgejo/workflows/release.yml
+@@ -0,0 +1,76 @@
++# Forgejo Actions release — runs on Codeberg when a `v*` tag is pushed.
++# Syntax is GitHub-Actions-compatible.
++#
++# Prerequisites (one-time):
++#   * Codeberg Actions enabled for the repo, with a runner that provides Docker
++#     (the `docker` label below; a self-hosted runner with the docker socket, or
++#     Codeberg's hosted runners).
++#   * A `helm` binary on the runner (installed in-step below) and Node 22.
++#   * Secrets:
++#       REGISTRY_USER  - Codeberg username (package registry push)
++#       REGISTRY_TOKEN - Codeberg token with package:write scope
++#     GITHUB_TOKEN is provided automatically by Forgejo for release upload.
++name: release
++
++on:
++  push:
++    tags: ["v*"]
++
++env:
++  IMAGE: codeberg.org/psvensson/lagrange
++
++jobs:
++  release:
++    runs-on: docker
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Set up Node 22
++        uses: actions/setup-node@v4
++        with:
++          node-version: "22"
++
++      - name: Install dependencies
++        run: npm ci
++
++      # Full pre-release gate. Fails the release if the tagged tree is not green.
++      - name: Full gate (test:ci)
++        run: npm run test:ci
++
++      # Bundle + single-executable (SEA) builds -> ./dist
++      - name: Build bundle and SEA binaries
++        run: npm run build:all
++
++      - name: Package Helm chart
++        run: |
++          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
++          helm package charts/lagrange-node --destination dist/
++
++      # Checksum every release artifact (SEA binaries + Helm chart tarball).
++      - name: Checksum release artifacts
++        run: |
++          cd dist
++          sha256sum * > SHA256SUMS
++          cat SHA256SUMS
++
++      - name: Build and push Docker image
++        run: |
++          echo "${{ secrets.REGISTRY_TOKEN }}" | \
++            docker login codeberg.org -u "${{ secrets.REGISTRY_USER }}" --password-stdin
++          TAG="${GITHUB_REF_NAME#v}"
++          docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
++          docker push "$IMAGE:$TAG"
++          docker push "$IMAGE:latest"
++
++      # Publishes the tag as a Forgejo Release and attaches the artifacts.
++      - name: Publish Forgejo release
++        uses: actions/forgejo-release@v2
++        with:
++          direction: upload
++          token: ${{ secrets.GITHUB_TOKEN }}
++          tag: ${{ github.ref_name }}
++          release-dir: dist
++          release-notes: |
++            Lagrange ${{ github.ref_name }} (experimental / alpha).
++            See CHANGELOG.md and RELEASE.md. Docker image: ${{ env.IMAGE }}:${{ github.ref_name }}
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 00000000..04f6afbe
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,89 @@
++# Changelog
++
++All notable changes to Lagrange are documented in this file.
++
++The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
++and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
++While the major version is `0`, the public surface (SQL dialect, wire
++protocols, admin CLI, cluster membership behaviour) may change between minor
++releases without a compatibility guarantee.
++
++## [Unreleased]
++
++### Removed
++- The broken `test:coverage` npm script (`tap test/` exceeds the OS argument
++  limit; use the sharded `test:*` scripts instead).
++
++## [0.1.0] — 2026-07-02
++
++First tagged release. **Experimental / alpha** — Lagrange is a research-grade
++distributed SQL database and compute-near-data runtime. It is substantial and
++extensively tested, but not production-hardened; see _Known limitations_ below.
++
++### Added
++- Distributed SQL over Raft-replicated partitions with a shared execution path.
++- Compute-near-data runtime: distributed functions and services co-located with
++  the partitions that own the relevant data.
++- Unified rebalancer with load-aware placement; runtime services are first-class
++  rebalancer entities (a partition is a service).
++- SWIM/Lifeguard failure detection, shipped default-on and unconditional.
++- Postgres wire (`pgwire`) SQL endpoint, registered as a managed service (a bare
++  node exposes 8080/8081/8082; the SQL endpoint is started on demand, not at boot).
++- Deterministic/directed testing substrate: virtual clock, seeded RNG, and PCT
++  scheduling for reproducible convergence and safety investigations.
++- Distroless Docker image and single-executable (SEA) builds.
++
++### Changed
++- Package version set to `0.1.0` (was an internal `1.0.0`); user-facing
++  `--version` output (admin CLI and node entrypoint) now reports the release
++  version, guarded against drift by a test.
++
++### Fixed
++- Raft safety: same-index stale-commit (CL-040), vote double-vote TOCTOU
++  (CL-041), and empty-log-term masquerade (CL-042).
++- Node restart with a new IP: stale-seed-vs-canonical reconciliation and
++  keepalive/pong severing on transport re-resolution.
++- Durable node identity: a node started without an explicit `NODE_ID` now
++  restores its persisted identity from the data directory on restart instead
++  of minting a fresh UUID and refusing to start over its own durable state
++  (identity mismatch). Enables orchestrators (Kubernetes, plain restarts) to
++  restart nodes onto their volumes without pinning `NODE_ID`.
++- SEA single-executable boot: dynamic imports with const-variable specifiers
++  were silently left out of the esbuild bundle, so the binary could never
++  boot the full system (`ERR_MODULE_NOT_FOUND`); the entrypoint and SQL
++  runtime composition imports are now literal and bundled.
++- Dockerfile `EXPOSE` corrected to the real listener set 8080/8081/8082
++  (nothing listens on the previously exposed 9080).
++- Test gating: in-process tests asserting bounded-time convergence
++  (node-join SLO, multi-join formation) moved out of the blocking `test:ci`
++  lanes into an on-demand statistical lane (`npm run test:convergence-probes`)
++  — per-run bounded-time convergence is exactly the property this release
++  documents as statistical and hardware-relative, so it cannot be a
++  deterministic gate; the shard generator now supports (and existence-checks)
++  such curated exclusions.
++- Control-plane readiness: stored readiness snapshots could be reused while
++  the live local query-transport verdict had flipped (transport evidence is
++  live router state and advances no heartbeat watermark or cache marker), so
++  owner-read participation could answer `ready` with the transport down — or
++  keep deferring after it recovered. Snapshot reuse now rebuilds on local
++  query-transport drift.
++
++### Known limitations
++- **Rolling-restart convergence is a statistical property, not a bounded-time
++  guarantee.** Under a rolling restart the cluster settles into either a
++  convergent basin or a slow/limit-cycle basin. *Eventual* stabilization is
++  proven for the sole residual head (a monotone Φ-fixpoint over the real
++  rebalancer kernel), but *bounded-time* convergence within any fixed window is
++  a latency tail near its statistical floor. The measured per-run scenario-PASS
++  rate is ≈25–33%; the release does not promise convergence by a specific
++  deadline. See `docs/convergence-donewhen-metric.md`.
++- **Safety is the hard floor and is never relaxed.** Every certified run holds
++  the safety invariants (no data corruption, no unexpected node exit, no
++  blind/stale oracle reads); convergence *latency* is the residual, not
++  correctness.
++- No autoscaler for load; scaling is operator-driven.
++- Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
++  change between `0.x` releases without migration guarantees.
++
++[Unreleased]: https://codeberg.org/psvensson/lagrange/compare/v0.1.0...HEAD
++[0.1.0]: https://codeberg.org/psvensson/lagrange/releases/tag/v0.1.0
+diff --git a/Dockerfile b/Dockerfile
+index 2d956592..693db194 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -27,7 +27,8 @@ COPY --from=builder /app/node_modules ./node_modules
+ COPY package.json ./
+ COPY src/ ./src/
+ 
+-EXPOSE 8080 8081 9080
++# REST API, admin WS, transport WS (REST+2). Nothing listens on the old 9080.
++EXPOSE 8080 8081 8082
+ 
+ # distroless ENTRYPOINT is ["/nodejs/bin/node"]; these args are appended to it.
+ CMD ["--max-old-space-size=1536", "src/index.js"]
+diff --git a/RELEASE.md b/RELEASE.md
+new file mode 100644
+index 00000000..425050a8
+--- /dev/null
++++ b/RELEASE.md
+@@ -0,0 +1,70 @@
++# Release process
++
++Lagrange releases are cut from an annotated `v*` git tag on `main`. CI runs on
++[Codeberg](https://codeberg.org/psvensson/lagrange) via **Forgejo Actions**
++(`.forgejo/workflows/`); the syntax is GitHub-Actions-compatible.
++
++While the major version is `0`, releases are **experimental / alpha** and carry
++no backward-compatibility guarantee (see `CHANGELOG.md`).
++
++## Pipeline overview
++
++| Trigger | Workflow | What runs |
++| --- | --- | --- |
++| PR / push to `main` | `.forgejo/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
++| Push of a `v*` tag | `.forgejo/workflows/release.yml` | `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image → `helm package charts/lagrange-node` → publish image + chart + SEA binaries + `SHA256SUMS` to the Forgejo Release. |
++
++## Cutting a release
++
++1. **Land all release content on `main`** and let `ci.yml` go green.
++2. **Bump the version.** Edit `package.json` (and the `version` fields of the
++   root package in `package-lock.json`). The user-facing `--version` literals in
++   `src/cli/cli-constants.js` and `src/constants/entrypoint.js` must match; the
++   guard in `test/release/version-single-source.test.js` enforces this (kept as
++   literals, not a `package.json` read, so the SEA binary — which has no
++   `package.json` on disk — still reports the right version).
++3. **Update `CHANGELOG.md`.** Move `[Unreleased]` items under a new
++   `[x.y.z] — YYYY-MM-DD` heading and refresh the compare/tag links. Keep the
++   _Known limitations_ section honest about convergence (see below).
++4. **Verify on a clean checkout** (the release Quest's `doneWhen`):
++   ```sh
++   npm ci
++   npm run test:ci                       # full gate
++   docker build -t lagrange:rc .         # image builds
++   docker run --rm -p 8080:8080 lagrange:rc &   # boots, opens 8080/8081/8082
++   npm run build:all && ./dist/<binary> --version   # SEA runs, prints version
++   helm template charts/lagrange-node    # chart renders
++   ```
++5. **Tag and push:**
++   ```sh
++   git tag -a v0.1.0 -m "Lagrange 0.1.0 (alpha)"
++   git push origin v0.1.0
++   ```
++   `release.yml` builds and publishes every artifact from the tagged tree.
++
++## Convergence: what the release does and does not promise
++
++This is the one property a distributed release must be candid about.
++
++- **Safety is a hard floor, never relaxed.** Every certified run holds the
++  safety invariants (no corruption, no unexpected node exit, no blind/stale
++  oracle reads).
++- **Bounded-time convergence is not guaranteed.** Rolling-restart convergence is
++  statistical: the per-run scenario-PASS rate is ≈25–33%, and the honest bar is
++  a Wilson-95 lower bound over a fixed-code window of N ≥ 20 runs
++  (`docs/convergence-donewhen-metric.md`), not "converges by time T".
++- **Eventual stabilization is proven** for the sole residual head via a
++  monotone Φ-fixpoint over the real rebalancer kernel
++  (`test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js`).
++  The residual is bounded *latency* of a proven-convergent loop, not
++  non-termination.
++
++Do not gate ordinary pushes on the statistical convergence rate — it is
++satisfiable or violable by variance alone and would make CI flaky. Track it as a
++trend and promote only on a sealed N ≥ 20 Wilson bar.
++
++## Runner prerequisite
++
++Codeberg's hosted Forgejo Actions runners must be enabled for this repository
++(one-time opt-in), or a self-hosted runner registered, before these workflows
++execute. Until then the pipeline is a documented manual runbook (steps 1–5).
+diff --git a/charts/lagrange-node/Chart.yaml b/charts/lagrange-node/Chart.yaml
+new file mode 100644
+index 00000000..e858a534
+--- /dev/null
++++ b/charts/lagrange-node/Chart.yaml
+@@ -0,0 +1,17 @@
++apiVersion: v2
++name: lagrange-node
++description: >-
++  Lagrange experimental distributed SQL database and compute-near-data runtime.
++  Deploys a seed node plus joiner nodes as StatefulSets with stable per-pod DNS
++  identity (name-first addressing survives pod restarts with new IPs).
++type: application
++version: 0.1.0
++appVersion: "0.1.0"
++home: https://codeberg.org/psvensson/lagrange
++sources:
++  - https://codeberg.org/psvensson/lagrange
++keywords:
++  - database
++  - distributed
++  - sql
++  - raft
+diff --git a/charts/lagrange-node/README.md b/charts/lagrange-node/README.md
+new file mode 100644
+index 00000000..4e345e09
+--- /dev/null
++++ b/charts/lagrange-node/README.md
+@@ -0,0 +1,58 @@
++# lagrange-node Helm chart
++
++Deploys a Lagrange cluster: **1 seed node + N joiners** (default N=2 → a
++3-node cluster). Experimental / alpha, like the release it ships with.
++
++```sh
++helm install lagrange charts/lagrange-node \
++  --set image.tag=0.1.0 --set joiners.replicas=2
++```
++
++The default `image.repository` (`codeberg.org/psvensson/lagrange`) is the
++published release image, which exists once a `v*` release has been cut. Until
++then, or for local builds, build and push your own image and pass
++`--set image.repository=<your-registry>/lagrange --set image.tag=<tag>`.
++
++## Shape and why
++
++- **Two StatefulSets (seed + joiners), not one.** The node entrypoint has
++  distinct seed/joiner startup branches (seed = no `SEED_NODE_ADDRESS`, no
++  self-seed guard), and the runtime image is distroless (no shell), so
++  ordinal-based "pod-0 is the seed" logic cannot run in-container.
++- **Name-first addressing.** Every pod registers (`NODE_ADDRESS`) and
++  advertises (`NODE_ADVERTISED_WS_ADDRESS`) its stable headless-service DNS
++  name, and binds wide (`TRANSPORT_WS_HOST=0.0.0.0`). Peers re-resolve the
++  name on reconnect, so nodes survive pod restarts that change the pod IP.
++- **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
++  so the runtime mints one on first boot and restores it from the data
++  directory (rejoin hints) on restart. Identity rides the PVC.
++- **Ports**: REST `node.restPort` (default 8080), transport WS restPort+2;
++  admin WS is a hardcoded runtime constant `8081` that does not move with
++  restPort. The pgwire SQL endpoint is a managed service started on demand —
++  no 5432 boot listener.
++- **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
++- **Storage**: one PVC per pod mounted at `/data`, passed as `--data-dir`.
++
++## Key values
++
++| Value | Default | Meaning |
++| --- | --- | --- |
++| `joiners.replicas` | `2` | Non-seed nodes; cluster size = this + 1 |
++| `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
++| `node.restPort` | `8080` | REST port; transport WS = +2, admin WS fixed at 8081 |
++| `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
++| `node.extraEnv` | `[]` | Extra env (see `ENV_MAPPINGS` in `src/config/config-constants.js`) |
++| `persistence.size` | `10Gi` | Per-pod volume |
++| `resources` | 1 CPU / 2Gi | Per-pod resources |
++
++## Caveats (0.1)
++
++- Rolling-restart convergence is statistical, not bounded-time — see the
++  repository `CHANGELOG.md` Known limitations before operating this in
++  anything load-bearing.
++- Scaling `joiners.replicas` up adds nodes; scale-down drains are subject to
++  the same convergence caveat.
++- The seed StatefulSet is a single replica by design. Fresh joiners need it up
++  to bootstrap; already-joined nodes keep their own peer mesh, but seed
++  availability during simultaneous full-cluster restarts has not been
++  k8s-exercised in 0.1.
+diff --git a/charts/lagrange-node/templates/_helpers.tpl b/charts/lagrange-node/templates/_helpers.tpl
+new file mode 100644
+index 00000000..48f9370f
+--- /dev/null
++++ b/charts/lagrange-node/templates/_helpers.tpl
+@@ -0,0 +1,145 @@
++{{/* Chart name */}}
++{{- define "lagrange-node.name" -}}
++{{- .Chart.Name | trunc 63 | trimSuffix "-" -}}
++{{- end -}}
++
++{{/*
++Fully qualified base name. Truncated to 45 so the longest derived names stay
++inside the 63-char DNS-label limit: StatefulSet pod hostnames append
++"-joiner-<ordinal>" and the headless service appends "-hl".
++*/}}
++{{- define "lagrange-node.fullname" -}}
++{{- if contains .Chart.Name .Release.Name -}}
++{{- .Release.Name | trunc 45 | trimSuffix "-" -}}
++{{- else -}}
++{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 45 | trimSuffix "-" -}}
++{{- end -}}
++{{- end -}}
++
++{{/* Headless service name — the DNS domain every pod gets its stable identity in */}}
++{{- define "lagrange-node.headlessService" -}}
++{{- printf "%s-hl" (include "lagrange-node.fullname" .) -}}
++{{- end -}}
++
++{{/* Common labels */}}
++{{- define "lagrange-node.labels" -}}
++helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
++app.kubernetes.io/name: {{ include "lagrange-node.name" . }}
++app.kubernetes.io/instance: {{ .Release.Name }}
++app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
++app.kubernetes.io/managed-by: {{ .Release.Service }}
++{{- end -}}
++
++{{/* Selector labels shared by every node pod (seed and joiners) */}}
++{{- define "lagrange-node.selectorLabels" -}}
++app.kubernetes.io/name: {{ include "lagrange-node.name" . }}
++app.kubernetes.io/instance: {{ .Release.Name }}
++{{- end -}}
++
++{{/* Image reference */}}
++{{- define "lagrange-node.image" -}}
++{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
++{{- end -}}
++
++{{/*
++Shared container spec for a node. The runtime image is distroless with
++ENTRYPOINT /nodejs/bin/node, so `args` supplies everything node receives.
++Per-pod stable DNS identity is composed with Kubernetes $(VAR) env expansion
++(no shell in the image): the advertised WS address is
++<pod>.<headless-service>.<namespace>.svc.cluster.local:<restPort+2>, the
++name-first addressing path that survives pod restarts with new IPs.
++*/}}
++{{- define "lagrange-node.containerCommon" -}}
++image: {{ include "lagrange-node.image" . }}
++imagePullPolicy: {{ .Values.image.pullPolicy }}
++args:
++  - {{ printf "--max-old-space-size=%d" (int .Values.node.maxOldSpaceSizeMb) | quote }}
++  - "src/index.js"
++{{- if .Values.persistence.enabled }}
++  - "--data-dir"
++  - {{ .Values.persistence.mountPath | quote }}
++{{- end }}
++ports:
++  - name: rest
++    containerPort: {{ int .Values.node.restPort }}
++  # The admin WS port is a hardcoded constant in the runtime
++  # (src/admin/admin-constants.js WEBSOCKET_PORT), independent of restPort.
++  - name: admin-ws
++    containerPort: 8081
++  - name: transport-ws
++    containerPort: {{ add (int .Values.node.restPort) 2 }}
++livenessProbe:
++  httpGet:
++    path: {{ .Values.probes.liveness.path }}
++    port: rest
++  initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
++  periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
++  failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
++readinessProbe:
++  httpGet:
++    path: {{ .Values.probes.readiness.path }}
++    port: rest
++  initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
++  periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
++  failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
++resources:
++{{ toYaml .Values.resources | indent 2 }}
++{{- if .Values.persistence.enabled }}
++volumeMounts:
++  - name: data
++    mountPath: {{ .Values.persistence.mountPath | quote }}
++{{- end }}
++{{- end -}}
++
++{{/* Env vars shared by seed and joiner pods */}}
++{{- define "lagrange-node.envCommon" -}}
++- name: POD_NAME
++  valueFrom:
++    fieldRef:
++      fieldPath: metadata.name
++- name: POD_NAMESPACE
++  valueFrom:
++    fieldRef:
++      fieldPath: metadata.namespace
++# NODE_ID is deliberately NOT set: join admission requires a UUID, so the
++# runtime mints one on first boot and restores it from the data directory
++# (rejoin hints) on every restart — identity is durable via the PVC.
++- name: REST_API_PORT
++  value: {{ .Values.node.restPort | quote }}
++- name: LOG_LEVEL
++  value: {{ .Values.node.logLevel | quote }}
++# Bind wide, advertise + register the stable per-pod DNS name (name-first
++# addressing). NODE_ADDRESS must be unique per node — the default would
++# register every pod as localhost:<restPort> and collide at join admission.
++- name: TRANSPORT_WS_HOST
++  value: "0.0.0.0"
++- name: NODE_ADDRESS
++  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (int .Values.node.restPort) | quote }}
++- name: NODE_ADVERTISED_WS_ADDRESS
++  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (add (int .Values.node.restPort) 2) | quote }}
++{{- with .Values.node.extraEnv }}
++{{ toYaml . }}
++{{- end }}
++{{- end -}}
++
++{{/* Seed node REST address joiners bootstrap from (http:// is auto-prefixed) */}}
++{{- define "lagrange-node.seedAddress" -}}
++{{- printf "%s-seed-0.%s.%s.svc.cluster.local:%d" (include "lagrange-node.fullname" .) (include "lagrange-node.headlessService" .) .Release.Namespace (int .Values.node.restPort) -}}
++{{- end -}}
++
++{{/* PVC template shared by both StatefulSets */}}
++{{- define "lagrange-node.volumeClaimTemplates" -}}
++{{- if .Values.persistence.enabled }}
++volumeClaimTemplates:
++  - metadata:
++      name: data
++    spec:
++      accessModes: ["ReadWriteOnce"]
++      {{- with .Values.persistence.storageClass }}
++      storageClassName: {{ . | quote }}
++      {{- end }}
++      resources:
++        requests:
++          storage: {{ .Values.persistence.size | quote }}
++{{- end }}
++{{- end -}}
+diff --git a/charts/lagrange-node/templates/service-headless.yaml b/charts/lagrange-node/templates/service-headless.yaml
+new file mode 100644
+index 00000000..1a18adb1
+--- /dev/null
++++ b/charts/lagrange-node/templates/service-headless.yaml
+@@ -0,0 +1,24 @@
++# Headless service: gives every node pod (seed and joiners) a stable DNS name
++# — the identity each node advertises (NODE_ADVERTISED_WS_ADDRESS), so peers
++# re-resolve the name across pod restarts instead of caching a dead IP.
++apiVersion: v1
++kind: Service
++metadata:
++  name: {{ include "lagrange-node.headlessService" . }}
++  labels:
++    {{- include "lagrange-node.labels" . | nindent 4 }}
++spec:
++  clusterIP: None
++  # Nodes must be resolvable while starting up (before readiness) so joiners
++  # can dial the seed and peers can dial each other during formation.
++  publishNotReadyAddresses: true
++  selector:
++    {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
++  ports:
++    - name: rest
++      port: {{ int .Values.node.restPort }}
++    # Admin WS is a hardcoded runtime constant, independent of restPort.
++    - name: admin-ws
++      port: 8081
++    - name: transport-ws
++      port: {{ add (int .Values.node.restPort) 2 }}
+diff --git a/charts/lagrange-node/templates/service.yaml b/charts/lagrange-node/templates/service.yaml
+new file mode 100644
+index 00000000..ae5cb60e
+--- /dev/null
++++ b/charts/lagrange-node/templates/service.yaml
+@@ -0,0 +1,21 @@
++# Client-facing service across all ready nodes (REST API + admin WS).
++# The pgwire SQL endpoint is a managed service started on demand, not a boot
++# listener, so no 5432 port is exposed here.
++apiVersion: v1
++kind: Service
++metadata:
++  name: {{ include "lagrange-node.fullname" . }}
++  labels:
++    {{- include "lagrange-node.labels" . | nindent 4 }}
++spec:
++  type: {{ .Values.service.type }}
++  selector:
++    {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
++  ports:
++    - name: rest
++      port: {{ int .Values.node.restPort }}
++      targetPort: rest
++    # Admin WS is a hardcoded runtime constant, independent of restPort.
++    - name: admin-ws
++      port: 8081
++      targetPort: admin-ws
+diff --git a/charts/lagrange-node/templates/statefulset-joiner.yaml b/charts/lagrange-node/templates/statefulset-joiner.yaml
+new file mode 100644
+index 00000000..a319d004
+--- /dev/null
++++ b/charts/lagrange-node/templates/statefulset-joiner.yaml
+@@ -0,0 +1,50 @@
++# Joiner nodes — bootstrap into the cluster via the seed's REST address
++# (SEED_NODE_ADDRESS; the entrypoint auto-prefixes http://). Node identity is
++# the UUID nodeId, not the IP, and the advertised WS address is the stable
++# per-pod DNS name, so joiners survive pod restarts with new IPs.
++apiVersion: apps/v1
++kind: StatefulSet
++metadata:
++  name: {{ include "lagrange-node.fullname" . }}-joiner
++  labels:
++    {{- include "lagrange-node.labels" . | nindent 4 }}
++    app.kubernetes.io/component: joiner
++spec:
++  replicas: {{ int .Values.joiners.replicas }}
++  serviceName: {{ include "lagrange-node.headlessService" . }}
++  # Joiners are peers, not a sequence — start them together.
++  podManagementPolicy: Parallel
++  selector:
++    matchLabels:
++      {{- include "lagrange-node.selectorLabels" . | nindent 6 }}
++      app.kubernetes.io/component: joiner
++  template:
++    metadata:
++      labels:
++        {{- include "lagrange-node.selectorLabels" . | nindent 8 }}
++        app.kubernetes.io/component: joiner
++      {{- with .Values.podAnnotations }}
++      annotations:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++    spec:
++      containers:
++        - name: lagrange
++          {{- include "lagrange-node.containerCommon" . | nindent 10 }}
++          env:
++            {{- include "lagrange-node.envCommon" . | nindent 12 }}
++            - name: SEED_NODE_ADDRESS
++              value: {{ include "lagrange-node.seedAddress" . | quote }}
++      {{- with .Values.nodeSelector }}
++      nodeSelector:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++      {{- with .Values.tolerations }}
++      tolerations:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++      {{- with .Values.affinity }}
++      affinity:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++  {{- include "lagrange-node.volumeClaimTemplates" . | nindent 2 }}
+diff --git a/charts/lagrange-node/templates/statefulset-seed.yaml b/charts/lagrange-node/templates/statefulset-seed.yaml
+new file mode 100644
+index 00000000..eada8c94
+--- /dev/null
++++ b/charts/lagrange-node/templates/statefulset-seed.yaml
+@@ -0,0 +1,45 @@
++# Seed node — always exactly 1 replica. The entrypoint takes its seed startup
++# branch when no SEED_NODE_ADDRESS is set (there is no self-seed guard, so the
++# seed must not be pointed at itself).
++apiVersion: apps/v1
++kind: StatefulSet
++metadata:
++  name: {{ include "lagrange-node.fullname" . }}-seed
++  labels:
++    {{- include "lagrange-node.labels" . | nindent 4 }}
++    app.kubernetes.io/component: seed
++spec:
++  replicas: 1
++  serviceName: {{ include "lagrange-node.headlessService" . }}
++  selector:
++    matchLabels:
++      {{- include "lagrange-node.selectorLabels" . | nindent 6 }}
++      app.kubernetes.io/component: seed
++  template:
++    metadata:
++      labels:
++        {{- include "lagrange-node.selectorLabels" . | nindent 8 }}
++        app.kubernetes.io/component: seed
++      {{- with .Values.podAnnotations }}
++      annotations:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++    spec:
++      containers:
++        - name: lagrange
++          {{- include "lagrange-node.containerCommon" . | nindent 10 }}
++          env:
++            {{- include "lagrange-node.envCommon" . | nindent 12 }}
++      {{- with .Values.nodeSelector }}
++      nodeSelector:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++      {{- with .Values.tolerations }}
++      tolerations:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++      {{- with .Values.affinity }}
++      affinity:
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
++  {{- include "lagrange-node.volumeClaimTemplates" . | nindent 2 }}
+diff --git a/charts/lagrange-node/values.yaml b/charts/lagrange-node/values.yaml
+new file mode 100644
+index 00000000..f919077f
+--- /dev/null
++++ b/charts/lagrange-node/values.yaml
+@@ -0,0 +1,65 @@
++# Default values for lagrange-node.
++#
++# Topology: one seed StatefulSet (always 1 replica) plus a joiner StatefulSet.
++# Total cluster size = 1 + joiners.replicas. The split into two workloads is
++# deliberate: the node entrypoint has distinct seed/joiner startup branches
++# (seed = no SEED_NODE_ADDRESS), and the runtime image is distroless (no
++# shell), so ordinal-based "pod-0 is the seed" logic cannot run in-container.
++
++image:
++  repository: codeberg.org/psvensson/lagrange
++  tag: ""            # defaults to .Chart.appVersion
++  pullPolicy: IfNotPresent
++
++# Number of non-seed nodes. 2 joiners + 1 seed = 3-node cluster.
++joiners:
++  replicas: 2
++
++node:
++  # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
++  # the runtime). The admin WS port is a hardcoded runtime constant 8081 and
++  # does NOT move with restPort — so never set restPort to 8081 or 8079
++  # (collision with admin WS).
++  restPort: 8080
++  logLevel: info
++  # V8 heap cap passed as --max-old-space-size. Keep below the container
++  # memory limit.
++  maxOldSpaceSizeMb: 1536
++  # Extra environment variables for every node (e.g. RAFT_* tuning; see
++  # src/config/config-constants.js ENV_MAPPINGS for the supported set).
++  extraEnv: []
++
++persistence:
++  enabled: true
++  size: 10Gi
++  storageClass: ""   # empty = cluster default
++  mountPath: /data
++
++service:
++  # Client-facing service (REST + admin WS) in front of all nodes.
++  type: ClusterIP
++
++resources:
++  requests:
++    cpu: "1"
++    memory: 2Gi
++  limits:
++    memory: 2Gi
++
++# Probes hit the bootstrap REST API on the REST port.
++probes:
++  liveness:
++    path: /health
++    initialDelaySeconds: 10
++    periodSeconds: 10
++    failureThreshold: 6
++  readiness:
++    path: /readyz
++    initialDelaySeconds: 5
++    periodSeconds: 5
++    failureThreshold: 12
++
++podAnnotations: {}
++nodeSelector: {}
++tolerations: []
++affinity: {}
+diff --git a/src/bootstrap/rejoin-hints.js b/src/bootstrap/rejoin-hints.js
+index 1e76764c..a24adfd9 100644
+--- a/src/bootstrap/rejoin-hints.js
++++ b/src/bootstrap/rejoin-hints.js
+@@ -272,6 +272,22 @@ async function readRejoinHints(dataDir) {
+   }
+ }
+ 
++/**
++ * Read the node identity persisted with the rejoin hints, for reuse on
++ * restart. A node that boots over an existing data directory with a freshly
++ * generated id is refused as an identity mismatch (see
++ * IDENTITY_MISMATCH_ERROR_MESSAGE), so a deployment without an explicit
++ * NODE_ID needs the durable identity restored before configuration
++ * initialization mints a new one.
++ * @param {string} dataDir - Data directory holding the rejoin hints file.
++ * @return {Promise<string|null>} The persisted node id, or null when absent.
++ */
++async function readPersistedLocalNodeId(dataDir) {
++  const hints = await readRejoinHints(dataDir);
++  const localNodeId = normalizeAddress(hints?.localNodeId);
++  return localNodeId || null;
++}
++
+ function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
+   if (!hints || typeof hints !== 'object') {
+     return false;
+@@ -781,6 +797,7 @@ export {
+   buildBootstrapRejoinHintsSnapshot,
+   buildRejoinHintsSnapshot,
+   persistBootstrapRejoinHints,
++  readPersistedLocalNodeId,
+   readRejoinHints,
+   RejoinHintsPersistenceService,
+   resolveAutoRejoinStartupDecision,
+diff --git a/src/control-plane/control-plane-readiness-snapshot-store.js b/src/control-plane/control-plane-readiness-snapshot-store.js
+index 10167346..d07e9c1b 100644
+--- a/src/control-plane/control-plane-readiness-snapshot-store.js
++++ b/src/control-plane/control-plane-readiness-snapshot-store.js
+@@ -50,6 +50,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
+       return null;
+     }
+ 
++    // Local query-transport readiness is LIVE router evidence: it flips
++    // without any node-row heartbeat advance or cache-change marker, so the
++    // watermark/marker checks below cannot see the change. Owner-read
++    // participation depends on observing the flip immediately (DEFER with a
++    // retry hint while the local transport is down, recover as soon as it is
++    // back), so a stored snapshot whose captured transport verdict drifted
++    // from the live one must be rebuilt, not reused.
++    if (
++      this.hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot)
++    ) {
++      return null;
++    }
++
+     const storedWatermark =
+       this.buildStoredReadinessSnapshotWatermark(storedSnapshot);
+     if (!storedWatermark) {
+@@ -94,6 +107,42 @@ const controlPlaneReadinessSnapshotStoreMethods = {
+     });
+   },
+ 
++  /**
++   * Return true when the live local query-transport evidence no longer
++   * matches the transport verdict captured inside one stored snapshot.
++   * Only the self node carries local transport evidence
++   * (getLocalQueryTransportEvidence answers null for every other node), so
++   * this is a cheap in-memory comparison on the hot path and a no-op for
++   * remote rows.
++   * @param {string} nodeId
++   * @param {Object|null} storedSnapshot
++   * @return {boolean}
++   * @private
++   */
++  hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot) {
++    if (typeof this.getLocalQueryTransportEvidence !== 'function') {
++      return false;
++    }
++    const liveEvidence = this.getLocalQueryTransportEvidence(nodeId);
++    if (!liveEvidence || typeof liveEvidence !== 'object') {
++      return false;
++    }
++    const nodeEvidence = storedSnapshot?.nodeEvidence;
++    if (!nodeEvidence || typeof nodeEvidence !== 'object') {
++      return false;
++    }
++    return (
++      (nodeEvidence.localQueryTransportState ?? null) !==
++        (liveEvidence.state ?? null) ||
++      (nodeEvidence.localQueryTransportReady ?? null) !==
++        (liveEvidence.ready ?? null) ||
++      (nodeEvidence.localQueryTransportReasonCode ?? null) !==
++        (liveEvidence.reasonCode ?? null) ||
++      (nodeEvidence.localQueryTransportRetryAfterMs ?? null) !==
++        (liveEvidence.retryAfterMs ?? null)
++    );
++  },
++
+   /**
+    * Return true when one stored readiness snapshot is still safe to reuse for
+    * hot-path sync consumers.
+diff --git a/src/index.js b/src/index.js
+index 2853ce88..b4e259c4 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -2,6 +2,7 @@
+  * Distributed Database System - Main Entry Point
+  */
+ 
++import './boot/load-env.js';
+ import {dirname} from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ import {
+@@ -10,7 +11,7 @@ import {
+ } from './diagnostics/source-fingerprint.js';
+ import {EventLoopGapWatchdog} from './diagnostics/event-loop-gap-watchdog.js';
+ import {ConfigurationManager} from './config/configuration-manager.js';
+-import {CONFIG_KEY} from './config/config-constants.js';
++import {CONFIG_KEY, DEFAULT_CONFIG} from './config/config-constants.js';
+ import {LoggingService} from './logging/logging-service.js';
+ import {HLCClockService} from './hlc/hlc-clock-service.js';
+ import {DataDirectoryManager} from './storage/data-directory-manager.js';
+@@ -21,6 +22,7 @@ import {createControlPlaneWriteHealthProvider} from
+ import {
+   resolveAutoRejoinStartupDecision,
+   persistBootstrapRejoinHints,
++  readPersistedLocalNodeId,
+ } from './bootstrap/rejoin-hints.js';
+ import {
+   STARTUP_JOIN_MODE,
+@@ -746,6 +748,22 @@ async function main() {
+     overrides.storage = {dataDir: cliArgs.dataDir};
+   }
+ 
++  // Restore the durable node identity before configuration initialization
++  // mints a fresh one: booting over an existing data directory with a new
++  // generated id is refused as an identity mismatch, so a deployment without
++  // an explicit NODE_ID (e.g. an orchestrator restarting a pod onto its
++  // persistent volume) must reuse the id persisted with the rejoin hints.
++  // An explicit NODE_ID env keeps full precedence.
++  if (!process.env.NODE_ID) {
++    const identityDataDir = cliArgs.dataDir ||
++      process.env.DATA_DIR ||
++      DEFAULT_CONFIG.storage.dataDir;
++    const persistedNodeId = await readPersistedLocalNodeId(identityDataDir);
++    if (persistedNodeId) {
++      overrides.node = {id: persistedNodeId};
++    }
++  }
++
+   // Initialize configuration
+   const config = ConfigurationManager.getInstance();
+   config.initialize(overrides);
+diff --git a/src/sea-entry.js b/src/sea-entry.js
+index 0e406c21..401aef09 100644
+--- a/src/sea-entry.js
++++ b/src/sea-entry.js
+@@ -14,7 +14,6 @@ import {
+ 
+ const LOCAL_STR_OPTIONS = 'Options:';
+ const LOCAL_STR_ENVIRONMENT_VARIABLES = 'Environment Variables:';
+-const LOCAL_STR_INDEX_JS = './index.js';
+ const LOCAL_STR_ERR_UNKNOWN_BUILTIN_MODULE = 'ERR_UNKNOWN_BUILTIN_MODULE';
+ 
+ const VERSION = ENTRYPOINT_VERSION;
+@@ -53,8 +52,12 @@ if (checkVersionFlag()) {
+   process.exit(0);
+ }
+ 
+-// Load the main module (this will fail if native modules are not available)
+-import(LOCAL_STR_INDEX_JS).catch((err) => {
++// Load the main module (this will fail if native modules are not available).
++// The specifier must be a string LITERAL: esbuild only statically resolves and
++// bundles literal dynamic imports. With a const-variable specifier the import
++// was left as a runtime lookup that resolved ./index.js against the process
++// cwd, so the SEA binary could never boot the real system (ERR_MODULE_NOT_FOUND).
++import('./index.js').catch((err) => {
+   if (err.code === LOCAL_STR_ERR_UNKNOWN_BUILTIN_MODULE) {
+     console.error(ENTRYPOINT_TEXT.SEA_NATIVE_ERROR);
+     console.error('');
