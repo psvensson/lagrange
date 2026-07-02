@@ -1,7 +1,9 @@
 replicaCount: 2
 
 image:
-  repository: ghcr.io/example/system-endpoint-sync-controller
+  # Placeholder — no controller image is published by the release pipeline;
+  # point this at your own build (see the chart README for the entrypoint).
+  repository: ghcr.io/example/lagrange-endpoint-sync-controller
   pullPolicy: IfNotPresent
   tag: "0.1.0"
 

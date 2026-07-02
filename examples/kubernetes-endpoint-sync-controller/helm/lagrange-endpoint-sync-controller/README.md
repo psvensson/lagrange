@@ -1,6 +1,7 @@
-# system-endpoint-sync-controller Chart
+# lagrange-endpoint-sync-controller Chart
 
-Sample chart for deploying a Kubernetes-side endpoint sync controller.
+Sample chart for deploying a Kubernetes-side endpoint sync controller that
+projects Lagrange `service_endpoints` metadata into native Kubernetes objects.
 
 ## Runtime Entrypoint
 

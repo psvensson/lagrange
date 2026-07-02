@@ -1,39 +1,39 @@
 # Kubernetes Endpoint Sync Controller Example
 
 This example shows how to deploy a Kubernetes-side endpoint sync controller
-that projects system `service_endpoints` metadata into selector-less
+that projects Lagrange `service_endpoints` metadata into selector-less
 Kubernetes `Service` + `EndpointSlice` resources.
 
 This is a sample packaging artifact intended for integration testing and
 customer onboarding.
 
-## Kubernetes vs System (Key Differences)
+## Kubernetes vs Lagrange (Key Differences)
 
-The system and Kubernetes solve different ownership problems:
+Lagrange and Kubernetes solve different ownership problems:
 
-| Concern | Kubernetes Standard Model | This System Model |
+| Concern | Kubernetes Standard Model | Lagrange Model |
 | --- | --- | --- |
 | Workload unit | Pod/Deployment is the app unit | Replicated service is the app unit |
-| Placement owner | Kubernetes scheduler | System rebalancer/runtime lifecycle |
+| Placement owner | Kubernetes scheduler | Lagrange rebalancer/runtime lifecycle |
 | Endpoint source | Pod selectors + kube endpoints | Canonical `service_endpoints` table |
-| Service discovery objects | Kubernetes builds from Pod labels | Endpoint sync controller projects from system metadata |
-| Control-plane mutations | Kubernetes-native APIs | System SQL/CDC and internal control-plane services |
+| Service discovery objects | Kubernetes builds from Pod labels | Endpoint sync controller projects from Lagrange metadata |
+| Control-plane mutations | Kubernetes-native APIs | Lagrange SQL/CDC and internal control-plane services |
 
 Practical implication:
 
 - Kubernetes is still the infrastructure/orchestration layer.
-- The system remains source-of-truth for service placement and endpoint intent.
-- Endpoint sync is the bridge: it publishes system endpoint intent into native
-  Kubernetes `Service`/`EndpointSlice` objects.
+- Lagrange remains source-of-truth for service placement and endpoint intent.
+- Endpoint sync is the bridge: it publishes Lagrange endpoint intent into
+  native Kubernetes `Service`/`EndpointSlice` objects.
 
 ## Layout
 
-- `helm/system-endpoint-sync-controller/`: sample Helm chart
+- `helm/lagrange-endpoint-sync-controller/`: sample Helm chart
 
 ## Built-In System Services (Expected)
 
 These are the core replicated system services you should see in a standard
-deployment:
+Lagrange deployment:
 
 | Service ID | Purpose | Typical External Use |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ The projected name comes from:
 
 ```bash
 helm template endpoint-sync \
-  examples/kubernetes-endpoint-sync-controller/helm/system-endpoint-sync-controller
+  examples/kubernetes-endpoint-sync-controller/helm/lagrange-endpoint-sync-controller
 ```
 
 ## Quick Start (Local Process)
@@ -97,7 +97,7 @@ npm run test:chart:endpoint-sync
 
 ```bash
 helm upgrade --install endpoint-sync \
-  examples/kubernetes-endpoint-sync-controller/helm/system-endpoint-sync-controller \
+  examples/kubernetes-endpoint-sync-controller/helm/lagrange-endpoint-sync-controller \
   --namespace endpoint-sync \
   --create-namespace \
   --set source.adminStreamUrl=ws://my-node:8081/api/admin/stream \

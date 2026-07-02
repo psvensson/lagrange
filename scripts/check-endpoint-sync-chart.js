@@ -10,7 +10,7 @@ const HELM_TEMPLATE_CMD = 'template';
 const HELM_LINT_CMD = 'lint';
 const RELEASE_NAMESPACE = 'endpoint-sync';
 const CHART_PATH = resolve(
-  'examples/kubernetes-endpoint-sync-controller/helm/system-endpoint-sync-controller',
+  'examples/kubernetes-endpoint-sync-controller/helm/lagrange-endpoint-sync-controller',
 );
 
 const SCENARIOS = Object.freeze([

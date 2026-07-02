@@ -5,18 +5,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "system-endpoint-sync-controller.fullname" . }}
+  name: {{ include "lagrange-endpoint-sync-controller.fullname" . }}
   labels:
-    {{- include "system-endpoint-sync-controller.labels" . | nindent 4 }}
+    {{- include "lagrange-endpoint-sync-controller.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "system-endpoint-sync-controller.selectorLabels" . | nindent 6 }}
+      {{- include "lagrange-endpoint-sync-controller.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "system-endpoint-sync-controller.selectorLabels" . | nindent 8 }}
+        {{- include "lagrange-endpoint-sync-controller.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -25,7 +25,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "system-endpoint-sync-controller.serviceAccountName" . }}
+      serviceAccountName: {{ include "lagrange-endpoint-sync-controller.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

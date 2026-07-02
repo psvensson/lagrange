@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "system-endpoint-sync-controller.fullname" . }}
+  name: {{ include "lagrange-endpoint-sync-controller.fullname" . }}
   labels:
-    {{- include "system-endpoint-sync-controller.labels" . | nindent 4 }}
+    {{- include "lagrange-endpoint-sync-controller.labels" . | nindent 4 }}
   {{- with .Values.metrics.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -17,5 +17,5 @@ spec:
       protocol: TCP
       name: metrics
   selector:
-    {{- include "system-endpoint-sync-controller.selectorLabels" . | nindent 4 }}
+    {{- include "lagrange-endpoint-sync-controller.selectorLabels" . | nindent 4 }}
 {{- end }}
