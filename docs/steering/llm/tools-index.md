@@ -198,7 +198,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:convergence-probes` — `tap $(cat test/shards/convergence-probes.txt)`
 - `test:cycles` — `node scripts/check-circular-dependencies.js`
 - `test:cycles:strict` — `node scripts/check-circular-dependencies.js --strict`
-- `test:deps` — `depcruise --config dependency-cruiser.config.cjs src test`
+- `test:deps` — `depcruise --config dependency-cruiser.config.cjs --ignore-known .dependency-cruiser-known-violations.json src test`
 - `test:distributed:boundary:transition` — `node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js`
 - `test:distributed:checkpoint:7node:transaction-recovery` — `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery`
 - `test:duplication` — `node scripts/check-duplication.js`

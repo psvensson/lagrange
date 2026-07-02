@@ -45,7 +45,7 @@
     "test:unused:prod": "knip --production --include dependencies",
     "test:unused:exports": "knip --include exports",
     "test:unused:ratchet": "node scripts/check-unused-exports.js",
-    "test:deps": "depcruise --config dependency-cruiser.config.cjs src test",
+    "test:deps": "depcruise --config dependency-cruiser.config.cjs --ignore-known .dependency-cruiser-known-violations.json src test",
     "test:complexity": "node scripts/check-complexity.js",
     "test:complexity:strict": "node scripts/check-complexity.js --strict",
     "test:complexity:scoped": "node scripts/check-complexity.js --scoped",

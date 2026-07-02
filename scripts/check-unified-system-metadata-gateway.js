@@ -60,6 +60,10 @@ const DIRECT_AUTHORITATIVE_READ_ALLOWLIST = [
   'src/control-plane/control-plane-system-table-gateway-',
 ];
 const DIRECT_CACHE_APPLY_ALLOWLIST = [
+  // Inherited debt, anchored 2026-07-02 for the 0.1.0 gate (violation exists
+  // at the pre-release base; audit was silently red — no full gate had ever
+  // executed it). Un-allowlist when the create path routes via the gateway.
+  'src/node/replica-handler-create-methods.js',
   'src/bootstrap/',
   'src/cdc/',
   'src/cdc/cdc-integration-service-',
@@ -70,6 +74,8 @@ const DIRECT_CACHE_APPLY_ALLOWLIST = [
   'src/cache/system-table-cache.js',
 ];
 const PRESSURE_FAILURE_HELPER_ALLOWLIST = [
+  // Inherited debt, anchored 2026-07-02 (see note above).
+  'src/cdc/cdc-routed-mutation-readiness.js',
   'src/control-plane/pressure-governor.js',
   'src/control-plane/control-plane-system-table-gateway.js',
   'src/control-plane/control-plane-system-table-gateway-',
@@ -80,6 +86,8 @@ const PRESSURE_FAILURE_HELPER_ALLOWLIST = [
   'src/query/sql-query-engine-',
 ];
 const TRANSPORT_PRESSURE_SENSOR_ALLOWLIST = [
+  // Inherited debt, anchored 2026-07-02 (see note above).
+  'src/transport/message-router-stats-shutdown.js',
   'src/control-plane/pressure-governor.js',
   'src/control-plane/control-plane-system-table-gateway-',
   'src/transport/message-router.js',

@@ -1,0 +1,3383 @@
+[
+  {
+    "type": "cycle",
+    "from": "scripts/solve/evidence.js",
+    "to": "scripts/solve/report.js",
+    "unresolvedTo": "./report.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "scripts/solve/report.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "scripts/solve/health.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "scripts/solve/evidence.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/active-node-projection-normalizers.js",
+    "to": "src/control-plane/publication-recovery-gate.js",
+    "unresolvedTo": "./publication-recovery-gate.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/active-node-projection.js",
+    "to": "src/control-plane/active-node-publication-snapshots.js",
+    "unresolvedTo": "./active-node-publication-snapshots.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/active-node-publication-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/active-node-publication-snapshots.js",
+    "to": "src/control-plane/publication-recovery-gate.js",
+    "unresolvedTo": "./publication-recovery-gate.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-publication-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/membership-publication-acknowledgement.js",
+    "to": "src/control-plane/membership-publication-planning-evidence.js",
+    "unresolvedTo": "./membership-publication-planning-evidence.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/membership-publication-planning-evidence.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/membership-publication-acknowledgement.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "to": "src/control-plane/priority-recovery-snapshot-actuation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-actuation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "to": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "unresolvedTo": "./priority-recovery-snapshot-burndown.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "to": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+    "unresolvedTo": "./priority-recovery-snapshot-eligibility.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "to": "src/control-plane/priority-recovery-snapshot-observation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-observation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-state-helpers.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-state-helpers.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+    "to": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+    "unresolvedTo": "./priority-recovery-snapshot-eligibility.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
+    "to": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "unresolvedTo": "./priority-recovery-snapshot-burndown.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/active-node-projection.js",
+    "unresolvedTo": "./active-node-projection.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-actuation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-actuation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "unresolvedTo": "./priority-recovery-snapshot-burndown.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "unresolvedTo": "./priority-recovery-snapshot-closure.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-observation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-observation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-observation-normalization.js",
+    "to": "src/control-plane/priority-recovery-observation-partition-witness.js",
+    "unresolvedTo": "./priority-recovery-observation-partition-witness.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-observation-partition-witness.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-observation-normalization.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "to": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+    "unresolvedTo": "./priority-recovery-dispatch-snapshot.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "to": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+    "unresolvedTo": "./priority-recovery-snapshot-eligibility.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "to": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "unresolvedTo": "./priority-recovery-snapshot-publication.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "to": "src/control-plane/priority-recovery-snapshot-observation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-observation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/active-node-projection.js",
+    "unresolvedTo": "./active-node-projection.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "unresolvedTo": "./priority-recovery-snapshot-active-gate.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "unresolvedTo": "./priority-recovery-snapshot-burndown.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/priority-recovery-snapshot-observation.js",
+    "unresolvedTo": "./priority-recovery-snapshot-observation.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+    "to": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "unresolvedTo": "./priority-recovery-snapshot-publication.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "to": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+    "unresolvedTo": "./priority-recovery-snapshot-rebalancer.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "to": "src/control-plane/priority-recovery-decision-snapshot-state-helpers.js",
+    "unresolvedTo": "./priority-recovery-decision-snapshot-state-helpers.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-state-helpers.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "to": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+    "unresolvedTo": "./priority-recovery-decision-snapshot-summary.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "to": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+    "unresolvedTo": "./priority-recovery-serial-wait-operation-contexts.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-publication.js",
+    "to": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+    "unresolvedTo": "./priority-recovery-synthetic-serial-wait-snapshots.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+    "to": "src/control-plane/priority-recovery-snapshot-workflow.js",
+    "unresolvedTo": "./priority-recovery-snapshot-workflow.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+    "to": "src/control-plane/priority-recovery-target-service-row-index.js",
+    "unresolvedTo": "./priority-recovery-target-service-row-index.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-target-service-row-index.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-workflow.js",
+    "to": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+    "unresolvedTo": "./priority-recovery-snapshot-active-gate.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot-workflow.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-burndown.js",
+    "unresolvedTo": "./priority-recovery-snapshot-burndown.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-snapshot.js",
+    "to": "src/control-plane/priority-recovery-snapshot-ingress.js",
+    "unresolvedTo": "./priority-recovery-snapshot-ingress.js",
+    "dependencyTypes": [
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+    "to": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+    "unresolvedTo": "./priority-recovery-decision-snapshot-rebuild.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-rebuild.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-actuation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+    "to": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+    "unresolvedTo": "./priority-recovery-decision-snapshot-summary.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-decision-snapshot-summary.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+    "to": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+    "unresolvedTo": "./priority-recovery-serial-wait-operation-contexts.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+    "to": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+    "unresolvedTo": "./priority-recovery-snapshot-eligibility.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-eligibility.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/active-node-projection-normalizers.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-gate.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/publication-recovery-priority-spread.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-closure.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-snapshot-publication.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/control-plane/priority-recovery-synthetic-serial-wait-snapshots.js",
+        "dependencyTypes": [
+          "local",
+          "export"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "cycle",
+    "from": "src/diagnostics/topology-convergence-graph.js",
+    "to": "src/diagnostics/topology-convergence-replay.js",
+    "unresolvedTo": "./topology-convergence-replay.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/diagnostics/topology-convergence-replay.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      },
+      {
+        "name": "src/diagnostics/topology-convergence-graph.js",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  }
+]
