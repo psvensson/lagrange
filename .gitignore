@@ -48,3 +48,14 @@ solve/invariant-status.generated.md
 
 # TLC scratch output from manual tlc2.TLC runs
 states/
+
+# Gastown agent-workspace artifacts (external tooling state, never part of the release)
+.beads/
+city.toml
+/orders/
+/formulas/
+/packs/
+/prompts/
+/hooks/
+/exports/
+/work/

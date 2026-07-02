@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Fast structural guards (<2s). Bypass for a single commit with
-# SKIP_GATE_HOOKS=1 git commit ...
-set -euo pipefail
-if [ "${SKIP_GATE_HOOKS:-0}" = "1" ]; then exit 0; fi
-npm run -s audit:file-size
-npm run -s audit:guideline:hot-path-diagnostics
-node tooling/validators/check-staged-constant-names.js

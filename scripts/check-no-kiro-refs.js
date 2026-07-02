@@ -15,7 +15,6 @@ import {execFileSync} from 'node:child_process';
 // working copy — none of which is the live operating surface.
 const ALLOWED_PREFIXES = Object.freeze([
   '_legacy_work/', // archived specs + pre-Quest work packages
-  'exports/', // portable method snapshot that documents extraction FROM .kiro
   '.claude/worktrees/', // parallel git worktrees
   'solve/changes/', // recorded historical diffs of past Quest work
   'solve/log/', // append-only event logs (immutable)
