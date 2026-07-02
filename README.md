@@ -9,12 +9,34 @@ The basic idea is simple: if the data already lives on a node, run the work
 there first and move only the data that actually has to move.
 
 That puts Lagrange somewhere between a distributed SQL database, a dataflow
-runtime, and a service platform. Tables live in replicated partitions. SQL
-goes through one execution engine. Distributed functions and services can run
-close to the partitions that own the data.
+runtime, and a service platform. Tables are split into partitions, every
+partition is copied to several nodes, SQL goes through one execution engine,
+and distributed functions and services can run on the same nodes that store
+the data they use.
 
 This repo is for people interested in building or studying that model. It is
 substantial, but still experimental.
+
+---
+
+## Five Terms This README Leans On
+
+If you work with distributed databases daily, skip ahead. Otherwise, these
+five terms carry most of the meaning on this page:
+
+- **Partition** — one slice of a table's rows. Tables are split into
+  partitions so the cluster can spread storage and work across many nodes.
+- **Replica** — a copy of a partition kept on another node, so losing a node
+  loses no data.
+- **Raft** — the consensus protocol that keeps replicas agreeing. One replica
+  (the leader) accepts writes and the rest follow; if the leader's node dies,
+  the remaining replicas elect a new leader. The node holding the leader is
+  said to *own* that partition.
+- **Shuffle** — copying rows from the nodes that store them to the nodes that
+  need them. In most data systems this is the dominant cost of distributed
+  work, and it happens implicitly, all the time.
+- **Data locality** — running work on the node that already stores the data
+  it reads, so there is nothing to ship.
 
 ---
 
@@ -27,11 +49,13 @@ Lagrange is trying to answer a specific question:
 
 In practice that means:
 
-- table data is partitioned and replicated with Raft
+- table data is split into partitions, each replicated across nodes with Raft
 - SQL runs through a shared execution path
 - distributed compute runs on the nodes that own the relevant partitions
 - services can query tables without a separate data access stack
-- data shuffles are explicit instead of being the default architecture
+- during distributed compute, rows move between nodes only when your code
+  explicitly asks — a shuffle is an operation you invoke, not a side effect
+  baked into every step of the architecture
 
 If you have ever built a system that looked like this:
 
@@ -39,74 +63,14 @@ If you have ever built a system that looked like this:
 app -> database -> queue -> workers -> cache -> database
 ```
 
-then the motivation should be familiar.
+then the motivation should be familiar. Every arrow in that picture copies
+data somewhere else before any useful work happens to it.
 
 Lagrange explores a tighter loop:
 
 ```text
 client -> cluster -> execute near the data -> return results
 ```
-
----
-
-## Good Fit
-
-Lagrange makes sense if you care about any of these:
-
-- partition-local processing where shipping rows around is the main cost
-- distributed SQL workloads that also need custom compute
-- service logic that should execute close to the tables it reads and writes
-- experimenting with WASM-based distributed execution
-- studying the mechanics of a database that treats compute as part of the
-  runtime instead of an external layer
-
-## Not A Good Fit
-
-Lagrange is probably the wrong tool if you need:
-
-- a boring, mature drop-in production database right now
-- polished one-command deployment and operations workflows
-- a general-purpose serverless platform
-- a system where the database and compute tiers must stay separate
-
----
-
-## What Exists Today
-
-This repository already contains real distributed database machinery, not just
-design notes.
-
-Current building blocks include:
-
-- partition groups backed by SQLite and replicated with Raft
-- multi-partition transactions with recovery and timeout handling
-- a shared SQL execution engine used across entry points
-- distributed execution primitives such as `lookup`, `emit`, and `broadcast`
-- WASM service execution and service-to-table query paths
-- cluster diagnostics, health probes, live query support, and an admin CLI
-- distributed failure and stress testing infrastructure
-
-The current roadmap focus is less about proving the core model and more about
-making it easier to run, inspect, and develop against.
-
-See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
-
----
-
-## Small Mental Model
-
-At a high level, a request goes through these steps:
-
-1. a SQL query or runtime call enters the cluster
-2. metadata resolves which partitions own the relevant data
-3. work is sent to those nodes
-4. local execution happens there first
-5. only required cross-partition traffic is performed
-6. results stream back
-
-The important part is not the routing itself. The important part is that data
-movement is treated as a cost to minimize, not as the default programming
-model.
 
 ---
 
@@ -142,7 +106,8 @@ state, and application compute lives outside it in a separate scheduler,
 deployment system, and failure domain.
 
 Lagrange is not mainly about replacing a container scheduler. The difference
-is that compute placement is derived from data ownership.
+is that compute placement is derived from data ownership: the cluster decides
+where your code runs based on which nodes store the data it touches.
 
 In practice that changes a few things:
 
@@ -224,6 +189,74 @@ call.
 
 ---
 
+## Good Fit
+
+Lagrange makes sense if you care about any of these:
+
+- workloads where the real cost is copying rows out of the database to
+  wherever the compute runs — the win is running that compute where the rows
+  already are
+- distributed SQL workloads that also need custom compute
+- service logic that should execute close to the tables it reads and writes
+- experimenting with WASM-based distributed execution
+- studying the mechanics of a database that treats compute as part of the
+  runtime instead of an external layer
+
+## Not A Good Fit
+
+Lagrange is probably the wrong tool if you need:
+
+- a boring, mature drop-in production database right now
+- polished one-command deployment and operations workflows
+- a general-purpose serverless platform
+- a system where the database and compute tiers must stay separate
+
+---
+
+## What Exists Today
+
+This repository already contains real distributed database machinery, not just
+design notes.
+
+Current building blocks include:
+
+- partition groups (a partition plus its replicas, acting as one Raft group)
+  storing their data in SQLite
+- multi-partition transactions with recovery and timeout handling
+- one SQL execution engine shared by every way a query can arrive: clients,
+  services, and internal system queries
+- distributed execution primitives such as `lookup`, `emit`, and `broadcast`
+  (defined in the [Example](#example) section)
+- WASM service execution, with services querying tables through that same
+  SQL engine
+- cluster diagnostics, health probes, live query support, and an admin CLI
+- distributed failure and stress testing infrastructure
+
+The current roadmap focus is less about proving the core model and more about
+making it easier to run, inspect, and develop against.
+
+See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
+
+---
+
+## Small Mental Model
+
+At a high level, a request goes through these steps:
+
+1. a SQL query or runtime call enters the cluster
+2. the cluster looks up which nodes hold the partitions for that data
+3. work is sent to those nodes
+4. local execution happens there first
+5. only the rows that genuinely must cross the network are moved
+6. results stream back
+
+The important part is not the routing itself. The important part is the
+order: local work first, network traffic only for what is left. Most stacks
+are built the other way around — every step ships data somewhere else before
+the work starts.
+
+---
+
 ## Example
 
 ```javascript
@@ -248,7 +281,7 @@ distribution primitives:
 |-----------|-------|---------------|
 | `ctx.lookup(table, keys[])` | Batched fetch | Read from other partitions without hand-rolling request fan-out |
 | `ctx.emit(key, value)` | Shuffle | Redistribute intermediate data when it really must move |
-| `ctx.broadcast(ref, dataset)` | Replicate | Send a small shared dataset to all nodes |
+| `ctx.broadcast(ref, dataset)` | Replicate | Send a small shared dataset to every node involved in the job |
 
 ---
 
@@ -453,7 +486,7 @@ execution:
 - SQL engine (`SqlCore`)
 - message router
 - worker thread pool
-- system metadata cache fed from CDC
+- system metadata cache, kept up to date by change data capture (CDC) events
 
 The deeper architecture docs live here:
 
@@ -469,8 +502,10 @@ The deeper architecture docs live here:
 ### Distributed SQL Database
 
 Tables are partitioned and replicated. Each partition is a Raft group storing
-data in SQLite, which gives leader-based writes, failover behavior, and a
-clear consistency model.
+its data in SQLite: one replica (the leader) accepts writes and replicates
+them to the rest, a new leader is elected automatically when the current one
+fails, and the result is a predictable consistency story rather than
+best-effort eventual consistency.
 
 ### One SQL Engine
 
