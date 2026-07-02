@@ -267,22 +267,73 @@ npm install
 
 ### Minimal Configuration
 
-Create `.env`:
+Create `.env` in the directory you start the node from (loaded at startup;
+variables already set in your shell take precedence):
 
 ```env
 NODE_ID=node-1
-SEED_NODE_ADDRESS=http://seed-node:8080
 REST_API_PORT=8080
 
 LOG_LEVEL=info
 LOG_PRETTY_PRINT=false
 ```
 
+Leave `SEED_NODE_ADDRESS` unset for your first node. A node without a seed
+address starts as the cluster seed; setting one makes the node try to join an
+existing cluster and give up after a few minutes if that seed does not exist.
+
 ### Start A Node
 
 ```bash
 npm start
 ```
+
+The node opens three ports: `8080` (REST API), `8081` (admin websocket), and
+`8082` (node-to-node transport).
+
+### Run A Query
+
+The admin CLI is an interactive terminal UI that connects to the admin port:
+
+```bash
+npm run cli            # connects to localhost:8081
+```
+
+Press `6` to open the SQL view, type a statement, and press `Ctrl+Enter` to
+execute it:
+
+```sql
+CREATE TABLE users (id TEXT PRIMARY KEY)
+```
+
+### Add More Nodes
+
+Additional nodes join the cluster by pointing at the seed:
+
+```bash
+NODE_ID=node-2 REST_API_PORT=8090 \
+SEED_NODE_ADDRESS=http://localhost:8080 npm start
+```
+
+### Docker And Kubernetes
+
+The repo ships a distroless Docker image and a Helm chart:
+
+```bash
+# Single node in Docker
+docker build -t lagrange .
+docker run --rm -p 8080:8080 -p 8081:8081 -p 8082:8082 lagrange
+
+# Seed + joiner cluster on Kubernetes
+helm install lagrange charts/lagrange-node \
+  --set image.repository=<your-registry>/lagrange --set image.tag=<tag>
+```
+
+The chart's default image reference points at the published release image,
+which exists once a `v*` release has been cut; until then, or for local
+builds, set `image.repository`/`image.tag` as above. See
+[charts/lagrange-node/README.md](charts/lagrange-node/README.md) for
+values and topology details.
 
 ### Useful Commands
 
@@ -300,7 +351,7 @@ npm run test:static
 If you are just passing through the repo, the fastest way to get oriented is:
 
 1. read this README
-2. skim [architecture.md](architecture.md)
+2. skim the architecture walkthrough at [architecture/INDEX.md](architecture/INDEX.md)
 3. inspect [roadmap.md](roadmap.md)
 4. look at [src/index.js](src/index.js) and the directories under `src/`
 5. run `npm test` if you want to see the project as executable code rather
@@ -364,7 +415,7 @@ execution:
 
 The deeper architecture docs live here:
 
-- [architecture.md](architecture.md)
+- [architecture/INDEX.md](architecture/INDEX.md) (canonical entry point)
 - [architecture/README.md](architecture/README.md)
 - [architecture/lagrange_architecture_diagrams.md](architecture/lagrange_architecture_diagrams.md)
 - [architecture/lagrange_advanced_architecture_diagrams.md](architecture/lagrange_advanced_architecture_diagrams.md)
@@ -469,8 +520,10 @@ not as a polished end-user product.
 
 ## Further Reading
 
-- [architecture.md](architecture.md) for the main architecture walkthrough
+- [architecture/INDEX.md](architecture/INDEX.md) for the main architecture walkthrough
 - [roadmap.md](roadmap.md) for implementation status and scope
+- [product-roadmap.md](product-roadmap.md) for cross-edition product phases
+- [platform-doctrine.md](platform-doctrine.md) for the platform design doctrine
 - [edition-matrix.md](edition-matrix.md) for edition ownership boundaries
 - [DEBUGGING.md](DEBUGGING.md) for debugging notes
 - [docs/](docs) for operational and feature-specific documents
