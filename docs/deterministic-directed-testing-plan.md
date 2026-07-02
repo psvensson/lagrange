@@ -372,6 +372,22 @@ Author: analysis of the convergence loop + harness, 2026-06-16.
 > (DT7 is net-new CI wiring, not a promotion), and `pauseNode` is docker-pause
 > (cgroup freezer), not literal SIGSTOP.
 
+## What the DT substrate cannot prove (limits table)
+
+The fidelity limits are otherwise scattered across the MOTIVE block, per-step [V]
+notes, and test headers; this table consolidates them so a DT quest is scoped
+against them up front. A DT "not found" or "green" verdict is only as strong as
+the row that bounds it.
+
+| # | Limit | What it means for a verdict | Instrument instead | Anchor |
+| --- | --- | --- | --- | --- |
+| a | CPU-contention / latency-tail races | Out of scope BY DESIGN: the virtual clock/network determinizes message and timer ordering, not CPU contention — virtualizing a latency-tail scenario deletes the race. Never scope a DT quest around scenario-rate fidelity. | The statistical Docker gate (Wilson-95 bar, `docs/convergence-donewhen-metric.md` §5/§7) | This doc's MOTIVE block (~lines 24-41) |
+| b | Real network transport / Docker-only behaviors | TCP resets, dial-to-dead-IP behavior, and cgroup-freezer pauses (`docker pause`) are not modeled in-process; a DT pass says nothing about them. | Docker harness / targeted transport tests | [V] note on `pauseNode` (~line 372) |
+| c | Real persistence / CDC / ack pipeline + not-yet-hosted control-plane subsystems | Steps 5-7 host the publication driver with a required-version stand-in and `InMemoryLogAdapter`; readiness / rebalancer / membership-lifecycle + placement controllers are not on the network yet. | Deferred whole-system DST (the gated north-star program) | "REMAINING toward full DT6" (~lines 313-317, 350-361) |
+| d | Mid-churn invariant sampling under coarse `driveNetwork` | Coarse batching drains a co-due batch before flushing microtasks, so a mid-batch observation is a drive-granularity artifact, not a protocol state; most raw sweep "violations" were this. Coarse and fine are NOT equivalent under a PctScheduler — they can elect different leaders on some seeds. | `driveNetworkFine` (deliver one event, flush to quiescence, observe) | `test/convergence/dt6-fine-drive-midchurn-safety.test.js:9-30` |
+| e | Negative-evidence PCT results | "Not found" is bounded by the seed budget, the depth searched, AND the drive granularity: a coarse-batched search explores a different schedule space than fine (batching changes which events are co-due when the scheduler picks). "Not found" ≠ impossible. | Raise the bound (more seeds / higher depth / fine drive) or make a structural-unreachability argument | `test/convergence/dt6-publication-failback-pct-search.test.js:28-40`; `minimizePctDepth`'s `notReproducedBelow` (~lines 128-133) |
+| f | Unseamed `src/` code (wall-clock leaks) | Only ~15 of ~330 `Date.now()`-using src files thread a TimeSource; everywhere else raw `Date.now`/`setTimeout` runs on the wall clock under virtual time, so a virtual-time run silently exercises real-time logic (e.g. the raw `Date.now()` catch-up inflight-TTL class at `src/raft/liferaft.js:184`). | Thread the DT4 TimeSource seam through the subsystem before trusting a DT verdict that crosses it | `src/time/time-source.js`; `src/raft/liferaft.js:184` |
+
 ## Why this plan
 
 The convergence verdict today is a Monte-Carlo docker gate: N≥8 runs × ~400s ≈ 50

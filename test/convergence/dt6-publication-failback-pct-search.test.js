@@ -33,6 +33,13 @@ import {TABLES} from '../../src/constants/index.js';
 // NOT from the delivery reordering; the search-load-bearing assertion is the reorder COUNT (the
 // scheduler genuinely permuted co-due deliveries), and the invariant held regardless.
 //
+// NEGATIVE-EVIDENCE SCOPE (drive granularity): this search drives the coarse `driveNetwork`, whose
+// stepMs-batched run() delivers a whole co-due batch before flushing microtasks, so the not-found
+// result is bounded negative evidence over the schedule space reachable at THAT granularity — coarse
+// batching hides microtask-spawned co-due orderings, and coarse vs fine are NOT equivalent under a
+// PctScheduler (see dt6-fine-drive-midchurn-safety.test.js). Together with the seed budget and PCT
+// depth, this bounds the claim: "no schedule found" here is not a proof over all interleavings.
+//
 // INVARIANT (asserted on the FINAL, fully-healed, fully-settled state — the coarse converged-outcome
 // regime DT6 is faithful for; this deliberately does NOT sample mid-churn safety, which is item 7's
 // fidelity concern): after partition(leader) + a required v2 bump + heal, every node converges to a

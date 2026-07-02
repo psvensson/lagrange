@@ -29,6 +29,13 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 // stepBudget 4 covers the firings; the PCT floor is 1/(n * stepBudget^(d-1)) = 1/(2*4) =
 // 1/8 per seed, so a 100-seed budget finds it with overwhelming probability — a provable
 // floor on a DISTRIBUTED delivery race, not "hope".
+//
+// NEGATIVE-EVIDENCE SCOPE: the depth-1 not-found result is bounded negative evidence within
+// the seed budget and the schedule space reachable at the drive granularity searched, not a
+// proof over all interleavings (structural unreachability is argued separately above). Here
+// every handler is SYNCHRONOUS (C's handler mutates state and calls netApi.send inline; no
+// awaits or microtask-spawned continuations), so the coarse-vs-fine drive-granularity caveat
+// (dt6-fine-drive-midchurn-safety.test.js) is moot for this scenario.
 
 function networkRaceScenario({scheduler, random}) {
   const net = createVirtualNetwork({scheduler, random});
