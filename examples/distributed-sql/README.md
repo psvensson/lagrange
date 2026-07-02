@@ -67,6 +67,14 @@ owner for packaging/upload/execute logic and makes examples both:
 
 ## Run Locally Against a Node
 
+Start a node first if one is not already running (from the repo root):
+
+```bash
+npm start
+```
+
+Then, in another terminal, point the runner at its admin websocket:
+
 ```bash
 node scripts/examples/build-upload-run.js \
   --target ws://127.0.0.1:8081/api/admin/stream

@@ -7,6 +7,14 @@ only aggregated results return.
 
 Dataset: [MovieLens 100k](https://files.grouplens.org/datasets/movielens/ml-100k/)
 
+## Prerequisites
+
+- **Docker** — the Postgres baseline (steps 2 and 4) starts containers and
+  pulls `postgres:16`; the daemon must be running.
+- **Internet access** — step 1 downloads the dataset from
+  `files.grouplens.org`.
+- Node.js >= 22 and `npm install` done in the repo root.
+
 ## 1) Download the dataset
 
 ```bash
