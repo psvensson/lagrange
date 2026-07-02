@@ -7,7 +7,7 @@ const ENTRYPOINT_VERSION = '0.1.0';
 const ENTRYPOINT_APP = Object.freeze({
   NAME: 'Distributed Database System',
   CLI_NAME: 'distributed-db',
-  PACKAGE_NAME: 'distributed-database-system',
+  PACKAGE_NAME: 'lagrange',
 });
 
 const ENTRYPOINT_FLAG = Object.freeze({

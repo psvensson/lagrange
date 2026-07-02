@@ -1,5 +1,5 @@
 {
-  "name": "distributed-database-system",
+  "name": "lagrange",
   "version": "0.1.0",
   "description": "Lagrange experimental distributed SQL database and compute-near-data runtime",
   "type": "module",
