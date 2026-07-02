@@ -1,0 +1,21 @@
+# Client-facing service across all ready nodes (REST API + admin WS).
+# The pgwire SQL endpoint is a managed service started on demand, not a boot
+# listener, so no 5432 port is exposed here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lagrange-node.fullname" . }}
+  labels:
+    {{- include "lagrange-node.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ int .Values.node.restPort }}
+      targetPort: rest
+    # Admin WS is a hardcoded runtime constant, independent of restPort.
+    - name: admin-ws
+      port: 8081
+      targetPort: admin-ws

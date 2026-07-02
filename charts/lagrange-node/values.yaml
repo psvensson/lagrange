@@ -1,0 +1,65 @@
+# Default values for lagrange-node.
+#
+# Topology: one seed StatefulSet (always 1 replica) plus a joiner StatefulSet.
+# Total cluster size = 1 + joiners.replicas. The split into two workloads is
+# deliberate: the node entrypoint has distinct seed/joiner startup branches
+# (seed = no SEED_NODE_ADDRESS), and the runtime image is distroless (no
+# shell), so ordinal-based "pod-0 is the seed" logic cannot run in-container.
+
+image:
+  repository: codeberg.org/psvensson/lagrange
+  tag: ""            # defaults to .Chart.appVersion
+  pullPolicy: IfNotPresent
+
+# Number of non-seed nodes. 2 joiners + 1 seed = 3-node cluster.
+joiners:
+  replicas: 2
+
+node:
+  # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
+  # the runtime). The admin WS port is a hardcoded runtime constant 8081 and
+  # does NOT move with restPort — so never set restPort to 8081 or 8079
+  # (collision with admin WS).
+  restPort: 8080
+  logLevel: info
+  # V8 heap cap passed as --max-old-space-size. Keep below the container
+  # memory limit.
+  maxOldSpaceSizeMb: 1536
+  # Extra environment variables for every node (e.g. RAFT_* tuning; see
+  # src/config/config-constants.js ENV_MAPPINGS for the supported set).
+  extraEnv: []
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""   # empty = cluster default
+  mountPath: /data
+
+service:
+  # Client-facing service (REST + admin WS) in front of all nodes.
+  type: ClusterIP
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    memory: 2Gi
+
+# Probes hit the bootstrap REST API on the REST port.
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 12
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

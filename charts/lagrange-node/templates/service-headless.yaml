@@ -1,0 +1,24 @@
+# Headless service: gives every node pod (seed and joiners) a stable DNS name
+# — the identity each node advertises (NODE_ADVERTISED_WS_ADDRESS), so peers
+# re-resolve the name across pod restarts instead of caching a dead IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lagrange-node.headlessService" . }}
+  labels:
+    {{- include "lagrange-node.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  # Nodes must be resolvable while starting up (before readiness) so joiners
+  # can dial the seed and peers can dial each other during formation.
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ int .Values.node.restPort }}
+    # Admin WS is a hardcoded runtime constant, independent of restPort.
+    - name: admin-ws
+      port: 8081
+    - name: transport-ws
+      port: {{ add (int .Values.node.restPort) 2 }}

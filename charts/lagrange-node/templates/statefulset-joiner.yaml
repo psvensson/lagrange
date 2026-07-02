@@ -1,0 +1,50 @@
+# Joiner nodes — bootstrap into the cluster via the seed's REST address
+# (SEED_NODE_ADDRESS; the entrypoint auto-prefixes http://). Node identity is
+# the UUID nodeId, not the IP, and the advertised WS address is the stable
+# per-pod DNS name, so joiners survive pod restarts with new IPs.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "lagrange-node.fullname" . }}-joiner
+  labels:
+    {{- include "lagrange-node.labels" . | nindent 4 }}
+    app.kubernetes.io/component: joiner
+spec:
+  replicas: {{ int .Values.joiners.replicas }}
+  serviceName: {{ include "lagrange-node.headlessService" . }}
+  # Joiners are peers, not a sequence — start them together.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "lagrange-node.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: joiner
+  template:
+    metadata:
+      labels:
+        {{- include "lagrange-node.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: joiner
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+        - name: lagrange
+          {{- include "lagrange-node.containerCommon" . | nindent 10 }}
+          env:
+            {{- include "lagrange-node.envCommon" . | nindent 12 }}
+            - name: SEED_NODE_ADDRESS
+              value: {{ include "lagrange-node.seedAddress" . | quote }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- include "lagrange-node.volumeClaimTemplates" . | nindent 2 }}

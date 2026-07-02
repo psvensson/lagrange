@@ -151,7 +151,7 @@ Enterprise
 | `lagrange node start` | 🔲 |
 | `lagrange cluster join` | 🔲 |
 | `docker-compose` cluster | 🔲 |
-| Kubernetes Helm chart | 🔧 |
+| Kubernetes Helm chart | ✅ |
 
 ### 2. Developer Workflow — 🟢 Community
 

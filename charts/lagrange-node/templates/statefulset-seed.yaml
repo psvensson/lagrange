@@ -1,0 +1,45 @@
+# Seed node — always exactly 1 replica. The entrypoint takes its seed startup
+# branch when no SEED_NODE_ADDRESS is set (there is no self-seed guard, so the
+# seed must not be pointed at itself).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "lagrange-node.fullname" . }}-seed
+  labels:
+    {{- include "lagrange-node.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seed
+spec:
+  replicas: 1
+  serviceName: {{ include "lagrange-node.headlessService" . }}
+  selector:
+    matchLabels:
+      {{- include "lagrange-node.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: seed
+  template:
+    metadata:
+      labels:
+        {{- include "lagrange-node.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: seed
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+        - name: lagrange
+          {{- include "lagrange-node.containerCommon" . | nindent 10 }}
+          env:
+            {{- include "lagrange-node.envCommon" . | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- include "lagrange-node.volumeClaimTemplates" . | nindent 2 }}

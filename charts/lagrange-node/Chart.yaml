@@ -1,0 +1,17 @@
+apiVersion: v2
+name: lagrange-node
+description: >-
+  Lagrange experimental distributed SQL database and compute-near-data runtime.
+  Deploys a seed node plus joiner nodes as StatefulSets with stable per-pod DNS
+  identity (name-first addressing survives pod restarts with new IPs).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://codeberg.org/psvensson/lagrange
+sources:
+  - https://codeberg.org/psvensson/lagrange
+keywords:
+  - database
+  - distributed
+  - sql
+  - raft
