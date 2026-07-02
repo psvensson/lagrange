@@ -25,12 +25,11 @@ runner:
     - "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-latest"
 
 container:
-  # Job containers run on the HOST daemon (socket mounted by compose) and get
-  # the socket themselves so release steps can docker build/push.
+  # docker_host as a unix socket makes the runner AUTO-MOUNT it into every job
+  # container, so release steps can docker build/push. Do NOT also add it via
+  # options (-v ...) — that double-mounts and docker rejects the container with
+  # "Duplicate mount point: /var/run/docker.sock".
   docker_host: unix:///var/run/docker.sock
-  options: "-v /var/run/docker.sock:/var/run/docker.sock"
-  valid_volumes:
-    - /var/run/docker.sock
   force_pull: false
 
 cache:
