@@ -187,6 +187,7 @@
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "fastify": "^5.2.1",
+    "millisecond": "^0.1.2",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.4.0",
     "pg": "^8.18.0",
