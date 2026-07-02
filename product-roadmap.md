@@ -18,6 +18,10 @@ actionable work in this codebase.
 | 🔧     | In Progress  |
 | 🔲     | Not Started  |
 
+Note: in [roadmap.md](roadmap.md) the ✅ glyph means "available at roadmap
+scope" — release readiness may still need release-gate proof there, while
+here it simply means done.
+
 ## Edition Legend
 
 | Symbol | Edition              |
