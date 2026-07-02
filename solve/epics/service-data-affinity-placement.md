@@ -176,7 +176,15 @@ existing degenerate form of this alternative).
      wired path REPLACEs a healthy incumbent for a 5-cpu-point challenger; and
      the Tier-1a sim's load dimension picks the same node set as the real
      kernel on a strict ordering (correspondence verified).
-  6. **Verdict machinery lessons** (both caught by adversarial verification,
+  6. **Adaptation-vs-stability band is wide** (census sweep E, hotspot
+     rotation from a converged start): hysteresis 0.05–0.6 all re-converge to
+     the shifted optimum in one planner pass (6–9 moves); 0 churns
+     (oscillation, 45 moves); ≥ the affinity gradient (~0.85 here) stops
+     tracking the workload (partial at 0.9, frozen at 2). The knob is bounded
+     below by the load self-shadow and above by the affinity gradient — a
+     forgiving range, so the eventual production constant need not be finely
+     tuned.
+  7. **Verdict machinery lessons** (both caught by adversarial verification,
      both pinned by regression scenarios): a fixpoint claim under CDC lag is
      only sound if quiet rounds planned against a view EQUAL to live placement
      (stale-view quiet windows fake fixpoints), and quiet must be tracked

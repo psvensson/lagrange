@@ -419,3 +419,57 @@ t.test('anchored consumers: chasing caps at the same-group fraction; widening th
   t.equal(result.cumulativeMoves - preWiden[1], 2,
     'exactly (#consumerGroups − 1) = 2 replica adds — a bounded one-time cost');
 });
+
+t.test('adaptation ceiling: hysteresis above the affinity gradient stops tracking ' +
+  'workload shifts; below it, the planner re-converges after a hotspot rotation',
+async (t) => {
+  // At tick 10 every service's hot partition rotates (s1: p1→p2, s2: p2→p3,
+  // s3: p3→p1). Moderate hysteresis must chase the new hotspots; hysteresis
+  // above the affinity gradient (≈0.85 here) freezes placement on the OLD ones.
+  const rotateHotspots = {
+    atTick: 10,
+    mutate: (w) => {
+      for (const edge of w.access) {
+        const s = Number(edge.serviceId.slice(1));
+        const rotated = (s % 3) + 1;
+        edge.reads = edge.partitionId === `p${rotated}` ? 90 : 5;
+      }
+    },
+  };
+  const run = (hysteresis) => {
+    // Both runs START on the pre-shift optimum (each service co-located with
+    // its old hot partition), so the over-damped case demonstrably freezes on
+    // STALE hotspots rather than on a random initial placement.
+    const world = makeAffinityWorld({
+      seed: 11,
+      groups: THREE_GROUPS,
+      partitions: groupLocalPartitions(),
+      services: [1, 2, 3].map((i) =>
+        ({id: `s${i}`, replicaCount: 2, nodes: [`G${i}-n1`, `G${i}-n2`]})),
+      access: diagonalAccess(),
+    });
+    const result = runPlacementSim(world, {
+      routing: ROUTING_MODEL.LOCALITY,
+      weights: {affinity: 1, load: 0.3, spread: 0},
+      hysteresis: {service: hysteresis},
+    }, [rotateHotspots]);
+    return {result, optimum: optimalReadHitRate(world, {routing: ROUTING_MODEL.LOCALITY})};
+  };
+
+  const adaptive = run(0.1);
+  traceComment(t, adaptive.result, 'hysteresis=0.1');
+  t.equal(adaptive.result.verdict, SIM_VERDICT.FIXPOINT, 'moderate hysteresis: fixpoint');
+  t.ok(adaptive.result.finalMetrics.readHitRate >= 0.9 * adaptive.optimum,
+    `re-converges on the ROTATED hotspots (hit ${adaptive.result.finalMetrics.readHitRate}` +
+      ` ≥ 90% of post-shift optimum ${adaptive.optimum})`);
+  t.ok(adaptive.result.cumulativeMoves <= 12,
+    `bounded adaptation cost (${adaptive.result.cumulativeMoves} moves total)`);
+
+  const frozen = run(2);
+  traceComment(t, frozen.result, 'hysteresis=2');
+  t.equal(frozen.result.verdict, SIM_VERDICT.FIXPOINT,
+    'over-damped hysteresis also reaches a fixpoint — stability is not the problem');
+  t.ok(frozen.result.finalMetrics.readHitRate < 0.5,
+    `but it froze on the STALE hotspots (hit ${frozen.result.finalMetrics.readHitRate}) — ` +
+      'hysteresis above the affinity gradient trades away workload tracking entirely');
+});

@@ -252,6 +252,54 @@ const report = {generated: 'placement-affinity-study', sweeps: {}};
   report.sweeps.widenVsChase = rows;
 }
 
+// --- Sweep E: adaptation-vs-stability frontier --------------------------------
+// Hysteresis damps churn (sweep B) but above the affinity gradient it stops
+// tracking workload shifts. Rotate every service's hotspot at tick 10 from a
+// converged start and measure recovery: the usable hysteresis band is bounded
+// below by the load self-shadow and above by the affinity gradient.
+{
+  const rows = [];
+  for (const hysteresis of [0, 0.05, 0.1, 0.3, 0.6, 0.9, 2]) {
+    const world = makeAffinityWorld({
+      seed: 11,
+      groups: THREE_GROUPS,
+      partitions: groupLocalPartitions(),
+      services: [1, 2, 3].map((i) =>
+        ({id: `s${i}`, replicaCount: 2, nodes: [`G${i}-n1`, `G${i}-n2`]})),
+      access: diagonalAccess(),
+    });
+    const result = runPlacementSim(world, {
+      routing: ROUTING_MODEL.LOCALITY,
+      weights: {affinity: 1, load: 0.3, spread: 0},
+      hysteresis: {service: hysteresis},
+    }, [{
+      atTick: 10,
+      mutate: (w) => {
+        for (const edge of w.access) {
+          const s = Number(edge.serviceId.slice(1));
+          const rotated = (s % 3) + 1;
+          edge.reads = edge.partitionId === `p${rotated}` ? 90 : 5;
+        }
+      },
+    }]);
+    const postOptimum = optimalReadHitRate(world, {routing: ROUTING_MODEL.LOCALITY});
+    const recovered = result.trace.find((entry) =>
+      entry.tick > 10 && entry.readHitRate >= 0.9 * postOptimum);
+    rows.push({
+      hysteresis,
+      verdict: result.verdict,
+      postShiftHit: result.finalMetrics.readHitRate,
+      postOptimum,
+      recoveryTick: recovered ? recovered.tick : null,
+      moves: result.cumulativeMoves,
+    });
+  }
+  printTable('E — adaptation-vs-stability frontier (hotspot rotation at tick 10)',
+    ['hysteresis', 'verdict', 'postShiftHit', 'postOptimum', 'recoveryTick', 'moves'],
+    rows);
+  report.sweeps.adaptationFrontier = rows;
+}
+
 const jsonFlagIndex = process.argv.indexOf('--json');
 if (jsonFlagIndex !== -1) {
   const outPath = process.argv[jsonFlagIndex + 1];
