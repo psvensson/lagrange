@@ -12,11 +12,13 @@ pushes a Docker image.
 
 1. **Enable Actions on the repo** (if not already): repo Settings → Units →
    check "Actions".
-2. **Create a runner registration token**: repo (or account) Settings →
-   Actions → Runners → *Create new runner*. The token is shown once.
-3. **Register + start** (from this directory):
+2. **Create the runner**: repo (or account) Settings → Actions → Runners →
+   *Create new runner*. It shows a **UUID** and a **Token** (once only).
+   Forgejo 15 has no `register` step — these credentials go straight into the
+   daemon config.
+3. **Configure + start** (from this directory):
    ```sh
-   ./setup.sh <REGISTRATION_TOKEN>
+   ./setup.sh <UUID> <TOKEN>
    ```
    The runner should appear as *Idle* under Settings → Actions → Runners.
 4. **Add the registry secrets** (release pipeline pushes the Docker image):

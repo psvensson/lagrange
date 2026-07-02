@@ -1,36 +1,34 @@
 #!/bin/bash
-# One-shot setup for the self-hosted Codeberg runner.
+# One-shot setup for the self-hosted Codeberg runner (Forgejo 15 model).
 #
-#   ./setup.sh <REGISTRATION_TOKEN>
+#   ./setup.sh <UUID> <TOKEN>
 #
-# Token: codeberg.org repo (or account) Settings -> Actions -> Runners ->
-# "Create new runner" — the token is shown ONCE.
-#
-# Registers the runner with the labels our workflows target and starts the
-# daemon via docker compose. Idempotent-ish: re-running re-registers.
+# UUID + TOKEN come from the Codeberg "Create new runner" screen
+# (repo Settings -> Actions -> Runners -> Create new runner). Both are shown
+# once. There is no separate `register` step in Forgejo 15 — the daemon
+# connects using the credentials declared in the config.
 set -euo pipefail
 
-TOKEN="${1:?usage: ./setup.sh <REGISTRATION_TOKEN>}"
+UUID="${1:?usage: ./setup.sh <UUID> <TOKEN>}"
+TOKEN="${2:?usage: ./setup.sh <UUID> <TOKEN>}"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
 mkdir -p data
+# Drop any state from a prior/failed attempt so we start clean.
+rm -f data/.runner
 cp config-template.yml data/config.yml
 
-# Labels:
-#  - docker: what ci.yml and release.yml use (runs-on: docker). The
-#    catthehacker image ships docker CLI, curl, git — release.yml's
-#    setup-node/helm/docker steps all work in it.
-#  - ubuntu-latest: convenience alias for future third-party workflows.
-docker run --rm \
-  -v "$DIR/data":/data \
-  --workdir /data \
-  data.forgejo.org/forgejo/runner:12 \
-  forgejo-runner register --no-interactive \
-    --instance https://codeberg.org \
-    --token "$TOKEN" \
-    --name "$(hostname)-lagrange" \
-    --labels "docker:docker://ghcr.io/catthehacker/ubuntu:act-latest,ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-latest"
+# Append the connection block (2-space indented, top-level `server:` key).
+cat >> data/config.yml <<EOF
+
+server:
+  connections:
+    codeberg:
+      url: https://codeberg.org/
+      uuid: ${UUID}
+      token: ${TOKEN}
+EOF
 
 docker compose up -d
 echo

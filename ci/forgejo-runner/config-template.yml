@@ -1,19 +1,28 @@
 # forgejo-runner daemon config for the lagrange release runner.
-# Copied to data/config.yml by setup.sh. Registration state (.runner with
-# the instance UUID/token and labels) is created by `forgejo-runner register`
-# and lives next to it under data/ (gitignored).
+# setup.sh copies this to data/config.yml and appends the `server.connections`
+# block (URL + UUID + token from the Codeberg "Create new runner" screen).
+#
+# Forgejo 15 replaced the old `register` command + .runner file with this
+# declarative connection model — credentials live in config, the daemon
+# connects on start. data/config.yml is gitignored (it holds the token).
 log:
   level: info
 
 runner:
-  file: /data/.runner
   # One job at a time: the release workflow runs the full test:ci and gates
-  # are load-sensitive (see repo memory: gates run SOLO).
+  # are load-sensitive (repo memory: gates run SOLO).
   capacity: 1
-  # test:ci alone is ~40-60 min; leave generous headroom for builds/publish.
+  # test:ci alone is ~40-60 min; leave generous headroom for build/publish.
   timeout: 2h
   fetch_timeout: 5s
   fetch_interval: 2s
+  # Labels our workflows target. `docker` = what ci.yml/release.yml use
+  # (runs-on: docker); the catthehacker act image ships docker CLI, git,
+  # curl, so setup-node/helm/docker steps all work. ubuntu-latest is a
+  # convenience alias for future third-party workflows.
+  labels:
+    - "docker:docker://ghcr.io/catthehacker/ubuntu:act-latest"
+    - "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-latest"
 
 container:
   # Job containers run on the HOST daemon (socket mounted by compose) and get
@@ -22,7 +31,6 @@ container:
   options: "-v /var/run/docker.sock:/var/run/docker.sock"
   valid_volumes:
     - /var/run/docker.sock
-  # Job containers must not linger after failures.
   force_pull: false
 
 cache:
