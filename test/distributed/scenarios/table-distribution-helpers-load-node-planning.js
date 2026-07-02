@@ -1,3 +1,4 @@
+import assert from 'node:assert';
 import {TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS} from './table-distribution-helpers-control-query.js';
 
 const TABLE_DISTRIBUTION_QUERY_HELPERS_MODULE_PATH =

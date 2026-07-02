@@ -416,24 +416,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           observedAt,
         );
     } else if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
-    ) {
-      planningSnapshot =
-        await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
-    ) {
-      planningSnapshot =
-        await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
       typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
       TYPEOF.FUNCTION
     ) {

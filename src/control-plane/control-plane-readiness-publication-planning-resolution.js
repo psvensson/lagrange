@@ -333,7 +333,6 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         preferDirectReadyGate ?
           null :
           providedPriorityRecoveryDecisionSnapshots,
-      publicationRecoveryGate: publicationConvergenceGate,
       publicationEpoch:
         publicationConvergenceGate?.publicationEpoch ??
         directPlanningSnapshot.publicationEpoch ??
