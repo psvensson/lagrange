@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-12T06:49:22.773Z",
-  "rawViolationCount": 45,
+  "generatedAt": "2026-07-02T06:19:30.723Z",
+  "rawViolationCount": 46,
   "violations": [
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 178,
+      "line": 219,
       "column": 6,
       "functionName": "updateFromEpoch",
       "kind": "hot_path_unguarded_log_emission",
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 187,
+      "line": 228,
       "column": 4,
       "functionName": "updateFromEpoch",
       "kind": "hot_path_unguarded_log_emission",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 200,
+      "line": 241,
       "column": 4,
       "functionName": "getReadyNodes",
       "kind": "hot_path_unguarded_log_emission",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 305,
+      "line": 346,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "hot_path_unguarded_log_emission",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 318,
+      "line": 359,
       "column": 62,
       "functionName": "<anonymous>",
       "kind": "hot_path_deep_clone",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 333,
+      "line": 374,
       "column": 20,
       "functionName": "get",
       "kind": "hot_path_deep_clone",
@@ -59,7 +59,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 348,
+      "line": 389,
       "column": 15,
       "functionName": "find",
       "kind": "hot_path_deep_clone",
@@ -68,25 +68,34 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 368,
-      "column": 21,
-      "functionName": "filter",
+      "line": 667,
+      "column": 8,
+      "functionName": "reconcileAgainstAuthoritativeTruth",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 675,
+      "column": 10,
+      "functionName": "reconcileAgainstAuthoritativeTruth",
       "kind": "hot_path_deep_clone",
       "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
       "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 383,
-      "column": 54,
-      "functionName": "<anonymous>",
-      "kind": "hot_path_deep_clone",
-      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "line": 713,
+      "column": 6,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
       "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 448,
+      "line": 735,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -95,7 +104,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 458,
+      "line": 745,
       "column": 8,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -104,7 +113,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 463,
+      "line": 750,
       "column": 21,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_deep_clone",
@@ -113,7 +122,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 469,
+      "line": 756,
       "column": 8,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -122,7 +131,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 473,
+      "line": 760,
       "column": 23,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_deep_clone",
@@ -131,7 +140,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 486,
+      "line": 773,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -140,7 +149,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 503,
+      "line": 790,
       "column": 23,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_deep_clone",
@@ -149,7 +158,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 516,
+      "line": 803,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -158,7 +167,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 533,
+      "line": 823,
       "column": 8,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -167,7 +176,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 540,
+      "line": 832,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -176,7 +185,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 555,
+      "line": 848,
       "column": 4,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_unguarded_log_emission",
@@ -185,7 +194,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 569,
+      "line": 862,
       "column": 8,
       "functionName": "applySystemTableChange",
       "kind": "hot_path_deep_clone",
@@ -194,7 +203,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 586,
+      "line": 880,
       "column": 4,
       "functionName": "clear",
       "kind": "hot_path_unguarded_log_emission",
@@ -203,7 +212,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 638,
+      "line": 932,
       "column": 11,
       "functionName": "deepClone",
       "kind": "hot_path_deep_clone",
@@ -212,7 +221,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 244,
+      "line": 261,
       "column": 20,
       "functionName": "log",
       "kind": "hot_path_json_stringify",
@@ -221,7 +230,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 293,
+      "line": 310,
       "column": 8,
       "functionName": "logConsoleOnly",
       "kind": "hot_path_json_stringify",
@@ -230,7 +239,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 364,
+      "line": 381,
       "column": 32,
       "functionName": "<anonymous>",
       "kind": "hot_path_unguarded_log_emission",
@@ -239,7 +248,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 365,
+      "line": 382,
       "column": 32,
       "functionName": "<anonymous>",
       "kind": "hot_path_unguarded_log_emission",
@@ -248,7 +257,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 366,
+      "line": 383,
       "column": 31,
       "functionName": "<anonymous>",
       "kind": "hot_path_unguarded_log_emission",
@@ -257,7 +266,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 367,
+      "line": 384,
       "column": 31,
       "functionName": "<anonymous>",
       "kind": "hot_path_unguarded_log_emission",
@@ -266,7 +275,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 413,
+      "line": 430,
       "column": 4,
       "functionName": "onLogsTableReadyWithOptions",
       "kind": "hot_path_unguarded_log_emission",
@@ -275,7 +284,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 454,
+      "line": 471,
       "column": 4,
       "functionName": "flushBufferedEntriesInBackground",
       "kind": "hot_path_unguarded_log_emission",
@@ -284,7 +293,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 479,
+      "line": 496,
       "column": 10,
       "functionName": "processChunk",
       "kind": "hot_path_unguarded_log_emission",
@@ -293,7 +302,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 492,
+      "line": 509,
       "column": 8,
       "functionName": "processChunk",
       "kind": "hot_path_unguarded_log_emission",
@@ -302,7 +311,7 @@
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 117,
+      "line": 113,
       "column": 24,
       "functionName": "readEntryRow",
       "kind": "hot_path_json_parse",
@@ -311,7 +320,7 @@
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 144,
+      "line": 140,
       "column": 6,
       "functionName": "persistEntry",
       "kind": "hot_path_json_stringify",
@@ -338,7 +347,7 @@
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 601,
+      "line": 602,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "hot_path_json_stringify",
@@ -347,7 +356,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 46,
+      "line": 45,
       "column": 9,
       "functionName": "stableSerialize",
       "kind": "hot_path_json_stringify",
@@ -356,7 +365,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 91,
+      "line": 90,
       "column": 6,
       "functionName": "deliverToTargetsWithRetry",
       "kind": "hot_path_unguarded_log_emission",
@@ -365,7 +374,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 105,
+      "line": 104,
       "column": 6,
       "functionName": "deliverToTargetsWithRetry",
       "kind": "hot_path_unguarded_log_emission",
@@ -374,7 +383,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 349,
+      "line": 348,
       "column": 6,
       "functionName": "scheduleBackgroundRetry",
       "kind": "hot_path_unguarded_log_emission",
@@ -383,7 +392,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 387,
+      "line": 386,
       "column": 6,
       "functionName": "armBackgroundRetryEntry",
       "kind": "hot_path_unguarded_log_emission",
@@ -392,7 +401,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 402,
+      "line": 401,
       "column": 4,
       "functionName": "armBackgroundRetryEntry",
       "kind": "hot_path_unguarded_log_emission",
@@ -401,7 +410,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 567,
+      "line": 566,
       "column": 6,
       "functionName": "rescheduleBackgroundRetryEntry",
       "kind": "hot_path_unguarded_log_emission",
