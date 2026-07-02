@@ -59,3 +59,7 @@ city.toml
 /hooks/
 /exports/
 /work/
+
+# Editor/tool workspace droppings
+.antigravitycli/
+.codex
