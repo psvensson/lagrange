@@ -103,6 +103,26 @@ test('ConfigurationManager environment variables', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
+test('ConfigurationManager accepts NODE_ADVERTISED_WS_ADDRESS', async (t) => {
+  ConfigurationManager.resetInstance();
+
+  // The Helm chart sets this on every pod; the schema must admit the key the
+  // env mapping writes or the node dies at config validation.
+  process.env.NODE_ADVERTISED_WS_ADDRESS = 'node-0.cluster.local:8082';
+
+  const config = ConfigurationManager.getInstance();
+  config.initialize();
+
+  t.equal(
+    config.get('node.advertisedWsAddress'),
+    'node-0.cluster.local:8082',
+    'should load NODE_ADVERTISED_WS_ADDRESS from env and pass validation',
+  );
+
+  delete process.env.NODE_ADVERTISED_WS_ADDRESS;
+  ConfigurationManager.resetInstance();
+});
+
 test('ConfigurationManager validation', async (t) => {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
