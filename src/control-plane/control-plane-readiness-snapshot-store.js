@@ -50,6 +50,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return null;
     }
 
+    // Local query-transport readiness is LIVE router evidence: it flips
+    // without any node-row heartbeat advance or cache-change marker, so the
+    // watermark/marker checks below cannot see the change. Owner-read
+    // participation depends on observing the flip immediately (DEFER with a
+    // retry hint while the local transport is down, recover as soon as it is
+    // back), so a stored snapshot whose captured transport verdict drifted
+    // from the live one must be rebuilt, not reused.
+    if (
+      this.hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot)
+    ) {
+      return null;
+    }
+
     const storedWatermark =
       this.buildStoredReadinessSnapshotWatermark(storedSnapshot);
     if (!storedWatermark) {
@@ -92,6 +105,42 @@ const controlPlaneReadinessSnapshotStoreMethods = {
           storedSnapshot.membershipPublication ?? null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
     });
+  },
+
+  /**
+   * Return true when the live local query-transport evidence no longer
+   * matches the transport verdict captured inside one stored snapshot.
+   * Only the self node carries local transport evidence
+   * (getLocalQueryTransportEvidence answers null for every other node), so
+   * this is a cheap in-memory comparison on the hot path and a no-op for
+   * remote rows.
+   * @param {string} nodeId
+   * @param {Object|null} storedSnapshot
+   * @return {boolean}
+   * @private
+   */
+  hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot) {
+    if (typeof this.getLocalQueryTransportEvidence !== 'function') {
+      return false;
+    }
+    const liveEvidence = this.getLocalQueryTransportEvidence(nodeId);
+    if (!liveEvidence || typeof liveEvidence !== 'object') {
+      return false;
+    }
+    const nodeEvidence = storedSnapshot?.nodeEvidence;
+    if (!nodeEvidence || typeof nodeEvidence !== 'object') {
+      return false;
+    }
+    return (
+      (nodeEvidence.localQueryTransportState ?? null) !==
+        (liveEvidence.state ?? null) ||
+      (nodeEvidence.localQueryTransportReady ?? null) !==
+        (liveEvidence.ready ?? null) ||
+      (nodeEvidence.localQueryTransportReasonCode ?? null) !==
+        (liveEvidence.reasonCode ?? null) ||
+      (nodeEvidence.localQueryTransportRetryAfterMs ?? null) !==
+        (liveEvidence.retryAfterMs ?? null)
+    );
   },
 
   /**

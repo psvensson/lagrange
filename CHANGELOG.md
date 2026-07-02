@@ -50,6 +50,12 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
   runtime composition imports are now literal and bundled.
 - Dockerfile `EXPOSE` corrected to the real listener set 8080/8081/8082
   (nothing listens on the previously exposed 9080).
+- Control-plane readiness: stored readiness snapshots could be reused while
+  the live local query-transport verdict had flipped (transport evidence is
+  live router state and advances no heartbeat watermark or cache marker), so
+  owner-read participation could answer `ready` with the transport down — or
+  keep deferring after it recovered. Snapshot reuse now rebuilds on local
+  query-transport drift.
 
 ### Known limitations
 - **Rolling-restart convergence is a statistical property, not a bounded-time

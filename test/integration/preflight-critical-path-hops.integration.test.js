@@ -287,44 +287,66 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       const beforeAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
       const beforeWatermark = systemTableCache.getAppliedSchemaVersion(TABLES.NODES);
 
-      const existingCpu = Number(seedNodeRow?.[COLUMN.CPU_USAGE_PERCENT] || 0);
-      const existingUpdatedAt = Number(seedNodeRow?.[COLUMN.UPDATED_AT] || 0);
-      const updatedAt = Math.max(Date.now(), existingUpdatedAt + 1);
-      const nextCpu = existingCpu + 1;
+      // Forward the event for a SYNTHETIC node row, not the seed's own row:
+      // the seed's background stats/heartbeat writer keeps rewriting its row
+      // with newer timestamps, so a synthetic update to the same key can be
+      // legitimately superseded by last-write-wins conflict resolution — the
+      // historical ~1/3 flake in this subtest. A fabricated node id has no
+      // concurrent writer, so the forwarded event's effect is deterministic.
+      const syntheticNodeId = uuidv4();
+      const nextCpu = 42;
       const causeId = `hop-test-cdc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const updateRow = {
         ...seedNodeRow,
+        [COLUMN.NODE_ID]: syntheticNodeId,
         [COLUMN.CPU_USAGE_PERCENT]: nextCpu,
-        [COLUMN.UPDATED_AT]: updatedAt,
+        [COLUMN.UPDATED_AT]: Date.now(),
       };
 
-      await follower.applyCDCEvent(TABLES.NODES, CDC_OPERATION.UPDATE, updateRow, {causeId});
+      // Observe the apply through the cache-change event stream, not through
+      // live row state or getLastAppliedCauseId: the seed's own background
+      // stats/heartbeat CDC traffic keeps rewriting the nodes row (both the
+      // cpu value and the last-applied metadata are moving targets), which
+      // was the historical ~1/3 flake in this subtest. The notification for
+      // OUR causeId carries the record snapshot as applied — that is the
+      // stable evidence the forwarded event landed.
+      let notifiedRecord = null;
+      const causeIdListener = (tableName, _operation, record, metadata) => {
+        if (tableName === TABLES.NODES && metadata?.causeId === causeId) {
+          notifiedRecord = record;
+        }
+      };
+      systemTableCache.onCacheChange(causeIdListener);
 
-      const watermarkAdvanced = await waitFor(() => {
-        const updated = systemTableCache.get(TABLES.NODES, seedNodeId);
-        if (!updated) {
-          return false;
-        }
-        if (updated[COLUMN.CPU_USAGE_PERCENT] !== nextCpu) {
-          return false;
-        }
-        const afterAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
-        const afterWatermark = systemTableCache.getAppliedSchemaVersion(TABLES.NODES);
-        if (afterAppliedAtMs === null || beforeAppliedAtMs === null) {
-          return false;
-        }
-        if (!(afterAppliedAtMs > beforeAppliedAtMs)) {
-          return false;
-        }
-        return String(afterWatermark || '') !== String(beforeWatermark || '');
-      }, WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+      try {
+        await follower.applyCDCEvent(TABLES.NODES, CDC_OPERATION.UPDATE, updateRow, {causeId});
 
-      t.equal(watermarkAdvanced, true, 'cache should apply forwarded CDC event and advance watermarks');
-      t.equal(
-        systemTableCache.getLastAppliedCauseId(TABLES.NODES),
-        causeId,
-        'cache should record last applied causeId for the updated table',
-      );
+        const watermarkAdvanced = await waitFor(() => {
+          if (!notifiedRecord) {
+            return false;
+          }
+          const afterAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
+          const afterWatermark = systemTableCache.getAppliedSchemaVersion(TABLES.NODES);
+          if (afterAppliedAtMs === null || beforeAppliedAtMs === null) {
+            return false;
+          }
+          // >= (not >): the apply can land within the same millisecond as the
+          // captured before-value on a fast machine.
+          if (!(afterAppliedAtMs >= beforeAppliedAtMs)) {
+            return false;
+          }
+          return String(afterWatermark || '') !== String(beforeWatermark || '');
+        }, WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+
+        t.equal(watermarkAdvanced, true, 'cache should apply forwarded CDC event and advance watermarks');
+        t.equal(
+          notifiedRecord?.[COLUMN.CPU_USAGE_PERCENT],
+          nextCpu,
+          'cache change notification should carry the forwarded record for the updated table',
+        );
+      } finally {
+        systemTableCache.offCacheChange(causeIdListener);
+      }
     });
 
     await t.test('discovery returns endpoints once rows and cache are healthy', async (t) => {
