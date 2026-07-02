@@ -32,6 +32,7 @@
     "test:integration:3": "tap $(cat test/shards/integration-3.txt)",
     "test:bootstrap:1": "tap $(cat test/shards/bootstrap-1.txt)",
     "test:bootstrap:2": "tap $(cat test/shards/bootstrap-2.txt)",
+    "test:convergence-probes": "tap $(cat test/shards/convergence-probes.txt)",
     "test:pgwire": "tap $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)",
     "test:pgwire:unit": "tap $(cat test/shards/pgwire-unit.txt)",
     "test:pgwire:integration": "tap $(cat test/shards/pgwire-integration.txt)",

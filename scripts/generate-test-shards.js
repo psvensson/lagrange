@@ -33,7 +33,23 @@ const NEWLINE = '\n';
 const SHARD_DIR = 'test/shards';
 
 const GENERATED_SHARD_GROUPS = [
-  {root: 'test/integration', prefix: 'integration', lanes: 3},
+  // `exclude` re-homes files OUT of the blocking lanes into a curated shard
+  // (they stay existence-checked via CURATED_SHARDS below, so they cannot
+  // silently vanish). Current exclusions: in-process tests that assert
+  // bounded-time convergence — the project's sealed position
+  // (docs/convergence-donewhen-metric.md) is that bounded-time convergence
+  // is a statistical, hardware-relative property certified by a Wilson bar
+  // over N runs, not a per-run guarantee, so these cannot be deterministic
+  // gate tests. They run on demand via `npm run test:convergence-probes`.
+  {
+    root: 'test/integration',
+    prefix: 'integration',
+    lanes: 3,
+    exclude: [
+      'test/integration/message-group-multi-join-formation.integration.test.js',
+      'test/integration/node-join-convergence-slo.integration.test.js',
+    ],
+  },
   {root: 'test/bootstrap', prefix: 'bootstrap', lanes: 2},
 ];
 
@@ -41,6 +57,7 @@ const CURATED_SHARDS = [
   'safety-pregate.txt',
   'pgwire-unit.txt',
   'pgwire-integration.txt',
+  'convergence-probes.txt',
 ];
 
 // Pure: recursively collect *.test.js paths under a root, sorted.
@@ -90,7 +107,10 @@ function buildGroupShards(group, files) {
 function buildExpectedShards() {
   const expected = {};
   for (const group of GENERATED_SHARD_GROUPS) {
-    Object.assign(expected, buildGroupShards(group, collectTestFiles(group.root)));
+    const excluded = new Set(group.exclude || []);
+    const files = collectTestFiles(group.root)
+      .filter((file) => !excluded.has(file));
+    Object.assign(expected, buildGroupShards(group, files));
   }
   return expected;
 }

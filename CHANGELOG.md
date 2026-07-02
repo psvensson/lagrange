@@ -50,6 +50,13 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
   runtime composition imports are now literal and bundled.
 - Dockerfile `EXPOSE` corrected to the real listener set 8080/8081/8082
   (nothing listens on the previously exposed 9080).
+- Test gating: in-process tests asserting bounded-time convergence
+  (node-join SLO, multi-join formation) moved out of the blocking `test:ci`
+  lanes into an on-demand statistical lane (`npm run test:convergence-probes`)
+  — per-run bounded-time convergence is exactly the property this release
+  documents as statistical and hardware-relative, so it cannot be a
+  deterministic gate; the shard generator now supports (and existence-checks)
+  such curated exclusions.
 - Control-plane readiness: stored readiness snapshots could be reused while
   the live local query-transport verdict had flipped (transport evidence is
   live router state and advances no heartbeat watermark or cache marker), so
