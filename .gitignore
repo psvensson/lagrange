@@ -19,9 +19,6 @@ data2/
 .playback/
 test-output/
 
-# Legacy generated handoff render; Quest/Solver context is canonical.
-_legacy_work/sprints/current-blocker.md
-
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key

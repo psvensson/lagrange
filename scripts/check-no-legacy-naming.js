@@ -29,14 +29,18 @@ const LEGACY_TOKENS = Object.freeze([
 const ALLOWED_PREFIXES = Object.freeze([
   'CHANGELOG.md', // release history may name removed commands
   '_legacy_work/', // pruned archive remainder
-  'solve/', // Solver records: epics, changes, logs, reports (historical)
+  'solve/changes/', // recorded historical diffs of past Quest work
+  'solve/log/', // append-only event logs (immutable)
+  'solve/report/', // terminal Quest reports (historical)
+  'solve/autonomous/', // autorun state (historical)
   '.claude/worktrees/', // parallel git worktrees
   'scripts/check-no-legacy-naming.js', // this guard necessarily names the tokens
 ]);
 
-// A line that explains the rename itself may name the old command (the three
-// CLI docs carry one "the pre-rename `ddb-admin` alias was removed" note).
+// The CLI docs each carry one "the pre-rename `ddb-admin` alias was removed"
+// note; only there may a line explain the rename by naming the old command.
 const HISTORICAL_NOTE = /pre-rename/u;
+const HISTORICAL_NOTE_PREFIX = 'src/cli/';
 
 const PATTERN = new RegExp(LEGACY_TOKENS.join('|'), 'u');
 
@@ -63,9 +67,11 @@ function isAllowed(file) {
 function main() {
   const violations = trackedHits()
     .filter((line) => PATTERN.test(line))
-    .filter((line) => !HISTORICAL_NOTE.test(line))
     .filter((line) => {
       const file = line.slice(0, line.indexOf(':'));
+      if (file.startsWith(HISTORICAL_NOTE_PREFIX) && HISTORICAL_NOTE.test(line)) {
+        return false;
+      }
       return !isAllowed(file);
     });
 

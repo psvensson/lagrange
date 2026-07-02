@@ -507,7 +507,7 @@ each boot — StatefulSet+per-pod NODE_ID is mandatory. R3 seed `bootstrap()` fa
 no retry, joiners only retry 4× — gate ordering on `/readyz`. R4 WS is 8082 not 9080. R5 advertised
 addresses default to `localhost` — inject pod FQDN. R6 admin 8081 hardcoded. R7 `NODE_WS_PORT` env
 mapping is dead (needs a small src change if a non-default WS port is required). R8 AGPL image
-license obligations. R9 naming drift (`distributed-database-system`/`ddb-admin`/Lagrange). R10 fat
+license obligations. R9 naming drift (resolved pre-0.1.0: CLI, SEA binaries, and env vars unified on lagrange naming). R10 fat
 build image — consider multi-stage. **R11 replica floor: user-created services and the `scale` verb
 require odd, ≥3 replicas (`isValidReplicaCount`, `meta-command-handlers.js:197-201,222-225,385-387`),
 so the quickstart cluster must be ≥3 nodes for WS-HELLO/`scale` to converge — the "1-node try" cannot
