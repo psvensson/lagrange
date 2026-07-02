@@ -19,6 +19,7 @@ const LOCAL_STR_SPACE_SPACE = '  ';
 const LOCAL_STR_NO_REPORT_FILES_FOUND_IN = 'No report files found in ';
 
 const DEFAULT_REPORT_DIR = 'test-output/reports';
+const RERUN_FILE_PREFIX = 'rerun-';
 const MS_PER_SECOND = 1000;
 const PASS_SYMBOL = '\u2713';
 const FAIL_SYMBOL = '\u2717';
@@ -65,10 +66,23 @@ function parseReport(filePath) {
       pgBaseline.throughputRatioSutToBaseline != null ?
       pgBaseline.throughputRatioSutToBaseline : null;
 
+    const leak = scenario.memoryLeakAssertion || null;
+
     return {
       file: basename(filePath),
       scenario: scenario.scenario || UNKNOWN_SCENARIO,
       passed: !!scenario.passed,
+      // A rerun report must never silently displace the original failure it
+      // retried (rerun-failed-distributed-scenarios.sh writes rerun-*.json
+      // with the same scenario key and a newer timestamp).
+      isRerun: report.isRerun === true ||
+        basename(filePath).startsWith(RERUN_FILE_PREFIX),
+      memoryLeak: leak ? {
+        leakDetected: leak.leakDetected === true,
+        leakingNodes: Array.isArray(leak.leakingNodes) ? leak.leakingNodes : [],
+        enforced: leak.required === true,
+        passed: leak.passed !== false,
+      } : null,
       durationMs,
       clusterSize: scenario.clusterSize || current.clusterSize || 0,
       opsPerSec,
@@ -97,6 +111,12 @@ function discoverLatestRuns(reportDir) {
     .filter((f) => f.endsWith(REPORT_EXTENSION));
 
   const byScenario = new Map();
+  const latestOriginalByScenario = new Map();
+
+  const isNewer = (candidate, existing) =>
+    !existing ||
+    (candidate.timestamp && existing.timestamp &&
+      candidate.timestamp > existing.timestamp);
 
   for (const file of files) {
     const filePath = join(reportDir, file);
@@ -104,11 +124,21 @@ function discoverLatestRuns(reportDir) {
     if (!summary) continue;
 
     const key = summary.scenario + ':' + summary.clusterSize;
-    const existing = byScenario.get(key);
-    if (!existing ||
-        (summary.timestamp && existing.timestamp &&
-         summary.timestamp > existing.timestamp)) {
+    if (isNewer(summary, byScenario.get(key))) {
       byScenario.set(key, summary);
+    }
+    if (!summary.isRerun &&
+        isNewer(summary, latestOriginalByScenario.get(key))) {
+      latestOriginalByScenario.set(key, summary);
+    }
+  }
+
+  // Flake honesty: a rerun PASS that displaced an original FAIL is a retry
+  // pass, not a clean pass — surface it instead of hiding the flake.
+  for (const [key, summary] of byScenario) {
+    const original = latestOriginalByScenario.get(key);
+    if (summary.isRerun && summary.passed && original && !original.passed) {
+      summary.passedOnlyOnRetry = {originalFile: original.file};
     }
   }
 
@@ -178,7 +208,8 @@ function printTable(runs) {
 
   for (const r of runs) {
     const status = r.passed ?
-      (PASS_SYMBOL + ' PASS') : (FAIL_SYMBOL + ' FAIL');
+      (PASS_SYMBOL + (r.passedOnlyOnRetry ? ' PASS*' : ' PASS')) :
+      (FAIL_SYMBOL + ' FAIL');
     const dur = fmtNum(r.durationMs / MS_PER_SECOND, 's');
     const cluster = r.clusterSize + 'n';
     const ops = r.opsPerSec != null ?
@@ -210,6 +241,23 @@ function printTable(runs) {
   }
 
   console.log(sep);
+
+  for (const r of runs) {
+    if (r.passedOnlyOnRetry) {
+      console.log(
+        `* ${r.scenario}: passed only on retry — original failing report ` +
+        r.passedOnlyOnRetry.originalFile,
+      );
+    }
+    if (r.memoryLeak?.leakDetected && !r.memoryLeak.enforced) {
+      console.log(
+        `! ${r.scenario}: memory leak detected on ` +
+        `[${r.memoryLeak.leakingNodes.join(', ')}] but NOT enforced ` +
+        '(failOnDetection=false, Bug G override — ' +
+        'test/distributed/README.local.md "Temporary failOnDetection")',
+      );
+    }
+  }
   const timestamps = runs
     .filter((r) => r.timestamp)
     .map((r) => r.timestamp);

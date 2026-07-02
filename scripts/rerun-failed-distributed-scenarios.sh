@@ -155,6 +155,14 @@ for entry in "${ENTRIES[@]}"; do
     FAILED_NAMES+=("$scenario")
     echo "  -> FAIL"
   fi
+
+  # Stamp the report body as a retry so summaries can distinguish a
+  # passed-on-retry from a clean pass (the rerun- filename prefix alone is
+  # invisible to consumers that read report content, not filenames).
+  if [ -f "$output" ]; then
+    jq '. + {isRerun: true}' "$output" > "${output}.tmp" && \
+      mv "${output}.tmp" "$output"
+  fi
   echo ""
 done
 

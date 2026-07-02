@@ -694,3 +694,10 @@ This override **must be removed** once either:
 Do not leave `failOnDetection: false` as a permanent setting. It masks future
 memory leaks and defeats the purpose of the analyzer. Re-enable it as soon as
 the underlying issue is resolved.
+
+While the override is active, detections are not fully silent:
+`npm run summarize:harness` reads each report's `memoryLeakAssertion` and
+prints a `!` warning line for any run where a leak was detected but not
+enforced, naming the leaking nodes and this section. Treat those warnings as
+the re-arm signal — if they stop appearing on clean rolling restarts, gate 1
+above is satisfied and `failOnDetection` must be flipped back to `true`.
