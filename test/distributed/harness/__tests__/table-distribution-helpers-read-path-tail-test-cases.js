@@ -445,7 +445,11 @@ export function registerTableDistributionHelpersReadPathTailTests({
     const distribution = await queryTableDistribution(seedNode, {
       tableName: 'benchmark_events',
       queryNodes: [seedNode],
-      queryTimeoutMs: 5,
+      // Generous ceiling, not a duration: this budget seeds the helper's
+      // wall-clock deadline across the read -> repair -> re-read sequence,
+      // and a 5ms budget races event-loop lag under parallel-suite load
+      // (same class as the committed read-path.test.js fix).
+      queryTimeoutMs: 2000,
     });
 
     assert.equal(repairCount, 1);
@@ -572,7 +576,10 @@ export function registerTableDistributionHelpersReadPathTailTests({
     const distribution = await queryTableDistribution(seedNode, {
       tableName: 'benchmark_events',
       queryNodes: [seedNode],
-      queryTimeoutMs: 5,
+      // Generous ceiling, not a duration: seeds the wall-clock deadline for
+      // the read -> repair -> re-read sequence; 5ms races suite load (same
+      // class as the committed read-path.test.js fix).
+      queryTimeoutMs: 2000,
     });
 
     assert.equal(repairCount, 1);
@@ -997,7 +1004,11 @@ export function registerTableDistributionHelpersReadPathTailTests({
         queryNodes: [seedNode],
         pollIntervalMs: 5,
         stableWindowMs: 0,
-        queryTimeoutMs: 5,
+        // Generous ceiling, not a duration: a per-query wall-clock budget
+        // (today only forwarded to the admission mocks, which ignore it,
+        // but keep it un-raceable — 5ms is the budget class that flaked
+        // the release gate in read-path.test.js).
+        queryTimeoutMs: 2000,
       },
     );
 

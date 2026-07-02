@@ -171,7 +171,11 @@ export function registerTableDistributionHelpersReadPathTailFinalTests({
         timeoutMs: 40,
         pollIntervalMs: 5,
         stableWindowMs: 0,
-        queryTimeoutMs: 5,
+        // Generous ceiling, not a duration: a per-query wall-clock budget
+        // (today only forwarded to the admission mocks, which ignore it,
+        // but keep it un-raceable — 5ms is the budget class that flaked
+        // the release gate in read-path.test.js).
+        queryTimeoutMs: 2000,
       },
     );
 
