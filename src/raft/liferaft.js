@@ -181,7 +181,14 @@ function patchIncomingDataListener(raft) {
       return true;
     }
     const inflight = inflightBatchByAddress.get(packet.address);
-    const nowMs = Date.now();
+    // Catch-up TTL must run on the same clock as the rest of the node: under
+    // a DT virtual clock a raw Date.now() here measured REAL elapsed test
+    // time, so the inflight dedupe window never expired virtually (the
+    // wall-clock-leak class in the DT limits table). No timeSource -> real
+    // clock, byte-identical.
+    const nowMs = raft._catchupTimeSource ?
+      raft._catchupTimeSource.now() :
+      Date.now();
     if (
       inflight &&
       inflight.tailIndex >= startIndex &&
@@ -381,6 +388,9 @@ class LifeRaft extends BaseLifeRaft {
       this.timers.clear();
       this.timers = new VirtualTick(this, options.timeSource);
       this.heartbeat(this.timeout());
+      // The catch-up batch handler (patched above, runs on data events) reads
+      // this lazily so its inflight TTL shares the virtual clock.
+      this._catchupTimeSource = options.timeSource;
     }
   }
 
