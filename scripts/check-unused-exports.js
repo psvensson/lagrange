@@ -3,8 +3,9 @@
  * current baseline, mirroring the scripts/check-duplication.js idiom.
  *
  * The gated `test:unused` knip run excludes exports entirely, so without
- * this ratchet the unused-export backlog grows unbounded (it was 1,609
- * across 335 files when the ratchet was introduced on 2026-07-02).
+ * this ratchet the unused-export backlog grows unbounded (1,607 across
+ * 335 files when the ratchet was introduced on 2026-07-02, after the
+ * primitive-alias codemod deleted two of the original 1,609).
  * Ratchet DOWN only from here.
  */
 

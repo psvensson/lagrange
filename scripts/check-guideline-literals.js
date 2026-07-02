@@ -51,7 +51,6 @@ const LOCAL_STR_UNARYEXPRESSION = 'UnaryExpression';
 const LOCAL_STR_TYPEOF = 'typeof';
 const LOCAL_STR_SWITCHCASE = 'SwitchCase';
 const LOCAL_STR_SWITCHSTATEMENT = 'SwitchStatement';
-const LOCAL_STR_EMPTY = '';
 const EQUALITY_OPERATORS = new Set(['===', '!==', '==', '!=']);
 const STRUCTURAL_INTEGER_EXEMPTIONS = new Set([0, 1, 2]);
 
@@ -86,7 +85,7 @@ function isJsLanguagePrimitiveLiteral(node, parent, ancestors) {
     // structural case is covered by exempting the positive literal.
     return STRUCTURAL_INTEGER_EXEMPTIONS.has(node.value);
   }
-  if (node.value === LOCAL_STR_EMPTY) {
+  if (node.value === '') {
     return true;
   }
   return isTypeofComparisonLiteral(node, parent, ancestors);

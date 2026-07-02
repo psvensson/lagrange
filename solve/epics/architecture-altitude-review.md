@@ -92,7 +92,7 @@ it to owner-boundary properties needs a cheap runtime predicate that does not ye
   (`priority-recovery-snapshot-actuation`, `…-operation-owner-progress-contract`,
   `…-operation-owner-observation`, `operation-workflow-owner-priority-recovery-reentry`,
   `priority-recovery-superseded-target`) spanning ~45 files / ~17.8k lines;
-  18 of 43 closure-ledger records touch this stack; live exhibit: commit
+  18 of 42 closure-ledger records touch this stack; live exhibit: commit
   `4bb548a0` widened a reentry predicate and silently broke the `3aad7631`
   spread-certification grace-window guard in a different layer (fixed
   `25875059` by re-asserting "the ingress classifier is the single stall
