@@ -227,7 +227,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap`
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
-- `test:unused:prod` — `knip --production`
+- `test:unused:prod` — `knip --production --include dependencies`
 - `test:unused:ratchet` — `node scripts/check-unused-exports.js`
 
 ## test-output

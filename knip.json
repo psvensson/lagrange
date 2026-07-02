@@ -1,9 +1,11 @@
 {
   "entry": [
-    "src/sea-entry.js",
+    "src/sea-entry.js!",
+    "src/index.js!",
+    "src/cli/bin/lagrange-admin.js!",
+    "src/threading/service-worker.js!",
     "src/test-helpers/worker/entry-runner.js",
     "src/test-helpers/worker/admin-cli-direct-runner.js",
-    "src/threading/service-worker.js",
     "test/**/*.test.js",
     "test/**/*.test-part-*.js",
     "test/**/*test-cases.js",
@@ -14,7 +16,7 @@
     "scripts/**/*.js"
   ],
   "project": [
-    "src/**/*.js",
+    "src/**/*.js!",
     "test/**/*.js",
     "scripts/**/*.js"
   ],
@@ -28,6 +30,7 @@
     "postject",
     "@pulumi/pulumi",
     "@pulumi/gcp",
-    "jscpd"
+    "jscpd",
+    "node-fetch"
   ]
 }

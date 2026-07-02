@@ -42,7 +42,7 @@
     "test:sharded:all": "npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2",
     "test:cli": "tap test/cli/**/*.test.js",
     "test:unused": "knip --exclude exports,duplicates",
-    "test:unused:prod": "knip --production",
+    "test:unused:prod": "knip --production --include dependencies",
     "test:unused:exports": "knip --include exports",
     "test:unused:ratchet": "node scripts/check-unused-exports.js",
     "test:deps": "depcruise --config dependency-cruiser.config.cjs src test",
@@ -185,7 +185,6 @@
   "dependencies": {
     "@fastify/websocket": "^11.2.0",
     "@markwylde/liferaft": "^1.4.0",
-    "@vscode/dwarf-debugging": "^0.0.2",
     "ajv": "^8.17.1",
     "better-sqlite3": "^11.7.0",
     "blessed": "^0.1.81",
@@ -194,10 +193,8 @@
     "millisecond": "^0.1.2",
     "node-fetch": "^3.3.2",
     "node-sql-parser": "^5.4.0",
-    "pg": "^8.18.0",
     "pino": "^9.6.0",
     "piscina": "^4.8.0",
-    "raft-logic": "^0.3.14",
     "uuid": "^11.0.5",
     "ws": "^8.18.0"
   },
@@ -222,6 +219,9 @@
     "knip": "^5.83.1",
     "madge": "^8.0.0",
     "postject": "^1.0.0-alpha.6",
-    "tap": "^21.5.0"
+    "tap": "^21.5.0",
+    "@vscode/dwarf-debugging": "^0.0.2",
+    "pg": "^8.18.0",
+    "raft-logic": "^0.3.14"
   }
 }
