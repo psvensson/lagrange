@@ -140,6 +140,13 @@ function installCanonicalAdmissionOwner(fixture) {
     storageAdmissionService;
   fixture.sqlQueryEngine.rebalanceCoordinator
     .controlPlaneReadinessService = controlPlaneReadinessService;
+  // The engine snapshots controlPlaneReadinessService at construction
+  // (sql-query-engine-instance-initializer.js), and the admin API prefers
+  // that direct reference over the coordinator's.  Swap it too so every
+  // consumer (admission, routing, admin diagnostics) sees the same
+  // canonical readiness owner installed here.
+  fixture.sqlQueryEngine.controlPlaneReadinessService =
+    controlPlaneReadinessService;
   fixture.sqlQueryEngine.managedSplitWorkflow.storageAdmissionService =
     storageAdmissionService;
 
@@ -535,9 +542,13 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
       const tableRow = getTableRow(fixture.systemTableCache, tableName);
       const metadata = parseTransitionMetadata(tableRow);
 
+      // Compare identity as a boolean: on mismatch a direct t.equal of the
+      // two ControlPlaneReadinessService instances makes tap's diff
+      // formatter walk both full object graphs (cache, router, bootstrap)
+      // and OOM the worker instead of reporting the failure.
       t.equal(
-        adminApi.controlPlaneReadinessService,
-        readinessService,
+        adminApi.controlPlaneReadinessService === readinessService,
+        true,
         'admin diagnostics should consume the same readiness owner used by admission',
       );
       t.equal(
