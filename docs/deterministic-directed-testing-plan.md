@@ -386,7 +386,7 @@ the row that bounds it.
 | c | Real persistence / CDC / ack pipeline + not-yet-hosted control-plane subsystems | Steps 5-7 host the publication driver with a required-version stand-in and `InMemoryLogAdapter`; readiness / rebalancer / membership-lifecycle + placement controllers are not on the network yet. | Deferred whole-system DST (the gated north-star program) | "REMAINING toward full DT6" (~lines 313-317, 350-361) |
 | d | Mid-churn invariant sampling under coarse `driveNetwork` | Coarse batching drains a co-due batch before flushing microtasks, so a mid-batch observation is a drive-granularity artifact, not a protocol state; most raw sweep "violations" were this. Coarse and fine are NOT equivalent under a PctScheduler — they can elect different leaders on some seeds. | `driveNetworkFine` (deliver one event, flush to quiescence, observe) | `test/convergence/dt6-fine-drive-midchurn-safety.test.js:9-30` |
 | e | Negative-evidence PCT results | "Not found" is bounded by the seed budget, the depth searched, AND the drive granularity: a coarse-batched search explores a different schedule space than fine (batching changes which events are co-due when the scheduler picks). "Not found" ≠ impossible. | Raise the bound (more seeds / higher depth / fine drive) or make a structural-unreachability argument | `test/convergence/dt6-publication-failback-pct-search.test.js:28-40`; `minimizePctDepth`'s `notReproducedBelow` (~lines 128-133) |
-| f | Unseamed `src/` code (wall-clock leaks) | Only ~15 of ~330 `Date.now()`-using src files thread a TimeSource; everywhere else raw `Date.now`/`setTimeout` runs on the wall clock under virtual time, so a virtual-time run silently exercises real-time logic (e.g. the raw `Date.now()` catch-up inflight-TTL class at `src/raft/liferaft.js:184`). | Thread the DT4 TimeSource seam through the subsystem before trusting a DT verdict that crosses it | `src/time/time-source.js`; `src/raft/liferaft.js:184` |
+| f | Unseamed `src/` code (wall-clock leaks) | Only ~15 of ~330 `Date.now()`-using src files thread a TimeSource; everywhere else raw `Date.now`/`setTimeout` runs on the wall clock under virtual time, so a virtual-time run silently exercises real-time logic (e.g. the catch-up inflight-TTL instance in `src/raft/liferaft.js`, found by exactly this class-audit and since seamed with a red-on-revert virtual-TTL test). Hunt exercised-path leaks with `test/distributed/harness/determinism-tripwire.js`. | Thread the DT4 TimeSource seam through the subsystem before trusting a DT verdict that crosses it | `src/time/time-source.js`; `test/distributed/harness/determinism-tripwire.js` |
 
 ## Why this plan
 
@@ -586,12 +586,12 @@ The recurring bug class is design-level (`[[circular-dependency-class-formation-
 `models/active-gate/ActiveGate.tla`, `models/readiness-starvation/{ReadinessStarvation,
 PublicationConvergence,CoupledAdmission}.tla`, `models/readiness-handoff/ReadinessHandoff.tla`
 — and `PublicationConvergence.tla` already models a **lost-wakeup** with a candidate
-`ScheduledReconcile` fix. `npm run model:tlc` (`scripts/model-tlc.js`) runs TLC; it is
-in `test:quality` via `model:contracts`/`model:check` but **not in `test:ci`**, and
-there is **no documented CL↔spec mapping**. [V] Correction: `model:check`/`model:tlc`
-are **standalone manual scripts in NO test aggregate** — `test:quality` is
-`test:static + test:mutation`, neither of which references them. So DT7 step 3 is
-*net-new CI wiring*, not a "promotion."
+`ScheduledReconcile` fix. `npm run model:tlc` (`scripts/model-tlc.js`) runs TLC, and
+there was originally **no documented CL↔spec mapping**. [V 2026-07-02: WIRED —
+`test:ci` now ends with `npm run model:contracts` (which chains into
+`model:check`/`model:tlc`), so TLC and the six artifact validators are gated;
+the earlier corrections about `test:quality` not referencing them are
+historical.]
 
 ### Concrete steps
 1. **Map each design-class CL to a TLA+ property.** Add a `model:` field to the CL STATE

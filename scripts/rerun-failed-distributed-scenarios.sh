@@ -161,7 +161,7 @@ for entry in "${ENTRIES[@]}"; do
   # invisible to consumers that read report content, not filenames).
   if [ -f "$output" ]; then
     jq '. + {isRerun: true}' "$output" > "${output}.tmp" && \
-      mv "${output}.tmp" "$output"
+      mv "${output}.tmp" "$output" || rm -f "${output}.tmp"
   fi
   echo ""
 done

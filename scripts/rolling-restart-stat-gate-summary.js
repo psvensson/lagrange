@@ -100,19 +100,27 @@ export function classifyStatGateScenario(scenario = {}) {
 
 const CLOSURE_WITNESS_SIGNAL_PREFIX = 'closureWitnessClass=';
 
-// The failure classification carries typed key=value signal strings; the
-// closure-witness class is the one cross-gate trend queries group by.
+// The closure-witness class is the one cross-gate trend queries group by.
+// The typed classification signal only carries it for some heads; the
+// active-gate diagnostics field is where the dominant TOPOLOGY_BLOCKED head
+// actually records it, so read both.
 function extractClosureWitnessClass(scenario) {
   const signals = scenario?.failureClassification?.signals;
-  if (!Array.isArray(signals)) {
-    return null;
+  const fromSignals = Array.isArray(signals) ?
+    signals.find(
+      (signal) =>
+        typeof signal === 'string' &&
+        signal.startsWith(CLOSURE_WITNESS_SIGNAL_PREFIX),
+    ) :
+    null;
+  if (fromSignals) {
+    return fromSignals.slice(CLOSURE_WITNESS_SIGNAL_PREFIX.length);
   }
-  const match = signals.find(
-    (signal) =>
-      typeof signal === 'string' &&
-      signal.startsWith(CLOSURE_WITNESS_SIGNAL_PREFIX),
-  );
-  return match ? match.slice(CLOSURE_WITNESS_SIGNAL_PREFIX.length) : null;
+  const fromActiveGate =
+    scenario?.details?.diagnostics?.activeGate?.closureWitnessClass;
+  return typeof fromActiveGate === 'string' && fromActiveGate.length > 0 ?
+    fromActiveGate :
+    null;
 }
 
 export function classifyRunReport(report = {}) {
@@ -141,7 +149,10 @@ const GATE_VERDICT = Object.freeze({
 
 // Pure: Wilson score interval for `successes` out of `trials` at z.
 export function wilsonInterval(successes, trials, z = WILSON_Z_95) {
-  if (!Number.isInteger(trials) || trials <= 0) {
+  if (
+    !Number.isInteger(trials) || trials <= 0 ||
+    !Number.isInteger(successes) || successes < 0 || successes > trials
+  ) {
     return {lowerBound: null, upperBound: null, pointEstimate: null};
   }
   const p = successes / trials;

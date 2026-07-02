@@ -541,6 +541,10 @@ function extractControlPlaneDiagnostics(diagnostics) {
   );
   return firstObject([
     direct,
+    // The closure snapshot now carries ONE hoisted diagnostics copy at its
+    // top level; the per-dimension evidence field is a path-marker string
+    // (kept last for pre-hoist envelopes, where it was the object).
+    postRebalanceClosure[CONTROL_PLANE_DIAGNOSTICS_FIELD],
     closureEvidence[CONTROL_PLANE_DIAGNOSTICS_FIELD],
   ]);
 }

@@ -19,14 +19,14 @@
 // bottleneck — picking it is.
 
 import process from 'node:process';
-import {readdirSync, statSync, existsSync} from 'node:fs';
-import {join, basename} from 'node:path';
+import {readdirSync, readFileSync, statSync, existsSync} from 'node:fs';
+import {join, basename, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {classifyRunReport} from './rolling-restart-stat-gate-summary.js';
-import {readFileSync} from 'node:fs';
 
 const DEFAULT_REPORT_DIR = 'test-output/reports';
 const REPORT_SUFFIX = '.report.json';
+const MODEL_REPORT_SUFFIX = '.model.report.json';
 
 // Signature routes, first match wins; each command is a verified template
 // (analyzer usage checked at authoring time — artifact path = the report).
@@ -96,7 +96,8 @@ const CLASS_GUIDANCE = {
 
 function newestReport(reportDir) {
   const candidates = readdirSync(reportDir)
-    .filter((file) => file.endsWith(REPORT_SUFFIX))
+    .filter((file) =>
+      file.endsWith(REPORT_SUFFIX) && !file.endsWith(MODEL_REPORT_SUFFIX))
     .map((file) => {
       const path = join(reportDir, file);
       return {path, mtimeMs: statSync(path).mtimeMs};
@@ -107,7 +108,17 @@ function newestReport(reportDir) {
 
 function playbackDirFor(reportPath) {
   const name = basename(reportPath).replace(REPORT_SUFFIX, '');
-  return join(DEFAULT_REPORT_DIR, '.playback', name);
+  return join(dirname(reportPath), '.playback', name);
+}
+
+// The triage summary is written per scenario: <playback>/<scenario>/
+// triage-summary.md. The scenario dir name comes from the report itself.
+function findTriageSummary(playback, report) {
+  const scenarioName = report?.scenarios?.[0]?.scenario;
+  const candidate = scenarioName ?
+    join(playback, scenarioName, 'triage-summary.md') :
+    null;
+  return candidate && existsSync(candidate) ? candidate : null;
 }
 
 function main() {
@@ -136,9 +147,9 @@ function main() {
   }
   console.log('');
 
-  const triageSummary = join(playback, 'failure-bundles', 'triage-summary.md');
+  const triageSummary = findTriageSummary(playback, report);
   console.log('read first (mandated order):');
-  if (existsSync(triageSummary)) {
+  if (triageSummary) {
     console.log(`  1. ${triageSummary}`);
     console.log(`  2. ${triageSummary.replace(/\.md$/, '.json')}`);
   } else {

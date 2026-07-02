@@ -17,6 +17,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import LifeRaft from '../../src/raft/liferaft.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 
 function buildEntries(fromIndex, toIndex, term = 2) {
   const entries = [];
@@ -248,6 +249,49 @@ test('raft catch-up batching', async (t) => {
         );
         t.equal(writes.length, 2, 'tail ack re-arms the next batch');
         t.equal(writes[1].data[0].index, 69, 'next batch continues forward');
+      } finally {
+        raft.end();
+      }
+    },
+  );
+
+  await t.test(
+    'inflight TTL runs on the VIRTUAL clock when a timeSource is injected',
+    async (t) => {
+      // Red-on-revert for the catch-up TTL seam: with a raw Date.now() the
+      // dedupe window measures REAL elapsed test time (microseconds here),
+      // so the advance below would do nothing and the third fail would stay
+      // suppressed.
+      const timeSource = new VirtualTimeSource();
+      const raft = new LifeRaft('node-1', {...RAFT_OPTIONS, timeSource});
+      try {
+        raft.log.seed(1, 200);
+        raft.state = LifeRaft.LEADER;
+        raft.term = 2;
+        const writes = [];
+        const incoming = raft.listeners('data')[0];
+        const collect = (packet) => packet && writes.push(packet);
+
+        await incoming(
+          buildAppendFail({failedIndex: 150, followerLastIndex: 4}),
+          collect,
+        );
+        await incoming(
+          buildAppendFail({failedIndex: 151, followerLastIndex: 4}),
+          collect,
+        );
+        t.equal(writes.length, 1, 'suppressed inside the virtual TTL window');
+
+        timeSource.advance(401);
+        await incoming(
+          buildAppendFail({failedIndex: 151, followerLastIndex: 4}),
+          collect,
+        );
+        t.equal(
+          writes.length,
+          2,
+          'TTL expired on the virtual clock re-arms the batch',
+        );
       } finally {
         raft.end();
       }

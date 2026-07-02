@@ -60,8 +60,16 @@ function collectTestFiles(root) {
   return found.sort();
 }
 
-// Pure: deal sorted files round-robin into `lanes` buckets.
+// Pure: deal sorted files round-robin into `lanes` buckets. An empty lane is
+// refused: `tap $(cat empty.txt)` degrades to bare `tap`, which silently runs
+// tap's WHOLE default discovery instead of nothing.
 function dealIntoLanes(files, lanes) {
+  if (files.length < lanes) {
+    throw new Error(
+      `only ${files.length} test file(s) for ${lanes} lanes — an empty lane ` +
+      'file would make its npm script run the full default tap discovery',
+    );
+  }
   const buckets = Array.from({length: lanes}, () => []);
   files.forEach((file, index) => {
     buckets[index % lanes].push(file);
