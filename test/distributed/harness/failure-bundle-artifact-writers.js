@@ -241,8 +241,9 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   }
 
   if (isRecord(bundleJson.summary?.failureClassification)) {
-    diagnostics.failureClassification =
-      bundleJson.summary.failureClassification;
+    // Scenario-level only: mirroring the classification into
+    // details.diagnostics doubled a multi-MB blob in every report and had no
+    // reader (all consumers read scenario.failureClassification).
     entry.failureClassification = bundleJson.summary.failureClassification;
   }
 

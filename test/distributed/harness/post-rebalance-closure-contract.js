@@ -82,6 +82,11 @@ const POST_REBALANCE_CLOSURE_TERMINAL_STATES = Object.freeze([
 const POST_REBALANCE_CLOSURE_BLOCKER_SUFFIX = '_open';
 const POST_REBALANCE_CLOSURE_SOFT_SUFFIX = '_soft_closed';
 const POST_REBALANCE_CLOSURE_TEXT_EMPTY = '';
+// Marker written into per-dimension evidence where the shared (multi-MB)
+// controlPlaneDiagnostics object used to be embedded; the single real copy
+// lives at the closure snapshot's own top level.
+const POST_REBALANCE_CLOSURE_DIAGNOSTICS_HOISTED_REF =
+  '@postRebalanceClosure.controlPlaneDiagnostics';
 const POST_REBALANCE_CLOSURE_EMPTY_LIST = Object.freeze([]);
 const POST_REBALANCE_CLOSURE_EMPTY_RECORD = Object.freeze({});
 const REPLICA_OPERATION_DRAIN_DISCOUNT_REASON = Object.freeze({
@@ -1592,8 +1597,21 @@ function buildPostRebalanceClosureSnapshot(
     cdcProjectionVisible,
     noOverTarget,
   ];
+  // The five dimensions share ONE evidence object in memory, but
+  // JSON.stringify expands the shared reference into five byte-identical
+  // copies — with the full controlPlaneDiagnostics blob (multi-MB on a real
+  // cluster) inside each, this alone accounted for the bulk of a gate
+  // report's ~190MB. Hoist the diagnostics to a single snapshot-level copy
+  // and leave a path marker in the per-dimension evidence.
+  const sharedEvidence = {
+    ...evidence,
+    controlPlaneDiagnostics: POST_REBALANCE_CLOSURE_DIAGNOSTICS_HOISTED_REF,
+  };
   const dimensions = Object.fromEntries(
-    dimensionList.map((dimension) => [dimension.dimension, dimension]),
+    dimensionList.map((dimension) => [
+      dimension.dimension,
+      {...dimension, evidence: sharedEvidence},
+    ]),
   );
   const blockers = dimensionList
     .filter((dimension) => dimension.state === POST_REBALANCE_CLOSURE_STATE.OPEN)
@@ -1629,6 +1647,7 @@ function buildPostRebalanceClosureSnapshot(
     state,
     blockers,
     softClosures,
+    controlPlaneDiagnostics: evidence.controlPlaneDiagnostics,
     dimensions,
   };
 }
