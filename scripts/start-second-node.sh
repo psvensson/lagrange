@@ -14,8 +14,10 @@ DEFAULT_REST_PORT=$(node -e "console.log(JSON.parse('$DEFAULTS').restApiPort)")
 DEFAULT_ADMIN_PORT=$(node -e "console.log(JSON.parse('$DEFAULTS').adminPort)")
 DEFAULT_HOST=$(node -e "console.log(JSON.parse('$DEFAULTS').localhost)")
 
-REST_API_PORT=${REST_API_PORT:-$((DEFAULT_REST_PORT + 2))}
-ADMIN_WEBSOCKET_PORT=${ADMIN_WEBSOCKET_PORT:-$((DEFAULT_ADMIN_PORT + 2))}
+# Stride of 4: each node also opens its node-to-node WS transport on REST+2,
+# so REST+2 would collide with the seed's transport port.
+REST_API_PORT=${REST_API_PORT:-$((DEFAULT_REST_PORT + 4))}
+ADMIN_WEBSOCKET_PORT=${ADMIN_WEBSOCKET_PORT:-$((DEFAULT_ADMIN_PORT + 4))}
 DATA_DIR="${DATA_DIR:-./data2}"
 SEED_NODE_ADDRESS="${SEED_NODE_ADDRESS:-$DEFAULT_HOST:$DEFAULT_REST_PORT}"
 

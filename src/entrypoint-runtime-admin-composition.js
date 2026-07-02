@@ -1,5 +1,7 @@
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
+import {ConfigurationManager} from './config/configuration-manager.js';
+import {CONFIG_KEY} from './config/config-key-constants.js';
 import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
 import {READINESS_EVENT} from
   './bootstrap/bootstrap-readiness-state-constants.js';
@@ -502,7 +504,9 @@ async function startAdminRuntimeComposition(options) {
   });
   const adminAPI = adminStartup.adminAPI;
   const liveQueryWiring = adminStartup.liveQueryWiring;
-  const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
+  const adminPort =
+    ConfigurationManager.getInstance().get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) ??
+    ADMIN_DEFAULT.WEBSOCKET_PORT;
   await adminAPI.initialize(adminPort);
   const logger = options.owner?.logger;
   if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {

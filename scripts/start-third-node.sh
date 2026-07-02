@@ -14,8 +14,9 @@ DEFAULT_REST_PORT=$(node -e "console.log(JSON.parse('$DEFAULTS').restApiPort)")
 DEFAULT_ADMIN_PORT=$(node -e "console.log(JSON.parse('$DEFAULTS').adminPort)")
 DEFAULT_HOST=$(node -e "console.log(JSON.parse('$DEFAULTS').localhost)")
 
-REST_API_PORT=${REST_API_PORT:-$((DEFAULT_REST_PORT + 4))}
-ADMIN_WEBSOCKET_PORT=${ADMIN_WEBSOCKET_PORT:-$((DEFAULT_ADMIN_PORT + 4))}
+# Stride of 4 per node (WS transport binds REST+2); second node uses +4.
+REST_API_PORT=${REST_API_PORT:-$((DEFAULT_REST_PORT + 8))}
+ADMIN_WEBSOCKET_PORT=${ADMIN_WEBSOCKET_PORT:-$((DEFAULT_ADMIN_PORT + 8))}
 DATA_DIR="${DATA_DIR:-./data3}"
 SEED_NODE_ADDRESS="${SEED_NODE_ADDRESS:-$DEFAULT_HOST:$DEFAULT_REST_PORT}"
 

@@ -165,14 +165,24 @@ class LoggingService {
         pino.destination({dest: logFilePath, sync: true, mkdir: true}),
       );
     } else if (prettyPrint) {
-      this.logger = pino(pinoOptions, pino.transport({
-        target: LOGGING_PRETTY.TARGET,
-        options: {
-          colorize: LOGGING_PRETTY.COLORIZE,
-          translateTime: LOGGING_PRETTY.TRANSLATE_TIME,
-          singleLine: LOGGING_PRETTY.SINGLE_LINE,
-        },
-      }));
+      // Pretty printing is cosmetic; a missing/unresolvable pino-pretty must
+      // not make the node unbootable. Fall back to plain JSON output.
+      try {
+        this.logger = pino(pinoOptions, pino.transport({
+          target: LOGGING_PRETTY.TARGET,
+          options: {
+            colorize: LOGGING_PRETTY.COLORIZE,
+            translateTime: LOGGING_PRETTY.TRANSLATE_TIME,
+            singleLine: LOGGING_PRETTY.SINGLE_LINE,
+          },
+        }));
+      } catch (error) {
+        process.stderr.write(
+          `Pretty log transport unavailable (${error.message}); ` +
+          'falling back to JSON logging.\n',
+        );
+        this.logger = pino(pinoOptions);
+      }
     } else {
       this.logger = pino(pinoOptions);
     }

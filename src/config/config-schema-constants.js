@@ -224,6 +224,7 @@ const CONFIG_SCHEMA = {
       properties: {
         queryTimeoutMs: {type: 'number', minimum: 1000},
         cacheDumpTimeoutMs: {type: 'number', minimum: 1000},
+        websocketPort: {type: 'number', minimum: 1, maximum: 65535},
       },
       additionalProperties: false,
     },

@@ -141,6 +141,7 @@ const CONFIG_KEY = Object.freeze({
 
   ADMIN_QUERY_TIMEOUT_MS: 'admin.queryTimeoutMs',
   ADMIN_CACHE_DUMP_TIMEOUT_MS: 'admin.cacheDumpTimeoutMs',
+  ADMIN_WEBSOCKET_PORT: 'admin.websocketPort',
 
   FUNCTION_QUERY_TIMEOUT_MS: 'function.queryTimeoutMs',
   FUNCTION_QUERY_BATCH_SIZE: 'function.queryBatchSize',

@@ -266,6 +266,7 @@ const DEFAULT_CONFIG = {
   admin: {
     queryTimeoutMs: 30000, // Query timeout (30 seconds)
     cacheDumpTimeoutMs: 5000, // Cache dump timeout (5 seconds)
+    websocketPort: 8081, // Admin WebSocket port (matches ADMIN_DEFAULT.WEBSOCKET_PORT)
   },
   latency: {
     groupThresholdMs: 100,
@@ -319,6 +320,7 @@ const ENV_MAPPINGS = {
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
+  ADMIN_WEBSOCKET_PORT: CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
 };
 
 /**
