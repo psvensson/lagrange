@@ -16,10 +16,17 @@ import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 import {Worker} from 'worker_threads';
 import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
+import {readFileSync} from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '../..');
+
+// Single-source the expected package name so a rename cannot strand this test
+// on a stale literal (it previously pinned 'distributed-database-system').
+const pkgName = JSON.parse(
+  readFileSync(join(projectRoot, 'package.json'), 'utf8'),
+).name;
 
 const cliEntry = join(projectRoot, 'src/cli/bin/ddb-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
@@ -141,7 +148,7 @@ test('Single Executable Behavioral Equivalence - Property Test', async (t) => {
     t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
     if (flag === '--version' || flag === '-v') {
       t.ok(
-        out.includes('distributed-database-system'),
+        out.includes(pkgName),
         `main version output includes name for ${flag}`,
       );
       t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);

@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {CLI_VERSION} from '../../src/cli/cli-constants.js';
-import {ENTRYPOINT_VERSION} from '../../src/constants/entrypoint.js';
+import {
+  ENTRYPOINT_APP,
+  ENTRYPOINT_VERSION,
+} from '../../src/constants/entrypoint.js';
 
 // The release version lives in three places that must never drift: package.json
 // (the single source of truth) and the two user-facing `--version` string
@@ -32,6 +35,14 @@ describe('release version single-source', () => {
       ENTRYPOINT_VERSION,
       pkg.version,
       `ENTRYPOINT_VERSION (${ENTRYPOINT_VERSION}) must equal package.json version (${pkg.version})`,
+    );
+  });
+
+  it('entrypoint package-name literal matches package.json', () => {
+    assert.equal(
+      ENTRYPOINT_APP.PACKAGE_NAME,
+      pkg.name,
+      `ENTRYPOINT_APP.PACKAGE_NAME (${ENTRYPOINT_APP.PACKAGE_NAME}) must equal package.json name (${pkg.name})`,
     );
   });
 });

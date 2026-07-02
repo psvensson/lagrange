@@ -16,11 +16,17 @@ import {test} from '../../src/test-helpers/tap.js';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
 import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
+import {readFileSync} from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '../..');
 
+// Single-source the expected version so the release bump cannot strand this
+// test on a stale literal (it previously pinned '1.0.0').
+const pkgVersion = JSON.parse(
+  readFileSync(join(projectRoot, 'package.json'), 'utf8'),
+).version;
 const cliEntry = join(projectRoot, 'src/cli/bin/ddb-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
 
@@ -42,8 +48,8 @@ test('Single Executable Completeness - Property Test', async (t) => {
     t.ok(result.stdout.length > 0, `cli entry produces output for ${flag}`);
     if (flag === '--version' || flag === '-v') {
       t.ok(
-        result.stdout.includes('1.0.0'),
-        `cli entry version includes 1.0.0 for ${flag}`,
+        result.stdout.includes(pkgVersion),
+        `cli entry version includes ${pkgVersion} for ${flag}`,
       );
     } else {
       t.ok(
@@ -60,8 +66,8 @@ test('Single Executable Completeness - Property Test', async (t) => {
     t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
     if (flag === '--version' || flag === '-v') {
       t.ok(
-        result.stdout.includes('1.0.0'),
-        `main entry version includes 1.0.0 for ${flag}`,
+        result.stdout.includes(pkgVersion),
+        `main entry version includes ${pkgVersion} for ${flag}`,
       );
     } else {
       t.ok(

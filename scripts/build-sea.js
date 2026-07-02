@@ -171,4 +171,8 @@ async function main() {
   }
 }
 
-main();
+// Top-level await, not fire-and-forget: importers (the packaging smoke test
+// runs this via a worker-thread dynamic import) must observe completion of
+// the build when the module settles, or they race the in-flight esbuild
+// writes and see partially written dist/ output.
+await main();
