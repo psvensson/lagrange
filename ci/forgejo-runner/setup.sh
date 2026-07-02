@@ -19,6 +19,11 @@ mkdir -p data
 rm -f data/.runner
 cp config-template.yml data/config.yml
 
+# Grant the container access to the host docker socket: detect the socket's
+# owning group GID and hand it to compose (group_add). Falls back to 999.
+DOCKER_GID="$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 999)"
+echo "DOCKER_GID=${DOCKER_GID}" > .env
+
 # Append the connection block (2-space indented, top-level `server:` key).
 cat >> data/config.yml <<EOF
 
