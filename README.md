@@ -308,12 +308,40 @@ CREATE TABLE users (id TEXT PRIMARY KEY)
 
 ### Add More Nodes
 
-Additional nodes join the cluster by pointing at the seed:
+Additional nodes join the cluster by pointing `SEED_NODE_ADDRESS` at the
+seed. Two things to know:
+
+- leave `NODE_ID` unset on joining nodes — the seed admits joiners by a
+  UUID identity, which the node generates and persists in its data
+  directory on first start
+- run each node on its own host or container: the admin websocket port is
+  currently fixed at `8081`, so two nodes cannot share a network namespace
+- every node must advertise an address other nodes can reach
+  (`NODE_ADDRESS`, `NODE_ADVERTISED_WS_ADDRESS`) — the localhost default
+  is rejected at join admission because it collides with the seed's
+
+The easiest local multi-node setup is Docker, one container per node:
 
 ```bash
-NODE_ID=node-2 REST_API_PORT=8090 \
-SEED_NODE_ADDRESS=http://localhost:8080 npm start
+docker network create lagrange-net
+docker build -t lagrange .
+
+docker run -d --name seed --network lagrange-net \
+  -e TRANSPORT_WS_HOST=0.0.0.0 \
+  -e NODE_ADDRESS=seed:8080 \
+  -e NODE_ADVERTISED_WS_ADDRESS=seed:8082 \
+  lagrange
+
+docker run -d --name node2 --network lagrange-net \
+  -e TRANSPORT_WS_HOST=0.0.0.0 \
+  -e NODE_ADDRESS=node2:8080 \
+  -e NODE_ADVERTISED_WS_ADDRESS=node2:8082 \
+  -e SEED_NODE_ADDRESS=http://seed:8080 \
+  lagrange
 ```
+
+For a real cluster, use the Helm chart below — it wires the same
+name-first addressing per pod automatically.
 
 ### Docker And Kubernetes
 

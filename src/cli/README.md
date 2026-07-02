@@ -19,7 +19,7 @@ kept as a compatibility alias.
 ### From npm (recommended)
 
 ```bash
-npm install -g distributed-database-system
+npm install -g lagrange
 ```
 
 ### From source
@@ -27,7 +27,7 @@ npm install -g distributed-database-system
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd distributed-database-system
+cd lagrange
 
 # Install dependencies
 npm install

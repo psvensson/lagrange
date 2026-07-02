@@ -13,8 +13,9 @@
  * the location of the binary or this file.
  */
 
-import {existsSync} from 'node:fs';
+import {statSync} from 'node:fs';
 
-if (existsSync('.env')) {
+const envStat = statSync('.env', {throwIfNoEntry: false});
+if (envStat?.isFile()) {
   process.loadEnvFile('.env');
 }
