@@ -144,12 +144,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 314,
-    "dedupedRuleCount": 306,
-    "exportedRuleCount": 306,
+    "candidateCount": 324,
+    "dedupedRuleCount": 315,
+    "exportedRuleCount": 315,
     "aliasRuleCount": 4,
-    "masterRuleCount": 302,
-    "estimatedAllRulesTokens": 12125
+    "masterRuleCount": 311,
+    "estimatedAllRulesTokens": 12696
   },
   "rules": [
     {
@@ -157,12 +157,12 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Model choice notes are advisory only. They never replace validation, delegated review, Solver attempts, or terminal reports.",
+      "rule": "docs/ holds documentation, never active work definition: end-user and operator-facing docs, the agent steering tree under docs/steering/, and internal engineering plans. Active work definition lives under solve/quests/.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 94,
+          "line": 98,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
@@ -171,16 +171,14 @@
       "id": "ARCH-0002",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "If the existing owner lacks one capability, extend that owner. Do not fork a feature-local implementation.",
+      "tags": [],
+      "rule": "Model choice notes are advisory only. They never replace validation, delegated review, Solver attempts, or terminal reports.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 111,
-          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+          "line": 102,
+          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
     },
@@ -191,18 +189,35 @@
       "tags": [
         "ownership"
       ],
-      "rule": "Callers submit intent to owners. They do not reproduce owner logic locally.",
+      "rule": "If the existing owner lacks one capability, extend that owner. Do not fork a feature-local implementation.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 113,
+          "line": 119,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
     },
     {
       "id": "ARCH-0004",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Callers submit intent to owners. They do not reproduce owner logic locally.",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 121,
+          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0005",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -213,23 +228,8 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 137,
+          "line": 145,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0005",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "null and undefined MUST NOT encode runtime or domain state. Use an explicit named state variant.",
-      "score": 256,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 165,
-          "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
     },
@@ -238,19 +238,34 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
+      "rule": "null and undefined MUST NOT encode runtime or domain state. Use an explicit named state variant.",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 173,
+          "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0007",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Each concept has one name. Do not add synonyms for existing concepts.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 168,
+          "line": 176,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
       "canonical_of": "STYLE-0003"
     },
     {
-      "id": "ARCH-0007",
+      "id": "ARCH-0008",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -259,14 +274,14 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 171,
+          "line": 179,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
       "canonical_of": "STYLE-0001"
     },
     {
-      "id": "ARCH-0008",
+      "id": "ARCH-0009",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -277,13 +292,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 209,
+          "line": 217,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0009",
+      "id": "ARCH-0010",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -295,13 +310,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 216,
+          "line": 224,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0010",
+      "id": "ARCH-0011",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -312,7 +327,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 234,
+          "line": 242,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         },
         {
@@ -323,7 +338,7 @@
       ]
     },
     {
-      "id": "ARCH-0011",
+      "id": "ARCH-0012",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -334,13 +349,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 241,
+          "line": 249,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0012",
+      "id": "ARCH-0013",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -351,13 +366,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 259,
+          "line": 267,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
     },
     {
-      "id": "ARCH-0013",
+      "id": "ARCH-0014",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -368,23 +383,8 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 264,
+          "line": 272,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0014",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Throughput may fall under pressure; correctness must not.",
-      "score": 255,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 277,
-          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
@@ -393,18 +393,33 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Operations must not fail, return incorrect results, leak memory, or silently drop work because the system is under load.",
+      "rule": "Throughput may fall under pressure; correctness must not.",
       "score": 255,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 278,
+          "line": 285,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
       "id": "ARCH-0016",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Operations must not fail, return incorrect results, leak memory, or silently drop work because the system is under load.",
+      "score": 255,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 286,
+          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0017",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -415,22 +430,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 282,
-          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0017",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Control-plane pressure must not cause query/data-plane correctness failures.",
-      "score": 255,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 283,
+          "line": 290,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -440,18 +440,33 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses.",
+      "rule": "Control-plane pressure must not cause query/data-plane correctness failures.",
       "score": 255,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 299,
-          "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
+          "line": 291,
+          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
       "id": "ARCH-0019",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses.",
+      "score": 255,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 307,
+          "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0020",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -463,23 +478,8 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 324,
+          "line": 332,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0020",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments.",
-      "score": 246,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 192,
-          "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
     },
@@ -488,18 +488,33 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Non-forced readers do not repair authoritative state on the hot path.",
+      "rule": "Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments.",
       "score": 246,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 220,
-          "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
+          "line": 200,
+          "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
     },
     {
       "id": "ARCH-0022",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Non-forced readers do not repair authoritative state on the hot path.",
+      "score": 246,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 228,
+          "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0023",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -510,13 +525,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 226,
+          "line": 234,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0023",
+      "id": "ARCH-0024",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -533,7 +548,7 @@
       ]
     },
     {
-      "id": "ARCH-0024",
+      "id": "ARCH-0025",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -550,7 +565,7 @@
       ]
     },
     {
-      "id": "ARCH-0025",
+      "id": "ARCH-0026",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -568,7 +583,7 @@
       ]
     },
     {
-      "id": "ARCH-0026",
+      "id": "ARCH-0027",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -584,11 +599,11 @@
         }
       ],
       "aliases": [
-        "ARCH-0047"
+        "ARCH-0048"
       ]
     },
     {
-      "id": "ARCH-0027",
+      "id": "ARCH-0028",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -603,7 +618,7 @@
       ]
     },
     {
-      "id": "ARCH-0028",
+      "id": "ARCH-0029",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -614,13 +629,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 211,
+          "line": 219,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0029",
+      "id": "ARCH-0030",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -633,13 +648,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 231,
+          "line": 239,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0030",
+      "id": "ARCH-0031",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -650,24 +665,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 340,
-          "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0031",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "Static guardrail proof is required for touched runtime/control-plane, diagnostics, admin, harness, or shared test infrastructure boundaries.",
-      "score": 237,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 341,
+          "line": 348,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -679,18 +677,35 @@
       "tags": [
         "testing"
       ],
-      "rule": "Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX.md and testing-guidelines/INDEX.md.",
+      "rule": "Static guardrail proof is required for touched runtime/control-plane, diagnostics, admin, harness, or shared test infrastructure boundaries.",
       "score": 237,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 343,
+          "line": 349,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
       "id": "ARCH-0033",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX.md and testing-guidelines/INDEX.md.",
+      "score": 237,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 351,
+          "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0034",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -701,13 +716,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 346,
+          "line": 354,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "ARCH-0034",
+      "id": "ARCH-0035",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -716,7 +731,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 354,
+          "line": 362,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -738,7 +753,7 @@
         }
       ],
       "aliases": [
-        "ARCH-0007"
+        "ARCH-0008"
       ]
     },
     {
@@ -773,7 +788,7 @@
         }
       ],
       "aliases": [
-        "ARCH-0006"
+        "ARCH-0007"
       ]
     },
     {
@@ -781,12 +796,12 @@
       "domain": "style",
       "strength": "must_not",
       "tags": [],
-      "rule": "terminalize is not a word: identifiers, comments, commit messages, and steering prose MUST use terminate, never terminalize (an operation/handoff terminates; the terminal state is reached by terminating).",
+      "rule": "Do not expose semantic policy through combinable booleans when one named mode constant set should exist.",
       "score": 236,
       "sources": [
         {
           "file": "code-style.md",
-          "line": 85,
+          "line": 92,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -796,27 +811,12 @@
       "domain": "style",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not expose semantic policy through combinable booleans when one named mode constant set should exist.",
-      "score": 236,
-      "sources": [
-        {
-          "file": "code-style.md",
-          "line": 88,
-          "section": "Code Style Guidelines > Constants And Naming"
-        }
-      ]
-    },
-    {
-      "id": "STYLE-0006",
-      "domain": "style",
-      "strength": "must_not",
-      "tags": [],
       "rule": "Do not leak raw storage or transport field shapes into runtime model names or contracts.",
       "score": 236,
       "sources": [
         {
           "file": "code-style.md",
-          "line": 95,
+          "line": 99,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -985,7 +985,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 111,
+          "line": 117,
           "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -1163,7 +1163,7 @@
       ]
     },
     {
-      "id": "ARCH-0035",
+      "id": "ARCH-0036",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1181,7 +1181,7 @@
       ]
     },
     {
-      "id": "ARCH-0036",
+      "id": "ARCH-0037",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1196,7 +1196,7 @@
       ]
     },
     {
-      "id": "ARCH-0037",
+      "id": "ARCH-0038",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1205,13 +1205,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 82,
+          "line": 88,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
     },
     {
-      "id": "ARCH-0038",
+      "id": "ARCH-0039",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1224,13 +1224,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 103,
+          "line": 111,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
     },
     {
-      "id": "ARCH-0039",
+      "id": "ARCH-0040",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1239,13 +1239,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 131,
+          "line": 139,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
     },
     {
-      "id": "ARCH-0040",
+      "id": "ARCH-0041",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1257,23 +1257,8 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 219,
+          "line": 227,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0041",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [],
-      "rule": "The system must remain correct under contention, topology change, recovery, and control-plane pressure.",
-      "score": 227,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 272,
-          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
@@ -1282,12 +1267,27 @@
       "domain": "architecture",
       "strength": "must",
       "tags": [],
+      "rule": "The system must remain correct under contention, topology change, recovery, and control-plane pressure.",
+      "score": 227,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 280,
+          "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0043",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [],
       "rule": "All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps.",
       "score": 227,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 307,
+          "line": 315,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         },
         {
@@ -1298,7 +1298,7 @@
       ]
     },
     {
-      "id": "ARCH-0043",
+      "id": "ARCH-0044",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1313,7 +1313,7 @@
       ]
     },
     {
-      "id": "ARCH-0044",
+      "id": "ARCH-0045",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1328,7 +1328,7 @@
       ]
     },
     {
-      "id": "ARCH-0045",
+      "id": "ARCH-0046",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1345,7 +1345,7 @@
       ]
     },
     {
-      "id": "ARCH-0046",
+      "id": "ARCH-0047",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1360,7 +1360,7 @@
       ]
     },
     {
-      "id": "ARCH-0047",
+      "id": "ARCH-0048",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1375,7 +1375,7 @@
           "section": "Doctrine — State And Lifetime > 10. Normalize Evidence Before Adjudicating Decisions"
         }
       ],
-      "canonical_of": "ARCH-0026"
+      "canonical_of": "ARCH-0027"
     },
     {
       "id": "GOV-0001",
@@ -1389,7 +1389,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 131,
+          "line": 132,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
@@ -1406,13 +1406,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 134,
+          "line": 135,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
     },
     {
-      "id": "STYLE-0007",
+      "id": "STYLE-0006",
       "domain": "style",
       "strength": "must_not",
       "tags": [
@@ -1425,6 +1425,23 @@
           "file": "code-style.md",
           "line": 44,
           "section": "Code Style Guidelines > Linting Compliance"
+        }
+      ]
+    },
+    {
+      "id": "STYLE-0007",
+      "domain": "style",
+      "strength": "must_not",
+      "tags": [
+        "style"
+      ],
+      "rule": "The root .eslintrc.json is the legacy-format file and is NOT read by the npm run lint scripts; do not edit it expecting effect.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "code-style.md",
+          "line": 134,
+          "section": "Code Style Guidelines > Reference"
         }
       ]
     },
@@ -1572,7 +1589,7 @@
       ]
     },
     {
-      "id": "ARCH-0048",
+      "id": "ARCH-0049",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1589,7 +1606,7 @@
       ]
     },
     {
-      "id": "ARCH-0049",
+      "id": "ARCH-0050",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1606,7 +1623,7 @@
       ]
     },
     {
-      "id": "ARCH-0050",
+      "id": "ARCH-0051",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1863,7 +1880,7 @@
       ]
     },
     {
-      "id": "ARCH-0051",
+      "id": "ARCH-0052",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1878,7 +1895,7 @@
       ]
     },
     {
-      "id": "ARCH-0052",
+      "id": "ARCH-0053",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1895,7 +1912,7 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0054",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1913,7 +1930,7 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0055",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1930,7 +1947,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0056",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1947,7 +1964,7 @@
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0057",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1962,7 +1979,7 @@
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0058",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1980,7 +1997,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0059",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1995,7 +2012,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0060",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2012,7 +2029,7 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0061",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2029,7 +2046,7 @@
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2046,7 +2063,7 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2061,7 +2078,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2076,7 +2093,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2091,7 +2108,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2109,7 +2126,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2124,7 +2141,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2139,7 +2156,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2154,7 +2171,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2176,6 +2193,60 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "docs/ holds documentation, never active work definition: user/operator-facing docs, the agent steering tree under docs/steering/, and internal engineering plans.",
+      "score": 216,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 84,
+          "section": "Roadmap Steering Pointer > Quest Intake And Execution Flow"
+        },
+        {
+          "file": "workflow-guidelines/quest-artifacts.md",
+          "line": 45,
+          "section": "Quest Artifacts > Artifact Boundaries"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0006",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Tests never pin a flag in either regime.",
+      "score": 216,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 140,
+          "section": "Roadmap Steering Pointer > Feature Flag Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0007",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "after audit passes, commit every Quest-scoped change (the Solver never pushes; see \"Regular Commit (No Push)\" below).",
+      "score": 216,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 31,
+          "section": "Quest Workflow > Operating Contract"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0008",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "They have different jobs and MUST NOT duplicate each other; duplication is how the same \"truth\" drifts into three conflicting copies.",
       "score": 214,
       "sources": [
@@ -2187,7 +2258,7 @@
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2196,13 +2267,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 660,
+          "line": 664,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2225,7 +2296,7 @@
       ]
     },
     {
-      "id": "ARCH-0071",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2242,7 +2313,7 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2251,8 +2322,27 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 348,
+          "line": 356,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
+        }
+      ]
+    },
+    {
+      "id": "STYLE-0011",
+      "domain": "style",
+      "strength": "must_not",
+      "tags": [
+        "readiness",
+        "rebalancing",
+        "testing"
+      ],
+      "rule": "terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages, and steering prose, MUST use terminate, never terminalize (an operation/handoff terminates; the terminal state is reached by terminating). Inherited terminalize usages exist (e.g. in scripts/solve/, src/rebalancer/, and some test names); they are known debt, not license — do not imitate them, and rename them when other work already touches that line or file (no standalone mass-rename is required).",
+      "score": 212,
+      "sources": [
+        {
+          "file": "code-style.md",
+          "line": 85,
+          "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
     },
@@ -2278,9 +2368,12 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [
-        "testing"
+        "ownership",
+        "lifecycle",
+        "testing",
+        "governance"
       ],
-      "rule": "Production feature flags are within-session scaffolds only. By the end of the session a flag MUST be either baked in unconditionally (the flag deleted and the new behavior made the only path) or removed together with the functionality it gated; a flag MUST NOT linger as a permanent production toggle. Bake the chosen behavior in first, then update the test to assert that unconditional behavior.",
+      "rule": "Production feature flags default to within-session scaffolds. By the end of the session a flag MUST be either baked in unconditionally (the flag deleted and the new behavior made the only path), removed together with the functionality it gated, or explicitly enrolled in the feature-flag lifecycle: a written owner and promote-or-retire condition recorded in the landing commit or Quest (see roadmap.md \"Feature Flag Lifecycle\" and the building-block Quest closure bar in workflow-guidelines/solver-quests.md). A flag MUST NOT linger as an unowned, condition-less permanent toggle. Whichever way the flag resolves, the tests assert the real production behavior — bake the chosen behavior in first, then update the test to assert that unconditional behavior; a test never pins a flag either way.",
       "score": 212,
       "sources": [
         {
@@ -2291,7 +2384,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2306,7 +2399,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2315,13 +2408,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 55,
+          "line": 58,
           "section": "Quest Closure > Failure Migration"
         }
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2336,7 +2429,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2351,7 +2444,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2366,7 +2459,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2375,13 +2468,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 42,
+          "line": 48,
           "section": "Workflow Validators > Report Projection"
         }
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2396,7 +2489,7 @@
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2414,7 +2507,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2431,7 +2524,7 @@
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2446,7 +2539,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2463,7 +2556,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2474,13 +2567,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 109,
+          "line": 110,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2489,13 +2582,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 110,
+          "line": 111,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2506,13 +2599,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 114,
+          "line": 115,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "STYLE-0011",
+      "id": "STYLE-0012",
       "domain": "style",
       "strength": "must",
       "tags": [
@@ -2591,7 +2684,7 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 95,
+          "line": 101,
           "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -2871,7 +2964,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2880,13 +2973,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 33,
+          "line": 34,
           "section": "Quest Workflow > Operating Contract"
         }
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2895,13 +2988,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 70,
+          "line": 71,
           "section": "Quest Workflow > Closure Of Cutover Vs Building-Block Quests"
         }
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2910,13 +3003,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 90,
+          "line": 91,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2927,13 +3020,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 97,
+          "line": 98,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2942,13 +3035,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 101,
+          "line": 102,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2959,32 +3052,17 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 103,
+          "line": 104,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
       "rule": "An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 113,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0023",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
       "score": 206,
       "sources": [
         {
@@ -2995,7 +3073,22 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0026",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 115,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3004,13 +3097,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 120,
+          "line": 121,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3021,55 +3114,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 163,
+          "line": 164,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0026",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A Quest must not accumulate an unrecoverable dirty tree.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 179,
-          "section": "Quest Workflow > Regular Commit And Push"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0027",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Each auto-commit refuses when audit does not pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries a Co-Authored-By: trailer for the agent that drove the loop.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 183,
-          "section": "Quest Workflow > Regular Commit And Push"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0028",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "For ad-hoc, non-Quest work the opposite holds — a never-before-authorized push remains an Authorization stop-trigger and is NOT performed automatically.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 193,
-          "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
     },
@@ -3078,18 +3124,48 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Detectors fire only on real recorded events and never touch the sealed doneWhen.",
+      "rule": "A Quest must not accumulate an unrecoverable dirty tree.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 204,
-          "section": "Quest Workflow > Convergence Guards"
+          "line": 180,
+          "section": "Quest Workflow > Regular Commit (No Push)"
         }
       ]
     },
     {
       "id": "GOV-0030",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The Solver NEVER pushes: no subcommand, loop, or handoff runs git push (autoCommitQuest and handoff are commit-only).",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 194,
+          "section": "Quest Workflow > Regular Commit (No Push)"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0031",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Detectors fire only on real recorded events and never touch the sealed doneWhen.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 205,
+          "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3104,7 +3180,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3119,7 +3195,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3128,38 +3204,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 372,
+          "line": 373,
           "section": "Quest Workflow > Two-Layer Theory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0033",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, measured theory promotion, and one-Quest-per-commit remain serial.",
-      "score": 205,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 426,
-          "section": "Quest Workflow > Parallel-First Execution"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0034",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
-      "score": 205,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 460,
-          "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
@@ -3168,18 +3214,80 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, measured theory promotion, and one-Quest-per-commit remain serial.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 427,
+          "section": "Quest Workflow > Parallel-First Execution"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0036",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 461,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0037",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not include unrelated dirty worktree entries from another Quest.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 471,
+          "line": 472,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "GOV-0038",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not push (see \"Regular Commit (No Push)\" above).",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 474,
+          "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0039",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "It is a dry run by default; --commit executes the printed git add/commit for the in-scope paths only (it never pushes).",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 481,
+          "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3188,13 +3296,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 328,
+          "line": 336,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3205,13 +3313,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 100,
+          "line": 101,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3222,68 +3330,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 518,
-          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0038",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
-      "score": 204,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
           "line": 520,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0039",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A guard never silently halts a run.",
-      "score": 204,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 578,
-          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0040",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
-      "score": 204,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 666,
-          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0041",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
-      "score": 204,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 723,
-          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
@@ -3292,13 +3340,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
-      "score": 203,
+      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
+      "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 761,
-          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
+          "line": 522,
+          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
     },
@@ -3307,13 +3355,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
-      "score": 203,
+      "rule": "A guard never silently halts a run.",
+      "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 782,
-          "section": "Quest Workflow > Keep-Alive Supervisor"
+          "line": 582,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
@@ -3322,18 +3370,78 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 670,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0045",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 727,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0046",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 765,
+          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0047",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 786,
+          "section": "Quest Workflow > Keep-Alive Supervisor"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0048",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 821,
+          "line": 825,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3350,7 +3458,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3365,7 +3473,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3380,7 +3488,7 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0082",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3395,7 +3503,7 @@
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0083",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3412,7 +3520,7 @@
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3429,7 +3537,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3446,7 +3554,7 @@
       ]
     },
     {
-      "id": "ARCH-0085",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3463,7 +3571,7 @@
       ]
     },
     {
-      "id": "ARCH-0086",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3480,7 +3588,7 @@
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3497,7 +3605,7 @@
       ]
     },
     {
-      "id": "ARCH-0088",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3520,7 +3628,7 @@
       ]
     },
     {
-      "id": "ARCH-0089",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3537,7 +3645,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3552,7 +3660,7 @@
       ]
     },
     {
-      "id": "ARCH-0091",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3567,7 +3675,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3576,13 +3684,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 63,
+          "line": 64,
           "section": "Quest Workflow > Quest Anatomy"
         }
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3593,13 +3701,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 382,
+          "line": 383,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3608,13 +3716,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 383,
+          "line": 384,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3625,13 +3733,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 385,
+          "line": 386,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "ARCH-0092",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3646,7 +3754,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3655,13 +3763,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 568,
+          "line": 572,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3679,7 +3787,7 @@
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3698,7 +3806,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3707,13 +3815,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 779,
+          "line": 783,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -3724,7 +3832,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 293,
+          "line": 301,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -3748,7 +3856,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3759,13 +3867,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/quest-artifacts.md",
-          "line": 49,
+          "line": 51,
           "section": "Quest Artifacts > Artifact Boundaries"
         }
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3780,7 +3888,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3810,7 +3918,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3822,13 +3930,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 78,
+          "line": 79,
           "section": "Quest Workflow > Closure Of Cutover Vs Building-Block Quests"
         }
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3839,13 +3947,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 213,
+          "line": 214,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3854,13 +3962,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 227,
+          "line": 228,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3869,13 +3977,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 275,
+          "line": 276,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3886,28 +3994,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 282,
+          "line": 283,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "EXHAUSTED (terminal): every frontier is parked and no honest remaining move exists. A park is exhausted when it had at least one honestly-measured sample, or cannot_measure when every contributing sample was non-measuring (the harness never measured anything — fix the measurement infrastructure, then reopen).",
+      "rule": "EXHAUSTED (terminal): every frontier is parked as exhausted — each had at least one honestly-measured sample and no honest remaining move exists. A cannot_measure park (every contributing sample was non-measuring; the harness never measured anything) does NOT count toward this terminal: it is a resumable measurement park, so a Quest with any cannot_measure park stays open — fix the measurement infrastructure, then reopen (see closure.md \"EXHAUSTED\").",
       "score": 190,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 561,
+          "line": 563,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3918,13 +4026,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 571,
+          "line": 575,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "ARCH-0096",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -3935,7 +4043,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 116,
+          "line": 124,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         },
         {
@@ -3946,7 +4054,7 @@
       ]
     },
     {
-      "id": "ARCH-0097",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -3957,13 +4065,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 143,
+          "line": 151,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
     },
     {
-      "id": "ARCH-0098",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -3975,13 +4083,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 214,
+          "line": 222,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -3992,13 +4100,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 236,
+          "line": 244,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4007,13 +4115,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 326,
+          "line": 334,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4022,13 +4130,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 400,
+          "line": 401,
           "section": "Quest Workflow > Attempt Flow"
         }
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4037,13 +4145,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 424,
+          "line": 425,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4054,13 +4162,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 448,
+          "line": 449,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4069,13 +4177,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 450,
+          "line": 451,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4084,13 +4192,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 551,
+          "line": 553,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4099,13 +4207,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 707,
+          "line": 711,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "STYLE-0012",
+      "id": "STYLE-0013",
       "domain": "style",
       "strength": "should",
       "tags": [
@@ -4117,7 +4225,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 90,
+          "line": 94,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -4204,7 +4312,7 @@
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4239,7 +4347,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4248,13 +4356,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 92,
+          "line": 93,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4263,13 +4371,45 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 105,
+          "line": 106,
           "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0074",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Each auto-commit refuses when its gate is not met — the mid-quest checkpoint gate requires the attempt's source change to be subagent-verified; the terminal gate additionally requires the Quest to have finished without errors — stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries a Co-Authored-By: trailer for the agent that drove the loop.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 185,
+          "section": "Quest Workflow > Regular Commit (No Push)"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0075",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Pushing is a separate, outward-facing action — for Quest and ad-hoc work alike, a never-before-authorized push remains an Authorization stop-trigger and MUST NOT be performed automatically; commit, do not push, unless the user has durably authorized pushing.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 195,
+          "section": "Quest Workflow > Regular Commit (No Push)"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4281,13 +4421,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 475,
+          "line": 478,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4298,13 +4438,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 714,
+          "line": 718,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4313,13 +4453,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 731,
+          "line": 735,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
     },
     {
-      "id": "ARCH-0102",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4332,13 +4472,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 225,
+          "line": 233,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4347,7 +4487,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 845,
+          "line": 849,
           "section": "Quest Workflow > Ledger Consistency"
         }
       ]
@@ -4370,7 +4510,7 @@
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0104",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4387,7 +4527,7 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "ARCH-0105",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4402,7 +4542,7 @@
       ]
     },
     {
-      "id": "ARCH-0105",
+      "id": "ARCH-0106",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4482,7 +4622,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4491,13 +4631,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 144,
+          "line": 149,
           "section": "Roadmap Steering Pointer > Feature Flag Lifecycle"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4506,13 +4646,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 56,
+          "line": 57,
           "section": "Quest Workflow > Quest Anatomy"
         }
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4523,13 +4663,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 262,
+          "line": 263,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4544,7 +4684,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4593,7 +4733,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4604,7 +4744,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 585,
+          "line": 589,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4655,7 +4795,7 @@
       ]
     },
     {
-      "id": "ARCH-0106",
+      "id": "ARCH-0107",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4672,7 +4812,7 @@
       ]
     },
     {
-      "id": "ARCH-0107",
+      "id": "ARCH-0108",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4687,7 +4827,7 @@
       ]
     },
     {
-      "id": "ARCH-0108",
+      "id": "ARCH-0109",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4702,7 +4842,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4711,13 +4851,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 326,
+          "line": 327,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4726,13 +4866,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 530,
+          "line": 532,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4741,13 +4881,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 541,
+          "line": 543,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4758,13 +4898,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 546,
+          "line": 548,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4779,7 +4919,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4788,7 +4928,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 112,
+          "line": 113,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -4843,7 +4983,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4852,13 +4992,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 170,
+          "line": 171,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
         }
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4867,13 +5007,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 390,
+          "line": 391,
           "section": "Quest Workflow > Attempt Flow"
         }
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4882,13 +5022,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 419,
+          "line": 420,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4897,13 +5037,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 421,
+          "line": 422,
           "section": "Quest Workflow > Parallel-First Execution"
         }
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4918,7 +5058,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4935,7 +5075,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4944,13 +5084,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 543,
+          "line": 545,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4965,7 +5105,7 @@
       ]
     },
     {
-      "id": "ARCH-0109",
+      "id": "ARCH-0110",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4980,7 +5120,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4989,13 +5129,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 593,
+          "line": 597,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5010,7 +5150,22 @@
       ]
     },
     {
-      "id": "ARCH-0110",
+      "id": "GOV-0102",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "One sanctioned exception: a frontier metric may be sharpened to a strictly harder gradient from GRADIENT_REFINEMENT_METRICS (e.g.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines/validators.md",
+          "line": 40,
+          "section": "Workflow Validators > Goalpost Immutability"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0111",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5025,7 +5180,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5036,13 +5191,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 157,
+          "line": 158,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
         }
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5051,13 +5206,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 372,
+          "line": 373,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5068,13 +5223,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 99,
+          "line": 100,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5085,13 +5240,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 820,
+          "line": 824,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -5100,13 +5255,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 694,
+          "line": 698,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5115,13 +5270,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 795,
+          "line": 799,
           "section": "Quest Workflow > Known System-Theory Hypothesis (rolling-restart)"
         }
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5132,13 +5287,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 656,
+          "line": 660,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0110",
       "domain": "governance",
       "strength": "should",
       "tags": [
@@ -5156,5 +5311,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-01T19:40:56.128Z"
+  "generatedAt": "2026-07-02T04:56:28.236Z"
 }

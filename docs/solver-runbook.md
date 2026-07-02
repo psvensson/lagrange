@@ -340,7 +340,7 @@ the log.
 
 ## Git Handoff
 
-After `node scripts/solve.js audit --id <quest>` passes, commit and push the
+After `node scripts/solve.js audit --id <quest>` passes, commit the
 Quest-scoped changes before handing the work off. Include the authored Quest
 file, append-only log, generated report, `solve/changes/` attempt artifact, and
 all source, test, docs, steering, and model files changed for that Quest.
@@ -359,7 +359,7 @@ out-of-scope so it is never swept in:
 # Dry run by default: prints in-scope, out-of-scope, and the exact git commands.
 node scripts/solve.js handoff --id <quest>
 
-# Execute the printed git add/commit/push for the in-scope paths only:
+# Execute the printed git add/commit for the in-scope paths only (never pushes):
 node scripts/solve.js handoff --id <quest> --commit
 ```
 
@@ -369,44 +369,45 @@ If you prefer to drive git by hand, mirror the in-scope list manually:
 git status --short
 git add <quest-scoped paths>
 git commit -m "<quest>: <summary>"
-git push
 ```
 
+Do not push automatically: pushing is a separate, outward-facing action that
+stays an Authorization stop-trigger unless the user has durably authorized it.
+
 This git handoff does not replace Solver proof. Attempt proof remains the
-recorded `diff:<path>` changeRef plus live probe evidence; the commit and push
-make the completed Quest durable in the shared repository.
+recorded `diff:<path>` changeRef plus live probe evidence; the commit makes the
+completed Quest durable in the local repository.
 
-## Regular Commit And Push
+## Regular Commit (No Push)
 
-A Quest should not accumulate an unrecoverable dirty tree. The Solver commits —
-and by default pushes — each Quest's own scope-clean work as it progresses, so a
-single bad `git checkout` can never lose it. This happens automatically:
+A Quest should not accumulate an unrecoverable dirty tree. The Solver commits
+each Quest's own scope-clean work as it progresses, so a single bad
+`git checkout` can never lose it. This happens automatically:
 
 - after a supervised `node scripts/solve.js step --id <quest> --commit` whose
   attempt carries a resolved `diff:<path>` changeRef,
-- after **every measured attempt of an autonomous `run`** (not only at the
-  terminal), so a long narrowing Quest leaves a per-attempt trail of rollback
-  points instead of stacking dozens of attempts in one dirty tree, and
+- after every verified, scope-clean measured attempt of an autonomous `run` (a
+  squashable `checkpoint(quest):` commit, not only at the terminal), so a long
+  narrowing Quest leaves a per-attempt trail of rollback points instead of
+  stacking dozens of attempts in one dirty tree, and
 - on every autonomous-run terminal (`SOLVED` or `EXHAUSTED`) as a final flush.
 
-Each auto-commit obeys the same rules as `handoff`: it refuses when `audit` does
-not pass (a scope-clean commit of dishonest evidence is still dishonest), stages
-only the Quest's in-scope pathspec (never the dirty-tree shape), and carries a
-`Co-Authored-By:` trailer attributing the agent that drove the loop (default: the
-Claude trailer; override via `solve/config.json` `coauthorTrailer`). It is a no-op outside a git work tree, on a
-non-measuring sample, and when the attempt's `changeRef` does not resolve.
+Each auto-commit obeys the same rules as `handoff`: it refuses when its gate is
+not met (the mid-quest checkpoint gate requires the attempt's source change to be
+subagent-verified; the terminal gate additionally requires the Quest to have
+finished without errors — a scope-clean commit of dishonest evidence is still
+dishonest), stages only the Quest's in-scope pathspec (never the dirty-tree
+shape), and carries a `Co-Authored-By:` trailer attributing the agent that drove
+the loop (default: the Claude trailer; override via `solve/config.json`
+`coauthorTrailer`). It is a no-op outside a git work tree, on a non-measuring
+sample, and when the attempt's `changeRef` does not resolve.
 
-Push is best-effort: a push failure (no remote, no auth) is non-fatal and the
-commit is kept — only a warning is surfaced. Suppress pushing for offline or CI
-use with the `--no-push` flag or the `SOLVER_NO_PUSH=1` environment variable.
-Throttle the per-attempt volume with `--commit-every N` / `--push-every N`, or
-disable per-attempt commits entirely with `--no-commit` (the terminal flush
-still commits):
+The Solver never pushes — no subcommand, loop, or handoff runs `git push`.
+Throttle the per-attempt volume with `--commit-every N`, or disable per-attempt
+commits entirely with `--no-commit` (the terminal flush still commits):
 
 ```sh
-node scripts/solve.js step --id <quest> --commit --no-push
-SOLVER_NO_PUSH=1 node scripts/solve.js run --id <quest>
-node scripts/solve.js run --id <quest> --commit-every 3 --push-every 6
+node scripts/solve.js run --id <quest> --commit-every 3
 node scripts/solve.js run --id <quest> --no-commit
 ```
 

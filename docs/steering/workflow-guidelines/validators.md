@@ -37,6 +37,12 @@ The first Solver declaration seals:
 Later attempts must use the same sealed goalposts. If the desired result
 changes, stop the current Quest as EXHAUSTED or author a new Quest.
 
+One sanctioned exception: a frontier metric may be sharpened to a strictly
+harder gradient from `GRADIENT_REFINEMENT_METRICS` (e.g. `priority` →
+`distance`) without violating the seal, provided the probe and every other
+metric arg stay byte-identical and `doneWhen` is untouched — see
+solver-quests.md "Gradient refinement of the sealed metric".
+
 ## Report Projection
 
 `node scripts/solve.js report --id <id>` is a projection over the append-only

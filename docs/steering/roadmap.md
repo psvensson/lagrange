@@ -81,8 +81,9 @@ All non-trivial implementation work should start from a bounded Quest:
    constraints are clear.
 5. Completion is claimed only through the Solver report.
 
-`docs/` is reserved for user-facing or operator-facing documentation. Active
-work definition lives under `solve/quests/`.
+`docs/` holds documentation, never active work definition: user/operator-facing
+docs, the agent steering tree under `docs/steering/`, and internal engineering
+plans. Active work definition lives under `solve/quests/`.
 
 ## AGPL Preparatory Work
 
@@ -140,6 +141,10 @@ A default-off feature flag (e.g. a `LAGRANGE_*` lever) is a temporary validation
 gate, not a permanent home for a second implementation. Every flag carries, in its
 landing commit or Quest, an owner and a written promote-or-retire condition — the
 evidence that would graduate it to default-on, or the finding that would delete it.
+This lifecycle is the ONLY sanctioned way a flag outlives the session that landed
+it; the default for an un-enrolled flag is bake-in-or-remove by session end (see
+testing-guidelines/fixtures.md "No Flag-Coupled Tests"). Tests never pin a flag in
+either regime.
 
 A flag that preserves old behavior as the live default while a new mechanism sits
 dormant is an unfinished cutover (see [`doctrine/owner-boundaries.md`](doctrine/owner-boundaries.md) §1),

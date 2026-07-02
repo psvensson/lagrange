@@ -139,13 +139,9 @@ function buildRunOptions(root, id, args) {
   const executor = buildExecutor(root, id, args);
   const options = {executor};
   if (args.max !== undefined) options.maxCycles = Number(args.max);
-  if (args['no-push']) options.push = false;
   if (args['no-commit']) options.autoCommit = false;
   if (args['commit-every'] !== undefined) {
     options.commitEvery = Number(args['commit-every']);
-  }
-  if (args['push-every'] !== undefined) {
-    options.pushEvery = Number(args['push-every']);
   }
   return options;
 }
@@ -472,7 +468,6 @@ function cmdStep(root, args) {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
     summary: typeof args.summary === 'string' ? args.summary : undefined,
     force: Boolean(args.force),
-    push: args['no-push'] ? false : undefined,
     ...theoryCommitArgs(args),
   });
   if (r.terminal === 'theory-required' || r.terminal === 'blocked') {
@@ -514,13 +509,12 @@ function cmdStep(root, args) {
   emitAdvisories(root, quest);
 }
 
-// One-line human summary of the auto commit+push outcome (R1), printed after a step.
+// One-line human summary of the auto-commit outcome, printed after a step.
+// The Solver only ever commits — it never pushes (see autoCommitQuest).
 function commitLine(commit) {
   if (!commit) return '';
   if (commit.committed) {
-    const push = commit.pushed ? 'pushed' :
-      (commit.pushError ? `push failed (commit kept): ${commit.pushError}` : 'not pushed');
-    return `committed ${commit.paths.length} path(s), ${push}\n`;
+    return `committed ${commit.paths.length} path(s), not pushed\n`;
   }
   return `no auto-commit (${commit.skipped})\n`;
 }

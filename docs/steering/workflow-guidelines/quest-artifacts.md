@@ -42,7 +42,9 @@ Quest plus event log.
 
 ## Artifact Boundaries
 
-Use `docs/` for user-facing or operator-facing documentation.
+Use `docs/` for documentation (user/operator-facing docs, the agent steering
+tree under `docs/steering/`, and internal engineering plans) — never for active
+work definition.
 
 Use `solve/quests/` for active work definition.
 

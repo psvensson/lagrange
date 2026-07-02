@@ -28,7 +28,8 @@ A Quest must:
 5. for every Quest-scoped source code change, spawn a subagent verifier before
    audit and git handoff;
 6. close only through a Solver terminal state;
-7. after audit passes, commit and push every Quest-scoped change.
+7. after audit passes, commit every Quest-scoped change (the Solver never
+   pushes; see "Regular Commit (No Push)" below).
 
 Do not move goalposts in place. If the goal is wrong, record the finding and
 author a new Quest with the corrected `doneWhen`. (Sharpening a frontier metric
@@ -174,30 +175,30 @@ It is advisory rather than terminal, but a high-severity signal should usually
 produce a finding, a narrower theory, or a split Quest before more code is
 changed.
 
-## Regular Commit And Push
+## Regular Commit (No Push)
 
-A Quest must not accumulate an unrecoverable dirty tree. The Solver commits — and
-by default pushes — each Quest's own scope-clean work as it progresses: after a
-`step --commit` whose attempt carries a resolved `diff:<path>` changeRef, after
-**every measured attempt of an autonomous `run`**, and on every autonomous-run
-terminal as a final flush. Each auto-commit refuses when `audit` does not
-pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
+A Quest must not accumulate an unrecoverable dirty tree. The Solver commits each
+Quest's own scope-clean work as it progresses: after a `step --commit` whose
+attempt carries a resolved `diff:<path>` changeRef, after every verified,
+scope-clean measured attempt of an autonomous `run` (a squashable
+`checkpoint(quest):` commit), and on every autonomous-run terminal as the durable
+final flush. Each auto-commit refuses when its gate is not met — the mid-quest
+checkpoint gate requires the attempt's source change to be subagent-verified; the
+terminal gate additionally requires the Quest to have finished without errors —
+stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
 carries a `Co-Authored-By:` trailer for the agent that drove the loop. It is a
-no-op outside a git work
-tree, on a non-measuring sample, and when the changeRef does not resolve. Push is
-best-effort: a failure is non-fatal and the commit is kept. Suppress pushing with
-`--no-push` or `SOLVER_NO_PUSH=1`; throttle volume with `--commit-every N` /
-`--push-every N`; disable per-attempt commits with `--no-commit` (the terminal
-flush still commits).
+no-op outside a git work tree, on a non-measuring sample, and when the changeRef
+does not resolve. Throttle volume with `--commit-every N`; disable per-attempt
+commits with `--no-commit` (the terminal flush still commits).
 
-For the always-load commit-on-completion default — which also covers ad-hoc,
-non-Quest work (finished work is committed, not left pending) — see core.md
-"Default Posture: Commit On Completion". Note the divergence on **push**: this
-Solver Quest-loop auto-push is durably pre-authorized handoff behavior, suppressible
-with `--no-push`/`SOLVER_NO_PUSH=1`. For ad-hoc, non-Quest work the opposite holds —
-a never-before-authorized push remains an Authorization stop-trigger and is NOT
-performed automatically. The Quest loop is the authorized exception, not a relaxation
-of the ad-hoc default.
+The Solver NEVER pushes: no subcommand, loop, or handoff runs `git push`
+(`autoCommitQuest` and `handoff` are commit-only). Pushing is a separate,
+outward-facing action — for Quest and ad-hoc work alike, a never-before-authorized
+push remains an Authorization stop-trigger and MUST NOT be performed
+automatically; commit, do not push, unless the user has durably authorized
+pushing. For the always-load commit-on-completion default — which also covers
+ad-hoc, non-Quest work (finished work is committed, not left pending) — see
+core.md "Default Posture: Commit On Completion".
 
 ## Convergence Guards
 
@@ -463,21 +464,22 @@ finding.
 
 ## Git Handoff
 
-After `node scripts/solve.js audit --id <id>` passes, commit and push all
-Quest-scoped changes before handoff. Include source, tests, docs, steering,
-models, the authored Quest file, append-only log, generated report, and
-`solve/changes/` artifacts for the Quest.
+After `node scripts/solve.js audit --id <id>` passes, commit all Quest-scoped
+changes before handoff. Include source, tests, docs, steering, models, the
+authored Quest file, append-only log, generated report, and `solve/changes/`
+artifacts for the Quest.
 
 Do not include unrelated dirty worktree entries from another Quest. If the
 worktree is mixed, use explicit pathspecs with `git add <quest-scoped paths>`,
-then `git commit -m "<quest>: <summary>"` and `git push`.
+then `git commit -m "<quest>: <summary>"`. Do not push (see "Regular Commit
+(No Push)" above).
 
 `node scripts/solve.js handoff --id <quest>` computes this scope-safe pathspec.
 It runs the audit and refuses on failure, derives the in-scope set purely from
 the Quest's sealed `solve/` artifacts plus the source/test files named inside its
 own diffs, and lists every other dirty file as out-of-scope so it is never
 swept in. It is a dry run by default; `--commit` executes the printed
-`git add`/`commit`/`push` for the in-scope paths only.
+`git add`/`commit` for the in-scope paths only (it never pushes).
 
 ## Strategy Ladder
 
@@ -558,11 +560,13 @@ two results are TRUE terminals that close a Quest; every other stop is a
 recoverable gate that leaves the Quest open and resumable:
 
 - **SOLVED** (terminal): `doneWhen` is satisfied against live evidence.
-- **EXHAUSTED** (terminal): every frontier is parked and no honest remaining move
-  exists. A park is `exhausted` when it had at least one honestly-measured
-  sample, or `cannot_measure` when every contributing sample was non-measuring
-  (the harness never measured anything — fix the measurement infrastructure, then
-  reopen).
+- **EXHAUSTED** (terminal): every frontier is parked **as `exhausted`** — each
+  had at least one honestly-measured sample and no honest remaining move exists.
+  A `cannot_measure` park (every contributing sample was non-measuring; the
+  harness never measured anything) does NOT count toward this terminal: it is a
+  resumable measurement park, so a Quest with any `cannot_measure` park stays
+  open — fix the measurement infrastructure, then reopen (see closure.md
+  "EXHAUSTED").
 - **MAX_CYCLES** (non-terminal): the configured safety bound stopped the loop;
   treat this as a runner configuration problem, not a Quest result.
 - **THEORY_REQUIRED** (non-terminal): the selected rung needs system or frontier

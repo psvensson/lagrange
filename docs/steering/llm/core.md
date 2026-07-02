@@ -59,7 +59,11 @@ Stop and ask the user ONLY when one of these holds:
    and cannot be resolved from the repo, the Quest, or a sensible default; a wrong
    guess would change what "done" means. (A wrong guess about *how* to implement is
    NOT this: pick the obvious option, record a finding, proceed.)
-3. **EXHAUSTED** — no honest remaining move.
+3. **EXHAUSTED** — no honest remaining move anywhere, including no
+   higher-altitude Quest/epic worth authoring. (EXHAUSTing one Quest in order to
+   author and drive a higher-altitude Quest is NOT this trigger — that pivot is
+   autonomous work; see "Questioning a Quest's altitude" below. Stop only when
+   the pivot itself does not exist.)
 4. **Safety / scope** — a destructive boundary, or work outside the sealed Quest
    scope.
 
@@ -90,10 +94,12 @@ This applies to ad-hoc work just as much as to Quests; for Quests the Solver's
 post-audit commit handoff already does it. Work on `main` (the user's standing
 directive), and end commit messages with the configured co-author trailer.
 
-The push exception is Quest-scoped: the Solver's Quest loop is durably authorized
-to auto-push its own scope-clean work (suppressible with `--no-push`), but for
-ad-hoc, non-Quest work a never-before-authorized push still pauses — commit, do not
-push, unless durably authorized. See solver-quests.md "Regular Commit And Push".
+Committing never implies pushing. The Solver auto-commits Quest work (a squashable
+`checkpoint(quest):` commit per verified scope-clean attempt, plus the durable
+terminal commit) but NEVER pushes — nothing in this repository pushes
+automatically. A never-before-authorized push remains an Authorization
+stop-trigger for Quest and ad-hoc work alike. See solver-quests.md
+"Regular Commit (No Push)".
 
 ## Default Posture: Parallelism
 
@@ -119,10 +125,18 @@ authoritative). For the separate **execution-time** precedence among instruction
 Compact packs under [`docs/steering/llm/`](.) are the runtime surface. Each
 generated domain pack is a priority-ranked SUBSET (capped per `maxRules`), not the
 full rule corpus — consult [`rules-index.md`](rules-index.md) or `npm run rule` for
-every rule in a domain. Source steering under [`docs/steering/`](../) is consulted
+every rule in a domain. The rules omitted from a capped pack are just as binding
+when their scope is touched: the cap is a context-loading optimization, not a
+priority waiver. Source steering under [`docs/steering/`](../) is consulted
 only to chase cited detail behind a compact-pack rule or to repair pack drift. If
 source detail shows the pack is wrong, fix the source and regenerate with
 `npm run steering:llm:pack`.
+
+One carve-out: the Quest workflow canon (`AGENTS.md`,
+[solver-quests.md](../workflow-guidelines/solver-quests.md), and the active Quest
+file) is execution-time authority in its own right at Level 2 of boot.md's
+Authority Order — above the domain packs — even though solver-quests.md also
+feeds the generated governance pack. Do not demote it to "pack source".
 
 ## 30-Second Must-Not Checklist
 
@@ -143,8 +157,10 @@ Use this list before non-trivial work:
 4. **Do not trust agent self-report** for done or metric movement; probes decide.
 5. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
    `diff:<path>`.
-6. **Do not bypass frozen architecture decisions** without explicit user
-   override/confirmation.
+6. **Do not bypass recorded architecture decisions** — the owner boundaries and
+   contracts recorded under `architecture/` and in active specs — without
+   explicit user override/confirmation; a sanctioned exception must be explicit,
+   owned, and time-bounded (system-guidelines.md §13.7).
 7. **Do not widen, model, or change approach** on a stalled frontier without
    selected Quest theory evidence.
 8. **Do not exceed file-size caps** when modifying or creating files; refactor
@@ -215,6 +231,12 @@ a recorded finding into in-repo steering as a rule (requires
 `npm run steering:llm:pack`).
 
 ## Quest Shape Picker
+
+Shape is process-weight guidance for how to author the Quest (constraints, proof
+surface, metric cost) — it is NOT a declared field and there is no `--shape`
+flag. The Quest file declares only `class` (`product` | `process`; see
+solver-quests.md "Quest Anatomy"). The separate "cutover vs building-block"
+distinction in solver-quests.md is a closure-bar rule, not this picker.
 
 | Shape | Use when |
 | --- | --- |

@@ -29,6 +29,12 @@ Steering precedence (mirrors `AGENTS.md` and `docs/steering/llm/boot.md`):
 3. If a divergence exists between a compact pack and its source steering,
    fix the source, regenerate the packs, and re-validate. Do **not** treat
    the source as a parallel runtime contract that overrides the pack.
+4. Carve-out: the Quest workflow canon (`AGENTS.md`,
+   `workflow-guidelines/solver-quests.md`, and the active Quest file) is
+   execution-time authority in its own right — Level 2 of the boot.md
+   Authority Order, above the domain packs — even though solver-quests.md
+   also feeds the generated governance pack. The pack-vs-source rule above
+   does not demote it.
 
 Use this file for:
 
@@ -89,8 +95,10 @@ Required contract:
    focused proof surface.
 4. Quest progress is recorded by Solver attempts and findings, not parallel
    status files.
-5. `docs/` is reserved for end-user or operator-facing documentation. Active
-   work definition lives under `solve/quests/`.
+5. `docs/` holds documentation, never active work definition: end-user and
+   operator-facing docs, the agent steering tree under `docs/steering/`, and
+   internal engineering plans. Active work definition lives under
+   `solve/quests/`.
 6. Model choice notes are advisory only. They never replace validation,
    delegated review, Solver attempts, or terminal reports.
 7. Quest closure is SOLVED or EXHAUSTED in the Solver report.

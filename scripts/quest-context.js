@@ -276,7 +276,7 @@ function renderContext(context) {
   lines.push('- `git status --short`');
   lines.push('- `git add <quest-scoped paths>`');
   lines.push(`- \`git commit -m "${quest.id}: <summary>"\``);
-  lines.push('- `git push`');
+  lines.push('- do NOT push: pushing stays an Authorization stop-trigger unless the user durably authorized it');
   lines.push(EMPTY, '## Worktree Summary', EMPTY);
   if (context.worktree === null) {
     lines.push('- git status unavailable');

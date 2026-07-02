@@ -82,9 +82,13 @@ When writing or modifying code:
   snapshot plus one explicit state model or decision table rather than a bag of
   independent `if` statements.
 - Do not introduce synonyms for an existing concept.
-- `terminalize` is not a word: identifiers, comments, commit messages, and
-  steering prose MUST use `terminate`, never `terminalize` (an operation/handoff
-  `terminates`; the terminal state is reached by `terminating`).
+- `terminalize` is not a word: in NEW or newly edited identifiers, comments,
+  commit messages, and steering prose, MUST use `terminate`, never `terminalize`
+  (an operation/handoff `terminates`; the terminal state is reached by
+  `terminating`). Inherited `terminalize` usages exist (e.g. in
+  `scripts/solve/`, `src/rebalancer/`, and some test names); they are known
+  debt, not license — do not imitate them, and rename them when other work
+  already touches that line or file (no standalone mass-rename is required).
 - Do not expose semantic policy through combinable booleans when one named mode
   constant set should exist.
 - When a boundary already owns a named mode vocabulary, call sites and tests
@@ -127,4 +131,6 @@ const example = "value"
 
 ## Reference
 
-See `.eslintrc.json` for the complete ESLint configuration.
+See `eslint.config.js` (ESLint 9 flat config) for the complete, live ESLint
+configuration. The root `.eslintrc.json` is the legacy-format file and is NOT
+read by the `npm run lint` scripts; do not edit it expecting effect.

@@ -39,8 +39,11 @@ desired outcome or frontiers have changed.
 
 ## MAX_CYCLES
 
-MAX_CYCLES is not closure. It means the runner hit a safety bound. Increase the
-bound, inspect the open frontier, or switch to a supervised step.
+MAX_CYCLES is not closure. It means the runner hit a safety bound. It is a
+resume point, not a handoff: re-run with `--keep-alive` (which survives this
+gate via the supervisor) or raise `--max` and resume. Switch to a supervised
+`step` only when the work is genuinely human-paced (see core.md "Default
+Posture: Autonomy").
 
 ## Failure Migration
 

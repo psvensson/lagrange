@@ -167,7 +167,10 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
     t.match(rendered2, /Subagent verifier approved source changes/u);
     t.match(rendered2, /--evidence subagent:<id>/u);
     t.match(rendered2, /git commit -m "context-quest-test: <summary>"/u);
-    t.match(rendered2, /git push/u);
+    // The handoff guidance is commit-only: pushing stays an Authorization
+    // stop-trigger, so the context must warn against it, never instruct it.
+    t.match(rendered2, /do NOT push/u);
+    t.notMatch(rendered2, /- `git push`/u);
     t.match(rendered2, /do not include unrelated dirty worktree entries/u);
 
     fs.rmSync(root, {recursive: true, force: true});

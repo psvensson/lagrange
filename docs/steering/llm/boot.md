@@ -76,11 +76,12 @@ node scripts/solve.js theory option --id <id> --frontier <frontier> ...
 node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <theory-id>
 ```
 
-For an existing Quest:
+For an existing Quest, the default is the same autonomous posture (reach for
+supervised `step` only when the work is genuinely human-paced or exploratory):
 
 ```sh
 node scripts/solve.js status --id <id>
-node scripts/solve.js step --id <id>
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
 To commit a supervised attempt:
