@@ -84,17 +84,17 @@ flag into the proof.
   set, branch on, or pin a feature flag to make an assertion pass. A green test
   that only holds while a flag is in one position proves the flag, not the
   behavior.
-- Production feature flags default to within-session scaffolds. By the end of the
-  session a flag MUST be either baked in unconditionally (the flag deleted and the
-  new behavior made the only path), removed together with the functionality it
-  gated, or explicitly enrolled in the feature-flag lifecycle: a written owner and
-  promote-or-retire condition recorded in the landing commit or Quest (see
-  roadmap.md "Feature Flag Lifecycle" and the building-block Quest closure bar in
-  workflow-guidelines/solver-quests.md). A flag MUST NOT linger as an unowned,
-  condition-less permanent toggle. Whichever way the flag resolves, the tests
-  assert the real production behavior — bake the chosen behavior in first, then
-  update the test to assert that unconditional behavior; a test never pins a flag
-  either way.
+- Production feature flags are within-session scaffolds only — NO flag survives
+  the session that lands it (user directive 2026-06-26, re-affirmed 2026-07-02).
+  By the end of the session a flag MUST be either baked in unconditionally (the
+  flag deleted and the new behavior made the only path) or removed together with
+  the functionality it gated; a flag MUST NOT linger as a production toggle,
+  owned or otherwise — there is no enrolled multi-session regime. Flags
+  inherited from before this rule are recorded debt, not license (see roadmap.md
+  "Feature Flag Lifecycle" for how they are retired). Whichever way the flag
+  resolves, the tests assert the real production behavior — bake the chosen
+  behavior in first, then update the test to assert that unconditional behavior;
+  a test never pins a flag either way.
 
 ## System Guideline Conformance Gate for New and Existing Tests
 

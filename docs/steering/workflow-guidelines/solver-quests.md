@@ -76,11 +76,15 @@ Two legitimate Quest shapes have different closure bars; do not conflate them.
   a red-on-revert directed test, or a trace), not merely that its code or tests exist. A
   flag that leaves the old path live while the new mechanism sits dormant is an
   unfinished cutover, not a closed Quest (see doctrine/owner-boundaries.md §1).
-- A **building-block Quest** — landing a safe, default-off lever for later validation —
-  closes legitimately when its OWN sealed `doneWhen` is met (e.g. "the lever is SAFE and
-  engages under a flag-on repro"), provided the flag carries a written promote-or-retire
-  condition (see the feature-flag lifecycle in roadmap.md). This preserves the
-  deterministic-first / gate-last discipline; the cutover bar above must not block it.
+- A **building-block Quest** — landing a safe mechanism validated behind a
+  temporary lever — closes legitimately when its OWN sealed `doneWhen` is met
+  (e.g. "the lever is SAFE and engages under a flag-on repro"); the cutover bar
+  above must not block it. But the validation flag is a within-session scaffold
+  only: before the session that landed it ends, the lever is either promoted
+  (baked in unconditionally, flag deleted) or removed with its functionality —
+  NO flag survives the session (see the feature-flag lifecycle in roadmap.md).
+  The Quest may close on its own `doneWhen`; the flag may not outlive the
+  session.
 
 ## Metric Validity And Invalid Samples
 

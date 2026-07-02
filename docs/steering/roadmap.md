@@ -137,21 +137,21 @@ Required workflow:
 
 ## Feature Flag Lifecycle
 
-A default-off feature flag (e.g. a `LAGRANGE_*` lever) is a temporary validation
-gate, not a permanent home for a second implementation. Every flag carries, in its
-landing commit or Quest, an owner and a written promote-or-retire condition — the
-evidence that would graduate it to default-on, or the finding that would delete it.
-This lifecycle is the ONLY sanctioned way a flag outlives the session that landed
-it; the default for an un-enrolled flag is bake-in-or-remove by session end (see
-testing-guidelines/fixtures.md "No Flag-Coupled Tests"). Tests never pin a flag in
-either regime.
+A feature flag (e.g. a `LAGRANGE_*` lever) is a within-session validation
+scaffold only — NO flag survives the session that lands it (user directive
+2026-06-26, re-affirmed 2026-07-02). Before the landing session ends, the flag
+MUST be resolved: validate the change (deterministic red-on-revert proof; a gate
+only for an irreducibly-statistical claim) and bake the behavior in
+unconditionally with the flag deleted, or revert the functionality together with
+the flag. There is no multi-session promote-or-retire regime. Tests never pin a
+flag (see testing-guidelines/fixtures.md "No Flag-Coupled Tests").
 
 A flag that preserves old behavior as the live default while a new mechanism sits
 dormant is an unfinished cutover (see [`doctrine/owner-boundaries.md`](doctrine/owner-boundaries.md) §1),
-not a building block. Periodically sweep the flags and retire or promote any whose
-condition has been met or has gone stale. This sweep is a manual discipline today —
-there is no automated flag-audit script — so it must be performed deliberately, not
-assumed.
+not a building block. Flags inherited from before this rule are recorded debt,
+not license: retire or promote each one on contact (when other work touches its
+area) or in a dedicated cleanup Quest. There is no automated flag-audit script,
+so this cleanup must be performed deliberately, not assumed.
 
 ## Audit Procedure
 

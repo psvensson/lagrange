@@ -152,8 +152,9 @@ Use this list before non-trivial work:
    SOLVED requires evidence the new mechanism is ENGAGED and authoritative in a real
    run — not merely that its code or tests exist. A flag that leaves the old path as
    the live default while the new mechanism sits dormant is an unfinished cutover. This
-   does NOT block the legitimate default-off building-block pattern — see
-   solver-quests.md "Closure of cutover vs building-block Quests".
+   does NOT block the legitimate building-block pattern (a lever validated within
+   the session — its flag still may not outlive the session; see Must-Not #19) —
+   see solver-quests.md "Closure of cutover vs building-block Quests".
 4. **Do not trust agent self-report** for done or metric movement; probes decide.
 5. **Do not use `git:<sha>` as attempt proof**; attempt `changeRef` must be
    `diff:<path>`.
@@ -191,6 +192,11 @@ Use this list before non-trivial work:
 18. **Do not hand-roll a shell command where a script already does it**; consult
     `npm run commands` / [`tools-index.md`](tools-index.md) first (see "Tool
     Discovery").
+19. **Do not let a feature flag survive the session that lands it.** By session
+    end, bake the behavior in unconditionally (flag deleted) or remove it with
+    its functionality; never pin a flag in a test. Inherited flags are recorded
+    debt — retire or promote on contact. See fixtures.md "No Flag-Coupled Tests"
+    and roadmap.md "Feature Flag Lifecycle".
 
 ## Tool Discovery
 
