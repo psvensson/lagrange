@@ -144,12 +144,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 325,
-    "dedupedRuleCount": 316,
-    "exportedRuleCount": 316,
+    "candidateCount": 326,
+    "dedupedRuleCount": 317,
+    "exportedRuleCount": 317,
     "aliasRuleCount": 4,
-    "masterRuleCount": 312,
-    "estimatedAllRulesTokens": 12839
+    "masterRuleCount": 313,
+    "estimatedAllRulesTokens": 12964
   },
   "rules": [
     {
@@ -262,7 +262,7 @@
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
-      "canonical_of": "STYLE-0003"
+      "canonical_of": "STYLE-0010"
     },
     {
       "id": "ARCH-0008",
@@ -768,7 +768,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 79,
+          "line": 89,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -783,12 +783,9 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 84,
+          "line": 101,
           "section": "Code Style Guidelines > Constants And Naming"
         }
-      ],
-      "aliases": [
-        "ARCH-0007"
       ]
     },
     {
@@ -801,7 +798,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 92,
+          "line": 109,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -816,7 +813,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 99,
+          "line": 116,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -1440,7 +1437,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 134,
+          "line": 151,
           "section": "Code Style Guidelines > Reference"
         }
       ]
@@ -1702,9 +1699,12 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 74,
+          "line": 84,
           "section": "Code Style Guidelines > Constants And Naming"
         }
+      ],
+      "aliases": [
+        "ARCH-0007"
       ]
     },
     {
@@ -2332,6 +2332,23 @@
       "domain": "style",
       "strength": "must_not",
       "tags": [
+        "style"
+      ],
+      "rule": "JavaScript-language primitives are NOT domain scalars and do not need named constants: typeof comparison strings ('function', 'string', …), the empty string, and the structural integers -1, 0, 1, 2 may be written literally. The literals audit (scripts/check-guideline-literals.js) exempts exactly these. Aliases like TYPEOF.FUNCTION, NUM.ZERO, and file-local LOCAL_NUM_ONE-style names are retired-codemod residue — do not add new ones, and inline them when other work touches the line.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "code-style.md",
+          "line": 91,
+          "section": "Code Style Guidelines > Constants And Naming"
+        }
+      ]
+    },
+    {
+      "id": "STYLE-0012",
+      "domain": "style",
+      "strength": "must_not",
+      "tags": [
         "readiness",
         "rebalancing",
         "testing"
@@ -2341,7 +2358,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 85,
+          "line": 102,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -2604,7 +2621,7 @@
       ]
     },
     {
-      "id": "STYLE-0012",
+      "id": "STYLE-0013",
       "domain": "style",
       "strength": "must",
       "tags": [
@@ -4212,7 +4229,7 @@
       ]
     },
     {
-      "id": "STYLE-0013",
+      "id": "STYLE-0014",
       "domain": "style",
       "strength": "should",
       "tags": [
@@ -4224,7 +4241,7 @@
       "sources": [
         {
           "file": "code-style.md",
-          "line": 94,
+          "line": 111,
           "section": "Code Style Guidelines > Constants And Naming"
         }
       ]
@@ -5325,5 +5342,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-02T05:12:09.196Z"
+  "generatedAt": "2026-07-02T05:57:46.789Z"
 }

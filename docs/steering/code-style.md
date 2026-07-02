@@ -66,6 +66,16 @@ When writing or modifying code:
 - Do not create new files with ordinal, segment, or grab-bag names such as
   `part-2`, `segment`, `misc`, `helpers`, or `utils` unless that term is
   already an established domain concept in the repository.
+- When extracting NEW method groups from an oversized class, prefer an
+  explicit-context module (functions taking the owner as their first
+  argument, e.g. `resolvePlacement(coordinator, …)`) over a new
+  prototype-mixin `*-methods.js` fragment. Explicit-context modules keep
+  `this` resolution visible, lint-provable, and unit-testable without the
+  class. Existing mixin fragments are established debt, not license: keep
+  them working, and migrate a fragment to explicit context when other work
+  already restructures it (no standalone mass-rewrite). See
+  `architecture/ordinal-file-decomposition-roadmap.md` for the sanctioned
+  decomposition shapes.
 
 ## Constants And Naming
 
@@ -78,6 +88,13 @@ When writing or modifying code:
   suite.
 - Do not inline domain/runtime scalars when an owner constant or explicit state
   variant should exist.
+- JavaScript-language primitives are NOT domain scalars and do not need named
+  constants: `typeof` comparison strings (`'function'`, `'string'`, …), the
+  empty string, and the structural integers `-1`, `0`, `1`, `2` may be written
+  literally. The literals audit (`scripts/check-guideline-literals.js`)
+  exempts exactly these. Aliases like `TYPEOF.FUNCTION`, `NUM.ZERO`, and
+  file-local `LOCAL_NUM_ONE`-style names are retired-codemod residue — do not
+  add new ones, and inline them when other work touches the line.
 - When one semantic outcome depends on multiple signals, use one normalized
   snapshot plus one explicit state model or decision table rather than a bag of
   independent `if` statements.

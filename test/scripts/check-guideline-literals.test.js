@@ -90,6 +90,54 @@ test('scanner ignores module specifiers, property keys, and parseInt radix',
     );
   });
 
+test('scanner exempts JS-language primitives: typeof strings, empty string, 0/1/2',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'export function inspect(value, items) {',
+        '  if (typeof value === \'function\') {',
+        '    return items.length - 1;',
+        '  }',
+        '  switch (typeof value) {',
+        '    case \'string\':',
+        '      return \'\';',
+        '    default:',
+        '      return items[0] ?? 2;',
+        '  }',
+        '}',
+      ].join('\n'),
+      '/repo/src/runtime/inspector.js',
+    );
+
+    t.equal(
+      violations.length,
+      0,
+      'typeof-comparison strings, empty string, and structural integers ' +
+        'are JS-language primitives, not domain scalars',
+    );
+  });
+
+test('scanner still flags non-primitive literals next to exempt ones',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'export function classify(value) {',
+        '  if (typeof value === \'function\') {',
+        '    return value(5000, \'ready\');',
+        '  }',
+        '  return 0;',
+        '}',
+      ].join('\n'),
+      '/repo/src/runtime/classifier.js',
+    );
+
+    t.same(
+      violations.map((violation) => violation.value),
+      ['5000', '\'ready\''],
+      'domain scalars stay flagged; only the JS primitives are exempt',
+    );
+  });
+
 test('scanner skips test files by default because the guideline defines suite-local exceptions',
   async (t) => {
     const violations = collectMagicLiteralViolationsFromSource(

@@ -39,7 +39,58 @@ const LOCAL_STR_1E8GB = 'exported literal constant outside canonical constants-o
 const LOCAL_STR_B3TUC = 'raw literal outside a named constant owner';
 const LOCAL_NUM_TWO = 2;
 
-const RULE_REFERENCE = 'system guidelines.md §4.1 Constants, Not Literals';
+const RULE_REFERENCE =
+  'system-guidelines.md §4 Scalars, State, And Naming Have Owners';
+
+// JavaScript-language primitives are not domain scalars
+// (docs/steering/code-style.md "Constants And Naming"): typeof-comparison
+// strings, the empty string, and the structural integers -1/0/1/2 may be
+// written literally.
+const LOCAL_STR_BINARYEXPRESSION = 'BinaryExpression';
+const LOCAL_STR_UNARYEXPRESSION = 'UnaryExpression';
+const LOCAL_STR_TYPEOF = 'typeof';
+const LOCAL_STR_SWITCHCASE = 'SwitchCase';
+const LOCAL_STR_SWITCHSTATEMENT = 'SwitchStatement';
+const LOCAL_STR_EMPTY = '';
+const EQUALITY_OPERATORS = new Set(['===', '!==', '==', '!=']);
+const STRUCTURAL_INTEGER_EXEMPTIONS = new Set([0, 1, 2]);
+
+function isTypeofOperand(node) {
+  return node?.type === LOCAL_STR_UNARYEXPRESSION &&
+    node.operator === LOCAL_STR_TYPEOF;
+}
+
+function isTypeofComparisonLiteral(node, parent, ancestors) {
+  if (typeof node.value !== LOCAL_STR_STRING) {
+    return false;
+  }
+  if (parent?.type === LOCAL_STR_BINARYEXPRESSION &&
+      EQUALITY_OPERATORS.has(parent.operator) &&
+      ((parent.left === node && isTypeofOperand(parent.right)) ||
+       (parent.right === node && isTypeofOperand(parent.left)))) {
+    return true;
+  }
+  if (parent?.type === LOCAL_STR_SWITCHCASE && parent.test === node) {
+    // walkAst ancestors include the direct parent as the last entry, so the
+    // enclosing SwitchStatement sits one position earlier.
+    const switchStatement = ancestors[ancestors.length - LOCAL_NUM_TWO];
+    return switchStatement?.type === LOCAL_STR_SWITCHSTATEMENT &&
+      isTypeofOperand(switchStatement.discriminant);
+  }
+  return false;
+}
+
+function isJsLanguagePrimitiveLiteral(node, parent, ancestors) {
+  if (typeof node.value === LOCAL_STR_NUMBER) {
+    // -1 parses as UnaryExpression('-') around Literal(1), so the negative
+    // structural case is covered by exempting the positive literal.
+    return STRUCTURAL_INTEGER_EXEMPTIONS.has(node.value);
+  }
+  if (node.value === LOCAL_STR_EMPTY) {
+    return true;
+  }
+  return isTypeofComparisonLiteral(node, parent, ancestors);
+}
 const LITERAL_BASELINE_FILE_URL = new URL(
   './check-guideline-literals-baseline.json',
   import.meta.url,
@@ -162,6 +213,7 @@ function collectMagicLiteralViolationsFromSource(
         isModuleSourceLiteral(node, parent) ||
         isObjectKeyLiteral(node, parent) ||
         isParseIntRadixLiteral(node, parent) ||
+        isJsLanguagePrimitiveLiteral(node, parent, ancestors) ||
         shouldIgnoreBecauseNamedConstant(node, ancestors, fileClass)) {
       return;
     }

@@ -5,7 +5,7 @@ citations: `npm run rule -- --id <ID>` (or `--tag`, `--domain`,
 `--strength`, or free-text terms). Regenerate with
 `node scripts/lookup-rule.js --write-index`.
 
-Total rules: 316
+Total rules: 317
 
 | id | strength | domain | summary |
 | --- | --- | --- | --- |
@@ -139,7 +139,8 @@ Total rules: 316
 | ARCH-0071 | must | architecture | Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and … |
 | ARCH-0072 | must | architecture | Runtime shared-metadata access must cross canonical ingress owners. |
 | ARCH-0073 | must | architecture | Scenario-driven Quests must prove what the original scenario does next: representative gr… |
-| STYLE-0011 | must_not | style | terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages,… |
+| STYLE-0011 | must_not | style | JavaScript-language primitives are NOT domain scalars and do not need named constants: ty… |
+| STYLE-0012 | must_not | style | terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages,… |
 | TEST-0039 | must_not | testing | A test MUST assert the real, unconditional production behavior, and MUST NEVER set, branc… |
 | TEST-0040 | must_not | testing | Production feature flags are within-session scaffolds only — NO flag survives the session… |
 | ARCH-0074 | must | architecture | The system may slow under pressure, but it must remain correct. |
@@ -156,7 +157,7 @@ Total rules: 316
 | GOV-0016 | must | governance | The row must be in scope for this repository under the repo-root edition-matrix.md. |
 | GOV-0017 | must | governance | Broad rows must gain a linked spec or architecture document before active implementation … |
 | GOV-0018 | must | governance | The Quest must name the roadmap row, approved maintenance scope, or explicit user request… |
-| STYLE-0012 | must | style | All code must be written with ESLint rules in mind from the start. |
+| STYLE-0013 | must | style | All code must be written with ESLint rules in mind from the start. |
 | TEST-0041 | must | testing | Every test that exists must run and pass. |
 | TEST-0042 | must | testing | Tests must exercise the real production code paths. |
 | TEST-0043 | must | testing | The test suite must prove that production code works — not that a test-friendly fork of i… |
@@ -255,7 +256,7 @@ Total rules: 316
 | GOV-0069 | must | governance | The verifier must inspect the Quest intent, touched source diff, system guidelines, and a… |
 | GOV-0070 | must | governance | For any other open choice the agent MUST pick a sensible default, record a finding, and c… |
 | GOV-0071 | must | governance | EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of … |
-| STYLE-0013 | should | style | When a boundary already owns a named mode vocabulary, call sites and tests should use tha… |
+| STYLE-0014 | should | style | When a boundary already owns a named mode vocabulary, call sites and tests should use tha… |
 | TEST-0063 | should | testing | leftover scaffolds — a flag, test-only path, or dead branch the change should have remove… |
 | TEST-0064 | should | testing | The test should capture the exact failure scenario from the bug report |
 | TEST-0065 | should | testing | The failure message should match the reported error |

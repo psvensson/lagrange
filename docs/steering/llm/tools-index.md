@@ -18,6 +18,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
+- `prepare` — `node scripts/install-git-hooks.js`
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
@@ -219,6 +220,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
 - `test:unused:prod` — `knip --production`
+- `test:unused:ratchet` — `node scripts/check-unused-exports.js`
 
 ## test-output
 
@@ -227,4 +229,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-149 scripts indexed; 65 have a curated description, 84 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+151 scripts indexed; 65 have a curated description, 86 fall back to their raw command. Improve coverage in the two sources named in the header comment.

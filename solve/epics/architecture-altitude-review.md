@@ -84,3 +84,22 @@ it to owner-boundary properties needs a cheap runtime predicate that does not ye
   see [[membership-single-owner-cutover]] (diffuse active-membership truth is the
   root behind the rolling-restart whack-a-mole; CoupledAdmission proves
   single-frontier patches cannot converge a coupled system).
+- 2026-07-02 — Logged the **priority-recovery decision-layer sprawl** as a
+  standing altitude question (maintainability framing ONLY — the census
+  no-separator verdict and the Φ self-stabilization proof `37175d73` refute
+  any convergence/gate payoff, so this is NOT a source-patching license).
+  Evidence: five near-parallel classify/normalize/re-derive layers
+  (`priority-recovery-snapshot-actuation`, `…-operation-owner-progress-contract`,
+  `…-operation-owner-observation`, `operation-workflow-owner-priority-recovery-reentry`,
+  `priority-recovery-superseded-target`) spanning ~45 files / ~17.8k lines;
+  18 of 43 closure-ledger records touch this stack; live exhibit: commit
+  `4bb548a0` widened a reentry predicate and silently broke the `3aad7631`
+  spread-certification grace-window guard in a different layer (fixed
+  `25875059` by re-asserting "the ingress classifier is the single stall
+  discriminator"). Direction under discussion: single-deriver discipline per
+  semantic label. Prerequisite before ANY code moves: a falsifier-first
+  design pass proving the layers truly re-derive the *same* label rather
+  than integrating different evidence at different lifecycle points — the
+  [[membership-single-owner-cutover]] precedent ("delete the 7-source
+  projection" REFUTED on implementation: the projection was essential
+  evidence integration) is the exact failure mode to rule out first.

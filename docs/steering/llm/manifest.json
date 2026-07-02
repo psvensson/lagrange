@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-02T05:12:09.197Z",
+  "generatedAt": "2026-07-02T05:57:46.790Z",
   "packs": [
     {
       "name": "core",
@@ -41,8 +41,8 @@
       "name": "style",
       "title": "Style Steering Pack",
       "description": "Load for coding-style and lint policy enforcement.",
-      "ruleCount": 13,
-      "estimatedTokens": 514,
+      "ruleCount": 14,
+      "estimatedTokens": 640,
       "domains": [
         "style"
       ],
