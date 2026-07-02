@@ -108,6 +108,7 @@
     "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
+    "trends:gates": "node scripts/query-gate-trends.js",
     "debug:admin:ws": "node scripts/debug/admin-ws-connection-check.mjs",
     "debug:logs:parse": "node scripts/debug/parse-json-log-lines.cjs",
     "test-output:prune:dry": "node scripts/prune-test-output.js",

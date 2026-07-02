@@ -92,9 +92,27 @@ export function classifyStatGateScenario(scenario = {}) {
     oracleBlind: oracleBlindClassification === 'oracle_blind',
     unexpectedNodeExit: oracleBlindClassification === 'unexpected_node_exit',
     reason: scenario?.dominantReason || 'none',
+    closureWitnessClass: extractClosureWitnessClass(scenario),
     duration: asNumber(scenario?.duration, null),
     class: classification,
   };
+}
+
+const CLOSURE_WITNESS_SIGNAL_PREFIX = 'closureWitnessClass=';
+
+// The failure classification carries typed key=value signal strings; the
+// closure-witness class is the one cross-gate trend queries group by.
+function extractClosureWitnessClass(scenario) {
+  const signals = scenario?.failureClassification?.signals;
+  if (!Array.isArray(signals)) {
+    return null;
+  }
+  const match = signals.find(
+    (signal) =>
+      typeof signal === 'string' &&
+      signal.startsWith(CLOSURE_WITNESS_SIGNAL_PREFIX),
+  );
+  return match ? match.slice(CLOSURE_WITNESS_SIGNAL_PREFIX.length) : null;
 }
 
 export function classifyRunReport(report = {}) {

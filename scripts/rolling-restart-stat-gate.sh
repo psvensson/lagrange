@@ -286,7 +286,10 @@ jq --argjson verdict "${verdict_json}" '. + {gateVerdict: $verdict}' \
   node scripts/rolling-restart-stat-gate-summary.js gate-verdict-md "${OUT_JSON}"
 } > "${OUT_MD}"
 
-rm -f "${TMP_NDJSON}"
+# Persist the per-run NDJSON next to the gate summary — the cross-gate trend
+# query (scripts/query-gate-trends.js) and any ad-hoc jq join read it; it was
+# previously built here and then deleted.
+mv "${TMP_NDJSON}" "${REPORT_DIR}/stat-gate-${TS}-runs.ndjson"
 echo "=== summary -> ${OUT_MD} ==="
 cat "${OUT_MD}"
 
