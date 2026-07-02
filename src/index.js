@@ -10,7 +10,7 @@ import {
 } from './diagnostics/source-fingerprint.js';
 import {EventLoopGapWatchdog} from './diagnostics/event-loop-gap-watchdog.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
-import {CONFIG_KEY} from './config/config-constants.js';
+import {CONFIG_KEY, DEFAULT_CONFIG} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
@@ -21,6 +21,7 @@ import {createControlPlaneWriteHealthProvider} from
 import {
   resolveAutoRejoinStartupDecision,
   persistBootstrapRejoinHints,
+  readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
 import {
   STARTUP_JOIN_MODE,
@@ -744,6 +745,22 @@ async function main() {
   const overrides = {};
   if (cliArgs.dataDir) {
     overrides.storage = {dataDir: cliArgs.dataDir};
+  }
+
+  // Restore the durable node identity before configuration initialization
+  // mints a fresh one: booting over an existing data directory with a new
+  // generated id is refused as an identity mismatch, so a deployment without
+  // an explicit NODE_ID (e.g. an orchestrator restarting a pod onto its
+  // persistent volume) must reuse the id persisted with the rejoin hints.
+  // An explicit NODE_ID env keeps full precedence.
+  if (!process.env.NODE_ID) {
+    const identityDataDir = cliArgs.dataDir ||
+      process.env.DATA_DIR ||
+      DEFAULT_CONFIG.storage.dataDir;
+    const persistedNodeId = await readPersistedLocalNodeId(identityDataDir);
+    if (persistedNodeId) {
+      overrides.node = {id: persistedNodeId};
+    }
   }
 
   // Initialize configuration

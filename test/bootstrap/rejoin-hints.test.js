@@ -7,6 +7,7 @@ import {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,
+  readPersistedLocalNodeId,
   readRejoinHints,
   RejoinHintsPersistenceService,
   resolveAutoRejoinStartupDecision,
@@ -581,3 +582,48 @@ test('RejoinHintsPersistenceService serializes overlapping writes without warnin
       'the final persisted snapshot should reflect the latest queued write',
     );
   });
+
+test('readPersistedLocalNodeId restores the durable identity for restart reuse',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    await persistBootstrapRejoinHints({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      nodeRole: 'joiner',
+      peerAddresses: [PEER_NODE_ADDRESS_A],
+      clusterNodeCount: 2,
+    });
+
+    t.equal(
+      await readPersistedLocalNodeId(dataDir),
+      LOCAL_NODE_ID,
+      'the persisted identity should be readable before config initialization',
+    );
+  });
+
+test('readPersistedLocalNodeId returns null without usable hints', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+  t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+  t.equal(
+    await readPersistedLocalNodeId(dataDir),
+    null,
+    'a fresh data directory has no identity to restore',
+  );
+  t.equal(
+    await readPersistedLocalNodeId(''),
+    null,
+    'a blank data directory cannot resolve a hints path',
+  );
+
+  const {writeFile} = await import('node:fs/promises');
+  await writeFile(join(dataDir, REJOIN_HINTS_FILENAME), 'not-json', 'utf8');
+  t.equal(
+    await readPersistedLocalNodeId(dataDir),
+    null,
+    'a corrupt hints file must not produce an identity',
+  );
+});

@@ -39,6 +39,17 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
   (CL-041), and empty-log-term masquerade (CL-042).
 - Node restart with a new IP: stale-seed-vs-canonical reconciliation and
   keepalive/pong severing on transport re-resolution.
+- Durable node identity: a node started without an explicit `NODE_ID` now
+  restores its persisted identity from the data directory on restart instead
+  of minting a fresh UUID and refusing to start over its own durable state
+  (identity mismatch). Enables orchestrators (Kubernetes, plain restarts) to
+  restart nodes onto their volumes without pinning `NODE_ID`.
+- SEA single-executable boot: dynamic imports with const-variable specifiers
+  were silently left out of the esbuild bundle, so the binary could never
+  boot the full system (`ERR_MODULE_NOT_FOUND`); the entrypoint and SQL
+  runtime composition imports are now literal and bundled.
+- Dockerfile `EXPOSE` corrected to the real listener set 8080/8081/8082
+  (nothing listens on the previously exposed 9080).
 
 ### Known limitations
 - **Rolling-restart convergence is a statistical property, not a bounded-time

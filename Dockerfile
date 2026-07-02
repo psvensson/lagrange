@@ -27,7 +27,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY src/ ./src/
 
-EXPOSE 8080 8081 9080
+# REST API, admin WS, transport WS (REST+2). Nothing listens on the old 9080.
+EXPOSE 8080 8081 8082
 
 # distroless ENTRYPOINT is ["/nodejs/bin/node"]; these args are appended to it.
 CMD ["--max-old-space-size=1536", "src/index.js"]

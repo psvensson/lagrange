@@ -272,6 +272,22 @@ async function readRejoinHints(dataDir) {
   }
 }
 
+/**
+ * Read the node identity persisted with the rejoin hints, for reuse on
+ * restart. A node that boots over an existing data directory with a freshly
+ * generated id is refused as an identity mismatch (see
+ * IDENTITY_MISMATCH_ERROR_MESSAGE), so a deployment without an explicit
+ * NODE_ID needs the durable identity restored before configuration
+ * initialization mints a new one.
+ * @param {string} dataDir - Data directory holding the rejoin hints file.
+ * @return {Promise<string|null>} The persisted node id, or null when absent.
+ */
+async function readPersistedLocalNodeId(dataDir) {
+  const hints = await readRejoinHints(dataDir);
+  const localNodeId = normalizeAddress(hints?.localNodeId);
+  return localNodeId || null;
+}
+
 function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
   if (!hints || typeof hints !== 'object') {
     return false;
@@ -781,6 +797,7 @@ export {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,
+  readPersistedLocalNodeId,
   readRejoinHints,
   RejoinHintsPersistenceService,
   resolveAutoRejoinStartupDecision,

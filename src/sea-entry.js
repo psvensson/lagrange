@@ -14,7 +14,6 @@ import {
 
 const LOCAL_STR_OPTIONS = 'Options:';
 const LOCAL_STR_ENVIRONMENT_VARIABLES = 'Environment Variables:';
-const LOCAL_STR_INDEX_JS = './index.js';
 const LOCAL_STR_ERR_UNKNOWN_BUILTIN_MODULE = 'ERR_UNKNOWN_BUILTIN_MODULE';
 
 const VERSION = ENTRYPOINT_VERSION;
@@ -53,8 +52,12 @@ if (checkVersionFlag()) {
   process.exit(0);
 }
 
-// Load the main module (this will fail if native modules are not available)
-import(LOCAL_STR_INDEX_JS).catch((err) => {
+// Load the main module (this will fail if native modules are not available).
+// The specifier must be a string LITERAL: esbuild only statically resolves and
+// bundles literal dynamic imports. With a const-variable specifier the import
+// was left as a runtime lookup that resolved ./index.js against the process
+// cwd, so the SEA binary could never boot the real system (ERR_MODULE_NOT_FOUND).
+import('./index.js').catch((err) => {
   if (err.code === LOCAL_STR_ERR_UNKNOWN_BUILTIN_MODULE) {
     console.error(ENTRYPOINT_TEXT.SEA_NATIVE_ERROR);
     console.error('');

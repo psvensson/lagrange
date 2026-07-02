@@ -25,8 +25,6 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
-const LOCAL_STR_QUERY_SQL_QUERY_ENGINE_JS = './query/sql-query-engine.js';
-const LOCAL_STR_PARTITION_PARTITION_SPLIT_MERGE_MANAGER = './partition/partition-split-merge-manager.js';
 
 // A still-joining (or still-bootstrapping) node builds a cache-backed SQL engine
 // for the EARLY admin runtime (the `onLocalAdminRuntimeReady` surface that
@@ -332,7 +330,10 @@ async function createSqlRuntimeComposition(options) {
     };
   }
 
-  const {SQLQueryEngine} = await import(LOCAL_STR_QUERY_SQL_QUERY_ENGINE_JS);
+  // Literal specifier so esbuild bundles this into the SEA build; a
+  // const-variable specifier is left as a runtime lookup that cannot resolve
+  // inside the single executable (see src/sea-entry.js).
+  const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
   const wasmExecutor = createSqlCallbackWasmExecutor();
   const sqlQueryEngine = new SQLQueryEngine({
     systemCache: options.systemTableCache,
@@ -358,8 +359,9 @@ async function createSqlRuntimeComposition(options) {
     now: () => Date.now(),
   });
 
+  // Literal specifier so esbuild bundles this into the SEA build (see above).
   const {PartitionSplitMergeManager} =
-    await import(LOCAL_STR_PARTITION_PARTITION_SPLIT_MERGE_MANAGER);
+    await import('./partition/partition-split-merge-manager.js');
   const partitionSplitMergeManager = new PartitionSplitMergeManager({
     nodeId: options.nodeId,
     messageRouter: options.messageRouter,

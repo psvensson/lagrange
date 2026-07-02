@@ -413,7 +413,11 @@ function registerProcessLifecycleDiagnostics(logger, contextProvider) {
     }
   };
 
-  process.on(LOCAL_STR_BEFOREEXIT, (code) => {
+  // MUST be once, not on: the async log write schedules new event-loop work,
+  // which re-arms the loop and re-fires beforeExit — a persistent listener
+  // turns natural exit into an infinite beforeExit/log cycle (a bare
+  // `--dry-run` run never terminated).
+  process.once(LOCAL_STR_BEFOREEXIT, (code) => {
     logger.info(ENTRYPOINT_LOG_MSG.PROCESS_BEFORE_EXIT, {
       code,
       ...resolveContext(),
