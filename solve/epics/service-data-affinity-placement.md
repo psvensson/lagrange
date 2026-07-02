@@ -165,7 +165,18 @@ existing degenerate form of this alternative).
      but chasing piles consumers into one group (loadStddev 156 vs 47–67) —
      for multi-group consumers, widening the hot partition dominates on load
      spread; the planner should choose per-partition strategy.
-  5. **Verdict machinery lessons** (both caught by adversarial verification,
+  5. **Real-kernel fidelity harness landed**
+     (`test/convergence/dt-placement-affinity-real-kernel.test.js`, no src
+     changes): the four ground-truth claims are now executable — latency-group
+     scoring dormant under production constraint shapes; the lever works when
+     enabled (−5 same-group bonus flips a 3-point load gap) with OWN-replica
+     semantics and no input for accessed-data location; retainHealthyIncumbents
+     works via direct call (incumbent_retention reservation) but is dropped by
+     the MovePlanner bridge (enumerated options, top-level-only read) so the
+     wired path REPLACEs a healthy incumbent for a 5-cpu-point challenger; and
+     the Tier-1a sim's load dimension picks the same node set as the real
+     kernel on a strict ordering (correspondence verified).
+  6. **Verdict machinery lessons** (both caught by adversarial verification,
      both pinned by regression scenarios): a fixpoint claim under CDC lag is
      only sound if quiet rounds planned against a view EQUAL to live placement
      (stale-view quiet windows fake fixpoints), and quiet must be tracked
