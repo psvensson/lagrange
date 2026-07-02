@@ -2,6 +2,7 @@
  * Distributed Database System - Main Entry Point
  */
 
+import './boot/load-env.js';
 import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
