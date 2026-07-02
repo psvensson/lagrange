@@ -293,6 +293,15 @@ mv "${TMP_NDJSON}" "${REPORT_DIR}/stat-gate-${TS}-runs.ndjson"
 echo "=== summary -> ${OUT_MD} ==="
 cat "${OUT_MD}"
 
+# Bounded retention: the harness compares against up to 20 historical reports
+# and the census scripts scan the per-run corpus, so the keep floor (24) stays
+# ABOVE that window — never lower it below 20. Gate aggregates + runs.ndjson
+# (the trend ledger) are exempt inside the pruner. Non-fatal: retention must
+# never fail a gate.
+node scripts/prune-test-output.js --apply --keep-days 7 \
+  --keep-reports 24 --keep-report-playbacks 24 \
+  || echo "WARN: post-gate prune failed (non-fatal)"
+
 # WS10 read recipe: per-node full logs are GZIPPED under the default (non-debug)
 # path. Plain grep finds nothing and looks "missing" — use zcat/zgrep.
 echo

@@ -37,6 +37,8 @@ import {
   TEST_OUTPUT_PRUNE_VERB,
 } from '../src/constants/test-output-prune-scalars.js';
 
+const TEST_OUTPUT_PRUNE_GATE_AGGREGATE_PATTERN =
+  /^stat-gate-\d{8}T\d{6}Z(-runs\.ndjson|\.json)$/;
 const PRUNE_TARGET_SUMMARY_TEXT =
   'reports/report playbacks/legacy playbacks/run-like categories.';
 
@@ -458,8 +460,14 @@ async function main(argv) {
 
   const reportFiles =
     await listDirectoryEntries(reportsDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.FILE);
+  // Gate AGGREGATES (stat-gate-<TS>.json, a few KB each) are the cross-gate
+  // trend ledger read by scripts/query-gate-trends.js — deleting them erases
+  // signature history for no meaningful disk win, so they are exempt from the
+  // report retention count (per-run stat-gate-<TS>-run<i>.report.json files,
+  // the actual disk cost, remain covered).
   const reportJsonFiles = reportFiles.filter((entry) =>
-    entry.name.endsWith(TEST_OUTPUT_SUFFIX.JSON),
+    entry.name.endsWith(TEST_OUTPUT_SUFFIX.JSON) &&
+    !TEST_OUTPUT_PRUNE_GATE_AGGREGATE_PATTERN.test(entry.name),
   );
   const reportPlan = buildCategoryPlan(
     reportJsonFiles,
