@@ -1,5 +1,4 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {applyBoundedJitter} from '../utils/retry-jitter.js';
 
 const {
   CONNECTION_CLOSE_DISPOSITION,
@@ -153,13 +152,12 @@ class MessageRouterConnectionCloseReconnect {
       return;
     }
     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
-    const delay = applyBoundedJitter(
+    const delay =
       this.reconnectIntervalMs *
-        Math.pow(
-          this.reconnectBackoffMultiplier,
-          connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
-        ),
-    );
+      Math.pow(
+        this.reconnectBackoffMultiplier,
+        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
+      );
     connectionInfo.reconnectDueAt = Date.now() + delay;
     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,

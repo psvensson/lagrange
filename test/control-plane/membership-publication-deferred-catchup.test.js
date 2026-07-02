@@ -73,7 +73,6 @@ function makeDeferringCoordinator({cache, cdcIntegrationService, now}) {
   coordinator.buildOwnerKey = () => 'owner-key';
   coordinator._emitConvergenceDecisionTrace = () => {};
   // Force the not-write-leader defer branch.
-  coordinator.membershipLeaderDrivenEnabled = true;
   coordinator.resolveIsControlPlanePublicationsWriteLeader = () => false;
   coordinator.now = now || (() => 1000);
   coordinator.systemTableCache = cache;

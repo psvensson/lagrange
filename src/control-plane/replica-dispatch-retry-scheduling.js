@@ -2,7 +2,6 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 import {
   ReplicaDispatchReplayHealthReadiness,
 } from './replica-dispatch-replay-health-readiness.js';
-import {applyBoundedJitter} from '../utils/retry-jitter.js';
 
 const {
   ControlPlaneField,
@@ -179,9 +178,9 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
   resolveOperationDispatchRetryAfterMs(errorLike) {
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
-      return applyBoundedJitter(Math.max(NUM.ONE, Math.floor(retryAfterMs)));
+      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
     }
-    return applyBoundedJitter(this.operationDispatchRetryAfterMs);
+    return this.operationDispatchRetryAfterMs;
   }
 
   /**

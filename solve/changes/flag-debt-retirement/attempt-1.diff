@@ -1,0 +1,878 @@
+diff --git a/.githooks/pre-commit b/.githooks/pre-commit
+index e5d91739..134bada2 100755
+--- a/.githooks/pre-commit
++++ b/.githooks/pre-commit
+@@ -1,8 +1,7 @@
+ #!/usr/bin/env bash
+ # Fast structural guards (<2s). Bypass for a single commit with
+-# LAGRANGE_SKIP_HOOKS=1 git commit ...
++# git commit --no-verify (emergencies only).
+ set -euo pipefail
+-if [ "${LAGRANGE_SKIP_HOOKS:-0}" = "1" ]; then exit 0; fi
+ npm run -s audit:file-size
+ npm run -s audit:guideline:hot-path-diagnostics
+ node scripts/check-staged-constant-names.js
+diff --git a/.githooks/pre-push b/.githooks/pre-push
+index f8a05a97..2611a9da 100755
+--- a/.githooks/pre-push
++++ b/.githooks/pre-push
+@@ -1,5 +1,4 @@
+ #!/usr/bin/env bash
+-# Unused-code gate (~7s). Bypass with LAGRANGE_SKIP_HOOKS=1 git push ...
++# Unused-code gate (~7s). Bypass with git push --no-verify (emergencies only).
+ set -euo pipefail
+-if [ "${LAGRANGE_SKIP_HOOKS:-0}" = "1" ]; then exit 0; fi
+ npm run -s test:unused
+diff --git a/architecture/INDEX.md b/architecture/INDEX.md
+index 756b46ce..d91ffe2c 100644
+--- a/architecture/INDEX.md
++++ b/architecture/INDEX.md
+@@ -21,7 +21,7 @@ Use this index to choose the narrowest architecture domain file before reading i
+ - [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) - Logical-nodeId-vs-location identity, address resolution order, the three restart-with-new-IP recovery mechanisms, and name-first (hostname) addressing config.
+ - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
+ - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
+-- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence, default-off)** verifies an entry's optional `liveEvidence` predicate against the running system / a deterministic repro and derives HELD/BREACHED as a fold over the Solver event log — run `LAGRANGE_STANDING_INVARIANTS=true node scripts/solve.js invariants --evaluate`; a BREACH means the doc no longer reflects the system (spec: [`solve/specs/standing-invariant-closure/`](../solve/specs/standing-invariant-closure/)).
++- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence)** verifies an entry's optional `liveEvidence` predicate against the running system / a deterministic repro and derives HELD/BREACHED as a fold over the Solver event log — run `node scripts/solve.js invariants --evaluate`; a BREACH means the doc no longer reflects the system (spec: [`solve/specs/standing-invariant-closure/`](../solve/specs/standing-invariant-closure/)).
+ - [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
+ - [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
+ - [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.
+diff --git a/scripts/check-staged-constant-names.js b/scripts/check-staged-constant-names.js
+index 8f5a5bf4..af9c8480 100644
+--- a/scripts/check-staged-constant-names.js
++++ b/scripts/check-staged-constant-names.js
+@@ -30,8 +30,8 @@ const CONSTANT_DECLARATION_PATTERN =
+ const SCRIPT_BASENAME = 'check-staged-constant-names.js';
+ const GUIDANCE_TEXT =
+   'New constants must describe their semantic owner (system guidelines.md ' +
+-  '§4.1). Rename the constant; LAGRANGE_SKIP_HOOKS=1 bypasses in an ' +
+-  'emergency.';
++  '§4.1). Rename the constant; `git commit --no-verify` bypasses hooks in ' +
++  'an emergency.';
+ 
+ function collectOpaqueAddedConstants(diffText) {
+   const findings = [];
+diff --git a/src/bootstrap/shared/control-plane-setup.js b/src/bootstrap/shared/control-plane-setup.js
+index 695db2e4..4dd40811 100644
+--- a/src/bootstrap/shared/control-plane-setup.js
++++ b/src/bootstrap/shared/control-plane-setup.js
+@@ -60,7 +60,6 @@ import {LoggingService} from '../../logging/logging-service.js';
+ import {DependencyError} from '../bootstrap-errors.js';
+ import {SUBSYSTEM, TABLES} from '../../constants/index.js';
+ import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
+-import {isMembershipSwimDetectorEnabled} from '../../control-plane/membership-swim-detector.js';
+ import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
+ import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
+ 
+@@ -350,27 +349,25 @@ class ControlPlaneSetup {
+         controlPlaneWriteRetryBaseDelayMs,
+         controlPlaneWriteRetryMaxDelayMs,
+       });
+-    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime. Built unless
+-    // LAGRANGE_MEMBERSHIP_SWIM_DETECTOR is opted out (=='false' => null => the whole
+-    // probe is inert); default-on since the N=8 gate (commit b1434fe0). It probes the
++    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime, built
++    // unconditionally (default-on since the N=8 gate, commit b1434fe0; the opt-out
++    // flag was retired 2026-07-02 under the no-flag policy). It probes the
+     // published active set over the real transport and the coordinator emits its
+     // divergence vs the projection. Uses real time/random (no options) in production.
+-    const membershipSwimRuntime = isMembershipSwimDetectorEnabled() ?
+-      new MembershipSwimRuntime({
+-        nodeId,
+-        messageRouter,
+-        logger,
+-        getMembers: () => {
+-          try {
+-            const publicationRows =
+-              systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+-            return resolvePublishedActiveNodeIds({publicationRows}) || [];
+-          } catch {
+-            return [];
+-          }
+-        },
+-      }) :
+-      null;
++    const membershipSwimRuntime = new MembershipSwimRuntime({
++      nodeId,
++      messageRouter,
++      logger,
++      getMembers: () => {
++        try {
++          const publicationRows =
++            systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
++          return resolvePublishedActiveNodeIds({publicationRows}) || [];
++        } catch {
++          return [];
++        }
++      },
++    });
+     const membershipPublicationService =
+       new MembershipPublicationCoordinator({
+         nodeId,
+@@ -396,19 +393,10 @@ class ControlPlaneSetup {
+     // here at setup — NOT in the readiness-gated startup handoff — so it cannot be
+     // gated behind the metadata-publication readiness it exists to drive. Self-
+     // gates on the control_plane_publications write-leader predicate.
+-    logger.warn('DIAG control-plane-setup reached startOwnerMembershipDriver call', {
+-      nodeId,
+-      hasMethod:
+-        typeof membershipPublicationService.startOwnerMembershipDriver,
+-      flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
+-    });
+     membershipPublicationService.startOwnerMembershipDriver();
+-    // Start the SWIM probe loop independent of the leader-driven flag (inert when no
+-    // runtime was built behind the default-off detector flag). Stopped by the
+-    // coordinator's stopOwnerMembershipDriver.
+-    if (membershipSwimRuntime) {
+-      membershipSwimRuntime.start();
+-    }
++    // Start the SWIM probe loop; stopped by the coordinator's
++    // stopOwnerMembershipDriver.
++    membershipSwimRuntime.start();
+     if (!controlPlaneReadinessService.nodesOwner) {
+       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
+     }
+diff --git a/src/control-plane/heartbeat-service-lifecycle-methods.js b/src/control-plane/heartbeat-service-lifecycle-methods.js
+index d7c6bc7f..591dd270 100644
+--- a/src/control-plane/heartbeat-service-lifecycle-methods.js
++++ b/src/control-plane/heartbeat-service-lifecycle-methods.js
+@@ -26,7 +26,7 @@ import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-
+ // closes that gap: on each heartbeat tick the control_plane_publications
+ // write-leader enqueues a membership reconcile (idempotent — a no-op once
+ // converged), so the authority always drives the cluster-wide publication to
+-// completion. Flag-gated; default off.
++// completion. Unconditional since 2026-07-02 (no-flag policy).
+ // Diagnostics for the EXISTING leader-driven reconcile tick (research, not a new
+ // mechanism): why does runScheduledMembershipPublicationReconcileTick not drive
+ // publication during the stall? Transition-logged at warn so it lands in bundles.
+@@ -292,14 +292,12 @@ class HeartbeatServiceLifecycleMethods {
+     };
+     const heartbeatTick = () => {
+       sendHeartbeat();
+-      // The existing leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
+-      // is otherwise reached only AFTER a successful heartbeat send (~line 311);
+-      // during the stall the send returns early, so the recovery action never
+-      // runs. Drive it here, DECOUPLED from the heartbeat-send outcome (it has its
+-      // own in-flight guard + owner check). Flag-gated until validated.
+-      if (process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true') {
+-        this.runScheduledMembershipPublicationReconcileTick();
+-      }
++      // The leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
++      // is otherwise reached only AFTER a successful heartbeat send; during a send
++      // stall it would never run. Drive it here, DECOUPLED from the heartbeat-send
++      // outcome — it self-guards (in-flight guard + publication-owner check), so an
++      // extra drive on a non-owner or busy node is a no-op.
++      this.runScheduledMembershipPublicationReconcileTick();
+     };
+     this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
+     if (typeof this.heartbeatTimer?.unref === TYPEOF.FUNCTION) {
+diff --git a/src/control-plane/membership-publication-coordinator-reads.js b/src/control-plane/membership-publication-coordinator-reads.js
+index cff6409c..24b151d6 100644
+--- a/src/control-plane/membership-publication-coordinator-reads.js
++++ b/src/control-plane/membership-publication-coordinator-reads.js
+@@ -6,7 +6,6 @@ import {
+ import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+ import {readAllSharedRows} from '../cache/shared-row-read.js';
+ import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
+-import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
+ import {
+   normalizeControlPlanePublicationRow,
+   readInteger,
+@@ -55,8 +54,9 @@ import {
+ 
+ // FD-upgrade (cutover §5 step 3): SWIM divergence probe that diffs the SWIM
+ // detector's active set against the projection's published set. Emitted only when
+-// a SWIM runtime is wired in (default-on; opt out with the flag); diagnostics-only. The shared
+-// divergence constants below (agree/kind/interval) back this probe.
++// a SWIM runtime is wired in (production bootstrap always wires one);
++// diagnostics-only. The shared divergence constants below (agree/kind/interval)
++// back this probe.
+ const MEMBERSHIP_SWIM_DIVERGENCE_MSG = 'MEMBERSHIP_SWIM_DIVERGENCE';
+ const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
+ const MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION = 'transition';
+@@ -73,15 +73,14 @@ class MembershipPublicationCoordinatorReads {
+     this.authoritativeControlPlaneView = options.authoritativeControlPlaneView || null;
+     this.membershipPublicationRuntimeOwner = options.membershipPublicationRuntimeOwner || null;
+     this.controlPlanePublicationsOwner = resolveControlPlanePublicationsOwner(options);
+-    // Phase 4 (leader-driven recovery establishment): when enabled, only the
++    // Phase 4 (leader-driven recovery establishment): only the
+     // control_plane_publications partition WRITE-LEADER drives the cluster-wide
+     // membership reconcile (it writes locally + Raft-quorum-commits), so a
+     // rejoiner does not drive a doomed synchronous write to the saturated leader.
+-    // Injectable predicate (default absent => no gating => unchanged behavior).
+-    // Default off via env until validated against the deterministic reproducer.
+-    this.membershipLeaderDrivenEnabled =
+-      options.membershipLeaderDrivenEnabled ??
+-      process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
++    // Unconditional since 2026-07-02 (no-flag policy): validated by the dt4
++    // full-chain and dt6 publication failback/ack-recovery/quorum-failback
++    // deterministic reproducers. The deferral fails OPEN on a missing/throwing
++    // write-leader predicate (see shouldDeferMembershipReconcileToWriteLeader).
+     this.resolveIsControlPlanePublicationsWriteLeader =
+       typeof options.resolveIsControlPlanePublicationsWriteLeader ===
+       TYPEOF.FUNCTION ?
+@@ -90,9 +89,10 @@ class MembershipPublicationCoordinatorReads {
+     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
+     this.replicaOperationRepository = options.replicaOperationRepository || null;
+     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
+-    // FD-upgrade SWIM divergence probe: the runtime is null only when the bootstrap
+-    // opted out via LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=false (default-on since the N=8
+-    // gate, commit b1434fe0), in which case this whole probe is inert.
++    // FD-upgrade SWIM divergence probe: production bootstrap always wires a
++    // runtime (default-on since the N=8 gate, commit b1434fe0; opt-out flag
++    // retired 2026-07-02); null only when a caller constructs the coordinator
++    // without one, in which case this whole probe is inert.
+     this.membershipSwimRuntime = options.membershipSwimRuntime || null;
+     this._membershipSwimDivergenceLastState = null;
+     this._membershipSwimDivergenceLastSnapshotMs = null;
+@@ -575,11 +575,11 @@ class MembershipPublicationCoordinatorReads {
+       options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
+         options.planningSnapshot :
+         await this.readPublicationPlanningSnapshot(options);
+-    // Increment 4: feed the SWIM verdict into the projection when consumption is
+-    // enabled (and a runtime is wired). Asymmetric: `alive` protects a node from a
+-    // false readiness-grace trim; off/no-runtime => unchanged behavior.
+-    const membershipSwimConsumeEnabled =
+-      this.membershipSwimRuntime !== null && isMembershipSwimConsumeEnabled();
++    // Increment 4: feed the SWIM verdict into the projection whenever a runtime
++    // is wired (consumption is unconditional; the opt-out flag was retired
++    // 2026-07-02). Asymmetric: `alive` protects a node from a false
++    // readiness-grace trim; no-runtime => the probe is inert.
++    const membershipSwimConsumeEnabled = this.membershipSwimRuntime !== null;
+     const swimVerdictByNodeId =
+       membershipSwimConsumeEnabled &&
+       typeof this.membershipSwimRuntime.verdictByNodeId === TYPEOF.FUNCTION ?
+@@ -602,8 +602,8 @@ class MembershipPublicationCoordinatorReads {
+   // FD-upgrade (cutover §5 step 3): diff the SWIM detector's active set against the
+   // projection's published set, the SWIM analog of the owner-divergence probe. Reads
+   // the live verdict from the wired-in runtime and the projection inputs the pure
+-  // derivation exposed. Inert (returns early) unless a runtime is wired in behind
+-  // the default-off flag. Diagnostics-only; never disturbs the publication path.
++  // derivation exposed. Inert (returns early) unless a runtime is wired in.
++  // Diagnostics-only; never disturbs the publication path.
+   _emitMembershipSwimDivergence(swimInputs) {
+     if (!this.membershipSwimRuntime || !swimInputs) {
+       return;
+diff --git a/src/control-plane/membership-publication-coordinator-reconcile.js b/src/control-plane/membership-publication-coordinator-reconcile.js
+index 2754b087..8d67c4b7 100644
+--- a/src/control-plane/membership-publication-coordinator-reconcile.js
++++ b/src/control-plane/membership-publication-coordinator-reconcile.js
+@@ -117,14 +117,13 @@ const CONVERGENCE_OUTCOME = Object.freeze({
+   NONE: 'none',
+ });
+ 
+-// Phase 4: defer the membership reconcile when leader-driven mode is enabled and
+-// this node is NOT the control_plane_publications write-leader. Fail OPEN — never
+-// block a reconcile on a missing/throwing predicate or when the flag is off, so
+-// default behavior is unchanged.
++// Phase 4: defer the membership reconcile when this node is NOT the
++// control_plane_publications write-leader (leader-driven mode, unconditional
++// since 2026-07-02 — validated by the dt4 full-chain and dt6 publication
++// failback/ack-recovery/quorum-failback reproducers). Fail OPEN — never block a
++// reconcile on a missing/throwing predicate, so a coordinator wired without the
++// predicate reconciles as before.
+ function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
+-  if (coordinator.membershipLeaderDrivenEnabled !== true) {
+-    return false;
+-  }
+   if (
+     typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
+     TYPEOF.FUNCTION
+@@ -758,11 +757,6 @@ class MembershipPublicationCoordinatorReconcile extends
+       return;
+     }
+     const enabled = options.enabled ?? true;
+-    this.logger?.warn?.('DIAG startOwnerMembershipDriver called', {
+-      nodeId: this.nodeId,
+-      enabled,
+-      flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
+-    });
+     if (!enabled) {
+       return;
+     }
+@@ -800,7 +794,7 @@ class MembershipPublicationCoordinatorReconcile extends
+       this.ownerMembershipDriverTimer = null;
+     }
+     // Stop the SWIM probe loop alongside the owner driver (inert if no runtime
+-    // was wired in behind the default-off flag).
++    // was wired in).
+     if (typeof this.membershipSwimRuntime?.stop === TYPEOF.FUNCTION) {
+       this.membershipSwimRuntime.stop();
+     }
+diff --git a/src/control-plane/membership-swim-detector.js b/src/control-plane/membership-swim-detector.js
+index fc0fd156..e8581046 100644
+--- a/src/control-plane/membership-swim-detector.js
++++ b/src/control-plane/membership-swim-detector.js
+@@ -23,35 +23,13 @@ import {
+   normalizeMembershipMemberState,
+ } from './membership-lifecycle-constants.js';
+ 
+-const MEMBERSHIP_SWIM_DETECTOR_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_DETECTOR';
+-// Increment 4: when on (AND the detector is on), the projection CONSUMES the SWIM
+-// verdict — asymmetrically: a SWIM `alive` PROTECTS a node from a false readiness/
+-// liveness-grace trim (the Lifeguard benefit); SWIM `dead`/`suspect` never triggers a
+-// trim (the existing timeout path still removes genuinely-dead nodes). Default-off.
+-const MEMBERSHIP_SWIM_CONSUME_ENV = 'LAGRANGE_MEMBERSHIP_SWIM_CONSUME';
+-const ENV_FALSE = 'false';
+-
+-/**
+- * Failure-detector enablement. DEFAULT-ON (opt-out via the env set to 'false') as of
+- * 2026-06-21: a matched N=8 gate showed SWIM consumption ~5x'd the rolling-restart
+- * scenario-PASS rate (5/8 vs 1/8) and eliminated node exits (0 vs 3) on identical code.
+- * Set LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=false to disable.
+- * @param {Object} [env=process.env]
+- * @return {boolean}
+- */
+-function isMembershipSwimDetectorEnabled(env = process.env) {
+-  return env?.[MEMBERSHIP_SWIM_DETECTOR_ENV] !== ENV_FALSE;
+-}
+-
+-/**
+- * Consume the SWIM verdict in the projection (asymmetric protection). DEFAULT-ON
+- * (opt-out via the env set to 'false'); inert unless the detector is also enabled.
+- * @param {Object} [env=process.env]
+- * @return {boolean}
+- */
+-function isMembershipSwimConsumeEnabled(env = process.env) {
+-  return env?.[MEMBERSHIP_SWIM_CONSUME_ENV] !== ENV_FALSE;
+-}
++// The detector and its projection consumption are UNCONDITIONAL: promoted from a
++// default-on opt-out flag on 2026-07-02 (no-flag policy) after the 2026-06-21 matched
++// N=8 gate showed SWIM consumption ~5x'd the rolling-restart scenario-PASS rate
++// (5/8 vs 1/8) and eliminated node exits (0 vs 3) on identical code. Consumption is
++// asymmetric: a SWIM `alive` PROTECTS a node from a false readiness/liveness-grace
++// trim (the Lifeguard benefit); SWIM `dead`/`suspect` never triggers a trim (the
++// existing timeout path still removes genuinely-dead nodes).
+ 
+ const SWIM_MEMBER_STATE = Object.freeze({
+   ALIVE: 'alive',
+@@ -537,11 +515,7 @@ function computeSwimActiveMemberSet(options = {}) {
+ 
+ export {
+   MembershipSwimDetector,
+-  MEMBERSHIP_SWIM_DETECTOR_ENV,
+-  MEMBERSHIP_SWIM_CONSUME_ENV,
+   SWIM_MEMBER_STATE,
+   SWIM_DETECTOR_DEFAULTS,
+-  isMembershipSwimDetectorEnabled,
+-  isMembershipSwimConsumeEnabled,
+   computeSwimActiveMemberSet,
+ };
+diff --git a/src/control-plane/membership-swim-runtime.js b/src/control-plane/membership-swim-runtime.js
+index f7369075..09fc4c87 100644
+--- a/src/control-plane/membership-swim-runtime.js
++++ b/src/control-plane/membership-swim-runtime.js
+@@ -2,10 +2,9 @@
+ //
+ // Composes the detector + prober + messageRouter transport adapter + relay handler
+ // into one lifecycle-managed object: the single thing the node bootstrap instantiates
+-// (flag-gated) and the membership coordinator reads for the divergence emission. It
+-// owns start/stop (registers the relay handler + starts the probe loop) and exposes
+-// the verdict + the SWIM-derived active set. Default-on (opt out with the flag):
+-// nothing here is constructed when isMembershipSwimDetectorEnabled() is false at the wiring site.
++// unconditionally and the membership coordinator reads for the divergence emission.
++// It owns start/stop (registers the relay handler + starts the probe loop) and
++// exposes the verdict + the SWIM-derived active set.
+ 
+ import {
+   MembershipSwimDetector,
+diff --git a/src/control-plane/replica-dispatch-retry-scheduling.js b/src/control-plane/replica-dispatch-retry-scheduling.js
+index 08ec2b79..39725b1c 100644
+--- a/src/control-plane/replica-dispatch-retry-scheduling.js
++++ b/src/control-plane/replica-dispatch-retry-scheduling.js
+@@ -2,7 +2,6 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
+ import {
+   ReplicaDispatchReplayHealthReadiness,
+ } from './replica-dispatch-replay-health-readiness.js';
+-import {applyBoundedJitter} from '../utils/retry-jitter.js';
+ 
+ const {
+   ControlPlaneField,
+@@ -179,9 +178,9 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+   resolveOperationDispatchRetryAfterMs(errorLike) {
+     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+     if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+-      return applyBoundedJitter(Math.max(NUM.ONE, Math.floor(retryAfterMs)));
++      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+     }
+-    return applyBoundedJitter(this.operationDispatchRetryAfterMs);
++    return this.operationDispatchRetryAfterMs;
+   }
+ 
+   /**
+diff --git a/src/index.js b/src/index.js
+index bed67389..12dbc46c 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -42,7 +42,6 @@ import {
+   ENTRYPOINT_VERSION,
+ } from './constants/entrypoint.js';
+ import {assertCritical} from './utils/assert.js';
+-import {applyBoundedJitter} from './utils/retry-jitter.js';
+ import {
+   MembershipLifecycleController,
+ } from './control-plane/membership-lifecycle-controller.js';
+@@ -318,20 +317,17 @@ async function startJoinNode(options) {
+       joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS;
+     if (reattemptAllowed) {
+       // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
+-      // (does not hammer a saturated seed) but never gives up. Jittered to
+-      // decorrelate rejoiners (opt-in via LAGRANGE_RETRY_JITTER).
++      // (does not hammer a saturated seed) but never gives up.
+       const cappedExp = Math.min(joinAttempt, JOIN_REATTEMPT_BACKOFF_CAP_EXP);
+       const backoffMs = Math.min(
+         JOIN_REATTEMPT_MAX_DELAY_MS,
+         JOIN_REATTEMPT_BASE_DELAY_MS * Math.pow(2, cappedExp),
+       );
+-      const delayMs = applyBoundedJitter(
+-        Math.max(
+-          Number.isFinite(joinResult.retryAfterMs) ?
+-            joinResult.retryAfterMs :
+-            0,
+-          backoffMs,
+-        ),
++      const delayMs = Math.max(
++        Number.isFinite(joinResult.retryAfterMs) ?
++          joinResult.retryAfterMs :
++          0,
++        backoffMs,
+       );
+       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
+         nodeId,
+diff --git a/src/transport/message-router-connection-close-reconnect.js b/src/transport/message-router-connection-close-reconnect.js
+index 0624d6f6..d1803306 100644
+--- a/src/transport/message-router-connection-close-reconnect.js
++++ b/src/transport/message-router-connection-close-reconnect.js
+@@ -1,5 +1,4 @@
+ import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+-import {applyBoundedJitter} from '../utils/retry-jitter.js';
+ 
+ const {
+   CONNECTION_CLOSE_DISPOSITION,
+@@ -153,13 +152,12 @@ class MessageRouterConnectionCloseReconnect {
+       return;
+     }
+     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
+-    const delay = applyBoundedJitter(
++    const delay =
+       this.reconnectIntervalMs *
+-        Math.pow(
+-          this.reconnectBackoffMultiplier,
+-          connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
+-        ),
+-    );
++      Math.pow(
++        this.reconnectBackoffMultiplier,
++        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
++      );
+     connectionInfo.reconnectDueAt = Date.now() + delay;
+     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
+       nodeId: connectionInfo.nodeId,
+diff --git a/src/utils/retry-jitter.js b/src/utils/retry-jitter.js
+deleted file mode 100644
+index 610eef52..00000000
+--- a/src/utils/retry-jitter.js
++++ /dev/null
+@@ -1,53 +0,0 @@
+-/**
+- * Bounded retry jitter — decorrelate synchronized retriers so independent nodes
+- * do not all hammer a saturated owner at the same instant (a metastable-failure
+- * sustaining mechanism; see
+- * solve/specs/metastable-convergence-resilience/, Phase 1).
+- *
+- * Conservative by construction: jitter is ADDITIVE-UPWARD only, so a jittered
+- * delay is never SHORTER than the computed backoff — it can only spread the herd
+- * later, never make retries more aggressive. Range: [delayMs, delayMs*(1+ratio)].
+- *
+- * Opt-in, default OFF (ratio 0 -> identity), so the measured baseline is
+- * unchanged until enabled via LAGRANGE_RETRY_JITTER=true (or an explicit ratio
+- * via LAGRANGE_RETRY_JITTER_RATIO in [0,1]).
+- */
+-
+-const DEFAULT_RETRY_JITTER_RATIO = 0.25;
+-
+-function resolveRetryJitterRatio(env = process.env) {
+-  const explicit = Number(env.LAGRANGE_RETRY_JITTER_RATIO);
+-  if (Number.isFinite(explicit) && explicit >= 0 && explicit <= 1) {
+-    return explicit;
+-  }
+-  return env.LAGRANGE_RETRY_JITTER === 'true' ? DEFAULT_RETRY_JITTER_RATIO : 0;
+-}
+-
+-/**
+- * @param {number} delayMs - the computed (backoff) delay.
+- * @param {number} [ratio] - jitter fraction in [0,1]; defaults to the env policy.
+- * @param {function} [random] - injectable RNG returning [0,1).
+- * @return {number} floor(delayMs + random()*ratio*delayMs), never below delayMs.
+- */
+-function applyBoundedJitter(
+-  delayMs,
+-  ratio = resolveRetryJitterRatio(),
+-  random = Math.random,
+-) {
+-  if (!Number.isFinite(delayMs) || delayMs <= 0) {
+-    return delayMs;
+-  }
+-  const normalizedRatio =
+-    Number.isFinite(ratio) && ratio > 0 ? Math.min(ratio, 1) : 0;
+-  if (normalizedRatio === 0) {
+-    return delayMs;
+-  }
+-  const spread = delayMs * normalizedRatio * random();
+-  return Math.floor(delayMs + spread);
+-}
+-
+-export {
+-  DEFAULT_RETRY_JITTER_RATIO,
+-  applyBoundedJitter,
+-  resolveRetryJitterRatio,
+-};
+diff --git a/src/workflow/owner-key-reconcile-queue.js b/src/workflow/owner-key-reconcile-queue.js
+index 1905d1d6..f921ba17 100644
+--- a/src/workflow/owner-key-reconcile-queue.js
++++ b/src/workflow/owner-key-reconcile-queue.js
+@@ -15,7 +15,6 @@
+ 
+ import {EventEmitter} from 'events';
+ import {LoggingService} from '../logging/logging-service.js';
+-import {applyBoundedJitter} from '../utils/retry-jitter.js';
+ import {
+   RECONCILE_QUEUE_SUBSYSTEM,
+   RECONCILE_QUEUE_LOG_MSG,
+@@ -532,7 +531,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+     const timer = setTimeout(() => {
+       this.retryTimers.delete(ownerKey);
+       this._wakeRetryWorkItem(ownerKey);
+-    }, applyBoundedJitter(retryAfterMs));
++    }, retryAfterMs);
+     maybeUnrefTimer(timer);
+     this.retryTimers.set(ownerKey, timer);
+   }
+diff --git a/test/control-plane/membership-publication-deferred-catchup.test.js b/test/control-plane/membership-publication-deferred-catchup.test.js
+index 95becfd0..82d65d21 100644
+--- a/test/control-plane/membership-publication-deferred-catchup.test.js
++++ b/test/control-plane/membership-publication-deferred-catchup.test.js
+@@ -73,7 +73,6 @@ function makeDeferringCoordinator({cache, cdcIntegrationService, now}) {
+   coordinator.buildOwnerKey = () => 'owner-key';
+   coordinator._emitConvergenceDecisionTrace = () => {};
+   // Force the not-write-leader defer branch.
+-  coordinator.membershipLeaderDrivenEnabled = true;
+   coordinator.resolveIsControlPlanePublicationsWriteLeader = () => false;
+   coordinator.now = now || (() => 1000);
+   coordinator.systemTableCache = cache;
+diff --git a/test/control-plane/membership-publication-leader-driven-gate.test.js b/test/control-plane/membership-publication-leader-driven-gate.test.js
+index 04772ba1..0dcdf78b 100644
+--- a/test/control-plane/membership-publication-leader-driven-gate.test.js
++++ b/test/control-plane/membership-publication-leader-driven-gate.test.js
+@@ -3,35 +3,23 @@ import {
+   shouldDeferMembershipReconcileToWriteLeader,
+ } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+ 
+-// Phase 4 leader-driven gate: defer the membership reconcile only when enabled
+-// AND a working predicate says this node is NOT the write-leader. Fail OPEN
+-// otherwise so default behavior is unchanged.
++// Phase 4 leader-driven gate (unconditional since 2026-07-02): defer the
++// membership reconcile only when a working predicate says this node is NOT the
++// write-leader. Fail OPEN otherwise so a coordinator wired without the
++// predicate reconciles as before.
+ 
+-t.test('disabled -> never defers (default behavior unchanged)', async (t) => {
++t.test('no predicate -> fail open (never blocks)', async (t) => {
+   t.equal(
+     shouldDeferMembershipReconcileToWriteLeader({
+-      membershipLeaderDrivenEnabled: false,
+-      resolveIsControlPlanePublicationsWriteLeader: () => false,
+-    }),
+-    false,
+-    'flag off -> no gating even if predicate says not-leader',
+-  );
+-});
+-
+-t.test('enabled, no predicate -> fail open (never blocks)', async (t) => {
+-  t.equal(
+-    shouldDeferMembershipReconcileToWriteLeader({
+-      membershipLeaderDrivenEnabled: true,
+       resolveIsControlPlanePublicationsWriteLeader: null,
+     }),
+     false,
+   );
+ });
+ 
+-t.test('enabled + predicate', async (t) => {
++t.test('predicate wired', async (t) => {
+   t.equal(
+     shouldDeferMembershipReconcileToWriteLeader({
+-      membershipLeaderDrivenEnabled: true,
+       resolveIsControlPlanePublicationsWriteLeader: () => true,
+     }),
+     false,
+@@ -39,7 +27,6 @@ t.test('enabled + predicate', async (t) => {
+   );
+   t.equal(
+     shouldDeferMembershipReconcileToWriteLeader({
+-      membershipLeaderDrivenEnabled: true,
+       resolveIsControlPlanePublicationsWriteLeader: () => false,
+     }),
+     true,
+@@ -47,10 +34,9 @@ t.test('enabled + predicate', async (t) => {
+   );
+ });
+ 
+-t.test('enabled + throwing predicate -> fail open (never blocks)', async (t) => {
++t.test('throwing predicate -> fail open (never blocks)', async (t) => {
+   t.equal(
+     shouldDeferMembershipReconcileToWriteLeader({
+-      membershipLeaderDrivenEnabled: true,
+       resolveIsControlPlanePublicationsWriteLeader: () => {
+         throw new Error('leadership unknown');
+       },
+diff --git a/test/control-plane/membership-swim-consume.test.js b/test/control-plane/membership-swim-consume.test.js
+index cae7a7d1..3401fcb2 100644
+--- a/test/control-plane/membership-swim-consume.test.js
++++ b/test/control-plane/membership-swim-consume.test.js
+@@ -1,12 +1,12 @@
+-// Increment 4: asymmetric SWIM consumption in the projection. A SWIM `alive` verdict
+-// protects a node from a false readiness/liveness-grace trim; SWIM `dead`/`suspect` and
+-// the consume-flag-off path change nothing; status/member-state trims still apply.
++// Increment 4: asymmetric SWIM consumption in the projection (unconditional since
++// 2026-07-02). A SWIM `alive` verdict protects a node from a false readiness/
++// liveness-grace trim; SWIM `dead`/`suspect` and the no-runtime path change
++// nothing; status/member-state trims still apply.
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   isCanonicallyActiveNode,
+   resolveProjectedActiveNodeIds,
+ } from '../../src/control-plane/active-node-projection.js';
+-import {isMembershipSwimConsumeEnabled} from '../../src/control-plane/membership-swim-detector.js';
+ 
+ // A healthy node (status active) whose connection looks not-ready locally and which
+ // has no fresh lease/heartbeat -> the readiness/liveness gate would trim it.
+@@ -16,20 +16,6 @@ const TRIMMABLE_HEALTHY_NODE = Object.freeze({
+   connection_state: 'connecting',
+ });
+ 
+-test('consume flag is default-on (opt-out via =false)', (t) => {
+-  t.equal(isMembershipSwimConsumeEnabled({}), true, 'absent => on (default-on)');
+-  t.equal(
+-    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'false'}),
+-    false,
+-    'explicit false => off',
+-  );
+-  t.equal(
+-    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'true'}),
+-    true,
+-  );
+-  t.end();
+-});
+-
+ test('without consumption a grace-trimmable healthy node is excluded', (t) => {
+   t.equal(
+     isCanonicallyActiveNode(TRIMMABLE_HEALTHY_NODE, {}),
+diff --git a/test/control-plane/membership-swim-detector.test.js b/test/control-plane/membership-swim-detector.test.js
+index be9babef..171e89fc 100644
+--- a/test/control-plane/membership-swim-detector.test.js
++++ b/test/control-plane/membership-swim-detector.test.js
+@@ -1,10 +1,8 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   MembershipSwimDetector,
+-  MEMBERSHIP_SWIM_DETECTOR_ENV,
+   SWIM_MEMBER_STATE,
+   SWIM_DETECTOR_DEFAULTS,
+-  isMembershipSwimDetectorEnabled,
+ } from '../../src/control-plane/membership-swim-detector.js';
+ import {VirtualTimeSource} from '../../src/time/time-source.js';
+ import {SeededRandomSource} from '../../src/random/random-source.js';
+@@ -17,21 +15,6 @@ function buildDetector(options = {}) {
+   });
+ }
+ 
+-test('detector flag is default-on (opt-out via =false)', (t) => {
+-  t.equal(isMembershipSwimDetectorEnabled({}), true, 'absent => on (default-on)');
+-  t.equal(
+-    isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'false'}),
+-    false,
+-    'explicit false => off',
+-  );
+-  t.equal(
+-    isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'true'}),
+-    true,
+-    'true => on',
+-  );
+-  t.end();
+-});
+-
+ test('untracked node defaults to alive', (t) => {
+   const d = buildDetector();
+   t.equal(d.verdictFor('n1'), SWIM_MEMBER_STATE.ALIVE);
+diff --git a/test/control-plane/owner-membership-driver.test.js b/test/control-plane/owner-membership-driver.test.js
+index 017b8a1c..9a9a340b 100644
+--- a/test/control-plane/owner-membership-driver.test.js
++++ b/test/control-plane/owner-membership-driver.test.js
+@@ -256,22 +256,13 @@ t.test('start: no-op when explicitly disabled', async (t) => {
+ });
+ 
+ t.test('start: defaults enabled when no explicit option is provided', async (t) => {
+-  const priorFlag = process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+-  delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+-  t.teardown(() => {
+-    if (priorFlag === undefined) {
+-      delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
+-      return;
+-    }
+-    process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = priorFlag;
+-  });
+   let intervals = 0;
+   const fakeTimer = {unref() {}};
+   const ctx = {};
+   start.call(ctx, {setIntervalFn: () => {
+     intervals += 1; return fakeTimer;
+   }});
+-  t.equal(intervals, 1, 'interval started with legacy flag unset');
++  t.equal(intervals, 1, 'interval started by default');
+   t.equal(ctx.ownerMembershipDriverTimer, fakeTimer);
+   stop.call(ctx);
+ });
+diff --git a/test/convergence/dt4-full-chain-scenario.test.js b/test/convergence/dt4-full-chain-scenario.test.js
+index a59f4472..8d31fc9a 100644
+--- a/test/convergence/dt4-full-chain-scenario.test.js
++++ b/test/convergence/dt4-full-chain-scenario.test.js
+@@ -62,7 +62,6 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
+     driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: proto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: proto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId: 'seed',
+     // No partition-row / services witness: force resolution onto the Tier-0
+     // raft-role path (the cache tiers lag and are not the signal here).
+@@ -132,7 +131,6 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
+   const proto = MembershipPublicationCoordinatorReconcile.prototype;
+   const coordinator = {
+     driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId: 'seed',
+     systemTableCache: {get: () => null, find: () => null},
+     cdcIntegrationService: {
+diff --git a/test/convergence/dt6-control-plane-migration-network.test.js b/test/convergence/dt6-control-plane-migration-network.test.js
+index 46cda4ec..c0d28a6e 100644
+--- a/test/convergence/dt6-control-plane-migration-network.test.js
++++ b/test/convergence/dt6-control-plane-migration-network.test.js
+@@ -60,7 +60,6 @@ function hostOwnerDriver(net, raft, nodeId) {
+     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId,
+     systemTableCache: {get: () => null, find: () => null},
+     cdcIntegrationService: {
+diff --git a/test/convergence/dt6-publication-ack-recovery-gate-network.test.js b/test/convergence/dt6-publication-ack-recovery-gate-network.test.js
+index 62fa359f..126e2a74 100644
+--- a/test/convergence/dt6-publication-ack-recovery-gate-network.test.js
++++ b/test/convergence/dt6-publication-ack-recovery-gate-network.test.js
+@@ -140,7 +140,6 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
+     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId,
+     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
+     cdcIntegrationService: {
+diff --git a/test/convergence/dt6-publication-failback-network.test.js b/test/convergence/dt6-publication-failback-network.test.js
+index 15ea2a65..d3f0fa08 100644
+--- a/test/convergence/dt6-publication-failback-network.test.js
++++ b/test/convergence/dt6-publication-failback-network.test.js
+@@ -72,7 +72,6 @@ function hostPublisher(net, raft, nodeId, store) {
+     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId,
+     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
+     cdcIntegrationService: {
+diff --git a/test/convergence/dt6-publication-failback-pct-search.test.js b/test/convergence/dt6-publication-failback-pct-search.test.js
+index 2e551fb1..021c52c6 100644
+--- a/test/convergence/dt6-publication-failback-pct-search.test.js
++++ b/test/convergence/dt6-publication-failback-pct-search.test.js
+@@ -76,7 +76,6 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
+     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId,
+     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
+     cdcIntegrationService: {
+diff --git a/test/convergence/dt6-publication-quorum-failback-network.test.js b/test/convergence/dt6-publication-quorum-failback-network.test.js
+index 05285181..98f1e4ba 100644
+--- a/test/convergence/dt6-publication-quorum-failback-network.test.js
++++ b/test/convergence/dt6-publication-quorum-failback-network.test.js
+@@ -84,7 +84,6 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
+     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
+     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
+     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+-    membershipLeaderDrivenEnabled: true,
+     nodeId,
+     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
+     cdcIntegrationService: {
+diff --git a/test/utils/retry-jitter.test.js b/test/utils/retry-jitter.test.js
+deleted file mode 100644
+index 016a424d..00000000
+--- a/test/utils/retry-jitter.test.js
++++ /dev/null
+@@ -1,58 +0,0 @@
+-import t from 'tap';
+-import {
+-  DEFAULT_RETRY_JITTER_RATIO,
+-  applyBoundedJitter,
+-  resolveRetryJitterRatio,
+-} from '../../src/utils/retry-jitter.js';
+-
+-t.test('applyBoundedJitter', async (t) => {
+-  t.equal(
+-    applyBoundedJitter(1000, 0),
+-    1000,
+-    'ratio 0 is identity (default-off baseline unchanged)',
+-  );
+-  t.equal(applyBoundedJitter(0, 0.5), 0, 'non-positive delay is returned as-is');
+-  t.equal(
+-    applyBoundedJitter(-5, 0.5),
+-    -5,
+-    'negative delay is returned as-is',
+-  );
+-
+-  // Additive-upward only: never shorter than the backoff, never beyond +ratio.
+-  for (const r of [0, 0.5, 1]) {
+-    const lo = applyBoundedJitter(1000, 0.25, () => r);
+-    t.ok(lo >= 1000, `jittered delay is never below the backoff (r=${r})`);
+-    t.ok(lo <= 1250, `jittered delay never exceeds delay*(1+ratio) (r=${r})`);
+-  }
+-  t.equal(applyBoundedJitter(1000, 0.25, () => 0), 1000, 'rng=0 -> exactly delay');
+-  t.equal(
+-    applyBoundedJitter(1000, 0.25, () => 1),
+-    1250,
+-    'rng=1 -> delay*(1+ratio)',
+-  );
+-
+-  t.equal(
+-    applyBoundedJitter(1000, 5, () => 1),
+-    2000,
+-    'ratio is clamped to 1',
+-  );
+-});
+-
+-t.test('resolveRetryJitterRatio', async (t) => {
+-  t.equal(resolveRetryJitterRatio({}), 0, 'default off');
+-  t.equal(
+-    resolveRetryJitterRatio({LAGRANGE_RETRY_JITTER: 'true'}),
+-    DEFAULT_RETRY_JITTER_RATIO,
+-    'flag on -> default ratio',
+-  );
+-  t.equal(
+-    resolveRetryJitterRatio({LAGRANGE_RETRY_JITTER_RATIO: '0.4'}),
+-    0.4,
+-    'explicit ratio honored',
+-  );
+-  t.equal(
+-    resolveRetryJitterRatio({LAGRANGE_RETRY_JITTER_RATIO: '2'}),
+-    0,
+-    'out-of-range ratio ignored -> off',
+-  );
+-});

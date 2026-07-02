@@ -62,7 +62,6 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
     driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
     startOwnerMembershipDriver: proto.startOwnerMembershipDriver,
     stopOwnerMembershipDriver: proto.stopOwnerMembershipDriver,
-    membershipLeaderDrivenEnabled: true,
     nodeId: 'seed',
     // No partition-row / services witness: force resolution onto the Tier-0
     // raft-role path (the cache tiers lag and are not the signal here).
@@ -132,7 +131,6 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
   const proto = MembershipPublicationCoordinatorReconcile.prototype;
   const coordinator = {
     driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
-    membershipLeaderDrivenEnabled: true,
     nodeId: 'seed',
     systemTableCache: {get: () => null, find: () => null},
     cdcIntegrationService: {

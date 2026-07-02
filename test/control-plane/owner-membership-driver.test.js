@@ -256,22 +256,13 @@ t.test('start: no-op when explicitly disabled', async (t) => {
 });
 
 t.test('start: defaults enabled when no explicit option is provided', async (t) => {
-  const priorFlag = process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
-  delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
-  t.teardown(() => {
-    if (priorFlag === undefined) {
-      delete process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN;
-      return;
-    }
-    process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = priorFlag;
-  });
   let intervals = 0;
   const fakeTimer = {unref() {}};
   const ctx = {};
   start.call(ctx, {setIntervalFn: () => {
     intervals += 1; return fakeTimer;
   }});
-  t.equal(intervals, 1, 'interval started with legacy flag unset');
+  t.equal(intervals, 1, 'interval started by default');
   t.equal(ctx.ownerMembershipDriverTimer, fakeTimer);
   stop.call(ctx);
 });

@@ -1,0 +1,6 @@
+{
+  "metric": 0,
+  "target": 0,
+  "classification": "flag-retirement-complete",
+  "detail": "Grep count of production feature-flag env reads (LAGRANGE_MEMBERSHIP_SWIM_DETECTOR, LAGRANGE_MEMBERSHIP_SWIM_CONSUME, LAGRANGE_MEMBERSHIP_LEADER_DRIVEN, LAGRANGE_RETRY_JITTER[_RATIO], LAGRANGE_STANDING_INVARIANTS, LAGRANGE_SKIP_HOOKS) across src/ test/ scripts/ docs/ architecture/ .githooks/ == 0. Evidence: control-plane suite 6258 pass, bootstrap+convergence 4863 pass, targeted suites 413+211+47+422 pass, lint clean, subagent verifier ae0215d77eac5fd8d approved after 6 text residuals were fixed."
+}

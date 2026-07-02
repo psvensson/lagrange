@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Unused-code gate (~7s). Bypass with LAGRANGE_SKIP_HOOKS=1 git push ...
+# Unused-code gate (~7s). Bypass with git push --no-verify (emergencies only).
 set -euo pipefail
-if [ "${LAGRANGE_SKIP_HOOKS:-0}" = "1" ]; then exit 0; fi
 npm run -s test:unused

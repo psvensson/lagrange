@@ -1,10 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   MembershipSwimDetector,
-  MEMBERSHIP_SWIM_DETECTOR_ENV,
   SWIM_MEMBER_STATE,
   SWIM_DETECTOR_DEFAULTS,
-  isMembershipSwimDetectorEnabled,
 } from '../../src/control-plane/membership-swim-detector.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
@@ -16,21 +14,6 @@ function buildDetector(options = {}) {
     ...options,
   });
 }
-
-test('detector flag is default-on (opt-out via =false)', (t) => {
-  t.equal(isMembershipSwimDetectorEnabled({}), true, 'absent => on (default-on)');
-  t.equal(
-    isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'false'}),
-    false,
-    'explicit false => off',
-  );
-  t.equal(
-    isMembershipSwimDetectorEnabled({[MEMBERSHIP_SWIM_DETECTOR_ENV]: 'true'}),
-    true,
-    'true => on',
-  );
-  t.end();
-});
 
 test('untracked node defaults to alive', (t) => {
   const d = buildDetector();

@@ -3,35 +3,23 @@ import {
   shouldDeferMembershipReconcileToWriteLeader,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 
-// Phase 4 leader-driven gate: defer the membership reconcile only when enabled
-// AND a working predicate says this node is NOT the write-leader. Fail OPEN
-// otherwise so default behavior is unchanged.
+// Phase 4 leader-driven gate (unconditional since 2026-07-02): defer the
+// membership reconcile only when a working predicate says this node is NOT the
+// write-leader. Fail OPEN otherwise so a coordinator wired without the
+// predicate reconciles as before.
 
-t.test('disabled -> never defers (default behavior unchanged)', async (t) => {
+t.test('no predicate -> fail open (never blocks)', async (t) => {
   t.equal(
     shouldDeferMembershipReconcileToWriteLeader({
-      membershipLeaderDrivenEnabled: false,
-      resolveIsControlPlanePublicationsWriteLeader: () => false,
-    }),
-    false,
-    'flag off -> no gating even if predicate says not-leader',
-  );
-});
-
-t.test('enabled, no predicate -> fail open (never blocks)', async (t) => {
-  t.equal(
-    shouldDeferMembershipReconcileToWriteLeader({
-      membershipLeaderDrivenEnabled: true,
       resolveIsControlPlanePublicationsWriteLeader: null,
     }),
     false,
   );
 });
 
-t.test('enabled + predicate', async (t) => {
+t.test('predicate wired', async (t) => {
   t.equal(
     shouldDeferMembershipReconcileToWriteLeader({
-      membershipLeaderDrivenEnabled: true,
       resolveIsControlPlanePublicationsWriteLeader: () => true,
     }),
     false,
@@ -39,7 +27,6 @@ t.test('enabled + predicate', async (t) => {
   );
   t.equal(
     shouldDeferMembershipReconcileToWriteLeader({
-      membershipLeaderDrivenEnabled: true,
       resolveIsControlPlanePublicationsWriteLeader: () => false,
     }),
     true,
@@ -47,10 +34,9 @@ t.test('enabled + predicate', async (t) => {
   );
 });
 
-t.test('enabled + throwing predicate -> fail open (never blocks)', async (t) => {
+t.test('throwing predicate -> fail open (never blocks)', async (t) => {
   t.equal(
     shouldDeferMembershipReconcileToWriteLeader({
-      membershipLeaderDrivenEnabled: true,
       resolveIsControlPlanePublicationsWriteLeader: () => {
         throw new Error('leadership unknown');
       },

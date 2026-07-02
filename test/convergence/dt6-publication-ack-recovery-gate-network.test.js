@@ -140,7 +140,6 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
-    membershipLeaderDrivenEnabled: true,
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {

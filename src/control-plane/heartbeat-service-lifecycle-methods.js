@@ -26,7 +26,7 @@ import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-
 // closes that gap: on each heartbeat tick the control_plane_publications
 // write-leader enqueues a membership reconcile (idempotent — a no-op once
 // converged), so the authority always drives the cluster-wide publication to
-// completion. Flag-gated; default off.
+// completion. Unconditional since 2026-07-02 (no-flag policy).
 // Diagnostics for the EXISTING leader-driven reconcile tick (research, not a new
 // mechanism): why does runScheduledMembershipPublicationReconcileTick not drive
 // publication during the stall? Transition-logged at warn so it lands in bundles.
@@ -292,14 +292,12 @@ class HeartbeatServiceLifecycleMethods {
     };
     const heartbeatTick = () => {
       sendHeartbeat();
-      // The existing leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
-      // is otherwise reached only AFTER a successful heartbeat send (~line 311);
-      // during the stall the send returns early, so the recovery action never
-      // runs. Drive it here, DECOUPLED from the heartbeat-send outcome (it has its
-      // own in-flight guard + owner check). Flag-gated until validated.
-      if (process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true') {
-        this.runScheduledMembershipPublicationReconcileTick();
-      }
+      // The leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
+      // is otherwise reached only AFTER a successful heartbeat send; during a send
+      // stall it would never run. Drive it here, DECOUPLED from the heartbeat-send
+      // outcome — it self-guards (in-flight guard + publication-owner check), so an
+      // extra drive on a non-owner or busy node is a no-op.
+      this.runScheduledMembershipPublicationReconcileTick();
     };
     this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
     if (typeof this.heartbeatTimer?.unref === TYPEOF.FUNCTION) {

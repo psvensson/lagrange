@@ -6,7 +6,6 @@ import {
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
-import {isMembershipSwimConsumeEnabled} from './membership-swim-detector.js';
 import {
   normalizeControlPlanePublicationRow,
   readInteger,
@@ -55,8 +54,9 @@ import {
 
 // FD-upgrade (cutover §5 step 3): SWIM divergence probe that diffs the SWIM
 // detector's active set against the projection's published set. Emitted only when
-// a SWIM runtime is wired in (default-on; opt out with the flag); diagnostics-only. The shared
-// divergence constants below (agree/kind/interval) back this probe.
+// a SWIM runtime is wired in (production bootstrap always wires one);
+// diagnostics-only. The shared divergence constants below (agree/kind/interval)
+// back this probe.
 const MEMBERSHIP_SWIM_DIVERGENCE_MSG = 'MEMBERSHIP_SWIM_DIVERGENCE';
 const MEMBERSHIP_OWNER_DIVERGENCE_AGREE_STATE = 'agree';
 const MEMBERSHIP_OWNER_DIVERGENCE_KIND_TRANSITION = 'transition';
@@ -73,15 +73,14 @@ class MembershipPublicationCoordinatorReads {
     this.authoritativeControlPlaneView = options.authoritativeControlPlaneView || null;
     this.membershipPublicationRuntimeOwner = options.membershipPublicationRuntimeOwner || null;
     this.controlPlanePublicationsOwner = resolveControlPlanePublicationsOwner(options);
-    // Phase 4 (leader-driven recovery establishment): when enabled, only the
+    // Phase 4 (leader-driven recovery establishment): only the
     // control_plane_publications partition WRITE-LEADER drives the cluster-wide
     // membership reconcile (it writes locally + Raft-quorum-commits), so a
     // rejoiner does not drive a doomed synchronous write to the saturated leader.
-    // Injectable predicate (default absent => no gating => unchanged behavior).
-    // Default off via env until validated against the deterministic reproducer.
-    this.membershipLeaderDrivenEnabled =
-      options.membershipLeaderDrivenEnabled ??
-      process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    // Unconditional since 2026-07-02 (no-flag policy): validated by the dt4
+    // full-chain and dt6 publication failback/ack-recovery/quorum-failback
+    // deterministic reproducers. The deferral fails OPEN on a missing/throwing
+    // write-leader predicate (see shouldDeferMembershipReconcileToWriteLeader).
     this.resolveIsControlPlanePublicationsWriteLeader =
       typeof options.resolveIsControlPlanePublicationsWriteLeader ===
       TYPEOF.FUNCTION ?
@@ -90,9 +89,10 @@ class MembershipPublicationCoordinatorReads {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
-    // FD-upgrade SWIM divergence probe: the runtime is null only when the bootstrap
-    // opted out via LAGRANGE_MEMBERSHIP_SWIM_DETECTOR=false (default-on since the N=8
-    // gate, commit b1434fe0), in which case this whole probe is inert.
+    // FD-upgrade SWIM divergence probe: production bootstrap always wires a
+    // runtime (default-on since the N=8 gate, commit b1434fe0; opt-out flag
+    // retired 2026-07-02); null only when a caller constructs the coordinator
+    // without one, in which case this whole probe is inert.
     this.membershipSwimRuntime = options.membershipSwimRuntime || null;
     this._membershipSwimDivergenceLastState = null;
     this._membershipSwimDivergenceLastSnapshotMs = null;
@@ -575,11 +575,11 @@ class MembershipPublicationCoordinatorReads {
       options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
         options.planningSnapshot :
         await this.readPublicationPlanningSnapshot(options);
-    // Increment 4: feed the SWIM verdict into the projection when consumption is
-    // enabled (and a runtime is wired). Asymmetric: `alive` protects a node from a
-    // false readiness-grace trim; off/no-runtime => unchanged behavior.
-    const membershipSwimConsumeEnabled =
-      this.membershipSwimRuntime !== null && isMembershipSwimConsumeEnabled();
+    // Increment 4: feed the SWIM verdict into the projection whenever a runtime
+    // is wired (consumption is unconditional; the opt-out flag was retired
+    // 2026-07-02). Asymmetric: `alive` protects a node from a false
+    // readiness-grace trim; no-runtime => the probe is inert.
+    const membershipSwimConsumeEnabled = this.membershipSwimRuntime !== null;
     const swimVerdictByNodeId =
       membershipSwimConsumeEnabled &&
       typeof this.membershipSwimRuntime.verdictByNodeId === TYPEOF.FUNCTION ?
@@ -602,8 +602,8 @@ class MembershipPublicationCoordinatorReads {
   // FD-upgrade (cutover §5 step 3): diff the SWIM detector's active set against the
   // projection's published set, the SWIM analog of the owner-divergence probe. Reads
   // the live verdict from the wired-in runtime and the projection inputs the pure
-  // derivation exposed. Inert (returns early) unless a runtime is wired in behind
-  // the default-off flag. Diagnostics-only; never disturbs the publication path.
+  // derivation exposed. Inert (returns early) unless a runtime is wired in.
+  // Diagnostics-only; never disturbs the publication path.
   _emitMembershipSwimDivergence(swimInputs) {
     if (!this.membershipSwimRuntime || !swimInputs) {
       return;

@@ -15,7 +15,6 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {applyBoundedJitter} from '../utils/retry-jitter.js';
 import {
   RECONCILE_QUEUE_SUBSYSTEM,
   RECONCILE_QUEUE_LOG_MSG,
@@ -532,7 +531,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     const timer = setTimeout(() => {
       this.retryTimers.delete(ownerKey);
       this._wakeRetryWorkItem(ownerKey);
-    }, applyBoundedJitter(retryAfterMs));
+    }, retryAfterMs);
     maybeUnrefTimer(timer);
     this.retryTimers.set(ownerKey, timer);
   }

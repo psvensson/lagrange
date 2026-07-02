@@ -1,12 +1,12 @@
-// Increment 4: asymmetric SWIM consumption in the projection. A SWIM `alive` verdict
-// protects a node from a false readiness/liveness-grace trim; SWIM `dead`/`suspect` and
-// the consume-flag-off path change nothing; status/member-state trims still apply.
+// Increment 4: asymmetric SWIM consumption in the projection (unconditional since
+// 2026-07-02). A SWIM `alive` verdict protects a node from a false readiness/
+// liveness-grace trim; SWIM `dead`/`suspect` and the no-runtime path change
+// nothing; status/member-state trims still apply.
 import {test} from '../../src/test-helpers/tap.js';
 import {
   isCanonicallyActiveNode,
   resolveProjectedActiveNodeIds,
 } from '../../src/control-plane/active-node-projection.js';
-import {isMembershipSwimConsumeEnabled} from '../../src/control-plane/membership-swim-detector.js';
 
 // A healthy node (status active) whose connection looks not-ready locally and which
 // has no fresh lease/heartbeat -> the readiness/liveness gate would trim it.
@@ -14,20 +14,6 @@ const TRIMMABLE_HEALTHY_NODE = Object.freeze({
   node_id: 'peer-B',
   status: 'active',
   connection_state: 'connecting',
-});
-
-test('consume flag is default-on (opt-out via =false)', (t) => {
-  t.equal(isMembershipSwimConsumeEnabled({}), true, 'absent => on (default-on)');
-  t.equal(
-    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'false'}),
-    false,
-    'explicit false => off',
-  );
-  t.equal(
-    isMembershipSwimConsumeEnabled({LAGRANGE_MEMBERSHIP_SWIM_CONSUME: 'true'}),
-    true,
-  );
-  t.end();
 });
 
 test('without consumption a grace-trimmable healthy node is excluded', (t) => {

@@ -42,7 +42,6 @@ import {
   ENTRYPOINT_VERSION,
 } from './constants/entrypoint.js';
 import {assertCritical} from './utils/assert.js';
-import {applyBoundedJitter} from './utils/retry-jitter.js';
 import {
   MembershipLifecycleController,
 } from './control-plane/membership-lifecycle-controller.js';
@@ -318,20 +317,17 @@ async function startJoinNode(options) {
       joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS;
     if (reattemptAllowed) {
       // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
-      // (does not hammer a saturated seed) but never gives up. Jittered to
-      // decorrelate rejoiners (opt-in via LAGRANGE_RETRY_JITTER).
+      // (does not hammer a saturated seed) but never gives up.
       const cappedExp = Math.min(joinAttempt, JOIN_REATTEMPT_BACKOFF_CAP_EXP);
       const backoffMs = Math.min(
         JOIN_REATTEMPT_MAX_DELAY_MS,
         JOIN_REATTEMPT_BASE_DELAY_MS * Math.pow(2, cappedExp),
       );
-      const delayMs = applyBoundedJitter(
-        Math.max(
-          Number.isFinite(joinResult.retryAfterMs) ?
-            joinResult.retryAfterMs :
-            0,
-          backoffMs,
-        ),
+      const delayMs = Math.max(
+        Number.isFinite(joinResult.retryAfterMs) ?
+          joinResult.retryAfterMs :
+          0,
+        backoffMs,
       );
       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
         nodeId,

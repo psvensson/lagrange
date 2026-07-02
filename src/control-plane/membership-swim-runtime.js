@@ -2,10 +2,9 @@
 //
 // Composes the detector + prober + messageRouter transport adapter + relay handler
 // into one lifecycle-managed object: the single thing the node bootstrap instantiates
-// (flag-gated) and the membership coordinator reads for the divergence emission. It
-// owns start/stop (registers the relay handler + starts the probe loop) and exposes
-// the verdict + the SWIM-derived active set. Default-on (opt out with the flag):
-// nothing here is constructed when isMembershipSwimDetectorEnabled() is false at the wiring site.
+// unconditionally and the membership coordinator reads for the divergence emission.
+// It owns start/stop (registers the relay handler + starts the probe loop) and
+// exposes the verdict + the SWIM-derived active set.
 
 import {
   MembershipSwimDetector,

@@ -30,8 +30,8 @@ const CONSTANT_DECLARATION_PATTERN =
 const SCRIPT_BASENAME = 'check-staged-constant-names.js';
 const GUIDANCE_TEXT =
   'New constants must describe their semantic owner (system guidelines.md ' +
-  '§4.1). Rename the constant; LAGRANGE_SKIP_HOOKS=1 bypasses in an ' +
-  'emergency.';
+  '§4.1). Rename the constant; `git commit --no-verify` bypasses hooks in ' +
+  'an emergency.';
 
 function collectOpaqueAddedConstants(diffText) {
   const findings = [];

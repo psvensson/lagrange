@@ -60,7 +60,6 @@ function hostOwnerDriver(net, raft, nodeId) {
     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
-    membershipLeaderDrivenEnabled: true,
     nodeId,
     systemTableCache: {get: () => null, find: () => null},
     cdcIntegrationService: {

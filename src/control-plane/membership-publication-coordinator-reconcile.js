@@ -117,14 +117,13 @@ const CONVERGENCE_OUTCOME = Object.freeze({
   NONE: 'none',
 });
 
-// Phase 4: defer the membership reconcile when leader-driven mode is enabled and
-// this node is NOT the control_plane_publications write-leader. Fail OPEN — never
-// block a reconcile on a missing/throwing predicate or when the flag is off, so
-// default behavior is unchanged.
+// Phase 4: defer the membership reconcile when this node is NOT the
+// control_plane_publications write-leader (leader-driven mode, unconditional
+// since 2026-07-02 — validated by the dt4 full-chain and dt6 publication
+// failback/ack-recovery/quorum-failback reproducers). Fail OPEN — never block a
+// reconcile on a missing/throwing predicate, so a coordinator wired without the
+// predicate reconciles as before.
 function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
-  if (coordinator.membershipLeaderDrivenEnabled !== true) {
-    return false;
-  }
   if (
     typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
     TYPEOF.FUNCTION
@@ -758,11 +757,6 @@ class MembershipPublicationCoordinatorReconcile extends
       return;
     }
     const enabled = options.enabled ?? true;
-    this.logger?.warn?.('DIAG startOwnerMembershipDriver called', {
-      nodeId: this.nodeId,
-      enabled,
-      flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
-    });
     if (!enabled) {
       return;
     }
@@ -800,7 +794,7 @@ class MembershipPublicationCoordinatorReconcile extends
       this.ownerMembershipDriverTimer = null;
     }
     // Stop the SWIM probe loop alongside the owner driver (inert if no runtime
-    // was wired in behind the default-off flag).
+    // was wired in).
     if (typeof this.membershipSwimRuntime?.stop === TYPEOF.FUNCTION) {
       this.membershipSwimRuntime.stop();
     }

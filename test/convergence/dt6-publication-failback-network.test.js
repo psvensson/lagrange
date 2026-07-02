@@ -72,7 +72,6 @@ function hostPublisher(net, raft, nodeId, store) {
     driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
     startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
     stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
-    membershipLeaderDrivenEnabled: true,
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {

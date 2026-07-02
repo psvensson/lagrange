@@ -60,7 +60,6 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM, TABLES} from '../../constants/index.js';
 import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
-import {isMembershipSwimDetectorEnabled} from '../../control-plane/membership-swim-detector.js';
 import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
 import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
 
@@ -350,27 +349,25 @@ class ControlPlaneSetup {
         controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs,
       });
-    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime. Built unless
-    // LAGRANGE_MEMBERSHIP_SWIM_DETECTOR is opted out (=='false' => null => the whole
-    // probe is inert); default-on since the N=8 gate (commit b1434fe0). It probes the
+    // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime, built
+    // unconditionally (default-on since the N=8 gate, commit b1434fe0; the opt-out
+    // flag was retired 2026-07-02 under the no-flag policy). It probes the
     // published active set over the real transport and the coordinator emits its
     // divergence vs the projection. Uses real time/random (no options) in production.
-    const membershipSwimRuntime = isMembershipSwimDetectorEnabled() ?
-      new MembershipSwimRuntime({
-        nodeId,
-        messageRouter,
-        logger,
-        getMembers: () => {
-          try {
-            const publicationRows =
-              systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
-            return resolvePublishedActiveNodeIds({publicationRows}) || [];
-          } catch {
-            return [];
-          }
-        },
-      }) :
-      null;
+    const membershipSwimRuntime = new MembershipSwimRuntime({
+      nodeId,
+      messageRouter,
+      logger,
+      getMembers: () => {
+        try {
+          const publicationRows =
+            systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+          return resolvePublishedActiveNodeIds({publicationRows}) || [];
+        } catch {
+          return [];
+        }
+      },
+    });
     const membershipPublicationService =
       new MembershipPublicationCoordinator({
         nodeId,
@@ -396,19 +393,10 @@ class ControlPlaneSetup {
     // here at setup — NOT in the readiness-gated startup handoff — so it cannot be
     // gated behind the metadata-publication readiness it exists to drive. Self-
     // gates on the control_plane_publications write-leader predicate.
-    logger.warn('DIAG control-plane-setup reached startOwnerMembershipDriver call', {
-      nodeId,
-      hasMethod:
-        typeof membershipPublicationService.startOwnerMembershipDriver,
-      flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
-    });
     membershipPublicationService.startOwnerMembershipDriver();
-    // Start the SWIM probe loop independent of the leader-driven flag (inert when no
-    // runtime was built behind the default-off detector flag). Stopped by the
-    // coordinator's stopOwnerMembershipDriver.
-    if (membershipSwimRuntime) {
-      membershipSwimRuntime.start();
-    }
+    // Start the SWIM probe loop; stopped by the coordinator's
+    // stopOwnerMembershipDriver.
+    membershipSwimRuntime.start();
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
     }
