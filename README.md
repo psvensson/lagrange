@@ -309,7 +309,7 @@ CREATE TABLE users (id TEXT PRIMARY KEY)
 ### Add More Nodes
 
 Additional nodes join the cluster by pointing `SEED_NODE_ADDRESS` at the
-seed. Two things to know:
+seed. Three things to know:
 
 - leave `NODE_ID` unset on joining nodes — the seed admits joiners by a
   UUID identity, which the node generates and persists in its data
