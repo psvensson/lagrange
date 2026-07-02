@@ -882,7 +882,12 @@ test('table-distribution-helpers retries retryable snapshot-read defers until ' 
   const distribution = await queryTableDistribution(seedNode, {
     tableName: 'benchmark_events',
     queryNodes: [seedNode],
-    queryTimeoutMs: 5,
+    // Generous ceiling, not a duration: the mocks defer once with
+    // retryAfterMs 5 and the helper checks its wall-clock deadline before
+    // each retry, so a 5ms budget lost the race under parallel-suite load
+    // (event-loop lag ate the whole budget before attempt 2 could run).
+    // The test still completes in a few ms once the retries succeed.
+    queryTimeoutMs: 2000,
   });
 
   assert.equal(distribution.partitionCount, 1);
