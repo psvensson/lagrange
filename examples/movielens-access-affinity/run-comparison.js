@@ -5,8 +5,10 @@ function parseArgs(argv) {
   const args = new Set(argv);
   return {
     noStart: args.has('--no-start'),
+    local: args.has('--local'),
     target: process.env.LAGRANGE_TARGET,
     dataDir: process.env.LAGRANGE_DATA_DIR,
+    nodeCount: Number(process.env.LAGRANGE_NODES) || null,
   };
 }
 
@@ -29,8 +31,10 @@ async function runComparison() {
   const baseline = await runPostgresBaseline();
   const lagrange = await runLagrangeDemo({
     noStart: options.noStart,
+    local: options.local,
     target: options.target,
     dataDir: options.dataDir,
+    nodeCount: options.nodeCount,
   });
   const comparison = buildComparison(baseline, lagrange);
   return {baseline, lagrange, comparison};

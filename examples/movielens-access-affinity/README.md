@@ -44,13 +44,28 @@ node examples/movielens-access-affinity/run-lagrange-demo.js
 
 This script:
 
-1. Starts a local seed node (unless `--no-start` is passed)
+1. Starts a 5-node Lagrange cluster in Docker (unless `--no-start` is passed),
+   reusing the distributed-test harness (image `distributed-db:test`, built
+   or reused automatically), and waits until all nodes are active members
 2. Loads the same ratings dataset into Lagrange
 3. Runs the `07-movielens-access-affinity` callback example, which:
-   - Executes the loop over rows inside partition callbacks
+   - Executes the per-partition select at the data location
    - Reduces results by movie id and returns only the top-10 summary
 
-The script prints structured metrics for the load + callback phases.
+The script prints structured metrics for cluster formation, load, and callback
+phases, including the top-10 result so it can be diffed against the Postgres
+baseline.
+
+Options:
+
+- `--nodes <N>` (or `LAGRANGE_NODES=<N>`) — cluster size, default 5.
+- `--local` — run the nodes as co-located host processes instead of Docker
+  (faster startup, useful for development). Node `i` uses REST port
+  `8080 + 4i` and admin WebSocket port `8081 + 4i` (each node also opens its
+  node-to-node WS transport on REST+2, hence the stride of 4). Per-run node
+  data directories and logs live under
+  `data/examples/movielens-lagrange-cluster/` and are wiped at the start of
+  each run.
 
 ## 4) Baseline vs Lagrange comparison
 

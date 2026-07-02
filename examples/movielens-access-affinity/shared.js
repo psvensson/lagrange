@@ -11,7 +11,8 @@ const CREATE_RATINGS_SQL = `
     user_id INTEGER,
     movie_id INTEGER,
     rating INTEGER,
-    rating_ts INTEGER
+    rating_ts INTEGER,
+    PRIMARY KEY (user_id, movie_id)
   );
 `;
 
