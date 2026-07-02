@@ -192,7 +192,7 @@ function committedFiles(root) {
     {cwd: root, encoding: 'utf8'}).split('\n').filter(Boolean);
 }
 
-tap.test('auto commit+push (R1)', async (t) => {
+tap.test('auto commit (never pushes) (R1)', async (t) => {
   t.test('skips cleanly outside a git work tree', (t) => {
     const root = tmp();
     makeQuest(root);

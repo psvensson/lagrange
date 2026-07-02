@@ -183,7 +183,8 @@ Use this list before non-trivial work:
 16. **Do not leave completed work uncommitted**; commit every finished, coherent
     unit of work (a Quest terminal or an ad-hoc task), scoped to its own files and
     excluding unrelated dirty worktree entries. For Quests this is the post-audit
-    commit-and-push handoff. See "Default Posture: Commit On Completion".
+    commit handoff (commit only — the Solver never pushes). See "Default
+    Posture: Commit On Completion".
 17. **Do not hand off Quest source changes without subagent verification**;
     spawn a subagent verifier and record a Solver finding with evidence
     `subagent:<id>` before audit/git handoff.
