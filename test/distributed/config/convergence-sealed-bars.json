@@ -1,0 +1,13 @@
+{
+  "_source": "docs/convergence-donewhen-metric.md §5 (sealed doneWhen) + §6 (re-seal 2026-07-01). The bar re-seals UPWARD only, and only when a new N>=15 window's Wilson lower bound clears the old bar. Edit this file only together with a re-seal entry in that doc.",
+  "confidence": 0.95,
+  "scenarios": {
+    "rolling-restart": {
+      "wilsonLowerBoundBar": 0.357,
+      "qTarget": 0.812,
+      "nodes": 5,
+      "sealedAt": "2026-07-01",
+      "promotionWindowMinRuns": 15
+    }
+  }
+}

@@ -250,6 +250,13 @@ jq -s '
     runsDetail: .
   }' "${TMP_NDJSON}" > "${OUT_JSON}"
 
+# Sealed-bar verdict (docs/convergence-donewhen-metric.md §5/§7a): Wilson-95
+# lower bound of the PASS rate vs the sealed bar, ANDed with the hard SAFETY
+# floor. Mechanizes what was previously operator-applied arithmetic.
+verdict_json=$(node scripts/rolling-restart-stat-gate-summary.js gate-verdict "${OUT_JSON}")
+jq --argjson verdict "${verdict_json}" '. + {gateVerdict: $verdict}' \
+  "${OUT_JSON}" > "${OUT_JSON}.tmp" && mv "${OUT_JSON}.tmp" "${OUT_JSON}"
+
 # Markdown summary.
 {
   echo "# Rolling-restart statistical gate — ${TS}"
@@ -276,6 +283,7 @@ jq -s '
     "## dominant reason tally",
     (.dominantReasonTally | to_entries[] | "- \(.key): \(.value)")
   ' "${OUT_JSON}"
+  node scripts/rolling-restart-stat-gate-summary.js gate-verdict-md "${OUT_JSON}"
 } > "${OUT_MD}"
 
 rm -f "${TMP_NDJSON}"
