@@ -12,6 +12,7 @@ import {
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
@@ -469,24 +470,50 @@ function buildOperationWorkflowOwnerTargetProgressOwnerOutcome(
   });
 }
 
+// Stall-scoped guard (mirrors the 3aad7631 spread un-mask contract): a
+// source-removal-phase snapshot that still carries the optimistic
+// spread_satisfied_in_flight certification is, by the spread classifier's
+// stall discriminator (isReplaceRemoveDispatchSpreadStalled: voter-ready or
+// within the 60s grace window), NOT stalled — the owner-outcome rewrite must
+// not strip that certification by re-deriving semanticState. A stalled op is
+// un-masked upstream (it never classifies spread_satisfied_in_flight), so it
+// still normalizes and re-drives. An active rebalancer handoff retry keeps
+// normalizing (that route predates the source-removal progress contract and
+// its retry-scheduled surface must stay exposed).
+function isOperationWorkflowOwnerSpreadCertifiedSourceRemovalProgressWait(
+  snapshot,
+) {
+  return isOperationWorkflowOwnerSourceRemovalProgressWait(snapshot) ===
+    true &&
+    snapshot?.semanticState ===
+      PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
+}
+
 function normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
   owner,
   snapshot,
   operation,
 ) {
-  const action =
+  const handoffRetryActive =
     shouldNormalizeOperationWorkflowOwnerTargetProgressHandoffRetry(
       owner,
       snapshot,
       operation,
-    ) ?
-      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
-        .RETRY_AFTER_OWNER_LANE :
-      resolveOperationWorkflowOwnerTargetProgressReentryAction(
-        owner,
-        snapshot,
-        operation,
-      );
+    );
+  if (
+    handoffRetryActive !== true &&
+    isOperationWorkflowOwnerSpreadCertifiedSourceRemovalProgressWait(snapshot)
+  ) {
+    return snapshot;
+  }
+  const action = handoffRetryActive ?
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+      .RETRY_AFTER_OWNER_LANE :
+    resolveOperationWorkflowOwnerTargetProgressReentryAction(
+      owner,
+      snapshot,
+      operation,
+    );
   const ownerOutcomeResult =
     buildOperationWorkflowOwnerTargetProgressOwnerOutcome(operation, action);
   if (
