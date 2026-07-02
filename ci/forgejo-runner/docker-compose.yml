@@ -1,0 +1,20 @@
+# Self-hosted Forgejo Actions runner for codeberg.org/psvensson/lagrange.
+#
+# Host-socket pattern: the runner talks to the host Docker daemon, and job
+# containers get the same socket mounted (see config.yml container.options),
+# so workflow steps can `docker build`/`docker push` directly. This trades
+# isolation for simplicity — appropriate for a personal machine running CI
+# for its owner's own repository. If this runner ever serves untrusted
+# repositories, switch to the docker-in-docker sidecar pattern instead.
+#
+# Usage: see README.md (register first, then `docker compose up -d`).
+services:
+  runner:
+    image: data.forgejo.org/forgejo/runner:12
+    container_name: lagrange-forgejo-runner
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+    working_dir: /data
+    command: forgejo-runner daemon --config /data/config.yml

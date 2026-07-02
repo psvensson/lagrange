@@ -2,14 +2,17 @@
 # Syntax is GitHub-Actions-compatible.
 #
 # Prerequisites (one-time):
-#   * Codeberg Actions enabled for the repo, with a runner that provides Docker
-#     (the `docker` label below; a self-hosted runner with the docker socket, or
-#     Codeberg's hosted runners).
-#   * A `helm` binary on the runner (installed in-step below) and Node 22.
+#   * Codeberg Actions enabled for the repo AND the SELF-HOSTED runner from
+#     ci/forgejo-runner/ registered and Idle. Codeberg's HOSTED runners cannot
+#     run this pipeline: their labels are codeberg-tiny/small/medium (no
+#     `docker` label), jobs are capped at 10 minutes (test:ci alone runs
+#     40-60), and docker-in-docker is unsupported — see ci/forgejo-runner/
+#     README.md.
 #   * Secrets:
 #       REGISTRY_USER  - Codeberg username (package registry push)
 #       REGISTRY_TOKEN - Codeberg token with package:write scope
 #     GITHUB_TOKEN is provided automatically by Forgejo for release upload.
+#   * To re-fire for an already-pushed tag: delete and re-push the tag.
 name: release
 
 on:

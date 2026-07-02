@@ -1,0 +1,29 @@
+# forgejo-runner daemon config for the lagrange release runner.
+# Copied to data/config.yml by setup.sh. Registration state (.runner with
+# the instance UUID/token and labels) is created by `forgejo-runner register`
+# and lives next to it under data/ (gitignored).
+log:
+  level: info
+
+runner:
+  file: /data/.runner
+  # One job at a time: the release workflow runs the full test:ci and gates
+  # are load-sensitive (see repo memory: gates run SOLO).
+  capacity: 1
+  # test:ci alone is ~40-60 min; leave generous headroom for builds/publish.
+  timeout: 2h
+  fetch_timeout: 5s
+  fetch_interval: 2s
+
+container:
+  # Job containers run on the HOST daemon (socket mounted by compose) and get
+  # the socket themselves so release steps can docker build/push.
+  docker_host: unix:///var/run/docker.sock
+  options: "-v /var/run/docker.sock:/var/run/docker.sock"
+  valid_volumes:
+    - /var/run/docker.sock
+  # Job containers must not linger after failures.
+  force_pull: false
+
+cache:
+  enabled: false
