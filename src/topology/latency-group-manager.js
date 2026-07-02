@@ -6,7 +6,7 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
@@ -84,11 +84,11 @@ class LatencyGroupManager extends EventEmitter {
     this.cycleInFlight = false;
     this.activeCyclePromises = new Set();
     this.stats = {
-      cycleCount: NUM.ZERO,
-      assignmentChangedCount: NUM.ZERO,
-      assignmentUnchangedCount: NUM.ZERO,
-      groupCreatedCount: NUM.ZERO,
-      cycleFailureCount: NUM.ZERO,
+      cycleCount: 0,
+      assignmentChangedCount: 0,
+      assignmentUnchangedCount: 0,
+      groupCreatedCount: 0,
+      cycleFailureCount: 0,
       lastCycleAt: null,
       lastReason: null,
       lastTargetGroupId: null,
@@ -196,7 +196,7 @@ class LatencyGroupManager extends EventEmitter {
     this.logger.info(LATENCY_GROUP_MANAGER_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
-    if (this.activeCyclePromises.size > NUM.ZERO) {
+    if (this.activeCyclePromises.size > 0) {
       await Promise.allSettled([...this.activeCyclePromises]);
     }
   }
@@ -210,7 +210,7 @@ class LatencyGroupManager extends EventEmitter {
   async runAssignmentCycle(options = {}) {
     this.ensureInitialized();
     const trigger = options.trigger || LATENCY_GROUP_MANAGER_TRIGGER.MANUAL;
-    this.stats.cycleCount += NUM.ONE;
+    this.stats.cycleCount += 1;
     this.stats.lastCycleAt = this.now();
 
     if (this.cycleInFlight) {
@@ -260,9 +260,9 @@ class LatencyGroupManager extends EventEmitter {
       this.stats.lastReason = result.reason;
       this.stats.lastTargetGroupId = result.targetGroupId;
       if (result.changed) {
-        this.stats.assignmentChangedCount += NUM.ONE;
+        this.stats.assignmentChangedCount += 1;
       } else {
-        this.stats.assignmentUnchangedCount += NUM.ONE;
+        this.stats.assignmentUnchangedCount += 1;
       }
 
       this.emit(eventName, result);
@@ -298,7 +298,7 @@ class LatencyGroupManager extends EventEmitter {
       try {
         await this.runAssignmentCycle({trigger});
       } catch (error) {
-        this.stats.cycleFailureCount += NUM.ONE;
+        this.stats.cycleFailureCount += 1;
         this.logger.error(LATENCY_GROUP_MANAGER_LOG_MSG.CYCLE_FAILED, {
           nodeId: this.nodeId,
           trigger,
@@ -460,7 +460,7 @@ class LatencyGroupManager extends EventEmitter {
         nodeId: this.nodeId,
         groupId: decision.createdGroupRow[COLUMN.GROUP_ID],
       });
-      this.stats.groupCreatedCount += NUM.ONE;
+      this.stats.groupCreatedCount += 1;
       this.emit(LATENCY_GROUP_MANAGER_EVENT.GROUP_CREATED, {
         nodeId: this.nodeId,
         groupId: decision.createdGroupRow[COLUMN.GROUP_ID],
@@ -554,11 +554,11 @@ class LatencyGroupManager extends EventEmitter {
       const memberRows = nodeRowsAfterAssignment.filter((nodeRow) => {
         return nodeRow?.[COLUMN.LATENCY_GROUP_ID] === groupId;
       });
-      if (!groupRow && memberRows.length === NUM.ZERO) {
+      if (!groupRow && memberRows.length === 0) {
         continue;
       }
 
-      const desiredState = memberRows.length > NUM.ZERO ?
+      const desiredState = memberRows.length > 0 ?
         LATENCY_GROUP_STATE.ACTIVE :
         LATENCY_GROUP_STATE.DRAINING;
       const normalizedGroupRow = buildNormalizedGroupRow({
@@ -620,12 +620,12 @@ class LatencyGroupManager extends EventEmitter {
         return left.rttMs - right.rttMs;
       }
       if (left.groupId < right.groupId) {
-        return NUM.NEGATIVE_ONE;
+        return -1;
       }
       if (left.groupId > right.groupId) {
-        return NUM.ONE;
+        return 1;
       }
-      return NUM.ZERO;
+      return 0;
     });
   }
 
@@ -643,7 +643,7 @@ class LatencyGroupManager extends EventEmitter {
     this.recalcTimer = this.setTimeoutFn(() => {
       void this.executeScheduledCycle(LATENCY_GROUP_MANAGER_TRIGGER.PERIODIC);
     }, delayMs);
-    if (typeof this.recalcTimer?.unref === TYPEOF.FUNCTION) {
+    if (typeof this.recalcTimer?.unref === 'function') {
       this.recalcTimer.unref();
     }
   }

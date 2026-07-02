@@ -1,10 +1,9 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const POST_REJOIN_RECONCILIATION_OWNER = 'topology_membership_owner';
 const POST_REJOIN_RECONCILIATION_BOUNDARY = 'rejoin_reconciliation';
 const POST_REJOIN_RECONCILIATION_ABSENT_TEXT = 'absent';
 const POST_REJOIN_RECONCILIATION_EMPTY_TEXT = '';
-const POST_REJOIN_RECONCILIATION_DEFAULT_OBSERVED_AT = NUM.ZERO;
+const POST_REJOIN_RECONCILIATION_DEFAULT_OBSERVED_AT = 0;
 
 const POST_REJOIN_RECONCILIATION_DECISION_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -91,13 +90,13 @@ const POST_REJOIN_RECONCILIATION_PENDING_EVIDENCE_STATES = Object.freeze([
 ]);
 
 function normalizePostRejoinReconciliationRecord(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value) ?
+  return value && typeof value === 'object' && !Array.isArray(value) ?
     value :
     {};
 }
 
 function normalizePostRejoinReconciliationText(value, fallback) {
-  if (typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO) {
+  if (typeof value === 'string' && value.trim().length > 0) {
     return value.trim();
   }
   if (Number.isFinite(value)) {
@@ -108,7 +107,7 @@ function normalizePostRejoinReconciliationText(value, fallback) {
 
 function normalizePostRejoinReconciliationTimestamp(value) {
   const normalizedValue = Number(value);
-  return Number.isFinite(normalizedValue) && normalizedValue >= NUM.ZERO ?
+  return Number.isFinite(normalizedValue) && normalizedValue >= 0 ?
     Math.trunc(normalizedValue) :
     POST_REJOIN_RECONCILIATION_DEFAULT_OBSERVED_AT;
 }
@@ -121,7 +120,7 @@ function normalizePostRejoinReconciliationReasonCodes(values = []) {
           value,
           POST_REJOIN_RECONCILIATION_EMPTY_TEXT,
         ))
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     )],
   );
 }
@@ -227,12 +226,12 @@ function resolvePostRejoinReconciliationDecisionFromSnapshot(snapshot) {
     Object.freeze({
       state: POST_REJOIN_RECONCILIATION_DECISION_STATE.BLOCKED,
       evidence: blockedEvidence,
-      matches: blockedEvidence.length > NUM.ZERO,
+      matches: blockedEvidence.length > 0,
     }),
     Object.freeze({
       state: POST_REJOIN_RECONCILIATION_DECISION_STATE.PENDING,
       evidence: pendingEvidence,
-      matches: pendingEvidence.length > NUM.ZERO,
+      matches: pendingEvidence.length > 0,
     }),
     Object.freeze({
       state: POST_REJOIN_RECONCILIATION_DECISION_STATE.SATISFIED,
@@ -266,7 +265,7 @@ function buildPostRejoinReconciliationDecision(options = {}) {
 function isPostRejoinReconciliationSatisfied(decision) {
   return Boolean(
     decision &&
-    typeof decision === TYPEOF.OBJECT &&
+    typeof decision === 'object' &&
     decision.owner === POST_REJOIN_RECONCILIATION_OWNER &&
     decision.boundary === POST_REJOIN_RECONCILIATION_BOUNDARY &&
     decision.state === POST_REJOIN_RECONCILIATION_DECISION_STATE.SATISFIED,

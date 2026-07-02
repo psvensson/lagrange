@@ -7,7 +7,6 @@ const {
   COLUMN,
   CRITICAL_SYSTEM_PARTITION_IDS,
   LIFECYCLE_REASON,
-  NUM,
   PARTITION_RAFT_ROLE,
   PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
@@ -21,7 +20,6 @@ const {
   STRING,
   TABLES,
   TERMINAL_STATUSES,
-  TYPEOF,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
@@ -201,7 +199,7 @@ class PartitionServiceLearnerPromotionMethods {
         return !TERMINAL_STATUSES.includes(operationStatus);
       },
     );
-    if (!Array.isArray(operationRows) || operationRows.length === NUM.ZERO) {
+    if (!Array.isArray(operationRows) || operationRows.length === 0) {
       return [];
     }
     return operationRows
@@ -210,7 +208,7 @@ class PartitionServiceLearnerPromotionMethods {
       )
       .filter(
         (operationContext) =>
-          operationContext && typeof operationContext === TYPEOF.OBJECT,
+          operationContext && typeof operationContext === 'object',
       );
   }
   getPartitionServiceRowsForPromotion() {
@@ -248,9 +246,9 @@ class PartitionServiceLearnerPromotionMethods {
       serviceRow?.[COLUMN.NODE_ID] || STRING.EMPTY,
     ).trim();
     const replicaMatches =
-      localReplicaId.length > NUM.ZERO && serviceReplicaId === localReplicaId;
+      localReplicaId.length > 0 && serviceReplicaId === localReplicaId;
     const nodeMatches =
-      localNodeId.length > NUM.ZERO && serviceNodeId === localNodeId;
+      localNodeId.length > 0 && serviceNodeId === localNodeId;
     return replicaMatches || nodeMatches;
   }
   getReplicaServiceRowReplicaIdForPromotion(serviceRow) {
@@ -279,10 +277,10 @@ class PartitionServiceLearnerPromotionMethods {
       inFlightAddLikeReplicaIds instanceof Set ?
         inFlightAddLikeReplicaIds :
         new Set();
-    if (operationReplicaIds.size === NUM.ZERO) {
-      return {scopeActive: false, learnerCount: NUM.ZERO};
+    if (operationReplicaIds.size === 0) {
+      return {scopeActive: false, learnerCount: 0};
     }
-    let learnerCount = NUM.ZERO;
+    let learnerCount = 0;
     const serviceRows = this.getPartitionServiceRowsForPromotion();
     const operationScopedLearnerRows = serviceRows.filter((serviceRow) => {
       const serviceReplicaId =
@@ -305,7 +303,7 @@ class PartitionServiceLearnerPromotionMethods {
     );
     if (
       this.role === RaftRole.LEARNER &&
-      localReplicaId.length > NUM.ZERO &&
+      localReplicaId.length > 0 &&
       operationReplicaIds.has(localReplicaId) &&
       !localLearnerRowVisible
     ) {
@@ -318,10 +316,10 @@ class PartitionServiceLearnerPromotionMethods {
       observedCounts.activeVoterCount,
     ) ?
       observedCounts.activeVoterCount :
-      NUM.ZERO;
+      0;
     const observedLearnerCount = Number.isFinite(observedCounts.learnerCount) ?
       observedCounts.learnerCount :
-      NUM.ZERO;
+      0;
     const operationScopedLearnerCount =
       this.resolveOperationScopedLearnerCountForPromotion(
         observedCounts.inFlightAddLikeReplicaIds,
@@ -347,9 +345,9 @@ class PartitionServiceLearnerPromotionMethods {
     const learnerCount =
       localLearnerRowVisible || operationScopedLearnerCount.scopeActive ?
         baseLearnerCount :
-        baseLearnerCount + NUM.ONE;
+        baseLearnerCount + 1;
     const activeVoterCount = localVoterRowVisible ?
-      Math.max(observedActiveVoterCount - NUM.ONE, NUM.ZERO) :
+      Math.max(observedActiveVoterCount - 1, 0) :
       observedActiveVoterCount;
     return {activeVoterCount, learnerCount};
   }
@@ -360,7 +358,7 @@ class PartitionServiceLearnerPromotionMethods {
     const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
     if (
       this.role !== RaftRole.LEARNER ||
-      localNodeId.length === NUM.ZERO ||
+      localNodeId.length === 0 ||
       learnerNodeIds.includes(localNodeId)
     ) {
       return learnerNodeIds;
@@ -393,7 +391,7 @@ class PartitionServiceLearnerPromotionMethods {
         .map((serviceRow) =>
           String(serviceRow?.[COLUMN.NODE_ID] || STRING.EMPTY).trim(),
         )
-        .filter((nodeId) => nodeId.length > NUM.ZERO) :
+        .filter((nodeId) => nodeId.length > 0) :
       [];
     const activeLearnerNodeIds =
       this.resolveActiveLearnerNodeIdsForPromotion(serviceLearnerNodeIds);
@@ -488,7 +486,7 @@ class PartitionServiceLearnerPromotionMethods {
     const learnerCount = promotionCounts.learnerCount;
     const hasOwnedAddLikeOperation = Boolean(
       inFlightAddLikeReplicaIds &&
-      inFlightAddLikeReplicaIds.size > NUM.ZERO &&
+      inFlightAddLikeReplicaIds.size > 0 &&
       inFlightAddLikeReplicaIds.has(this.replicaId),
     );
     const targetReplicaCount = this.getTargetReplicaCountForPromotion();
@@ -497,7 +495,7 @@ class PartitionServiceLearnerPromotionMethods {
     );
     const singleReplacementPromotionAllowed =
       (this.isJoiningExistingGroup === true || hasOwnedAddLikeOperation) &&
-      learnerCount === NUM.ONE &&
+      learnerCount === 1 &&
       activeVoterCount >= targetReplicaCount;
     const operationOwnedCriticalReplacementPromotionAllowed =
       isCriticalSystemPartition &&
@@ -508,8 +506,8 @@ class PartitionServiceLearnerPromotionMethods {
       operationOwnedCriticalReplacementPromotionAllowed;
     const singleVoterExpansionPromotionAllowed =
       this.isJoiningExistingGroup === true &&
-      learnerCount === NUM.ONE &&
-      activeVoterCount === NUM.ONE;
+      learnerCount === 1 &&
+      activeVoterCount === 1;
     const priorityRecoveryCompletion = isCriticalSystemPartition ?
       this.resolvePriorityRecoveryCompletionForLearnerPromotion({
         targetReplicaCount,
@@ -521,21 +519,21 @@ class PartitionServiceLearnerPromotionMethods {
       isCriticalSystemPartition &&
       Number.isFinite(priorityRecoveryCompletion?.temporaryOverflowVoterBudget) ?
         priorityRecoveryCompletion.temporaryOverflowVoterBudget :
-        NUM.ZERO;
+        0;
     const priorityRecoveryOverflowPromotionAllowed =
-      priorityRecoveryAdditionalVotersAllowed > NUM.ZERO;
+      priorityRecoveryAdditionalVotersAllowed > 0;
     const maxAllowedVotersAfterPromotion =
       targetReplicaCount +
       (replacementPromotionAllowed || singleVoterExpansionPromotionAllowed ?
-        NUM.ONE :
-        NUM.ZERO) +
+        1 :
+        0) +
       priorityRecoveryAdditionalVotersAllowed;
-    const votersAfterPromotion = activeVoterCount + NUM.ONE;
+    const votersAfterPromotion = activeVoterCount + 1;
     const wouldExceedTargetReplicaCount =
       votersAfterPromotion > maxAllowedVotersAfterPromotion;
-    const wouldBeEven = votersAfterPromotion % NUM.TWO === NUM.ZERO;
+    const wouldBeEven = votersAfterPromotion % 2 === 0;
     const votersAfterAllLearners = activeVoterCount + learnerCount;
-    const allLearnersWouldBeOdd = votersAfterAllLearners % NUM.TWO === NUM.ONE;
+    const allLearnersWouldBeOdd = votersAfterAllLearners % 2 === 1;
     const allLearnersWithinTarget =
       votersAfterAllLearners <= targetReplicaCount;
     if (
@@ -591,7 +589,7 @@ class PartitionServiceLearnerPromotionMethods {
       const replicaId = String(
         operationRow?.[COLUMN.REPLICA_ID] || STRING.EMPTY,
       ).trim();
-      if (replicaId.length > NUM.ZERO) {
+      if (replicaId.length > 0) {
         replicaIds.add(replicaId);
       }
       const targetNodeId = String(
@@ -600,8 +598,8 @@ class PartitionServiceLearnerPromotionMethods {
       const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
       const localReplicaId = String(this.replicaId || STRING.EMPTY).trim();
       if (
-        targetNodeId.length > NUM.ZERO &&
-        localReplicaId.length > NUM.ZERO &&
+        targetNodeId.length > 0 &&
+        localReplicaId.length > 0 &&
         targetNodeId === localNodeId
       ) {
         replicaIds.add(localReplicaId);
@@ -611,7 +609,7 @@ class PartitionServiceLearnerPromotionMethods {
   }
   countPendingLearners() {
     const services = this.getPartitionServiceRowsForPromotion();
-    let learnerCount = NUM.ZERO;
+    let learnerCount = 0;
     for (const service of services) {
       if (this.isLearnerServiceRowForPromotion(service)) {
         learnerCount++;
@@ -630,14 +628,14 @@ class PartitionServiceLearnerPromotionMethods {
     );
     if (
       Number.isInteger(publishedReplicaCount) &&
-      publishedReplicaCount > NUM.ZERO
+      publishedReplicaCount > 0
     ) {
       return publishedReplicaCount;
     }
     const configuredReplicaCount = Number(this.replicaCount);
     if (
       Number.isInteger(configuredReplicaCount) &&
-      configuredReplicaCount > NUM.ZERO
+      configuredReplicaCount > 0
     ) {
       return configuredReplicaCount;
     }
@@ -645,7 +643,7 @@ class PartitionServiceLearnerPromotionMethods {
   }
   countActiveVoters() {
     const services = this.getPartitionServiceRowsForPromotion();
-    let voterCount = NUM.ZERO;
+    let voterCount = 0;
     for (const service of services) {
       if (this.isActiveVoterServiceRowForPromotion(service)) {
         voterCount++;

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   EMPTY_STRING,
   LOCAL_STR_EMPTY,
@@ -25,7 +24,7 @@ import {
 } from './membership-lifecycle-constants.js';
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
 }
@@ -35,7 +34,7 @@ function normalizeDistinctStringArray(values = []) {
     [...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     )],
   );
 }
@@ -48,7 +47,7 @@ function normalizePublicationStatus(status) {
 }
 
 function hasPublicationStatusPendingMeaning(publicationStatusNormalized) {
-  return publicationStatusNormalized.length > NUM.ZERO &&
+  return publicationStatusNormalized.length > 0 &&
     publicationStatusNormalized !== PUBLICATION_OWNER_TEXT.UNKNOWN;
 }
 
@@ -56,10 +55,10 @@ function hasCountOnlyMissingPublishedDebt(
   publicationOwnerStream,
   missingPublishedCount,
 ) {
-  return normalizeNonNegativeInteger(missingPublishedCount) > NUM.ZERO &&
+  return normalizeNonNegativeInteger(missingPublishedCount) > 0 &&
     normalizeDistinctStringArray(
       publicationOwnerStream?.missingPublishedNodeIds,
-    ).length === NUM.ZERO;
+    ).length === 0;
 }
 
 function isClosedNotStartedPublicationOwnerStream(
@@ -80,9 +79,9 @@ function isClosedNotStartedPublicationOwnerStream(
       publicationOwnerStream?.ackState ===
         PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE
     ) &&
-    normalizeNonNegativeInteger(pendingAckCount) === NUM.ZERO &&
+    normalizeNonNegativeInteger(pendingAckCount) === 0 &&
     (
-      normalizeNonNegativeInteger(missingPublishedCount) === NUM.ZERO ||
+      normalizeNonNegativeInteger(missingPublishedCount) === 0 ||
       hasCountOnlyMissingPublishedDebt(
         publicationOwnerStream,
         missingPublishedCount,
@@ -106,14 +105,14 @@ function isPublicationOwnerStreamPendingForRecoveryGate(
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeOptionalNonNegativeInteger(value, fallbackValue) {
   const normalizedValue = Number(value);
-  return Number.isFinite(normalizedValue) && normalizedValue >= NUM.ZERO ?
+  return Number.isFinite(normalizedValue) && normalizedValue >= 0 ?
     Math.floor(normalizedValue) :
     fallbackValue;
 }
@@ -126,7 +125,7 @@ function normalizePublicationPressureState(value) {
 
 function isPublicationOwnerStreamRecord(value) {
   return Boolean(value) &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value);
 }
 
@@ -208,7 +207,7 @@ function resolvePublicationPressureEvidence(
   );
   const optionRetryAfterMs = normalizeOptionalNonNegativeInteger(
     options.pressureRetryAfterMs ?? options.retryAfterMs,
-    NUM.ZERO,
+    0,
   );
 
   return Object.freeze({
@@ -218,7 +217,7 @@ function resolvePublicationPressureEvidence(
     pressureRetryAfterMs:
       pressureDeferred ?
         streamRetryAfterMs ?? optionRetryAfterMs :
-        NUM.ZERO,
+        0,
     pressureReasonCodes: normalizeDistinctStringArray([
       ...normalizeDistinctStringArray(
         publicationOwnerStream?.pressureReasonCodes,
@@ -239,9 +238,9 @@ function resolvePublicationStreamPrioritySpreadPending(
   options = {},
 ) {
   return hasAuthoritativePrioritySpreadDecision(options) &&
-    typeof options.prioritySpreadPending === TYPEOF.BOOLEAN ?
+    typeof options.prioritySpreadPending === 'boolean' ?
     options.prioritySpreadPending :
-    typeof publicationOwnerStream?.prioritySpreadPending === TYPEOF.BOOLEAN ?
+    typeof publicationOwnerStream?.prioritySpreadPending === 'boolean' ?
       publicationOwnerStream.prioritySpreadPending :
       publicationOwnerStream?.recoveryOutcome ===
         PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING ?
@@ -267,9 +266,9 @@ function hasClosedUnpublishedPendingAckEvidence(options = {}) {
     options.recoveryProtocolState,
   );
   return Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO &&
-    normalizeNonNegativeInteger(options.pendingAckCount) === NUM.ZERO &&
-    normalizeNonNegativeInteger(options.missingPublishedCount) === NUM.ZERO &&
+    explicitPendingAckNodeIds.length === 0 &&
+    normalizeNonNegativeInteger(options.pendingAckCount) === 0 &&
+    normalizeNonNegativeInteger(options.missingPublishedCount) === 0 &&
     hasPublicationStatusPendingMeaning(publicationStatusNormalized) !== true &&
     recoveryProtocolState === RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
 }
@@ -284,7 +283,7 @@ function hasClosedPublishedPendingAckEvidence(options = {}) {
   return publicationStatusNormalized ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
 }
 
 function hasOpenCountOnlyPendingAckEvidence(options = {}) {
@@ -299,7 +298,7 @@ function hasOpenCountOnlyPendingAckEvidence(options = {}) {
   return openCountOnlyAckIsStale &&
     publicationStatusNormalized === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
 }
 
 function resolvePendingAckEvidenceState(options = {}) {
@@ -308,12 +307,12 @@ function resolvePendingAckEvidenceState(options = {}) {
   );
   const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
     Number(options.pendingAckCount) :
-    NUM.ZERO;
+    0;
   const hasCountOnlyDebt =
     options.pendingAckEvidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-    explicitPendingAckNodeIds.length === NUM.ZERO &&
-    pendingAckCount > NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0 &&
+    pendingAckCount > 0;
 
   if (hasClosedPublishedPendingAckEvidence(options) && !hasCountOnlyDebt) {
     return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
@@ -338,8 +337,8 @@ function resolvePendingAckEvidenceState(options = {}) {
   const hasRequiredAckNodeListEvidence =
     Array.isArray(options.requiredAckNodeIds) &&
     (
-      requiredAckNodeIds.length > NUM.ZERO ||
-      explicitPendingAckNodeIds.length === NUM.ZERO
+      requiredAckNodeIds.length > 0 ||
+      explicitPendingAckNodeIds.length === 0
     ) &&
     !hasCountOnlyDebt;
   const hasClosedPendingAckNodeListEvidence =
@@ -371,12 +370,12 @@ function buildPendingAckEvidence(options = {}) {
     evidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST ?
       derivedPendingAckNodeIds :
-      explicitPendingAckNodeIds.length > NUM.ZERO ?
+      explicitPendingAckNodeIds.length > 0 ?
         explicitPendingAckNodeIds :
         derivedPendingAckNodeIds;
   const countOnlyPendingAckCount =
     hasOpenCountOnlyPendingAckEvidence(options) ?
-      NUM.ZERO :
+      0 :
       Math.max(
         pendingAckNodeIds.length,
         normalizeNonNegativeInteger(options.pendingAckCount),
@@ -425,7 +424,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
       pendingAckEvidence.pendingAckNodeIds,
     );
   const streamPendingAckCount = normalizeOptionalNonNegativeInteger(
-    pressureDeferred ? NUM.ZERO : publicationOwnerStream?.pendingAckCount,
+    pressureDeferred ? 0 : publicationOwnerStream?.pendingAckCount,
     null,
   );
   const streamPendingAckEvidence = buildPendingAckEvidence({
@@ -450,7 +449,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
       fallbackMissingPublishedNodeIds,
     );
   const streamMissingPublishedCount = normalizeOptionalNonNegativeInteger(
-    pressureDeferred ? NUM.ZERO : publicationOwnerStream?.missingPublishedCount,
+    pressureDeferred ? 0 : publicationOwnerStream?.missingPublishedCount,
     null,
   );
   const missingPublishedCount =
@@ -466,7 +465,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
     );
   const prioritySpreadEvidenceUnavailable =
     typeof publicationOwnerStream?.prioritySpreadEvidenceUnavailable ===
-      TYPEOF.BOOLEAN ?
+      'boolean' ?
       publicationOwnerStream.prioritySpreadEvidenceUnavailable :
       publicationOwnerStream?.recoveryOutcome ===
         PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_RECOVERY_EVIDENCE ?
@@ -480,7 +479,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
       pendingAckCount,
       missingPublishedCount,
     ) ||
-      pendingAckCount > NUM.ZERO;
+      pendingAckCount > 0;
   const recoveryProtocolState = resolvePublicationRecoveryProtocolState({
     publicationOwnerStream,
     prioritySpreadPending,
@@ -516,7 +515,7 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
       (
         publicationOwnerStream?.ackState ===
         PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK ||
-        pendingAckCount > NUM.ZERO
+        pendingAckCount > 0
       ),
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,

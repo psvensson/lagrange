@@ -4,7 +4,6 @@
  * @module runtime/pgwire-result-mapper
  */
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_SELECT = 'SELECT';
 const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_UPDATE = 'UPDATE';
@@ -31,19 +30,19 @@ function deriveCommandTag(result, query) {
   const upper = query.trimStart().toUpperCase();
   if (upper.startsWith(LOCAL_STR_SELECT)) {
     const count = Array.isArray(result?.rows) ?
-      result.rows.length : LOCAL_NUM_ZERO;
+      result.rows.length : 0;
     return `SELECT ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_INSERT)) {
-    const count = result?.changes ?? result?.rowCount ?? LOCAL_NUM_ZERO;
+    const count = result?.changes ?? result?.rowCount ?? 0;
     return `INSERT 0 ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_UPDATE)) {
-    const count = result?.changes ?? result?.rowCount ?? LOCAL_NUM_ZERO;
+    const count = result?.changes ?? result?.rowCount ?? 0;
     return `UPDATE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_DELETE)) {
-    const count = result?.changes ?? result?.rowCount ?? LOCAL_NUM_ZERO;
+    const count = result?.changes ?? result?.rowCount ?? 0;
     return `DELETE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_CREATE)) return LOCAL_STR_CREATE_TABLE;
@@ -66,8 +65,8 @@ function extractColumns(result) {
       typeof c === LOCAL_STR_STRING ? {name: c} : {name: c.name || LOCAL_STR_COLUMN},
     );
   }
-  if (Array.isArray(result?.rows) && result.rows.length > LOCAL_NUM_ZERO) {
-    return Object.keys(result.rows[LOCAL_NUM_ZERO]).map((k) => ({name: k}));
+  if (Array.isArray(result?.rows) && result.rows.length > 0) {
+    return Object.keys(result.rows[0]).map((k) => ({name: k}));
   }
   return [];
 }

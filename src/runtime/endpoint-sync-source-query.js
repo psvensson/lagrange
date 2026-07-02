@@ -10,7 +10,6 @@
 import {
   SQL,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   EP_COL,
@@ -23,9 +22,7 @@ import {
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
 } from './endpoint-sync-constants.js';
 
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_COMMA_SPACE = ', ';
 
 const ENDPOINT_SOURCE_COLUMN = Object.freeze({
   UPDATED_AT: 'updated_at',
@@ -62,7 +59,7 @@ function buildInFilter(fieldName, values, params) {
     params.push(value);
     return `?${params.length}`;
   });
-  return `${fieldName} ${SQL.IN} (${placeholders.join(LOCAL_STR_128KJ)})`;
+  return `${fieldName} ${SQL.IN} (${placeholders.join(LOCAL_STR_COMMA_SPACE)})`;
 }
 
 /**
@@ -80,17 +77,17 @@ function buildEndpointSourceQuery(options = {}) {
 
   const protocolAllowlist = Array.isArray(options.protocolAllowlist) ?
     options.protocolAllowlist.filter((value) =>
-      typeof value === TYPEOF.STRING && value.trim().length > 0) :
+      typeof value === 'string' && value.trim().length > 0) :
     [];
   const serviceIdAllowlist = Array.isArray(options.serviceIdAllowlist) ?
     options.serviceIdAllowlist.filter((value) =>
-      typeof value === TYPEOF.STRING && value.trim().length > 0) :
+      typeof value === 'string' && value.trim().length > 0) :
     [];
 
-  if (protocolAllowlist.length > LOCAL_NUM_ZERO) {
+  if (protocolAllowlist.length > 0) {
     filters.push(buildInFilter(EP_COL.PROTOCOL, protocolAllowlist, params));
   }
-  if (serviceIdAllowlist.length > LOCAL_NUM_ZERO) {
+  if (serviceIdAllowlist.length > 0) {
     filters.push(buildInFilter(EP_COL.SERVICE_ID, serviceIdAllowlist, params));
   }
 
@@ -103,7 +100,7 @@ function buildEndpointSourceQuery(options = {}) {
   }
 
   let sql = SOURCE_SELECT_SQL;
-  if (filters.length > LOCAL_NUM_ZERO) {
+  if (filters.length > 0) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
   sql += ` ${SOURCE_ORDER_BY_SQL}`;
@@ -118,15 +115,15 @@ function buildEndpointSourceQuery(options = {}) {
  * @return {Object} Parsed metadata object.
  */
 function parseEndpointMetadata(metadataValue) {
-  if (metadataValue && typeof metadataValue === TYPEOF.OBJECT) {
+  if (metadataValue && typeof metadataValue === 'object') {
     return metadataValue;
   }
-  if (typeof metadataValue !== TYPEOF.STRING || metadataValue.trim() === LOCAL_STR_EMPTY) {
+  if (typeof metadataValue !== 'string' || metadataValue.trim() === '') {
     return {};
   }
   try {
     const parsed = JSON.parse(metadataValue);
-    if (parsed && typeof parsed === TYPEOF.OBJECT) {
+    if (parsed && typeof parsed === 'object') {
       return parsed;
     }
     return {};
@@ -144,8 +141,8 @@ function parseEndpointMetadata(metadataValue) {
  */
 function resolveLogicalServiceName(serviceId, metadata) {
   const metaServiceName = metadata[EP_META.SERVICE_NAME];
-  if (typeof metaServiceName === TYPEOF.STRING &&
-      metaServiceName.trim().length > LOCAL_NUM_ZERO) {
+  if (typeof metaServiceName === 'string' &&
+      metaServiceName.trim().length > 0) {
     return metaServiceName.trim();
   }
   return serviceId;
@@ -158,7 +155,7 @@ function resolveLogicalServiceName(serviceId, metadata) {
  * @return {Object|null} Normalized row or null when invalid.
  */
 function normalizeEndpointRow(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
 
@@ -173,27 +170,27 @@ function normalizeEndpointRow(row) {
     row[EP_COL.METADATA] ?? row.metadata,
   );
 
-  const protocol = typeof protocolRaw === TYPEOF.STRING ?
+  const protocol = typeof protocolRaw === 'string' ?
     protocolRaw.toLowerCase().trim() :
     '';
-  const healthStatus = typeof healthStatusRaw === TYPEOF.STRING ?
+  const healthStatus = typeof healthStatusRaw === 'string' ?
     healthStatusRaw.toLowerCase().trim() :
     '';
   const port = Number(portRaw);
 
-  if (typeof endpointId !== TYPEOF.STRING || endpointId.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof endpointId !== 'string' || endpointId.trim().length === 0) {
     return null;
   }
-  if (typeof serviceId !== TYPEOF.STRING || serviceId.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof serviceId !== 'string' || serviceId.trim().length === 0) {
     return null;
   }
-  if (typeof nodeId !== TYPEOF.STRING || nodeId.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof nodeId !== 'string' || nodeId.trim().length === 0) {
     return null;
   }
-  if (typeof address !== TYPEOF.STRING || address.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof address !== 'string' || address.trim().length === 0) {
     return null;
   }
-  if (protocol.length === LOCAL_NUM_ZERO || !Number.isInteger(port) || port <= LOCAL_NUM_ZERO) {
+  if (protocol.length === 0 || !Number.isInteger(port) || port <= 0) {
     return null;
   }
 
@@ -208,7 +205,7 @@ function normalizeEndpointRow(row) {
     healthStatus,
     metadata,
     updatedAt: Number(
-      row[ENDPOINT_SOURCE_COLUMN.UPDATED_AT] || row.updated_at || LOCAL_NUM_ZERO,
+      row[ENDPOINT_SOURCE_COLUMN.UPDATED_AT] || row.updated_at || 0,
     ),
     serviceKey: serviceId.trim() +
       ENDPOINT_SYNC_LIST_SEPARATOR.SERVICE_KEY +
@@ -262,10 +259,10 @@ function filterNormalizedEndpointRows(rows, options = {}) {
 
   return rows
     .filter((row) => {
-      if (protocolAllowlist.size > LOCAL_NUM_ZERO && !protocolAllowlist.has(row.protocol)) {
+      if (protocolAllowlist.size > 0 && !protocolAllowlist.has(row.protocol)) {
         return false;
       }
-      if (serviceIdAllowlist.size > LOCAL_NUM_ZERO && !serviceIdAllowlist.has(row.serviceId)) {
+      if (serviceIdAllowlist.size > 0 && !serviceIdAllowlist.has(row.serviceId)) {
         return false;
       }
 

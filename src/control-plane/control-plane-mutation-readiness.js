@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -79,7 +78,7 @@ function normalizeControlPlaneMutationWorkClass(
   workClass,
   defaultWorkClass = CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
 ) {
-  if (typeof workClass !== TYPEOF.STRING || workClass.length === NUM.ZERO) {
+  if (typeof workClass !== 'string' || workClass.length === 0) {
     return defaultWorkClass;
   }
   const normalized = workClass.toLowerCase();
@@ -102,7 +101,7 @@ function normalizeReasonCodes(readiness, failedDimensions) {
   const codes = [];
   for (const reason of Array.isArray(readiness?.reasons) ? readiness.reasons : []) {
     const code = String(reason?.code || reason?.reason || reason || '');
-    if (code.length === NUM.ZERO || seen.has(code)) {
+    if (code.length === 0 || seen.has(code)) {
       continue;
     }
     seen.add(code);
@@ -111,7 +110,7 @@ function normalizeReasonCodes(readiness, failedDimensions) {
 
   for (const dimension of Array.isArray(failedDimensions) ? failedDimensions : []) {
     const mappedCode = REASON_BY_DIMENSION[dimension] || '';
-    if (mappedCode.length === NUM.ZERO || seen.has(mappedCode)) {
+    if (mappedCode.length === 0 || seen.has(mappedCode)) {
       continue;
     }
     seen.add(mappedCode);
@@ -123,7 +122,7 @@ function normalizeReasonCodes(readiness, failedDimensions) {
     projectionReadinessContract.reasonCodes :
     []) {
     const normalizedCode = String(code || '');
-    if (normalizedCode.length === NUM.ZERO || seen.has(normalizedCode)) {
+    if (normalizedCode.length === 0 || seen.has(normalizedCode)) {
       continue;
     }
     seen.add(normalizedCode);
@@ -136,7 +135,7 @@ function normalizeReasonCodes(readiness, failedDimensions) {
 function getProjectionReadinessContract(readiness = null) {
   const directContract =
     readiness?.projectionReadinessContract &&
-    typeof readiness.projectionReadinessContract === TYPEOF.OBJECT ?
+    typeof readiness.projectionReadinessContract === 'object' ?
       readiness.projectionReadinessContract :
       NO_PROJECTION_READINESS_CONTRACT;
   if (directContract) {
@@ -145,7 +144,7 @@ function getProjectionReadinessContract(readiness = null) {
   const compactContract =
     readiness?.[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] &&
     typeof readiness[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       readiness[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] :
       NO_PROJECTION_READINESS_CONTRACT;
   return compactContract;
@@ -155,12 +154,12 @@ function normalizePublishedConvergenceEvidence(readiness = null) {
   const projectionReadinessContract = getProjectionReadinessContract(readiness);
   const publication =
     projectionReadinessContract?.publication &&
-    typeof projectionReadinessContract.publication === TYPEOF.OBJECT ?
+    typeof projectionReadinessContract.publication === 'object' ?
       projectionReadinessContract.publication :
       NO_PROJECTION_READINESS_CONTRACT;
   const priorityRecovery =
     projectionReadinessContract?.priorityRecovery &&
-    typeof projectionReadinessContract.priorityRecovery === TYPEOF.OBJECT ?
+    typeof projectionReadinessContract.priorityRecovery === 'object' ?
       projectionReadinessContract.priorityRecovery :
       NO_PROJECTION_READINESS_CONTRACT;
   const serveReady =
@@ -170,7 +169,7 @@ function normalizePublishedConvergenceEvidence(readiness = null) {
   return Object.freeze({
     contractAvailable: !!projectionReadinessContract,
     publicationReady:
-      typeof publication?.ready === TYPEOF.BOOLEAN ?
+      typeof publication?.ready === 'boolean' ?
         publication.ready :
         serveReady,
     priorityRecoveryActive: priorityRecovery?.active === true,
@@ -200,7 +199,7 @@ const PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS = Object.freeze([
 ]);
 
 function isPriorityRecoveryWriteLaneOpen(readiness = null) {
-  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+  if (!readiness || typeof readiness !== 'object') {
     return false;
   }
   const recoveryLaneEligible =
@@ -219,7 +218,7 @@ function isPriorityRecoveryWriteLaneOpen(readiness = null) {
 function relaxFailedDimensionsForPriorityRecovery(failedDimensions, readiness) {
   if (
     !Array.isArray(failedDimensions) ||
-    failedDimensions.length === NUM.ZERO ||
+    failedDimensions.length === 0 ||
     !isPriorityRecoveryWriteLaneOpen(readiness)
   ) {
     return {failedDimensions, recoveryBypassApplied: false};
@@ -241,12 +240,12 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   if (!nodeId ||
       !controlPlaneReadinessService ||
       typeof controlPlaneReadinessService.getNodeReadinessSync !==
-        TYPEOF.FUNCTION) {
+        'function') {
     return null;
   }
 
   const requiredDimensions = Array.isArray(options.requiredDimensions) &&
-      options.requiredDimensions.length > NUM.ZERO ?
+      options.requiredDimensions.length > 0 ?
     options.requiredDimensions :
     DEFAULT_REQUIRED_DIMENSIONS;
   const readiness = controlPlaneReadinessService.getNodeReadinessSync(
@@ -274,7 +273,7 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   if (requirePublishedConvergence && isPublishedConvergencePending(readiness)) {
     failedDimensions.push(CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING);
   }
-  if (failedDimensions.length === NUM.ZERO) {
+  if (failedDimensions.length === 0) {
     return null;
   }
 
@@ -294,30 +293,30 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
 }
 
 function normalizeRoutingSnapshotSummary(routingSnapshot = null) {
-  if (!routingSnapshot || typeof routingSnapshot !== TYPEOF.OBJECT) {
+  if (!routingSnapshot || typeof routingSnapshot !== 'object') {
     return null;
   }
   return Object.freeze({
     canonicalLeaderIdentityState:
-      typeof routingSnapshot.canonicalLeaderIdentityState === TYPEOF.STRING ?
+      typeof routingSnapshot.canonicalLeaderIdentityState === 'string' ?
         routingSnapshot.canonicalLeaderIdentityState :
         null,
     canonicalLeaderNodeId:
-      typeof routingSnapshot.canonicalLeaderNodeId === TYPEOF.STRING ?
+      typeof routingSnapshot.canonicalLeaderNodeId === 'string' ?
         routingSnapshot.canonicalLeaderNodeId :
         null,
     canonicalLeaderRoutingGapState:
-      typeof routingSnapshot.canonicalLeaderRoutingGapState === TYPEOF.STRING ?
+      typeof routingSnapshot.canonicalLeaderRoutingGapState === 'string' ?
         routingSnapshot.canonicalLeaderRoutingGapState :
         null,
     serviceRowCount:
       Number.isFinite(routingSnapshot.serviceRowCount) ?
-        Math.max(NUM.ZERO, Math.floor(routingSnapshot.serviceRowCount)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(routingSnapshot.serviceRowCount)) :
+        0,
     routableServiceCount:
       Number.isFinite(routingSnapshot.routableServiceCount) ?
-        Math.max(NUM.ZERO, Math.floor(routingSnapshot.routableServiceCount)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(routingSnapshot.routableServiceCount)) :
+        0,
   });
 }
 
@@ -328,7 +327,7 @@ function shouldBlockSystemTableMutationRoutingGap(recoveryContract = null) {
 function getSystemTableMutationRoutingGapBlocker(options = {}) {
   const queryExecutor = options.queryExecutor || null;
   if (!queryExecutor ||
-      typeof queryExecutor.getPartitionRoutingSnapshot !== TYPEOF.FUNCTION) {
+      typeof queryExecutor.getPartitionRoutingSnapshot !== 'function') {
     return null;
   }
   const routingReadinessDimension =
@@ -343,12 +342,12 @@ function getSystemTableMutationRoutingGapBlocker(options = {}) {
   const reasonCodes = [];
   const dependencyTables =
     Array.isArray(options.dependencyTables) &&
-      options.dependencyTables.length > NUM.ZERO ?
+      options.dependencyTables.length > 0 ?
       options.dependencyTables :
       CONTROL_PLANE_MUTATION_ROUTING_GAP_DEPENDENCY_TABLES;
   for (const tableName of dependencyTables) {
     const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
-    if (typeof partitionId !== TYPEOF.STRING || partitionId.length === NUM.ZERO) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
       continue;
     }
     let routingSnapshot = null;
@@ -374,7 +373,7 @@ function getSystemTableMutationRoutingGapBlocker(options = {}) {
     }
     const recoveryContract =
       typeof queryExecutor.resolveCanonicalLeaderGapRecoveryRoutingContract ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         queryExecutor.resolveCanonicalLeaderGapRecoveryRoutingContract(
           partitionId,
           routingSnapshot,
@@ -395,7 +394,7 @@ function getSystemTableMutationRoutingGapBlocker(options = {}) {
       routingSnapshot: normalizeRoutingSnapshotSummary(routingSnapshot),
     }));
   }
-  if (dependencyStates.length === NUM.ZERO) {
+  if (dependencyStates.length === 0) {
     return null;
   }
   return Object.freeze({
@@ -411,42 +410,42 @@ function getSystemTableMutationRoutingGapBlocker(options = {}) {
 function resolveMutationReadinessRetryAfterMs(blocker, errorLike = null) {
   const readinessRetryAfterMs =
     Number.isFinite(blocker?.readiness?.retryAfterMs) &&
-      blocker.readiness.retryAfterMs > NUM.ZERO ?
+      blocker.readiness.retryAfterMs > 0 ?
       Math.floor(blocker.readiness.retryAfterMs) :
-      NUM.ZERO;
+      0;
   const blockerRetryAfterMs =
     Number.isFinite(blocker?.retryAfterMs) &&
-      blocker.retryAfterMs > NUM.ZERO ?
+      blocker.retryAfterMs > 0 ?
       Math.floor(blocker.retryAfterMs) :
-      NUM.ZERO;
+      0;
   const errorRetryAfterMs = getControlPlaneRetryAfterMs(errorLike);
   const retryAfterMs = Math.max(
     readinessRetryAfterMs,
     blockerRetryAfterMs,
     errorRetryAfterMs,
   );
-  return retryAfterMs > NUM.ZERO ? retryAfterMs : null;
+  return retryAfterMs > 0 ? retryAfterMs : null;
 }
 
 function cloneMutationReadinessDetails(options = {}) {
   const details = {};
-  if (typeof options?.tableName === TYPEOF.STRING &&
-      options.tableName.length > NUM.ZERO) {
+  if (typeof options?.tableName === 'string' &&
+      options.tableName.length > 0) {
     details.tableName = options.tableName;
   }
-  if (typeof options?.workClass === TYPEOF.STRING &&
-      options.workClass.length > NUM.ZERO) {
+  if (typeof options?.workClass === 'string' &&
+      options.workClass.length > 0) {
     details.workClass = options.workClass;
   }
-  if (typeof options?.error?.message === TYPEOF.STRING &&
-      options.error.message.length > NUM.ZERO) {
+  if (typeof options?.error?.message === 'string' &&
+      options.error.message.length > 0) {
     details.cause = options.error.message;
   }
   if (Array.isArray(options?.dependencyStates) &&
-      options.dependencyStates.length > NUM.ZERO) {
+      options.dependencyStates.length > 0) {
     details.dependencyStates = options.dependencyStates;
   }
-  return Object.keys(details).length > NUM.ZERO ?
+  return Object.keys(details).length > 0 ?
     Object.freeze(details) :
     null;
 }
@@ -461,13 +460,13 @@ function buildControlPlaneMutationDeferredFailure(options = {}) {
     Object.freeze([]);
   const readinessSnapshot =
     blocker?.readinessSnapshot &&
-    typeof blocker.readinessSnapshot === TYPEOF.OBJECT ?
+    typeof blocker.readinessSnapshot === 'object' ?
       blocker.readinessSnapshot :
       null;
   const runtimeAuthority =
     readinessSnapshot?.[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] &&
     typeof readinessSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       readinessSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] :
       null;
   const dependencyStates = Array.isArray(blocker?.dependencyStates) ?
@@ -477,12 +476,12 @@ function buildControlPlaneMutationDeferredFailure(options = {}) {
     blocker,
     options?.error || null,
   );
-  const errorCode = typeof options?.error?.errorCode === TYPEOF.STRING &&
-      options.error.errorCode.length > NUM.ZERO ?
+  const errorCode = typeof options?.error?.errorCode === 'string' &&
+      options.error.errorCode.length > 0 ?
     options.error.errorCode :
     (
-      typeof options?.error?.code === TYPEOF.STRING &&
-        options.error.code.length > NUM.ZERO ?
+      typeof options?.error?.code === 'string' &&
+        options.error.code.length > 0 ?
         options.error.code :
         null
     );
@@ -499,14 +498,14 @@ function buildControlPlaneMutationDeferredFailure(options = {}) {
     contractState: contractOutcome.contractState,
     nextAction: contractOutcome.nextAction,
     deferRetry: true,
-    reasonCode: reasonCodes[NUM.ZERO] || null,
+    reasonCode: reasonCodes[0] || null,
     reasonCodes,
     failedDimensions,
     readinessSnapshot,
     runtimeAuthority,
   };
-  if (typeof options?.tableName === TYPEOF.STRING &&
-      options.tableName.length > NUM.ZERO) {
+  if (typeof options?.tableName === 'string' &&
+      options.tableName.length > 0) {
     failure.tableName = options.tableName;
   }
   if (dependencyStates) {

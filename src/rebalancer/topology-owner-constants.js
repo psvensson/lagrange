@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PLACEMENT_OWNER_INPUT,
   PLACEMENT_OWNER_POLICY,
@@ -362,15 +361,15 @@ const OPERATION_OWNER_RESUME_TERMINAL_REASON_BY_STATE = Object.freeze(
 );
 
 function normalizePositiveInteger(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function buildOperationOwnerRetryOutcome(options = {}) {
@@ -378,20 +377,20 @@ function buildOperationOwnerRetryOutcome(options = {}) {
   const fallbackDelayMs = normalizePositiveInteger(options.fallbackDelayMs);
   const attempt = normalizeNonNegativeInteger(options.attempt);
   const maxAttempts = normalizePositiveInteger(options.maxAttempts);
-  const delayMs = retryAfterMs > NUM.ZERO ? retryAfterMs : fallbackDelayMs;
+  const delayMs = retryAfterMs > 0 ? retryAfterMs : fallbackDelayMs;
   const evidence = Object.freeze({
     owner: TOPOLOGY_CONTROL_PLANE_OWNER,
     inputs: OPERATION_OWNER_INPUT,
     retryKind: options.retryKind || OPERATION_OWNER_RETRY_KIND.TRANSITION,
     operationAvailable:
       typeof options.operationId === 'string' &&
-      options.operationId.length > NUM.ZERO,
+      options.operationId.length > 0,
     retryable: options.retryable === true,
     timerActive: options.timerActive === true,
     criticalWorkflow: options.criticalWorkflow === true,
     attempt,
     maxAttempts,
-    attemptBounded: maxAttempts > NUM.ZERO,
+    attemptBounded: maxAttempts > 0,
     retryAfterMs,
     fallbackDelayMs,
     delayMs,
@@ -437,7 +436,7 @@ function buildOperationOwnerResumeOutcome(options = {}) {
   const boundedRetryWindowActive =
     options.boundedRetryWindowActive === true ||
     options.retryGraceActive === true ||
-    retryAfterMs > NUM.ZERO;
+    retryAfterMs > 0;
   const evidence = Object.freeze({
     owner: TOPOLOGY_CONTROL_PLANE_OWNER,
     inputs: OPERATION_OWNER_INPUT,
@@ -492,7 +491,7 @@ function resolveOperationOwnerRetryMaxAttempts(evidence) {
 
 function resolveOperationOwnerRetryAttemptsRemaining(evidence) {
   return evidence.attemptBounded === true ?
-    Math.max(evidence.maxAttempts - evidence.attempt, NUM.ZERO) :
+    Math.max(evidence.maxAttempts - evidence.attempt, 0) :
     TOPOLOGY_OWNER_ABSENT_VALUE;
 }
 
@@ -500,7 +499,7 @@ function resolveOperationOwnerNextAttemptAtMs({action, currentTimeMs, delayMs}) 
   const scheduleAction =
     action === OPERATION_OWNER_RETRY_ACTION.SCHEDULE_TIMER ||
     action === OPERATION_OWNER_RESUME_ACTION.DISPATCH;
-  return scheduleAction === true && currentTimeMs > NUM.ZERO ?
+  return scheduleAction === true && currentTimeMs > 0 ?
     currentTimeMs + delayMs :
     TOPOLOGY_OWNER_ABSENT_VALUE;
 }

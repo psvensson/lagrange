@@ -64,27 +64,27 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD = Object.freeze({
 const PUBLICATION_ACTIVE_GATE_OWNER_RECOVERY_RETRY_AFTER_MS = NUM.THOUSAND;
 
 function normalizePublicationActiveGateHandoffRetryAfterMs(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function selectPublicationActiveGateHandoffRetryAfterMsFromRecord(
   record = null,
 ) {
   if (!isPublicationActiveGateHandoffRecord(record)) {
-    return NUM.ZERO;
+    return 0;
   }
   for (const fieldName of Object.values(
     PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD,
   )) {
     const retryAfterMs =
       normalizePublicationActiveGateHandoffRetryAfterMs(record[fieldName]);
-    if (retryAfterMs > NUM.ZERO) {
+    if (retryAfterMs > 0) {
       return retryAfterMs;
     }
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function collectPublicationActiveGateHandoffRetrySourceRecords(value = null) {
@@ -129,12 +129,12 @@ function resolvePublicationActiveGateHandoffRetryAfterMs(...sources) {
     )) {
       const retryAfterMs =
         selectPublicationActiveGateHandoffRetryAfterMsFromRecord(record);
-      if (retryAfterMs > NUM.ZERO) {
+      if (retryAfterMs > 0) {
         return retryAfterMs;
       }
     }
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
@@ -155,7 +155,7 @@ function resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
 function applyPublicationActiveGateHandoffRetryAfterMs(value, retryAfterMs) {
   if (
     !isPublicationActiveGateHandoffRecord(value) ||
-    retryAfterMs <= NUM.ZERO
+    retryAfterMs <= 0
   ) {
     return value;
   }
@@ -172,7 +172,7 @@ function applyPublicationActiveGateCrossOwnerRetryAfterMs(
 ) {
   if (
     !isPublicationActiveGateHandoffRecord(contract) ||
-    retryAfterMs <= NUM.ZERO
+    retryAfterMs <= 0
   ) {
     return contract;
   }
@@ -611,9 +611,9 @@ function enrichSelectedOwnerReconcileHandoffContract(
   const selectedReasonCode = selectedHandoffContract?.reasonCode;
   const normalizedReasonCode = normalizedHandoffContract?.reasonCode;
   const needsReasonCode =
-    !(typeof selectedReasonCode === 'string' && selectedReasonCode.length > NUM.ZERO) &&
+    !(typeof selectedReasonCode === 'string' && selectedReasonCode.length > 0) &&
     typeof normalizedReasonCode === 'string' &&
-    normalizedReasonCode.length > NUM.ZERO;
+    normalizedReasonCode.length > 0;
   const fenceField =
     PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE;
   const needsFence =
@@ -654,9 +654,9 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
     (
-      selectedPendingReconcileNodeIds.length > NUM.ZERO ||
+      selectedPendingReconcileNodeIds.length > 0 ||
       Number.isFinite(selectedPendingReconcileCount) &&
-        selectedPendingReconcileCount > NUM.ZERO
+        selectedPendingReconcileCount > 0
     );
   const handoffContract = normalizePublicationActiveGateHandoffContract(
     selectedHandoffContract,
@@ -718,12 +718,12 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
         selectedHandoffContract[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT
         ],
-      ) > NUM.ZERO ||
+      ) > 0 ||
       normalizePublicationActiveGateHandoffNodeIdList(
         selectedHandoffContract[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
         ],
-      ).length > NUM.ZERO
+      ).length > 0
     )
   ) {
     return true;
@@ -738,8 +738,8 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
       .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
     hasPublicationActiveGateOwnerRecoveryWaitSignal(handoffContract) ||
-    handoffContract.pendingReconcileCount > NUM.ZERO ||
-    handoffContract.pendingReconcileNodeIds.length > NUM.ZERO;
+    handoffContract.pendingReconcileCount > 0 ||
+    handoffContract.pendingReconcileNodeIds.length > 0;
 }
 
 export {

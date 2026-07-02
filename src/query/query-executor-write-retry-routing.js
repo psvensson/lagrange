@@ -60,7 +60,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
       const address = service?.address;
       if (
         typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        address.length === NUM.ZERO ||
+        address.length === 0 ||
         this.isTemporarilyUnroutableAddress(
           routingSnapshot?.partitionId || null,
           address,
@@ -106,7 +106,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
         routableServices,
         attemptedAddresses,
       );
-    if (deprioritizedNodeIds.size === NUM.ZERO) {
+    if (deprioritizedNodeIds.size === 0) {
       return orderedServices;
     }
     return [
@@ -136,7 +136,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     const partitionId =
       typeof routingSnapshot?.partitionId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      routingSnapshot.partitionId.length > NUM.ZERO ?
+      routingSnapshot.partitionId.length > 0 ?
         routingSnapshot.partitionId :
         null;
     const recoveryRoutingContract =
@@ -150,13 +150,13 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     if (
       recoveryRoutingContract.preferDifferentNodeAfterRuntimeWitness === true &&
       attemptedAddresses instanceof Set &&
-      attemptedAddresses.size > NUM.ZERO
+      attemptedAddresses.size > 0
     ) {
       for (const service of routableServices) {
         if (
           attemptedAddresses.has(service?.address) &&
           typeof service?.node_id === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-          service.node_id.length > NUM.ZERO
+          service.node_id.length > 0
         ) {
           deprioritizedNodeIds.add(service.node_id);
         }
@@ -165,7 +165,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     const canonicalLeaderNodeId =
       typeof routingSnapshot?.canonicalLeaderNodeId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO ?
+      routingSnapshot.canonicalLeaderNodeId.length > 0 ?
         routingSnapshot.canonicalLeaderNodeId :
         null;
     if (
@@ -194,7 +194,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     const addNodeId = (nodeId) => {
       if (
         typeof nodeId !== 'string' ||
-        nodeId.length === NUM.ZERO ||
+        nodeId.length === 0 ||
         seen.has(nodeId)
       ) {
         return;
@@ -234,7 +234,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
         routingSnapshot,
         options.participantNodeId || null,
       );
-      if (repairNodeIds.length > NUM.ZERO) {
+      if (repairNodeIds.length > 0) {
         await Promise.all(
           repairNodeIds.map(async (nodeId) => {
             try {
@@ -242,7 +242,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
                 allowAuthoritativeRefresh: true,
                 requireFreshOnIneligible: true,
                 forceAuthoritativeRefresh: true,
-                maxCachedAgeMs: NUM.ZERO,
+                maxCachedAgeMs: 0,
                 decisionDimension: routingReadinessDimension,
                 refreshReason:
                   options.refreshReason ||
@@ -297,12 +297,12 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     }
     const partitionId =
       typeof options.partitionId === 'string' &&
-      options.partitionId.length > NUM.ZERO ?
+      options.partitionId.length > 0 ?
         options.partitionId :
         routingSnapshot?.partitionId || null;
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO
+      partitionId.length === 0
     ) {
       return false;
     }
@@ -346,9 +346,9 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    */
   getWriteRetryAttemptLimit(options = {}) {
     const maxRecoveryAttempts = NUM.TEN * NUM.FOUR;
-    const retryDelayMs = Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
+    const retryDelayMs = Math.max(this.leaderRetryDelayMs || 0, 1);
     const executionTimeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO ?
+      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
         Math.floor(options.timeoutMs) :
         this.queryTimeoutMs;
     const timeoutBoundAttempts = Math.ceil(executionTimeoutMs / retryDelayMs);
@@ -427,18 +427,18 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
       null;
     if (
       typeof tableName === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      tableName.length > NUM.ZERO
+      tableName.length > 0
     ) {
       return tableName;
     }
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO
+      partitionId.length === 0
     ) {
       return null;
     }
     const fallbackTableName = partitionId.replace(/-p\d+$/, '');
-    return fallbackTableName.length > NUM.ZERO ? fallbackTableName : null;
+    return fallbackTableName.length > 0 ? fallbackTableName : null;
   }
 
   /**
@@ -494,7 +494,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     );
     const deferredFailure =
       failure?.deferRetry === true ||
-      (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO);
+      (Number.isFinite(retryAfterMs) && retryAfterMs > 0);
     const tableName = this.resolvePartitionTableName(partitionId);
     const systemTableWrite =
       !forRead &&
@@ -570,7 +570,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     if (
       typeof executionOptions?.sessionId !==
         QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      executionOptions.sessionId.length <= NUM.ZERO
+      executionOptions.sessionId.length <= 0
     ) {
       return false;
     }

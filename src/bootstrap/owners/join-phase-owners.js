@@ -8,7 +8,7 @@
 import {assertCritical} from '../../utils/assert.js';
 
 
-const LOCAL_STR_80AEP = 'NodeJoiningService is required for joining phase owners';
+const LOCAL_STR_NODEJOININGSERVICE_IS_REQUIRED_FOR_JOINI = 'NodeJoiningService is required for joining phase owners';
 
 const JOIN_PHASE_OWNER = Object.freeze({
   CONTACT_SEED: 'contactSeed',
@@ -86,7 +86,7 @@ function createPhaseInvoker(service, ownerField, methodName) {
  * @return {Object<string, Function>} Joining phase owner registry.
  */
 function createJoiningPhaseOwners(service) {
-  assertCritical(service, LOCAL_STR_80AEP);
+  assertCritical(service, LOCAL_STR_NODEJOININGSERVICE_IS_REQUIRED_FOR_JOINI);
 
   const owners = {};
   for (const key of Object.values(JOIN_PHASE_OWNER)) {

@@ -10,7 +10,6 @@ import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-no
 const {
   COLUMN,
   EntityType,
-  NUM,
   OperationType,
   READINESS_SKIP_DETAIL,
   REPLICA_OPERATION_SEMANTIC_PHASE,
@@ -19,7 +18,6 @@ const {
   STATE,
   SYSTEM_TABLE_NAME,
   TABLES,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
   buildReplicaOperationProgressSnapshot,
@@ -100,7 +98,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    */
   isTransportReady(nodeId) {
     const router = this.messageRouter;
-    if (!router || typeof router.getConnectionState !== TYPEOF.FUNCTION) {
+    if (!router || typeof router.getConnectionState !== 'function') {
       return false;
     }
 
@@ -109,7 +107,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     }
 
     if (
-      typeof router.isOutboundQueueAvailable === TYPEOF.FUNCTION &&
+      typeof router.isOutboundQueueAvailable === 'function' &&
       !router.isOutboundQueueAvailable(nodeId)
     ) {
       return false;
@@ -129,13 +127,13 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    */
   async checkReadinessPing(nodeId) {
     const router = this.messageRouter;
-    if (!router || typeof router.pingNode !== TYPEOF.FUNCTION) {
+    if (!router || typeof router.pingNode !== 'function') {
       return true;
     }
 
     const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
       this.readinessPingTimeoutMs :
-      NUM.ZERO;
+      0;
     return router.pingNode(nodeId, pingTimeout);
   }
 
@@ -182,7 +180,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
 
     // Record-level checks passed; check transport dimensions.
     const router = this.messageRouter;
-    if (!router || typeof router.getConnectionState !== TYPEOF.FUNCTION) {
+    if (!router || typeof router.getConnectionState !== 'function') {
       return READINESS_SKIP_DETAIL.CONNECTION_DOWN;
     }
     if (router.getConnectionState(nodeId) !== STATE.CONNECTED) {
@@ -190,7 +188,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     }
 
     if (
-      typeof router.isOutboundQueueAvailable === TYPEOF.FUNCTION &&
+      typeof router.isOutboundQueueAvailable === 'function' &&
       !router.isOutboundQueueAvailable(nodeId)
     ) {
       return READINESS_SKIP_DETAIL.OUTBOUND_QUEUE_UNAVAILABLE;
@@ -198,11 +196,11 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
 
     if (
       this.enableReadinessPing &&
-      typeof router.pingNode === TYPEOF.FUNCTION
+      typeof router.pingNode === 'function'
     ) {
       const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
         this.readinessPingTimeoutMs :
-        NUM.ZERO;
+        0;
       const ok = await router.pingNode(nodeId, pingTimeout);
       if (!ok) {
         return READINESS_SKIP_DETAIL.PING_FAILED;
@@ -316,9 +314,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     const workflowStep =
       operation?.workflowStep ?? operation?.workflow_step ?? null;
     if (
-      typeof operationType === TYPEOF.STRING &&
-      typeof workflowStep === TYPEOF.STRING &&
-      workflowStep.length > NUM.ZERO
+      typeof operationType === 'string' &&
+      typeof workflowStep === 'string' &&
+      workflowStep.length > 0
     ) {
       if (isValidWorkflowStep(operationType, workflowStep)) {
         return true;
@@ -340,8 +338,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       return stepsHistory;
     }
     if (
-      typeof stepsHistory !== TYPEOF.STRING ||
-      stepsHistory.length === NUM.ZERO
+      typeof stepsHistory !== 'string' ||
+      stepsHistory.length === 0
     ) {
       return [];
     }
@@ -364,7 +362,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         operation?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID_SNAKE] ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (directSourceReplicaId.length > NUM.ZERO) {
+    if (directSourceReplicaId.length > 0) {
       return directSourceReplicaId;
     }
     const stepsHistory = this.getReplicaOperationStepsHistory(operation);
@@ -374,7 +372,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
           entry?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID_SNAKE] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (sourceReplicaId.length > NUM.ZERO) {
+      if (sourceReplicaId.length > 0) {
         return sourceReplicaId;
       }
     }
@@ -438,7 +436,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     for (const operation of operations) {
       const sourceReplicaId =
         this.getReplaceSourceReplicaIdFromOperationRow(operation);
-      if (sourceReplicaId.length > NUM.ZERO) {
+      if (sourceReplicaId.length > 0) {
         retiredSourceReplicaIds.add(sourceReplicaId);
       }
     }
@@ -473,7 +471,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     );
     for (const operation of operations) {
       const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > NUM.ZERO) {
+      if (targetReplicaId.length > 0) {
         failedTargetReplicaIds.add(targetReplicaId);
       }
     }
@@ -488,13 +486,13 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   filterReplicasRetiredByTerminalReplaceOperations(replicas) {
     const normalizedReplicas = Array.isArray(replicas) ? replicas : [];
     const retiredSourceReplicaIds = this.getTerminalReplaceSourceReplicaIds();
-    if (retiredSourceReplicaIds.size === NUM.ZERO) {
+    if (retiredSourceReplicaIds.size === 0) {
       return normalizedReplicas;
     }
     return normalizedReplicas.filter((replica) => {
       const replicaId = this.getReplicaIdFromServiceRow(replica);
       return (
-        replicaId.length === NUM.ZERO ||
+        replicaId.length === 0 ||
         !retiredSourceReplicaIds.has(replicaId)
       );
     });

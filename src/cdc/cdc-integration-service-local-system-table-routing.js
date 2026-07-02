@@ -4,9 +4,7 @@ const {
   CDC_INTEGRATION_SERVICE_LITERAL,
   INITIAL_PARTITION_IDS,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  NUM,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   VALID_SYSTEM_TABLES,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
@@ -16,9 +14,9 @@ function resolvePartitionRowsFromCache(cache, tableName) {
     const rowTableId = row?.table_id ?? row?.tableId ?? null;
     return rowTableName === tableName || rowTableId === tableName;
   };
-  return typeof cache.filter === TYPEOF.FUNCTION ?
+  return typeof cache.filter === 'function' ?
     cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :
-    typeof cache.getAll === TYPEOF.FUNCTION ?
+    typeof cache.getAll === 'function' ?
       (cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || []).filter(partitionPredicate) :
       [];
 }
@@ -59,9 +57,9 @@ function isUsablePartitionService(partitionService) {
     return false;
   }
   return (
-    typeof partitionService.executeQuery === TYPEOF.FUNCTION ||
-    typeof partitionService.executeLocalQuery === TYPEOF.FUNCTION ||
-    typeof partitionService?.db?.prepare === TYPEOF.FUNCTION
+    typeof partitionService.executeQuery === 'function' ||
+    typeof partitionService.executeLocalQuery === 'function' ||
+    typeof partitionService?.db?.prepare === 'function'
   );
 }
 
@@ -76,7 +74,7 @@ function resolveLeaderRole(partitionService) {
   // (the witnessed post-churn 'No row found for CDC update' on rows the
   // real group committed). Flags remain only as fallback for services
   // exposing no live accessor.
-  if (typeof partitionService.getRole === TYPEOF.FUNCTION) {
+  if (typeof partitionService.getRole === 'function') {
     const liveRole = String(partitionService.getRole() || '').toLowerCase();
     return liveRole === CDC_INTEGRATION_SERVICE_LITERAL.LEADER;
   }
@@ -84,7 +82,7 @@ function resolveLeaderRole(partitionService) {
     return true;
   }
   if (
-    typeof partitionService.isLeaderReplica === TYPEOF.FUNCTION &&
+    typeof partitionService.isLeaderReplica === 'function' &&
     partitionService.isLeaderReplica() === true
   ) {
     return true;
@@ -98,14 +96,14 @@ function resolveLeaderRole(partitionService) {
     return true;
   }
   const leaderId =
-    typeof partitionService.getLeaderId === TYPEOF.FUNCTION ?
+    typeof partitionService.getLeaderId === 'function' ?
       partitionService.getLeaderId() :
       partitionService.leaderId;
   const replicaId = partitionService.replicaId || partitionService.replica_id;
   return (
-    typeof leaderId === TYPEOF.STRING &&
-    typeof replicaId === TYPEOF.STRING &&
-    leaderId.length > NUM.ZERO &&
+    typeof leaderId === 'string' &&
+    typeof replicaId === 'string' &&
+    leaderId.length > 0 &&
     leaderId === replicaId
   );
 }
@@ -114,7 +112,7 @@ function resolvePartitionServicesForSegment(service) {
   if (service.bootstrapMode && service.localPartitionServices instanceof Map) {
     return service.localPartitionServices;
   }
-  if (typeof service.partitionServicesProvider === TYPEOF.FUNCTION) {
+  if (typeof service.partitionServicesProvider === 'function') {
     const provided = service.partitionServicesProvider();
     return provided instanceof Map ? provided : null;
   }
@@ -138,7 +136,7 @@ function resolveSystemTablePartitionIdsForSegment(service, tableName) {
     ),
   ];
 
-  if (resolvedPartitionIds.length > NUM.ZERO) {
+  if (resolvedPartitionIds.length > 0) {
     return resolvedPartitionIds;
   }
 
@@ -196,17 +194,17 @@ function resolvePartitionServicesForTable(service, tableName, options = {}) {
 }
 
 function executeSystemTableRead(partitionService, sql, params = []) {
-  if (typeof partitionService?.executeLocalQuery === TYPEOF.FUNCTION) {
+  if (typeof partitionService?.executeLocalQuery === 'function') {
     return partitionService.executeLocalQuery(sql, params);
   }
-  if (typeof partitionService?.db?.prepare === TYPEOF.FUNCTION) {
+  if (typeof partitionService?.db?.prepare === 'function') {
     const stmt = partitionService.db.prepare(sql);
     return {
       success: true,
       rows: stmt.all(...params),
     };
   }
-  if (typeof partitionService?.executeQuery === TYPEOF.FUNCTION) {
+  if (typeof partitionService?.executeQuery === 'function') {
     return partitionService.executeQuery(sql, params);
   }
   return {
@@ -223,7 +221,7 @@ function canWriteLocally(service, tableName) {
   const localLeaders = resolvePartitionServicesForTable(service, tableName, {
     consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   });
-  return localLeaders.length > NUM.ZERO;
+  return localLeaders.length > 0;
 }
 
 export function resolvePartitionServices(service) {

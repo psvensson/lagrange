@@ -6,9 +6,7 @@ const {
   ControlPlaneMessageType,
   DISPATCH_LOG_MSG,
   DISPATCH_STATE,
-  NUM,
   REBALANCE_COORDINATOR_EVENT,
-  TYPEOF,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
@@ -22,7 +20,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
   stop() {
     if (this.directDispatchServiceAddress &&
         this.messageRouter &&
-        typeof this.messageRouter.unregister === TYPEOF.FUNCTION) {
+        typeof this.messageRouter.unregister === 'function') {
       this.messageRouter.unregister(this.directDispatchServiceAddress);
     }
     this.directDispatchServiceHandler = null;
@@ -30,7 +28,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
 
     if (this.coordinatorOperationCreatedListener &&
         this.rebalanceCoordinator &&
-        typeof this.rebalanceCoordinator.off === TYPEOF.FUNCTION) {
+        typeof this.rebalanceCoordinator.off === 'function') {
       this.rebalanceCoordinator.off(
         REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED,
         this.coordinatorOperationCreatedListener,
@@ -40,7 +38,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
 
     if (this.cacheChangeListener &&
         this.systemTableCache &&
-        typeof this.systemTableCache.offCacheChange === TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.offCacheChange === 'function') {
       this.systemTableCache.offCacheChange(this.cacheChangeListener);
     }
     this.cacheChangeListener = null;
@@ -80,10 +78,10 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     this.membershipPublicationAckDeferredRetries.clear();
     this.nodeStateUpdateRetryStateByNodeId.clear();
     this.nodeStateUpdateQueueAssignments.clear();
-    this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
+    this.nextNodeStateUpdateQueueIndex = 0;
 
     if (Array.isArray(this.operationDispatchQueues) &&
-        this.operationDispatchQueues.length > NUM.ZERO) {
+        this.operationDispatchQueues.length > 0) {
       for (const operationDispatchQueue of this.operationDispatchQueues) {
         operationDispatchQueue.shutdown();
       }

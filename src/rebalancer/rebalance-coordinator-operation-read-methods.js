@@ -2,12 +2,10 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
 
 const {
   CONTROL_PLANE_QUERY_OPTIONS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  NUM,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationRepository,
   SERVICE_TYPE,
@@ -133,7 +131,7 @@ class RebalanceCoordinatorOperationReadMethods {
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > LOCAL_NUM_ZERO ?
+        operationCount > 0 ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
           INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
@@ -190,7 +188,7 @@ class RebalanceCoordinatorOperationReadMethods {
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > LOCAL_NUM_ZERO ?
+        operationCount > 0 ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
           INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
@@ -468,10 +466,10 @@ class RebalanceCoordinatorOperationReadMethods {
       ).trim();
       const nodeId = String(row.node_id || row.nodeId || '').trim();
       const topologyKey =
-        serviceId.length > NUM.ZERO ?
+        serviceId.length > 0 ?
           serviceId :
           [partitionKey, nodeId].join(':');
-      if (topologyKey.length === NUM.ZERO) {
+      if (topologyKey.length === 0) {
         continue;
       }
       mergedRowsByTopologyKey.set(topologyKey, row);

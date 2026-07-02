@@ -205,7 +205,7 @@ const INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD = 1000;
 const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS = TIME_MS.SECOND / NUM.FOUR;
 const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS = TIME_MS.SECOND * NUM.FIVE;
 const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STALE_GRACE_MS = TIME_MS.SECOND * (NUM.TEN + NUM.FIVE);
-const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_OWNER_VISIBILITY_GRACE_MS = TIME_MS.MINUTE * NUM.TWO;
+const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_OWNER_VISIBILITY_GRACE_MS = TIME_MS.MINUTE * 2;
 const INCOMPLETE_OPERATION_OBSERVATION_SOURCE = Object.freeze({
   CACHE_OR_AUTHORITATIVE_READ: 'cache_or_authoritative_read',
   OWNER_PERSISTED_TRANSITION: 'owner_persisted_transition',
@@ -266,14 +266,14 @@ function buildControlPlaneFailurePayload(nodeId, resultOrError) {
   const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
     resultOrError.participantFailures
       .filter((entry) => entry && typeof entry === 'object')
-      .slice(NUM.ZERO, NUM.THREE) :
+      .slice(0, NUM.THREE) :
     [];
   const firstFailedParticipant =
     resultOrError?.firstFailedParticipant &&
     typeof resultOrError.firstFailedParticipant === 'object' ?
       resultOrError.firstFailedParticipant :
-      participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      participantFailures.length > 0 ?
+        participantFailures[0] :
         null;
   return {
     error: resultOrError?.error || resultOrError?.message || null,
@@ -281,15 +281,15 @@ function buildControlPlaneFailurePayload(nodeId, resultOrError) {
     code: getControlPlaneErrorCode(resultOrError) || null,
     retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
     reasonCode:
-      typeof resultOrError?.reasonCode === TYPEOF.STRING ? resultOrError.reasonCode : null,
+      typeof resultOrError?.reasonCode === 'string' ? resultOrError.reasonCode : null,
     participationKind:
-      typeof resultOrError?.participationKind === TYPEOF.STRING ?
+      typeof resultOrError?.participationKind === 'string' ?
         resultOrError.participationKind :
         null,
     tableName:
-      typeof resultOrError?.tableName === TYPEOF.STRING ?
+      typeof resultOrError?.tableName === 'string' ?
         resultOrError.tableName :
-        typeof firstFailedParticipant?.failedTable === TYPEOF.STRING ?
+        typeof firstFailedParticipant?.failedTable === 'string' ?
           firstFailedParticipant.failedTable :
           null,
     participantFailures,
@@ -306,8 +306,8 @@ function cloneControlPlaneFailureParticipants(resultOrError) {
     resultOrError?.firstFailedParticipant &&
     typeof resultOrError.firstFailedParticipant === 'object' ?
       {...resultOrError.firstFailedParticipant} :
-      participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      participantFailures.length > 0 ?
+        participantFailures[0] :
         null;
   return {participantFailures, firstFailedParticipant};
 }
@@ -379,7 +379,7 @@ const OPERATION_MUTATION_SESSION_RETRY_DECISION = Object.freeze({
 const REPLICA_OPERATION_OWNER_NAME = 'replica-operations-owner';
 function isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) {
   return (
-    typeof errorMessage === TYPEOF.STRING &&
+    typeof errorMessage === 'string' &&
     errorMessage.startsWith(REPLICA_OPERATION_REPOSITORY_LITERAL.WORKFLOW_PARTICIPANT) &&
     errorMessage.endsWith(REPLICA_OPERATION_REPOSITORY_LITERAL.NOT_FOUND)
   );
@@ -516,11 +516,11 @@ class ReplicaOperationRepository {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.logger = options.logger;
     this.emitter = options.emitter || null;
-    this.random = typeof options.random === TYPEOF.FUNCTION ? options.random : Math.random;
-    this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
-    this.nextIncompleteOperationSqlRetryAtMs = NUM.ZERO;
+    this.random = typeof options.random === 'function' ? options.random : Math.random;
+    this.lastIncompleteOperationQueryWarningAtMs = 0;
+    this.nextIncompleteOperationSqlRetryAtMs = 0;
     this.lastIncompleteOperationObservation = [];
-    this.lastIncompleteOperationObservationAtMs = NUM.ZERO;
+    this.lastIncompleteOperationObservationAtMs = 0;
     this.lastIncompleteOperationObservationSource =
       INCOMPLETE_OPERATION_OBSERVATION_SOURCE.CACHE_OR_AUTHORITATIVE_READ;
     this.lastIncompleteOperationReadOutcome = null;
@@ -532,12 +532,12 @@ class ReplicaOperationRepository {
     ]);
     this.replicaOperationAuthoritativeVisibilityTimeoutMs =
       Number.isFinite(options.authoritativeVisibilityTimeoutMs) &&
-      options.authoritativeVisibilityTimeoutMs >= NUM.ZERO ?
+      options.authoritativeVisibilityTimeoutMs >= 0 ?
         Math.floor(options.authoritativeVisibilityTimeoutMs) :
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS;
     this.replicaOperationAuthoritativeVisibilityRetryDelayMs =
       Number.isFinite(options.authoritativeVisibilityRetryDelayMs) &&
-      options.authoritativeVisibilityRetryDelayMs >= NUM.ZERO ?
+      options.authoritativeVisibilityRetryDelayMs >= 0 ?
         Math.floor(options.authoritativeVisibilityRetryDelayMs) :
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
     this._shuttingDown = false;

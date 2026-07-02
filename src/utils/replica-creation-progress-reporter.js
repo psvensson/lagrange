@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_NEWLINE = '\n';
 
@@ -35,7 +34,7 @@ class ReplicaCreationProgressReporter {
       options.tickMs :
       REPLICA_CREATION_PROGRESS_DEFAULT.TICK_MS;
     this.spinnerFrames = Array.isArray(options.spinnerFrames) &&
-      options.spinnerFrames.length > NUM.ZERO ?
+      options.spinnerFrames.length > 0 ?
       options.spinnerFrames :
       REPLICA_CREATION_PROGRESS_DEFAULT.SPINNER_FRAMES;
     this.enableSpinner = options.enableSpinner !== false;
@@ -52,18 +51,18 @@ class ReplicaCreationProgressReporter {
   start(details) {
     const progress = {
       ...details,
-      spinnerIndex: NUM.ZERO,
-      spinnerFrame: this.spinnerFrames[NUM.ZERO],
+      spinnerIndex: 0,
+      spinnerFrame: this.spinnerFrames[0],
       timer: null,
       spinnerEnabled: this.shouldRenderSpinner(),
-      previousLineLength: NUM.ZERO,
+      previousLineLength: 0,
     };
 
     if (progress.spinnerEnabled) {
       this.activeSpinner = true;
       this.render(progress, null, null, false);
       progress.timer = setInterval(() => {
-        progress.spinnerIndex = (progress.spinnerIndex + NUM.ONE) % this.spinnerFrames.length;
+        progress.spinnerIndex = (progress.spinnerIndex + 1) % this.spinnerFrames.length;
         progress.spinnerFrame = this.spinnerFrames[progress.spinnerIndex];
         this.render(progress, null, null, false);
       }, this.tickMs);
@@ -186,7 +185,7 @@ class ReplicaCreationProgressReporter {
   log(progress, status, error) {
     const line = this.formatLine(progress, status, error);
     const context = this.buildContext(progress, status, error);
-    if (context && Object.keys(context).length > NUM.ZERO) {
+    if (context && Object.keys(context).length > 0) {
       this.logger.info(line, context);
       return;
     }

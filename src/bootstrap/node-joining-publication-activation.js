@@ -16,7 +16,6 @@ const {
   LatencyTopologySetup,
   MessageGroupServiceHandlerSetup,
   NODE_JOINING_SERVICE_LITERAL,
-  NUM,
   NodeService,
   PartitionService,
   PgWireStartupSafetyGate,
@@ -27,7 +26,6 @@ const {
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
   STRING,
-  TYPEOF,
   TablePolicyService,
   UNIFIED_SERVICE_TYPE,
   assertCritical,
@@ -58,7 +56,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       dataDir: this.dataDir,
       logger: this.logger,
     });
-    if (restorePlans.length === NUM.ZERO) {
+    if (restorePlans.length === 0) {
       this.durableRejoinRestoreState =
         JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORED;
       return [];
@@ -108,7 +106,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
   async ensureDurableRejoinPartitionRuntimes(restorePlans = []) {
     for (const restorePlan of restorePlans) {
       const replicaId = restorePlan?.replicaId;
-      if (typeof replicaId !== TYPEOF.STRING || replicaId.length === NUM.ZERO) {
+      if (typeof replicaId !== 'string' || replicaId.length === 0) {
         continue;
       }
       const partition = this.partitionServices.get(replicaId);
@@ -133,11 +131,11 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
   startDurableRejoinLocalPartitionElections(restorePlans = []) {
     for (const restorePlan of restorePlans) {
       const replicaId = restorePlan?.replicaId;
-      if (typeof replicaId !== TYPEOF.STRING || replicaId.length === NUM.ZERO) {
+      if (typeof replicaId !== 'string' || replicaId.length === 0) {
         continue;
       }
       const partition = this.partitionServices.get(replicaId);
-      if (typeof partition?.startElection === TYPEOF.FUNCTION) {
+      if (typeof partition?.startElection === 'function') {
         partition.startElection();
       }
     }
@@ -331,7 +329,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
         serviceId: replicaId,
         serviceType: SERVICE_TYPE.PARTITION,
         serviceAddress:
-          typeof partition?.getUnifiedAddress === TYPEOF.FUNCTION ?
+          typeof partition?.getUnifiedAddress === 'function' ?
             partition.getUnifiedAddress() :
             formatReplicatedServiceAddress(
               SERVICE_TYPE.PARTITION,
@@ -370,7 +368,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     for (const messageGroupService of this.messageGroupServices.values()) {
       assertCritical(
         messageGroupService &&
-          typeof messageGroupService.subscribeToCDC === TYPEOF.FUNCTION,
+          typeof messageGroupService.subscribeToCDC === 'function',
         JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
           STRING.UNKNOWN,
           NODE_JOINING_SERVICE_LITERAL.SUBSCRIBETOCDC_NOT_AVAILABLE,
@@ -415,7 +413,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     });
     this.heartbeatService = controlPlane.heartbeatService;
     if (
-      typeof this.heartbeatService?.setNodeStateReporter === TYPEOF.FUNCTION
+      typeof this.heartbeatService?.setNodeStateReporter === 'function'
     ) {
       this.heartbeatService.setNodeStateReporter(async (payload = {}) => {
         return this.sendControlPlaneNodeStateUpdate({

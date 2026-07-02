@@ -5,7 +5,6 @@ import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NUM,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
@@ -283,7 +282,7 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER,
     );
     t.equal(
-      deferredTimers[NUM.ZERO]?.delayMs,
+      deferredTimers[0]?.delayMs,
       DIRECT_WAKEUP_RETRY_AFTER_MS,
       DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER,
     );
@@ -293,12 +292,12 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
       'acknowledged remote wake-up should publish the dispatch retry slot to the workflow owner',
     );
     t.equal(
-      workflowOwnerDispatchRetries[NUM.ZERO]?.operationId,
+      workflowOwnerDispatchRetries[0]?.operationId,
       DIRECT_WAKEUP_VERIFICATION_OPERATION_ID,
       'workflow-owner dispatch retry bridge should retain operation identity',
     );
     t.equal(
-      workflowOwnerDispatchRetries[NUM.ZERO]?.retry?.retryAfterMs,
+      workflowOwnerDispatchRetries[0]?.retry?.retryAfterMs,
       DIRECT_WAKEUP_RETRY_AFTER_MS,
       'workflow-owner dispatch retry bridge should retain retry delay',
     );
@@ -312,7 +311,7 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
       shutdown() {},
     };
 
-    deferredTimers[NUM.ZERO].callback();
+    deferredTimers[0].callback();
 
     t.same(
       workflowOwnerClearedDispatchRetries,
@@ -326,7 +325,7 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
         operationId: DIRECT_WAKEUP_VERIFICATION_OPERATION_ID,
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
         context: {
-          row: deliveries[NUM.ZERO]?.payload?.[
+          row: deliveries[0]?.payload?.[
             ControlPlaneField.OPERATION_ROW
           ],
           [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
@@ -406,7 +405,7 @@ test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
       sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
       targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
       createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
       stepsHistory: [],
     });
 
@@ -423,7 +422,7 @@ test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
       service.operationDispatchDeferredRetries.get(
         DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
       )?.row?.updated_at,
-      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
       DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
     );
     t.equal(
@@ -458,7 +457,7 @@ test(DIRECT_WAKEUP_COALESCE_RETRY_REFRESH_TEST_NAME, async (t) => {
   };
   const freshOperationRow = {
     ...staleOperationRow,
-    updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+    updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
   };
   const service = createService({
     operationDispatchRetryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
@@ -527,7 +526,7 @@ test(DIRECT_WAKEUP_COALESCE_RETRY_REFRESH_TEST_NAME, async (t) => {
       'coalesced direct wake should promote deferred retry row refresh',
     );
 
-    deferredTimers[NUM.ZERO].callback();
+    deferredTimers[0].callback();
 
     t.same(
       retryEnqueues,
@@ -612,7 +611,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_ASSERT_FIRST_DELIVERY,
     );
     t.same(
-      deliveries[NUM.ZERO],
+      deliveries[0],
       {
         address: DIRECT_WAKEUP_RETRY_TARGET_ADDRESS,
         payload: {
@@ -651,7 +650,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_ARMED,
     );
     t.equal(
-      deferredTimers[NUM.ZERO]?.delayMs,
+      deferredTimers[0]?.delayMs,
       DIRECT_WAKEUP_RETRY_AFTER_MS,
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_DELAY,
     );
@@ -665,7 +664,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
       targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
       createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
       stepsHistory: [],
     });
 
@@ -678,7 +677,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       service.operationDispatchDeferredRetries.get(
         DIRECT_WAKEUP_RETRY_OPERATION_ID,
       )?.row?.updated_at,
-      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
       DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
     );
 
@@ -696,7 +695,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       shutdown() {},
     };
 
-    deferredTimers[NUM.ZERO].callback();
+    deferredTimers[0].callback();
     await retryPromise;
 
     t.same(
@@ -711,8 +710,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY,
     );
     t.equal(
-      retryEnqueues[NUM.ZERO]?.context?.row?.updated_at,
-      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      retryEnqueues[0]?.context?.row?.updated_at,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
       DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
     );
     t.equal(

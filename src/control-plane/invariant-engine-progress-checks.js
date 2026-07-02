@@ -13,8 +13,7 @@ import {
 } from './invariant-constants.js';
 import {buildInvariantResult} from './invariant-engine-result.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1W88E = 'serve_without_repair';
+const LOCAL_STR_SERVE_WITHOUT_REPAIR = 'serve_without_repair';
 const LOCAL_STR_WRONG_DIMENSION = 'wrong_dimension';
 const LOCAL_STR_OUTCOME_MISMATCH = 'outcome_mismatch';
 const LOCAL_STR_TERMINAL_SUCCESS = 'terminal_success';
@@ -84,7 +83,7 @@ function checkReadinessDimensionCorrectness(state) {
         repairEligible,
         serveEligible,
         consumerOutcome,
-        violationType: LOCAL_STR_1W88E,
+        violationType: LOCAL_STR_SERVE_WITHOUT_REPAIR,
       }));
       continue;
     }
@@ -124,7 +123,7 @@ function checkReadinessDimensionCorrectness(state) {
     }
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId:
         INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS,
@@ -170,7 +169,7 @@ function checkTransactionAvailability(state) {
     }));
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId:
         INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED,
@@ -207,7 +206,7 @@ function resolveOperationProgressStepCount(record) {
   if (Number.isFinite(record?.observedStepCount)) {
     return Math.floor(record.observedStepCount);
   }
-  return LOCAL_NUM_ZERO;
+  return 0;
 }
 
 function isDispatchedOperationProgress(record) {
@@ -254,7 +253,7 @@ function checkOperationProgressBoundedSteps(state) {
     }));
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -300,7 +299,7 @@ function checkPublicationVisibleOrRetained(state) {
     }));
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -327,7 +326,7 @@ function resolveSnapshotCoverageCount(record) {
   if (Number.isFinite(record?.snapshotCoverageNodeCount)) {
     return Math.floor(record.snapshotCoverageNodeCount);
   }
-  return LOCAL_NUM_ZERO;
+  return 0;
 }
 
 function resolveSnapshotCoverageOrder(record) {
@@ -337,7 +336,7 @@ function resolveSnapshotCoverageOrder(record) {
   if (Number.isFinite(record?.sequence)) {
     return Math.floor(record.sequence);
   }
-  return LOCAL_NUM_ZERO;
+  return 0;
 }
 
 function isNoFailureSnapshotCoverageSample(record) {
@@ -359,7 +358,7 @@ function checkSnapshotCoverageMonotonic(state) {
     resolveSnapshotCoverageOrder(left) - resolveSnapshotCoverageOrder(right),
   );
   const violations = [];
-  let previousCoverage = LOCAL_NUM_ZERO;
+  let previousCoverage = 0;
 
   for (const sample of orderedSamples) {
     const coverageNodeCount = resolveSnapshotCoverageCount(sample);
@@ -373,7 +372,7 @@ function checkSnapshotCoverageMonotonic(state) {
     previousCoverage = Math.max(previousCoverage, coverageNodeCount);
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,

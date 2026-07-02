@@ -17,21 +17,20 @@ import {
 } from './partition-descriptor-epoch-contract.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const LOCAL_STR_HO8X3 = 'split_execution_failure';
-const LOCAL_STR_1KKL2 = 'Failed to persist managed split workflow failure';
-const LOCAL_STR_93870 = 'Managed split child partition metadata is inconsistent: exactly one ';
+const LOCAL_STR_SPLIT_EXECUTION_FAILURE = 'split_execution_failure';
+const LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW = 'Failed to persist managed split workflow failure';
+const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_I = 'Managed split child partition metadata is inconsistent: exactly one ';
 const LOCAL_STR_CHILD_ROW_EXISTS = 'child row exists';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_NAME = 'table_name';
-const LOCAL_STR_S87I2 = 'partition_key_start';
+const LOCAL_STR_PARTITION_KEY_START = 'partition_key_start';
 const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
 const LOCAL_STR_PARTITION_VERSION = 'partition_version';
-const LOCAL_STR_1BLIL = 'Managed split child partition metadata mismatch for ';
+const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M = 'Managed split child partition metadata mismatch for ';
 
 class ManagedSplitWorkflowPersistenceMethods {
   /**
@@ -58,7 +57,7 @@ class ManagedSplitWorkflowPersistenceMethods {
         metadata: {
           ...(workflow.metadata || {}),
           [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_HO8X3,
+            classification: LOCAL_STR_SPLIT_EXECUTION_FAILURE,
             message: error?.message || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
             failedAt: new Date(this.now()).toISOString(),
             ...(timeoutClassification ? {timeoutClassification} : {}),
@@ -66,7 +65,7 @@ class ManagedSplitWorkflowPersistenceMethods {
         },
       });
     } catch (persistError) {
-      this.logger.error(LOCAL_STR_1KKL2, {
+      this.logger.error(LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW, {
         workflowId,
         error: persistError?.message || persistError,
       });
@@ -117,7 +116,7 @@ class ManagedSplitWorkflowPersistenceMethods {
           pendingPartitionVersion;
         updatePayload.pending_partition_version = null;
       }
-      if (Array.isArray(targetIds) && targetIds.length > LOCAL_NUM_ZERO) {
+      if (Array.isArray(targetIds) && targetIds.length > 0) {
         updatePayload.partition_count = targetIds.length;
       }
     }
@@ -175,7 +174,7 @@ class ManagedSplitWorkflowPersistenceMethods {
    */
   serializeParticipantsForMetadata(workflow) {
     if (!(workflow.participants instanceof Map) ||
-        workflow.participants.size === LOCAL_NUM_ZERO) {
+        workflow.participants.size === 0) {
       return null;
     }
 
@@ -194,7 +193,7 @@ class ManagedSplitWorkflowPersistenceMethods {
    */
   resolveSourceCheckpoint(workflow) {
     if (!(workflow.participants instanceof Map) ||
-        workflow.participants.size === LOCAL_NUM_ZERO) {
+        workflow.participants.size === 0) {
       return null;
     }
 
@@ -245,7 +244,7 @@ class ManagedSplitWorkflowPersistenceMethods {
 
     if (leftExists !== rightExists) {
       throw new Error(
-        LOCAL_STR_93870 +
+        LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_I +
         LOCAL_STR_CHILD_ROW_EXISTS,
       );
     }
@@ -315,7 +314,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       existing.table_name ?? existing.tableName ?? null,
     );
     compareField(
-      LOCAL_STR_S87I2,
+      LOCAL_STR_PARTITION_KEY_START,
       expected.partition_key_start,
       existing.partition_key_start ?? existing.partitionKeyStart ?? null,
     );
@@ -344,9 +343,9 @@ class ManagedSplitWorkflowPersistenceMethods {
       });
     }
 
-    if (mismatches.length > LOCAL_NUM_ZERO) {
+    if (mismatches.length > 0) {
       throw new Error(
-        LOCAL_STR_1BLIL +
+        LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M +
         `${expected.partition_id}: ${JSON.stringify(mismatches)}`,
       );
     }

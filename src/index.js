@@ -76,12 +76,10 @@ import {
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_JOINER = 'joiner';
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_MX5FT = 'Failed to persist bootstrap rejoin hints';
-const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS = 'Failed to persist bootstrap rejoin hints';
 const LOCAL_STR_JOIN = 'join';
 const LOCAL_STR_SEED = 'seed';
-const LOCAL_STR_PY3S1 = 'Configuration loaded';
+const LOCAL_STR_CONFIGURATION_LOADED = 'Configuration loaded';
 const LOCAL_STR_REATTEMPT_JOIN =
   'Re-attempting cluster join after retryable failure';
 const LOCAL_STR_DEBUG = 'debug';
@@ -92,7 +90,7 @@ const LOCAL_STR_INFO = 'info';
 // fast. Override via env; set to <=1 to restore exit-on-first-failure.
 const JOIN_REATTEMPT_MAX_ATTEMPTS =
   Number.isFinite(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) &&
-  Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS) >= LOCAL_NUM_ONE ?
+  Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS) >= 1 ?
     Math.floor(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) :
     4;
 const JOIN_REATTEMPT_BASE_DELAY_MS = 2000;
@@ -170,10 +168,10 @@ async function startJoinNode(options) {
       nodeAddress: joiningNodeAddress,
       nodeRole: LOCAL_STR_JOINER,
       peerAddresses: [seedNodeAddress],
-      clusterNodeCount: LOCAL_NUM_TWO,
+      clusterNodeCount: 2,
     });
   } catch (error) {
-    mainLogger.warn(LOCAL_STR_MX5FT, {
+    mainLogger.warn(LOCAL_STR_FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS, {
       nodeId,
       dataDir: dataDirectoryManager.getDataDir(),
       error: error.message,
@@ -314,7 +312,7 @@ async function startJoinNode(options) {
     // a non-retryable failure (or exhausted attempts) exits.
     const reattemptAllowed =
       joinResult.retryable === true &&
-      joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS;
+      joinAttempt + 1 < JOIN_REATTEMPT_MAX_ATTEMPTS;
     if (reattemptAllowed) {
       // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
       // (does not hammer a saturated seed) but never gives up.
@@ -331,17 +329,17 @@ async function startJoinNode(options) {
       );
       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
         nodeId,
-        attempt: joinAttempt + LOCAL_NUM_ONE,
+        attempt: joinAttempt + 1,
         maxAttempts: JOIN_REATTEMPT_MAX_ATTEMPTS,
         delayMs,
       });
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       return startJoinNode({
         ...options,
-        _joinAttempt: joinAttempt + LOCAL_NUM_ONE,
+        _joinAttempt: joinAttempt + 1,
       });
     }
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
 
   let joinLogsPersistence = null;
@@ -565,7 +563,7 @@ async function startSeedNode(options) {
     mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
       error: bootstrapResult.error,
     });
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
 
   let seedLogsPersistence = null;
@@ -789,7 +787,7 @@ async function main() {
   });
   ensureLiferaftProviderForRuntime(process.env);
 
-  configLogger.debug(LOCAL_STR_PY3S1, {
+  configLogger.debug(LOCAL_STR_CONFIGURATION_LOADED, {
     categories: config.getCategories(),
   });
 
@@ -864,5 +862,5 @@ async function main() {
 
 main().catch((err) => {
   console.error(`${ENTRYPOINT_TEXT.FATAL_ERROR_PREFIX}`, err);
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

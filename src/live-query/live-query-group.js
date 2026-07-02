@@ -13,7 +13,6 @@ import {
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_SUBSYSTEM,
-  TYPEOF,
 } from './live-query-constants.js';
 import {
   compilePredicate,
@@ -21,10 +20,8 @@ import {
   extractPartitionKeyValue,
 } from './live-query-service.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_0_POINT_7 = 0.7;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_32 = 32;
+const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
+const LOCAL_NUM_THIRTY_TWO = 32;
 
 const DEFAULT_PARTITION_VERSION = 1;
 const ACTIVE_PARTITION_STATE = 'NORMAL';
@@ -141,7 +138,7 @@ class QueryGroup extends EventEmitter {
       clientCount: this.clients.size,
     });
 
-    return this.clients.size === LOCAL_NUM_ZERO;
+    return this.clients.size === 0;
   }
 
   /**
@@ -164,7 +161,8 @@ class QueryGroup extends EventEmitter {
       queryId: this.queryId,
       clientId,
       expiresAt: subscription.lastRenewal + subscription.ttlMs,
-      renewBefore: subscription.lastRenewal + Math.floor(subscription.ttlMs * LOCAL_NUM_0_POINT_7),
+      renewBefore: subscription.lastRenewal +
+        Math.floor(subscription.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
     };
   }
 
@@ -301,15 +299,15 @@ class QueryGroup extends EventEmitter {
     }
 
     if (start === null || start === undefined) {
-      return this.compareValues(key, end) < LOCAL_NUM_ZERO;
+      return this.compareValues(key, end) < 0;
     }
 
     if (end === null || end === undefined) {
-      return this.compareValues(key, start) >= LOCAL_NUM_ZERO;
+      return this.compareValues(key, start) >= 0;
     }
 
-    return this.compareValues(key, start) >= LOCAL_NUM_ZERO &&
-           this.compareValues(key, end) < LOCAL_NUM_ZERO;
+    return this.compareValues(key, start) >= 0 &&
+           this.compareValues(key, end) < 0;
   }
 
   /**
@@ -378,15 +376,15 @@ class QueryGroup extends EventEmitter {
    * @return {number} Comparison result.
    */
   compareValues(a, b) {
-    if (a === b) return LOCAL_NUM_ZERO;
-    if (a === null) return -LOCAL_NUM_ONE;
-    if (b === null) return LOCAL_NUM_ONE;
+    if (a === b) return 0;
+    if (a === null) return -1;
+    if (b === null) return 1;
 
-    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
+    if (typeof a === 'string' && typeof b === 'string') {
       return a.localeCompare(b);
     }
 
-    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
+    if (typeof a === 'number' && typeof b === 'number') {
       return a - b;
     }
 
@@ -407,7 +405,7 @@ class QueryGroup extends EventEmitter {
       // Fan-out to all clients
       for (const [clientId, subscription] of this.clients) {
         try {
-          if (subscription.client && typeof subscription.client.send === TYPEOF.FUNCTION) {
+          if (subscription.client && typeof subscription.client.send === 'function') {
             subscription.client.send(JSON.stringify(result));
           }
           subscription.lastSeenHLC = change.hlc_timestamp || change.hlcTimestamp;
@@ -554,7 +552,7 @@ class QueryGroup extends EventEmitter {
       queryId: this.queryId,
       table: this.table,
       predicateHash: canonicalizePredicate(this.whereClause)
-        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_32),
+        .substring(0, LOCAL_NUM_THIRTY_TWO),
       partitionKeyValue: this.partitionKeyValue,
       clientCount: this.clients.size,
       subscribedPartitions: Array.from(this.subscribedPartitions),

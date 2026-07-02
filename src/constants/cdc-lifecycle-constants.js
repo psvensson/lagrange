@@ -1,6 +1,5 @@
 import {NUM} from './numbers.js';
 import {TIME_MS} from './time.js';
-import {TYPEOF} from './types.js';
 
 // ---------------------------------------------------------------------------
 // CDC Lifecycle Constants
@@ -84,9 +83,9 @@ const CDC_PIPELINE_READINESS_GATE = Object.freeze({
 const CDC_PIPELINE_READINESS_NOW = () => Date.now();
 
 const CDC_PIPELINE_READINESS_SLEEP = (delayMs) =>
-  typeof delayMs === TYPEOF.NUMBER ?
+  typeof delayMs === 'number' ?
     new Promise((resolve) => setTimeout(resolve, delayMs)) :
-    new Promise((resolve) => setTimeout(resolve, NUM.ZERO));
+    new Promise((resolve) => setTimeout(resolve, 0));
 
 // --- Cluster readiness condition names ---
 

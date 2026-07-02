@@ -1,8 +1,6 @@
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  NUM,
-  TYPEOF,
   applyMutationWorkloadProfileDefaults,
   buildControlPlaneQueryOptions,
   copyOption,
@@ -40,7 +38,7 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
   };
   if (
-    typeof options?.sessionId === TYPEOF.STRING &&
+    typeof options?.sessionId === 'string' &&
     options.sessionId.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO
   ) {
     queryOptions.sessionId = options.sessionId;
@@ -48,7 +46,7 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
   if (options?.cancellationToken) {
     queryOptions.cancellationToken = options.cancellationToken;
   }
-  if (typeof options?.preferLeader === TYPEOF.BOOLEAN) {
+  if (typeof options?.preferLeader === 'boolean') {
     queryOptions.preferLeader = options.preferLeader;
   }
   queryOptions = copyOption(
@@ -56,7 +54,7 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
     options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
   );
-  if (typeof deliverySource === TYPEOF.STRING &&
+  if (typeof deliverySource === 'string' &&
     deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
     queryOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
       deliverySource;
@@ -89,14 +87,14 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     writeOptions.queryTimeoutMs = queryTimeoutMs;
   } else if (
     options?.timeoutBudget &&
-    typeof options.timeoutBudget === TYPEOF.OBJECT
+    typeof options.timeoutBudget === 'object'
   ) {
     const remainingBudgetMs = getRemainingBudgetMs(options.timeoutBudget, {
       now: gateway.now,
     });
-    if (remainingBudgetMs > NUM.ZERO) {
+    if (remainingBudgetMs > 0) {
       writeOptions.queryTimeoutMs = Math.max(
-        NUM.ONE,
+        1,
         Math.floor(remainingBudgetMs),
       );
     }
@@ -212,7 +210,7 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REPLACEPENDINGKEY,
   );
   writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
-  if (typeof deliverySource === TYPEOF.STRING &&
+  if (typeof deliverySource === 'string' &&
     deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
     writeOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
       deliverySource;

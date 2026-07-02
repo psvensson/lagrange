@@ -13,7 +13,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {isRaftPacket} from './raft-packet-utils.js';
-import {NUM, STRING} from '../constants/index.js';
+import {STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
@@ -37,15 +37,14 @@ import {
   RAFT_REPLICA_BASE_ROLE,
 } from './raft-replica-base-constants.js';
 
-const LOCAL_STR_GIR4Q = 'RaftReplicaBase requires replicaId';
-const LOCAL_STR_10OVO = 'RaftReplicaBase requires entityType';
-const LOCAL_NUM_250 = 250;
-const LOCAL_NUM_25 = 25;
-const LOCAL_STR_1DAWU = 'flushRoleUpdate must be implemented by subclass';
-const LOCAL_STR_15DUC = 'flushLeaderNodeUpdate must be implemented by subclass';
+const LOCAL_STR_RAFTREPLICABASE_REQUIRES_REPLICAID = 'RaftReplicaBase requires replicaId';
+const LOCAL_STR_RAFTREPLICABASE_REQUIRES_ENTITYTYPE = 'RaftReplicaBase requires entityType';
+const LOCAL_NUM_TWO_HUNDRED_FIFTY = 250;
+const LOCAL_NUM_TWENTY_FIVE = 25;
+const LOCAL_STR_FLUSHROLEUPDATE_MUST_BE_IMPLEMENTED_BY_S = 'flushRoleUpdate must be implemented by subclass';
+const LOCAL_STR_FLUSHLEADERNODEUPDATE_MUST_BE_IMPLEMENTE = 'flushLeaderNodeUpdate must be implemented by subclass';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_XXMH6 = 'Shutting down raft replica';
+const LOCAL_STR_SHUTTING_DOWN_RAFT_REPLICA = 'Shutting down raft replica';
 
 const RaftRole = RAFT_REPLICA_BASE_ROLE;
 
@@ -73,10 +72,10 @@ class RaftReplicaBase extends EventEmitter {
     super();
 
     if (!options.replicaId) {
-      throw new Error(LOCAL_STR_GIR4Q);
+      throw new Error(LOCAL_STR_RAFTREPLICABASE_REQUIRES_REPLICAID);
     }
     if (!options.entityType) {
-      throw new Error(LOCAL_STR_10OVO);
+      throw new Error(LOCAL_STR_RAFTREPLICABASE_REQUIRES_ENTITYTYPE);
     }
 
     this.replicaId = options.replicaId;
@@ -123,19 +122,19 @@ class RaftReplicaBase extends EventEmitter {
     const config = ConfigurationManager.getInstance();
     this.leaderActivationStabilizationMs =
       Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+      options.leaderActivationStabilizationMs >= 0 ?
         Math.floor(options.leaderActivationStabilizationMs) :
         (
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
-          LOCAL_NUM_250
+          LOCAL_NUM_TWO_HUNDRED_FIFTY
         );
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+      options.leaderActivationNodeSpacingMs >= 0 ?
         Math.floor(options.leaderActivationNodeSpacingMs) :
         (
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
-          LOCAL_NUM_25
+          LOCAL_NUM_TWENTY_FIVE
         );
     this.leaderActivationScheduler = options.leaderActivationScheduler ||
       LeaderActivationScheduler.getShared({
@@ -204,7 +203,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   wireRaftEvents() {
-    const isSingleReplica = this.replicaIds.length === NUM.ONE;
+    const isSingleReplica = this.replicaIds.length === 1;
 
     this.raft.on(RAFT_REPLICA_BASE_LIFERAFT_EVENT.LEADER, () => {
       this.role = RaftRole.LEADER;
@@ -290,7 +289,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   handleSingleReplicaLeadership() {
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
@@ -324,7 +323,7 @@ class RaftReplicaBase extends EventEmitter {
       return;
     }
 
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.electionStarted = true;
       return;
     }
@@ -334,7 +333,7 @@ class RaftReplicaBase extends EventEmitter {
     if (this.raft) {
       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.STARTING_ELECTION_TIMER, {
         replicaId: this.replicaId,
-        peerCount: this.replicaIds.length - NUM.ONE,
+        peerCount: this.replicaIds.length - 1,
       });
       this.raftProvider.startElectionTimer(this.raft);
     }
@@ -505,7 +504,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   async flushRoleUpdate() {
-    throw new Error(LOCAL_STR_1DAWU);
+    throw new Error(LOCAL_STR_FLUSHROLEUPDATE_MUST_BE_IMPLEMENTED_BY_S);
   }
 
   /**
@@ -516,7 +515,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   async flushLeaderNodeUpdate() {
-    throw new Error(LOCAL_STR_15DUC);
+    throw new Error(LOCAL_STR_FLUSHLEADERNODEUPDATE_MUST_BE_IMPLEMENTE);
   }
 
   /**
@@ -663,7 +662,7 @@ class RaftReplicaBase extends EventEmitter {
       demoted,
     };
     this.emitLeadershipInvariant(
-      typeof leaderId === LOCAL_STR_STRING && leaderId.length > LOCAL_NUM_ZERO,
+      typeof leaderId === LOCAL_STR_STRING && leaderId.length > 0,
       {
         leaderId,
         ...context,
@@ -738,7 +737,7 @@ class RaftReplicaBase extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.info(LOCAL_STR_XXMH6, {
+    this.logger.info(LOCAL_STR_SHUTTING_DOWN_RAFT_REPLICA, {
       replicaId: this.replicaId,
     });
 

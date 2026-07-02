@@ -5,7 +5,6 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
  */
 
-import {NUM} from '../constants/index.js';
 
 /**
  * Number of committed entries to retain after compaction.
@@ -27,8 +26,8 @@ class InMemoryLogAdapter {
   constructor(node, _options = {}) {
     this.node = node;
     this.entries = new Map(); // index -> entry
-    this.committedIndex = NUM.ZERO;
-    this.lastIndex = NUM.ZERO;
+    this.committedIndex = 0;
+    this.lastIndex = 0;
   }
 
   /**
@@ -41,7 +40,7 @@ class InMemoryLogAdapter {
   async saveCommand(command, term, index) {
     if (!index) {
       const {index: lastIndex} = await this.getLastInfo();
-      index = lastIndex + NUM.ONE;
+      index = lastIndex + 1;
     }
 
     const entry = {
@@ -86,15 +85,15 @@ class InMemoryLogAdapter {
     // that bumped its term out-rank a voter holding committed entries (Leader-Completeness
     // violation → committed-log divergence). Use 0 so the up-to-date comparison is correct on both
     // sides (an empty candidate never out-ranks a log-bearing voter; an empty voter still grants).
-    if (this.lastIndex === NUM.ZERO) {
+    if (this.lastIndex === 0) {
       return {
-        index: NUM.ZERO,
-        term: NUM.ZERO,
+        index: 0,
+        term: 0,
       };
     }
     return this.entries.get(this.lastIndex) || {
-      index: NUM.ZERO,
-      term: NUM.ZERO,
+      index: 0,
+      term: 0,
     };
   }
 
@@ -128,7 +127,7 @@ class InMemoryLogAdapter {
       }
     }
     // Update lastIndex
-    this.lastIndex = NUM.ZERO;
+    this.lastIndex = 0;
     for (const [key] of this.entries) {
       if (key > this.lastIndex) {
         this.lastIndex = key;
@@ -172,7 +171,7 @@ class InMemoryLogAdapter {
     }
 
     const existingIndex = entry.responses.findIndex((r) => r.address === address);
-    if (existingIndex === NUM.NEGATIVE_ONE) {
+    if (existingIndex === -1) {
       entry.responses.push({address, ack: true});
     }
 
@@ -217,11 +216,11 @@ class InMemoryLogAdapter {
    */
   async getEntryBefore(entry) {
     const defaultInfo = {
-      index: NUM.ZERO,
-      term: this.node ? this.node.term : NUM.ZERO,
+      index: 0,
+      term: this.node ? this.node.term : 0,
     };
 
-    if (!entry || entry.index <= NUM.ONE) {
+    if (!entry || entry.index <= 1) {
       return defaultInfo;
     }
 
@@ -246,7 +245,7 @@ class InMemoryLogAdapter {
     if (!entry) {
       return {
         index,
-        term: this.node ? this.node.term : NUM.ZERO,
+        term: this.node ? this.node.term : 0,
         committed: false,
       };
     }
@@ -269,7 +268,7 @@ class InMemoryLogAdapter {
     }
     const cutoff =
       this.committedIndex - IN_MEMORY_LOG_COMPACTION_RETENTION;
-    if (cutoff <= NUM.ZERO) {
+    if (cutoff <= 0) {
       return;
     }
     for (const key of this.entries.keys()) {
@@ -285,8 +284,8 @@ class InMemoryLogAdapter {
    */
   end() {
     this.entries.clear();
-    this.lastIndex = NUM.ZERO;
-    this.committedIndex = NUM.ZERO;
+    this.lastIndex = 0;
+    this.committedIndex = 0;
     return true;
   }
 
@@ -295,8 +294,8 @@ class InMemoryLogAdapter {
    */
   reset() {
     this.entries.clear();
-    this.lastIndex = NUM.ZERO;
-    this.committedIndex = NUM.ZERO;
+    this.lastIndex = 0;
+    this.committedIndex = 0;
   }
 }
 

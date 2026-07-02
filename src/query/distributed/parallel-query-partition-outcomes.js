@@ -1,26 +1,25 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 
 function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
     null;
 }
 
 function normalizeFailureString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
 
 function resolveFailureBackpressureState(diagnostics = {}) {
-  if (typeof diagnostics?.backpressured === TYPEOF.BOOLEAN) {
+  if (typeof diagnostics?.backpressured === 'boolean') {
     return diagnostics.backpressured;
   }
   if (diagnostics?.deferRetry === true) {
     return true;
   }
   return Number.isFinite(diagnostics?.retryAfterMs) &&
-    diagnostics.retryAfterMs > NUM.ZERO;
+    diagnostics.retryAfterMs > 0;
 }
 
 /**

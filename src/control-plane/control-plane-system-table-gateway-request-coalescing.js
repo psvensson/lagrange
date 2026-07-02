@@ -6,10 +6,8 @@ import {
   CONTROL_PLANE_MUTATION_QUEUE_STATE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  NUM,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
-  TYPEOF,
   buildOwnerContractOutcome,
   createDeferredPromise,
   normalizeCoalescingToken,
@@ -55,7 +53,7 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
     }
     const existingRequest = requestMap.get(key);
     if (existingRequest) {
-      if (typeof options?.joinMetricName === TYPEOF.STRING) {
+      if (typeof options?.joinMetricName === 'string') {
         this.incrementGatewayMetric(options.joinMetricName);
       }
       return existingRequest;
@@ -65,7 +63,7 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
       Number.MAX_SAFE_INTEGER,
     );
     if (requestMap.size >= maxTrackedRequests) {
-      if (typeof options?.bypassMetricName === TYPEOF.STRING) {
+      if (typeof options?.bypassMetricName === 'string') {
         this.incrementGatewayMetric(options.bypassMetricName);
       }
       return executionFactory();
@@ -173,8 +171,8 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
     if (explicitSelectionKey) {
       return explicitSelectionKey;
     }
-    return typeof requestKey === TYPEOF.STRING &&
-      requestKey.length > NUM.ZERO ?
+    return typeof requestKey === 'string' &&
+      requestKey.length > 0 ?
       requestKey :
       null;
   },
@@ -229,20 +227,20 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
       queueState:
         deferred?.queueState || CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
       queueWaitMs: Number.isFinite(deferred?.enqueuedAtMs) ?
-        Math.max(NUM.ZERO, Math.floor(this.now() - deferred.enqueuedAtMs)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(this.now() - deferred.enqueuedAtMs)) :
+        0,
       pendingReplaceQueueDepth: Number.isFinite(
         deferred?.pendingReplaceQueueDepth,
       ) ?
-        Math.max(NUM.ZERO, Math.floor(deferred.pendingReplaceQueueDepth)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(deferred.pendingReplaceQueueDepth)) :
+        0,
     };
     executionPromise = Promise.resolve()
       .then(() => executionFactory())
       .then(
         (result) => {
           const enrichedResult =
-            result && typeof result === TYPEOF.OBJECT ?
+            result && typeof result === 'object' ?
               {
                 ...result,
                 queueState: queueMetadata.queueState,
@@ -257,7 +255,7 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           return enrichedResult;
         },
         (error) => {
-          if (error && typeof error === TYPEOF.OBJECT) {
+          if (error && typeof error === 'object') {
             error.queueState = queueMetadata.queueState;
             error.queueWaitMs = queueMetadata.queueWaitMs;
             error.pendingReplaceQueueDepth =

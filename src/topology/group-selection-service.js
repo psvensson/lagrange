@@ -5,7 +5,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {COLUMN, NODE_STATE, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, NODE_STATE, TABLES} from '../constants/index.js';
 import {LATENCY_GROUP_STATE} from './latency-topology-constants.js';
 import {
   GROUP_SELECTION_DEFAULT,
@@ -32,9 +32,9 @@ class GroupSelectionService extends EventEmitter {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(GROUP_SELECTION_SUBSYSTEM) : console;
     this.stats = {
-      leadershipChangeCount: NUM.ZERO,
-      leadershipUnchangedCount: NUM.ZERO,
-      reconcileCount: NUM.ZERO,
+      leadershipChangeCount: 0,
+      leadershipUnchangedCount: 0,
+      reconcileCount: 0,
       lastGroupId: null,
       lastReconciledAt: null,
     };
@@ -110,11 +110,11 @@ class GroupSelectionService extends EventEmitter {
    */
   async applyGroupLeadership(options = {}) {
     const selection = this.selectGroupLeadership(options);
-    this.stats.reconcileCount += NUM.ONE;
+    this.stats.reconcileCount += 1;
     this.stats.lastGroupId = selection.groupId;
     this.stats.lastReconciledAt = this.now();
     if (!selection.representativeChanged && !selection.coordinatorChanged) {
-      this.stats.leadershipUnchangedCount += NUM.ONE;
+      this.stats.leadershipUnchangedCount += 1;
       this.logger.debug(GROUP_SELECTION_LOG_MSG.LEADERSHIP_UNCHANGED, {
         groupId: selection.groupId,
         representativeNodeId: selection.representativeNodeId,
@@ -161,7 +161,7 @@ class GroupSelectionService extends EventEmitter {
       row,
       result,
     });
-    this.stats.leadershipChangeCount += NUM.ONE;
+    this.stats.leadershipChangeCount += 1;
 
     return {
       changed: true,
@@ -214,12 +214,12 @@ class GroupSelectionService extends EventEmitter {
       return currentRepresentativeNodeId;
     }
 
-    if (eligible.length > NUM.ZERO) {
-      return eligible[NUM.ZERO][COLUMN.NODE_ID];
+    if (eligible.length > 0) {
+      return eligible[0][COLUMN.NODE_ID];
     }
 
-    if (members.length > NUM.ZERO) {
-      return members[NUM.ZERO][COLUMN.NODE_ID];
+    if (members.length > 0) {
+      return members[0][COLUMN.NODE_ID];
     }
 
     return null;
@@ -239,7 +239,7 @@ class GroupSelectionService extends EventEmitter {
     representativeNodeId,
     currentCoordinatorNodeId,
   ) {
-    const coordinatorPool = eligible.length > NUM.ZERO ? eligible : members;
+    const coordinatorPool = eligible.length > 0 ? eligible : members;
     const nonRepresentativePool = coordinatorPool.filter((member) => {
       return member?.[COLUMN.NODE_ID] !== representativeNodeId;
     });
@@ -249,8 +249,8 @@ class GroupSelectionService extends EventEmitter {
       return currentCoordinatorNodeId;
     }
 
-    if (nonRepresentativePool.length > NUM.ZERO) {
-      return nonRepresentativePool[NUM.ZERO][COLUMN.NODE_ID];
+    if (nonRepresentativePool.length > 0) {
+      return nonRepresentativePool[0][COLUMN.NODE_ID];
     }
 
     return representativeNodeId || null;
@@ -276,18 +276,18 @@ class GroupSelectionService extends EventEmitter {
    */
   sortMembersDeterministically(memberRows) {
     return [...memberRows]
-      .filter((member) => typeof member?.[COLUMN.NODE_ID] === TYPEOF.STRING)
+      .filter((member) => typeof member?.[COLUMN.NODE_ID] === 'string')
       .sort((left, right) => {
         const leftNodeId = left[COLUMN.NODE_ID];
         const rightNodeId = right[COLUMN.NODE_ID];
         if (leftNodeId < rightNodeId) {
-          return NUM.NEGATIVE_ONE;
+          return -1;
         }
         if (leftNodeId > rightNodeId) {
-          return NUM.ONE;
+          return 1;
         }
-        const leftCreatedAt = Number(left?.[COLUMN.CREATED_AT]) || NUM.ZERO;
-        const rightCreatedAt = Number(right?.[COLUMN.CREATED_AT]) || NUM.ZERO;
+        const leftCreatedAt = Number(left?.[COLUMN.CREATED_AT]) || 0;
+        const rightCreatedAt = Number(right?.[COLUMN.CREATED_AT]) || 0;
         return leftCreatedAt - rightCreatedAt;
       });
   }

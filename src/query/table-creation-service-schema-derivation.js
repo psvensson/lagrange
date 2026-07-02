@@ -5,7 +5,6 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {NUM} from '../constants/index.js';
 import {QUERY_ERROR_MSG} from './query-constants.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 
@@ -18,7 +17,7 @@ import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completio
  * @private
  */
 function derivePartitionKey(primaryKey) {
-  if (!primaryKey || primaryKey.length === NUM.ZERO) {
+  if (!primaryKey || primaryKey.length === 0) {
     throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL);
   }
 

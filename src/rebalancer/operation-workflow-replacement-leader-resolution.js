@@ -8,7 +8,6 @@ import {
 } from './operation-workflow-replacement-leader-state.js';
 
 const {
-  TYPEOF,
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -44,11 +43,11 @@ function hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
     return false;
   }
   const sourceNodeId =
-    typeof operation.sourceNodeId === TYPEOF.STRING ?
+    typeof operation.sourceNodeId === 'string' ?
       operation.sourceNodeId.trim() :
       null;
   const normalizedOperationReplicaId =
-    typeof operationReplicaId === TYPEOF.STRING ?
+    typeof operationReplicaId === 'string' ?
       operationReplicaId.trim() :
       null;
   const candidateRows = Array.isArray(currentVoterReadyRows) ?
@@ -75,7 +74,7 @@ function hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
   return candidateRows.some((row) => {
     const rowReplicaId = context.getReplicaRowIdentity(row);
     const rowNodeId =
-      typeof row?.node_id === TYPEOF.STRING ? row.node_id.trim() : null;
+      typeof row?.node_id === 'string' ? row.node_id.trim() : null;
     return (
       rowReplicaId &&
       rowNodeId &&
@@ -130,11 +129,11 @@ async function resolvePriorityPublicationReplacementLeaderCandidateRow(
   }
 
   const sourceNodeId =
-    typeof operation.sourceNodeId === TYPEOF.STRING ?
+    typeof operation.sourceNodeId === 'string' ?
       operation.sourceNodeId.trim() :
       null;
   const normalizedOperationReplicaId =
-    typeof operationReplicaId === TYPEOF.STRING ?
+    typeof operationReplicaId === 'string' ?
       operationReplicaId.trim() :
       null;
   const normalizedReplacementReplicaId = replacementReplicaId.trim();
@@ -155,9 +154,9 @@ async function resolvePriorityPublicationReplacementLeaderCandidateRow(
     const replacementRoleState =
       context.getPriorityPublicationReplacementRoleState(replicaRow);
     const replacementNodeId =
-      typeof replicaRow?.node_id === TYPEOF.STRING ?
+      typeof replicaRow?.node_id === 'string' ?
         replicaRow.node_id.trim() :
-        typeof operation.targetNodeId === TYPEOF.STRING ?
+        typeof operation.targetNodeId === 'string' ?
           operation.targetNodeId.trim() :
           null;
     return (
@@ -178,13 +177,13 @@ async function resolvePriorityPublicationReplacementLeaderCandidateRow(
       getReplicaRowIdentity,
     );
   const evidenceReplicaId =
-    typeof electionEvidence?.replacementReplicaId === TYPEOF.STRING ?
+    typeof electionEvidence?.replacementReplicaId === 'string' ?
       electionEvidence.replacementReplicaId.trim() :
       null;
   const isEligibleCandidateRow = (row, blockedReplicaIds) => {
     const rowReplicaId = context.getReplicaRowIdentity(row);
     const rowNodeId =
-      typeof row?.node_id === TYPEOF.STRING ? row.node_id.trim() : null;
+      typeof row?.node_id === 'string' ? row.node_id.trim() : null;
     return (
       rowReplicaId &&
       rowNodeId &&

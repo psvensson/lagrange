@@ -44,9 +44,9 @@ const CDC_SKIP_REASON = Object.freeze({
 });
 
 const CDC_RETRY = Object.freeze({
-  MIN_ATTEMPTS: NUM.ONE,
-  MIN_DELAY_MS: NUM.ZERO,
-  BACKOFF_BASE: NUM.TWO,
+  MIN_ATTEMPTS: 1,
+  MIN_DELAY_MS: 0,
+  BACKOFF_BASE: 2,
   MAX_EXPONENT: NUM.SIX,
   MAX_DELAY_MS: 2000,
 });
@@ -75,12 +75,12 @@ const CDC_PRIMARY_KEY = Object.freeze({
 });
 
 const CDC_STATS_DEFAULT = Object.freeze({
-  inserts: NUM.ZERO,
-  updates: NUM.ZERO,
-  deletes: NUM.ZERO,
-  failures: NUM.ZERO,
-  epochChanges: NUM.ZERO,
-  nodeStateChanges: NUM.ZERO,
+  inserts: 0,
+  updates: 0,
+  deletes: 0,
+  failures: 0,
+  epochChanges: 0,
+  nodeStateChanges: 0,
 });
 
 const CDC_LOG_MSG = Object.freeze({

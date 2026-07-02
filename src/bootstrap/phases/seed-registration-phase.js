@@ -53,9 +53,9 @@ import {createBootstrapCacheHydrationApplier} from
   '../bootstrap-cache-hydration-applier.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1IES0 = 'Deferring seed partition service row activation during startup';
+const LOCAL_STR_DEFERRING_SEED_PARTITION_SERVICE_ROW_ACT = 'Deferring seed partition service row activation during startup';
 const LOCAL_STR_INSERT = 'INSERT';
-const LOCAL_STR_1O7VI = 'direct_bootstrap_seed';
+const LOCAL_STR_DIRECT_BOOTSTRAP_SEED = 'direct_bootstrap_seed';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
@@ -252,7 +252,7 @@ class SeedRegistrationPhase {
       deferTransientFailures: true,
       onDeferredActivation: ({partitionId, replicaId, error}) => {
         logger.warn(
-          LOCAL_STR_1IES0,
+          LOCAL_STR_DEFERRING_SEED_PARTITION_SERVICE_ROW_ACT,
           {
             nodeId,
             partitionId,
@@ -348,10 +348,10 @@ class SeedRegistrationPhase {
         table_id: tableName,
         table_name: tableName,
         schema_definition: JSON.stringify(schema),
-        partition_key: schema.columns[NUM.ZERO].name,
+        partition_key: schema.columns[0].name,
         table_policies: JSON.stringify({}),
-        partition_count: NUM.ONE,
-        active_partition_version: NUM.ONE,
+        partition_count: 1,
+        active_partition_version: 1,
         pending_partition_version: null,
         partition_transition_state: null,
         partition_transition_metadata: null,
@@ -378,9 +378,9 @@ class SeedRegistrationPhase {
         table_name: tableName,
         partition_key_start: null,
         partition_key_end: null,
-        partition_version: NUM.ONE,
+        partition_version: 1,
         replica_count: NUM.THREE,
-        size_bytes: NUM.ZERO,
+        size_bytes: 0,
         leader_node_id: d.getNodeId(),
         state: PARTITION_STATE.NORMAL,
         created_at: now,
@@ -417,7 +417,7 @@ class SeedRegistrationPhase {
     const systemTableWriter = this.ensureSystemTableWriter();
 
     const updatedPartitions = new Set();
-    let updatedCount = NUM.ZERO;
+    let updatedCount = 0;
 
     for (const [_replicaId, partitionService] of
       d.getPartitionServices()) {
@@ -475,10 +475,10 @@ class SeedRegistrationPhase {
         const result = await configPartition.executeQuery(
           BOOTSTRAP_SQL.CONFIG_COUNT,
         );
-        if (result && result.rows && result.rows.length > NUM.ZERO &&
-            result.rows[NUM.ZERO].count > NUM.ZERO) {
+        if (result && result.rows && result.rows.length > 0 &&
+            result.rows[0].count > 0) {
           logger.info(BOOTSTRAP_LOG_MSG.CONFIG_ALREADY_SEEDED, {
-            existingCount: result.rows[NUM.ZERO].count,
+            existingCount: result.rows[0].count,
           });
           return;
         }
@@ -490,7 +490,7 @@ class SeedRegistrationPhase {
       }
     } else {
       logger.debug(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING, {
-        strategy: LOCAL_STR_1O7VI,
+        strategy: LOCAL_STR_DIRECT_BOOTSTRAP_SEED,
       });
     }
 
@@ -546,7 +546,7 @@ class SeedRegistrationPhase {
       );
       const hasEpoch = result?.success &&
         Array.isArray(result.rows) &&
-        result.rows.length > NUM.ZERO;
+        result.rows.length > 0;
       if (hasEpoch) {
         return;
       }
@@ -562,7 +562,7 @@ class SeedRegistrationPhase {
         [COLUMN.CONFIG_KEY]: EPOCH_CONFIG_KEY,
         [COLUMN.CONFIG_VALUE]: serializedEpoch,
         [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.JSON,
-        [COLUMN.REQUIRES_RESTART]: NUM.ZERO,
+        [COLUMN.REQUIRES_RESTART]: 0,
         [COLUMN.DESCRIPTION]:
           BOOTSTRAP_EPOCH.CONFIG_DESCRIPTION,
         [COLUMN.DEFAULT_VALUE]: serializedEpoch,

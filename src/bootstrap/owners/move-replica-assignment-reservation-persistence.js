@@ -1,10 +1,8 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_TYPE,
   STRING,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   BOOTSTRAP_API_ASSIGNMENT,
@@ -71,14 +69,14 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
       return type === BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE;
     };
 
-    if (typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
+    if (typeof systemTableCache?.filter === 'function') {
       return systemTableCache.filter(
         TABLES.REPLICA_OPERATIONS,
         isMoveReplicaAssignmentRow,
       ) || [];
     }
 
-    if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
+    if (typeof systemTableCache?.getAll === 'function') {
       return (systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [])
         .filter(isMoveReplicaAssignmentRow);
     }
@@ -117,7 +115,7 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
 
     const cacheRows = this.getMoveReplicaAssignmentRowsFromCache();
     const cacheCoveredAssignmentIds = new Set();
-    if (Array.isArray(cacheRows) && cacheRows.length > NUM.ZERO) {
+    if (Array.isArray(cacheRows) && cacheRows.length > 0) {
       for (const row of cacheRows) {
         const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
         if (!normalized) {
@@ -211,7 +209,7 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
           BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE,
       };
     }
-    const row = Array.isArray(queryResult?.rows) ? queryResult.rows[NUM.ZERO] : null;
+    const row = Array.isArray(queryResult?.rows) ? queryResult.rows[0] : null;
     if (!row) {
       return {reservation: null, lookupUnavailable: false, error: null};
     }
@@ -228,7 +226,7 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
   },
 
   normalizeMoveReplicaAssignmentReservationRow(row) {
-    if (!row || typeof row !== TYPEOF.OBJECT) {
+    if (!row || typeof row !== 'object') {
       return null;
     }
     const assignmentId = row[COLUMN.OPERATION_ID] || row.operation_id || row.operationId;
@@ -257,8 +255,8 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
     let stepsHistory = [];
     if (Array.isArray(stepsHistoryRaw)) {
       stepsHistory = stepsHistoryRaw;
-    } else if (typeof stepsHistoryRaw === TYPEOF.STRING &&
-        stepsHistoryRaw.length > NUM.ZERO) {
+    } else if (typeof stepsHistoryRaw === 'string' &&
+        stepsHistoryRaw.length > 0) {
       try {
         const parsedStepsHistory = JSON.parse(stepsHistoryRaw);
         if (Array.isArray(parsedStepsHistory)) {

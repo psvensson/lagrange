@@ -20,14 +20,12 @@ const {
   JOIN_SESSION_PHASE,
   JoiningEvent,
   JoiningPhase,
-  NUM,
   NodeLifecycleStateMachine,
   NodeService,
   NodeState,
   RPCClient,
   StartupPipelineRunner,
   getControlPlaneErrorCode,
-  TYPEOF,
   WORK_CLASS,
   activateSteadyStateRuntimeHandoff,
   assertCritical,
@@ -90,7 +88,7 @@ function normalizeBootstrapResponseReasons(error) {
     return [];
   }
   return error.bootstrapResponse.reasons.filter((reason) =>
-    typeof reason === TYPEOF.STRING && reason.length > NUM.ZERO,
+    typeof reason === 'string' && reason.length > 0,
   );
 }
 
@@ -98,29 +96,29 @@ function buildSeedContactFailureDiagnostics(error) {
   const bootstrapResponse = error?.bootstrapResponse || null;
   const diagnostics = {
     seedContactFailureKind:
-      typeof error?.seedContactFailureKind === TYPEOF.STRING &&
-      error.seedContactFailureKind.length > NUM.ZERO ?
+      typeof error?.seedContactFailureKind === 'string' &&
+      error.seedContactFailureKind.length > 0 ?
         error.seedContactFailureKind :
         null,
     bootstrapResponseCode:
-      typeof bootstrapResponse?.code === TYPEOF.STRING &&
-      bootstrapResponse.code.length > NUM.ZERO ?
+      typeof bootstrapResponse?.code === 'string' &&
+      bootstrapResponse.code.length > 0 ?
         bootstrapResponse.code :
         null,
     bootstrapResponsePhase:
-      typeof bootstrapResponse?.phase === TYPEOF.STRING &&
-      bootstrapResponse.phase.length > NUM.ZERO ?
+      typeof bootstrapResponse?.phase === 'string' &&
+      bootstrapResponse.phase.length > 0 ?
         bootstrapResponse.phase :
         null,
     bootstrapResponseState:
-      typeof bootstrapResponse?.state === TYPEOF.STRING &&
-      bootstrapResponse.state.length > NUM.ZERO ?
+      typeof bootstrapResponse?.state === 'string' &&
+      bootstrapResponse.state.length > 0 ?
         bootstrapResponse.state :
         null,
     bootstrapResponseReasons: normalizeBootstrapResponseReasons(error),
     bootstrapResponseRetryAfterMs:
       Number.isFinite(bootstrapResponse?.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(bootstrapResponse.retryAfterMs)) :
+        Math.max(0, Math.floor(bootstrapResponse.retryAfterMs)) :
         null,
   };
   return diagnostics;
@@ -128,11 +126,11 @@ function buildSeedContactFailureDiagnostics(error) {
 
 function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
   const retryWindowMs = Number.isFinite(options.retryWindowMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.retryWindowMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.retryWindowMs)) :
+    0;
   const httpTimeoutMs = Number.isFinite(options.httpTimeoutMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.httpTimeoutMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.httpTimeoutMs)) :
+    0;
   const defaultMaxElapsedMs =
     JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs;
   const contactSeedWindowMs = retryWindowMs + httpTimeoutMs;
@@ -141,7 +139,7 @@ function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
       defaultMaxElapsedMs + retryWindowMs :
       contactSeedWindowMs;
   return Math.max(
-    NUM.ZERO,
+    0,
     contactSeedWindowMs,
     latePhaseWindowMs,
   );
@@ -180,10 +178,10 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
   async runJoinInfrastructurePhases(startupPipelineRunner, joinPlan) {
     const infraPhases = joinPlan.segments[JOIN_PLAN_SEGMENT.INFRASTRUCTURE];
     await startupPipelineRunner.run({
-      phases: infraPhases.slice(NUM.ZERO, NUM.ONE),
+      phases: infraPhases.slice(0, 1),
     });
     this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
-    await startupPipelineRunner.run({phases: infraPhases.slice(NUM.ONE)});
+    await startupPipelineRunner.run({phases: infraPhases.slice(1)});
     await this.initializeJoinInfrastructure();
     await this.notifyLocalAdminRuntimeReady();
     this.lifecycleStateMachine.transition(NodeState.JOINING);
@@ -232,7 +230,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
   openExternalTransportAdmission() {
     if (
       this.messageRouter &&
-      typeof this.messageRouter.setExternalAdmissionEnabled === TYPEOF.FUNCTION
+      typeof this.messageRouter.setExternalAdmissionEnabled === 'function'
     ) {
       this.messageRouter.setExternalAdmissionEnabled(true);
     }
@@ -282,7 +280,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
     this.lifecycleStateMachine.transition(NodeState.READY);
     for (const messageGroupService of this.messageGroupServices.values()) {
       if (
-        typeof messageGroupService?.completeJoinConvergence === TYPEOF.FUNCTION
+        typeof messageGroupService?.completeJoinConvergence === 'function'
       ) {
         messageGroupService.completeJoinConvergence();
       }
@@ -414,8 +412,8 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       nodeId: this.nodeId,
       allowResumeLatest,
     });
-    if (typeof resumedSessionId === TYPEOF.STRING &&
-        resumedSessionId.length > NUM.ZERO) {
+    if (typeof resumedSessionId === 'string' &&
+        resumedSessionId.length > 0) {
       this.joinSessionId = resumedSessionId;
     }
     const membershipLifecycleIntent =
@@ -439,9 +437,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       membershipLifecycleIntentType,
     });
     const resumePolicy = this.resolveRetryableJoinResumePolicy();
-    let attempt = NUM.ZERO;
+    let attempt = 0;
     while (true) {
-      attempt += NUM.ONE;
+      attempt += 1;
       this.resetLifecycleStateForRetryableResumeAttempt(attempt);
       try {
         if (this.lifecycleStateMachine.getState() !== NodeState.CONNECTING) {
@@ -524,12 +522,12 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
    * @return {void}
    */
   resetLifecycleStateForRetryableResumeAttempt(attempt) {
-    if (attempt <= NUM.ONE) {
+    if (attempt <= 1) {
       return;
     }
     if (
       !this.lifecycleStateMachine ||
-      typeof this.lifecycleStateMachine.getState !== TYPEOF.FUNCTION
+      typeof this.lifecycleStateMachine.getState !== 'function'
     ) {
       return;
     }
@@ -555,7 +553,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
   resolveRetryableJoinResumePolicy() {
     const joinRetryPolicy = this.resolveJoinRetryPolicy();
     const joinHttpTimeoutMs = Number.isFinite(this.config.httpTimeoutMs) ?
-      Math.max(NUM.ZERO, Math.floor(this.config.httpTimeoutMs)) :
+      Math.max(0, Math.floor(this.config.httpTimeoutMs)) :
       JOINING_DEFAULT.httpTimeoutMs;
     const minimumMaxElapsedMs = resolveRetryableJoinMinimumMaxElapsedMs({
       retryWindowMs: joinRetryPolicy.retryTimeoutMs,
@@ -567,7 +565,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         this.config.retryableFailureResumeMaxAttempts,
       ) ?
         Math.max(
-          NUM.ONE,
+          1,
           Math.floor(this.config.retryableFailureResumeMaxAttempts),
         ) :
         JOINING_DEFAULT.retryableFailureResumeMaxAttempts,
@@ -575,13 +573,13 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         this.config.retryableFailureResumeBaseDelayMs,
       ) ?
         Math.max(
-          NUM.ONE,
+          1,
           Math.floor(this.config.retryableFailureResumeBaseDelayMs),
         ) :
         JOINING_DEFAULT.retryableFailureResumeBaseDelayMs,
       maxDelayMs: Number.isFinite(this.config.retryableFailureResumeMaxDelayMs) ?
         Math.max(
-          NUM.ONE,
+          1,
           Math.floor(this.config.retryableFailureResumeMaxDelayMs),
         ) :
         JOINING_DEFAULT.retryableFailureResumeMaxDelayMs,
@@ -613,11 +611,11 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       return false;
     }
     const failureMessage =
-      typeof failureResult?.error === TYPEOF.STRING ?
+      typeof failureResult?.error === 'string' ?
         failureResult.error :
         error?.message;
     const bootstrapNotReadyPrefix = JOINING_ERROR_MSG.bootstrapNotReady();
-    return typeof failureMessage === TYPEOF.STRING &&
+    return typeof failureMessage === 'string' &&
       failureMessage.startsWith(bootstrapNotReadyPrefix);
   }
   resolveRetryableJoinResumeFailureProfile(error, failureResult) {
@@ -741,11 +739,11 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
   }
   computeRetryableJoinResumeDelayMs(error, attempt, policy) {
     const hintedDelayMs = getControlPlaneRetryAfterMs(error);
-    if (hintedDelayMs > NUM.ZERO) {
+    if (hintedDelayMs > 0) {
       return Math.min(policy.maxDelayMs, hintedDelayMs);
     }
     const exponentialDelayMs =
-      policy.baseDelayMs * NUM.TWO ** Math.max(NUM.ZERO, attempt - NUM.ONE);
+      policy.baseDelayMs * 2 ** Math.max(0, attempt - 1);
     return Math.min(policy.maxDelayMs, exponentialDelayMs);
   }
   /**

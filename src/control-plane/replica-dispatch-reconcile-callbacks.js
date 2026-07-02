@@ -4,12 +4,10 @@ const {
   COLUMN,
   ControlPlaneField,
   DISPATCH_LOG_MSG,
-  NUM,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   WORKFLOW_STEP,
   isCoordinatorOwnedOperationType,
   wasNodeRecordReadyWhenWritten,
@@ -38,7 +36,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
   async retryPendingDispatchesForReadyNode(options = {}) {
     const nodeId = options.nodeId;
     const readyForDispatchRetry =
-      typeof this.isNodeReadyForDispatchRetry === TYPEOF.FUNCTION ?
+      typeof this.isNodeReadyForDispatchRetry === 'function' ?
         this.isNodeReadyForDispatchRetry(nodeId) :
         this.isNodeReady(nodeId);
     if (!nodeId || !readyForDispatchRetry) {
@@ -47,7 +45,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
     }
 
     const nodeRow =
-      options.nodeRow && typeof options.nodeRow === TYPEOF.OBJECT ?
+      options.nodeRow && typeof options.nodeRow === 'object' ?
         options.nodeRow :
         await this.getNodeRow(nodeId);
     if (
@@ -133,7 +131,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         this.clearDeferredOperationDispatchRetry(operationId);
         const operation = this.buildOperationFromRow(row);
         if (
-          typeof this.rebalanceCoordinator.dispatchOperation === TYPEOF.FUNCTION
+          typeof this.rebalanceCoordinator.dispatchOperation === 'function'
         ) {
           await this.rebalanceCoordinator.dispatchOperation(operation, {
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
@@ -154,12 +152,12 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
 
       await this.dispatchOperationRow(row, {
         readyNodeId:
-          typeof context?.readyNodeId === TYPEOF.STRING &&
-          context.readyNodeId.length > NUM.ZERO ?
+          typeof context?.readyNodeId === 'string' &&
+          context.readyNodeId.length > 0 ?
             context.readyNodeId :
             null,
         readyNodeRow:
-          context?.readyNodeRow && typeof context.readyNodeRow === TYPEOF.OBJECT ?
+          context?.readyNodeRow && typeof context.readyNodeRow === 'object' ?
             context.readyNodeRow :
             null,
         [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
@@ -214,14 +212,14 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
   enqueueLocalReadyNodeDispatchRetry(reason, context = {}) {
     const nodeId = this.nodeId;
     const readyForDispatchRetry =
-      typeof this.isNodeReadyForDispatchRetry === TYPEOF.FUNCTION ?
+      typeof this.isNodeReadyForDispatchRetry === 'function' ?
         this.isNodeReadyForDispatchRetry(nodeId) :
         this.isNodeReady(nodeId);
     if (!nodeId || !readyForDispatchRetry) {
       return false;
     }
     const retryContext =
-      context && typeof context === TYPEOF.OBJECT ? context : {};
+      context && typeof context === 'object' ? context : {};
     this.nodeReadyRetryQueue.enqueue(
       nodeId,
       reason,
@@ -266,7 +264,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         retryAfterMs,
         retryClass:
           retryState?.retryClass || REPLICA_DISPATCH_SERVICE_LITERAL.UNKNOWN,
-        failureCount: retryState?.failureCount || NUM.ONE,
+        failureCount: retryState?.failureCount || 1,
         error: error.message,
         errorCode: error?.code || null,
       });
@@ -282,7 +280,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
    */
   handleCacheNodeChange(tableName, operationOrRecord, recordInput) {
     const operation =
-      typeof operationOrRecord === TYPEOF.STRING ? operationOrRecord : null;
+      typeof operationOrRecord === 'string' ? operationOrRecord : null;
     const record = recordInput || operationOrRecord;
     if (!record) {
       return;

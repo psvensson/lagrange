@@ -3,7 +3,6 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FUNCTION = 'function';
 
 class ManagedSplitTopologyAdapter {
@@ -37,7 +36,7 @@ class ManagedSplitTopologyAdapter {
   }
 
   resolveActivePartitionVersion(tableInfo) {
-    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || LOCAL_NUM_ONE;
+    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || 1;
   }
 
   buildManagedSplitPlan(...args) {

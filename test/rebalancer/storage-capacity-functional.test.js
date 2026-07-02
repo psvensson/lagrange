@@ -49,8 +49,8 @@ function initConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageSoftPressurePercent:
         STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
       storageHardPressurePercent:
@@ -136,7 +136,7 @@ function addReservation(cache, resId, nodeId, bytes, opts = {}) {
     [COLUMN.RESERVATION_ID]: resId,
     [COLUMN.TARGET_NODE_ID]: nodeId,
     [COLUMN.ESTIMATED_BYTES]: bytes,
-    [COLUMN.AMPLIFICATION_FACTOR]: opts.amplification || NUM.ONE,
+    [COLUMN.AMPLIFICATION_FACTOR]: opts.amplification || 1,
     [COLUMN.STATUS]: opts.status || RESERVATION_STATUS.ACTIVE,
     [COLUMN.EXPIRES_AT]: opts.expiresAt || Date.now() + NUM.THIRTY_THOUSAND,
   });
@@ -153,7 +153,7 @@ test('estimation - zero-size partition uses minimum replica bytes',
 
     const estimate = svc.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
 
     // max(0, 10) = 10, + overhead 5 = 15
@@ -168,11 +168,11 @@ test('estimation - message_group_replica uses message group overhead',
 
     const estimate = svc.estimateReplicaBytes({
       entityType: SERVICE_TYPE.MESSAGE_GROUP_REPLICA,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
 
     // max(0, 10) = 10, + mg overhead 2 = 12
-    t.equal(estimate, NUM.TEN + NUM.TWO);
+    t.equal(estimate, NUM.TEN + 2);
     t.end();
   });
 
@@ -186,7 +186,7 @@ test('estimation - custom overhead config values are respected',
 
     const estimate = svc.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.ONE,
+      sizeBytes: 1,
     });
 
     // max(1, 5) = 5, + overhead 100 = 105
@@ -227,7 +227,7 @@ test('estimation - unknown entity type uses service overhead',
     });
 
     // max(100, 10) = 100, + service overhead 1 = 101
-    t.equal(estimate, NUM.HUNDRED + NUM.ONE);
+    t.equal(estimate, NUM.HUNDRED + 1);
     t.end();
   });
 
@@ -239,7 +239,7 @@ test('pressure - 0% utilization is normal', async (t) => {
   initConfig();
   const svc = new StorageCapacityAccountingService();
 
-  const state = svc.getPressureState(NUM.ZERO, NUM.THOUSAND);
+  const state = svc.getPressureState(0, NUM.THOUSAND);
   t.equal(state, PRESSURE_STATE.NORMAL);
   t.end();
 });
@@ -252,7 +252,7 @@ test('pressure - one byte below soft threshold is normal',
     // soft = 70%, budget = 1000 -> threshold at 700
     const allocated =
       STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT *
-      NUM.TEN - NUM.ONE;
+      NUM.TEN - 1;
     const state = svc.getPressureState(allocated, NUM.THOUSAND);
     t.equal(state, PRESSURE_STATE.NORMAL);
     t.end();
@@ -289,7 +289,7 @@ test('pressure - one byte below hard threshold is soft',
     // hard = 85%, budget = 1000 -> threshold at 850
     const allocated =
       STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT *
-      NUM.TEN - NUM.ONE;
+      NUM.TEN - 1;
     const state = svc.getPressureState(allocated, NUM.THOUSAND);
     t.equal(state, PRESSURE_STATE.SOFT);
     t.end();
@@ -335,7 +335,7 @@ test('pressure - over 100% utilization is exhausted', async (t) => {
   const svc = new StorageCapacityAccountingService();
 
   const state = svc.getPressureState(
-    NUM.THOUSAND + NUM.ONE, NUM.THOUSAND,
+    NUM.THOUSAND + 1, NUM.THOUSAND,
   );
   t.equal(state, PRESSURE_STATE.EXHAUSTED);
   t.end();
@@ -357,7 +357,7 @@ test('PBT: available = budget - used - reserved clamped to zero',
 
     fc.assert(
       fc.property(
-        fc.integer({min: NUM.ONE, max: NUM.TEN_THOUSAND}),
+        fc.integer({min: 1, max: NUM.TEN_THOUSAND}),
         fc.nat({max: NUM.FIVE_THOUSAND}),
         fc.nat({max: NUM.FIVE_THOUSAND}),
         (budget, used, reserved) => {
@@ -375,7 +375,7 @@ test('PBT: available = budget - used - reserved clamped to zero',
           );
 
           const expected = Math.max(
-            NUM.ZERO,
+            0,
             Math.floor(budget) - (used + reserved),
           );
           return snapshot.availableBytes === expected;
@@ -399,8 +399,8 @@ test('PBT: non-critical admission never allows at or above hard ' +
 
   await fc.assert(
     fc.asyncProperty(
-      fc.integer({min: NUM.ONE, max: NUM.TEN_THOUSAND}),
-      fc.integer({min: NUM.ONE, max: NUM.FIVE_THOUSAND}),
+      fc.integer({min: 1, max: NUM.TEN_THOUSAND}),
+      fc.integer({min: 1, max: NUM.FIVE_THOUSAND}),
       async (budget, estimated) => {
         const cache = new SystemTableCache();
         const accounting = createAccountingWithCache(cache);
@@ -444,7 +444,7 @@ test('PBT: critical replace allows up to emergency headroom limit',
     await fc.assert(
       fc.asyncProperty(
         fc.integer({min: NUM.HUNDRED, max: NUM.TEN_THOUSAND}),
-        fc.integer({min: NUM.ONE, max: NUM.FIVE_THOUSAND}),
+        fc.integer({min: 1, max: NUM.FIVE_THOUSAND}),
         async (budget, estimated) => {
           const cache = new SystemTableCache();
           const accounting = createAccountingWithCache(cache);
@@ -490,8 +490,8 @@ test('e2e: node registers budget, snapshot shows capacity, ' +
   const snapshot = await accounting
     .getCapacitySnapshotForNode('node-e2e');
   t.equal(snapshot.budgetBytes, NUM.THOUSAND);
-  t.equal(snapshot.usedBytes, NUM.ZERO);
-  t.equal(snapshot.reservedBytes, NUM.ZERO);
+  t.equal(snapshot.usedBytes, 0);
+  t.equal(snapshot.reservedBytes, 0);
   t.equal(snapshot.availableBytes, NUM.THOUSAND);
   t.equal(snapshot.pressureState, PRESSURE_STATE.NORMAL);
 
@@ -564,7 +564,7 @@ test('e2e: split deferred when capacity insufficient, succeeds ' +
     targetNodeId: 'node-split',
     estimatedBytes: accounting.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.TEN * NUM.TWO,
+      sizeBytes: NUM.TEN * 2,
       amplificationFactor:
         STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR,
     }),
@@ -586,7 +586,7 @@ test('e2e: split deferred when capacity insufficient, succeeds ' +
     targetNodeId: 'node-split',
     estimatedBytes: accounting.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.TEN * NUM.TWO,
+      sizeBytes: NUM.TEN * 2,
       amplificationFactor:
         STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR,
     }),
@@ -643,7 +643,7 @@ test('e2e: expired reservation does not count toward capacity',
     // Add expired reservation (expiresAt in the past)
     addReservation(
       cache, 'res-exp', 'node-exp', NUM.FIVE * NUM.TEN,
-      {expiresAt: NUM.ONE},
+      {expiresAt: 1},
     );
 
     const admission = createAdmissionService(accounting, cache);
@@ -687,7 +687,7 @@ test('e2e: pressure transitions tracked across multiple state ' +
   await behavior.shouldAllowMove(
     'n1', MOVE_CRITICALITY.NON_CRITICAL,
   );
-  t.equal(behavior.getMetricEvents().length, NUM.ZERO);
+  t.equal(behavior.getMetricEvents().length, 0);
 
   // normal -> soft
   pressureState = PRESSURE_STATE.SOFT;
@@ -698,7 +698,7 @@ test('e2e: pressure transitions tracked across multiple state ' +
     softResult.decision,
     PRESSURE_BEHAVIOR_DECISION.ALLOW_REDUCED_PRIORITY,
   );
-  t.equal(behavior.getMetricEvents().length, NUM.ONE);
+  t.equal(behavior.getMetricEvents().length, 1);
 
   // soft -> hard
   pressureState = PRESSURE_STATE.HARD;
@@ -706,7 +706,7 @@ test('e2e: pressure transitions tracked across multiple state ' +
     'n1', MOVE_CRITICALITY.NON_CRITICAL,
   );
   t.equal(hardResult.decision, PRESSURE_BEHAVIOR_DECISION.DENY);
-  t.equal(behavior.getMetricEvents().length, NUM.TWO);
+  t.equal(behavior.getMetricEvents().length, 2);
 
   // hard -> exhausted
   pressureState = PRESSURE_STATE.EXHAUSTED;
@@ -726,12 +726,12 @@ test('e2e: pressure transitions tracked across multiple state ' +
 
   // Verify transition chain
   const events = behavior.getMetricEvents();
-  t.equal(events[NUM.ZERO].previousState, PRESSURE_STATE.NORMAL);
-  t.equal(events[NUM.ZERO].currentState, PRESSURE_STATE.SOFT);
-  t.equal(events[NUM.ONE].previousState, PRESSURE_STATE.SOFT);
-  t.equal(events[NUM.ONE].currentState, PRESSURE_STATE.HARD);
-  t.equal(events[NUM.TWO].previousState, PRESSURE_STATE.HARD);
-  t.equal(events[NUM.TWO].currentState, PRESSURE_STATE.EXHAUSTED);
+  t.equal(events[0].previousState, PRESSURE_STATE.NORMAL);
+  t.equal(events[0].currentState, PRESSURE_STATE.SOFT);
+  t.equal(events[1].previousState, PRESSURE_STATE.SOFT);
+  t.equal(events[1].currentState, PRESSURE_STATE.HARD);
+  t.equal(events[2].previousState, PRESSURE_STATE.HARD);
+  t.equal(events[2].currentState, PRESSURE_STATE.EXHAUSTED);
   t.end();
 });
 

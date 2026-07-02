@@ -281,7 +281,7 @@ const ADMIN_CACHE_DUMP = Object.freeze({
 });
 
 const ADMIN_QUERY_RESULT = Object.freeze({
-  AFFECTED_ROWS_DEFAULT: NUM.ZERO,
+  AFFECTED_ROWS_DEFAULT: 0,
 });
 
 const CONSISTENCY_MISMATCH_KIND = Object.freeze({

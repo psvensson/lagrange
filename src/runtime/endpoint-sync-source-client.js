@@ -8,7 +8,6 @@
  */
 
 import WebSocket from 'ws';
-import {TYPEOF} from '../constants/index.js';
 import {ADMIN_MESSAGE_TYPE} from '../admin/admin-constants.js';
 import {BaseError} from '../utils/base-error.js';
 import {
@@ -21,9 +20,7 @@ import {
   normalizeEndpointRows,
 } from './endpoint-sync-source-query.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1T6E5 = 'EndpointSyncSourceClient';
+const LOCAL_STR_ENDPOINTSYNCSOURCECLIENT = 'EndpointSyncSourceClient';
 const LOCAL_STR_QUERY = 'query';
 const LOCAL_STR_OPEN = 'open';
 const LOCAL_STR_MESSAGE = 'message';
@@ -33,7 +30,7 @@ const LOCAL_STR_CLOSE = 'close';
 const ADMIN_AUTH_HEADER = 'authorization';
 const BEARER_PREFIX = 'Bearer ';
 
-let queryCounter = LOCAL_NUM_ZERO;
+let queryCounter = 0;
 
 /**
  * Build deterministic query id.
@@ -41,7 +38,7 @@ let queryCounter = LOCAL_NUM_ZERO;
  * @return {string}
  */
 function nextQueryId() {
-  queryCounter += LOCAL_NUM_ONE;
+  queryCounter += 1;
   return ENDPOINT_SYNC_SOURCE_QUERY.QUERY_ID_PREFIX + queryCounter;
 }
 
@@ -70,7 +67,7 @@ class EndpointSyncSourceQueryError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: LOCAL_STR_1T6E5,
+        component: LOCAL_STR_ENDPOINTSYNCSOURCECLIENT,
         operation: LOCAL_STR_QUERY,
         metadata,
       },
@@ -103,7 +100,7 @@ class EndpointSyncSourceTimeoutError extends EndpointSyncSourceQueryError {
  * @return {Object}
  */
 function buildAuthHeaders(token) {
-  if (!token || typeof token !== TYPEOF.STRING) {
+  if (!token || typeof token !== 'string') {
     return {};
   }
   return {
@@ -119,7 +116,7 @@ function buildAuthHeaders(token) {
  * @return {{done: boolean, rows?: Array<Object>, error?: Error}}
  */
 function readQueryResultMessage(message, queryId) {
-  if (!message || typeof message !== TYPEOF.OBJECT) {
+  if (!message || typeof message !== 'object') {
     return {done: false};
   }
   if (message.type !== ADMIN_MESSAGE_TYPE.QUERY_RESULT) {
@@ -197,7 +194,7 @@ class EndpointSyncSourceClient {
     });
 
     let lastError = null;
-    for (let attempt = LOCAL_NUM_ZERO; attempt <= maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const rows = await this._executeQueryOnce({
           adminStreamUrl: options.adminStreamUrl,
@@ -212,7 +209,7 @@ class EndpointSyncSourceClient {
         if (attempt === maxRetries) {
           break;
         }
-        await sleep(retryDelayMs * (attempt + LOCAL_NUM_ONE));
+        await sleep(retryDelayMs * (attempt + 1));
       }
     }
 

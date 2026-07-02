@@ -2,7 +2,7 @@
  * Assignment and lifecycle helpers for LatencyGroupManager.
  */
 
-import {COLUMN, NUM} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {LATENCY_GROUP_STATE} from './latency-topology-constants.js';
 
 function buildNormalizedGroupRow(options) {
@@ -65,7 +65,7 @@ function selectNearestEligibleGroup(measurements, groupThresholdMs) {
   const eligible = measurements.filter((measurement) => {
     return measurement.rttMs <= groupThresholdMs;
   });
-  return eligible[NUM.ZERO] || null;
+  return eligible[0] || null;
 }
 
 function getMeasurementForGroup(measurements, groupId) {

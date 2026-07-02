@@ -64,8 +64,8 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
   const REPLAY_TEST_102455Z_SERVICE_STATUS_SYNCING = 'syncing';
   const REPLAY_TEST_SERVICE_ROW_FIELD_RAFT_ROLE = 'raftRole';
   const REPLAY_TEST_102455Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_102455Z_BASELINE_REPLICA_ORDINAL = NUM.FOUR;
@@ -187,8 +187,8 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
     REPLAY_TEST_114859Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT,
   ]);
   const REPLAY_TEST_114859Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_114859Z_EXTRA_REPLICA_ORDINAL = NUM.FOUR;
@@ -333,8 +333,8 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
     ).sort((left, right) => left.localeCompare(right)),
   );
   const REPLAY_TEST_123850Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_123850Z_SELECTED_REPLICA_ORDINAL = NUM.FOUR;
@@ -456,8 +456,8 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
   ]);
   const REPLAY_TEST_132033Z_EMPTY_PENDING_ACK_NODE_IDS = Object.freeze([]);
   const REPLAY_TEST_132033Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_132033Z_EXTRA_REPLICA_ORDINAL = NUM.FOUR;

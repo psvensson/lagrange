@@ -58,7 +58,6 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE = Object.freeze(
 
 const {
   DEFAULT_AMPLIFICATION_FACTOR,
-  NUM,
   OperationType,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
@@ -146,7 +145,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const changeCount = this.extractMutationChangeCount(result);
     return {
       success: true,
-      changed: changeCount === null || changeCount > NUM.ZERO,
+      changed: changeCount === null || changeCount > 0,
       changeCount,
     };
   }
@@ -173,7 +172,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
     const estimatedBytes = this.storageAccountingService.estimateReplicaBytes({
       entityType: operation.entityType || SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
 
     const now = Date.now();
@@ -266,7 +265,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     }
 
     const now = Date.now();
-    let releasedCount = NUM.ZERO;
+    let releasedCount = 0;
     const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
     for (const row of rows) {
       const transition = await this.transitionActiveReservationById(
@@ -289,7 +288,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         releasedCount++;
       }
     }
-    if (releasedCount <= NUM.ZERO) {
+    if (releasedCount <= 0) {
       return;
     }
 
@@ -381,8 +380,8 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_START);
 
     const now = Date.now();
-    let expired = NUM.ZERO;
-    let orphansReleased = NUM.ZERO;
+    let expired = 0;
+    let orphansReleased = 0;
 
     const staleResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
@@ -424,7 +423,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       );
     }
 
-    if (expired > NUM.ZERO) {
+    if (expired > 0) {
       this.logger.info(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_EXPIRED,
         {count: expired},

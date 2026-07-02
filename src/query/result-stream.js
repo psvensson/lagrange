@@ -9,7 +9,6 @@
  * Requirements: 4.4, 9.1
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DEFAULT_QUERY_BUDGET,
   QUERY_BUDGET_ERROR_MSG,
@@ -42,8 +41,8 @@ const STREAM_ERROR_MSG = Object.freeze({
  * @return {number} Estimated byte size.
  */
 function estimateRowBytes(row) {
-  if (row === null || row === undefined) return NUM.ZERO;
-  if (typeof row === TYPEOF.STRING) return row.length;
+  if (row === null || row === undefined) return 0;
+  if (typeof row === 'string') return row.length;
   return JSON.stringify(row).length;
 }
 
@@ -60,8 +59,8 @@ class ResultStream {
     const merged = {...DEFAULT_QUERY_BUDGET, ...budgets};
     this.maxRows = merged.RESULT_MAX_ROWS;
     this.maxBytes = merged.RESULT_MAX_BYTES;
-    this.totalRows = NUM.ZERO;
-    this.totalBytes = NUM.ZERO;
+    this.totalRows = 0;
+    this.totalBytes = 0;
     this.rows = [];
     this.state = STREAM_STATE.OPEN;
     this.budgetError = null;
@@ -74,7 +73,7 @@ class ResultStream {
    * @param {Function} fn - Listener receiving (rows, meta).
    */
   onData(fn) {
-    if (typeof fn !== TYPEOF.FUNCTION) {
+    if (typeof fn !== 'function') {
       throw new Error(STREAM_ERROR_MSG.LISTENER_MUST_BE_FUNCTION);
     }
     this._listeners.push(fn);
@@ -101,12 +100,12 @@ class ResultStream {
       throw new Error(STREAM_ERROR_MSG.ROWS_MUST_BE_ARRAY);
     }
 
-    let accepted = NUM.ZERO;
+    let accepted = 0;
 
     for (const row of rows) {
       const rowBytes = estimateRowBytes(row);
 
-      if (this.totalRows + NUM.ONE > this.maxRows) {
+      if (this.totalRows + 1 > this.maxRows) {
         this._exceed(
           QUERY_BUDGET_ERROR_MSG.RESULT_MAX_ROWS_EXCEEDED,
         );
@@ -120,14 +119,14 @@ class ResultStream {
       }
 
       this.rows.push(row);
-      this.totalRows += NUM.ONE;
+      this.totalRows += 1;
       this.totalBytes += rowBytes;
-      accepted += NUM.ONE;
+      accepted += 1;
     }
 
     const exceeded = this.state === STREAM_STATE.BUDGET_EXCEEDED;
 
-    if (accepted > NUM.ZERO) {
+    if (accepted > 0) {
       const batch = this.rows.slice(
         this.rows.length - accepted,
       );

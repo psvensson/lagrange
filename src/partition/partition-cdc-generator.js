@@ -4,7 +4,7 @@
  * Requirements: 6.2, 6.4, 6.6
  */
 
-import {CDC_OPERATION, COLUMN, NUM, SQL, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION, COLUMN, SQL} from '../constants/index.js';
 import {
   extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
   extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
@@ -125,12 +125,12 @@ class PartitionCDCGenerator {
       partitionId: this.partitionId,
       entryType: entry.type,
       sql: entry.sql ?
-        entry.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
+        entry.sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
         null,
       subscriberCount: this.cdcSubscribers.size,
     });
 
-    if (this.cdcSubscribers.size === NUM.ZERO) {
+    if (this.cdcSubscribers.size === 0) {
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
         partitionId: this.partitionId,
       });
@@ -248,8 +248,8 @@ class PartitionCDCGenerator {
    * @private
    */
   stampOriginHlc(data, originHlc) {
-    if (!data || typeof data !== TYPEOF.OBJECT ||
-        originHlc === null || typeof originHlc === TYPEOF.UNDEFINED) {
+    if (!data || typeof data !== 'object' ||
+        originHlc === null || typeof originHlc === 'undefined') {
       return data;
     }
     return {...data, [COLUMN.UPDATED_AT_HLC]: String(originHlc)};
@@ -354,12 +354,12 @@ class PartitionCDCGenerator {
     // For raw SQL queries, extract data from SQL
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       // For parameterized queries (SQL with ? placeholders), build data from params
-      const hasParams = entry.params && entry.params.length > NUM.ZERO;
+      const hasParams = entry.params && entry.params.length > 0;
       const hasPlaceholders = entry.sql.includes(
         PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK,
       );
 
-      if (hasParams && hasPlaceholders && Object.keys(cdcData).length === NUM.ZERO) {
+      if (hasParams && hasPlaceholders && Object.keys(cdcData).length === 0) {
         cdcData = this.extractDataFromParameterizedSQL(
           entry.sql, entry.params, tableName, entryType,
         );
@@ -368,19 +368,19 @@ class PartitionCDCGenerator {
       // For INSERT queries without params, parse literal values from SQL
       if ((entryType === PARTITION_SERVICE_OPERATION.INSERT ||
         entryType === PARTITION_SERVICE_OPERATION.UPSERT) &&
-          Object.keys(cdcData).length === NUM.ZERO) {
+          Object.keys(cdcData).length === 0) {
         cdcData = this.extractInsertDataFromSQL(entry.sql, tableName);
       }
 
       // For UPDATE queries, try to extract the WHERE clause to query updated row
       if (entryType === PARTITION_SERVICE_OPERATION.UPDATE &&
-        Object.keys(cdcData).length === NUM.ZERO) {
+        Object.keys(cdcData).length === 0) {
         cdcData = this.extractUpdateDataFromSQL(entry.sql, tableName);
       }
 
       // For DELETE queries, extract the WHERE clause
       if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
-        Object.keys(cdcData).length === NUM.ZERO) {
+        Object.keys(cdcData).length === 0) {
         cdcData = this.extractDeleteDataFromSQL(entry.sql);
       }
     }
@@ -402,11 +402,11 @@ class PartitionCDCGenerator {
    * @return {boolean} True when CDC should be suppressed.
    */
   shouldSuppressNoOpWrite(entry, entryType) {
-    const hasChangeCount = typeof entry?.changes === TYPEOF.NUMBER;
+    const hasChangeCount = typeof entry?.changes === 'number';
     if (!hasChangeCount) {
       return false;
     }
-    if (entry.changes > NUM.ZERO) {
+    if (entry.changes > 0) {
       return false;
     }
     return entryType === PARTITION_SERVICE_OPERATION.UPDATE ||
@@ -444,7 +444,7 @@ class PartitionCDCGenerator {
       /(?:UPDATE|INSERT\s+(?:OR\s+\w+\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
     );
     if (tableMatch) {
-      const tableName = tableMatch[NUM.ONE];
+      const tableName = tableMatch[1];
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_TABLE_NAME, {tableName});
       return Object.freeze({
         state: PARTITION_SERVICE_VALUE.CDC_TABLE_NAME_EXTRACTION_STATE_FOUND,
@@ -463,7 +463,7 @@ class PartitionCDCGenerator {
    * @private
    */
   async deliverEvent(cdcEvent) {
-    let deliveredCount = NUM.ZERO;
+    let deliveredCount = 0;
     for (const subscriber of this.cdcSubscribers) {
       try {
         if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
@@ -567,7 +567,7 @@ class PartitionCDCGenerator {
    * @private
    */
   extractDataFromParameterizedSQL(sql, params, tableName, operationType) {
-    if (!params || params.length === NUM.ZERO) {
+    if (!params || params.length === 0) {
       return {};
     }
 

@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {TABLES} from '../constants/index.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
@@ -188,7 +187,7 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .filter((value) => typeof value === LOCAL_STR_STRING && value.length > NUM.ZERO),
+      .filter((value) => typeof value === LOCAL_STR_STRING && value.length > 0),
   )];
 }
 

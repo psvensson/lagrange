@@ -1,12 +1,12 @@
-import {CDC_PIPELINE_METRIC, NUM} from '../constants/index.js';
+import {CDC_PIPELINE_METRIC} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
 const ONE_MINUTE_MS = 60 * 1000;
 
 function normalizePartitionSize(partition) {
-  const sizeBytes = Number(partition?.size_bytes ?? partition?.sizeBytes ?? NUM.ZERO);
-  return Number.isFinite(sizeBytes) ? sizeBytes : NUM.ZERO;
+  const sizeBytes = Number(partition?.size_bytes ?? partition?.sizeBytes ?? 0);
+  return Number.isFinite(sizeBytes) ? sizeBytes : 0;
 }
 
 function findLocalLeaderPartitionService(partitionServices, partitionId) {
@@ -31,7 +31,7 @@ function findLocalLeaderPartitionService(partitionServices, partitionId) {
 
 function normalizeCounterValue(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < NUM.ZERO) {
+  if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
   }
   return parsed;
@@ -63,13 +63,13 @@ function calculateQueriesPerMinuteFromSample(
   if (!previousSample ||
       !Number.isFinite(previousSample.sampledAtMs) ||
       !Number.isFinite(previousSample.generatedWriteCount)) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const deltaMs = nowMs - previousSample.sampledAtMs;
   const deltaWrites = generatedWriteCount - previousSample.generatedWriteCount;
-  if (deltaMs <= NUM.ZERO || deltaWrites <= NUM.ZERO) {
-    return NUM.ZERO;
+  if (deltaMs <= 0 || deltaWrites <= 0) {
+    return 0;
   }
 
   return (deltaWrites * ONE_MINUTE_MS) / deltaMs;
@@ -94,7 +94,7 @@ function createManagedSplitMetricsProvider(options = {}) {
       const liveSizeBytes = Number(localLeaderService.getSize());
       const generatedWriteCount = resolveGeneratedWriteCount(localLeaderService);
       const queriesPerMinute = generatedWriteCount === null ?
-        NUM.ZERO :
+        0 :
         calculateQueriesPerMinuteFromSample(
           normalizedPartitionId,
           generatedWriteCount,
@@ -111,7 +111,7 @@ function createManagedSplitMetricsProvider(options = {}) {
 
     return {
       sizeBytes: normalizePartitionSize(partition),
-      queriesPerMinute: NUM.ZERO,
+      queriesPerMinute: 0,
     };
   };
 }

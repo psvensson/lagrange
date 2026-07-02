@@ -13,7 +13,6 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
     CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
     INITIAL_PARTITION_IDS,
-    NUM,
     OWNER_CONTRACT_NEXT_ACTION,
     OWNER_CONTRACT_STATE,
     PRIORITY_CONTROL_PLANE_TABLE_IDS,
@@ -180,7 +179,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
           readyEligibleNodeCount:
           REPLAY_TEST_132033Z_READY_ELIGIBLE_NODE_COUNT,
           totalPriorityPartitionCount: PRIORITY_CONTROL_PLANE_TABLE_IDS.size,
-          blockedPartitionCount: NUM.ZERO,
+          blockedPartitionCount: 0,
           largestSpreadGap: REPLAY_TEST_132033Z_DURABLE_SPREAD_GAP,
           totalSpreadGap: REPLAY_TEST_132033Z_DURABLE_SPREAD_GAP,
         },
@@ -257,7 +256,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
             readyEligibleNodeCount:
             REPLAY_TEST_132033Z_READY_ELIGIBLE_NODE_COUNT,
             totalPriorityPartitionCount: PRIORITY_CONTROL_PLANE_TABLE_IDS.size,
-            blockedPartitionCount: NUM.ZERO,
+            blockedPartitionCount: 0,
             largestSpreadGap: REPLAY_TEST_132033Z_DURABLE_SPREAD_GAP,
             totalSpreadGap: REPLAY_TEST_132033Z_DURABLE_SPREAD_GAP,
           },
@@ -308,9 +307,9 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_140646Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_140646Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,
@@ -664,9 +663,9 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_145246Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_145246Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,
@@ -729,17 +728,17 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
 
   function build145246ZBlockedPartition(partitionId) {
     const replayRequiredDistinctNodeCount =
-      REPLAY_TEST_145246Z_REQUIRED_DISTINCT_NODE_COUNT + NUM.ONE;
+      REPLAY_TEST_145246Z_REQUIRED_DISTINCT_NODE_COUNT + 1;
     const highReadyPartitionIds = new Set([
       REPLAY_TEST_145246Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
       REPLAY_TEST_145246Z_SQL_TRANSACTIONS_PARTITION_ID,
     ]);
     const readyDistinctNodeCount =
       REPLAY_TEST_145246Z_READY_DISTINCT_NODE_COUNT +
-      (highReadyPartitionIds.has(partitionId) ? NUM.ONE : NUM.ZERO);
+      (highReadyPartitionIds.has(partitionId) ? 1 : 0);
     const readyReplicaCount =
       REPLAY_TEST_145246Z_READY_REPLICA_COUNT +
-      (highReadyPartitionIds.has(partitionId) ? NUM.ONE : NUM.ZERO);
+      (highReadyPartitionIds.has(partitionId) ? 1 : 0);
     // CL-021 witness pass-through (source commit 89147e21): per-row exclusion
     // attribution. Only the replica_operations partition has an excluded
     // replica here — the baseline replica is SYNCING (see
@@ -748,7 +747,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     // partition has no excluded replica, so the attribution map is empty.
     const exclusionReasonCounts =
       partitionId === REPLAY_TEST_145246Z_REPLICA_OPERATIONS_PARTITION_ID ?
-        {[`status_${REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING}`]: NUM.ONE} :
+        {[`status_${REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING}`]: 1} :
         {};
     return {
       partitionId,

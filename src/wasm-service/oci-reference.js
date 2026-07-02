@@ -12,7 +12,6 @@
  * Requirements: 4.3, 4.4
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {isValidDigest} from './module-manifest-models.js';
 
 // --- OCI reference separators ---
@@ -78,10 +77,10 @@ function parseOciReference(ref) {
   if (ref === undefined || ref === null) {
     return {valid: false, errors: [OCI_REFERENCE_ERROR.REFERENCE_REQUIRED]};
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {valid: false, errors: [OCI_REFERENCE_ERROR.REFERENCE_NOT_STRING]};
   }
-  if (ref.length === NUM.ZERO) {
+  if (ref.length === 0) {
     return {valid: false, errors: [OCI_REFERENCE_ERROR.REFERENCE_REQUIRED]};
   }
 
@@ -91,9 +90,9 @@ function parseOciReference(ref) {
   let remainder = ref;
   let digest = null;
   const atIdx = ref.indexOf(OCI_DIGEST_SEPARATOR);
-  if (atIdx !== NUM.NEGATIVE_ONE) {
-    digest = ref.slice(atIdx + NUM.ONE);
-    remainder = ref.slice(NUM.ZERO, atIdx);
+  if (atIdx !== -1) {
+    digest = ref.slice(atIdx + 1);
+    remainder = ref.slice(0, atIdx);
     if (!isValidDigest(digest)) {
       errors.push(OCI_REFERENCE_ERROR.DIGEST_INVALID_FORMAT);
       digest = null;
@@ -104,14 +103,14 @@ function parseOciReference(ref) {
   // the first slash to avoid matching port numbers in registry)
   let tag = null;
   const firstSlash = remainder.indexOf(OCI_PATH_SEPARATOR);
-  const afterRegistry = firstSlash !== NUM.NEGATIVE_ONE ?
+  const afterRegistry = firstSlash !== -1 ?
     remainder.slice(firstSlash) :
     '';
   const tagColonIdx = afterRegistry.lastIndexOf(OCI_TAG_SEPARATOR);
-  if (tagColonIdx > NUM.ZERO) {
-    tag = afterRegistry.slice(tagColonIdx + NUM.ONE);
+  if (tagColonIdx > 0) {
+    tag = afterRegistry.slice(tagColonIdx + 1);
     remainder = remainder.slice(
-      NUM.ZERO, firstSlash + tagColonIdx,
+      0, firstSlash + tagColonIdx,
     );
     if (!OCI_TAG_PATTERN.test(tag)) {
       errors.push(OCI_REFERENCE_ERROR.INVALID_TAG_FORMAT);
@@ -123,27 +122,27 @@ function parseOciReference(ref) {
   const slashIdx = remainder.indexOf(OCI_PATH_SEPARATOR);
   let registry = null;
   let repository = null;
-  if (slashIdx === NUM.NEGATIVE_ONE) {
+  if (slashIdx === -1) {
     errors.push(OCI_REFERENCE_ERROR.REGISTRY_REQUIRED);
     errors.push(OCI_REFERENCE_ERROR.REPOSITORY_REQUIRED);
   } else {
-    registry = remainder.slice(NUM.ZERO, slashIdx);
-    repository = remainder.slice(slashIdx + NUM.ONE);
-    if (registry.length === NUM.ZERO) {
+    registry = remainder.slice(0, slashIdx);
+    repository = remainder.slice(slashIdx + 1);
+    if (registry.length === 0) {
       errors.push(OCI_REFERENCE_ERROR.REGISTRY_REQUIRED);
       registry = null;
     }
-    if (!repository || repository.length === NUM.ZERO) {
+    if (!repository || repository.length === 0) {
       errors.push(OCI_REFERENCE_ERROR.REPOSITORY_REQUIRED);
       repository = null;
     }
   }
 
-  if (!tag && !digest && errors.length === NUM.ZERO) {
+  if (!tag && !digest && errors.length === 0) {
     errors.push(OCI_REFERENCE_ERROR.TAG_OR_DIGEST_REQUIRED);
   }
 
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
 
@@ -198,7 +197,7 @@ function formatOciReference(parts) {
       OCI_REFERENCE_ERROR.REPOSITORY_REQUIRED_FOR_FORMAT,
     );
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
 

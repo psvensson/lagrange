@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_DEFAULT,
@@ -43,8 +42,8 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
     }
 
     reservations.sort((left, right) => {
-      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ? left.updatedAt : NUM.ZERO;
-      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ? right.updatedAt : NUM.ZERO;
+      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ? left.updatedAt : 0;
+      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ? right.updatedAt : 0;
       return leftUpdatedAt - rightUpdatedAt;
     });
 
@@ -73,8 +72,8 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
     }
 
     reservations.sort((left, right) => {
-      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ? left.updatedAt : NUM.ZERO;
-      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ? right.updatedAt : NUM.ZERO;
+      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ? left.updatedAt : 0;
+      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ? right.updatedAt : 0;
       return leftUpdatedAt - rightUpdatedAt;
     });
     return reservations;
@@ -104,8 +103,8 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
     now = Date.now(),
   ) {
     if (!reservation ||
-        typeof reservation.assignmentId !== TYPEOF.STRING ||
-        reservation.assignmentId.length === NUM.ZERO) {
+        typeof reservation.assignmentId !== 'string' ||
+        reservation.assignmentId.length === 0) {
       return false;
     }
     if (!reservation.replicaId || !reservation.targetNodeId) {
@@ -179,11 +178,11 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
     now = Date.now(),
   ) {
     const admissionFloor = Number.isFinite(this.getBootstrapAdmissionRetryAfterMs()) &&
-      this.getBootstrapAdmissionRetryAfterMs() > NUM.ZERO ?
+      this.getBootstrapAdmissionRetryAfterMs() > 0 ?
       this.getBootstrapAdmissionRetryAfterMs() :
       BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
     const sweepInterval = Number.isFinite(this.getMoveReplicaAssignmentSweepIntervalMs()) &&
-      this.getMoveReplicaAssignmentSweepIntervalMs() > NUM.ZERO ?
+      this.getMoveReplicaAssignmentSweepIntervalMs() > 0 ?
       this.getMoveReplicaAssignmentSweepIntervalMs() :
       admissionFloor;
 
@@ -200,8 +199,8 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
       return Math.max(admissionFloor, sweepInterval);
     }
 
-    const remainingMs = Math.max(NUM.ZERO, blockingUntilMs - now);
-    if (remainingMs === NUM.ZERO) {
+    const remainingMs = Math.max(0, blockingUntilMs - now);
+    if (remainingMs === 0) {
       return admissionFloor;
     }
 

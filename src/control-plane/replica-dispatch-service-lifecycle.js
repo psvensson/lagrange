@@ -27,7 +27,6 @@ const {
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
   createControlPlaneRuntimeBundle,
@@ -98,16 +97,16 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     this.membershipPublicationAckDeferredRetries = new Map();
     this.nodeStateUpdateRetryStateByNodeId = new Map();
     this.nodeStateUpdateQueueAssignments = new Map();
-    this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
+    this.nextNodeStateUpdateQueueIndex = 0;
     this.cacheChangeListener = null;
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.setTimeoutFn === 'function' ?
         options.setTimeoutFn :
         setTimeout;
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :
         clearTimeout;
     const config = ConfigurationManager.getInstance();
@@ -115,7 +114,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       config.get(CONTROL_PLANE_CONFIG_KEY.READY_LEASE_MS) ||
       DEFAULT_READY_LEASE_MS;
     this.nodeStateUpdateQueryTimeoutMs = Math.max(
-      NUM.ONE,
+      1,
       Math.floor(this.readyLeaseMs / NUM.THREE),
     );
     this.nodeStateUpdateRetryAfterMs =
@@ -175,7 +174,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       },
     );
     // Keep the first shard exposed for compatibility with existing diagnostics.
-    this.nodeStateUpdateQueue = this.nodeStateUpdateQueues[NUM.ZERO];
+    this.nodeStateUpdateQueue = this.nodeStateUpdateQueues[0];
 
     this.nodeReadyRetryQueue = new OwnerKeyReconcileQueue({
       name: DISPATCH_QUEUE_NAME.NODE_READY,
@@ -193,11 +192,11 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     assertCritical(this.messageRouter, DISPATCH_ERROR_MSG.MISSING_ROUTER);
     assertCritical(this.systemTableCache, DISPATCH_ERROR_MSG.MISSING_CACHE);
     assertCritical(
-      typeof this.systemTableCache.get === TYPEOF.FUNCTION,
+      typeof this.systemTableCache.get === 'function',
       DISPATCH_ERROR_MSG.MISSING_CACHE_GET,
     );
     assertCritical(
-      typeof this.systemTableCache.getAll === TYPEOF.FUNCTION,
+      typeof this.systemTableCache.getAll === 'function',
       DISPATCH_ERROR_MSG.MISSING_CACHE_GET_ALL,
     );
     assertCritical(this.cdcIntegrationService, DISPATCH_ERROR_MSG.MISSING_CDC);
@@ -213,7 +212,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
 
     if (
       this.systemTableCache &&
-      typeof this.systemTableCache.onCacheChange === TYPEOF.FUNCTION
+      typeof this.systemTableCache.onCacheChange === 'function'
     ) {
       this.cacheChangeListener = (tableName, operation, record) => {
         this.handleCacheNodeChange(tableName, operation, record);
@@ -223,7 +222,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
 
     if (
       this.messageRouter &&
-      typeof this.messageRouter.register === TYPEOF.FUNCTION
+      typeof this.messageRouter.register === 'function'
     ) {
       this.directDispatchServiceAddress =
         this.buildDirectDispatchServiceAddress(this.nodeId);
@@ -251,7 +250,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
 
     if (
       this.rebalanceCoordinator &&
-      typeof this.rebalanceCoordinator.on === TYPEOF.FUNCTION
+      typeof this.rebalanceCoordinator.on === 'function'
     ) {
       this.coordinatorOperationCreatedListener = (event = {}) => {
         this.handleCoordinatorOperationCreated(event.operation).catch(
@@ -407,7 +406,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         });
         if (
           messageId &&
-          typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION
+          typeof mgService.acknowledgeMessage === 'function'
         ) {
           await mgService.acknowledgeMessage(messageId);
         }
@@ -416,7 +415,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       this.enqueueNodeStateUpdate(payload);
       if (
         messageId &&
-        typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION
+        typeof mgService.acknowledgeMessage === 'function'
       ) {
         await mgService.acknowledgeMessage(messageId);
       }
@@ -432,7 +431,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       await this.handleReplicaOperationDispatch(payload);
     }
 
-    if (messageId && typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION) {
+    if (messageId && typeof mgService.acknowledgeMessage === 'function') {
       await mgService.acknowledgeMessage(messageId);
     }
   }
@@ -444,7 +443,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
   resolveMessageGroupIngressReadiness(mgService, requiredTables = []) {
     if (
       !mgService ||
-      typeof mgService.getMetadataIngressReadiness !== TYPEOF.FUNCTION
+      typeof mgService.getMetadataIngressReadiness !== 'function'
     ) {
       return {
         ready: false,
@@ -460,13 +459,13 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       action,
       ready: readiness?.ready === true,
       reason:
-        typeof readiness?.reason === TYPEOF.STRING &&
-        readiness.reason.length > NUM.ZERO ?
+        typeof readiness?.reason === 'string' &&
+        readiness.reason.length > 0 ?
           readiness.reason :
           null,
       retryAfterMs:
         Number.isFinite(readiness?.retryAfterMs) &&
-        readiness.retryAfterMs > NUM.ZERO ?
+        readiness.retryAfterMs > 0 ?
           Math.floor(readiness.retryAfterMs) :
           null,
       ...extra,
@@ -486,7 +485,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     }
     if (
       typeof mgService?.forwardMetadataIngressPayloadToLeader ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return this.buildMessageGroupIngressDecision(
         MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
@@ -500,7 +499,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
   }
 
   async resolveMessageGroupIngressDecision(mgService, requiredTables = []) {
-    if (!mgService || typeof mgService !== TYPEOF.OBJECT) {
+    if (!mgService || typeof mgService !== 'object') {
       return this.buildMessageGroupIngressDecision(
         MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
         {
@@ -512,7 +511,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     }
     if (
       typeof mgService.resolveMetadataIngressForwardSelection !==
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return this.resolveMessageGroupIngressFallbackDecision(
         mgService,
@@ -530,10 +529,10 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER;
     const retryAfterMs =
       Number.isFinite(selection?.retryAfterMs) &&
-      selection.retryAfterMs > NUM.ZERO ?
+      selection.retryAfterMs > 0 ?
         selection.retryAfterMs :
         Number.isFinite(selection?.strictForwardRetryAfterMs) &&
-            selection.strictForwardRetryAfterMs > NUM.ZERO ?
+            selection.strictForwardRetryAfterMs > 0 ?
           selection.strictForwardRetryAfterMs :
           null;
     return this.buildMessageGroupIngressDecision(
@@ -541,7 +540,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       {
         ready: selection?.ready === true,
         reason:
-          typeof selection?.reason === TYPEOF.STRING ?
+          typeof selection?.reason === 'string' ?
             selection.reason :
             REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_SELECTION_UNAVAILABLE,
         retryAfterMs,

@@ -1,7 +1,5 @@
 import {
   HOST,
-  NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   BOOTSTRAP_API_LOG_MSG,
@@ -39,7 +37,7 @@ const bootstrapApiAdmissionMethods = {
     }
     this.expireStaleBootstrapAdmissionPeerHints(now);
     this.synchronizeBootstrapAdmissionCount();
-    if (expiredAdmissions.length > NUM.ZERO) {
+    if (expiredAdmissions.length > 0) {
       this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_EXPIRED, {
         seedNodeId: this.seedNodeId,
         expiredAdmissionCount: expiredAdmissions.length,
@@ -61,10 +59,10 @@ const bootstrapApiAdmissionMethods = {
   recordBootstrapAdmissionPeerHint(admission) {
     if (
       !admission ||
-      typeof admission.nodeId !== TYPEOF.STRING ||
-      admission.nodeId.length === NUM.ZERO ||
-      typeof admission.nodeAddress !== TYPEOF.STRING ||
-      admission.nodeAddress.length === NUM.ZERO
+      typeof admission.nodeId !== 'string' ||
+      admission.nodeId.length === 0 ||
+      typeof admission.nodeAddress !== 'string' ||
+      admission.nodeAddress.length === 0
     ) {
       return;
     }
@@ -77,7 +75,7 @@ const bootstrapApiAdmissionMethods = {
 
   getBootstrapAdmissionPeerHints(now = Date.now()) {
     this.expireStaleBootstrapAdmissionPeerHints(now);
-    if (this.bootstrapAdmissionPeerHints.size === NUM.ZERO) {
+    if (this.bootstrapAdmissionPeerHints.size === 0) {
       return BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY;
     }
     return Array.from(this.bootstrapAdmissionPeerHints.values()).map((hint) => ({
@@ -95,7 +93,7 @@ const bootstrapApiAdmissionMethods = {
       String(this.bootstrapAdmissionSequence),
       String(now),
     ].join(BOOTSTRAP_ADMISSION_ID_SEPARATOR);
-    this.bootstrapAdmissionSequence += NUM.ONE;
+    this.bootstrapAdmissionSequence += 1;
     const admission = {
       admissionId,
       nodeId: snapshot.nodeId || BOOTSTRAP_API_SUBSYSTEM,
@@ -111,7 +109,7 @@ const bootstrapApiAdmissionMethods = {
 
   releaseBootstrapAdmission(admission) {
     const admissionId = admission?.admissionId;
-    if (typeof admissionId === TYPEOF.STRING) {
+    if (typeof admissionId === 'string') {
       this.bootstrapAdmissionLeases.delete(admissionId);
     }
     this.synchronizeBootstrapAdmissionCount();

@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
 import {
@@ -34,13 +34,13 @@ import {
 
 function resolveMutationCompletionState(result = {}) {
   if (
-    typeof result?.completionState === TYPEOF.STRING &&
-    result.completionState.length > NUM.ZERO
+    typeof result?.completionState === 'string' &&
+    result.completionState.length > 0
   ) {
     return result.completionState;
   }
   if (
-    typeof result?.visibilityState === TYPEOF.STRING &&
+    typeof result?.visibilityState === 'string' &&
     result.visibilityState !==
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
   ) {
@@ -56,7 +56,7 @@ function resolveMutationCompletionState(result = {}) {
   const affectedRows = Number(
     result?.partitionResult?.affectedRows ?? result?.affectedRows,
   );
-  return Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO ?
+  return Number.isFinite(affectedRows) && affectedRows <= 0 ?
     CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED :
     CONTROL_PLANE_MUTATION_OUTCOME.APPLIED;
 }
@@ -86,7 +86,7 @@ function canonicalizeControlPlaneMutation(
   let row = mutation?.row;
   if (
     row &&
-    typeof row === TYPEOF.OBJECT &&
+    typeof row === 'object' &&
     (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT)
   ) {
@@ -94,7 +94,7 @@ function canonicalizeControlPlaneMutation(
     if (allowedColumns) {
       row = {};
       for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+        if (allowedColumns.has(key) && typeof value !== 'undefined') {
           row[key] = value;
         }
       }
@@ -106,14 +106,14 @@ function canonicalizeControlPlaneMutation(
   let data = mutation?.data;
   if (
     data &&
-    typeof data === TYPEOF.OBJECT &&
+    typeof data === 'object' &&
     operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE
   ) {
     const canonicalized = canonicalizeSystemTableRow(tableName, data);
     if (allowedColumns) {
       data = {};
       for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+        if (allowedColumns.has(key) && typeof value !== 'undefined') {
           data[key] = value;
         }
       }
@@ -125,7 +125,7 @@ function canonicalizeControlPlaneMutation(
   let whereClause = mutation?.whereClause;
   if (
     whereClause &&
-    typeof whereClause === TYPEOF.OBJECT &&
+    typeof whereClause === 'object' &&
     (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
   ) {
@@ -133,7 +133,7 @@ function canonicalizeControlPlaneMutation(
     if (allowedColumns) {
       whereClause = {};
       for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+        if (allowedColumns.has(key) && typeof value !== 'undefined') {
           whereClause[key] = value;
         }
       }
@@ -181,7 +181,7 @@ function resolveControlPlaneMutationOutcomeSnapshot(result = {}) {
     );
   }
   if (
-    typeof result?.visibilityState === TYPEOF.STRING &&
+    typeof result?.visibilityState === 'string' &&
     result.visibilityState !==
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
   ) {
@@ -190,7 +190,7 @@ function resolveControlPlaneMutationOutcomeSnapshot(result = {}) {
       completionState,
     );
   }
-  if (Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO) {
+  if (Number.isFinite(affectedRows) && affectedRows <= 0) {
     return buildControlPlaneMutationOutcomeSnapshot(
       CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
       completionState,
@@ -286,17 +286,17 @@ function resolveControlPlaneMutationOutcomeFreshness(
 
 function resolveControlPlaneMutationOutcomeReasonCodes(result = {}) {
   const localReasonCodes = normalizeDistinctStringArray(result?.reasonCodes);
-  if (localReasonCodes.length > NUM.ZERO) {
+  if (localReasonCodes.length > 0) {
     return localReasonCodes;
   }
   const errorCode = getControlPlaneErrorCode(result?.error || result);
-  if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+  if (typeof errorCode === 'string' && errorCode.length > 0) {
     return [errorCode];
   }
   const failureSummary = getControlPlaneFailureSummary(result?.error || result);
   if (
-    typeof failureSummary?.primaryReason === TYPEOF.STRING &&
-    failureSummary.primaryReason.length > NUM.ZERO
+    typeof failureSummary?.primaryReason === 'string' &&
+    failureSummary.primaryReason.length > 0
   ) {
     return [failureSummary.primaryReason];
   }
@@ -304,7 +304,7 @@ function resolveControlPlaneMutationOutcomeReasonCodes(result = {}) {
 }
 
 function resolveControlPlaneWakeSource(result = {}, visibilityState) {
-  if (typeof result?.wakeSource === TYPEOF.STRING && result.wakeSource.length > NUM.ZERO) {
+  if (typeof result?.wakeSource === 'string' && result.wakeSource.length > 0) {
     return result.wakeSource;
   }
   if (visibilityState === CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE) {
@@ -314,13 +314,13 @@ function resolveControlPlaneWakeSource(result = {}, visibilityState) {
 }
 
 function resolveControlPlaneAttemptKey(result = {}) {
-  if (typeof result?.attemptKey === TYPEOF.STRING && result.attemptKey.length > NUM.ZERO) {
+  if (typeof result?.attemptKey === 'string' && result.attemptKey.length > 0) {
     return result.attemptKey;
   }
-  if (typeof result?.coalescingKey === TYPEOF.STRING && result.coalescingKey.length > NUM.ZERO) {
+  if (typeof result?.coalescingKey === 'string' && result.coalescingKey.length > 0) {
     return result.coalescingKey;
   }
-  if (typeof result?.requestKey === TYPEOF.STRING && result.requestKey.length > NUM.ZERO) {
+  if (typeof result?.requestKey === 'string' && result.requestKey.length > 0) {
     return result.requestKey;
   }
   return 'unknown_attempt_key';
@@ -338,14 +338,14 @@ function resolveControlPlaneDeadline(result = {}) {
 
 function resolveControlPlaneTerminalEscalationBehavior(result = {}) {
   if (
-    typeof result?.terminalEscalationBehavior === TYPEOF.STRING &&
-    result.terminalEscalationBehavior.length > NUM.ZERO
+    typeof result?.terminalEscalationBehavior === 'string' &&
+    result.terminalEscalationBehavior.length > 0
   ) {
     return result.terminalEscalationBehavior;
   }
   if (
-    typeof result?.terminalEscalationState === TYPEOF.STRING &&
-    result.terminalEscalationState.length > NUM.ZERO
+    typeof result?.terminalEscalationState === 'string' &&
+    result.terminalEscalationState.length > 0
   ) {
     return result.terminalEscalationState;
   }
@@ -358,7 +358,7 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
 ) {
   const outcomeSnapshot = resolveControlPlaneMutationOutcomeSnapshot(result);
   const resolvedOutcome =
-    typeof normalizedOutcome === TYPEOF.STRING ?
+    typeof normalizedOutcome === 'string' ?
       normalizedOutcome :
       outcomeSnapshot.outcome;
   const contractOutcome = resolveControlPlaneMutationContractOutcome(
@@ -394,7 +394,7 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
     ),
     revision: Number.isFinite(result?.revision) ?
       result.revision :
-      NUM.ZERO,
+      0,
     retryAfterMs: getControlPlaneRetryAfterMs(result),
     terminal:
       contractOutcome.contractState === OWNER_OUTCOME_STATE.BLOCKED ||
@@ -431,8 +431,8 @@ function applyMutationWorkloadProfileDefaults(
   options = {},
 ) {
   if (
-    typeof options?.workloadClass !== TYPEOF.STRING ||
-    options.workloadClass.length === NUM.ZERO
+    typeof options?.workloadClass !== 'string' ||
+    options.workloadClass.length === 0
   ) {
     return resolvedOptions;
   }
@@ -440,7 +440,7 @@ function applyMutationWorkloadProfileDefaults(
     options.workloadClass,
   );
   const mergedResourceKeys = normalizeDistinctStringArray([
-    ...(typeof options?.resourceKeys === TYPEOF.UNDEFINED ?
+    ...(typeof options?.resourceKeys === 'undefined' ?
       workloadProfile.resourceKeys :
       []),
     ...(Array.isArray(resolvedOptions?.resourceKeys) ?
@@ -451,11 +451,11 @@ function applyMutationWorkloadProfileDefaults(
     ...resolvedOptions,
     workloadClass: workloadProfile.workloadClass,
     workClass:
-      typeof options?.workClass === TYPEOF.UNDEFINED ?
+      typeof options?.workClass === 'undefined' ?
         workloadProfile.workClass :
         resolvedOptions.workClass,
     allowPressureDefer:
-      typeof options?.allowPressureDefer === TYPEOF.UNDEFINED ?
+      typeof options?.allowPressureDefer === 'undefined' ?
         workloadProfile.allowPressureDefer :
         resolvedOptions.allowPressureDefer,
     resourceKeys: mergedResourceKeys,

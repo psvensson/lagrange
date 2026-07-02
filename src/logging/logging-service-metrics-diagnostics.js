@@ -9,9 +9,7 @@ import {
   LOGGING_DIAGNOSTICS_DEFAULT,
 } from './logging-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_ONE_THOUSAND = 1000;
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BOOLEAN = 'boolean';
@@ -47,14 +45,14 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   createDiagnosticsState() {
     return {
-      totalLogs: LOCAL_NUM_ZERO,
-      metricsLogs: LOCAL_NUM_ZERO,
-      nonMetricsLogs: LOCAL_NUM_ZERO,
-      logsSuppressedByLevel: LOCAL_NUM_ZERO,
-      metricsSuppressedFromConsole: LOCAL_NUM_ZERO,
-      metricsSuppressedFromPersistence: LOCAL_NUM_ZERO,
-      metricsSuppressedByResolution: LOCAL_NUM_ZERO,
-      metricsSuppressedByDetailedWindow: LOCAL_NUM_ZERO,
+      totalLogs: 0,
+      metricsLogs: 0,
+      nonMetricsLogs: 0,
+      logsSuppressedByLevel: 0,
+      metricsSuppressedFromConsole: 0,
+      metricsSuppressedFromPersistence: 0,
+      metricsSuppressedByResolution: 0,
+      metricsSuppressedByDetailedWindow: 0,
       subsystemCounts: new Map(),
       metricTagCounts: new Map(),
     };
@@ -131,10 +129,10 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   getMetricsDetailedWindowRemainingMs(nowMs = Date.now()) {
     if (!this.isMetricsDetailedWindowActive(nowMs)) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
     return Math.max(
-      LOCAL_NUM_ZERO,
+      0,
       this.metricsDetailedWindowExpiresAtMs - nowMs,
     );
   },
@@ -169,15 +167,15 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
   shouldEmitMetricsMessage(message, context = {}) {
     const nowMs = Date.now();
     const detailedWindowActive = this.isMetricsDetailedWindowActive(nowMs);
-    const resolutionMs = Math.max(LOCAL_NUM_ZERO, this.metricsDefaultResolutionMs);
-    const lastEmissionMs = !detailedWindowActive && resolutionMs > LOCAL_NUM_ZERO ?
+    const resolutionMs = Math.max(0, this.metricsDefaultResolutionMs);
+    const lastEmissionMs = !detailedWindowActive && resolutionMs > 0 ?
       this.metricsLastEmissionByTag.get(message) :
       undefined;
     const suppressReason =
       this.isDetailedMetricsContext(context) && !detailedWindowActive ?
         LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW :
         !detailedWindowActive &&
-          resolutionMs > LOCAL_NUM_ZERO &&
+          resolutionMs > 0 &&
           Number.isFinite(lastEmissionMs) &&
           (nowMs - lastEmissionMs) < resolutionMs ?
           LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION :
@@ -274,26 +272,26 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
     const context = options.context || {};
 
     if (!isLevelEnabled) {
-      this.diagnostics.logsSuppressedByLevel += LOCAL_NUM_ONE;
+      this.diagnostics.logsSuppressedByLevel += 1;
       return;
     }
 
-    this.diagnostics.totalLogs += LOCAL_NUM_ONE;
+    this.diagnostics.totalLogs += 1;
     if (isMetricsMessage) {
-      this.diagnostics.metricsLogs += LOCAL_NUM_ONE;
+      this.diagnostics.metricsLogs += 1;
       if (!shouldWriteToConsole) {
-        this.diagnostics.metricsSuppressedFromConsole += LOCAL_NUM_ONE;
+        this.diagnostics.metricsSuppressedFromConsole += 1;
       }
       if (!shouldPersist) {
-        this.diagnostics.metricsSuppressedFromPersistence += LOCAL_NUM_ONE;
+        this.diagnostics.metricsSuppressedFromPersistence += 1;
       }
       if (metricsSuppressReason ===
         LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION) {
-        this.diagnostics.metricsSuppressedByResolution += LOCAL_NUM_ONE;
+        this.diagnostics.metricsSuppressedByResolution += 1;
       }
       if (metricsSuppressReason ===
         LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW) {
-        this.diagnostics.metricsSuppressedByDetailedWindow += LOCAL_NUM_ONE;
+        this.diagnostics.metricsSuppressedByDetailedWindow += 1;
       }
       this.incrementBoundedCounter(
         this.diagnostics.metricTagCounts,
@@ -301,7 +299,7 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
         LOGGING_DIAGNOSTICS_DEFAULT.MAX_METRIC_TAG_CARDINALITY,
       );
     } else {
-      this.diagnostics.nonMetricsLogs += LOCAL_NUM_ONE;
+      this.diagnostics.nonMetricsLogs += 1;
     }
 
     const subsystem = context.subsystem || LOGGING_DIAGNOSTICS_UNKNOWN_SUBSYSTEM;
@@ -321,13 +319,13 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   incrementBoundedCounter(map, key, maxCardinality) {
     if (map.has(key)) {
-      map.set(key, map.get(key) + LOCAL_NUM_ONE);
+      map.set(key, map.get(key) + 1);
       return;
     }
     if (map.size >= maxCardinality) {
       return;
     }
-    map.set(key, LOCAL_NUM_ONE);
+    map.set(key, 1);
   },
 
   /**
@@ -339,8 +337,8 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   getTopCounterEntries(map, fieldName) {
     return [...map.entries()]
-      .sort((left, right) => right[LOCAL_NUM_ONE] - left[LOCAL_NUM_ONE])
-      .slice(LOCAL_NUM_ZERO, LOGGING_DIAGNOSTICS_DEFAULT.TOP_LIMIT)
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, LOGGING_DIAGNOSTICS_DEFAULT.TOP_LIMIT)
       .map(([name, count]) => ({[fieldName]: name, count}));
   },
 
@@ -404,7 +402,7 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   setMetricsDefaultResolutionMs(metricsDefaultResolutionMs) {
     if (!Number.isFinite(metricsDefaultResolutionMs) ||
-      metricsDefaultResolutionMs < LOCAL_NUM_ZERO) {
+      metricsDefaultResolutionMs < 0) {
       return false;
     }
 
@@ -419,7 +417,7 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
    */
   setMetricsDetailedWindowTtlMs(metricsDetailedWindowTtlMs) {
     if (!Number.isFinite(metricsDetailedWindowTtlMs) ||
-      metricsDetailedWindowTtlMs < LOCAL_NUM_1000) {
+      metricsDetailedWindowTtlMs < LOCAL_NUM_ONE_THOUSAND) {
       return false;
     }
 

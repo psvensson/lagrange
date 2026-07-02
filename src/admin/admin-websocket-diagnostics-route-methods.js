@@ -16,8 +16,6 @@ const {
   ADMIN_SERVICE_DISCOVERY,
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
   HTTP_STATUS,
-  NUM,
-  TYPEOF,
   normalizeIdentifier,
   normalizeSql,
   parseDiscoveryBooleanQuery,
@@ -29,13 +27,13 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
   resolveServiceDiagnosticsReport() {
     if (
       !this.serviceDiagnosticsProvider ||
-      typeof this.serviceDiagnosticsProvider !== TYPEOF.FUNCTION
+      typeof this.serviceDiagnosticsProvider !== 'function'
     ) {
       return null;
     }
 
     const report = this.serviceDiagnosticsProvider();
-    if (!report || typeof report !== TYPEOF.OBJECT) {
+    if (!report || typeof report !== 'object') {
       return null;
     }
     return report;
@@ -243,7 +241,7 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
   async buildLocalControlSnapshot() {
     if (
       typeof this.controlSnapshot.resolveLocalControlSnapshot ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return this.controlSnapshot.resolveLocalControlSnapshot();
     }
@@ -288,7 +286,7 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
   },
 
   async buildControlSnapshotQueryResult(options = {}) {
-    let attempts = NUM.ZERO;
+    let attempts = 0;
     while (true) {
       let resultOrError;
       try {
@@ -306,7 +304,7 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
       );
 
       if (decision.outcome === CONTROL_SNAPSHOT_RETRY_DECISION.RETRY) {
-        attempts += NUM.ONE;
+        attempts += 1;
         this.logger.warn(SNAPSHOT_RETRY_LOG_MSG, {
           attempt: attempts,
           reason: decision.reason,

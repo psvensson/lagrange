@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
@@ -22,7 +21,7 @@ function normalizeCanonicalStartupNodeIds(values = []) {
     [...new Set(
       (Array.isArray(values) ? values : [])
         .filter((nodeId) =>
-          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+          typeof nodeId === 'string' && nodeId.length > 0,
         ),
     )].sort(),
   );
@@ -31,10 +30,10 @@ function normalizeCanonicalStartupNodeIds(values = []) {
 export function normalizeStartupProjectionReadinessContract(source = {}) {
   const contract =
     source.projectionReadinessContract &&
-      typeof source.projectionReadinessContract === TYPEOF.OBJECT ?
+      typeof source.projectionReadinessContract === 'object' ?
       source.projectionReadinessContract :
       source.projectionReadiness &&
-        typeof source.projectionReadiness === TYPEOF.OBJECT ?
+        typeof source.projectionReadiness === 'object' ?
         source.projectionReadiness :
         null;
   return contract ? Object.freeze({...contract}) : null;
@@ -43,7 +42,7 @@ export function normalizeStartupProjectionReadinessContract(source = {}) {
 export function normalizeStartupProjectionActiveGate(projectionReadinessContract) {
   const activeGate =
     projectionReadinessContract?.activeGate &&
-      typeof projectionReadinessContract.activeGate === TYPEOF.OBJECT ?
+      typeof projectionReadinessContract.activeGate === 'object' ?
       projectionReadinessContract.activeGate :
       null;
   return activeGate ? Object.freeze({...activeGate}) : null;
@@ -61,8 +60,8 @@ export function isStartupProjectionActiveGateBlocked(activeGate) {
 }
 
 export function buildStartupAuthorityFailureDescriptor(failureReason) {
-  return typeof failureReason === TYPEOF.STRING &&
-    failureReason.length > NUM.ZERO ?
+  return typeof failureReason === 'string' &&
+    failureReason.length > 0 ?
     Object.freeze({
       state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
       reason: failureReason,
@@ -74,8 +73,8 @@ export function buildStartupAuthorityFailureDescriptor(failureReason) {
 
 export function buildStartupAuthorityPublicationDescriptor(details = {}) {
   const observationState =
-    typeof details.publicationObservationState === TYPEOF.STRING &&
-    details.publicationObservationState.length > NUM.ZERO ?
+    typeof details.publicationObservationState === 'string' &&
+    details.publicationObservationState.length > 0 ?
       details.publicationObservationState :
       AUTHORITY_PUBLICATION_OBSERVATION_STATE.OBSERVATION_UNAVAILABLE;
   const unpublishedObservation =
@@ -92,8 +91,8 @@ export function buildStartupAuthorityPublicationDescriptor(details = {}) {
           AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
     });
   const status =
-    typeof details.publicationStatus === TYPEOF.STRING &&
-    details.publicationStatus.length > NUM.ZERO ?
+    typeof details.publicationStatus === 'string' &&
+    details.publicationStatus.length > 0 ?
       Object.freeze({
         state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
         value: details.publicationStatus,
@@ -115,7 +114,7 @@ export function buildStartupAuthorityPriorityPartitionDescriptor(
   priorityPartitionSummary,
 ) {
   return priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof priorityPartitionSummary === 'object' ?
     Object.freeze({
       state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
       summary: priorityPartitionSummary,
@@ -128,8 +127,8 @@ export function buildStartupAuthorityPriorityPartitionDescriptor(
 export function buildStartupAuthorityRecoveryProtocolDescriptor(
   recoveryProtocolState,
 ) {
-  return typeof recoveryProtocolState === TYPEOF.STRING &&
-    recoveryProtocolState.length > NUM.ZERO ?
+  return typeof recoveryProtocolState === 'string' &&
+    recoveryProtocolState.length > 0 ?
     Object.freeze({
       state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
       value: recoveryProtocolState,
@@ -143,7 +142,7 @@ export function buildStartupAuthorityTargetParticipationDescriptor(
   targetParticipation,
 ) {
   return targetParticipation &&
-    typeof targetParticipation === TYPEOF.OBJECT ?
+    typeof targetParticipation === 'object' ?
     Object.freeze({
       state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
       participation: targetParticipation,
@@ -155,8 +154,8 @@ export function buildStartupAuthorityTargetParticipationDescriptor(
 
 export function buildStartupAuthorityAdmissionDescriptor(details = {}) {
   const state =
-    typeof details.admissionState === TYPEOF.STRING &&
-    details.admissionState.length > NUM.ZERO ?
+    typeof details.admissionState === 'string' &&
+    details.admissionState.length > 0 ?
       details.admissionState :
       STARTUP_AUTHORITY_ADMISSION_STATE.UNAVAILABLE;
   const reasonCodes = Object.freeze(
@@ -166,7 +165,7 @@ export function buildStartupAuthorityAdmissionDescriptor(details = {}) {
   );
   const clusterIncarnationFence =
     details.clusterIncarnationFence &&
-      typeof details.clusterIncarnationFence === TYPEOF.OBJECT ?
+      typeof details.clusterIncarnationFence === 'object' ?
       Object.freeze({
         ...details.clusterIncarnationFence,
         ...(Array.isArray(details.clusterIncarnationFence.reasonCodes) ?
@@ -214,7 +213,7 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
   );
   const publicationRecoveryGate =
     options.publicationRecoveryGate &&
-      typeof options.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof options.publicationRecoveryGate === 'object' ?
       options.publicationRecoveryGate :
       null;
   const projectionReadinessContract =
@@ -278,7 +277,7 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
         admissionState: admission.state,
         admissionReasonCodes: admission.reasonCodes,
         ...(admission.clusterIncarnationFence &&
-          typeof admission.clusterIncarnationFence === TYPEOF.OBJECT ?
+          typeof admission.clusterIncarnationFence === 'object' ?
           {
             clusterIncarnationFence: admission.clusterIncarnationFence,
           } :
@@ -312,7 +311,7 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
     publicationObservationState:
       startupAuthority.publication.observationState,
     ...(startupAuthority.publicationRecoveryGate &&
-      typeof startupAuthority.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof startupAuthority.publicationRecoveryGate === 'object' ?
       {
         publicationRecoveryGate: startupAuthority.publicationRecoveryGate,
       } :
@@ -356,7 +355,7 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
         admissionReasonCodes: startupAuthority.admission.reasonCodes,
         ...(startupAuthority.admission.clusterIncarnationFence &&
           typeof startupAuthority.admission.clusterIncarnationFence ===
-            TYPEOF.OBJECT ?
+            'object' ?
           {
             clusterIncarnationFence:
               startupAuthority.admission.clusterIncarnationFence,

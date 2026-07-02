@@ -87,7 +87,7 @@ test('shutdown clears active cdcBufferReplayTimer', async (t) => {
 
   try {
     // Buffer events and register a subscriber so replay can be scheduled
-    for (let i = NUM.ZERO; i < BUFFERED_EVENT_COUNT; i++) {
+    for (let i = 0; i < BUFFERED_EVENT_COUNT; i++) {
       const event = buildNodeCdcEvent(`node-shutdown-${i}`, i);
       partition.cdcEventBuffer.buffer(event);
     }
@@ -97,7 +97,7 @@ test('shutdown clears active cdcBufferReplayTimer', async (t) => {
 
     // Buffer more events after subscriber is registered so
     // scheduleBufferedCDCReplay creates a timer
-    for (let i = NUM.ZERO; i < BUFFERED_EVENT_COUNT; i++) {
+    for (let i = 0; i < BUFFERED_EVENT_COUNT; i++) {
       const event = buildNodeCdcEvent(`node-post-sub-${i}`, i + NUM.TEN);
       partition.cdcEventBuffer.buffer(event);
     }
@@ -163,7 +163,7 @@ test('no new cdcBufferReplayTimer created after shutdown', async (t) => {
     // subscriber-count guard. This simulates a race where a callback
     // still holds a reference to the partition.
     partition.cdcSubscribers.add(subscriber);
-    for (let i = NUM.ZERO; i < BUFFERED_EVENT_COUNT; i++) {
+    for (let i = 0; i < BUFFERED_EVENT_COUNT; i++) {
       const event = buildNodeCdcEvent(`node-after-shutdown-${i}`, i);
       partition.cdcEventBuffer.buffer(event);
     }
@@ -177,7 +177,7 @@ test('no new cdcBufferReplayTimer created after shutdown', async (t) => {
     );
 
     t.equal(
-      postShutdownTimers.length, NUM.ZERO,
+      postShutdownTimers.length, 0,
       'no new timers should be created after shutdown',
     );
   } finally {
@@ -259,7 +259,7 @@ test('shutdown waits for tracked in-flight CDC delivery', async (t) => {
 
   t.equal(shutdownResolved, true,
     'shutdown should resolve after tracked CDC delivery completes');
-  t.equal(partition.pendingCDCEventDeliveries.size, NUM.ZERO,
+  t.equal(partition.pendingCDCEventDeliveries.size, 0,
     'tracked CDC deliveries should be cleared after shutdown');
 });
 

@@ -4,7 +4,6 @@
  * Parses module DWARF metadata, builds indexes, and caches results.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DWARF_INDEX_VALUE as VALUE,
   DWARF_INDEX_ERROR_MSG as ERR,
@@ -121,7 +120,7 @@ function buildDwarfIndexCacheKey(moduleRef, moduleDigest) {
  * @param {Object} request - Request payload.
  */
 function assertModuleIdentityRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
   if (!isNonEmptyString(request.moduleRef)) {
@@ -137,8 +136,8 @@ function assertModuleIdentityRequest(request) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

@@ -4,7 +4,6 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 const {
   MOVE_REASON,
   MoveType,
-  NUM,
   REBALANCER_LOG_MSG,
   REBALANCER_MOVE_FIELD,
   REBALANCER_PRE_EXECUTION_HANDOFF_STATE,
@@ -17,7 +16,6 @@ const {
   REBALANCER_RUNTIME_REASON,
   REBALANCER_SKIP_REASON,
   REBALANCER_TARGET_READINESS_MODE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
@@ -126,7 +124,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
     const normalizedReplicaId = String(
       replicaId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (normalizedReplicaId.length === NUM.ZERO) {
+    if (normalizedReplicaId.length === 0) {
       return false;
     }
     const inFlightOps = this.getInFlightOperations();
@@ -170,7 +168,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
     const nodeId = String(
       move?.nodeId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    return nodeId.length > NUM.ZERO ?
+    return nodeId.length > 0 ?
       nodeId :
       REBALANCER_PRE_EXECUTION_READINESS_NODE_ID.UNTARGETED;
   }
@@ -201,10 +199,10 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
   }
 
   normalizePreExecutionSkipDetail(skipDetail) {
-    const normalizedSkipDetail = typeof skipDetail === TYPEOF.STRING ?
+    const normalizedSkipDetail = typeof skipDetail === 'string' ?
       skipDetail.trim() :
       UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
-    return normalizedSkipDetail.length > NUM.ZERO ?
+    return normalizedSkipDetail.length > 0 ?
       normalizedSkipDetail :
       REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
   }
@@ -215,27 +213,27 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       const nodeId = this.resolvePreExecutionReadinessNodeId(move);
       const current = groupsByNodeId.get(nodeId) || {
         nodeId,
-        moveCount: NUM.ZERO,
-        addLikeMoveCount: NUM.ZERO,
-        removeMoveCount: NUM.ZERO,
-        otherMoveCount: NUM.ZERO,
+        moveCount: 0,
+        addLikeMoveCount: 0,
+        removeMoveCount: 0,
+        otherMoveCount: 0,
       };
       const addLikeMoveCount =
         move?.type === MoveType.ADD || move?.type === MoveType.REPLACE ?
-          current.addLikeMoveCount + NUM.ONE :
+          current.addLikeMoveCount + 1 :
           current.addLikeMoveCount;
       const removeMoveCount = move?.type === MoveType.REMOVE ?
-        current.removeMoveCount + NUM.ONE :
+        current.removeMoveCount + 1 :
         current.removeMoveCount;
       const otherMoveCount =
         move?.type !== MoveType.ADD &&
         move?.type !== MoveType.REPLACE &&
         move?.type !== MoveType.REMOVE ?
-          current.otherMoveCount + NUM.ONE :
+          current.otherMoveCount + 1 :
           current.otherMoveCount;
       groupsByNodeId.set(nodeId, {
         nodeId,
-        moveCount: current.moveCount + NUM.ONE,
+        moveCount: current.moveCount + 1,
         addLikeMoveCount,
         removeMoveCount,
         otherMoveCount,
@@ -262,7 +260,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
             result?.reason || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
           ).trim(),
         )
-        .filter((reason) => reason.length > NUM.ZERO),
+        .filter((reason) => reason.length > 0),
     )].sort((left, right) => left.localeCompare(right));
   }
 
@@ -289,7 +287,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
   } = {}) {
     const executableMoveCount = executableGroups.reduce(
       (count, group) => count + group.nodeMoves.length,
-      NUM.ZERO,
+      0,
     );
     const evidence = Object.freeze({
       shuttingDown: this.isShuttingDown === true,
@@ -418,7 +416,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       const strictNodeMoves = nodeMoves.filter((move) =>
         this.shouldRequireMoveTargetReadiness(move),
       );
-      const skipDetail = nodeId && strictNodeMoves.length > NUM.ZERO ?
+      const skipDetail = nodeId && strictNodeMoves.length > 0 ?
         await getSkipReasonCached(nodeId) :
         REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
       if (

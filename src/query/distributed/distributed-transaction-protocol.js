@@ -12,8 +12,6 @@ import {
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 
 /**
@@ -132,7 +130,7 @@ const distributedTransactionProtocolMethods = {
       return getRemainingBudgetMs(tx.timeoutBudget, {now: this.now});
     }
     if (Number.isFinite(tx?.timeoutDeadline)) {
-      return Math.max(LOCAL_NUM_ZERO, tx.timeoutDeadline - this.now());
+      return Math.max(0, tx.timeoutDeadline - this.now());
     }
     return Number.POSITIVE_INFINITY;
   },
@@ -145,7 +143,7 @@ const distributedTransactionProtocolMethods = {
    */
 
   isTransactionBudgetExceeded(tx) {
-    return this.getRemainingTransactionBudgetMs(tx) <= LOCAL_NUM_ZERO;
+    return this.getRemainingTransactionBudgetMs(tx) <= 0;
   },
 
   /**
@@ -214,7 +212,7 @@ const distributedTransactionProtocolMethods = {
         (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
         {participantKeys: this.getPrepareParticipantKeys(tx)},
       );
-      if (prepareFailures.length > LOCAL_NUM_ZERO) {
+      if (prepareFailures.length > 0) {
         if (this.hasTimeoutFailure(prepareFailures)) {
           return this.abortTimedOutTransaction(
             tx,
@@ -270,7 +268,7 @@ const distributedTransactionProtocolMethods = {
         skipBudgetEnforcement: commitStatusAllowsTimeout,
       },
     );
-    if (commitFailures.length > LOCAL_NUM_ZERO) {
+    if (commitFailures.length > 0) {
       if (
         !commitStatusAllowsTimeout &&
         this.hasTimeoutFailure(commitFailures)
@@ -321,7 +319,7 @@ const distributedTransactionProtocolMethods = {
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
 
-    if (rollbackFailures.length > LOCAL_NUM_ZERO) {
+    if (rollbackFailures.length > 0) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     } else {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
@@ -329,17 +327,17 @@ const distributedTransactionProtocolMethods = {
     }
 
     return {
-      success: rollbackFailures.length === LOCAL_NUM_ZERO,
+      success: rollbackFailures.length === 0,
       operation: QUERY_OPERATION.ROLLBACK,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
       failedParticipants: rollbackFailures,
       errorCode:
-        rollbackFailures.length > LOCAL_NUM_ZERO ?
+        rollbackFailures.length > 0 ?
           QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
           undefined,
       error:
-        rollbackFailures.length > LOCAL_NUM_ZERO ?
+        rollbackFailures.length > 0 ?
           QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
           undefined,
     };
@@ -441,7 +439,7 @@ const distributedTransactionProtocolMethods = {
     operation,
     options = {},
   ) {
-    let attempt = LOCAL_NUM_ZERO;
+    let attempt = 0;
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
     while (true) {
       if (
@@ -462,7 +460,7 @@ const distributedTransactionProtocolMethods = {
           throw error;
         }
 
-        attempt += LOCAL_NUM_ONE;
+        attempt += 1;
         const retryDelayMs = this.calculateParticipantRetryDelay(attempt);
         this.emitParticipantRetryDiagnostic({
           transactionId: tx.transactionId,

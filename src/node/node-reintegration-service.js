@@ -9,7 +9,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
@@ -39,7 +38,6 @@ import {
 } from './node-reintegration-reconciliation.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_CRITICAL = 'critical';
 
 const NodeStatus = NODE_STATUS;
@@ -49,7 +47,7 @@ function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
   };
-  if (typeof node?.status === LOCAL_STR_STRING && node.status.length > LOCAL_NUM_ZERO) {
+  if (typeof node?.status === LOCAL_STR_STRING && node.status.length > 0) {
     whereClause.status = node.status;
   }
   if (Number.isFinite(node?.last_heartbeat)) {
@@ -69,7 +67,7 @@ function guardedUpdateApplied(result) {
     return false;
   }
   const affectedRows = Number(result?.partitionResult?.affectedRows);
-  return !Number.isFinite(affectedRows) || affectedRows > NUM.ZERO;
+  return !Number.isFinite(affectedRows) || affectedRows > 0;
 }
 
 /**
@@ -123,7 +121,7 @@ class NodeReintegrationService extends EventEmitter {
     this.currentCheckIntervalMs = this.checkIntervalMs;
     this.pendingReintegrations = new Map(); // nodeId -> reintegration info
     this.cleanupTimers = new Map(); // nodeId -> cleanup timer
-    this.reintegrationCount = NUM.ZERO;
+    this.reintegrationCount = 0;
 
     this.initialized = false;
   }
@@ -215,7 +213,7 @@ class NodeReintegrationService extends EventEmitter {
    */
   async checkRecoveringNodes() {
     const nodes = this.getNodes();
-    let recoveringNodeCount = NUM.ZERO;
+    let recoveringNodeCount = 0;
 
     for (const node of nodes) {
       // Skip self
@@ -225,15 +223,15 @@ class NodeReintegrationService extends EventEmitter {
 
       // Process recovering nodes
       if (node.status === NODE_STATUS.RECOVERING) {
-        recoveringNodeCount += NUM.ONE;
+        recoveringNodeCount += 1;
         await this.processRecoveringNode(node);
       }
     }
 
     return {
       recoveringNodeCount,
-      hadActivity: recoveringNodeCount > NUM.ZERO ||
-        this.pendingReintegrations.size > NUM.ZERO,
+      hadActivity: recoveringNodeCount > 0 ||
+        this.pendingReintegrations.size > 0,
     };
   }
 
@@ -327,7 +325,7 @@ class NodeReintegrationService extends EventEmitter {
       nodeId,
       status: ReintegrationStatus.IN_PROGRESS,
       startedAt: Date.now(),
-      healthChecks: NUM.ZERO,
+      healthChecks: 0,
     });
 
     try {
@@ -352,11 +350,11 @@ class NodeReintegrationService extends EventEmitter {
    */
   async verifyNodeHealth(node) {
     const nodeId = node.node_id;
-    let successfulChecks = NUM.ZERO;
+    let successfulChecks = 0;
 
-    for (let i = NUM.ZERO; i < this.healthCheckCount; i += NUM.ONE) {
+    for (let i = 0; i < this.healthCheckCount; i += 1) {
       // Wait between checks
-      if (i > NUM.ZERO) {
+      if (i > 0) {
         await this.sleep(this.healthCheckIntervalMs);
       }
 
@@ -368,22 +366,22 @@ class NodeReintegrationService extends EventEmitter {
       }
 
       const now = Date.now();
-      const lastHeartbeat = currentNode.last_heartbeat || NUM.ZERO;
+      const lastHeartbeat = currentNode.last_heartbeat || 0;
       const timeSinceHeartbeat = now - lastHeartbeat;
 
       // Consider healthy if heartbeat within HEALTHY_HEARTBEAT_WINDOW_MS
       if (timeSinceHeartbeat < NODE_REINTEGRATION_DEFAULT.HEALTHY_HEARTBEAT_WINDOW_MS) {
-        successfulChecks += NUM.ONE;
+        successfulChecks += 1;
         this.logger.debug(NODE_REINTEGRATION_LOG_MSG.HEALTH_CHECK_PASSED, {
           nodeId,
-          check: i + NUM.ONE,
+          check: i + 1,
           total: this.healthCheckCount,
           timeSinceHeartbeat,
         });
       } else {
         this.logger.warn(NODE_REINTEGRATION_LOG_MSG.HEALTH_CHECK_FAILED, {
           nodeId,
-          check: i + NUM.ONE,
+          check: i + 1,
           total: this.healthCheckCount,
           timeSinceHeartbeat,
         });
@@ -419,7 +417,7 @@ class NodeReintegrationService extends EventEmitter {
     pending.rejoinReconciliationState = decision.state;
     pending.rejoinReconciliationReasonCodes = decision.reasonCodes;
     pending.blockedReasonCode =
-      decision.reasonCodes[NUM.ZERO] ||
+      decision.reasonCodes[0] ||
       NODE_REINTEGRATION_REASON.REJOIN_RECONCILIATION_PENDING;
     pending.blockedAt = now;
   }
@@ -512,7 +510,7 @@ class NodeReintegrationService extends EventEmitter {
     // Update pending reintegration status
     this.recordPendingReintegrationCompleted(nodeId, now);
 
-    this.reintegrationCount += NUM.ONE;
+    this.reintegrationCount += 1;
 
     // Emit events
     this.emit(NODE_REINTEGRATION_EVENT.NODE_REINTEGRATED, {
@@ -637,7 +635,7 @@ class NodeReintegrationService extends EventEmitter {
     const nodes = this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return node.node_id === nodeId;
     });
-    return nodes[NUM.ZERO] || null;
+    return nodes[0] || null;
   }
 
   /**

@@ -3,9 +3,6 @@
  */
 
 import {
-  TYPEOF,
-} from '../constants/index.js';
-import {
   DEBUG_SESSION_FIELD as DSF,
   DEBUG_BREAKPOINT_FIELD as DBF,
   DEBUG_SNAPSHOT_FIELD as DPF,
@@ -15,7 +12,6 @@ import {
 } from './debug-metadata-service-constants.js';
 
 const LOCAL_STR_BASE64 = 'base64';
-const LOCAL_STR_EMPTY = '';
 
 /**
  * @param {Object} row
@@ -65,7 +61,7 @@ function normalizeSnapshotRow(row, includeEnvelope) {
   let envelope = null;
   if (includeEnvelope) {
     envelope = Buffer.from(
-      row[DPF.SNAPSHOT_BYTES_BASE64] || LOCAL_STR_EMPTY,
+      row[DPF.SNAPSHOT_BYTES_BASE64] || '',
       LOCAL_STR_BASE64,
     );
   }
@@ -94,7 +90,7 @@ function normalizeSnapshotRow(row, includeEnvelope) {
  * @return {*}
  */
 function parseJson(value, fallback) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return fallback;
   }
   try {

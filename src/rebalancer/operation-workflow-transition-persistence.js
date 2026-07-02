@@ -15,7 +15,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
   TRANSITION_STEP_OPTIONS,
-  TYPEOF,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
   isCoordinatorOwnedOperationType,
@@ -100,7 +99,7 @@ class OperationWorkflowTransitionPersistence
           if (
             typeof projectedOperation[
               PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD
-            ] === TYPEOF.STRING
+            ] === 'string'
           ) {
             nextOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
               projectedOperation[

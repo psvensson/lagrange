@@ -13,13 +13,10 @@
 import {readdirSync, readFileSync, existsSync} from 'node:fs';
 import {join, basename} from 'node:path';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_1T4GV = 'Distributed Harness Summary: ';
-const LOCAL_STR_1DBPT = '  ';
-const LOCAL_STR_1FRJD = 'No report files found in ';
+const LOCAL_STR_DISTRIBUTED_HARNESS_SUMMARY = 'Distributed Harness Summary: ';
+const LOCAL_STR_SPACE_SPACE = '  ';
+const LOCAL_STR_NO_REPORT_FILES_FOUND_IN = 'No report files found in ';
 
 const DEFAULT_REPORT_DIR = 'test-output/reports';
 const MS_PER_SECOND = 1000;
@@ -73,7 +70,7 @@ function parseReport(filePath) {
       scenario: scenario.scenario || UNKNOWN_SCENARIO,
       passed: !!scenario.passed,
       durationMs,
-      clusterSize: scenario.clusterSize || current.clusterSize || LOCAL_NUM_ZERO,
+      clusterSize: scenario.clusterSize || current.clusterSize || 0,
       opsPerSec,
       totalOps: lm.totalOps || null,
       successRate: lm.successRate != null ? lm.successRate : null,
@@ -117,7 +114,7 @@ function discoverLatestRuns(reportDir) {
 
   const results = Array.from(byScenario.values());
   results.sort((a, b) => {
-    if (a.passed !== b.passed) return a.passed ? -LOCAL_NUM_ONE : LOCAL_NUM_ONE;
+    if (a.passed !== b.passed) return a.passed ? -1 : 1;
     return a.scenario.localeCompare(b.scenario);
   });
   return results;
@@ -126,27 +123,27 @@ function discoverLatestRuns(reportDir) {
 /** Pad string to fixed width (left-aligned). */
 function pad(str, width) {
   const s = String(str);
-  if (s.length >= width) return s.slice(LOCAL_NUM_ZERO, width);
+  if (s.length >= width) return s.slice(0, width);
   return s + LOCAL_STR_SPACE.repeat(width - s.length);
 }
 
 /** Pad string to fixed width (right-aligned). */
 function rpad(str, width) {
   const s = String(str);
-  if (s.length >= width) return s.slice(LOCAL_NUM_ZERO, width);
+  if (s.length >= width) return s.slice(0, width);
   return LOCAL_STR_SPACE.repeat(width - s.length) + s;
 }
 
 /** Format a number with one decimal, or return '-'. */
 function fmtNum(val, suffix) {
   if (val == null) return NO_VALUE;
-  return Number(val).toFixed(DECIMAL_PLACES) + (suffix || LOCAL_STR_EMPTY);
+  return Number(val).toFixed(DECIMAL_PLACES) + (suffix || '');
 }
 
 /** Format an integer or return '-'. */
 function fmtInt(val, suffix) {
   if (val == null) return NO_VALUE;
-  return Math.round(val) + (suffix || LOCAL_STR_EMPTY);
+  return Math.round(val) + (suffix || '');
 }
 
 /**
@@ -160,7 +157,7 @@ function printTable(runs) {
 
   console.log(sep);
   console.log(
-    LOCAL_STR_1T4GV +
+    LOCAL_STR_DISTRIBUTED_HARNESS_SUMMARY +
     `${passCount} passed, ${failCount} failed ` +
     `(${runs.length} scenarios)`,
   );
@@ -208,7 +205,7 @@ function printTable(runs) {
       const errSnippet = r.error.length > ERROR_TRUNCATE_LEN ?
         r.error.slice(0, ERROR_TRUNCATE_LEN) + '...' :
         r.error;
-      console.log(LOCAL_STR_1DBPT + errSnippet);
+      console.log(LOCAL_STR_SPACE_SPACE + errSnippet);
     }
   }
 
@@ -216,7 +213,7 @@ function printTable(runs) {
   const timestamps = runs
     .filter((r) => r.timestamp)
     .map((r) => r.timestamp);
-  if (timestamps.length > LOCAL_NUM_ZERO) {
+  if (timestamps.length > 0) {
     const oldest = timestamps.reduce((a, b) => a < b ? a : b);
     const newest = timestamps.reduce((a, b) => a > b ? a : b);
     console.log(`Report range: ${oldest} .. ${newest}`);
@@ -228,9 +225,9 @@ function main() {
   const args = process.argv.slice(2);
   let reportDir = DEFAULT_REPORT_DIR;
 
-  for (let i = LOCAL_NUM_ZERO; i < args.length; i++) {
-    if (args[i] === ARG_REPORT_DIR && args[i + LOCAL_NUM_ONE]) {
-      reportDir = args[i + LOCAL_NUM_ONE];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === ARG_REPORT_DIR && args[i + 1]) {
+      reportDir = args[i + 1];
       i++;
     }
   }
@@ -241,8 +238,8 @@ function main() {
   }
 
   const runs = discoverLatestRuns(reportDir);
-  if (runs.length === LOCAL_NUM_ZERO) {
-    console.log(LOCAL_STR_1FRJD + reportDir);
+  if (runs.length === 0) {
+    console.log(LOCAL_STR_NO_REPORT_FILES_FOUND_IN + reportDir);
     return;
   }
 

@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   buildPublicationRecoveryGateSnapshot,
 } from
@@ -257,7 +256,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       pendingAckNodeIds: pendingAckEvidence.pendingAckNodeIds,
     });
   const authoritativePublicationMembershipAvailable =
-    authoritativePublicationMembershipNodeIds.length > NUM.ZERO;
+    authoritativePublicationMembershipNodeIds.length > 0;
   const steadyPublishedSelectedPublicationMembershipOpen =
     hasSteadyPublishedSelectedPublicationMembershipOpen({
       publicationConvergence,
@@ -271,7 +270,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       authoritativePublicationMembershipNodeIds,
       selectedPublicationMembershipNodeIds,
       selectedPublicationMembershipOpen:
-        pendingAckEvidence.pendingAckCount > NUM.ZERO ||
+        pendingAckEvidence.pendingAckCount > 0 ||
         steadyPublishedSelectedPublicationMembershipOpen === true ||
         rawPublicationConvergenceGate?.publicationPending === true ||
         publicationConvergence?.publicationPending === true,
@@ -337,7 +336,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     selectedMissingPublishedEvidence.state ===
       PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
         .FULL_SELECTED_COVERAGE &&
-    pendingAckEvidence.pendingAckCount === NUM.ZERO;
+    pendingAckEvidence.pendingAckCount === 0;
   const selectedMembershipClosesPublication =
     hasSelectedFullCoverageClosure ||
     selectedMembershipClosesStaleOpenPublication;
@@ -348,7 +347,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     countOnlyUnknownPublicationDeficit;
   const ownerReconcileNarrowsOpenPublication =
     !missingPublishedClosed &&
-    ownerReconcileNarrowedMissingPublishedNodeIds.length > NUM.ZERO;
+    ownerReconcileNarrowedMissingPublishedNodeIds.length > 0;
   const missingPublishedNodeIds = resolvePublicationMissingPublishedNodeIds({
     ownerReconcileNarrowsOpenPublication,
     ownerReconcileNarrowedMissingPublishedNodeIds,
@@ -410,7 +409,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     !rawPublicationConvergenceGate &&
     !priorityRecoveryDecisionSnapshots &&
     !priorityRecoveryObservation &&
-    activeGateProgressRecords.length === NUM.ZERO
+    activeGateProgressRecords.length === 0
   ) {
     return null;
   }

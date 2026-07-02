@@ -1,9 +1,9 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_STATUS, STATE, TYPEOF} from '../constants/index.js';
+import {SERVICE_STATUS, STATE} from '../constants/index.js';
 
-const LOCAL_STR_1JMCK = 'ready_lease_expires_at';
-const LOCAL_STR_I7OGB = 'readyLeaseExpiresAt';
-const LOCAL_STR_XKEQN = 'readyLeaseExpiresAtMs';
+const LOCAL_STR_READY_LEASE_EXPIRES_AT = 'ready_lease_expires_at';
+const LOCAL_STR_READYLEASEEXPIRESAT = 'readyLeaseExpiresAt';
+const LOCAL_STR_READYLEASEEXPIRESATMS = 'readyLeaseExpiresAtMs';
 const LOCAL_STR_READYLEASEEXPIRES = 'readyLeaseExpires';
 
 const REQUIRE_ACTIVE_STATUS_DEFAULT = true;
@@ -12,12 +12,12 @@ function normalizeConnectionState(nodeRow) {
   const rawState = nodeRow?.connection_state ??
     nodeRow?.connectionState ??
     null;
-  if (typeof rawState !== TYPEOF.STRING) {
+  if (typeof rawState !== 'string') {
     return null;
   }
 
   const normalizedState = rawState.toLowerCase();
-  return normalizedState.length > NUM.ZERO ? normalizedState : null;
+  return normalizedState.length > 0 ? normalizedState : null;
 }
 
 function getFiniteNumber(value) {
@@ -28,20 +28,20 @@ function getFiniteNumber(value) {
 function hasOwnField(target, fieldName) {
   return Boolean(
     target &&
-    typeof target === TYPEOF.OBJECT &&
+    typeof target === 'object' &&
     Object.prototype.hasOwnProperty.call(target, fieldName),
   );
 }
 
 function hasExplicitReadyLeaseField(nodeRow) {
-  return hasOwnField(nodeRow, LOCAL_STR_1JMCK) ||
-    hasOwnField(nodeRow, LOCAL_STR_I7OGB) ||
-    hasOwnField(nodeRow, LOCAL_STR_XKEQN) ||
+  return hasOwnField(nodeRow, LOCAL_STR_READY_LEASE_EXPIRES_AT) ||
+    hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRESAT) ||
+    hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRESATMS) ||
     hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRES);
 }
 
 function getNodeHeartbeatWatermark(nodeRow) {
-  if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+  if (!nodeRow || typeof nodeRow !== 'object') {
     return null;
   }
 
@@ -63,54 +63,54 @@ function getNodeHeartbeatWatermark(nodeRow) {
 
 function compareWatermarkNumber(previousValue, nextValue) {
   if (previousValue === null || nextValue === null || previousValue === nextValue) {
-    return NUM.ZERO;
+    return 0;
   }
-  return nextValue > previousValue ? NUM.ONE : NUM.NEGATIVE_ONE;
+  return nextValue > previousValue ? 1 : -1;
 }
 
 function compareReadyLeaseTie(previous, next) {
   if (previous.readyLeaseExpiresAt !== null && next.readyLeaseExpiresAt === null) {
     if (next.connectionState === STATE.CONNECTED ||
         next.connectionState === STATE.READY) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (next.connectionState === STATE.DISCONNECTED) {
-      return NUM.ONE;
+      return 1;
     }
   }
 
   if (previous.readyLeaseExpiresAt === null &&
       next.readyLeaseExpiresAt !== null) {
-    return NUM.ONE;
+    return 1;
   }
 
-  return NUM.ZERO;
+  return 0;
 }
 
 function compareConnectionStateTie(previous, next) {
   if (previous.connectionState === STATE.READY &&
       next.connectionState === STATE.CONNECTED) {
-    return NUM.NEGATIVE_ONE;
+    return -1;
   }
   if (previous.connectionState === STATE.CONNECTED &&
       next.connectionState === STATE.READY) {
-    return NUM.ONE;
+    return 1;
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
   const previous = getNodeHeartbeatWatermark(previousRow);
   const next = getNodeHeartbeatWatermark(nextRow);
   if (!previous || !next) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const heartbeatComparison = compareWatermarkNumber(
     previous.lastHeartbeat,
     next.lastHeartbeat,
   );
-  if (heartbeatComparison !== NUM.ZERO) {
+  if (heartbeatComparison !== 0) {
     return heartbeatComparison;
   }
 
@@ -118,18 +118,18 @@ function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
     previous.readyLeaseExpiresAt,
     next.readyLeaseExpiresAt,
   );
-  if (readyLeaseComparison !== NUM.ZERO) {
+  if (readyLeaseComparison !== 0) {
     return readyLeaseComparison;
   }
 
   if (previous.lastHeartbeat === null ||
       next.lastHeartbeat === null ||
       previous.lastHeartbeat !== next.lastHeartbeat) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const readyLeaseTieComparison = compareReadyLeaseTie(previous, next);
-  if (readyLeaseTieComparison !== NUM.ZERO) {
+  if (readyLeaseTieComparison !== 0) {
     return readyLeaseTieComparison;
   }
 
@@ -137,7 +137,7 @@ function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
 }
 
 function isNodeHeartbeatWatermarkRegression(previousRow, nextRow) {
-  return compareNodeHeartbeatWatermarks(previousRow, nextRow) < NUM.ZERO;
+  return compareNodeHeartbeatWatermarks(previousRow, nextRow) < 0;
 }
 
 /**
@@ -255,7 +255,7 @@ function isNodeReadyWithConnection(options = {}) {
   }
 
   const cache = options.systemTableCache;
-  if (!cache || typeof cache.get !== TYPEOF.FUNCTION) {
+  if (!cache || typeof cache.get !== 'function') {
     return false;
   }
 
@@ -265,7 +265,7 @@ function isNodeReadyWithConnection(options = {}) {
   }
 
   const router = options.messageRouter;
-  if (!router || typeof router.getConnectionState !== TYPEOF.FUNCTION) {
+  if (!router || typeof router.getConnectionState !== 'function') {
     return false;
   }
 
@@ -287,16 +287,16 @@ async function isNodeReadyWithTransport(options = {}) {
 
   const router = options.messageRouter;
   if (options.requireOutboundQueue &&
-      typeof router.isOutboundQueueAvailable === TYPEOF.FUNCTION &&
+      typeof router.isOutboundQueueAvailable === 'function' &&
       !router.isOutboundQueueAvailable(options.nodeId)) {
     return false;
   }
 
   if (options.enableReadinessPing &&
-      typeof router.pingNode === TYPEOF.FUNCTION) {
+      typeof router.pingNode === 'function') {
     const pingTimeout = Number.isFinite(options.readinessPingTimeoutMs) ?
       options.readinessPingTimeoutMs :
-      NUM.ZERO;
+      0;
     const ok = await router.pingNode(options.nodeId, pingTimeout);
     if (!ok) {
       return false;

@@ -65,7 +65,7 @@ function createFailThenSucceedCDC(failCount) {
     onCalls: [],
     removeCalls: [],
     listenerCountCalls: [],
-    fullAttempts: NUM.ZERO,
+    fullAttempts: 0,
   };
 
   // Track attempts: each time the catch block finishes cleanup
@@ -194,15 +194,15 @@ test('structured diagnostics logged on each retry failure ' +
   );
 
   // Verify structured payload on each retry log
-  for (let i = NUM.ZERO; i < retryLogs.length; i++) {
+  for (let i = 0; i < retryLogs.length; i++) {
     const payload = retryLogs[i].payload;
     t.ok(payload.nodeId, 'retry log includes nodeId');
     t.ok(payload.tables, 'retry log includes tables');
     t.ok(payload.error, 'retry log includes error message');
     t.equal(
       payload.attempt,
-      i + NUM.ONE,
-      `retry log attempt is ${i + NUM.ONE}`,
+      i + 1,
+      `retry log attempt is ${i + 1}`,
     );
     t.equal(
       payload.maxRetries,
@@ -222,7 +222,7 @@ test('structured diagnostics logged on each retry failure ' +
   );
   t.equal(
     completeLogs.length,
-    NUM.ONE,
+    1,
     'CDC re-establishment complete log emitted',
   );
 });
@@ -255,8 +255,8 @@ test('success after retries sets cdcSubscriptionsActive ' +
     (l) => l.msg ===
       JOINING_LOG_MSG.CDC_REESTABLISHMENT_COMPLETE,
   );
-  t.equal(completeLogs.length, NUM.ONE, 'one completion log');
-  const payload = completeLogs[NUM.ZERO].payload;
+  t.equal(completeLogs.length, 1, 'one completion log');
+  const payload = completeLogs[0].payload;
   t.ok(payload.nodeId, 'completion log includes nodeId');
   t.ok(
     typeof payload.elapsedMs === 'number',
@@ -271,7 +271,7 @@ test('success after retries sets cdcSubscriptionsActive ' +
   );
   t.equal(
     exhaustedLogs.length,
-    NUM.ZERO,
+    0,
     'no exhaustion log on successful retry',
   );
 });
@@ -285,7 +285,7 @@ test('timeout path emits diagnostic summary when ' +
   // Each call to now() advances by a large step so the budget
   // is exhausted after a few attempts.
   const STEP_MS = 10000;
-  let clockMs = NUM.ZERO;
+  let clockMs = 0;
   const advancingNow = () => {
     const current = clockMs;
     clockMs += STEP_MS;
@@ -298,7 +298,7 @@ test('timeout path emits diagnostic summary when ' +
     throw new Error('Persistent subscription failure');
   };
   alwaysFailCDC.removeListener = () => alwaysFailCDC;
-  alwaysFailCDC.listenerCount = () => NUM.ZERO;
+  alwaysFailCDC.listenerCount = () => 0;
 
   const {service, logs} = createServiceWithCapturingLogger({
     now: advancingNow,
@@ -313,12 +313,12 @@ test('timeout path emits diagnostic summary when ' +
       JOINING_LOG_MSG.CDC_REESTABLISHMENT_TIMEOUT,
   );
   t.ok(
-    timeoutLogs.length > NUM.ZERO,
+    timeoutLogs.length > 0,
     'timeout diagnostic emitted when budget expires',
   );
 
   // Verify timeout payload has required fields
-  const payload = timeoutLogs[NUM.ZERO].payload;
+  const payload = timeoutLogs[0].payload;
   t.ok(payload.nodeId, 'timeout log includes nodeId');
   t.ok(payload.tables, 'timeout log includes tables');
   t.ok(
@@ -337,10 +337,10 @@ test('timeout path emits diagnostic summary when ' +
       JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY_EXHAUSTED,
   );
   t.ok(
-    exhaustedLogs.length > NUM.ZERO,
+    exhaustedLogs.length > 0,
     'exhaustion summary emitted after timeout',
   );
-  const exhaustedPayload = exhaustedLogs[NUM.ZERO].payload;
+  const exhaustedPayload = exhaustedLogs[0].payload;
   t.ok(
     exhaustedPayload.subscriptionStatus,
     'exhaustion log includes subscriptionStatus',
@@ -354,7 +354,7 @@ test('partial listener cleanup on retry removes ' +
   const FAIL_COUNT = 2;
   const emitter = new EventEmitter();
   const removeCalls = [];
-  let fullAttempts = NUM.ZERO;
+  let fullAttempts = 0;
   const firstEventType = 'insert';
 
   const originalOn = emitter.on.bind(emitter);
@@ -396,7 +396,7 @@ test('partial listener cleanup on retry removes ' +
   // Verify cleanup events include all 4 CDC event types per
   // failed attempt
   const firstCleanupEvents = removeCalls
-    .slice(NUM.ZERO, EVENTS_PER_CLEANUP)
+    .slice(0, EVENTS_PER_CLEANUP)
     .map((c) => c.event);
   t.ok(
     firstCleanupEvents.includes('insert'),
@@ -428,7 +428,7 @@ test('getCdcSubscriptionStatus returns subscribed ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const {mock} = createFailThenSucceedCDC(NUM.ZERO);
+  const {mock} = createFailThenSucceedCDC(0);
   const {service} = createServiceWithCapturingLogger();
   service.cdcIntegrationService = mock;
 
@@ -464,7 +464,7 @@ async (t) => {
   ];
   for (const et of eventTypes) {
     t.ok(
-      status.eventTypes[et] > NUM.ZERO,
+      status.eventTypes[et] > 0,
       `listener count for ${et} is positive`,
     );
   }
@@ -504,7 +504,7 @@ test('getCdcSubscriptionStatus returns failed ' +
   for (const et of eventTypes) {
     t.equal(
       status.eventTypes[et],
-      NUM.ZERO,
+      0,
       `listener count for ${et} is zero`,
     );
   }
@@ -539,7 +539,7 @@ test('getCdcSubscriptionStatus reads from existing ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const {mock} = createFailThenSucceedCDC(NUM.ZERO);
+  const {mock} = createFailThenSucceedCDC(0);
   const {service} = createServiceWithCapturingLogger();
   service.cdcIntegrationService = mock;
 

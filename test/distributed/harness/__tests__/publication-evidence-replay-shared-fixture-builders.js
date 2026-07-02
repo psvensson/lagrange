@@ -76,8 +76,8 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
     REPLAY_TEST_140646Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT,
   ]);
   const REPLAY_TEST_140646Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_140646Z_EXTRA_REPLICA_ORDINAL = NUM.FOUR;
@@ -136,7 +136,7 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
   const REPLAY_TEST_145246Z_TIMESTAMP_MS = 1777992905960;
   const REPLAY_TEST_145246Z_READY_LEASE_EXTENSION_MS = 60000;
   const REPLAY_TEST_145246Z_EXPIRED_READY_LEASE_MS =
-  REPLAY_TEST_145246Z_TIMESTAMP_MS - NUM.ONE;
+  REPLAY_TEST_145246Z_TIMESTAMP_MS - 1;
   const REPLAY_TEST_145246Z_PUBLICATION_EPOCH = 2;
   const REPLAY_TEST_145246Z_EXPECTED_NODE_COUNT = 5;
   const REPLAY_TEST_145246Z_TERMINAL_ACTIVE_NODE_COUNT = 4;
@@ -255,16 +255,16 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
   const REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT = 3;
   const REPLAY_TEST_145246Z_TOTAL_CANDIDATE_COUNT = 5;
   const REPLAY_TEST_145246Z_ADMISSION_ALLOWED_COUNT = 1;
-  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_MOVE_LIMIT = NUM.TWO;
-  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT = NUM.TWO;
+  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_MOVE_LIMIT = 2;
+  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT = 2;
   const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT =
-  NUM.ZERO;
-  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIPPED_MOVE_COUNT = NUM.TWO;
+  0;
+  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIPPED_MOVE_COUNT = 2;
   const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUP_COUNT =
-  NUM.TWO;
-  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_GROUP_COUNT = NUM.ONE;
+  2;
+  const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_GROUP_COUNT = 1;
   const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_GROUP_COUNT =
-  NUM.ONE;
+  1;
   const REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS = 12834;
   const REPLAY_TEST_145246Z_BUDGET_PRESSURE_ROW_COUNT = 3;
   const REPLAY_TEST_145246Z_CLUSTER_MEMBER_UNHEALTHY =
@@ -325,8 +325,8 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
     REPLAY_TEST_145246Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT,
   ]);
   const REPLAY_TEST_145246Z_SEED_REPLICA_ORDINALS = Object.freeze([
-    NUM.ONE,
-    NUM.TWO,
+    1,
+    2,
     NUM.THREE,
   ]);
   const REPLAY_TEST_145246Z_EXTRA_REPLICA_ORDINAL = NUM.FOUR;
@@ -402,20 +402,20 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
   Object.freeze([
     Object.freeze({
       nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
-      moveCount: NUM.ONE,
-      addLikeMoveCount: NUM.ONE,
-      removeMoveCount: NUM.ZERO,
-      otherMoveCount: NUM.ZERO,
+      moveCount: 1,
+      addLikeMoveCount: 1,
+      removeMoveCount: 0,
+      otherMoveCount: 0,
       readinessState:
         REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_READINESS_STATE,
       skipDetail: READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE,
     }),
     Object.freeze({
       nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
-      moveCount: NUM.ONE,
-      addLikeMoveCount: NUM.ZERO,
-      removeMoveCount: NUM.ONE,
-      otherMoveCount: NUM.ZERO,
+      moveCount: 1,
+      addLikeMoveCount: 0,
+      removeMoveCount: 1,
+      otherMoveCount: 0,
       readinessState:
         REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_READINESS_STATE,
       skipDetail: REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_SKIP_DETAIL,
@@ -450,7 +450,7 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
     for (const tableId of PRIORITY_CONTROL_PLANE_TABLE_IDS) {
       const partitionId = INITIAL_PARTITION_IDS[tableId];
       REPLAY_TEST_NODE_IDS.forEach((nodeId, index) => {
-        const replicaId = `${partitionId}${REPLAY_TEST_REPLICA_SEPARATOR}${index + NUM.ONE}`;
+        const replicaId = `${partitionId}${REPLAY_TEST_REPLICA_SEPARATOR}${index + 1}`;
         serviceRows.push({
           service_id: replicaId,
           service_type: SERVICE_TYPE.PARTITION,
@@ -472,7 +472,7 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
         publicationEpoch: REPLAY_TEST_PUBLICATION_EPOCH,
         publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
         publishedActiveNodeIds: REPLAY_TEST_NODE_IDS,
-        pendingAckNodeIds: [REPLAY_TEST_NODE_IDS[NUM.TWO]],
+        pendingAckNodeIds: [REPLAY_TEST_NODE_IDS[2]],
         prioritySpreadPending: true,
         priorityPartitionSummary: {
           satisfied: false,
@@ -538,9 +538,9 @@ export function buildPublicationEvidenceReplaySharedFixtureBuilders(context) {
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_102455Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_102455Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,

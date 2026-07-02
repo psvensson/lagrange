@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../../src/constants/index.js';
 import {
   isReplicaOperationInFlight,
   isReplicaOperationStale,
@@ -149,22 +148,22 @@ const POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE = Object.freeze([
 ]);
 const POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE = Object.freeze([
   Object.freeze({
-    matches: (evidence) => evidence.expectedPartitionIds.length === NUM.ZERO,
+    matches: (evidence) => evidence.expectedPartitionIds.length === 0,
     state: POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
     reasonCodes: Object.freeze([
       POST_REBALANCE_CLOSURE_REASON.CDC_PROJECTION_UNAVAILABLE,
     ]),
   }),
   Object.freeze({
-    matches: (evidence) => evidence.missingLeaderPartitionIds.length === NUM.ZERO,
+    matches: (evidence) => evidence.missingLeaderPartitionIds.length === 0,
     state: POST_REBALANCE_CLOSURE_STATE.CLOSED,
     reasonCodes: POST_REBALANCE_CLOSURE_EMPTY_LIST,
   }),
   Object.freeze({
     matches: (evidence) =>
       evidence.ignoreStaleInFlightReplicaOperations === true &&
-      evidence.staleDiscountCount > NUM.ZERO &&
-      evidence.uncoveredMissingLeaderPartitionIds.length === NUM.ZERO,
+      evidence.staleDiscountCount > 0 &&
+      evidence.uncoveredMissingLeaderPartitionIds.length === 0,
     state: POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
     reasonCodes: Object.freeze([
       POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS,
@@ -179,9 +178,9 @@ const POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE = Object.freeze([
   }),
 ]);
 
-function normalizeNonNegativeInteger(value, fallback = NUM.ZERO) {
+function normalizeNonNegativeInteger(value, fallback = 0) {
   const numericValue = Number(value);
-  if (Number.isFinite(numericValue) && numericValue >= NUM.ZERO) {
+  if (Number.isFinite(numericValue) && numericValue >= 0) {
     return Math.floor(numericValue);
   }
   return fallback;
@@ -198,7 +197,7 @@ function normalizeStringList(values = POST_REBALANCE_CLOSURE_EMPTY_LIST) {
     ...new Set(
       candidateValues
         .map((value) => String(value || POST_REBALANCE_CLOSURE_TEXT_EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
@@ -209,7 +208,7 @@ function normalizeEntries(value = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   }
   if (
     value &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value)
   ) {
     return Object.entries(value);
@@ -221,10 +220,10 @@ function normalizeCountMap(value = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const countMap = new Map();
   for (const [rawKey, rawCount] of normalizeEntries(value)) {
     const key = String(rawKey || POST_REBALANCE_CLOSURE_TEXT_EMPTY).trim();
-    if (key.length === NUM.ZERO) {
+    if (key.length === 0) {
       continue;
     }
-    countMap.set(key, normalizeNonNegativeInteger(rawCount, NUM.ZERO));
+    countMap.set(key, normalizeNonNegativeInteger(rawCount, 0));
   }
   return countMap;
 }
@@ -233,10 +232,10 @@ function normalizeDurationRecord(value = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const durationRecord = {};
   for (const [rawKey, rawDuration] of normalizeEntries(value)) {
     const key = String(rawKey || POST_REBALANCE_CLOSURE_TEXT_EMPTY).trim();
-    if (key.length === NUM.ZERO) {
+    if (key.length === 0) {
       continue;
     }
-    durationRecord[key] = normalizeNonNegativeInteger(rawDuration, NUM.ZERO);
+    durationRecord[key] = normalizeNonNegativeInteger(rawDuration, 0);
   }
   return durationRecord;
 }
@@ -248,7 +247,7 @@ function normalizeLeaderPartitionIds(value = POST_REBALANCE_CLOSURE_EMPTY_RECORD
     const leader = String(
       rawLeader || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
     ).trim();
-    if (key.length > NUM.ZERO && leader.length > NUM.ZERO) {
+    if (key.length > 0 && leader.length > 0) {
       leaderPartitionIds.add(key);
     }
   }
@@ -256,7 +255,7 @@ function normalizeLeaderPartitionIds(value = POST_REBALANCE_CLOSURE_EMPTY_RECORD
 }
 
 function getDiagnosticsObject(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value) ?
+  return value && typeof value === 'object' && !Array.isArray(value) ?
     value :
     POST_REBALANCE_CLOSURE_EMPTY_RECORD;
 }
@@ -385,7 +384,7 @@ function collectOverTargetPartitionIds(
     }
   }
   for (const [partitionId, durationMs] of Object.entries(overTargetDurations)) {
-    if (durationMs > NUM.ZERO) {
+    if (durationMs > 0) {
       partitionIds.add(partitionId);
     }
   }
@@ -436,7 +435,7 @@ function collectPriorityRecoveryDiagnosticsSources(
     controlPlaneDiagnostics?.priorityRecoveryObservation
       ?.priorityRecoveryCurrentSummary,
   ]) {
-    if (candidate && typeof candidate === TYPEOF.OBJECT &&
+    if (candidate && typeof candidate === 'object' &&
       !Array.isArray(candidate)) {
       sources.push(candidate);
     }
@@ -484,7 +483,7 @@ function collectPriorityRecoverySummaryEvidence(
   const allowOpenSatisfiedWorkflow =
     isPriorityRecoveryClosureSatisfied(source);
   const hasSatisfiedClosurePartitionEvidence =
-    satisfiedClosurePartitionIds.size > NUM.ZERO;
+    satisfiedClosurePartitionIds.size > 0;
   const requireSatisfiedClosureForSummaryEvidence =
     options.requireSatisfiedClosureForSummaryEvidence === true;
   const allowSummaryPartitionEvidence =
@@ -493,10 +492,10 @@ function collectPriorityRecoverySummaryEvidence(
     hasSatisfiedClosurePartitionEvidence === true;
   const partitionIdsBySemanticState =
     source?.priorityRecoveryPartitionIdsBySemanticState &&
-    typeof source.priorityRecoveryPartitionIdsBySemanticState === TYPEOF.OBJECT ?
+    typeof source.priorityRecoveryPartitionIdsBySemanticState === 'object' ?
       source.priorityRecoveryPartitionIdsBySemanticState :
       source?.partitionIdsBySemanticState &&
-          typeof source.partitionIdsBySemanticState === TYPEOF.OBJECT ?
+          typeof source.partitionIdsBySemanticState === 'object' ?
         source.partitionIdsBySemanticState :
         POST_REBALANCE_CLOSURE_EMPTY_RECORD;
   evidence.push({
@@ -609,7 +608,7 @@ function collectPriorityRecoveryPartitionSummaries(source) {
     source?.priorityRecoveryPartitionSummary,
     source?.publicationConvergenceGate?.priorityPartitionSummary,
   ].filter((candidate) =>
-    candidate && typeof candidate === TYPEOF.OBJECT && !Array.isArray(candidate));
+    candidate && typeof candidate === 'object' && !Array.isArray(candidate));
 }
 
 function normalizeBlockedPriorityPartitionId(partition) {
@@ -636,7 +635,7 @@ function collectOpenPriorityRecoveryWorkflowPartitionIds(sources) {
       const partitionId = String(
         snapshot?.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
       ).trim();
-      if (partitionId.length > NUM.ZERO) {
+      if (partitionId.length > 0) {
         partitionIds.add(partitionId);
       }
     }
@@ -655,7 +654,7 @@ function collectOpenPriorityRecoverySummaryPartitionIds(sources) {
         summary.blockedPartitions :
         POST_REBALANCE_CLOSURE_EMPTY_LIST) {
         const partitionId = normalizeBlockedPriorityPartitionId(partition);
-        if (partitionId.length > NUM.ZERO) {
+        if (partitionId.length > 0) {
           partitionIds.add(partitionId);
         }
       }
@@ -664,7 +663,7 @@ function collectOpenPriorityRecoverySummaryPartitionIds(sources) {
       }
       if (
         summary.satisfied === false ||
-        normalizeNonNegativeInteger(summary.blockedPartitionCount) > NUM.ZERO
+        normalizeNonNegativeInteger(summary.blockedPartitionCount) > 0
       ) {
         partitionIds.add(POST_REBALANCE_CLOSURE_TEXT_EMPTY);
       }
@@ -674,7 +673,7 @@ function collectOpenPriorityRecoverySummaryPartitionIds(sources) {
 }
 
 function isPriorityRecoveryPartitionSummarySatisfied(summary) {
-  if (!summary || typeof summary !== TYPEOF.OBJECT || Array.isArray(summary)) {
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return false;
   }
   const blockedPartitions = Array.isArray(summary.blockedPartitions) ?
@@ -682,10 +681,10 @@ function isPriorityRecoveryPartitionSummarySatisfied(summary) {
     POST_REBALANCE_CLOSURE_EMPTY_LIST;
   return (
     summary.satisfied === true &&
-    normalizeStringList(summary.missingPartitionIds).length === NUM.ZERO &&
-    normalizeStringList(summary.blockedPartitionIds).length === NUM.ZERO &&
-    blockedPartitions.length === NUM.ZERO &&
-    normalizeNonNegativeInteger(summary.blockedPartitionCount) === NUM.ZERO
+    normalizeStringList(summary.missingPartitionIds).length === 0 &&
+    normalizeStringList(summary.blockedPartitionIds).length === 0 &&
+    blockedPartitions.length === 0 &&
+    normalizeNonNegativeInteger(summary.blockedPartitionCount) === 0
   );
 }
 
@@ -730,7 +729,7 @@ function isPriorityRecoveryPartitionCoveredBySatisfiedClosure(
     partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
   ).trim();
   return (
-    normalizedPartitionId.length > NUM.ZERO &&
+    normalizedPartitionId.length > 0 &&
     satisfiedClosurePartitionIds instanceof Set &&
     satisfiedClosurePartitionIds.has(normalizedPartitionId)
   );
@@ -742,13 +741,13 @@ function hasOpenPriorityRecoveryResiduals(controlPlaneDiagnostics) {
   );
   const openSummaryPartitionIds =
     collectOpenPriorityRecoverySummaryPartitionIds(sources);
-  if (openSummaryPartitionIds.size > NUM.ZERO) {
+  if (openSummaryPartitionIds.size > 0) {
     return true;
   }
   const openWorkflowPartitionIds =
     collectOpenPriorityRecoveryWorkflowPartitionIds(sources);
   if (
-    openWorkflowPartitionIds.size > NUM.ZERO &&
+    openWorkflowPartitionIds.size > 0 &&
     hasSatisfiedPriorityRecoveryPartitionSummary(sources) !== true
   ) {
     return true;
@@ -759,7 +758,7 @@ function hasOpenPriorityRecoveryResiduals(controlPlaneDiagnostics) {
 }
 
 function isPriorityRecoveryClosureWitnessSatisfied(witness) {
-  if (!witness || typeof witness !== TYPEOF.OBJECT || Array.isArray(witness)) {
+  if (!witness || typeof witness !== 'object' || Array.isArray(witness)) {
     return false;
   }
   if (witness.state !== PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_FRESH) {
@@ -768,12 +767,12 @@ function isPriorityRecoveryClosureWitnessSatisfied(witness) {
   return (
     witness.prioritySpreadPending !== true &&
     witness.publicationRefreshRequired !== true &&
-    normalizeStringList(witness.blockedPartitionIds).length === NUM.ZERO &&
+    normalizeStringList(witness.blockedPartitionIds).length === 0 &&
     normalizeStringList(witness.unresolvedSemanticStateIds).length ===
-      NUM.ZERO &&
-    normalizeNonNegativeInteger(witness.blockedPartitionCount) === NUM.ZERO &&
+      0 &&
+    normalizeNonNegativeInteger(witness.blockedPartitionCount) === 0 &&
     normalizeNonNegativeInteger(witness.unresolvedSemanticStateCount) ===
-      NUM.ZERO
+      0
   );
 }
 
@@ -786,20 +785,20 @@ function isPriorityRecoveryClosureSatisfied(source) {
 function hasOpenPublicationDebt(publicationConvergence) {
   if (
     normalizeStringList(publicationConvergence.pendingAckNodeIds).length >
-      NUM.ZERO ||
+      0 ||
     normalizeStringList(publicationConvergence.missingPublishedNodeIds).length >
-      NUM.ZERO ||
+      0 ||
     normalizeStringList(
       publicationConvergence.missingPublishedRecoveryActiveNodeIds,
-    ).length > NUM.ZERO
+    ).length > 0
   ) {
     return true;
   }
   return (
     normalizeNonNegativeInteger(publicationConvergence.pendingAckCount) >
-      NUM.ZERO ||
+      0 ||
     normalizeNonNegativeInteger(publicationConvergence.missingPublishedCount) >
-      NUM.ZERO
+      0
   );
 }
 
@@ -961,7 +960,7 @@ function addNormalizedIds(target, ids) {
     const normalizedId = String(
       id || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
     ).trim();
-    if (normalizedId.length === NUM.ZERO) {
+    if (normalizedId.length === 0) {
       continue;
     }
     target.add(normalizedId);
@@ -1008,10 +1007,10 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
     buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
       controlPlaneDiagnostics,
     );
-  if (operationIds.size === NUM.ZERO && partitionIds.size === NUM.ZERO) {
-    return NUM.ZERO;
+  if (operationIds.size === 0 && partitionIds.size === 0) {
+    return 0;
   }
-  let matchingOperationCount = NUM.ZERO;
+  let matchingOperationCount = 0;
   for (const operationRow of Array.isArray(operationRows) ?
     operationRows :
     POST_REBALANCE_CLOSURE_EMPTY_LIST) {
@@ -1023,15 +1022,15 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
       normalizedOperation.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
     ).trim();
     const matchesByOperationId =
-      operationId.length > NUM.ZERO && operationIds.has(operationId);
+      operationId.length > 0 && operationIds.has(operationId);
     const matchesByPartitionId =
-      partitionId.length > NUM.ZERO && partitionIds.has(partitionId);
+      partitionId.length > 0 && partitionIds.has(partitionId);
     if (!matchesByOperationId && !matchesByPartitionId) {
       continue;
     }
-    matchingOperationCount += NUM.ONE;
+    matchingOperationCount += 1;
   }
-  return matchingOperationCount > NUM.ZERO ?
+  return matchingOperationCount > 0 ?
     matchingOperationCount :
     Math.max(operationIds.size, partitionIds.size);
 }
@@ -1048,8 +1047,8 @@ function isCacheVisibleSatisfiedPriorityRecoveryOperation(
     normalizedOperation.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
   ).trim();
   return (
-    operationId.length > NUM.ZERO && operationIds.has(operationId) ||
-    partitionId.length > NUM.ZERO && partitionIds.has(partitionId)
+    operationId.length > 0 && operationIds.has(operationId) ||
+    partitionId.length > 0 && partitionIds.has(partitionId)
   );
 }
 
@@ -1094,7 +1093,7 @@ function isPostPublicationReplicaOperationDiscountAllowed(
 function hasReplicaOperationTimelineInFlightEvidence(operationId, options) {
   const timelineById =
     options.operationTimelineById &&
-    typeof options.operationTimelineById === TYPEOF.OBJECT ?
+    typeof options.operationTimelineById === 'object' ?
       options.operationTimelineById :
       POST_REBALANCE_CLOSURE_EMPTY_RECORD;
   const timeline = Array.isArray(timelineById[operationId]) ?
@@ -1112,8 +1111,8 @@ function hasReplicaOperationInFlightEvidence(normalizedOperation, options) {
   ));
   return (
     isReplicaOperationInFlight(normalizedOperation) ||
-    operationId.length > NUM.ZERO && inFlightOperationIds.has(operationId) ||
-    operationId.length > NUM.ZERO &&
+    operationId.length > 0 && inFlightOperationIds.has(operationId) ||
+    operationId.length > 0 &&
       hasReplicaOperationTimelineInFlightEvidence(operationId, options)
   );
 }
@@ -1284,7 +1283,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const voterCounts = normalizeCountMap(options.voterCounts);
   const targetVoterCount = normalizeNonNegativeInteger(
     options.targetVoterCount,
-    NUM.ZERO,
+    0,
   );
   const overTargetDurations = normalizeDurationRecord(
     options.overTargetDurations,
@@ -1298,7 +1297,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
     options.expectedPartitionIds,
   );
   const expectedPartitionIds =
-    expectedPartitionIdsFromOptions.length > NUM.ZERO ?
+    expectedPartitionIdsFromOptions.length > 0 ?
       expectedPartitionIdsFromOptions :
       normalizeStringList(Array.from(voterCounts.keys()));
   const leaderPartitionIds = normalizeLeaderPartitionIds(options.leaders);
@@ -1310,7 +1309,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
       options.cacheVisibleSatisfiedPriorityRecoveryPartitionIds,
     );
   const priorityRecoveryPartitionIds =
-    cacheVisibleSatisfiedPriorityRecoveryPartitionIds.length > NUM.ZERO ?
+    cacheVisibleSatisfiedPriorityRecoveryPartitionIds.length > 0 ?
       cacheVisibleSatisfiedPriorityRecoveryPartitionIds :
       normalizeStringList(
         buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
@@ -1336,18 +1335,18 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   );
   const projectedActiveNodeIdSet = new Set(projectedActiveNodeIds);
   const stalePublishedNodeIds =
-    projectedActiveNodeIds.length > NUM.ZERO ?
+    projectedActiveNodeIds.length > 0 ?
       publishedActiveNodeIds.filter(
         (nodeId) => !projectedActiveNodeIdSet.has(nodeId),
       ) :
       POST_REBALANCE_CLOSURE_EMPTY_LIST;
   const publicationVisibility = resolvePublicationVisibility(
     controlPlaneDiagnostics,
-    publishedActiveNodeIds.length > NUM.ZERO,
+    publishedActiveNodeIds.length > 0,
   );
   const inFlightReplicaOperationCount = normalizeNonNegativeInteger(
     options.inFlightReplicaOperationCount,
-    NUM.ZERO,
+    0,
   );
   const effectiveInFlightReplicaOperationCount = normalizeNonNegativeInteger(
     options.effectiveInFlightReplicaOperationCount,
@@ -1355,7 +1354,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   );
   const staleInFlightReplicaOperationCount = normalizeNonNegativeInteger(
     options.staleInFlightReplicaOperationCount,
-    NUM.ZERO,
+    0,
   );
   const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
     normalizeNonNegativeInteger(
@@ -1364,7 +1363,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
     );
   const additionalInFlightDiscountCount = normalizeNonNegativeInteger(
     options.additionalInFlightDiscountCount,
-    NUM.ZERO,
+    0,
   );
   const staleDiscountCount = Math.min(
     inFlightReplicaOperationCount,
@@ -1382,11 +1381,11 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
     overTargetPartitionIds,
     maxOverTargetMs: normalizeNonNegativeInteger(
       options.maxOverTargetMs,
-      NUM.ZERO,
+      0,
     ),
     maxSustainedOverTargetMs: normalizeNonNegativeInteger(
       options.maxSustainedOverTargetMs,
-      NUM.ZERO,
+      0,
     ),
     inFlightReplicaOperationCount,
     effectiveInFlightReplicaOperationCount,
@@ -1419,7 +1418,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
 }
 
 function classifyOperationDrain(evidence) {
-  if (evidence.effectiveInFlightReplicaOperationCount > NUM.ZERO) {
+  if (evidence.effectiveInFlightReplicaOperationCount > 0) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.OPERATION_DRAIN,
       POST_REBALANCE_CLOSURE_STATE.OPEN,
@@ -1429,16 +1428,16 @@ function classifyOperationDrain(evidence) {
   }
   if (
     evidence.ignoreStaleInFlightReplicaOperations &&
-    evidence.inFlightReplicaOperationCount > NUM.ZERO &&
-    evidence.staleDiscountCount > NUM.ZERO
+    evidence.inFlightReplicaOperationCount > 0 &&
+    evidence.staleDiscountCount > 0
   ) {
     const reasonCodes = [];
-    if (evidence.staleInFlightReplicaOperationCount > NUM.ZERO) {
+    if (evidence.staleInFlightReplicaOperationCount > 0) {
       reasonCodes.push(
         POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS,
       );
     }
-    if (evidence.additionalInFlightDiscountCount > NUM.ZERO) {
+    if (evidence.additionalInFlightDiscountCount > 0) {
       reasonCodes.push(
         POST_REBALANCE_CLOSURE_REASON
           .IGNORED_POST_PUBLICATION_REPLICA_OPERATIONS,
@@ -1447,7 +1446,7 @@ function classifyOperationDrain(evidence) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.OPERATION_DRAIN,
       POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
-      reasonCodes.length > NUM.ZERO ?
+      reasonCodes.length > 0 ?
         reasonCodes :
         [POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS],
       evidence,
@@ -1484,7 +1483,7 @@ function classifyCdcProjectionVisible(evidence) {
 
 function classifyMembershipTrim(evidence, operationDrainState) {
   if (
-    evidence.stalePublishedNodeIds.length > NUM.ZERO &&
+    evidence.stalePublishedNodeIds.length > 0 &&
     evidence.membershipFreezeActive !== true
   ) {
     return buildDimension(
@@ -1494,7 +1493,7 @@ function classifyMembershipTrim(evidence, operationDrainState) {
       evidence,
     );
   }
-  if (evidence.overTargetPartitionIds.length === NUM.ZERO) {
+  if (evidence.overTargetPartitionIds.length === 0) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.MEMBERSHIP_TRIM,
       POST_REBALANCE_CLOSURE_STATE.CLOSED,
@@ -1529,7 +1528,7 @@ function classifyMembershipTrim(evidence, operationDrainState) {
 function classifyNoOverTarget(evidence, operationDrainState) {
   if (
     evidence.membershipFreezeActive === true &&
-    evidence.overTargetPartitionIds.length > NUM.ZERO
+    evidence.overTargetPartitionIds.length > 0
   ) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET,
@@ -1546,7 +1545,7 @@ function classifyNoOverTarget(evidence, operationDrainState) {
       evidence,
     );
   }
-  if (evidence.overTargetPartitionIds.length === NUM.ZERO) {
+  if (evidence.overTargetPartitionIds.length === 0) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET,
       POST_REBALANCE_CLOSURE_STATE.CLOSED,
@@ -1620,9 +1619,9 @@ function buildPostRebalanceClosureSnapshot(
       reasonCodes: dimension.reasonCodes,
     }));
   const state =
-    blockers.length > NUM.ZERO ?
+    blockers.length > 0 ?
       POST_REBALANCE_CLOSURE_STATE.OPEN :
-      softClosures.length > NUM.ZERO ?
+      softClosures.length > 0 ?
         POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED :
         POST_REBALANCE_CLOSURE_STATE.CLOSED;
 

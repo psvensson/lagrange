@@ -2,7 +2,6 @@
  * Replay runtime for deterministic snapshot debugging.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   deserializeSnapshotEnvelope,
 } from './snapshot-recorder.js';
@@ -12,7 +11,6 @@ import {
   REPLAY_RUNTIME_ERROR_MSG as ERR,
 } from './replay-runtime-constants.js';
 
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_RUNNING = 'running';
 const LOCAL_STR_PAUSED = 'paused';
 
@@ -47,11 +45,11 @@ class ReplayRuntime {
   loadSnapshot(request) {
     assertRequest(request);
     if (!request.manifest ||
-      typeof request.manifest !== TYPEOF.OBJECT) {
+      typeof request.manifest !== 'object') {
       throw new Error(ERR.MANIFEST_REQUIRED);
     }
     if (!request.snapshot ||
-      typeof request.snapshot !== TYPEOF.OBJECT) {
+      typeof request.snapshot !== 'object') {
       throw new Error(ERR.SNAPSHOT_REQUIRED);
     }
 
@@ -109,8 +107,8 @@ class ReplayRuntime {
    */
   async resume(request) {
     this._assertLoadedWithInstance(request);
-    if (this.frameCursor < this.snapshot.inputFrames.length - LOCAL_NUM_ONE) {
-      this.frameCursor += LOCAL_NUM_ONE;
+    if (this.frameCursor < this.snapshot.inputFrames.length - 1) {
+      this.frameCursor += 1;
     }
     return {
       status: LOCAL_STR_RUNNING,
@@ -147,14 +145,14 @@ class ReplayRuntime {
     const memoryBoundary = this._currentMemoryBoundary();
     const memory = memoryBoundary ?
       Buffer.from(memoryBoundary.bytesBase64, 'base64') :
-      Buffer.alloc(NUM.ZERO);
+      Buffer.alloc(0);
 
     return {
       state: LOCAL_STR_PAUSED,
-      codeOffset: frame?.codeOffset || NUM.ZERO,
+      codeOffset: frame?.codeOffset || 0,
       stackFrames: [{
-        frameId: NUM.ZERO,
-        codeOffset: frame?.codeOffset || NUM.ZERO,
+        frameId: 0,
+        codeOffset: frame?.codeOffset || 0,
       }],
       localsByFrame: {
         0: Array.isArray(frame?.locals) ? frame.locals : [],
@@ -221,7 +219,7 @@ class ReplayRuntime {
       return {ok: false, error: DRIFT.HOST_CALL_ARGS_MISMATCH};
     }
 
-    this.hostCallCursor += LOCAL_NUM_ONE;
+    this.hostCallCursor += 1;
     this.consumedHostCalls.push({
       namespace: request.namespace,
       functionName: request.functionName,
@@ -251,7 +249,7 @@ class ReplayRuntime {
     }
 
     return {
-      deterministic: diagnostics.length === NUM.ZERO,
+      deterministic: diagnostics.length === 0,
       expectedHostCallCount: this.snapshot.hostCallLedger.length,
       consumedHostCallCount: this.hostCallCursor,
       driftDiagnostics: diagnostics,
@@ -277,7 +275,7 @@ class ReplayRuntime {
    * @private
    */
   _currentFrame() {
-    if (this.snapshot.inputFrames.length === NUM.ZERO) {
+    if (this.snapshot.inputFrames.length === 0) {
       return null;
     }
     return this.snapshot.inputFrames[this.frameCursor] || null;
@@ -288,7 +286,7 @@ class ReplayRuntime {
    * @private
    */
   _currentMemoryBoundary() {
-    if (this.snapshot.memoryBoundaries.length === NUM.ZERO) {
+    if (this.snapshot.memoryBoundaries.length === 0) {
       return null;
     }
     const index = Math.min(
@@ -313,9 +311,9 @@ class ReplayRuntime {
    */
   _assertLoadedWithInstance(request) {
     this._assertLoaded();
-    if (!request || typeof request !== TYPEOF.OBJECT ||
+    if (!request || typeof request !== 'object' ||
       !request.instanceHandle ||
-      typeof request.instanceHandle !== TYPEOF.OBJECT) {
+      typeof request.instanceHandle !== 'object') {
       throw new Error(ERR.INSTANCE_HANDLE_REQUIRED);
     }
   }
@@ -347,7 +345,7 @@ function normalizeSnapshot(snapshot) {
  * @param {Object} request
  */
 function assertRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
 }
@@ -366,8 +364,8 @@ function deepEqualJson(left, right) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 /**

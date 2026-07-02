@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {
@@ -9,9 +8,8 @@ import {
 } from './pg/pg-translate.js';
 import {translateFunctionCall} from './pg/pg-function-registry.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_145ZS = '!=';
-const LOCAL_STR_151ZF = '<>';
+const LOCAL_STR_BANG_EQUALS = '!=';
+const LOCAL_STR_LT_GT = '<>';
 
 const PARSER_ERROR_MSG = Object.freeze({
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
@@ -151,7 +149,7 @@ const sqlParserExpressionMethods = {
       return translateTypeCast(
         {
           expr: expr.expr,
-          target: {dataType: expr.target[LOCAL_NUM_ZERO]?.dataType},
+          target: {dataType: expr.target[0]?.dataType},
         },
         convertExprFn,
       );
@@ -209,14 +207,14 @@ const sqlParserExpressionMethods = {
    */
   convertPgFunction(expr) {
     const nameParts = expr.name?.name || [];
-    const funcName = nameParts.length > NUM.ZERO ?
-      nameParts[NUM.ZERO].value :
+    const funcName = nameParts.length > 0 ?
+      nameParts[0].value :
       '';
     const argValues = expr.args?.value || [];
 
     // EXISTS is parsed as a function with a subquery argument
     if (funcName.toUpperCase() === PG_EXISTS_NAME) {
-      const subqueryArg = argValues[NUM.ZERO];
+      const subqueryArg = argValues[0];
       const innerAst = subqueryArg?.ast || subqueryArg;
       return {
         type: PG_EXPR_TYPE.EXISTS,
@@ -256,14 +254,14 @@ const sqlParserExpressionMethods = {
     if (operator === SQL_OPERATOR.IN || operator === SQL_OPERATOR.NOT_IN) {
       // IN subquery: right is expr_list with a single element having .ast
       if (Array.isArray(expr.right.value) &&
-          expr.right.value.length === NUM.ONE &&
-          expr.right.value[NUM.ZERO]?.ast) {
+          expr.right.value.length === 1 &&
+          expr.right.value[0]?.ast) {
         return {
           type: EXPR_TYPE.IN,
           expression: this.convertExpression(expr.left),
           subquery: {
             type: PG_EXPR_TYPE.SUBQUERY,
-            query: this.convertSelect(expr.right.value[NUM.ZERO].ast),
+            query: this.convertSelect(expr.right.value[0].ast),
           },
           negated: operator === SQL_OPERATOR.NOT_IN,
         };
@@ -283,8 +281,8 @@ const sqlParserExpressionMethods = {
       return {
         type: EXPR_TYPE.BETWEEN,
         expression: this.convertExpression(expr.left),
-        low: this.convertExpression(expr.right.value[NUM.ZERO]),
-        high: this.convertExpression(expr.right.value[NUM.ONE]),
+        low: this.convertExpression(expr.right.value[0]),
+        high: this.convertExpression(expr.right.value[1]),
       };
     }
 
@@ -319,7 +317,7 @@ const sqlParserExpressionMethods = {
 
   normalizeOperator(op) {
     const upper = op.toUpperCase();
-    if (upper === LOCAL_STR_145ZS) return LOCAL_STR_151ZF;
+    if (upper === LOCAL_STR_BANG_EQUALS) return LOCAL_STR_LT_GT;
     return upper;
   },
 
@@ -333,7 +331,7 @@ const sqlParserExpressionMethods = {
 
   convertColumnRef(expr) {
     // PG mode wraps column name in {expr: {type: 'default', value: name}}
-    const column = (typeof expr.column === TYPEOF.OBJECT && expr.column?.expr) ?
+    const column = (typeof expr.column === 'object' && expr.column?.expr) ?
       expr.column.expr.value :
       expr.column;
     return {

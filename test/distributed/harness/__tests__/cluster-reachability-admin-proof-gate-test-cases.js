@@ -13,7 +13,6 @@ import {CONTROL_PLANE_PUBLICATION_STATUS} from
   '../../../../src/control-plane/control-plane-publication-merge.js';
 import {
   SERVICE_STATUS,
-  TYPEOF,
 } from '../../../../src/constants/index.js';
 import {
   createCluster,
@@ -179,7 +178,7 @@ test(ACTIVE_GATE_STRONG_ADMISSION_TEST_NAME,
       },
       (error) => {
         timeoutError = error;
-        return typeof error?.message === TYPEOF.STRING &&
+        return typeof error?.message === 'string' &&
           error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
       },
       ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION,
@@ -465,7 +464,7 @@ test(ACTIVE_GATE_STRONG_ADMIN_PROOF_TEST_NAME,
       },
       (error) => {
         timeoutError = error;
-        return typeof error?.message === TYPEOF.STRING &&
+        return typeof error?.message === 'string' &&
           error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
       },
       ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION,

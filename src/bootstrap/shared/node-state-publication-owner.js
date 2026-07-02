@@ -29,9 +29,7 @@ import {
   QUERY_ERROR_MSG,
 } from '../../query/query-constants.js';
 import {
-  NUM,
   STATE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
@@ -70,39 +68,39 @@ class NodeStatePublicationOwner {
   }
 
   now() {
-    return typeof this.delegates.getNow === TYPEOF.FUNCTION ?
+    return typeof this.delegates.getNow === 'function' ?
       this.delegates.getNow() :
       Date.now();
   }
 
   sleep(delayMs) {
-    if (typeof this.delegates.getSleep === TYPEOF.FUNCTION) {
+    if (typeof this.delegates.getSleep === 'function') {
       return this.delegates.getSleep()(delayMs);
     }
     return Promise.resolve();
   }
 
   logger() {
-    return typeof this.delegates.getLogger === TYPEOF.FUNCTION ?
+    return typeof this.delegates.getLogger === 'function' ?
       this.delegates.getLogger() :
       console;
   }
 
   messageRouter() {
-    return typeof this.delegates.getMessageRouter === TYPEOF.FUNCTION ?
+    return typeof this.delegates.getMessageRouter === 'function' ?
       this.delegates.getMessageRouter() :
       null;
   }
 
   controlPlaneKernelIngress() {
     return typeof this.delegates.getControlPlaneKernelIngress ===
-        TYPEOF.FUNCTION ?
+        'function' ?
       this.delegates.getControlPlaneKernelIngress() :
       null;
   }
 
   getNodeCapabilities() {
-    return typeof this.delegates.getNodeCapabilities === TYPEOF.FUNCTION ?
+    return typeof this.delegates.getNodeCapabilities === 'function' ?
       this.delegates.getNodeCapabilities() :
       [];
   }
@@ -110,7 +108,7 @@ class NodeStatePublicationOwner {
   resolveNodeStateUpdateTargetCandidates(options = {}) {
     const controlPlaneKernelIngress = this.controlPlaneKernelIngress();
     if (typeof controlPlaneKernelIngress?.resolveNodeStateUpdateTargetCandidates !==
-        TYPEOF.FUNCTION) {
+        'function') {
       return [];
     }
     return controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates({
@@ -130,7 +128,7 @@ class NodeStatePublicationOwner {
     )) {
       return isRetryableControlPlaneError(error);
     }
-    const message = typeof error?.message === TYPEOF.STRING ? error.message : '';
+    const message = typeof error?.message === 'string' ? error.message : '';
     return message.includes(
       NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
     ) ||
@@ -171,11 +169,11 @@ class NodeStatePublicationOwner {
 
   resolveNodeStateUpdatePublicationRetryAfterMs(error) {
     const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (retryAfterMs > NUM.ZERO) {
-      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+    if (retryAfterMs > 0) {
+      return Math.max(1, Math.floor(retryAfterMs));
     }
     const configuredRetryAfterMs = Number(this.config?.readySignalRetryDelayMs);
-    if (Number.isFinite(configuredRetryAfterMs) && configuredRetryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(configuredRetryAfterMs) && configuredRetryAfterMs > 0) {
       return Math.floor(configuredRetryAfterMs);
     }
     return JOINING_DEFAULT.readySignalRetryDelayMs;
@@ -188,7 +186,7 @@ class NodeStatePublicationOwner {
 
   buildDeferredNodeStateUpdatePublicationOutcome(deferredPublication, nowMs) {
     const remainingRetryAfterMs = Math.max(
-      NUM.ZERO,
+      0,
       deferredPublication.nextAttemptAtMs - nowMs,
     );
     const publicationDiagnostics =
@@ -258,7 +256,7 @@ class NodeStatePublicationOwner {
       nodeId: this.nodeId,
       publicationMode: deferredPublicationMode,
       retryAfterMs: Math.max(
-        NUM.ZERO,
+        0,
         deferredPublication.nextAttemptAtMs - nowMs,
       ),
       nextAttemptAtMs: deferredPublication.nextAttemptAtMs,
@@ -359,7 +357,7 @@ class NodeStatePublicationOwner {
       message[ControlPlaneField.READY_LEASE_EXPIRES_AT] =
         options.readyLeaseExpiresAt;
     }
-    if (options.nodeRow && typeof options.nodeRow === TYPEOF.OBJECT) {
+    if (options.nodeRow && typeof options.nodeRow === 'object') {
       message[ControlPlaneField.NODE_ROW] = options.nodeRow;
     }
 
@@ -381,9 +379,9 @@ class NodeStatePublicationOwner {
     if (!Array.isArray(targetCandidates)) {
       targetCandidates = [];
     }
-    if (targetCandidates.length === NUM.ZERO &&
+    if (targetCandidates.length === 0 &&
         typeof this.delegates.resolveLegacyTargetCandidates ===
-          TYPEOF.FUNCTION) {
+          'function') {
       const legacyTargetCandidates =
         this.delegates.resolveLegacyTargetCandidates({
           allowBootstrapHints: true,
@@ -397,7 +395,7 @@ class NodeStatePublicationOwner {
         );
       }
     }
-    if (targetCandidates.length === NUM.ZERO) {
+    if (targetCandidates.length === 0) {
       const publicationDiagnostics = Object.freeze({
         publicationPath: NODE_STATE_UPDATE_PUBLICATION_PATH,
         nodeStatePublicationMode: publicationMode,
@@ -420,7 +418,7 @@ class NodeStatePublicationOwner {
 
     const deliveryTimeoutBudgetMs =
       typeof this.delegates.resolveNodeStateUpdateTimeoutMs ===
-          TYPEOF.FUNCTION ?
+          'function' ?
         this.delegates.resolveNodeStateUpdateTimeoutMs(options) :
         null;
     const deliveryDeadlineMs =
@@ -428,9 +426,9 @@ class NodeStatePublicationOwner {
         this.now() + deliveryTimeoutBudgetMs :
         null;
     let lastError = null;
-    let sameTargetRetryCount = NUM.ZERO;
+    let sameTargetRetryCount = 0;
 
-    for (let attempt = NUM.ZERO; attempt < targetCandidates.length; attempt++) {
+    for (let attempt = 0; attempt < targetCandidates.length; attempt++) {
       const targetAddress = targetCandidates[attempt];
       if (this.controlPlaneTargetAddress &&
           this.controlPlaneTargetAddress !== targetAddress) {
@@ -454,10 +452,10 @@ class NodeStatePublicationOwner {
         const remainingAttempts = targetCandidates.length - attempt;
         const deliveryTimeoutMs = Number.isFinite(deliveryDeadlineMs) ?
           Math.max(
-            NUM.ONE,
+            1,
             Math.floor(
-              Math.max(NUM.ZERO, deliveryDeadlineMs - this.now()) /
-                Math.max(NUM.ONE, remainingAttempts),
+              Math.max(0, deliveryDeadlineMs - this.now()) /
+                Math.max(1, remainingAttempts),
             ),
           ) :
           deliveryTimeoutBudgetMs;
@@ -488,7 +486,7 @@ class NodeStatePublicationOwner {
           publicationMode,
         });
         if (typeof this.controlPlaneKernelIngress()?.noteSuccessfulTarget ===
-            TYPEOF.FUNCTION) {
+            'function') {
           this.controlPlaneKernelIngress().noteSuccessfulTarget(targetAddress);
         }
         return buildNodeStateUpdatePublicationOutcome({
@@ -504,7 +502,7 @@ class NodeStatePublicationOwner {
             error,
             publicationMode,
           );
-        const isFinalAttempt = attempt >= targetCandidates.length - NUM.ONE;
+        const isFinalAttempt = attempt >= targetCandidates.length - 1;
         const shouldRetryAlternateTargetBeforeDeferring =
           options.heartbeatOnly === true &&
           isFinalAttempt !== true &&
@@ -515,7 +513,7 @@ class NodeStatePublicationOwner {
         const shouldRetryAlternateTarget = !isFinalAttempt &&
           (retryableTargetFailure || shouldRetryAlternateTargetBeforeDeferring);
         const shouldRetrySameTarget = isFinalAttempt &&
-          sameTargetRetryCount < NUM.ONE &&
+          sameTargetRetryCount < 1 &&
           retryableTargetFailure &&
           (options.heartbeatOnly !== true ||
             isHeartbeatEscalatedControlPlaneNodeStatePublicationMode(
@@ -567,7 +565,7 @@ class NodeStatePublicationOwner {
         if (failureAction.retryTarget ===
             NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.DEFERRED_SLOT) {
           if (typeof this.controlPlaneKernelIngress()?.invalidateTarget ===
-              TYPEOF.FUNCTION) {
+              'function') {
             this.controlPlaneKernelIngress().invalidateTarget(targetAddress);
           }
           this.controlPlaneTargetAddress = null;
@@ -582,12 +580,12 @@ class NodeStatePublicationOwner {
 
         if (failureAction.retryTarget ===
             NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.SAME_TARGET) {
-          sameTargetRetryCount += NUM.ONE;
-          if (failureAction.retryAfterMs > NUM.ZERO) {
+          sameTargetRetryCount += 1;
+          if (failureAction.retryAfterMs > 0) {
             await this.sleep(failureAction.retryAfterMs);
           }
           if (typeof this.controlPlaneKernelIngress()?.invalidateTarget ===
-              TYPEOF.FUNCTION) {
+              'function') {
             this.controlPlaneKernelIngress().invalidateTarget(targetAddress);
           }
           this.logger().warn(JOINING_LOG_MSG.NODE_STATE_UPDATE_RETRYING, {
@@ -596,7 +594,7 @@ class NodeStatePublicationOwner {
             nextTargetAddress: targetAddress,
             state,
             publicationMode,
-            attempt: attempt + NUM.ONE,
+            attempt: attempt + 1,
             maxAttempts: targetCandidates.length + sameTargetRetryCount,
             retryAfterMs: failureAction.retryAfterMs,
             error: error.message,
@@ -609,16 +607,16 @@ class NodeStatePublicationOwner {
         if (failureAction.retryTarget ===
             NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.ALTERNATE_TARGET) {
           if (typeof this.controlPlaneKernelIngress()?.invalidateTarget ===
-              TYPEOF.FUNCTION) {
+              'function') {
             this.controlPlaneKernelIngress().invalidateTarget(targetAddress);
           }
           this.logger().warn(JOINING_LOG_MSG.NODE_STATE_UPDATE_RETRYING, {
             nodeId: this.nodeId,
             targetAddress,
-            nextTargetAddress: targetCandidates[attempt + NUM.ONE],
+            nextTargetAddress: targetCandidates[attempt + 1],
             state,
             publicationMode,
-            attempt: attempt + NUM.ONE,
+            attempt: attempt + 1,
             maxAttempts: targetCandidates.length,
             error: error.message,
           });
@@ -652,7 +650,7 @@ class NodeStatePublicationOwner {
         normalizedState ===
           NODE_STATE_PUBLICATION_OWNER_LITERAL.SHUTTING_DOWN ||
         normalizedState === NODE_STATE_PUBLICATION_OWNER_LITERAL.STOPPED ||
-        typeof this.delegates.shouldReconnectClusterMesh !== TYPEOF.FUNCTION ||
+        typeof this.delegates.shouldReconnectClusterMesh !== 'function' ||
         this.delegates.shouldReconnectClusterMesh() !== true) {
       return;
     }

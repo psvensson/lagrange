@@ -19,8 +19,6 @@ import {
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
@@ -176,21 +174,21 @@ const distributedTransactionRecoveryMethods = {
   async runRecoverySweep() {
     if (this.recoverySweepInFlight) {
       return {
-        swept: LOCAL_NUM_ZERO,
-        resolved: LOCAL_NUM_ZERO,
-        failed: LOCAL_NUM_ZERO,
+        swept: 0,
+        resolved: 0,
+        failed: 0,
         skipped: true,
-        deferred: LOCAL_NUM_ZERO,
+        deferred: 0,
         results: [],
       };
     }
     if (this.isRecoverySweepDeferred()) {
       return {
-        swept: LOCAL_NUM_ZERO,
-        resolved: LOCAL_NUM_ZERO,
-        failed: LOCAL_NUM_ZERO,
+        swept: 0,
+        resolved: 0,
+        failed: 0,
         skipped: false,
-        deferred: LOCAL_NUM_ONE,
+        deferred: 1,
         deferredUntilMs: this.recoverySweepDeferredUntilMs,
         results: [],
       };
@@ -221,7 +219,7 @@ const distributedTransactionRecoveryMethods = {
           this.isTransactionBudgetExceeded(tx),
       );
       const results = [];
-      let deferred = LOCAL_NUM_ZERO;
+      let deferred = 0;
 
       for (const tx of stuckTransactions) {
         let protocolResult = null;
@@ -243,7 +241,7 @@ const distributedTransactionRecoveryMethods = {
           );
         } catch (error) {
           if (this.shouldDeferRecoverySweepError(error)) {
-            deferred += LOCAL_NUM_ONE;
+            deferred += 1;
             const deferredResult = this.buildDeferredRecoverySweepResult(
               error,
               {
@@ -271,7 +269,7 @@ const distributedTransactionRecoveryMethods = {
           protocolResult?.success !== true &&
           this.shouldDeferRecoverySweepError(protocolResult)
         ) {
-          deferred += LOCAL_NUM_ONE;
+          deferred += 1;
           this.deferRecoverySweep(protocolResult);
           results.push({
             transactionId: tx.transactionId,
@@ -299,7 +297,7 @@ const distributedTransactionRecoveryMethods = {
       const failed = results.filter(
         (entry) => entry.success !== true && entry.deferred !== true,
       ).length;
-      if (deferred === LOCAL_NUM_ZERO) {
+      if (deferred === 0) {
         this.clearRecoverySweepDeferState();
       }
       return {
@@ -307,9 +305,9 @@ const distributedTransactionRecoveryMethods = {
         resolved,
         failed,
         deferred,
-        deferredUntilMs: deferred > LOCAL_NUM_ZERO ?
+        deferredUntilMs: deferred > 0 ?
           this.recoverySweepDeferredUntilMs :
-          LOCAL_NUM_ZERO,
+          0,
         skipped: false,
         results,
       };
@@ -379,7 +377,7 @@ const distributedTransactionRecoveryMethods = {
                 2 ** this.recoverySweepDeferredAttempts,
           ),
         );
-    this.recoverySweepDeferredAttempts += LOCAL_NUM_ONE;
+    this.recoverySweepDeferredAttempts += 1;
     this.recoverySweepDeferredUntilMs = this.now() + backoffMs;
     return {
       delayMs: backoffMs,
@@ -393,8 +391,8 @@ const distributedTransactionRecoveryMethods = {
    */
 
   clearRecoverySweepDeferState() {
-    this.recoverySweepDeferredUntilMs = LOCAL_NUM_ZERO;
-    this.recoverySweepDeferredAttempts = LOCAL_NUM_ZERO;
+    this.recoverySweepDeferredUntilMs = 0;
+    this.recoverySweepDeferredAttempts = 0;
   },
 
   /**
@@ -407,13 +405,13 @@ const distributedTransactionRecoveryMethods = {
   buildDeferredRecoverySweepResult(errorLike, overrides = {}) {
     this.deferRecoverySweep(errorLike);
     return {
-      swept: overrides.swept || LOCAL_NUM_ZERO,
-      resolved: LOCAL_NUM_ZERO,
-      failed: LOCAL_NUM_ZERO,
+      swept: overrides.swept || 0,
+      resolved: 0,
+      failed: 0,
       skipped: false,
       deferred: Number.isFinite(overrides.deferred) ?
         overrides.deferred :
-        LOCAL_NUM_ONE,
+        1,
       deferredUntilMs: this.recoverySweepDeferredUntilMs,
       error: errorLike?.message || String(errorLike),
       results: Array.isArray(overrides.results) ? overrides.results : [],
@@ -527,7 +525,7 @@ const distributedTransactionRecoveryMethods = {
         idempotencyKey: row.idempotency_key || row.idempotencyKey,
         payloadHash: row.payload_hash || row.payloadHash,
         status: row.status || WRITE_OPERATION_STATUS.PENDING,
-        retryCount: row.retry_count || row.retryCount || LOCAL_NUM_ZERO,
+        retryCount: row.retry_count || row.retryCount || 0,
         lastError: row.last_error || row.lastError || null,
         createdAt: row.created_at || row.createdAt || tx.createdAt,
         updatedAt: row.updated_at || row.updatedAt || tx.updatedAt,

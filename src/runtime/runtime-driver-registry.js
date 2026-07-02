@@ -27,7 +27,7 @@ import {
 } from './runtime-driver-errors.js';
 
 const LOCAL_STR_REGISTER = 'register';
-const LOCAL_STR_1J8ZG = 'driver must be an instance of RuntimeDriver';
+const LOCAL_STR_DRIVER_MUST_BE_AN_INSTANCE_OF_RUNTIMEDRI = 'driver must be an instance of RuntimeDriver';
 
 /**
  * RuntimeDriverRegistry — the single lookup owner for runtime
@@ -71,7 +71,7 @@ class RuntimeDriverRegistry {
     }
     if (!(driver instanceof RuntimeDriver)) {
       throw new TypeError(
-        LOCAL_STR_1J8ZG,
+        LOCAL_STR_DRIVER_MUST_BE_AN_INSTANCE_OF_RUNTIMEDRI,
       );
     }
     if (this._drivers.has(driver.kind)) {

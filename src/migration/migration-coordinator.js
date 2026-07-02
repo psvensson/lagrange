@@ -26,8 +26,8 @@ import {
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_AU1TP = '"';
-const LOCAL_STR_1YZ14 = '""';
+const LOCAL_STR_DQUOTE = '"';
+const LOCAL_STR_DQUOTE_DQUOTE = '""';
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_BOOLEAN = 'boolean';
 const LOCAL_NUM_ONE = 1;
@@ -35,7 +35,7 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SCHEMA_MIGRATION = 'schema-migration';
 const LOCAL_STR_SCHEMA_MIGRATION_2 = 'schema_migration';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_1G5VR = 'MigrationCoordinator requires sqlCore.queryExecutor';
+const LOCAL_STR_MIGRATIONCOORDINATOR_REQUIRES_SQLCORE_QU = 'MigrationCoordinator requires sqlCore.queryExecutor';
 const LOCAL_STR_18RRO = 'Migration alter SQL is required for dual-write stage';
 const LOCAL_STR_1S5V1 = 'Partition ALTER TABLE failed';
 const LOCAL_STR_1A9V5 = 'Missing migration_id for rollback';
@@ -141,7 +141,7 @@ function cloneJson(value) {
 }
 
 function quoteIdentifier(identifier) {
-  return `"${String(identifier || LOCAL_STR_EMPTY).replaceAll(LOCAL_STR_AU1TP, LOCAL_STR_1YZ14)}"`;
+  return `"${String(identifier || LOCAL_STR_EMPTY).replaceAll(LOCAL_STR_DQUOTE, LOCAL_STR_DQUOTE_DQUOTE)}"`;
 }
 
 function normalizeInteger(value, fallback = LOCAL_NUM_ZERO) {
@@ -585,7 +585,7 @@ class MigrationCoordinator {
   async executePartitionSql(partitionId, sql, params = [], options = {}) {
     const queryExecutor = this.sqlCore?.queryExecutor || null;
     if (!queryExecutor || typeof queryExecutor.executeOnPartition !== LOCAL_STR_FUNCTION) {
-      throw new Error(LOCAL_STR_1G5VR);
+      throw new Error(LOCAL_STR_MIGRATIONCOORDINATOR_REQUIRES_SQLCORE_QU);
     }
 
     const forRead = options.forRead === true;

@@ -28,7 +28,6 @@ import {JoinCoordinator} from '../../src/bootstrap/join-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {NUM} from '../../src/constants/index.js';
 
 // -- Suite-local fixture constants --
 
@@ -308,7 +307,7 @@ test('Join checkpoint progression - resume skips completed checkpoints',
     );
 
     // Clear tracking and fix the failure
-    tracking.executedPhases.length = NUM.ZERO;
+    tracking.executedPhases.length = 0;
     membershipFail = false;
     service.joiningPhaseOwners.querySystemState = originalQuerySystemState;
 
@@ -340,7 +339,7 @@ async (t) => {
   const coordinator = new JoinCoordinator({joinSessionStore: store});
 
   let localInfrastructureReady = false;
-  let infrastructureRunCount = NUM.ZERO;
+  let infrastructureRunCount = 0;
 
   // First run: advance to JOIN_INFRASTRUCTURE_READY only
   await coordinator.run({
@@ -430,7 +429,7 @@ test('Join checkpoint progression - SEED_CONTACTED step runs plan phase 0',
     const steps = service.buildJoinCheckpointSteps(runner, joinPlan);
 
     // Execute only the SEED_CONTACTED step
-    await steps[NUM.ZERO].run();
+    await steps[0].run();
 
     t.same(
       tracking.executedPhases,
@@ -671,7 +670,7 @@ async (t) => {
   // Each checkpoint step should carry a segment reference
   for (const step of steps) {
     t.ok(
-      typeof step.segment === 'string' && step.segment.length > NUM.ZERO,
+      typeof step.segment === 'string' && step.segment.length > 0,
       `checkpoint "${step.checkpoint}" should reference a named segment ` +
       '(Req 3.2, D4.2)',
     );

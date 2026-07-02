@@ -92,8 +92,8 @@ function hasCapacityAccountingUnavailableRejection(diagnostics) {
     (
       diagnostics?.rejectionsByReason?.[
         ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE
-      ] || NUM.ZERO
-    ) > NUM.ZERO
+      ] || 0
+    ) > 0
   );
 }
 const MOVE_PLANNER_REBALANCE_REASON = Object.freeze({
@@ -107,9 +107,9 @@ const MOVE_PLANNER_DESCRIPTOR_EPOCH_DIAGNOSTIC = Object.freeze({
   REJECTED: 'partition_descriptor_epoch_rejected',
 });
 function buildReplicaCountPolicyDecision(options = {}) {
-  const healthyReplicaCount = Number(options.healthyReplicaCount) || NUM.ZERO;
-  const actionableTarget = Number(options.actionableTarget) || NUM.ZERO;
-  const targetCount = Number(options.targetCount) || NUM.ZERO;
+  const healthyReplicaCount = Number(options.healthyReplicaCount) || 0;
+  const actionableTarget = Number(options.actionableTarget) || 0;
+  const targetCount = Number(options.targetCount) || 0;
   let needsRebalancing = false;
   let reason = null;
   if (healthyReplicaCount < actionableTarget) {
@@ -135,7 +135,7 @@ function applyAdditionalRebalancingReason(decision, shouldRebalance, reason) {
   };
 }
 function buildMessageGroupPlacementResult(options = {}) {
-  const targetReplicaCount = Number(options.targetReplicaCount) || NUM.ZERO;
+  const targetReplicaCount = Number(options.targetReplicaCount) || 0;
   const targetNodes = Array.isArray(options.targetNodes) ?
     options.targetNodes :
     [];
@@ -147,7 +147,7 @@ function buildMessageGroupPlacementResult(options = {}) {
       MESSAGE_GROUP_PLACEMENT_DEFAULT_MAX_REPLICA_COUNT,
     degraded: targetNodes.length < targetReplicaCount,
     degradedReason: options.degradedReason,
-    availableNodeCount: Number(options.availableNodeCount) || NUM.ZERO,
+    availableNodeCount: Number(options.availableNodeCount) || 0,
     capacityDiagnostics: options.capacityDiagnostics,
     placementOwnerOutcome:
       options.placementOwnerOutcome || buildPlacementOwnerTargetOutcome(),
@@ -337,11 +337,11 @@ class MovePlanner {
             MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_ESTIMATE_REQUIRED,
         );
       }
-      return NUM.ZERO;
+      return 0;
     }
     return this.accountingService.estimateReplicaBytes({
       entityType: this.entityType,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
   }
 
@@ -364,10 +364,10 @@ class MovePlanner {
    * @private
    */
   buildDescriptorEpochRejectedDiagnostics(nodes, transitionSnapshot) {
-    const candidateCount = Array.isArray(nodes) ? nodes.length : NUM.ZERO;
+    const candidateCount = Array.isArray(nodes) ? nodes.length : 0;
     return {
       totalCandidates: candidateCount,
-      feasibleCount: NUM.ZERO,
+      feasibleCount: 0,
       rejectedCount: candidateCount,
       rejectionsByReason: {
         [transitionSnapshot.descriptorEpochDecision.reason]:
@@ -399,11 +399,11 @@ class MovePlanner {
     const diagnostics = {
       totalCandidates: nodes.length,
       feasibleCount: nodes.length,
-      rejectedCount: NUM.ZERO,
+      rejectedCount: 0,
       rejectionsByReason: {},
       capacityFilterApplied: false,
     };
-    if (estimatedBytes <= NUM.ZERO) {
+    if (estimatedBytes <= 0) {
       diagnostics.feasibleCount = nodes.length;
       return {
         feasibleNodes: nodes,
@@ -444,7 +444,7 @@ class MovePlanner {
         } else {
           const reason = result.reason;
           diagnostics.rejectionsByReason[reason] =
-            (diagnostics.rejectionsByReason[reason] || NUM.ZERO) + NUM.ONE;
+            (diagnostics.rejectionsByReason[reason] || 0) + 1;
           this.logger.debug(STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_REJECTED, {
             entityId: this.entityId,
             nodeId,
@@ -455,7 +455,7 @@ class MovePlanner {
       } catch (err) {
         const reason = classifyCapacityAdmissionError(err);
         diagnostics.rejectionsByReason[reason] =
-          (diagnostics.rejectionsByReason[reason] || NUM.ZERO) + NUM.ONE;
+          (diagnostics.rejectionsByReason[reason] || 0) + 1;
         this.logger.warn(STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_REJECTED, {
           entityId: this.entityId,
           nodeId,
@@ -466,7 +466,7 @@ class MovePlanner {
     }
     diagnostics.feasibleCount = feasibleNodes.length;
     diagnostics.rejectedCount = nodes.length - feasibleNodes.length;
-    if (diagnostics.rejectedCount > NUM.ZERO) {
+    if (diagnostics.rejectedCount > 0) {
       this.logger.info(STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_APPLIED, {
         entityId: this.entityId,
         entityType: this.entityType,
@@ -508,7 +508,7 @@ class MovePlanner {
     }
     // Capacity filtering removed nodes — capacity is the bottleneck
     // when the filter reduced the candidate set below target.
-    if (diagnostics.rejectedCount > NUM.ZERO && feasibleCount < targetCount) {
+    if (diagnostics.rejectedCount > 0 && feasibleCount < targetCount) {
       if (hasCapacityAccountingUnavailableRejection(diagnostics)) {
         return DegradedReason.CAPACITY_ACCOUNTING_UNAVAILABLE;
       }
@@ -537,9 +537,9 @@ class MovePlanner {
   ) {
     const targetNodes = [];
     const diag = diagnostics || {
-      totalCandidates: nodes ? nodes.length : NUM.ZERO,
-      feasibleCount: nodes ? nodes.length : NUM.ZERO,
-      rejectedCount: NUM.ZERO,
+      totalCandidates: nodes ? nodes.length : 0,
+      feasibleCount: nodes ? nodes.length : 0,
+      rejectedCount: 0,
       rejectionsByReason: {},
       capacityFilterApplied: false,
     };
@@ -561,19 +561,19 @@ class MovePlanner {
       .map((candidate) => candidate.node);
 
     // No feasible nodes: we cannot place any replicas.
-    if (sortedNodes.length === NUM.ZERO) {
+    if (sortedNodes.length === 0) {
       return buildMessageGroupPlacementResult({
         targetReplicaCount: targetCount,
         targetNodes: [],
         maxReplicaCount,
         degradedReason: this.getDegradedReason(
           totalReadyNodes,
-          NUM.ZERO,
-          NUM.ZERO,
+          0,
+          0,
           targetCount,
           diag,
         ),
-        availableNodeCount: NUM.ZERO,
+        availableNodeCount: 0,
         capacityDiagnostics: diag,
         placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
         placementOwnerDecision,
@@ -641,9 +641,9 @@ class MovePlanner {
   ) {
     const targetNodes = [];
     const diag = diagnostics || {
-      totalCandidates: nodes ? nodes.length : NUM.ZERO,
-      feasibleCount: nodes ? nodes.length : NUM.ZERO,
-      rejectedCount: NUM.ZERO,
+      totalCandidates: nodes ? nodes.length : 0,
+      feasibleCount: nodes ? nodes.length : 0,
+      rejectedCount: 0,
       rejectionsByReason: {},
       capacityFilterApplied: false,
     };
@@ -668,11 +668,11 @@ class MovePlanner {
       .map((candidate) => candidate.node);
 
     // No feasible nodes: we cannot place any replicas.
-    if (sortedNodes.length === NUM.ZERO) {
+    if (sortedNodes.length === 0) {
       const degradedReason = this.getDegradedReason(
         totalReadyNodes,
-        NUM.ZERO,
-        NUM.ZERO,
+        0,
+        0,
         targetCount,
         diag,
       );
@@ -684,7 +684,7 @@ class MovePlanner {
         maxReplicaCount: policy.maxReplicaCount || NUM.SEVEN,
         degraded: true,
         degradedReason,
-        availableNodeCount: NUM.ZERO,
+        availableNodeCount: 0,
         capacityDiagnostics: diag,
         prioritySpread,
         placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,

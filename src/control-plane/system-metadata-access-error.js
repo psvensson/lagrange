@@ -1,6 +1,6 @@
-const LOCAL_STR_3UV4P = 'SystemMetadataAccessError';
-const LOCAL_STR_2WQV7 = 'SystemMetadataConsumer';
-const LOCAL_STR_15PSZ = 'System metadata access error';
+const LOCAL_STR_SYSTEMMETADATAACCESSERROR = 'SystemMetadataAccessError';
+const LOCAL_STR_SYSTEMMETADATACONSUMER = 'SystemMetadataConsumer';
+const LOCAL_STR_SYSTEM_METADATA_ACCESS_ERROR = 'System metadata access error';
 
 const SYSTEM_METADATA_ACCESS_ERROR_CODE = Object.freeze({
   OWNER_REQUIRED: 'SYSTEM_METADATA_OWNER_REQUIRED',
@@ -20,7 +20,7 @@ function createSystemMetadataAccessError({
   serviceName = null,
 } = {}) {
   const error = new Error(message || 'System metadata access error');
-  error.name = LOCAL_STR_3UV4P;
+  error.name = LOCAL_STR_SYSTEMMETADATAACCESSERROR;
   error.code = code || SYSTEM_METADATA_ACCESS_ERROR_CODE.GATEWAY_REQUIRED;
   error.outcome = SYSTEM_METADATA_ACCESS_OUTCOME.OWNER_NOT_READY;
   if (ownerName) {
@@ -48,7 +48,7 @@ function createSystemMetadataOwnerRequiredError({
   return createSystemMetadataAccessError({
     code: SYSTEM_METADATA_ACCESS_ERROR_CODE.OWNER_REQUIRED,
     message: message ||
-      `${serviceName || LOCAL_STR_2WQV7} requires ${ownerName}`,
+      `${serviceName || LOCAL_STR_SYSTEMMETADATACONSUMER} requires ${ownerName}`,
     ownerName,
     tableName,
     operation,
@@ -79,7 +79,7 @@ function buildSystemMetadataOwnerNotReadyFailure(error) {
   return {
     success: false,
     outcome: SYSTEM_METADATA_ACCESS_OUTCOME.OWNER_NOT_READY,
-    error: error?.message || LOCAL_STR_15PSZ,
+    error: error?.message || LOCAL_STR_SYSTEM_METADATA_ACCESS_ERROR,
     errorCode:
       error?.code || SYSTEM_METADATA_ACCESS_ERROR_CODE.GATEWAY_REQUIRED,
   };

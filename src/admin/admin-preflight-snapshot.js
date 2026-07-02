@@ -14,9 +14,7 @@
 
 import {
   COLUMN,
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {CONNECTION_STATE} from '../constants/transport.js';
 import {INITIAL_PARTITION_IDS} from
@@ -79,20 +77,20 @@ class AdminPreflightSnapshot {
     this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.buildLocalServiceDiscoverySnapshot =
-      typeof deps.buildLocalServiceDiscoverySnapshot === TYPEOF.FUNCTION ?
+      typeof deps.buildLocalServiceDiscoverySnapshot === 'function' ?
         deps.buildLocalServiceDiscoverySnapshot :
         null;
     this.ensureAuthoritativeDiscoveryCacheRepair =
-      typeof deps.ensureAuthoritativeDiscoveryCacheRepair === TYPEOF.FUNCTION ?
+      typeof deps.ensureAuthoritativeDiscoveryCacheRepair === 'function' ?
         deps.ensureAuthoritativeDiscoveryCacheRepair :
         null;
     this.buildControlPlaneDiagnosticsSnapshot =
-      typeof deps.buildControlPlaneDiagnosticsSnapshot === TYPEOF.FUNCTION ?
+      typeof deps.buildControlPlaneDiagnosticsSnapshot === 'function' ?
         deps.buildControlPlaneDiagnosticsSnapshot :
         null;
     this.authoritativeRepairWaitBudgetMs =
       Number.isFinite(deps.authoritativeRepairWaitBudgetMs) &&
-      deps.authoritativeRepairWaitBudgetMs > NUM.ZERO ?
+      deps.authoritativeRepairWaitBudgetMs > 0 ?
         Math.floor(deps.authoritativeRepairWaitBudgetMs) :
         PREFLIGHT_AUTHORITATIVE_REPAIR_WAIT_BUDGET_MS;
   }
@@ -173,7 +171,7 @@ class AdminPreflightSnapshot {
     try {
       const diagnostics =
         await this.buildControlPlaneDiagnosticsSnapshot();
-      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+      return diagnostics && typeof diagnostics === 'object' ?
         diagnostics :
         null;
     } catch (_error) {
@@ -200,7 +198,7 @@ class AdminPreflightSnapshot {
         repair: {
           applied: false,
           skipped: true,
-          tableCount: NUM.ZERO,
+          tableCount: 0,
         },
       }));
     const timeoutResult = {
@@ -208,11 +206,11 @@ class AdminPreflightSnapshot {
       repair: {
         applied: false,
         skipped: true,
-        tableCount: NUM.ZERO,
+        tableCount: 0,
       },
     };
 
-    if (!Number.isFinite(waitBudgetMs) || waitBudgetMs <= NUM.ZERO) {
+    if (!Number.isFinite(waitBudgetMs) || waitBudgetMs <= 0) {
       const result = await wrappedRepairPromise;
       return result.repair;
     }
@@ -258,10 +256,10 @@ class AdminPreflightSnapshot {
     if (!this.systemTableCache ||
         !this.cacheMutationTarget ||
         typeof this.cacheMutationTarget.applySystemTableChange !==
-          TYPEOF.FUNCTION ||
+          'function' ||
         !this.sqlQueryEngine ||
         typeof this.sqlQueryEngine.executeRequest !==
-          TYPEOF.FUNCTION) {
+          'function') {
       return null;
     }
     const selectedNodeIds =
@@ -286,7 +284,7 @@ class AdminPreflightSnapshot {
    */
   resolvePreflightSnapshotNodeAddress() {
     const routerAddress =
-      typeof this.messageRouter?.nodeAddress === TYPEOF.STRING ?
+      typeof this.messageRouter?.nodeAddress === 'string' ?
         this.messageRouter.nodeAddress :
         null;
     if (routerAddress) {
@@ -294,7 +292,7 @@ class AdminPreflightSnapshot {
     }
 
     if (this.systemTableCache &&
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.getAll === 'function') {
       const nodes = this.systemTableCache.getAll(TABLES.NODES);
       const localRow = nodes.find((row) =>
         firstStringField(row, COLUMN.NODE_ID, 'id') === this.nodeId,
@@ -316,24 +314,24 @@ class AdminPreflightSnapshot {
    */
   buildPreflightRouterConnectivitySummary() {
     const defaultSummary = {
-      connectedCount: NUM.ZERO,
-      reconnectingCount: NUM.ZERO,
-      disconnectedCount: NUM.ZERO,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      disconnectedCount: 0,
     };
     if (!this.messageRouter ||
-        typeof this.messageRouter.getStats !== TYPEOF.FUNCTION) {
+        typeof this.messageRouter.getStats !== 'function') {
       return defaultSummary;
     }
 
     const stats = this.messageRouter.getStats();
     const connections =
       stats?.connections &&
-      typeof stats.connections === TYPEOF.OBJECT ?
+      typeof stats.connections === 'object' ?
         stats.connections :
         {};
-    let connectedCount = NUM.ZERO;
-    let reconnectingCount = NUM.ZERO;
-    let disconnectedCount = NUM.ZERO;
+    let connectedCount = 0;
+    let reconnectingCount = 0;
+    let disconnectedCount = 0;
     for (const [nodeId, info] of Object.entries(connections)) {
       if (!nodeId || nodeId === this.nodeId) {
         continue;
@@ -342,11 +340,11 @@ class AdminPreflightSnapshot {
         .trim()
         .toLowerCase();
       if (state === CONNECTION_STATE.CONNECTED) {
-        connectedCount += NUM.ONE;
+        connectedCount += 1;
       } else if (state === CONNECTION_STATE.RECONNECTING) {
-        reconnectingCount += NUM.ONE;
+        reconnectingCount += 1;
       } else {
-        disconnectedCount += NUM.ONE;
+        disconnectedCount += 1;
       }
     }
     return {
@@ -393,7 +391,7 @@ class AdminPreflightSnapshot {
     }
 
     if (!this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.getAll !== 'function') {
       return {
         leaderKnown: false,
         leaderNodeId: null,
@@ -441,7 +439,7 @@ class AdminPreflightSnapshot {
     }
 
     const leaderNodeId = canonicalLeaderNodeId ||
-      partitionTopology.leaderRoleNodeIds[NUM.ZERO] ||
+      partitionTopology.leaderRoleNodeIds[0] ||
       null;
     if (!leaderNodeId) {
       return {
@@ -465,35 +463,35 @@ class AdminPreflightSnapshot {
    * @return {Object}
    */
   buildPreflightCdcHealthSummary() {
-    let bufferDepth = NUM.ZERO;
-    let retryCount = NUM.ZERO;
+    let bufferDepth = 0;
+    let retryCount = 0;
     if (this.messageRouter &&
-        typeof this.messageRouter.getStats === TYPEOF.FUNCTION) {
+        typeof this.messageRouter.getStats === 'function') {
       const stats = this.messageRouter.getStats();
       const outboundQueues =
         stats?.outboundQueues &&
-        typeof stats.outboundQueues === TYPEOF.OBJECT ?
+        typeof stats.outboundQueues === 'object' ?
           stats.outboundQueues :
           {};
       for (const queue of Object.values(outboundQueues)) {
-        bufferDepth += Number(queue?.pending || NUM.ZERO);
+        bufferDepth += Number(queue?.pending || 0);
       }
       const connections =
         stats?.connections &&
-        typeof stats.connections === TYPEOF.OBJECT ?
+        typeof stats.connections === 'object' ?
           stats.connections :
           {};
       for (const conn of Object.values(connections)) {
-        retryCount += Number(conn?.reconnectAttempts || NUM.ZERO);
+        retryCount += Number(conn?.reconnectAttempts || 0);
       }
     }
     return {
       bufferDepth: Number.isFinite(bufferDepth) ?
-        Math.max(NUM.ZERO, Math.floor(bufferDepth)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(bufferDepth)) :
+        0,
       retryCount: Number.isFinite(retryCount) ?
-        Math.max(NUM.ZERO, Math.floor(retryCount)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(retryCount)) :
+        0,
       lastErrorCode: null,
       lastForwardAttemptAtMs: null,
     };
@@ -509,7 +507,7 @@ class AdminPreflightSnapshot {
     const capturedAtMs = Number(options?.capturedAtMs);
     const lastAppliedAtMs =
       typeof this.systemTableCache?.getLastAppliedAtMs ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.systemTableCache.getLastAppliedAtMs(
           TABLES.SERVICE_ENDPOINTS,
         ) :
@@ -523,13 +521,13 @@ class AdminPreflightSnapshot {
     for (const tableName of tableNames) {
       lastAppliedCauseIdByTableName[tableName] =
         typeof this.systemTableCache?.getLastAppliedCauseId ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           this.systemTableCache.getLastAppliedCauseId(tableName) :
           null;
     }
     const appliedSchemaVersion =
       typeof this.systemTableCache?.getAppliedSchemaVersion ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         normalizeSchemaVersionValue(
           this.systemTableCache.getAppliedSchemaVersion(
             TABLES.SERVICE_ENDPOINTS,
@@ -539,12 +537,12 @@ class AdminPreflightSnapshot {
     const numericLastAppliedAtMs = Number(lastAppliedAtMs);
     const hasNumericLastAppliedAtMs =
       lastAppliedAtMs !== null &&
-      typeof lastAppliedAtMs !== TYPEOF.UNDEFINED &&
+      typeof lastAppliedAtMs !== 'undefined' &&
       Number.isFinite(numericLastAppliedAtMs);
     const stalenessMs = Number.isFinite(capturedAtMs) &&
       hasNumericLastAppliedAtMs ?
       Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(capturedAtMs - numericLastAppliedAtMs),
       ) :
       null;
@@ -564,11 +562,11 @@ class AdminPreflightSnapshot {
    */
   buildPreflightRowCountsSummary() {
     if (!this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.getAll !== 'function') {
       return {
-        sysPostgresWireServiceCount: NUM.ZERO,
-        nodeEndpointsCount: NUM.ZERO,
-        serviceEndpointsCount: NUM.ZERO,
+        sysPostgresWireServiceCount: 0,
+        nodeEndpointsCount: 0,
+        serviceEndpointsCount: 0,
       };
     }
 
@@ -580,11 +578,11 @@ class AdminPreflightSnapshot {
       ).length;
 
     const nodeEndpointsCount =
-      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache.count === 'function' ?
         this.systemTableCache.count(TABLES.NODE_ENDPOINTS) :
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS).length;
     const serviceEndpointsCount =
-      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache.count === 'function' ?
         this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
         this.systemTableCache.getAll(
           TABLES.SERVICE_ENDPOINTS,
@@ -663,7 +661,7 @@ class AdminPreflightSnapshot {
    * @private
    */
   appendPreflightDiscoveryReplicaSummary(summary, replica) {
-    const nodeId = typeof replica?.nodeId === TYPEOF.STRING ?
+    const nodeId = typeof replica?.nodeId === 'string' ?
       replica.nodeId :
       null;
     if (!nodeId) {
@@ -671,7 +669,7 @@ class AdminPreflightSnapshot {
     }
 
     const reasonCodes = this.resolvePreflightDiscoveryReasonCodes(replica);
-    if (reasonCodes.length === NUM.ZERO) {
+    if (reasonCodes.length === 0) {
       summary.selectedNodeIds.push(nodeId);
       return;
     }
@@ -684,7 +682,7 @@ class AdminPreflightSnapshot {
    * @private
    */
   resolvePreflightDiscoveryReasonCodes(replica) {
-    const readiness = replica?.readiness && typeof replica.readiness === TYPEOF.OBJECT ?
+    const readiness = replica?.readiness && typeof replica.readiness === 'object' ?
       replica.readiness :
       null;
     const reasons = Array.isArray(readiness?.reasons) ?
@@ -705,7 +703,7 @@ class AdminPreflightSnapshot {
     return {
       success: true,
       rows: [snapshot],
-      count: NUM.ONE,
+      count: 1,
       partitions: ADMIN_CACHE_DUMP.EMPTY,
       tableName:
         ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.TABLE_NAME,

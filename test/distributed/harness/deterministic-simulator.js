@@ -1,5 +1,3 @@
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_DEFAULT_MAX_STEPS = 1000;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -68,10 +66,10 @@ function createQueueEntry(sequence, dueTimeMs, event) {
 function createDeterministicSimulator(options = {}) {
   let nowMs = Number.isFinite(options.startTimeMs) ?
     Math.floor(options.startTimeMs) :
-    LOCAL_NUM_ZERO;
-  let logSequence = LOCAL_NUM_ZERO;
-  let queueSequence = LOCAL_NUM_ZERO;
-  let handlerDepth = LOCAL_NUM_ZERO;
+    0;
+  let logSequence = 0;
+  let queueSequence = 0;
+  let handlerDepth = 0;
   const eventLog = [];
   const queue = [];
   const nodes = new Map();
@@ -95,15 +93,15 @@ function createDeterministicSimulator(options = {}) {
     return record({
       kind: DETERMINISTIC_SIMULATOR_EVENT.COMMAND,
       command,
-      replayable: handlerDepth === LOCAL_NUM_ZERO,
+      replayable: handlerDepth === 0,
       payload,
     });
   }
 
   function scheduleInternal(delayMs, event) {
     const dueTimeMs = nowMs + Math.max(
-      LOCAL_NUM_ZERO,
-      Number.isFinite(delayMs) ? Math.floor(delayMs) : LOCAL_NUM_ZERO,
+      0,
+      Number.isFinite(delayMs) ? Math.floor(delayMs) : 0,
     );
     queue.push(createQueueEntry(queueSequence++, dueTimeMs, event));
     queue.sort((left, right) =>
@@ -116,9 +114,9 @@ function createDeterministicSimulator(options = {}) {
     recordCommand(DETERMINISTIC_SIMULATOR_COMMAND.SCHEDULE, {
       type: options.type,
       payload: clonePlain(options.payload || {}),
-      delayMs: options.delayMs || LOCAL_NUM_ZERO,
+      delayMs: options.delayMs || 0,
     });
-    scheduleInternal(options.delayMs || LOCAL_NUM_ZERO, {
+    scheduleInternal(options.delayMs || 0, {
       from: options.from,
       to: options.to,
       type: options.type,
@@ -178,9 +176,9 @@ function createDeterministicSimulator(options = {}) {
       to: options.to,
       type: options.type,
       payload: clonePlain(options.payload || {}),
-      delayMs: options.delayMs || LOCAL_NUM_ZERO,
+      delayMs: options.delayMs || 0,
     });
-    scheduleInternal(options.delayMs || LOCAL_NUM_ZERO, {
+    scheduleInternal(options.delayMs || 0, {
       from: options.from,
       to: options.to,
       type: options.type,
@@ -234,11 +232,11 @@ function createDeterministicSimulator(options = {}) {
     });
     const handler = handlers.get(event.to);
     if (typeof handler === LOCAL_STR_FUNCTION) {
-      handlerDepth += LOCAL_NUM_ONE;
+      handlerDepth += 1;
       try {
         handler(Object.freeze({...event}), api);
       } finally {
-        handlerDepth -= LOCAL_NUM_ONE;
+        handlerDepth -= 1;
       }
       record({
         kind: DETERMINISTIC_SIMULATOR_EVENT.HANDLED,
@@ -255,11 +253,11 @@ function createDeterministicSimulator(options = {}) {
       maxSteps: options.maxSteps || LOCAL_NUM_DEFAULT_MAX_STEPS,
     });
     const maxSteps = options.maxSteps || LOCAL_NUM_DEFAULT_MAX_STEPS;
-    let steps = LOCAL_NUM_ZERO;
-    while (queue.length > LOCAL_NUM_ZERO && steps < maxSteps) {
+    let steps = 0;
+    while (queue.length > 0 && steps < maxSteps) {
       const entry = queue.shift();
       deliver(entry);
-      steps += LOCAL_NUM_ONE;
+      steps += 1;
     }
     return Object.freeze({
       steps,
@@ -414,16 +412,16 @@ function minimizeDeterministicTrace(eventLog, predicate) {
     ) :
     [];
   let minimized = [...replayableCommands];
-  let index = LOCAL_NUM_ZERO;
+  let index = 0;
   while (index < minimized.length) {
     const candidate = [
-      ...minimized.slice(LOCAL_NUM_ZERO, index),
-      ...minimized.slice(index + LOCAL_NUM_ONE),
+      ...minimized.slice(0, index),
+      ...minimized.slice(index + 1),
     ];
     if (predicate(candidate) === true) {
       minimized = candidate;
     } else {
-      index += LOCAL_NUM_ONE;
+      index += 1;
     }
   }
   return Object.freeze(minimized.map(clonePlain));

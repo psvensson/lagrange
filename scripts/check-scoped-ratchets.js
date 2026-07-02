@@ -7,9 +7,6 @@
 
 import {spawnSync} from 'node:child_process';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
 
 const STRICT_FLAG = '--strict';
 const HELP_FLAG = '--help';
@@ -27,7 +24,7 @@ const FILTERED_FLAGS = new Set([
   HELP_FLAG,
   HELP_SHORT_FLAG,
 ]);
-const args = process.argv.slice(LOCAL_NUM_TWO);
+const args = process.argv.slice(2);
 const strict = args.includes(STRICT_FLAG);
 const helpRequested = args.includes(HELP_FLAG) || args.includes(HELP_SHORT_FLAG);
 const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
@@ -35,12 +32,12 @@ const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
 if (helpRequested) {
   console.log(USAGE_TEXT);
   console.log(STRICT_USAGE_TEXT);
-  process.exit(LOCAL_NUM_ZERO);
+  process.exit(0);
 }
 
-if (scopedTargets.length === LOCAL_NUM_ZERO) {
+if (scopedTargets.length === 0) {
   console.error(USAGE_TEXT);
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 }
 
 const strictArgs = strict ? [STRICT_FLAG] : [];
@@ -55,7 +52,7 @@ const checks = Object.freeze([
   }),
 ]);
 
-let exitCode = LOCAL_NUM_ZERO;
+let exitCode = 0;
 
 for (const check of checks) {
   console.log(`\n${check.label}`);
@@ -72,11 +69,11 @@ for (const check of checks) {
     },
   );
 
-  if (result.status && result.status !== LOCAL_NUM_ZERO) {
+  if (result.status && result.status !== 0) {
     exitCode = result.status;
   } else if (result.error) {
     console.error(result.error.message);
-    exitCode = LOCAL_NUM_ONE;
+    exitCode = 1;
   }
 }
 

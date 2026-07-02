@@ -1,7 +1,4 @@
 import {
-  NUM,
-} from '../../constants/index.js';
-import {
   BOOTSTRAP_API_REQUEST_FIELD,
 } from '../bootstrap-api-constants.js';
 
@@ -16,18 +13,18 @@ const BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION = Object.freeze({
 });
 const BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE = Object.freeze({
   state: BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.UNBOUNDED,
-  deadlineMs: NUM.ZERO,
-  remainingBudgetMs: NUM.ZERO,
+  deadlineMs: 0,
+  remainingBudgetMs: 0,
 });
 
 function normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody) {
   const rawDeadlineMs =
     requestBody?.[BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS];
   if (!Number.isFinite(rawDeadlineMs)) {
-    return NUM.ZERO;
+    return 0;
   }
   const deadlineMs = Math.floor(rawDeadlineMs);
-  return deadlineMs > NUM.ZERO ? deadlineMs : NUM.ZERO;
+  return deadlineMs > 0 ? deadlineMs : 0;
 }
 
 function evaluateBootstrapRequestClientAttemptDeadline(
@@ -36,15 +33,15 @@ function evaluateBootstrapRequestClientAttemptDeadline(
 ) {
   const deadlineMs =
     normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody);
-  if (deadlineMs <= NUM.ZERO) {
+  if (deadlineMs <= 0) {
     return BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE;
   }
   const remainingBudgetMs = Math.max(
-    NUM.ZERO,
+    0,
     deadlineMs - observedAtMs,
   );
   return Object.freeze({
-    state: remainingBudgetMs > NUM.ZERO ?
+    state: remainingBudgetMs > 0 ?
       BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.ACTIVE :
       BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.EXPIRED,
     deadlineMs,

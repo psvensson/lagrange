@@ -7,8 +7,6 @@ import {
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 const {
   BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
@@ -42,7 +40,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
         );
       if (leaderIdentity && typeof leaderIdentity === LOCAL_STR_OBJECT) {
         const leaderNodeId = leaderIdentity.leaderNodeId;
-        return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > LOCAL_NUM_ZERO ?
+        return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > 0 ?
           leaderNodeId :
           null;
       }
@@ -56,7 +54,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
         bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderNodeId(
           partitionId,
         );
-      return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > LOCAL_NUM_ZERO ?
+      return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > 0 ?
         leaderNodeId :
         null;
     }
@@ -64,7 +62,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
     const cachedLeaderNodeId =
       cachedPartition?.leader_node_id || cachedPartition?.leaderNodeId || null;
     return typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
-      cachedLeaderNodeId.length > LOCAL_NUM_ZERO ?
+      cachedLeaderNodeId.length > 0 ?
       cachedLeaderNodeId :
       null;
   }
@@ -101,7 +99,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
    * @private
    */
   getCachedLeaderAddressedPartitionServiceRows(partitionId, leaderNodeId) {
-    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === LOCAL_NUM_ZERO) {
+    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === 0) {
       return [];
     }
     return this.getPartitionServiceRows(partitionId).filter((service) => {
@@ -218,7 +216,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
       ) || '',
     );
 
-    if (cachedLeaderNodeId.length === LOCAL_NUM_ZERO) {
+    if (cachedLeaderNodeId.length === 0) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.FRESH_BOOTSTRAP,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.FRESH_BOOTSTRAP,
@@ -235,7 +233,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
         partitionId,
         cachedLeaderNodeId,
       );
-    if (cachedLeaderServices.length > LOCAL_NUM_ZERO) {
+    if (cachedLeaderServices.length > 0) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.CACHE_READY,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.CACHE_LEADER_SERVICE_READY,
@@ -250,7 +248,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
         hasActiveAddressedPartitionService(service)
       );
     });
-    if (overlayLeaderServices.length === LOCAL_NUM_ZERO) {
+    if (overlayLeaderServices.length === 0) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.STALE_FOR_CURRENT_LEADER,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.STALE_FOR_CURRENT_LEADER,
@@ -322,7 +320,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
         return false;
       }) :
       this.getCachedRoutablePartitionServiceRows(partitionId);
-    if (routableServices.length === LOCAL_NUM_ZERO) {
+    if (routableServices.length === 0) {
       return Object.freeze({
         state:
           BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE.SKIP_NO_ROUTABLE_SERVICES,
@@ -341,14 +339,14 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
       hintedLeaderNodeId,
     });
     const leaderNodeId = leaderSelection.leaderNodeId;
-    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === LOCAL_NUM_ZERO) {
+    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === 0) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE.SKIP_NO_SELECTED_LEADER,
       });
     }
     if (
       typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
-      cachedLeaderNodeId.length > LOCAL_NUM_ZERO &&
+      cachedLeaderNodeId.length > 0 &&
       cachedLeaderNodeId !== leaderNodeId
     ) {
       return Object.freeze({
@@ -395,7 +393,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
       ),
       retentionMode,
     });
-    if (cachedLeaderServices.length > LOCAL_NUM_ZERO) {
+    if (cachedLeaderServices.length > 0) {
       return Object.freeze({
         state:
           options.installSupersededEntry === true &&
@@ -461,7 +459,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
    */
   seedBootstrapRoutingOverlayFromSnapshots(systemTableSnapshots) {
     if (!systemTableSnapshots || typeof systemTableSnapshots !== LOCAL_STR_OBJECT) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
 
     const partitionRows = Array.isArray(systemTableSnapshots[TABLES.PARTITIONS]) ?
@@ -470,7 +468,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
     const serviceRows = Array.isArray(systemTableSnapshots[TABLES.SERVICES]) ?
       systemTableSnapshots[TABLES.SERVICES] :
       [];
-    let seededCount = LOCAL_NUM_ZERO;
+    let seededCount = 0;
 
     for (const partitionRow of partitionRows) {
       const partitionId = String(
@@ -484,8 +482,8 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
           '',
       );
       if (
-        partitionId.length === LOCAL_NUM_ZERO ||
-        tableRef.length === LOCAL_NUM_ZERO ||
+        partitionId.length === 0 ||
+        tableRef.length === 0 ||
         !this.isSystemTable(tableRef)
       ) {
         continue;
@@ -507,7 +505,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
           installSupersededEntry: true,
         })
       ) {
-        seededCount += LOCAL_NUM_ONE;
+        seededCount += 1;
       }
     }
 
@@ -531,7 +529,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
     if (!partitionId || !tableName) {
       return false;
     }
-    if (!Array.isArray(serviceRows) || serviceRows.length === LOCAL_NUM_ZERO) {
+    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
       return false;
     }
     const cachedLeaderNodeId =
@@ -541,7 +539,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
       );
     if (
       typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
-      cachedLeaderNodeId.length > LOCAL_NUM_ZERO
+      cachedLeaderNodeId.length > 0
     ) {
       return false;
     }
@@ -679,7 +677,7 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
     tableRef,
     activePartitionVersion,
   ) {
-    if (typeof tableRef !== LOCAL_STR_STRING || tableRef.length === LOCAL_NUM_ZERO) {
+    if (typeof tableRef !== LOCAL_STR_STRING || tableRef.length === 0) {
       return [];
     }
 

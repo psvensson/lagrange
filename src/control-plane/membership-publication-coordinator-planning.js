@@ -1,6 +1,5 @@
 import {
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} from './control-plane-readiness-service.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
@@ -23,7 +22,7 @@ class MembershipPublicationCoordinatorPlanning extends
   MembershipPublicationCoordinatorReads {
   deriveClusterMembershipCandidateSync(options = {}) {
     const planningSnapshot =
-      options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
+      options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
         options.planningSnapshot :
         this.readPublicationPlanningSnapshotSync(options);
     return deriveMembershipPublicationCandidate({
@@ -83,7 +82,7 @@ class MembershipPublicationCoordinatorPlanning extends
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :
       this.controlPlaneReadinessService &&
-          typeof this.controlPlaneReadinessService.getAllNodeReadiness === TYPEOF.FUNCTION ?
+          typeof this.controlPlaneReadinessService.getAllNodeReadiness === 'function' ?
         await this.controlPlaneReadinessService.getAllNodeReadiness({
           allowAuthoritativeRefresh: preferAuthoritativeMembershipState,
           membershipPublicationPlanningSource:
@@ -93,12 +92,12 @@ class MembershipPublicationCoordinatorPlanning extends
     const recoveryEpochsByNodeId =
       options.recoveryEpochsByNodeId ||
       (this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === TYPEOF.FUNCTION ?
+      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === 'function' ?
         this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId() :
         null);
     const connectedNodeIds =
       this.controlPlaneReadinessService?.messageRouter &&
-      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === TYPEOF.FUNCTION ?
+      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === 'function' ?
         this.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
         [];
     const priorityRecoveryPlanningSnapshot =
@@ -106,7 +105,7 @@ class MembershipPublicationCoordinatorPlanning extends
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getMembershipPublicationPlanningSnapshotBestEffort === TYPEOF.FUNCTION ?
+              .getMembershipPublicationPlanningSnapshotBestEffort === 'function' ?
           await this.controlPlaneReadinessService
             .getMembershipPublicationPlanningSnapshotBestEffort(
               options.publisherNodeId || this.nodeId,
@@ -144,33 +143,33 @@ class MembershipPublicationCoordinatorPlanning extends
         this.getLatestPublishedPublicationRowSync(options));
     const nodeRows = Array.isArray(options.nodeRows) ?
       options.nodeRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODES) || [] :
         [];
     const nodeEndpointRows = Array.isArray(options.nodeEndpointRows) ?
       options.nodeEndpointRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [] :
         [];
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         readAllSharedRows(this.systemTableCache, TABLES.SERVICES) :
         [];
     const partitionRows = Array.isArray(options.partitionRows) ?
       options.partitionRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.PARTITIONS) || [] :
         [];
     const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
       options.replicaOperationRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         readAllSharedRows(this.systemTableCache, TABLES.REPLICA_OPERATIONS) :
         [];
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :
       this.controlPlaneReadinessService &&
-          typeof this.controlPlaneReadinessService.getAllNodeReadinessSync === TYPEOF.FUNCTION ?
+          typeof this.controlPlaneReadinessService.getAllNodeReadinessSync === 'function' ?
         this.controlPlaneReadinessService.getAllNodeReadinessSync({
           allowStaleOnCacheChange: true,
           membershipPublicationPlanningSource:
@@ -180,12 +179,12 @@ class MembershipPublicationCoordinatorPlanning extends
     const recoveryEpochsByNodeId =
       options.recoveryEpochsByNodeId ||
       (this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === TYPEOF.FUNCTION ?
+      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === 'function' ?
         this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId() :
         null);
     const connectedNodeIds =
       this.controlPlaneReadinessService?.messageRouter &&
-      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === TYPEOF.FUNCTION ?
+      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === 'function' ?
         this.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
         [];
     return buildMembershipPublicationEvidenceSnapshot({

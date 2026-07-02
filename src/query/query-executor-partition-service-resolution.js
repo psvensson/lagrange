@@ -14,7 +14,6 @@ const {
   CONTROL_PLANE_READINESS_DIMENSION,
   LEADER_GAP_REASON_OWNER_MISSING,
   LEADER_GAP_REASON_SERVICE_MISSING,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_LOG_MSG,
@@ -54,7 +53,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     if (
       !service ||
       typeof service.address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      service.address.length === NUM.ZERO
+      service.address.length === 0
     ) {
       this.logger.debug(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {
         partitionId,
@@ -84,7 +83,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       false,
       routingReadinessDimension,
     );
-    return candidates[NUM.ZERO] || null;
+    return candidates[0] || null;
   }
 
   /**
@@ -128,7 +127,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       };
     } else if (
       typeof service.address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      service.address.length === NUM.ZERO
+      service.address.length === 0
     ) {
       routabilityResult = {
         routable: false,
@@ -144,7 +143,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       service?.partition_id || service?.partitionId || '',
     );
     const partitionRow =
-      partitionId.length > NUM.ZERO ?
+      partitionId.length > 0 ?
         this.getPartitionRecord(partitionId) :
         null;
     const priorityControlPlanePartition =
@@ -336,7 +335,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     const partitionId = String(
       service?.partition_id || service?.partitionId || '',
     );
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return false;
     }
     const partition = this.getPartitionRecord(partitionId);
@@ -377,7 +376,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       decision.failedDimensions :
       [];
     return (
-      failedDimensions.length > NUM.ZERO &&
+      failedDimensions.length > 0 &&
       failedDimensions.every((dimension) =>
         allowedFailedDimensions.has(dimension),
       )
@@ -435,8 +434,8 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         TABLES.PARTITIONS,
         (partition) => partition.partition_id === partitionId,
       );
-      if (records.length > NUM.ZERO) {
-        return records[NUM.ZERO];
+      if (records.length > 0) {
+        return records[0];
       }
     }
     if (
@@ -469,7 +468,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         );
       if (
         typeof leaderNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        leaderNodeId.length > NUM.ZERO
+        leaderNodeId.length > 0
       ) {
         return leaderNodeId;
       }
@@ -478,7 +477,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     const leaderNodeId =
       partition?.[COLUMN.LEADER_NODE_ID] ?? partition?.leaderNodeId ?? null;
     return typeof leaderNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId.length > 0 ?
       leaderNodeId :
       null;
   }
@@ -502,7 +501,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     const canonicalLeaderNodeId =
       typeof canonicalLeaderObservation?.leaderNodeId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      canonicalLeaderObservation.leaderNodeId.length > NUM.ZERO ?
+      canonicalLeaderObservation.leaderNodeId.length > 0 ?
         canonicalLeaderObservation.leaderNodeId :
         null;
     return Object.freeze({
@@ -534,7 +533,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
           partitionId,
           services,
         );
-      if (Array.isArray(ownerServices) && ownerServices.length > NUM.ZERO) {
+      if (Array.isArray(ownerServices) && ownerServices.length > 0) {
         return ownerServices;
       }
     }
@@ -577,7 +576,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       null;
     return (
       typeof leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      leaderNodeId.length === NUM.ZERO
+      leaderNodeId.length === 0
     );
   }
 
@@ -643,7 +642,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         services
           .map((service) => service?.node_id)
           .filter(
-            (nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO,
+            (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
           ),
       ),
     ];
@@ -653,7 +652,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
           .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
           .map((service) => service?.node_id)
           .filter(
-            (nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO,
+            (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
           ),
       ),
     ];

@@ -1,8 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  NUM,
-  TYPEOF,
   OperationType,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -26,11 +24,11 @@ function applyObservedOperationState(context, targetOperation, sourceOperation) 
     sourceOperation.stepsHistory :
     [];
   const adoptedStepsHistory =
-    observedStepsHistory.length > NUM.ZERO ?
+    observedStepsHistory.length > 0 ?
       observedStepsHistory :
       retainedStepsHistory;
   const clonedStepsHistory = adoptedStepsHistory.map((entry) => {
-    return entry && typeof entry === TYPEOF.OBJECT ? {...entry} : entry;
+    return entry && typeof entry === 'object' ? {...entry} : entry;
   });
   if (operationType === OperationType.REPLACE) {
     const retainedSourceReplicaId =
@@ -48,13 +46,13 @@ function applyObservedOperationState(context, targetOperation, sourceOperation) 
     const observedReplicaId =
       typeof sourceOperation.replicaId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      sourceOperation.replicaId.length > NUM.ZERO ?
+      sourceOperation.replicaId.length > 0 ?
         sourceOperation.replicaId :
         null;
     const observedTargetReplicaId =
       typeof canonicalSourceReplicaId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      canonicalSourceReplicaId.length > NUM.ZERO &&
+      canonicalSourceReplicaId.length > 0 &&
       typeof observedReplicaId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
       observedReplicaId !== canonicalSourceReplicaId ?
         observedReplicaId :
@@ -64,21 +62,21 @@ function applyObservedOperationState(context, targetOperation, sourceOperation) 
     if (
       typeof canonicalTargetReplicaId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      canonicalTargetReplicaId.length > NUM.ZERO
+      canonicalTargetReplicaId.length > 0
     ) {
       targetOperation.replicaId = canonicalTargetReplicaId;
     }
     if (
       typeof canonicalSourceReplicaId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      canonicalSourceReplicaId.length > NUM.ZERO
+      canonicalSourceReplicaId.length > 0
     ) {
       targetOperation.sourceReplicaId = canonicalSourceReplicaId;
       const hasObservedSourceReplicaMetadata = clonedStepsHistory.some(
         (entry) => {
           return (
             entry &&
-            typeof entry === TYPEOF.OBJECT &&
+            typeof entry === 'object' &&
             entry[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] ===
               canonicalSourceReplicaId
           );
@@ -86,12 +84,12 @@ function applyObservedOperationState(context, targetOperation, sourceOperation) 
       );
       if (
         !hasObservedSourceReplicaMetadata &&
-        clonedStepsHistory.length > NUM.ZERO &&
-        clonedStepsHistory[NUM.ZERO] &&
-        typeof clonedStepsHistory[NUM.ZERO] === TYPEOF.OBJECT
+        clonedStepsHistory.length > 0 &&
+        clonedStepsHistory[0] &&
+        typeof clonedStepsHistory[0] === 'object'
       ) {
-        clonedStepsHistory[NUM.ZERO] = {
-          ...clonedStepsHistory[NUM.ZERO],
+        clonedStepsHistory[0] = {
+          ...clonedStepsHistory[0],
           [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]:
             canonicalSourceReplicaId,
         };
@@ -121,7 +119,7 @@ async function adoptMostAdvancedObservedReplaceState(context, operation) {
     operation.type !== OperationType.REPLACE ||
     typeof operation.operationId !==
       OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-    operation.operationId.length === NUM.ZERO
+    operation.operationId.length === 0
   ) {
     return null;
   }

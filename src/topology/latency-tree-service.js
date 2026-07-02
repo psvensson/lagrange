@@ -5,7 +5,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {LATENCY_GROUP_STATE} from './latency-topology-constants.js';
 import {
   LATENCY_TREE_DEFAULT,
@@ -96,11 +96,11 @@ class LatencyTreeService extends EventEmitter {
       if (!LATENCY_TREE_TABLE.WATCHED.includes(tableName)) {
         return;
       }
-      this.stats.cacheChangeTriggerCount += NUM.ONE;
+      this.stats.cacheChangeTriggerCount += 1;
       this.recompute({reason: LATENCY_TREE_REASON.TOPOLOGY_CHANGE});
     };
 
-    if (typeof this.systemTableCache.onCacheChange === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.onCacheChange === 'function') {
       this.systemTableCache.onCacheChange(this.cacheListener);
     }
 
@@ -119,7 +119,7 @@ class LatencyTreeService extends EventEmitter {
    */
   stop() {
     if (this.cacheListener &&
-      typeof this.systemTableCache?.offCacheChange === TYPEOF.FUNCTION) {
+      typeof this.systemTableCache?.offCacheChange === 'function') {
       this.systemTableCache.offCacheChange(this.cacheListener);
     }
     this.cacheListener = null;
@@ -165,7 +165,7 @@ class LatencyTreeService extends EventEmitter {
 
     this.localGroupId = localGroupId;
     this.sourceViews = sourceViews;
-    this.stats.recomputeCount += NUM.ONE;
+    this.stats.recomputeCount += 1;
     this.stats.groupCount = orderedGroupIds.length;
     this.stats.edgeCount = this.countUndirectedEdges(adjacency);
     this.stats.lastRecomputeAt = this.now();
@@ -372,12 +372,12 @@ class LatencyTreeService extends EventEmitter {
         return left.latencyMs - right.latencyMs;
       }
       if (left.targetGroupId < right.targetGroupId) {
-        return NUM.NEGATIVE_ONE;
+        return -1;
       }
       if (left.targetGroupId > right.targetGroupId) {
-        return NUM.ONE;
+        return 1;
       }
-      return NUM.ZERO;
+      return 0;
     });
   }
 
@@ -405,12 +405,12 @@ class LatencyTreeService extends EventEmitter {
           return leftDistance - rightDistance;
         }
         if (left < right) {
-          return NUM.NEGATIVE_ONE;
+          return -1;
         }
         if (left > right) {
-          return NUM.ONE;
+          return 1;
         }
-        return NUM.ZERO;
+        return 0;
       });
   }
 
@@ -506,11 +506,11 @@ class LatencyTreeService extends EventEmitter {
    * @private
    */
   countUndirectedEdges(adjacency) {
-    let directedCount = NUM.ZERO;
+    let directedCount = 0;
     for (const neighbors of adjacency.values()) {
       directedCount += neighbors.size;
     }
-    return Math.floor(directedCount / NUM.TWO);
+    return Math.floor(directedCount / 2);
   }
 
   /**

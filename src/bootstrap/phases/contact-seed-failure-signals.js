@@ -18,17 +18,16 @@ import {
   NUM,
   STRING,
   TIME_MS,
-  TYPEOF,
 } from '../../constants/index.js';
 
-const LOCAL_STR_1JITK = 'missingPartitionLeaders=';
+const LOCAL_STR_MISSINGPARTITIONLEADERS = 'missingPartitionLeaders=';
 const LOCAL_STR_COMMA = ',';
-const LOCAL_STR_19TB4 = 'missingMessageGroupLeaders=';
-const LOCAL_STR_159CY = 'missingPartitionLeaderNodes=';
-const LOCAL_STR_1AWHD = 'missingMessageGroupLeaderNodes=';
+const LOCAL_STR_MISSINGMESSAGEGROUPLEADERS = 'missingMessageGroupLeaders=';
+const LOCAL_STR_MISSINGPARTITIONLEADERNODES = 'missingPartitionLeaderNodes=';
+const LOCAL_STR_MISSINGMESSAGEGROUPLEADERNODES = 'missingMessageGroupLeaderNodes=';
 const LOCAL_STR_SPACE = ' ';
 const MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES = 1;
-const MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS = NUM.ONE;
+const MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS = 1;
 const RETAINED_BOOTSTRAP_NOT_READY_REQUEST_TIMEOUT_MS =
   TIME_MS.SECOND * NUM.FIVE;
 const RETRYABLE_SEED_CONTACT_FAILURE_ACTION = Object.freeze({
@@ -101,7 +100,7 @@ function isRetryableSeedContactTransportFailure(error, options = {}) {
     return true;
   }
 
-  if (typeof error.message !== TYPEOF.STRING) {
+  if (typeof error.message !== 'string') {
     return false;
   }
   const message = error.message.toLowerCase();
@@ -111,10 +110,10 @@ function isRetryableSeedContactTransportFailure(error, options = {}) {
 }
 
 function normalizeRetryableSeedContactEvidence(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return null;
   }
-  const code = typeof value.code === TYPEOF.STRING ?
+  const code = typeof value.code === 'string' ?
     value.code :
     null;
   const statusCode = Number.isFinite(value.statusCode) ?
@@ -145,7 +144,7 @@ function normalizeSeedContactEvidenceReasons(value) {
     return [];
   }
   return value.reasons.filter((reason) =>
-    typeof reason === TYPEOF.STRING && reason.length > NUM.ZERO,
+    typeof reason === 'string' && reason.length > 0,
   );
 }
 
@@ -169,18 +168,18 @@ function resolveRetryableSeedContactFailureAction(options = {}) {
     return RETRYABLE_SEED_CONTACT_FAILURE_ACTION.TERMINAL;
   }
   const elapsedMs = Number.isFinite(options.elapsedMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.elapsedMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.elapsedMs)) :
+    0;
   const retryTimeoutMs = Number.isFinite(options.retryTimeoutMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.retryTimeoutMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.retryTimeoutMs)) :
+    0;
   if (elapsedMs >= retryTimeoutMs) {
     return RETRYABLE_SEED_CONTACT_FAILURE_ACTION.SURFACE;
   }
   const retryableSeedContactOutcomeBudgetExhausted =
     options.hasRetryableSeedContactEvidence === true &&
     Number.isFinite(options.retryableSeedContactEvidenceRetryBudget) &&
-    options.retryableSeedContactEvidenceRetryBudget <= NUM.ZERO;
+    options.retryableSeedContactEvidenceRetryBudget <= 0;
   if (retryableSeedContactOutcomeBudgetExhausted === true &&
       options.classification?.retryableTimeout === true &&
       options.retryableSeedContactEvidenceSource ===
@@ -247,7 +246,7 @@ function resolveSeedContactRetryAfterMs(error, parsedError) {
     if (!Number.isFinite(hint)) {
       continue;
     }
-    return Math.max(NUM.ZERO, Math.floor(hint));
+    return Math.max(0, Math.floor(hint));
   }
   return null;
 }
@@ -264,7 +263,7 @@ function parseBootstrapError(error) {
   }
 
   if (error.responseJson &&
-      typeof error.responseJson === TYPEOF.OBJECT) {
+      typeof error.responseJson === 'object') {
     const parsedFromJson = {...error.responseJson};
     if (Number.isFinite(error.statusCode) &&
         !Number.isFinite(parsedFromJson.statusCode)) {
@@ -277,7 +276,7 @@ function parseBootstrapError(error) {
     return parsedFromJson;
   }
 
-  if (typeof error.message !== TYPEOF.STRING) {
+  if (typeof error.message !== 'string') {
     return null;
   }
 
@@ -311,27 +310,27 @@ function parseBootstrapError(error) {
 function formatLeaderMetadataDetails(details) {
   const parts = [];
   if (Array.isArray(details.missingPartitionLeaders) &&
-      details.missingPartitionLeaders.length > NUM.ZERO) {
-    parts.push(LOCAL_STR_1JITK +
+      details.missingPartitionLeaders.length > 0) {
+    parts.push(LOCAL_STR_MISSINGPARTITIONLEADERS +
       details.missingPartitionLeaders.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingMessageGroupLeaders) &&
-      details.missingMessageGroupLeaders.length > NUM.ZERO) {
-    parts.push(LOCAL_STR_19TB4 +
+      details.missingMessageGroupLeaders.length > 0) {
+    parts.push(LOCAL_STR_MISSINGMESSAGEGROUPLEADERS +
       details.missingMessageGroupLeaders.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingPartitionLeaderNodes) &&
-      details.missingPartitionLeaderNodes.length > NUM.ZERO) {
-    parts.push(LOCAL_STR_159CY +
+      details.missingPartitionLeaderNodes.length > 0) {
+    parts.push(LOCAL_STR_MISSINGPARTITIONLEADERNODES +
       details.missingPartitionLeaderNodes.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingMessageGroupLeaderNodes) &&
-      details.missingMessageGroupLeaderNodes.length > NUM.ZERO) {
-    parts.push(LOCAL_STR_1AWHD +
+      details.missingMessageGroupLeaderNodes.length > 0) {
+    parts.push(LOCAL_STR_MISSINGMESSAGEGROUPLEADERNODES +
       details.missingMessageGroupLeaderNodes.join(LOCAL_STR_COMMA));
   }
 
-  return parts.length > NUM.ZERO ? parts.join(LOCAL_STR_SPACE) : STRING.UNKNOWN;
+  return parts.length > 0 ? parts.join(LOCAL_STR_SPACE) : STRING.UNKNOWN;
 }
 
 export {

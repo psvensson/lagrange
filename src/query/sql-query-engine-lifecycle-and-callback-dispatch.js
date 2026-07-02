@@ -2,9 +2,8 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_COMPLETED = 'completed';
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_STRING = 'string';
@@ -325,7 +324,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_START, {
       executionMode,
-      statement: statement.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
+      statement: statement.substring(0, LOCAL_NUM_ONE_HUNDRED),
       sessionId,
     });
 
@@ -430,7 +429,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     }
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_DISPATCH, {
-      statement: statement.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
+      statement: statement.substring(0, LOCAL_NUM_ONE_HUNDRED),
       callbackModuleRef,
       callbackExport,
       sessionId,
@@ -620,8 +619,8 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       [callbackModuleRef],
       {sessionId},
     );
-    if (byFunctionId.rows?.[LOCAL_NUM_ZERO]) {
-      return byFunctionId.rows[LOCAL_NUM_ZERO];
+    if (byFunctionId.rows?.[0]) {
+      return byFunctionId.rows[0];
     }
 
     const byFunctionName = await this.executeQuery(
@@ -629,7 +628,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       [callbackModuleRef],
       {sessionId},
     );
-    return byFunctionName.rows?.[LOCAL_NUM_ZERO] || null;
+    return byFunctionName.rows?.[0] || null;
   }
 
   /**
@@ -675,7 +674,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       [callbackModuleRef],
       {sessionId},
     );
-    return manifestLookup.rows?.[LOCAL_NUM_ZERO] || null;
+    return manifestLookup.rows?.[0] || null;
   }
 
   /**

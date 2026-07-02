@@ -1,7 +1,7 @@
 import {CLI_VIEW} from './cli-constants.js';
 
 const LOCAL_STR_YELLOW = 'yellow';
-const LOCAL_NUM_2000 = 2000;
+const LOCAL_NUM_TWO_THOUSAND = 2000;
 const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_RESIZE = 'resize';
 const LOCAL_NUM_ZERO = 0;
@@ -13,9 +13,9 @@ const LOCAL_STR_100_6 = '100%-6';
 const LOCAL_STR_CYAN = 'cyan';
 const LOCAL_STR_WHITE = 'white';
 const LOCAL_NUM_TWO = 2;
-const LOCAL_NUM_20 = 20;
-const LOCAL_NUM_12 = 12;
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TWENTY = 20;
+const LOCAL_NUM_TWELVE = 12;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_CENTER = 'center';
 const LOCAL_STR_80 = '80%';
 const LOCAL_STR_GREEN = 'green';
@@ -30,12 +30,12 @@ const LOCAL_STR_MIDDLE = 'middle';
 const LOCAL_NUM_SIX = 6;
 const LOCAL_STR_60 = '60%';
 const LOCAL_STR_100_8 = '100%-8';
-const LOCAL_NUM_15 = 15;
+const LOCAL_NUM_FIFTEEN = 15;
 const LOCAL_STR_15RD3 = ' Results (↑↓ navigate, Tab: detail panel) ';
 const LOCAL_STR_ROW_DETAILS = ' Row Details ';
 const LOCAL_STR_100_2 = '100%-2';
 const LOCAL_STR_RESULTS = ' Results ';
-const LOCAL_NUM_60 = 60;
+const LOCAL_NUM_SIXTY = 60;
 const LOCAL_STR_EDIT_CONFIGURATION = ' Edit Configuration ';
 const LOCAL_STR_EMPTY = '';
 const LOCAL_NUM_FOUR = 4;
@@ -163,7 +163,7 @@ const VIEW_NUMBERS = {
 
 export {
   LOCAL_STR_YELLOW,
-  LOCAL_NUM_2000,
+  LOCAL_NUM_TWO_THOUSAND,
   LOCAL_NUM_ONE,
   LOCAL_STR_RESIZE,
   LOCAL_NUM_ZERO,
@@ -175,9 +175,9 @@ export {
   LOCAL_STR_CYAN,
   LOCAL_STR_WHITE,
   LOCAL_NUM_TWO,
-  LOCAL_NUM_20,
-  LOCAL_NUM_12,
-  LOCAL_NUM_10,
+  LOCAL_NUM_TWENTY,
+  LOCAL_NUM_TWELVE,
+  LOCAL_NUM_TEN,
   LOCAL_STR_CENTER,
   LOCAL_STR_80,
   LOCAL_STR_GREEN,
@@ -192,12 +192,12 @@ export {
   LOCAL_NUM_SIX,
   LOCAL_STR_60,
   LOCAL_STR_100_8,
-  LOCAL_NUM_15,
+  LOCAL_NUM_FIFTEEN,
   LOCAL_STR_15RD3,
   LOCAL_STR_ROW_DETAILS,
   LOCAL_STR_100_2,
   LOCAL_STR_RESULTS,
-  LOCAL_NUM_60,
+  LOCAL_NUM_SIXTY,
   LOCAL_STR_EDIT_CONFIGURATION,
   LOCAL_STR_EMPTY,
   LOCAL_NUM_FOUR,

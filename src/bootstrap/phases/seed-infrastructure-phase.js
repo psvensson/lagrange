@@ -22,9 +22,7 @@ import {
 } from '../bootstrap-constants.js';
 import {NODE_CONFIG_KEY} from '../../node/node-constants.js';
 import {
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {
@@ -179,7 +177,7 @@ class SeedInfrastructurePhase {
     }
 
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
-        TYPEOF.FUNCTION) {
+        'function') {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
         resolveQueryTransportSelection(
           () => d.resolveQueryTransportMessageGroupSelection(),
@@ -245,7 +243,7 @@ class SeedInfrastructurePhase {
       [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: serviceType,
       [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: d.getNodeId(),
       [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: serviceId,
-      [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: NUM.ONE,
+      [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: 1,
       [SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND]:
         BOOTSTRAP_UNIFIED_RECONCILE.RUNTIME_KIND,
       [SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF]: null,

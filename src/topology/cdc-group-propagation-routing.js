@@ -1,4 +1,4 @@
-import {COLUMN, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {LATENCY_GROUP_STATE} from './latency-topology-constants.js';
 import {CDC_GROUP_PROPAGATION_REASON} from './cdc-group-propagation-constants.js';
@@ -13,7 +13,7 @@ function buildGroupedContextResult(sourceGroupId, targets, fallbackReason) {
 
 function resolveSourceMessageGroupId(sourceMessageGroupService) {
   const groupId = sourceMessageGroupService?.groupId;
-  if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+  if (typeof groupId !== 'string' || groupId.length === 0) {
     return null;
   }
   return groupId;
@@ -21,13 +21,13 @@ function resolveSourceMessageGroupId(sourceMessageGroupService) {
 
 function resolveActiveMessageGroupServices(options = {}) {
   const rowPredicate =
-    typeof options.predicate === TYPEOF.FUNCTION ? options.predicate : null;
+    typeof options.predicate === 'function' ? options.predicate : null;
   return options.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
     const isMessageGroup = serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
     const isActive = serviceRow?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
     const hasAddress =
-      typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-      serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+      typeof serviceRow?.[COLUMN.ADDRESS] === 'string' &&
+      serviceRow[COLUMN.ADDRESS].length > 0;
     if (!isMessageGroup || !isActive || !hasAddress) {
       return false;
     }
@@ -43,20 +43,20 @@ function sortCoordinatorCandidates(services) {
     const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     if (leftLeader && !rightLeader) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (!leftLeader && rightLeader) {
-      return NUM.ONE;
+      return 1;
     }
     const leftServiceId = left?.[COLUMN.SERVICE_ID] || '';
     const rightServiceId = right?.[COLUMN.SERVICE_ID] || '';
     if (leftServiceId < rightServiceId) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (leftServiceId > rightServiceId) {
-      return NUM.ONE;
+      return 1;
     }
-    return NUM.ZERO;
+    return 0;
   });
 }
 
@@ -65,31 +65,31 @@ function resolveCoordinatorAddress(options = {}) {
     systemTableCache: options.systemTableCache,
     predicate: (serviceRow) => serviceRow?.[COLUMN.NODE_ID] === options.coordinatorNodeId,
   });
-  if (services.length === NUM.ZERO) {
+  if (services.length === 0) {
     return null;
   }
   const sorted = sortCoordinatorCandidates(services);
-  return sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
+  return sorted[0]?.[COLUMN.ADDRESS] || null;
 }
 
 function resolveMessageGroupId(serviceRow, options = {}) {
   const explicitGroupId = serviceRow?.[COLUMN.GROUP_ID];
-  if (typeof explicitGroupId === TYPEOF.STRING && explicitGroupId.length > NUM.ZERO) {
+  if (typeof explicitGroupId === 'string' && explicitGroupId.length > 0) {
     return explicitGroupId;
   }
   const serviceId = serviceRow?.[COLUMN.SERVICE_ID];
-  if (typeof serviceId !== TYPEOF.STRING || serviceId.length === NUM.ZERO) {
+  if (typeof serviceId !== 'string' || serviceId.length === 0) {
     return null;
   }
   const replicaSuffix = String(options.messageGroupReplicaSuffix || '').trim();
-  if (replicaSuffix.length === NUM.ZERO) {
+  if (replicaSuffix.length === 0) {
     return null;
   }
   const replicaSuffixIndex = serviceId.lastIndexOf(replicaSuffix);
-  if (replicaSuffixIndex <= NUM.ZERO) {
+  if (replicaSuffixIndex <= 0) {
     return null;
   }
-  return serviceId.slice(NUM.ZERO, replicaSuffixIndex);
+  return serviceId.slice(0, replicaSuffixIndex);
 }
 
 function buildSafeTargets(options = {}) {
@@ -118,7 +118,7 @@ function buildSafeTargets(options = {}) {
     if (options.sourceGroupId && groupId === options.sourceGroupId) {
       continue;
     }
-    const selectedService = sortCoordinatorCandidates(servicesByGroupId.get(groupId))[NUM.ZERO];
+    const selectedService = sortCoordinatorCandidates(servicesByGroupId.get(groupId))[0];
     if (!selectedService) {
       continue;
     }
@@ -178,7 +178,7 @@ function buildGroupedContext(options = {}) {
       }
       return !state || state === LATENCY_GROUP_STATE.ACTIVE;
     });
-  if (activeGroups.length === NUM.ZERO) {
+  if (activeGroups.length === 0) {
     return buildGroupedContextResult(
       sourceGroupId,
       [],
@@ -223,8 +223,8 @@ function buildGroupedContext(options = {}) {
   }
 
   if (
-    targets.length > NUM.ZERO &&
-    (!options.messageRouter || typeof options.messageRouter.deliver !== TYPEOF.FUNCTION)
+    targets.length > 0 &&
+    (!options.messageRouter || typeof options.messageRouter.deliver !== 'function')
   ) {
     return buildGroupedContextResult(
       sourceGroupId,

@@ -4,7 +4,6 @@ const {
   ADMIN_LOG_MSG,
   DebugMetadataStore,
   ERRNO,
-  TYPEOF,
   resolvePreferredControlPlaneReadinessService,
   resolveSqlEngineControlPlaneReadinessService,
 } = ADMIN_WEBSOCKET_API_SHARED;
@@ -37,7 +36,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
     }
     if (
       this.liveQueryManager &&
-      typeof this.liveQueryManager.initialize === TYPEOF.FUNCTION
+      typeof this.liveQueryManager.initialize === 'function'
     ) {
       this.liveQueryManager.initialize({
         sqlQueryEngine: engine,
@@ -45,7 +44,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
     }
     if (
       this.debugMetadataStore &&
-      typeof this.debugMetadataStore.setSqlQueryEngine === TYPEOF.FUNCTION
+      typeof this.debugMetadataStore.setSqlQueryEngine === 'function'
     ) {
       this.debugMetadataStore.setSqlQueryEngine(engine);
       return;
@@ -86,11 +85,11 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
 
     if (this.fastify) {
       const server = this.fastify.server;
-      if (server && typeof server.closeAllConnections === TYPEOF.FUNCTION) {
+      if (server && typeof server.closeAllConnections === 'function') {
         server.closeAllConnections();
       }
       await this.fastify.close();
-      if (server && typeof server.close === TYPEOF.FUNCTION) {
+      if (server && typeof server.close === 'function') {
         await new Promise((resolve) => {
           server.close((error) => {
             if (error && error.code !== ERRNO.NOT_RUNNING) {
@@ -102,7 +101,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
           });
         });
       }
-      if (server && typeof server.unref === TYPEOF.FUNCTION) {
+      if (server && typeof server.unref === 'function') {
         server.unref();
       }
       this.fastify = null;

@@ -1,12 +1,12 @@
 const LOCAL_STR_NAVIGATION = 'Navigation';
 const LOCAL_STR_1UYVY = '↑/↓';
-const LOCAL_STR_13TAS = 'Move selection up/down';
+const LOCAL_STR_MOVE_SELECTION_UP_DOWN = 'Move selection up/down';
 const LOCAL_STR_PAGE_UP_DOWN = 'Page Up/Down';
-const LOCAL_STR_1AYRV = 'Scroll page up/down';
+const LOCAL_STR_SCROLL_PAGE_UP_DOWN = 'Scroll page up/down';
 const LOCAL_STR_HOME_END = 'Home/End';
-const LOCAL_STR_J3HJ6 = 'Jump to first/last row';
+const LOCAL_STR_JUMP_TO_FIRST_LAST_ROW = 'Jump to first/last row';
 const LOCAL_STR_ENTER = 'Enter';
-const LOCAL_STR_1WUEG = 'Drill down into selected item';
+const LOCAL_STR_DRILL_DOWN_INTO_SELECTED_ITEM = 'Drill down into selected item';
 const LOCAL_STR_ESCAPE_BACKSPACE = 'Escape/Backspace';
 const LOCAL_STR_GO_BACK_ONE_LEVEL = 'Go back one level';
 const LOCAL_STR_VIEWS = 'Views';
@@ -19,7 +19,7 @@ const LOCAL_STR_TABLES_VIEW = 'Tables view';
 const LOCAL_STR_4 = '4';
 const LOCAL_STR_PARTITIONS_VIEW = 'Partitions view';
 const LOCAL_STR_5 = '5';
-const LOCAL_STR_1TGD5 = 'Message Groups view';
+const LOCAL_STR_MESSAGE_GROUPS_VIEW = 'Message Groups view';
 const LOCAL_STR_6 = '6';
 const LOCAL_STR_SQL_QUERY_VIEW = 'SQL Query view';
 const LOCAL_STR_7 = '7';
@@ -49,72 +49,71 @@ const LOCAL_STR_QUIT_APPLICATION = 'Quit application';
 const LOCAL_STR_CTRL_C = 'Ctrl+C';
 const LOCAL_STR_FORCE_QUIT = 'Force quit';
 const LOCAL_STR_NODES_VIEW_2 = 'Nodes View';
-const LOCAL_STR_183MH = 'Displays all nodes in the cluster with resource usage.';
-const LOCAL_STR_1PTO3 = 'View services on selected node';
+const LOCAL_STR_DISPLAYS_ALL_NODES_IN_THE_CLUSTER_WITH_R = 'Displays all nodes in the cluster with resource usage.';
+const LOCAL_STR_VIEW_SERVICES_ON_SELECTED_NODE = 'View services on selected node';
 const LOCAL_STR_C = 'c';
-const LOCAL_STR_1F4L2 = 'Connect to selected node';
+const LOCAL_STR_CONNECT_TO_SELECTED_NODE = 'Connect to selected node';
 const LOCAL_STR_SERVICES_VIEW_2 = 'Services View';
-const LOCAL_STR_1VBVL = 'Displays logical service definitions and health.';
-const LOCAL_STR_1NTHI = 'View replicas for selected service';
+const LOCAL_STR_DISPLAYS_LOGICAL_SERVICE_DEFINITIONS_AND = 'Displays logical service definitions and health.';
+const LOCAL_STR_VIEW_REPLICAS_FOR_SELECTED_SERVICE = 'View replicas for selected service';
 const LOCAL_STR_REPLICAS_VIEW_2 = 'Replicas View';
-const LOCAL_STR_54UD6 = 'Displays concrete replicas running on nodes.';
-const LOCAL_STR_1UJ8E = 'View replica details';
+const LOCAL_STR_DISPLAYS_CONCRETE_REPLICAS_RUNNING_ON_NO = 'Displays concrete replicas running on nodes.';
+const LOCAL_STR_VIEW_REPLICA_DETAILS = 'View replica details';
 const LOCAL_STR_T = 't';
-const LOCAL_STR_1TB8M = 'Filter by replica type';
+const LOCAL_STR_FILTER_BY_REPLICA_TYPE = 'Filter by replica type';
 const LOCAL_STR_TABLES_VIEW_2 = 'Tables View';
-const LOCAL_STR_STFG1 = 'Displays all tables with partition and replica info.';
-const LOCAL_STR_1GOQ6 = 'View partitions for table';
+const LOCAL_STR_DISPLAYS_ALL_TABLES_WITH_PARTITION_AND_R = 'Displays all tables with partition and replica info.';
+const LOCAL_STR_VIEW_PARTITIONS_FOR_TABLE = 'View partitions for table';
 const LOCAL_STR_P = 'p';
-const LOCAL_STR_1DISR = 'View table policies';
+const LOCAL_STR_VIEW_TABLE_POLICIES = 'View table policies';
 const LOCAL_STR_PARTITIONS_VIEW_2 = 'Partitions View';
-const LOCAL_STR_1DGSW = 'Displays partitions for a table.';
-const LOCAL_STR_12ICU = 'View partition replicas';
+const LOCAL_STR_DISPLAYS_PARTITIONS_FOR_A_TABLE = 'Displays partitions for a table.';
+const LOCAL_STR_VIEW_PARTITION_REPLICAS = 'View partition replicas';
 const LOCAL_STR_N = 'n';
-const LOCAL_STR_EMET2 = 'Jump to leader node';
+const LOCAL_STR_JUMP_TO_LEADER_NODE = 'Jump to leader node';
 const LOCAL_STR_TW2WE = 'Message Groups View';
-const LOCAL_STR_988TO = 'Displays message group distribution.';
-const LOCAL_STR_1I6IS = 'View replica locations';
+const LOCAL_STR_DISPLAYS_MESSAGE_GROUP_DISTRIBUTION = 'Displays message group distribution.';
+const LOCAL_STR_VIEW_REPLICA_LOCATIONS = 'View replica locations';
 const LOCAL_STR_SQL_QUERY_VIEW_2 = 'SQL Query View';
-const LOCAL_STR_14ANX = 'Execute SQL queries against the database.';
+const LOCAL_STR_EXECUTE_SQL_QUERIES_AGAINST_THE_DATABASE = 'Execute SQL queries against the database.';
 const LOCAL_STR_CTRL_ENTER = 'Ctrl+Enter';
 const LOCAL_STR_EXECUTE_QUERY = 'Execute query';
-const LOCAL_STR_167E8 = 'Navigate query history';
+const LOCAL_STR_NAVIGATE_QUERY_HISTORY = 'Navigate query history';
 const LOCAL_STR_TAB = 'Tab';
-const LOCAL_STR_CJLUB = 'Autocomplete table name';
+const LOCAL_STR_AUTOCOMPLETE_TABLE_NAME = 'Autocomplete table name';
 const LOCAL_STR_ESCAPE = 'Escape';
 const LOCAL_STR_CLEAR_INPUT = 'Clear input';
 const LOCAL_STR_CTRL_L = 'Ctrl+L';
 const LOCAL_STR_START_LIVE_QUERY = 'Start live query';
 const LOCAL_STR_LOGS_VIEW_2 = 'Logs View';
-const LOCAL_STR_THDRR = 'View and filter system logs.';
-const LOCAL_STR_IMU9A = 'View full log entry';
+const LOCAL_STR_VIEW_AND_FILTER_SYSTEM_LOGS = 'View and filter system logs.';
+const LOCAL_STR_VIEW_FULL_LOG_ENTRY = 'View full log entry';
 const LOCAL_STR_L = 'l';
-const LOCAL_STR_VCT98 = 'Filter by log level';
+const LOCAL_STR_FILTER_BY_LOG_LEVEL = 'Filter by log level';
 const LOCAL_STR_FILTER_BY_NODE = 'Filter by node';
 const LOCAL_STR_E = 'e';
-const LOCAL_STR_1HO2X = 'Export filtered logs';
+const LOCAL_STR_EXPORT_FILTERED_LOGS = 'Export filtered logs';
 const LOCAL_STR_CONFIG_VIEW_2 = 'Config View';
-const LOCAL_STR_1HPY6 = 'View and edit system configuration.';
+const LOCAL_STR_VIEW_AND_EDIT_SYSTEM_CONFIGURATION = 'View and edit system configuration.';
 const LOCAL_STR_EDIT_CONFIG_VALUE = 'Edit config value';
 const LOCAL_STR_REVERT_TO_DEFAULT = 'Revert to default';
 const LOCAL_STR_CONTEXTS_VIEW_2 = 'Contexts View';
-const LOCAL_STR_1HS2L = 'View function execution contexts.';
-const LOCAL_STR_TVUBB = 'View context details';
-const LOCAL_STR_1HGNS = 'Filter by context type';
+const LOCAL_STR_VIEW_FUNCTION_EXECUTION_CONTEXTS = 'View function execution contexts.';
+const LOCAL_STR_VIEW_CONTEXT_DETAILS = 'View context details';
+const LOCAL_STR_FILTER_BY_CONTEXT_TYPE = 'Filter by context type';
 const LOCAL_STR_OPERATIONS_VIEW = 'Operations View';
-const LOCAL_STR_U3Z8D = 'View replica operations with workflow steps and history.';
-const LOCAL_STR_X6M3H = 'View operation details';
+const LOCAL_STR_VIEW_REPLICA_OPERATIONS_WITH_WORKFLOW_ST = 'View replica operations with workflow steps and history.';
+const LOCAL_STR_VIEW_OPERATION_DETAILS = 'View operation details';
 const LOCAL_STR_I = 'i';
-const LOCAL_STR_1DQU1 = 'Filter in-flight operations only';
+const LOCAL_STR_FILTER_IN_FLIGHT_OPERATIONS_ONLY = 'Filter in-flight operations only';
 const LOCAL_STR_F = 'f';
-const LOCAL_STR_1RHK1 = 'Filter failed operations only';
+const LOCAL_STR_FILTER_FAILED_OPERATIONS_ONLY = 'Filter failed operations only';
 const LOCAL_STR_O7OJW = '╔════════════════════════════════════════════════════════════╗';
 const LOCAL_STR_KEYBOARD_SHORTCUTS = '║                      KEYBOARD SHORTCUTS                     ║';
 const LOCAL_STR_146V0 = '╚════════════════════════════════════════════════════════════╝';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_TKR07 = 'Press any key to close this help';
+const LOCAL_STR_PRESS_ANY_KEY_TO_CLOSE_THIS_HELP = 'Press any key to close this help';
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_NUM_16 = 16;
+const LOCAL_NUM_SIXTEEN = 16;
 const LOCAL_STR_SQL = 'sql';
 const LOCAL_STR_CTRL_X_EXECUTE = 'Ctrl+X:Execute';
 const LOCAL_STR_LOGS = 'logs';
@@ -125,7 +124,7 @@ const LOCAL_STR_E_EDIT = 'e:Edit';
 const LOCAL_STR_R_REVERT = 'R:Revert';
 const LOCAL_STR_ENTER_DETAILS = 'Enter:Details';
 const LOCAL_STR_ENTER_DRILL_DOWN = 'Enter:Drill Down';
-const LOCAL_STR_17XHO = ' | ';
+const LOCAL_STR_SPACE_PIPE_SPACE = ' | ';
 const LOCAL_STR_HELP_SHOW = 'help:show';
 const LOCAL_STR_HELP_HIDE = 'help:hide';
 
@@ -176,10 +175,10 @@ export class HelpOverlay {
       {
         name: LOCAL_STR_NAVIGATION,
         shortcuts: [
-          {key: LOCAL_STR_1UYVY, description: LOCAL_STR_13TAS},
-          {key: LOCAL_STR_PAGE_UP_DOWN, description: LOCAL_STR_1AYRV},
-          {key: LOCAL_STR_HOME_END, description: LOCAL_STR_J3HJ6},
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1WUEG},
+          {key: LOCAL_STR_1UYVY, description: LOCAL_STR_MOVE_SELECTION_UP_DOWN},
+          {key: LOCAL_STR_PAGE_UP_DOWN, description: LOCAL_STR_SCROLL_PAGE_UP_DOWN},
+          {key: LOCAL_STR_HOME_END, description: LOCAL_STR_JUMP_TO_FIRST_LAST_ROW},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_DRILL_DOWN_INTO_SELECTED_ITEM},
           {key: LOCAL_STR_ESCAPE_BACKSPACE, description: LOCAL_STR_GO_BACK_ONE_LEVEL},
         ],
       },
@@ -190,7 +189,7 @@ export class HelpOverlay {
           {key: LOCAL_STR_2, description: LOCAL_STR_REPLICAS_VIEW},
           {key: LOCAL_STR_3, description: LOCAL_STR_TABLES_VIEW},
           {key: LOCAL_STR_4, description: LOCAL_STR_PARTITIONS_VIEW},
-          {key: LOCAL_STR_5, description: LOCAL_STR_1TGD5},
+          {key: LOCAL_STR_5, description: LOCAL_STR_MESSAGE_GROUPS_VIEW},
           {key: LOCAL_STR_6, description: LOCAL_STR_SQL_QUERY_VIEW},
           {key: LOCAL_STR_7, description: LOCAL_STR_LOGS_VIEW},
           {key: LOCAL_STR_8, description: LOCAL_STR_CONFIG_VIEW},
@@ -227,74 +226,74 @@ export class HelpOverlay {
     return {
       nodes: {
         title: LOCAL_STR_NODES_VIEW_2,
-        description: LOCAL_STR_183MH,
+        description: LOCAL_STR_DISPLAYS_ALL_NODES_IN_THE_CLUSTER_WITH_R,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1PTO3},
-          {key: LOCAL_STR_C, description: LOCAL_STR_1F4L2},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_SERVICES_ON_SELECTED_NODE},
+          {key: LOCAL_STR_C, description: LOCAL_STR_CONNECT_TO_SELECTED_NODE},
         ],
       },
       services: {
         title: LOCAL_STR_SERVICES_VIEW_2,
-        description: LOCAL_STR_1VBVL,
+        description: LOCAL_STR_DISPLAYS_LOGICAL_SERVICE_DEFINITIONS_AND,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1NTHI},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_REPLICAS_FOR_SELECTED_SERVICE},
         ],
       },
       replicas: {
         title: LOCAL_STR_REPLICAS_VIEW_2,
-        description: LOCAL_STR_54UD6,
+        description: LOCAL_STR_DISPLAYS_CONCRETE_REPLICAS_RUNNING_ON_NO,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1UJ8E},
-          {key: LOCAL_STR_T, description: LOCAL_STR_1TB8M},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_REPLICA_DETAILS},
+          {key: LOCAL_STR_T, description: LOCAL_STR_FILTER_BY_REPLICA_TYPE},
         ],
       },
       tables: {
         title: LOCAL_STR_TABLES_VIEW_2,
-        description: LOCAL_STR_STFG1,
+        description: LOCAL_STR_DISPLAYS_ALL_TABLES_WITH_PARTITION_AND_R,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1GOQ6},
-          {key: LOCAL_STR_P, description: LOCAL_STR_1DISR},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_PARTITIONS_FOR_TABLE},
+          {key: LOCAL_STR_P, description: LOCAL_STR_VIEW_TABLE_POLICIES},
         ],
       },
       partitions: {
         title: LOCAL_STR_PARTITIONS_VIEW_2,
-        description: LOCAL_STR_1DGSW,
+        description: LOCAL_STR_DISPLAYS_PARTITIONS_FOR_A_TABLE,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_12ICU},
-          {key: LOCAL_STR_N, description: LOCAL_STR_EMET2},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_PARTITION_REPLICAS},
+          {key: LOCAL_STR_N, description: LOCAL_STR_JUMP_TO_LEADER_NODE},
         ],
       },
       message_groups: {
         title: LOCAL_STR_TW2WE,
-        description: LOCAL_STR_988TO,
+        description: LOCAL_STR_DISPLAYS_MESSAGE_GROUP_DISTRIBUTION,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_1I6IS},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_REPLICA_LOCATIONS},
         ],
       },
       sql: {
         title: LOCAL_STR_SQL_QUERY_VIEW_2,
-        description: LOCAL_STR_14ANX,
+        description: LOCAL_STR_EXECUTE_SQL_QUERIES_AGAINST_THE_DATABASE,
         shortcuts: [
           {key: LOCAL_STR_CTRL_ENTER, description: LOCAL_STR_EXECUTE_QUERY},
-          {key: LOCAL_STR_1UYVY, description: LOCAL_STR_167E8},
-          {key: LOCAL_STR_TAB, description: LOCAL_STR_CJLUB},
+          {key: LOCAL_STR_1UYVY, description: LOCAL_STR_NAVIGATE_QUERY_HISTORY},
+          {key: LOCAL_STR_TAB, description: LOCAL_STR_AUTOCOMPLETE_TABLE_NAME},
           {key: LOCAL_STR_ESCAPE, description: LOCAL_STR_CLEAR_INPUT},
           {key: LOCAL_STR_CTRL_L, description: LOCAL_STR_START_LIVE_QUERY},
         ],
       },
       logs: {
         title: LOCAL_STR_LOGS_VIEW_2,
-        description: LOCAL_STR_THDRR,
+        description: LOCAL_STR_VIEW_AND_FILTER_SYSTEM_LOGS,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_IMU9A},
-          {key: LOCAL_STR_L, description: LOCAL_STR_VCT98},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_FULL_LOG_ENTRY},
+          {key: LOCAL_STR_L, description: LOCAL_STR_FILTER_BY_LOG_LEVEL},
           {key: LOCAL_STR_N, description: LOCAL_STR_FILTER_BY_NODE},
-          {key: LOCAL_STR_E, description: LOCAL_STR_1HO2X},
+          {key: LOCAL_STR_E, description: LOCAL_STR_EXPORT_FILTERED_LOGS},
         ],
       },
       config: {
         title: LOCAL_STR_CONFIG_VIEW_2,
-        description: LOCAL_STR_1HPY6,
+        description: LOCAL_STR_VIEW_AND_EDIT_SYSTEM_CONFIGURATION,
         shortcuts: [
           {key: LOCAL_STR_ENTER, description: LOCAL_STR_EDIT_CONFIG_VALUE},
           {key: LOCAL_STR_R, description: LOCAL_STR_REVERT_TO_DEFAULT},
@@ -302,19 +301,19 @@ export class HelpOverlay {
       },
       contexts: {
         title: LOCAL_STR_CONTEXTS_VIEW_2,
-        description: LOCAL_STR_1HS2L,
+        description: LOCAL_STR_VIEW_FUNCTION_EXECUTION_CONTEXTS,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_TVUBB},
-          {key: LOCAL_STR_T, description: LOCAL_STR_1HGNS},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_CONTEXT_DETAILS},
+          {key: LOCAL_STR_T, description: LOCAL_STR_FILTER_BY_CONTEXT_TYPE},
         ],
       },
       operations: {
         title: LOCAL_STR_OPERATIONS_VIEW,
-        description: LOCAL_STR_U3Z8D,
+        description: LOCAL_STR_VIEW_REPLICA_OPERATIONS_WITH_WORKFLOW_ST,
         shortcuts: [
-          {key: LOCAL_STR_ENTER, description: LOCAL_STR_X6M3H},
-          {key: LOCAL_STR_I, description: LOCAL_STR_1DQU1},
-          {key: LOCAL_STR_F, description: LOCAL_STR_1RHK1},
+          {key: LOCAL_STR_ENTER, description: LOCAL_STR_VIEW_OPERATION_DETAILS},
+          {key: LOCAL_STR_I, description: LOCAL_STR_FILTER_IN_FLIGHT_OPERATIONS_ONLY},
+          {key: LOCAL_STR_F, description: LOCAL_STR_FILTER_FAILED_OPERATIONS_ONLY},
         ],
       },
     };
@@ -348,18 +347,18 @@ export class HelpOverlay {
     lines.push(LOCAL_STR_O7OJW);
     lines.push(LOCAL_STR_KEYBOARD_SHORTCUTS);
     lines.push(LOCAL_STR_146V0);
-    lines.push(LOCAL_STR_EMPTY);
+    lines.push('');
 
     // View-specific help first (if available)
     if (content.viewHelp) {
       lines.push(`── ${content.viewHelp.title} ──`);
       lines.push(content.viewHelp.description);
-      lines.push(LOCAL_STR_EMPTY);
+      lines.push('');
 
       for (const shortcut of content.viewHelp.shortcuts) {
         lines.push(`  ${this.padKey(shortcut.key)}  ${shortcut.description}`);
       }
-      lines.push(LOCAL_STR_EMPTY);
+      lines.push('');
     }
 
     // Global shortcuts by category
@@ -368,10 +367,10 @@ export class HelpOverlay {
       for (const shortcut of category.shortcuts) {
         lines.push(`  ${this.padKey(shortcut.key)}  ${shortcut.description}`);
       }
-      lines.push(LOCAL_STR_EMPTY);
+      lines.push('');
     }
 
-    lines.push(LOCAL_STR_TKR07);
+    lines.push(LOCAL_STR_PRESS_ANY_KEY_TO_CLOSE_THIS_HELP);
 
     return lines.join(LOCAL_STR_NEWLINE);
   }
@@ -382,7 +381,7 @@ export class HelpOverlay {
    * @returns {string} Padded key
    */
   padKey(key) {
-    return key.padEnd(LOCAL_NUM_16);
+    return key.padEnd(LOCAL_NUM_SIXTEEN);
   }
 
   /**
@@ -408,7 +407,7 @@ export class HelpOverlay {
       hints.unshift(LOCAL_STR_ENTER_DRILL_DOWN);
     }
 
-    return hints.join(LOCAL_STR_17XHO);
+    return hints.join(LOCAL_STR_SPACE_PIPE_SPACE);
   }
 
   /**

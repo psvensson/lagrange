@@ -6,7 +6,6 @@
  * Requirements: 6.1, 6.2, 12.4
  */
 
-import {NUM} from '../constants/index.js';
 import {
   validateModuleManifest,
 } from './module-manifest-models.js';
@@ -61,7 +60,7 @@ function validateCapabilities(
 ) {
   const caps = manifest ? manifest[MF.CAPABILITIES] : null;
   if (!caps || !Array.isArray(caps) ||
-      caps.length === NUM.ZERO) {
+      caps.length === 0) {
     return {valid: true, errors: []};
   }
 
@@ -93,7 +92,7 @@ function validateCapabilities(
 function validateResolvedDependencies(resolvedDependencies) {
   if (!resolvedDependencies ||
       !Array.isArray(resolvedDependencies) ||
-      resolvedDependencies.length === NUM.ZERO) {
+      resolvedDependencies.length === 0) {
     return {valid: true, errors: []};
   }
 
@@ -108,7 +107,7 @@ function validateResolvedDependencies(resolvedDependencies) {
   }
 
   return {
-    valid: errors.length === NUM.ZERO,
+    valid: errors.length === 0,
     errors,
   };
 }
@@ -131,7 +130,7 @@ function validateResolvedDependencies(resolvedDependencies) {
 function validateDebugArtifactPolicy(manifest, capabilityPolicy) {
   const caps = manifest ? manifest[MF.CAPABILITIES] : null;
   if (!caps || !Array.isArray(caps) ||
-      caps.length === NUM.ZERO) {
+      caps.length === 0) {
     return {valid: true, errors: []};
   }
 

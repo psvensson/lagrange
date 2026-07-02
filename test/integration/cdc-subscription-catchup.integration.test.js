@@ -10,7 +10,6 @@ import {
   ConfigurationManager,
 } from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NUM} from '../../src/constants/index.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   buildEventIdentity,
@@ -177,7 +176,7 @@ test('CDC subscription handshake + catch-up integration',
             (e) => e.streamMode === STREAM_MODE_STEADY,
           );
           t.ok(
-            steadyEvents.length >= NUM.ONE,
+            steadyEvents.length >= 1,
             'subscriber continues in steady stream mode',
           );
           t.ok(
@@ -262,14 +261,14 @@ test('CDC sliding window handshake catchup integration',
 
           // Pre-subscriber buffer should be empty
           t.equal(
-            partition.cdcEventBuffer.size(), NUM.ZERO,
+            partition.cdcEventBuffer.size(), 0,
             'pre-subscriber buffer empty after delivery',
           );
 
           // Sliding window should have recorded events
           t.ok(
             partition.cdcEventBuffer.recentEventsSize() >
-              NUM.ZERO,
+              0,
             'sliding window has recorded events',
           );
 
@@ -296,18 +295,18 @@ test('CDC sliding window handshake catchup integration',
           );
           t.ok(
             handshakeB.catchup
-              .slidingWindowEventsReplayed > NUM.ZERO,
+              .slidingWindowEventsReplayed > 0,
             'sliding window events replayed to B',
           );
           t.equal(
             handshakeB.catchup.bufferedEventsReplayed,
-            NUM.ZERO,
+            0,
             'no buffered events replayed',
           );
 
           // Subscriber B received sliding window events
           t.ok(
-            subscriberBEvents.length > NUM.ZERO,
+            subscriberBEvents.length > 0,
             'subscriber B received catchup events',
           );
           t.ok(
@@ -350,7 +349,7 @@ test('CDC sliding window handshake catchup integration',
           const bufferedCount =
             partition.cdcEventBuffer.size();
           t.ok(
-            bufferedCount > NUM.ZERO,
+            bufferedCount > 0,
             'events buffered before subscriber registers',
           );
 
@@ -372,7 +371,7 @@ test('CDC sliding window handshake catchup integration',
           );
           t.ok(
             handshakeA.catchup.bufferedEventsReplayed >
-              NUM.ZERO,
+              0,
             'subscriber A received buffered events',
           );
 
@@ -450,17 +449,17 @@ test('CDC sliding window handshake catchup integration',
           );
           t.equal(
             handshake.catchup.bufferedEventsReplayed,
-            NUM.ZERO,
+            0,
             'no buffered events replayed',
           );
           t.equal(
             handshake.catchup
               .slidingWindowEventsReplayed,
-            NUM.ZERO,
+            0,
             'no sliding window events replayed',
           );
           t.equal(
-            subscriberEvents.length, NUM.ZERO,
+            subscriberEvents.length, 0,
             'subscriber received no catchup events',
           );
           t.equal(
@@ -495,7 +494,7 @@ test('CDC sliding window handshake catchup integration',
           // Sliding window empty before writes
           t.equal(
             partition.cdcEventBuffer.recentEventsSize(),
-            NUM.ZERO,
+            0,
             'sliding window empty before writes',
           );
 
@@ -511,7 +510,7 @@ test('CDC sliding window handshake catchup integration',
 
           // Verify events were delivered
           t.ok(
-            events.length > NUM.ZERO,
+            events.length > 0,
             'events delivered to subscriber',
           );
 
@@ -519,7 +518,7 @@ test('CDC sliding window handshake catchup integration',
           const recentEvents =
             partition.cdcEventBuffer.getRecentEvents();
           t.ok(
-            recentEvents.length > NUM.ZERO,
+            recentEvents.length > 0,
             'sliding window has recorded events',
           );
           t.ok(
@@ -529,7 +528,7 @@ test('CDC sliding window handshake catchup integration',
 
           // Verify identity match
           for (
-            let i = NUM.ZERO;
+            let i = 0;
             i < recentEvents.length;
             i++
           ) {
@@ -576,7 +575,7 @@ test('CDC sliding window handshake catchup integration',
             timestamp: String(Date.now()),
             sourcePartition: TEST_IDS.PARTITION_ID,
             sourceReplica: TEST_IDS.REPLICA_ID,
-            sequenceNumber: NUM.ONE,
+            sequenceNumber: 1,
           };
           const event2 = {
             tableName: TEST_IDS.TABLE_ID,
@@ -585,20 +584,20 @@ test('CDC sliding window handshake catchup integration',
             timestamp: String(Date.now()),
             sourcePartition: TEST_IDS.PARTITION_ID,
             sourceReplica: TEST_IDS.REPLICA_ID,
-            sequenceNumber: NUM.TWO,
+            sequenceNumber: 2,
           };
           partition.cdcEventBuffer.buffer(event1);
           partition.cdcEventBuffer.buffer(event2);
 
           t.ok(
-            partition.cdcEventBuffer.size() > NUM.ZERO,
+            partition.cdcEventBuffer.size() > 0,
             'events buffered for retry',
           );
 
           // Sliding window empty before flush
           t.equal(
             partition.cdcEventBuffer.recentEventsSize(),
-            NUM.ZERO,
+            0,
             'sliding window empty before flush',
           );
 
@@ -611,7 +610,7 @@ test('CDC sliding window handshake catchup integration',
           const recentEvents =
             partition.cdcEventBuffer.getRecentEvents();
           t.ok(
-            recentEvents.length > NUM.ZERO,
+            recentEvents.length > 0,
             'sliding window populated after flush',
           );
 
@@ -629,7 +628,7 @@ test('CDC sliding window handshake catchup integration',
 
           t.ok(
             handshakeB.catchup
-              .slidingWindowEventsReplayed > NUM.ZERO,
+              .slidingWindowEventsReplayed > 0,
             'B received sliding window catchup ' +
             'from flushed events',
           );

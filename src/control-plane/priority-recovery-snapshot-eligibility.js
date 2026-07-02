@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
@@ -37,9 +33,9 @@ function normalizePriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
 function hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) {
   return (
     normalizePriorityRecoveryDecisionSnapshotOperationIds(snapshot).length >
-      NUM.ZERO ||
+      0 ||
     normalizePriorityRecoveryInteger(snapshot?.coordinator?.operationCount) >
-      NUM.ZERO
+      0
   );
 }
 
@@ -109,7 +105,7 @@ function normalizePriorityRecoveryDecisionSnapshotFreshnessCandidates(
 ) {
   return values
     .map((value) => normalizePriorityRecoveryInteger(value))
-    .filter((value) => Number.isFinite(value) && value > NUM.ZERO);
+    .filter((value) => Number.isFinite(value) && value > 0);
 }
 
 function resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot) {
@@ -139,9 +135,9 @@ function resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot) {
         PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.LAST_PROGRESS_AT_MS
       ],
     ]);
-  return freshnessCandidates.length > NUM.ZERO ?
+  return freshnessCandidates.length > 0 ?
     Math.max(...freshnessCandidates) :
-    NUM.ZERO;
+    0;
 }
 
 function resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs(snapshot) {
@@ -168,9 +164,9 @@ function resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs(snapshot) {
         PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.CREATED_AT_MS
       ],
     ]);
-  return freshnessCandidates.length > NUM.ZERO ?
+  return freshnessCandidates.length > 0 ?
     Math.max(...freshnessCandidates) :
-    NUM.ZERO;
+    0;
 }
 
 function isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) {
@@ -222,8 +218,8 @@ function shouldDropPriorityRecoverySyntheticNoOperationSnapshot({
   progressSnapshot,
 }) {
   return (
-    syntheticFreshnessMs === NUM.ZERO ||
-    progressFreshnessMs === NUM.ZERO ||
+    syntheticFreshnessMs === 0 ||
+    progressFreshnessMs === 0 ||
     progressFreshnessMs >= syntheticFreshnessMs ||
     isPriorityRecoveryWorkflowOwnerWaitWindowOpenSnapshot(
       progressSnapshot,
@@ -237,9 +233,9 @@ function shouldDropPriorityRecoveryStaleOperationSnapshot({
   staleOperationFreshnessMs,
 }) {
   return (
-    progressFreshnessMs > NUM.ZERO &&
+    progressFreshnessMs > 0 &&
     (
-      staleOperationFreshnessMs === NUM.ZERO ||
+      staleOperationFreshnessMs === 0 ||
       progressFreshnessMs > staleOperationFreshnessMs
     )
   );
@@ -278,7 +274,7 @@ function isPriorityRecoveryWorkflowOwnerWaitWindowOpenSnapshot(
     !Number.isFinite(lastProgressAtMs) ||
     !Number.isFinite(stepTimeoutMs) ||
     !Number.isFinite(syntheticFreshnessMs) ||
-    stepTimeoutMs <= NUM.ZERO
+    stepTimeoutMs <= 0
   ) {
     return false;
   }
@@ -296,13 +292,13 @@ function filterPriorityRecoverySyntheticNoOperationConflicts(snapshots = []) {
     const partitionId = String(
       snapshot?.partitionId || LOCAL_STR_EMPTY,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     const snapshotFreshnessMs =
       resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot);
     const currentFreshnessMs =
-      progressFreshnessByPartitionId.get(partitionId) || NUM.ZERO;
+      progressFreshnessByPartitionId.get(partitionId) || 0;
     if (snapshotFreshnessMs >= currentFreshnessMs) {
       progressSnapshotByPartitionId.set(partitionId, snapshot);
     }
@@ -314,12 +310,12 @@ function filterPriorityRecoverySyntheticNoOperationConflicts(snapshots = []) {
       ),
     );
   }
-  if (progressFreshnessByPartitionId.size === NUM.ZERO) {
+  if (progressFreshnessByPartitionId.size === 0) {
     return Array.isArray(snapshots) ? snapshots : [];
   }
   return normalizedSnapshots.filter((snapshot) => {
     const partitionId = String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return false;
     }
     const progressFreshnessMs = progressFreshnessByPartitionId.get(partitionId);
@@ -349,18 +345,18 @@ function filterPriorityRecoveryStaleOperationProgressConflicts(snapshots = []) {
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
         LOCAL_STR_EMPTY,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     progressFreshnessByPartitionId.set(
       partitionId,
       Math.max(
-        progressFreshnessByPartitionId.get(partitionId) || NUM.ZERO,
+        progressFreshnessByPartitionId.get(partitionId) || 0,
         resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs(snapshot),
       ),
     );
   }
-  if (progressFreshnessByPartitionId.size === NUM.ZERO) {
+  if (progressFreshnessByPartitionId.size === 0) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.filter((snapshot) => {
@@ -368,7 +364,7 @@ function filterPriorityRecoveryStaleOperationProgressConflicts(snapshots = []) {
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
         LOCAL_STR_EMPTY,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return false;
     }
     const progressFreshnessMs = progressFreshnessByPartitionId.get(partitionId);
@@ -423,7 +419,7 @@ function isPriorityRecoveryReleasedSerialWaitSourceSnapshot(
   const normalizedOperationId = String(operationId || LOCAL_STR_EMPTY).trim();
   const operation = resolvePriorityRecoveryDecisionSnapshotOperation(snapshot);
   return (
-    normalizedOperationId.length > NUM.ZERO &&
+    normalizedOperationId.length > 0 &&
     resolvePriorityRecoveryOperationContextId(operation) ===
       normalizedOperationId &&
     isPriorityRecoveryOperationContextTerminal(operation) === true &&
@@ -443,7 +439,7 @@ function buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId(
         LOCAL_STR_EMPTY,
     ).trim();
     if (
-      operationId.length === NUM.ZERO ||
+      operationId.length === 0 ||
       isPriorityRecoveryReleasedSerialWaitSourceSnapshot(
         snapshot,
         operationId,
@@ -453,13 +449,13 @@ function buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId(
     }
     const releasedFreshnessMs =
       resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot);
-    if (releasedFreshnessMs === NUM.ZERO) {
+    if (releasedFreshnessMs === 0) {
       continue;
     }
     releasedFreshnessByOperationId.set(
       operationId,
       Math.max(
-        releasedFreshnessByOperationId.get(operationId) || NUM.ZERO,
+        releasedFreshnessByOperationId.get(operationId) || 0,
         releasedFreshnessMs,
       ),
     );
@@ -475,8 +471,8 @@ function shouldReleasePriorityRecoverySerialWaitSnapshot(
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.BLOCKER_REASONS],
   );
   const serialWaitOnly =
-    blockerReasons.length === NUM.ONE &&
-    blockerReasons[NUM.ZERO] ===
+    blockerReasons.length === 1 &&
+    blockerReasons[0] ===
       PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT;
   if (
     serialWaitOnly !== true ||
@@ -492,14 +488,14 @@ function shouldReleasePriorityRecoverySerialWaitSnapshot(
   const snapshotFreshnessMs =
     resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot);
   if (
-    serialWaitOperationIds.length === NUM.ZERO ||
-    snapshotFreshnessMs === NUM.ZERO
+    serialWaitOperationIds.length === 0 ||
+    snapshotFreshnessMs === 0
   ) {
     return false;
   }
   return serialWaitOperationIds.every((operationId) => {
     return (
-      (releasedFreshnessByOperationId.get(operationId) || NUM.ZERO) >
+      (releasedFreshnessByOperationId.get(operationId) || 0) >
       snapshotFreshnessMs
     );
   });
@@ -509,14 +505,14 @@ function buildReleasedPriorityRecoverySerialWaitAssessment(snapshot) {
   const planner =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] :
       {};
   const spreadCompletion =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION] &&
     typeof snapshot[
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION
-    ] === TYPEOF.OBJECT ?
+    ] === 'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION] :
       {};
   const blockerReasons = Object.freeze([

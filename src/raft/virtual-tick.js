@@ -19,7 +19,6 @@
  */
 
 import ms from 'millisecond';
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const TIMER_NAME_SEPARATOR = /[, ]+/;
 
@@ -89,7 +88,7 @@ class VirtualTick {
   }
 
   setImmediate(name, fn) {
-    return this.setTimeout(name, fn, NUM.ZERO);
+    return this.setTimeout(name, fn, 0);
   }
 
   active(name) {
@@ -107,10 +106,10 @@ class VirtualTick {
       return this;
     }
     let targets = names;
-    if (names.length === NUM.ONE && typeof names[0] === TYPEOF.STRING) {
+    if (names.length === 1 && typeof names[0] === 'string') {
       targets = names[0].split(TIMER_NAME_SEPARATOR);
     }
-    if (targets.length === NUM.ZERO) {
+    if (targets.length === 0) {
       targets = Object.keys(this.timers);
     }
     for (const name of targets) {

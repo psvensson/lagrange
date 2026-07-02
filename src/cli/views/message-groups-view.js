@@ -12,27 +12,25 @@ import {BaseView, ROW_STATUS} from '../core/base-view.js';
 const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
 const LOCAL_STR_GROUP_ID = 'group_id';
 const LOCAL_STR_GROUP_ID_2 = 'Group ID';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_REPLICA_COUNT = 'replica_count';
 const LOCAL_STR_REPLICAS = 'Replicas';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_NODES_COVERED = 'nodes_covered';
 const LOCAL_STR_NODES_COVERED_2 = 'Nodes Covered';
-const LOCAL_NUM_30 = 30;
+const LOCAL_NUM_THIRTY = 30;
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
-const LOCAL_NUM_12 = 12;
+const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_NONE = 'None';
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_DEGRADED = 'degraded';
 const LOCAL_STR_HEALTHY = 'healthy';
 const LOCAL_STR_ACTIVE = 'active';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_REPLICAS_2 = 'replicas';
 const LOCAL_STR_MESSAGE_GROUP = 'message_group';
@@ -70,10 +68,10 @@ export class MessageGroupsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_GROUP_ID, label: LOCAL_STR_GROUP_ID_2, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
-      {key: LOCAL_STR_NODES_COVERED, label: LOCAL_STR_NODES_COVERED_2, width: LOCAL_NUM_30},
-      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_GROUP_ID, label: LOCAL_STR_GROUP_ID_2, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_TEN},
+      {key: LOCAL_STR_NODES_COVERED, label: LOCAL_STR_NODES_COVERED_2, width: LOCAL_NUM_THIRTY},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_TWELVE},
     ];
   }
 
@@ -115,10 +113,10 @@ export class MessageGroupsView extends BaseView {
       return LOCAL_STR_N_A;
     }
     if (Array.isArray(nodes)) {
-      if (nodes.length === LOCAL_NUM_ZERO) {
+      if (nodes.length === 0) {
         return LOCAL_STR_NONE;
       }
-      return nodes.join(LOCAL_STR_128KJ);
+      return nodes.join(LOCAL_STR_COMMA_SPACE);
     }
     return String(nodes);
   }
@@ -158,7 +156,7 @@ export class MessageGroupsView extends BaseView {
     // Check unhealthy_replica_count if available
     if (messageGroup.unhealthy_replica_count !== undefined &&
         messageGroup.unhealthy_replica_count !== null) {
-      return messageGroup.unhealthy_replica_count > LOCAL_NUM_ZERO;
+      return messageGroup.unhealthy_replica_count > 0;
     }
 
     // Check replica_statuses array if available
@@ -176,7 +174,7 @@ export class MessageGroupsView extends BaseView {
    * @return {string} Unique key (group_id)
    */
   getItemKey(messageGroup) {
-    return messageGroup.group_id || LOCAL_STR_EMPTY;
+    return messageGroup.group_id || '';
   }
 
   /**
@@ -206,14 +204,14 @@ export class MessageGroupsView extends BaseView {
    * @param {number} nodeIndex - Index of node in nodes_covered array
    * @return {Object|null} Navigation action or null
    */
-  navigateToNode(nodeIndex = LOCAL_NUM_ZERO) {
+  navigateToNode(nodeIndex = 0) {
     const selectedGroup = this.getSelectedItem();
     if (!selectedGroup) {
       return null;
     }
 
     const nodes = selectedGroup.nodes_covered;
-    if (!Array.isArray(nodes) || nodes.length === LOCAL_NUM_ZERO) {
+    if (!Array.isArray(nodes) || nodes.length === 0) {
       return null;
     }
 
@@ -237,7 +235,7 @@ export class MessageGroupsView extends BaseView {
       return this.handleDrillDown();
     }
     if (key.name === LOCAL_STR_N || key.name === LOCAL_STR_N_2) {
-      return this.navigateToNode(LOCAL_NUM_ZERO);
+      return this.navigateToNode(0);
     }
     return super.handleKey(key);
   }
@@ -276,7 +274,7 @@ export class MessageGroupsView extends BaseView {
 
     // Add leader info if available
     if (group.leader_node_id) {
-      sections[LOCAL_NUM_ZERO].fields.push(
+      sections[0].fields.push(
         {label: LOCAL_STR_LEADER_NODE, value: group.leader_node_id});
     }
 
@@ -285,8 +283,8 @@ export class MessageGroupsView extends BaseView {
       sections.push({
         title: LOCAL_STR_RAFT_STATE,
         fields: [
-          {label: LOCAL_STR_TERM, value: String(group.raft_term || LOCAL_NUM_ZERO)},
-          {label: LOCAL_STR_INDEX, value: String(group.raft_index || LOCAL_NUM_ZERO)},
+          {label: LOCAL_STR_TERM, value: String(group.raft_term || 0)},
+          {label: LOCAL_STR_INDEX, value: String(group.raft_index || 0)},
         ],
       });
     }

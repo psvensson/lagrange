@@ -3,7 +3,6 @@
  * entry shape consumed by liferaft.
  */
 
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COMMAND = 'command';
@@ -40,7 +39,7 @@ function normalizeLogEntry(entry, fallback = {}) {
   const hasCanonicalShape = isCanonicalLogEntryShape(entry);
   const committedIndex = Number.isFinite(fallback.committedIndex) ?
     fallback.committedIndex :
-    NUM.ZERO;
+    0;
   const index = hasCanonicalShape && Number.isFinite(entry?.index) ?
     entry.index :
     fallback.index;

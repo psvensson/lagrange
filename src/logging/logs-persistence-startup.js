@@ -1,12 +1,11 @@
 import {READINESS_EVENT} from '../bootstrap/bootstrap-readiness-state-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 
 const LOGS_TABLE_PERSISTENCE_READY_DELAY_MS = 5000;
 
 function normalizeDelayMs(value) {
-  if (!Number.isFinite(value) || value < LOCAL_NUM_ZERO) {
+  if (!Number.isFinite(value) || value < 0) {
     return LOGS_TABLE_PERSISTENCE_READY_DELAY_MS;
   }
   return Math.floor(value);

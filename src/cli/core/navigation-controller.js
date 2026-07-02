@@ -1,7 +1,6 @@
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_EIGHT = 8;
 const LOCAL_STR_NODES = 'nodes';
-const LOCAL_STR_592WI = ' > ';
+const LOCAL_STR_SPACE_GT_SPACE = ' > ';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_GOBACK = 'goBack';
 const LOCAL_STR_GOTOVIEW = 'goToView';
@@ -111,7 +110,7 @@ function formatReplicasBreadcrumb(context = {}) {
 
 function formatOperationsBreadcrumb(context = {}) {
   return context.operationId ?
-    `Operation: ${context.operationId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT)}...` :
+    `Operation: ${context.operationId.substring(0, LOCAL_NUM_EIGHT)}...` :
     VIEW_DISPLAY_NAME.operations;
 }
 
@@ -179,7 +178,7 @@ export class NavigationController {
       }));
     }
 
-    return parts.join(LOCAL_STR_592WI);
+    return parts.join(LOCAL_STR_SPACE_GT_SPACE);
   }
 
   /**
@@ -236,7 +235,7 @@ export class NavigationController {
    * @return {boolean} True if navigation occurred, false if at root
    */
   goBack() {
-    if (this.stack.length === LOCAL_NUM_ZERO) {
+    if (this.stack.length === 0) {
       return false;
     }
 
@@ -366,13 +365,13 @@ export class NavigationController {
     case LOCAL_STR_PARTITION: {
       const partition = this.cache.getPartition(entityId);
       return {
-        replicas: partition ? (partition.replica_count || LOCAL_NUM_ZERO) : LOCAL_NUM_ZERO,
+        replicas: partition ? (partition.replica_count || 0) : 0,
       };
     }
     case LOCAL_STR_MESSAGE_GROUP: {
       const group = this.cache.getMessageGroup(entityId);
       return {
-        replicas: group ? (group.replica_count || LOCAL_NUM_ZERO) : LOCAL_NUM_ZERO,
+        replicas: group ? (group.replica_count || 0) : 0,
       };
     }
     default:
@@ -385,7 +384,7 @@ export class NavigationController {
    * @return {boolean} True if back navigation is possible
    */
   canGoBack() {
-    return this.stack.length > LOCAL_NUM_ZERO;
+    return this.stack.length > 0;
   }
 
   /**

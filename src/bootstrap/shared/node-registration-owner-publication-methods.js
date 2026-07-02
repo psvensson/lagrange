@@ -21,12 +21,10 @@ import {JOINING_LOG_MSG} from '../node-joining-constants.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  NUM,
   SERVICE_STATUS,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   './retryable-control-plane-write.js';
@@ -149,7 +147,7 @@ class NodeRegistrationOwnerPublicationMethods {
       [COLUMN.NODE_ID]: this.nodeId,
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
       [COLUMN.ADDRESS]: canonicalWsAddress,
-      [COLUMN.PRIORITY]: NUM.ZERO,
+      [COLUMN.PRIORITY]: 0,
       [COLUMN.METADATA]: JSON.stringify({}),
       [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
       [COLUMN.CREATED_AT]: now,
@@ -223,7 +221,7 @@ class NodeRegistrationOwnerPublicationMethods {
       rowData[COLUMN.LAST_HEARTBEAT] :
       this.delegates.getNow()();
     const queryTimeoutMs =
-      Math.max(NUM.ONE, this.getJoinAdmissionWriteRetryTimeoutMs());
+      Math.max(1, this.getJoinAdmissionWriteRetryTimeoutMs());
 
     await heartbeatService.writeNodeHeartbeat(
       rowData,
@@ -364,7 +362,7 @@ class NodeRegistrationOwnerPublicationMethods {
     if (
       !controlPlaneSystemTableGateway ||
       typeof controlPlaneSystemTableGateway.submitMutation !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       throw new Error(
         NODE_REGISTRATION_ERROR.JOIN_ADMISSION_GATEWAY_REQUIRED,
@@ -408,7 +406,7 @@ class NodeRegistrationOwnerPublicationMethods {
     if (
       !controlPlaneSystemTableGateway ||
       typeof controlPlaneSystemTableGateway.updateSystemTableRow !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       throw new Error(
         NODE_REGISTRATION_ERROR.JOIN_ADMISSION_GATEWAY_REQUIRED,
@@ -465,7 +463,7 @@ class NodeRegistrationOwnerPublicationMethods {
 
     const logger = this.delegates.getLogger();
     let nodeEndpointWithdrawn = false;
-    let metaEndpointWithdrawnCount = NUM.ZERO;
+    let metaEndpointWithdrawnCount = 0;
     try {
       await this.updateJoinAdmissionSystemTableRowWithRetry(
         TABLES.NODE_ENDPOINTS,
@@ -493,7 +491,7 @@ class NodeRegistrationOwnerPublicationMethods {
       const endpointId = normalizeString(
         metaEndpointRow?.[COLUMN.ENDPOINT_ID],
       );
-      if (endpointId.length === NUM.ZERO) {
+      if (endpointId.length === 0) {
         continue;
       }
       try {
@@ -509,7 +507,7 @@ class NodeRegistrationOwnerPublicationMethods {
               JOIN_ADMISSION_WITHDRAWAL_TARGET.SERVICE_ENDPOINT,
           },
         );
-        metaEndpointWithdrawnCount += NUM.ONE;
+        metaEndpointWithdrawnCount += 1;
       } catch (endpointError) {
         logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
           nodeId: this.nodeId,
@@ -590,7 +588,7 @@ class NodeRegistrationOwnerPublicationMethods {
   }
 
   seedJoinTimeCacheRow(tableName, rowData) {
-    if (!rowData || typeof rowData !== TYPEOF.OBJECT) {
+    if (!rowData || typeof rowData !== 'object') {
       return;
     }
 
@@ -599,7 +597,7 @@ class NodeRegistrationOwnerPublicationMethods {
     if (
       !systemTableCache ||
       typeof systemTableCache.applySystemTableChange !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return;
     }
@@ -614,7 +612,7 @@ class NodeRegistrationOwnerPublicationMethods {
   getJoinAdmissionWriteRetryTimeoutMs() {
     const configured =
       this.delegates.getConfig?.()?.joinAdmissionWriteRetryTimeoutMs;
-    if (Number.isFinite(configured) && configured >= NUM.ZERO) {
+    if (Number.isFinite(configured) && configured >= 0) {
       return Math.floor(configured);
     }
     return JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS;

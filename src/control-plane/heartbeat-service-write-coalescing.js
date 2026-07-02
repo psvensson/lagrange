@@ -1,4 +1,4 @@
-import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 
 function buildNodeHeartbeatWriteDecision(
   shouldWrite,
@@ -13,7 +13,7 @@ function buildReporterHeartbeatVisibilityDecision(outcome, nextState) {
 }
 
 function normalizeHeartbeatPublicationTimestamp(value) {
-  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+  if (typeof value === 'string' && value.length > 0) {
     return value;
   }
   const timestampMs = Number(value);
@@ -24,26 +24,26 @@ function normalizeHeartbeatPublicationTimestamp(value) {
 }
 
 function normalizeHeartbeatPublicationDiagnostics(source, fallbackPath = null) {
-  const value = source && typeof source === TYPEOF.OBJECT ? source : {};
+  const value = source && typeof source === 'object' ? source : {};
   const targetAddress =
-    typeof value.targetAddress === TYPEOF.STRING && value.targetAddress.length > NUM.ZERO ?
+    typeof value.targetAddress === 'string' && value.targetAddress.length > 0 ?
       value.targetAddress :
       null;
   const addressParts = targetAddress ? targetAddress.split('/') : [];
   const targetNodeId =
-    typeof value.targetNodeId === TYPEOF.STRING && value.targetNodeId.length > NUM.ZERO ?
+    typeof value.targetNodeId === 'string' && value.targetNodeId.length > 0 ?
       value.targetNodeId :
-      addressParts[NUM.ZERO] || null;
+      addressParts[0] || null;
   const targetServiceType =
-    typeof value.targetServiceType === TYPEOF.STRING && value.targetServiceType.length > NUM.ZERO ?
+    typeof value.targetServiceType === 'string' && value.targetServiceType.length > 0 ?
       value.targetServiceType :
-      addressParts[NUM.ONE] || null;
+      addressParts[1] || null;
   const targetServiceId =
-    typeof value.targetServiceId === TYPEOF.STRING && value.targetServiceId.length > NUM.ZERO ?
+    typeof value.targetServiceId === 'string' && value.targetServiceId.length > 0 ?
       value.targetServiceId :
       addressParts.slice(2).join('/') || null;
   const publicationPath =
-    typeof value.publicationPath === TYPEOF.STRING && value.publicationPath.length > NUM.ZERO ?
+    typeof value.publicationPath === 'string' && value.publicationPath.length > 0 ?
       value.publicationPath :
       fallbackPath;
   return {publicationPath, targetAddress, targetNodeId, targetServiceType, targetServiceId};
@@ -79,20 +79,20 @@ function buildNodeHeartbeatUtilizationSignature(updateRow, options = {}) {
 }
 
 function resolveHeartbeatBudgetFields(cachedRow) {
-  if (!cachedRow || typeof cachedRow !== TYPEOF.OBJECT) {
+  if (!cachedRow || typeof cachedRow !== 'object') {
     return {};
   }
   const fields = {};
   const budgetBytes = Number(cachedRow[COLUMN.STORAGE_BUDGET_BYTES]);
-  if (Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO) {
+  if (Number.isFinite(budgetBytes) && budgetBytes > 0) {
     fields[COLUMN.STORAGE_BUDGET_BYTES] = Math.floor(budgetBytes);
   }
   const budgetSource = cachedRow[COLUMN.STORAGE_BUDGET_SOURCE];
-  if (typeof budgetSource === TYPEOF.STRING && budgetSource.length > NUM.ZERO) {
+  if (typeof budgetSource === 'string' && budgetSource.length > 0) {
     fields[COLUMN.STORAGE_BUDGET_SOURCE] = budgetSource;
   }
   const budgetUpdatedAt = Number(cachedRow[COLUMN.STORAGE_BUDGET_UPDATED_AT]);
-  if (Number.isFinite(budgetUpdatedAt) && budgetUpdatedAt > NUM.ZERO) {
+  if (Number.isFinite(budgetUpdatedAt) && budgetUpdatedAt > 0) {
     fields[COLUMN.STORAGE_BUDGET_UPDATED_AT] = Math.floor(budgetUpdatedAt);
   }
   return fields;
@@ -120,7 +120,7 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
   }
   const elapsedMs = now - options.lastNodeHeartbeatWriteAt;
   if (
-    options.heartbeatConsecutiveFailures > NUM.ZERO &&
+    options.heartbeatConsecutiveFailures > 0 &&
     options.isHeartbeatEscalatedPublicationMode(
       options.lastHeartbeatPublicationDecision?.publicationMode,
     )
@@ -237,7 +237,7 @@ function isQuietModeActive(quietMode, options = {}) {
   if (typeof quietMode === options.booleanTypeValue) {
     return quietMode;
   }
-  if (typeof quietMode?.isActive === TYPEOF.FUNCTION) {
+  if (typeof quietMode?.isActive === 'function') {
     return quietMode.isActive() === true;
   }
   if (quietMode.enabled === false) {
@@ -248,7 +248,7 @@ function isQuietModeActive(quietMode, options = {}) {
 
 function incrementHistogramEntry(histogram, key, oneValue) {
   if (!Object.prototype.hasOwnProperty.call(histogram, key)) {
-    histogram[key] = NUM.ZERO;
+    histogram[key] = 0;
   }
   histogram[key] += oneValue;
 }
@@ -300,7 +300,7 @@ function advanceMemoryTrendState(memoryUsagePercent, timestamp, options = {}) {
     };
   }
   if (
-    options.lastMemoryTrendWarningAt > NUM.ZERO &&
+    options.lastMemoryTrendWarningAt > 0 &&
     timestamp - options.lastMemoryTrendWarningAt < options.memoryTrendWarningCooldownMs
   ) {
     return {

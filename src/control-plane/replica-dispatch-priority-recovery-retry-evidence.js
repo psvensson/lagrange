@@ -2,8 +2,6 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 
 const {
   COLUMN,
-  NUM,
-  TYPEOF,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD = Object.freeze({
@@ -21,14 +19,14 @@ const PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD = Object.freeze({
 const PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT = '';
 
 function normalizePriorityRecoveryDispatchRetryPartitionId(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT;
   }
   return value.trim();
 }
 
 function normalizePriorityRecoveryDispatchRetryOperationId(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT;
   }
   return value.trim();
@@ -36,7 +34,7 @@ function normalizePriorityRecoveryDispatchRetryOperationId(value) {
 
 function addPriorityRecoveryDispatchRetryOperationId(operationIds, value) {
   const operationId = normalizePriorityRecoveryDispatchRetryOperationId(value);
-  if (operationId.length > NUM.ZERO) {
+  if (operationId.length > 0) {
     operationIds.add(operationId);
   }
 }
@@ -96,8 +94,8 @@ export function mergeDispatchRetryRowsByOperationId(
   const appendRow = (row) => {
     const operationId = row?.[COLUMN.OPERATION_ID];
     if (
-      typeof operationId !== TYPEOF.STRING ||
-      operationId.length === NUM.ZERO ||
+      typeof operationId !== 'string' ||
+      operationId.length === 0 ||
       seenOperationIds.has(operationId)
     ) {
       return;
@@ -121,7 +119,7 @@ export function getPriorityRecoveryDispatchRetryBlockedPartitionIds(
     publicationConvergence?.[
       PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PRIORITY_PARTITION_SUMMARY
     ];
-  if (!priorityPartitionSummary || typeof priorityPartitionSummary !== TYPEOF.OBJECT) {
+  if (!priorityPartitionSummary || typeof priorityPartitionSummary !== 'object') {
     return [];
   }
   const partitionIds = new Set();
@@ -138,7 +136,7 @@ export function getPriorityRecoveryDispatchRetryBlockedPartitionIds(
     const partitionId = normalizePriorityRecoveryDispatchRetryPartitionId(
       partition?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PARTITION_ID],
     );
-    if (partitionId.length > NUM.ZERO) {
+    if (partitionId.length > 0) {
       partitionIds.add(partitionId);
     }
   }
@@ -155,7 +153,7 @@ export function getPriorityRecoveryDispatchRetryBlockedPartitionIds(
     const partitionId = normalizePriorityRecoveryDispatchRetryPartitionId(
       partitionIdValue,
     );
-    if (partitionId.length > NUM.ZERO) {
+    if (partitionId.length > 0) {
       partitionIds.add(partitionId);
     }
   }
@@ -187,7 +185,7 @@ export function getDispatchRetryRowPartitionIds(dispatchRows = []) {
     const partitionId = normalizePriorityRecoveryDispatchRetryPartitionId(
       row?.[COLUMN.PARTITION_ID],
     );
-    if (partitionId.length > NUM.ZERO) {
+    if (partitionId.length > 0) {
       partitionIds.add(partitionId);
     }
   }
@@ -200,7 +198,7 @@ export function getDispatchRetryRowOperationIds(dispatchRows = []) {
     const operationId = normalizePriorityRecoveryDispatchRetryOperationId(
       row?.[COLUMN.OPERATION_ID] || row?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.OPERATION_ID],
     );
-    if (operationId.length > NUM.ZERO) {
+    if (operationId.length > 0) {
       operationIds.add(operationId);
     }
   }

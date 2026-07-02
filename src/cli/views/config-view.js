@@ -24,10 +24,10 @@ const LOCAL_STR_CONFIG = 'config';
 const LOCAL_STR_KEY = 'key';
 const LOCAL_STR_ASC = 'asc';
 const LOCAL_STR_KEY_2 = 'Key';
-const LOCAL_NUM_45 = 45;
+const LOCAL_NUM_FORTY_FIVE = 45;
 const LOCAL_STR_VALUE = 'value';
 const LOCAL_STR_VALUE_2 = 'Value';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_TYPE = 'type';
 const LOCAL_STR_TYPE_2 = 'Type';
 const LOCAL_NUM_EIGHT = 8;
@@ -36,16 +36,14 @@ const LOCAL_STR_RESTART = 'Restart';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
 const LOCAL_STR_LAST_MODIFIED = 'Last Modified';
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_YES = 'Yes (!)';
 const LOCAL_STR_YES_2 = 'Yes';
 const LOCAL_STR_NO = 'No';
 const LOCAL_STR_T = 'T';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_19 = 19;
+const LOCAL_NUM_NINETEEN = 19;
 const LOCAL_STR_DEFAULT_VALUE = 'default_value';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_1D7VE = '\\$&';
+const LOCAL_STR_BACKSLASH_DOLLAR_AMP = '\\$&';
 const LOCAL_STR_SHOWDETAIL = 'showDetail';
 const LOCAL_STR_ENTER = 'enter';
 const LOCAL_STR_RETURN = 'return';
@@ -54,25 +52,25 @@ const LOCAL_STR_R = 'R';
 const LOCAL_STR_SHOWERROR = 'showError';
 const LOCAL_STR_EDITCONFIG = 'editConfig';
 const LOCAL_STR_REVERTCONFIG = 'revertConfig';
-const LOCAL_STR_1XHIH = 'e:Edit  R:Revert  Enter:Details  d:Detail Panel  /:Filter';
+const LOCAL_STR_E_EDIT_R_REVERT_ENTER_DETAILS_D_DETAIL_P = 'e:Edit  R:Revert  Enter:Details  d:Detail Panel  /:Filter';
 const LOCAL_STR_DESCRIPTION = 'Description';
 const LOCAL_STR_INFO = 'Info';
 const LOCAL_STR_STATUS = 'Status';
 const LOCAL_STR_WARNING = 'Warning';
-const LOCAL_STR_2R3CU = 'Value differs from default';
+const LOCAL_STR_VALUE_DIFFERS_FROM_DEFAULT = 'Value differs from default';
 const LOCAL_STR_RESTART_REQUIRED = 'Restart Required';
-const LOCAL_STR_D2EP5 = 'Node restart required for changes to take effect';
+const LOCAL_STR_NODE_RESTART_REQUIRED_FOR_CHANGES_TO_TAK = 'Node restart required for changes to take effect';
 const LOCAL_STR_UNKNOWN = 'Unknown';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_ALL = 'all';
-const LOCAL_STR_TO60Q = '⚠️  WARNING: This change requires a node restart to take effect.';
-const LOCAL_STR_1A45C = 'Confirm Configuration Change';
+const LOCAL_STR_WARNING_THIS_CHANGE_REQUIRES_A_NODE_REST = '⚠️  WARNING: This change requires a node restart to take effect.';
+const LOCAL_STR_CONFIRM_CONFIGURATION_CHANGE = 'Confirm Configuration Change';
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_STR_K2VMV = 'Confirm Revert to Default';
-const LOCAL_STR_1QQHQ = 'Config key not found';
-const LOCAL_STR_N24TW = 'Config is read-only';
-const LOCAL_STR_1BJ9Z = 'No default value defined';
-const LOCAL_STR_68GR3 = 'Already at default value';
+const LOCAL_STR_CONFIRM_REVERT_TO_DEFAULT = 'Confirm Revert to Default';
+const LOCAL_STR_CONFIG_KEY_NOT_FOUND = 'Config key not found';
+const LOCAL_STR_CONFIG_IS_READ_ONLY = 'Config is read-only';
+const LOCAL_STR_NO_DEFAULT_VALUE_DEFINED = 'No default value defined';
+const LOCAL_STR_ALREADY_AT_DEFAULT_VALUE = 'Already at default value';
 
 /**
  * Validation result object
@@ -118,11 +116,11 @@ export class ConfigView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_KEY, label: LOCAL_STR_KEY_2, width: LOCAL_NUM_45},
-      {key: LOCAL_STR_VALUE, label: LOCAL_STR_VALUE_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_KEY, label: LOCAL_STR_KEY_2, width: LOCAL_NUM_FORTY_FIVE},
+      {key: LOCAL_STR_VALUE, label: LOCAL_STR_VALUE_2, width: LOCAL_NUM_TWENTY},
       {key: LOCAL_STR_TYPE, label: LOCAL_STR_TYPE_2, width: LOCAL_NUM_EIGHT},
       {key: LOCAL_STR_REQUIRES_RESTART, label: LOCAL_STR_RESTART, width: LOCAL_NUM_EIGHT},
-      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_LAST_MODIFIED, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_LAST_MODIFIED, width: LOCAL_NUM_TWENTY},
     ];
   }
 
@@ -186,7 +184,7 @@ export class ConfigView extends BaseView {
       }
       return date.toISOString()
         .replace(LOCAL_STR_T, LOCAL_STR_SPACE)
-        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+        .substring(0, LOCAL_NUM_NINETEEN);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }
@@ -229,7 +227,7 @@ export class ConfigView extends BaseView {
    * @return {string} Unique key
    */
   getItemKey(config) {
-    return config.config_key || LOCAL_STR_EMPTY;
+    return config.config_key || '';
   }
 
   /**
@@ -263,18 +261,18 @@ export class ConfigView extends BaseView {
     if (this.keyPatternFilter) {
       try {
         const pattern = new RegExp(this.escapeRegex(this.keyPatternFilter), 'i');
-        result = result.filter((config) => pattern.test(config.config_key || LOCAL_STR_EMPTY));
+        result = result.filter((config) => pattern.test(config.config_key || ''));
       } catch (_err) {
         // If regex is invalid, fall back to simple includes
         const lowerPattern = this.keyPatternFilter.toLowerCase();
         result = result.filter((config) =>
-          (config.config_key || LOCAL_STR_EMPTY).toLowerCase().includes(lowerPattern),
+          (config.config_key || '').toLowerCase().includes(lowerPattern),
         );
       }
     }
 
     // Apply general text filter (from base class)
-    if (this.filter && this.filter.trim() !== LOCAL_STR_EMPTY) {
+    if (this.filter && this.filter.trim() !== '') {
       const lowerFilter = this.filter.toLowerCase();
       result = result.filter((item) => {
         const values = Object.values(item);
@@ -294,7 +292,7 @@ export class ConfigView extends BaseView {
    * @return {string} Escaped string
    */
   escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
+    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_BACKSLASH_DOLLAR_AMP);
   }
 
   /**
@@ -398,7 +396,7 @@ export class ConfigView extends BaseView {
    * @return {string} Help text for status bar
    */
   getHelpText() {
-    return LOCAL_STR_1XHIH;
+    return LOCAL_STR_E_EDIT_R_REVERT_ENTER_DETAILS_D_DETAIL_P;
   }
 
   /**
@@ -445,7 +443,7 @@ export class ConfigView extends BaseView {
       sections.push({
         title: LOCAL_STR_STATUS,
         fields: [
-          {label: LOCAL_STR_WARNING, value: LOCAL_STR_2R3CU},
+          {label: LOCAL_STR_WARNING, value: LOCAL_STR_VALUE_DIFFERS_FROM_DEFAULT},
         ],
       });
     }
@@ -455,7 +453,7 @@ export class ConfigView extends BaseView {
       sections.push({
         title: LOCAL_STR_RESTART_REQUIRED,
         fields: [
-          {label: LOCAL_STR_WARNING, value: LOCAL_STR_D2EP5},
+          {label: LOCAL_STR_WARNING, value: LOCAL_STR_NODE_RESTART_REQUIRED_FOR_CHANGES_TO_TAK},
         ],
       });
     }
@@ -609,12 +607,12 @@ export class ConfigView extends BaseView {
     ];
 
     if (requiresRestart) {
-      message.push(LOCAL_STR_EMPTY);
-      message.push(LOCAL_STR_TO60Q);
+      message.push('');
+      message.push(LOCAL_STR_WARNING_THIS_CHANGE_REQUIRES_A_NODE_REST);
     }
 
     return {
-      title: LOCAL_STR_1A45C,
+      title: LOCAL_STR_CONFIRM_CONFIGURATION_CHANGE,
       message: message.join(LOCAL_STR_NEWLINE),
       requiresRestart,
       affectedNodes,
@@ -684,12 +682,12 @@ export class ConfigView extends BaseView {
     ];
 
     if (requiresRestart) {
-      message.push(LOCAL_STR_EMPTY);
-      message.push(LOCAL_STR_TO60Q);
+      message.push('');
+      message.push(LOCAL_STR_WARNING_THIS_CHANGE_REQUIRES_A_NODE_REST);
     }
 
     return {
-      title: LOCAL_STR_K2VMV,
+      title: LOCAL_STR_CONFIRM_REVERT_TO_DEFAULT,
       message: message.join(LOCAL_STR_NEWLINE),
       requiresRestart,
       affectedNodes,
@@ -704,9 +702,9 @@ export class ConfigView extends BaseView {
   canEdit(configKey) {
     const config = this.data.find((c) => c.config_key === configKey);
     return !config ?
-      {editable: false, reason: LOCAL_STR_1QQHQ} :
+      {editable: false, reason: LOCAL_STR_CONFIG_KEY_NOT_FOUND} :
       config.read_only ?
-        {editable: false, reason: LOCAL_STR_N24TW} :
+        {editable: false, reason: LOCAL_STR_CONFIG_IS_READ_ONLY} :
         {editable: true};
   }
 
@@ -720,13 +718,13 @@ export class ConfigView extends BaseView {
     const hasDefaultValue = config &&
       Object.prototype.hasOwnProperty.call(config, 'default_value');
     return !config ?
-      {revertable: false, reason: LOCAL_STR_1QQHQ} :
+      {revertable: false, reason: LOCAL_STR_CONFIG_KEY_NOT_FOUND} :
       !hasDefaultValue ?
-        {revertable: false, reason: LOCAL_STR_1BJ9Z} :
+        {revertable: false, reason: LOCAL_STR_NO_DEFAULT_VALUE_DEFINED} :
         !this.isDifferentFromDefault(config) ?
-          {revertable: false, reason: LOCAL_STR_68GR3} :
+          {revertable: false, reason: LOCAL_STR_ALREADY_AT_DEFAULT_VALUE} :
           config.read_only ?
-            {revertable: false, reason: LOCAL_STR_N24TW} :
+            {revertable: false, reason: LOCAL_STR_CONFIG_IS_READ_ONLY} :
             {revertable: true};
   }
 }

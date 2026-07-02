@@ -1,22 +1,18 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function freezeShallowObject(value) {
-  return value && typeof value === TYPEOF.OBJECT ?
+  return value && typeof value === 'object' ?
     Object.freeze({...value}) :
     null;
 }
@@ -26,7 +22,7 @@ function buildNodeStatePublicationStory(
   publicationMode = null,
 ) {
   const normalizedDiagnostics =
-    diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+    diagnostics && typeof diagnostics === 'object' ?
       diagnostics :
       null;
   const normalizedPublicationMode = normalizeOptionalString(
@@ -68,7 +64,7 @@ function buildNodeStatePublicationStory(
     nodeStatePublication.targetNodeId !== null ||
     nodeStatePublication.targetServiceType !== null ||
     nodeStatePublication.targetServiceId !== null ||
-    nodeStatePublication.consecutiveFailures > NUM.ZERO ||
+    nodeStatePublication.consecutiveFailures > 0 ||
     nodeStatePublication.publicationMode !== null;
   return hasDiagnostics ? nodeStatePublication : null;
 }
@@ -76,7 +72,7 @@ function buildNodeStatePublicationStory(
 function buildControlPlanePublicationStory(options = {}) {
   const membershipPublication =
     options.membershipPublication &&
-      typeof options.membershipPublication === TYPEOF.OBJECT ?
+      typeof options.membershipPublication === 'object' ?
       options.membershipPublication :
       null;
   const publishedControlPlaneEpoch = Number.isFinite(
@@ -107,7 +103,7 @@ function buildControlPlanePublicationStory(options = {}) {
     ...(
       membershipPublication?.publicationBoundaryOutcome &&
         typeof membershipPublication.publicationBoundaryOutcome ===
-          TYPEOF.OBJECT ?
+          'object' ?
         {
           publicationBoundaryOutcome:
             membershipPublication.publicationBoundaryOutcome,
@@ -116,7 +112,7 @@ function buildControlPlanePublicationStory(options = {}) {
     ),
     publicationRecoveryGate:
       membershipPublication?.publicationRecoveryGate &&
-        typeof membershipPublication.publicationRecoveryGate === TYPEOF.OBJECT ?
+        typeof membershipPublication.publicationRecoveryGate === 'object' ?
         membershipPublication.publicationRecoveryGate :
         null,
     publishedControlPlaneEpoch,

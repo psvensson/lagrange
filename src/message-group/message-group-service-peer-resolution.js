@@ -9,7 +9,6 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
-  NUM,
   SERVICE_TYPE,
   TABLES,
 } from '../constants/index.js';
@@ -93,7 +92,7 @@ function assignPeerResolution(serviceClass) {
       throw new Error(`Unable to resolve unified peer address for ${peerId}`);
     },
     resolvePeerAddressFromHints(peerId) {
-      if (!this.peerAddresses || this.peerAddresses.length === NUM.ZERO) {
+      if (!this.peerAddresses || this.peerAddresses.length === 0) {
         return null;
       }
       for (const addr of this.peerAddresses) {

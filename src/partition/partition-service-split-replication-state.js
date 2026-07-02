@@ -4,14 +4,12 @@ import {
 } from './partition-split-routing.js';
 
 const {
-  NUM,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   TABLES,
-  TYPEOF,
 } = PARTITION_SERVICE_SHARED;
 
 function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
@@ -19,7 +17,7 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
     return null;
   }
   let metadata = rawMetadata;
-  if (typeof rawMetadata === TYPEOF.STRING) {
+  if (typeof rawMetadata === 'string') {
     try {
       metadata = JSON.parse(rawMetadata);
     } catch {
@@ -43,9 +41,9 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
     !sourcePartitionId ||
     sourcePartitionId !== service.partitionId ||
     !Array.isArray(targetPartitionIds) ||
-    targetPartitionIds.length !== NUM.TWO ||
-    !targetPartitionIds[NUM.ZERO] ||
-    !targetPartitionIds[NUM.ONE] ||
+    targetPartitionIds.length !== 2 ||
+    !targetPartitionIds[0] ||
+    !targetPartitionIds[1] ||
     !Number.isInteger(targetPartitionVersion)
   ) {
     return null;
@@ -84,7 +82,7 @@ function resolveSplitDescriptorEpochEvidenceForService(service, metadata) {
   return {
     tableDescriptor,
     targetPartitionDescriptors,
-    requireTargetDescriptors: targetPartitionIds.length > NUM.ZERO,
+    requireTargetDescriptors: targetPartitionIds.length > 0,
   };
 }
 

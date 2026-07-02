@@ -33,7 +33,7 @@ import {
 } from './cli-constants.js';
 import {
   LOCAL_STR_YELLOW,
-  LOCAL_NUM_2000,
+  LOCAL_NUM_TWO_THOUSAND,
   LOCAL_NUM_ONE,
   LOCAL_NUM_ZERO,
 } from './admin-cli-local-constants.js';
@@ -132,7 +132,7 @@ export class AdminCLI {
     } catch (err) {
       this.showError(`Failed to connect: ${err.message}`);
       // Give user time to see the error
-      await new Promise((resolve) => setTimeout(resolve, LOCAL_NUM_2000));
+      await new Promise((resolve) => setTimeout(resolve, LOCAL_NUM_TWO_THOUSAND));
       this.cleanup();
       process.exit(LOCAL_NUM_ONE);
     }

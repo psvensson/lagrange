@@ -2,16 +2,14 @@
  * Canonical service-message envelope validation.
  */
 
-import {TYPEOF} from '../constants/types.js';
 import {
   SERVICE_MESSAGE_FIELD,
   SERVICE_MESSAGE_REQUIRED_FIELDS,
 } from '../constants/unified-service-lifecycle.js';
 import {InvalidServiceMessageError} from './service-lifecycle-errors.js';
 
-const LOCAL_STR_1XPH1 = 'envelope must be an object';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_ENVELOPE_MUST_BE_AN_OBJECT = 'envelope must be an object';
+const LOCAL_STR_SEMI_SPACE = '; ';
 
 /**
  * Validate canonical service message envelope shape.
@@ -22,10 +20,10 @@ const LOCAL_STR_1AM9G = '; ';
 function validateServiceMessageEnvelope(envelope) {
   const errors = [];
 
-  if (!envelope || typeof envelope !== TYPEOF.OBJECT) {
+  if (!envelope || typeof envelope !== 'object') {
     return {
       valid: false,
-      errors: [LOCAL_STR_1XPH1],
+      errors: [LOCAL_STR_ENVELOPE_MUST_BE_AN_OBJECT],
     };
   }
 
@@ -36,22 +34,22 @@ function validateServiceMessageEnvelope(envelope) {
   }
 
   if (envelope[SERVICE_MESSAGE_FIELD.MESSAGE_ID] !== undefined &&
-    typeof envelope[SERVICE_MESSAGE_FIELD.MESSAGE_ID] !== TYPEOF.STRING) {
+    typeof envelope[SERVICE_MESSAGE_FIELD.MESSAGE_ID] !== 'string') {
     errors.push(`field '${SERVICE_MESSAGE_FIELD.MESSAGE_ID}' must be a string`);
   }
 
   if (envelope[SERVICE_MESSAGE_FIELD.SERVICE_ID] !== undefined &&
-    typeof envelope[SERVICE_MESSAGE_FIELD.SERVICE_ID] !== TYPEOF.STRING) {
+    typeof envelope[SERVICE_MESSAGE_FIELD.SERVICE_ID] !== 'string') {
     errors.push(`field '${SERVICE_MESSAGE_FIELD.SERVICE_ID}' must be a string`);
   }
 
   if (envelope[SERVICE_MESSAGE_FIELD.OPERATION] !== undefined &&
-    typeof envelope[SERVICE_MESSAGE_FIELD.OPERATION] !== TYPEOF.STRING) {
+    typeof envelope[SERVICE_MESSAGE_FIELD.OPERATION] !== 'string') {
     errors.push(`field '${SERVICE_MESSAGE_FIELD.OPERATION}' must be a string`);
   }
 
   return {
-    valid: errors.length === LOCAL_NUM_ZERO,
+    valid: errors.length === 0,
     errors,
   };
 }
@@ -66,7 +64,7 @@ function assertServiceMessageEnvelope(envelope) {
   const validation = validateServiceMessageEnvelope(envelope);
   if (!validation.valid) {
     throw new InvalidServiceMessageError(
-      validation.errors.join(LOCAL_STR_1AM9G),
+      validation.errors.join(LOCAL_STR_SEMI_SPACE),
       {
         errors: validation.errors,
       },

@@ -9,7 +9,6 @@ const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
-  NUM,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -30,7 +29,6 @@ const {
   REMOVE_SAFETY_READINESS_DIMENSION,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
-  TYPEOF,
   WORKFLOW_STEP,
   isPriorityControlPlanePartition,
 } = SHARED;
@@ -55,7 +53,7 @@ const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_MODE_BY_STATE = Object.freeze(
 const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.CACHE_EMPTY,
-    matches: (evidence) => evidence.cacheVisibleOperationCount === NUM.ZERO,
+    matches: (evidence) => evidence.cacheVisibleOperationCount === 0,
   }),
   Object.freeze({
     state:
@@ -126,7 +124,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // on a virtual clock. RealTimeSource.now() === Date.now(), so production hosting is unchanged.
   resolveTimeoutCheckNowMs() {
     const timeSource = this.timeSource;
-    if (timeSource && typeof timeSource.now === TYPEOF.FUNCTION) {
+    if (timeSource && typeof timeSource.now === 'function') {
       return timeSource.now();
     }
     return Date.now();
@@ -139,7 +137,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
 
     const now = this.resolveTimeoutCheckNowMs();
     if (
-      this.lastEmptyIncompleteOperationQueryAtMs > NUM.ZERO &&
+      this.lastEmptyIncompleteOperationQueryAtMs > 0 &&
       now - this.lastEmptyIncompleteOperationQueryAtMs <
         this.incompleteOperationQueryEmptyBackoffMs
     ) {
@@ -151,7 +149,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     const cachedIncompleteOps = canUseCacheObservationBoundary ?
       await this.repository.queryCachedIncompleteOperations() :
       [];
-    if (cachedIncompleteOps.length > NUM.ZERO) {
+    if (cachedIncompleteOps.length > 0) {
       this.clearEmptyIncompleteOperationQueryDelay();
     } else if (
       canUseCacheObservationBoundary &&
@@ -274,7 +272,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       timeoutReconcileTasks.push(reconcileTask);
     }
 
-    if (timeoutReconcileTasks.length > NUM.ZERO) {
+    if (timeoutReconcileTasks.length > 0) {
       await Promise.all(timeoutReconcileTasks);
     }
 
@@ -329,9 +327,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       return;
     }
     const now = this.resolveTimeoutCheckNowMs();
-    const lastReconcileAtMs = this.lastOrphanedOperationReconcileAtMs ?? NUM.ZERO;
+    const lastReconcileAtMs = this.lastOrphanedOperationReconcileAtMs ?? 0;
     if (
-      lastReconcileAtMs > NUM.ZERO &&
+      lastReconcileAtMs > 0 &&
       now - lastReconcileAtMs < this.incompleteOperationQueryEmptyBackoffMs
     ) {
       return;
@@ -356,7 +354,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       !this.repository.isOperationTerminal(op) &&
       this.repository.isOperationLocallyOwned(op),
     );
-    if (ownedOps.length === NUM.ZERO) {
+    if (ownedOps.length === 0) {
       return;
     }
     await Promise.all(
@@ -408,7 +406,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       const stepTimeoutMs = this.getTimeoutForStep(op.workflowStep, op);
       if (
         Number.isFinite(stepTimeoutMs) &&
-        stepTimeoutMs > NUM.ZERO &&
+        stepTimeoutMs > 0 &&
         now - stepStartedAtMs >= stepTimeoutMs
       ) {
         return true;
@@ -559,17 +557,17 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (baseMs === null) {
       return null;
     }
-    return Math.max(NUM.ZERO, Math.floor(now - baseMs));
+    return Math.max(0, Math.floor(now - baseMs));
   }
 
   normalizeOperationDrainEpochMillis(value) {
     const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > NUM.ZERO) {
+    if (Number.isFinite(numeric) && numeric > 0) {
       return Math.floor(numeric);
     }
-    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+    if (typeof value === 'string' && value.length > 0) {
       const parsed = Date.parse(value);
-      if (Number.isFinite(parsed) && parsed > NUM.ZERO) {
+      if (Number.isFinite(parsed) && parsed > 0) {
         return parsed;
       }
     }
@@ -589,7 +587,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     );
     return (
       Number.isFinite(timeoutMs) &&
-      timeoutMs > NUM.ZERO &&
+      timeoutMs > 0 &&
       ageMs >= timeoutMs
     );
   }
@@ -632,7 +630,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       return false;
     }
     const router = this.messageRouter;
-    if (!router || typeof router.pingNode !== TYPEOF.FUNCTION) {
+    if (!router || typeof router.pingNode !== 'function') {
       return false;
     }
     const reachable = await router.pingNode(targetNodeId).catch(() => false);
@@ -645,7 +643,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     releaseEvidence = null,
     operation = null,
   ) {
-    if (!completion || typeof completion !== TYPEOF.OBJECT) {
+    if (!completion || typeof completion !== 'object') {
       return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
     }
     if (
@@ -742,8 +740,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
 
   isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation) {
     if (
-      typeof ownerNodeId !== TYPEOF.STRING ||
-      ownerNodeId.length === NUM.ZERO ||
+      typeof ownerNodeId !== 'string' ||
+      ownerNodeId.length === 0 ||
       ownerNodeId === this.nodeId
     ) {
       return false;
@@ -775,7 +773,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         .has(operation?.workflowStep) ||
       !this.repository ||
       typeof this.repository.getObservedReplicaStatusFromCache !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -798,7 +796,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       this.repository.resolveOperationOwnerNodeId(operation) || null;
     const completionAccepted =
       completion &&
-      typeof completion === TYPEOF.OBJECT &&
+      typeof completion === 'object' &&
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
         completion.state,
       );

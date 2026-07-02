@@ -1,7 +1,5 @@
 import {
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   AUTHORITATIVE_REPAIR_TRIGGER,
@@ -16,8 +14,8 @@ function normalizeAuthoritativeRepairTriggerCodes(triggerCodes = []) {
   return [...new Set(
     (Array.isArray(triggerCodes) ? triggerCodes : [])
       .filter((triggerCode) =>
-        typeof triggerCode === TYPEOF.STRING &&
-        triggerCode.length > NUM.ZERO,
+        typeof triggerCode === 'string' &&
+        triggerCode.length > 0,
       ),
   )];
 }
@@ -26,8 +24,8 @@ function hasAuthoritativeRepairTrigger(
   repairEvaluation,
   triggerCode,
 ) {
-  if (typeof triggerCode !== TYPEOF.STRING ||
-      triggerCode.length === NUM.ZERO) {
+  if (typeof triggerCode !== 'string' ||
+      triggerCode.length === 0) {
     return false;
   }
   return normalizeAuthoritativeRepairTriggerCodes(
@@ -38,7 +36,7 @@ function hasAuthoritativeRepairTrigger(
 function isReplicaOperationsOnlyTableSet(tableNames = []) {
   const normalizedTableNames =
     normalizeAuthoritativeRepairTriggerCodes(tableNames);
-  return normalizedTableNames.length > NUM.ZERO &&
+  return normalizedTableNames.length > 0 &&
     normalizedTableNames.every((tableName) =>
       tableName === TABLES.REPLICA_OPERATIONS,
     );

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const FAILURE_REPAIR_INTENT_OWNER = 'failure_detector';
 const FAILURE_REPAIR_INTENT_BOUNDARY = 'durable_repair_intent';
@@ -46,11 +45,11 @@ const FAILURE_REPAIR_INTENT_RECORDER_METHOD = Object.freeze({
   RECORD_INTENT: 'recordIntent',
 });
 
-const FAILURE_REPAIR_INTENT_DEFAULT_ATTEMPT = NUM.ONE;
-const FAILURE_REPAIR_INTENT_DEFAULT_TIMESTAMP = NUM.ZERO;
+const FAILURE_REPAIR_INTENT_DEFAULT_ATTEMPT = 1;
+const FAILURE_REPAIR_INTENT_DEFAULT_TIMESTAMP = 0;
 
 function normalizeFailureRepairIntentText(value, fallback) {
-  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+  if (typeof value === 'string' && value.length > 0) {
     return value;
   }
   if (Number.isFinite(value)) {
@@ -288,7 +287,7 @@ function createInMemoryFailureRepairIntentRecorder() {
       return [...records];
     },
     clear() {
-      records.length = NUM.ZERO;
+      records.length = 0;
     },
   });
 }

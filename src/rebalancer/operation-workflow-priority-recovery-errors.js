@@ -2,8 +2,6 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {resolvePriorityRecoverySupersededTargetDecision} from './operation-workflow-priority-recovery-superseded-target-decision.js';
 
 const {
-  NUM,
-  TYPEOF,
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   REMOVE_SAFETY_READINESS_DIMENSION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
@@ -48,19 +46,19 @@ function getPriorityRecoverySupersededTargetErrorFromContext(
   if (
     !operation ||
     !priorityRecoveryContext ||
-    typeof priorityRecoveryContext !== TYPEOF.OBJECT
+    typeof priorityRecoveryContext !== 'object'
   ) {
     return null;
   }
 
   const targetNodeId = String(operation?.targetNodeId || '').trim();
-  if (targetNodeId.length === NUM.ZERO) {
+  if (targetNodeId.length === 0) {
     return null;
   }
 
   const targetReadiness =
     typeof context.controlPlaneReadinessService?.getNodeReadinessSync ===
-      TYPEOF.FUNCTION ?
+      'function' ?
       context.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
         decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
         participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
@@ -69,7 +67,7 @@ function getPriorityRecoverySupersededTargetErrorFromContext(
   const targetLifecycleStatus =
     context.repository &&
     typeof context.repository.getObservedReplicaStatusFromCache ===
-      TYPEOF.FUNCTION ?
+      'function' ?
       context.repository.getObservedReplicaStatusFromCache(
         operation.replicaId,
         operation.partitionId,

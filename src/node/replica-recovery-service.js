@@ -10,7 +10,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -35,8 +35,6 @@ import {
   sortReplicaRecoveryNodesByLoad,
 } from './replica-recovery-placement.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_CRITICAL = 'critical';
 
 /**
@@ -101,7 +99,7 @@ class ReplicaRecoveryService extends EventEmitter {
     this.monitoringActive = false;
     this.currentCheckIntervalMs = this.checkIntervalMs;
     this.pendingRecoveries = new Map(); // entityId -> recovery info
-    this.recoveryCount = LOCAL_NUM_ZERO;
+    this.recoveryCount = 0;
 
     this.initialized = false;
   }
@@ -219,7 +217,7 @@ class ReplicaRecoveryService extends EventEmitter {
       const targetCount = partition.replica_count || this.minPartitionReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        deficitCount += LOCAL_NUM_ONE;
+        deficitCount += 1;
         try {
           recoveryCount += await this.triggerPartitionRecovery(
             partition,
@@ -261,7 +259,7 @@ class ReplicaRecoveryService extends EventEmitter {
       const targetCount = group.replica_count || this.minMessageGroupReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        deficitCount += LOCAL_NUM_ONE;
+        deficitCount += 1;
         try {
           recoveryCount += await this.triggerMessageGroupRecovery(
             group,
@@ -407,7 +405,7 @@ class ReplicaRecoveryService extends EventEmitter {
       let createdCount = REPLICA_RECOVERY_NUM.ZERO;
       for (const node of targetNodes) {
         await this.createPartitionReplica(partition, node.node_id);
-        createdCount += LOCAL_NUM_ONE;
+        createdCount += 1;
       }
       return createdCount;
     } finally {
@@ -471,7 +469,7 @@ class ReplicaRecoveryService extends EventEmitter {
       let createdCount = REPLICA_RECOVERY_NUM.ZERO;
       for (const node of targetNodes) {
         await this.createMessageGroupReplica(group, node.node_id);
-        createdCount += LOCAL_NUM_ONE;
+        createdCount += 1;
       }
       return createdCount;
     } finally {
@@ -733,7 +731,7 @@ class ReplicaRecoveryService extends EventEmitter {
     const nodes = this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return node.node_id === nodeId;
     });
-    return nodes[NUM.ZERO] || null;
+    return nodes[0] || null;
   }
 
   /**

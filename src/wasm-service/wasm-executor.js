@@ -22,9 +22,7 @@ import {
   RUN_EXPORT_MAX_PARAMS,
 } from './module-manifest-constants.js';
 import {
-  NUM,
   RUNTIME_KIND,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   InProcessWasmRuntimeAdapter,
@@ -306,7 +304,7 @@ class WasmExecutor {
    * @private
    */
   attachDebugTraceContext(mod, functionId, context, options) {
-    const targetContext = context && typeof context === TYPEOF.OBJECT ?
+    const targetContext = context && typeof context === 'object' ?
       context :
       {};
     if (!this.debugSessionResolver || !this.traceCollector) {
@@ -316,7 +314,7 @@ class WasmExecutor {
       return targetContext;
     }
     const existingTraceFn = targetContext.debug &&
-      typeof targetContext.debug.trace === TYPEOF.FUNCTION;
+      typeof targetContext.debug.trace === 'function';
     if (existingTraceFn) {
       return targetContext;
     }
@@ -348,7 +346,7 @@ class WasmExecutor {
       source: debugScope.source || DEBUG_TRACE_SOURCE.SERVICE,
     });
     const existingDebug = targetContext.debug &&
-      typeof targetContext.debug === TYPEOF.OBJECT ?
+      typeof targetContext.debug === 'object' ?
       targetContext.debug :
       {};
     targetContext.debug = Object.freeze({
@@ -439,8 +437,8 @@ function moduleHasTraceCapability(manifest) {
  */
 function pickFirstNonEmptyString(...values) {
   for (const value of values) {
-    if (typeof value === TYPEOF.STRING &&
-      value.length > NUM.ZERO) {
+    if (typeof value === 'string' &&
+      value.length > 0) {
       return value;
     }
   }

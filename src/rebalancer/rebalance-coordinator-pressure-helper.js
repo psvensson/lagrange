@@ -11,7 +11,6 @@ import {
 
 const {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  NUM,
   PRESSURE_GOVERNOR_ACTION,
   buildPriorityRecoveryPartitionAssessment,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -34,7 +33,7 @@ function shouldPauseAdmissionReadForLocalRouterPressure(coordinator, options = {
 
 function hasContainedPriorityRecoveryPressure(coordinator, partitionId = null) {
   const normalizedPartitionId = String(partitionId || '').trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return false;
   }
   const decision = coordinator.getLocalRouterPressureDecision({partitionId});
@@ -60,7 +59,7 @@ function buildPriorityDeferredObservationPressureEvidence(coordinator, options =
     priorityRecoveryPartitionActive:
       admissionEvidence.priorityRecoveryPartitionActive === true,
     emergencyPriorityPartition:
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       coordinator.isEmergencyPriorityControlPlanePartition(partitionId),
     backpressured: pressureDecision?.summary?.backpressured === true,
   });
@@ -77,11 +76,11 @@ function shouldAllowPriorityRecoveryDeferredObservation(
     return false;
   }
   const operationCount = Number.isFinite(observation?.operationCount) ?
-    Math.max(NUM.ZERO, Math.floor(observation.operationCount)) :
+    Math.max(0, Math.floor(observation.operationCount)) :
     Array.isArray(observation?.operations) ?
       observation.operations.length :
-      NUM.ZERO;
-  if (operationCount > NUM.ZERO || !observation?.deferredOutcome) {
+      0;
+  if (operationCount > 0 || !observation?.deferredOutcome) {
     return false;
   }
   return hasContainedPriorityRecoveryPressure(coordinator, partitionId);
@@ -127,7 +126,7 @@ function buildPriorityAddAdmissionPressureEvidence(coordinator, options = {}) {
   const planningEvidence =
     resolvePriorityRecoveryPlanningEvidence(coordinator, partitionId);
   const emergencyPriorityRecoveryPartition =
-    partitionId.length > NUM.ZERO &&
+    partitionId.length > 0 &&
     priorityRecoveryAdmissionPlan?.emergencyRecoveryActive === true &&
     coordinator.isEmergencyPriorityControlPlanePartition(partitionId);
   const priorityRecoveryActive =

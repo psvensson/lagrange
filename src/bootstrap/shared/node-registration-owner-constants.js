@@ -5,7 +5,6 @@ import {
   NUM,
   STATE,
   TIME_MS,
-  TYPEOF,
 } from '../../constants/index.js';
 import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
 
@@ -57,9 +56,9 @@ const REUSABLE_JOIN_ADMISSION_CONNECTION_STATES = Object.freeze([
 ]);
 const JOIN_ADMISSION_PHASE_SCOPE = CONTROL_PLANE_PHASE_SCOPE.JOIN;
 
-const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
+const hasFunction = (value) => typeof value === 'function';
 const normalizeString = (value) =>
-  typeof value === TYPEOF.STRING ? value.trim() : '';
+  typeof value === 'string' ? value.trim() : '';
 
 export {
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,

@@ -1,4 +1,3 @@
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * CallIterator — async iterator wrapper for Iterator_Mode
@@ -28,7 +27,7 @@ function createCallIterator(
   query, params, queryExecutor, cancellationToken,
 ) {
   let rows = null;
-  let index = LOCAL_NUM_ZERO;
+  let index = 0;
   let exhausted = false;
 
   return {

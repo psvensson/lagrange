@@ -12,11 +12,8 @@ import * as path from 'path';
 import * as os from 'os';
 import {CLI_DEFAULT, CLI_PATH} from '../cli-constants.js';
 
-const LOCAL_STR_1XNND = '~';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_TILDE = '~';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_TWO = 2;
 
 /**
  * Default maximum number of history entries
@@ -27,7 +24,7 @@ export const DEFAULT_MAX_ENTRIES = CLI_DEFAULT.MAX_HISTORY;
  * Default persistence path
  */
 export const DEFAULT_PERSIST_PATH = path.posix.join(
-  LOCAL_STR_1XNND,
+  LOCAL_STR_TILDE,
   CLI_PATH.CONFIG_DIR_NAME,
   CLI_PATH.QUERY_HISTORY_FILE,
 );
@@ -69,8 +66,8 @@ export class QueryHistory {
 
     // Remove existing entry if present (to move to front)
     const existingIndex = this.entries.indexOf(trimmed);
-    if (existingIndex !== -LOCAL_NUM_ONE) {
-      this.entries.splice(existingIndex, LOCAL_NUM_ONE);
+    if (existingIndex !== -1) {
+      this.entries.splice(existingIndex, 1);
     }
 
     // Add to front
@@ -78,7 +75,7 @@ export class QueryHistory {
 
     // Enforce max entries limit
     if (this.entries.length > this.maxEntries) {
-      this.entries = this.entries.slice(LOCAL_NUM_ZERO, this.maxEntries);
+      this.entries = this.entries.slice(0, this.maxEntries);
     }
 
     // Auto-save if enabled
@@ -94,7 +91,7 @@ export class QueryHistory {
    * @return {string|null} Query at index or null
    */
   getAt(index) {
-    if (index < LOCAL_NUM_ZERO || index >= this.entries.length) {
+    if (index < 0 || index >= this.entries.length) {
       return null;
     }
     return this.entries[index];
@@ -170,7 +167,7 @@ export class QueryHistory {
           // Validate and filter entries
           this.entries = parsed
             .filter((entry) => typeof entry === LOCAL_STR_STRING && entry.trim())
-            .slice(LOCAL_NUM_ZERO, this.maxEntries);
+            .slice(0, this.maxEntries);
         }
       }
     } catch (_error) {
@@ -197,7 +194,7 @@ export class QueryHistory {
         fs.mkdirSync(dir, {recursive: true});
       }
 
-      fs.writeFileSync(resolvedPath, JSON.stringify(this.entries, null, LOCAL_NUM_TWO));
+      fs.writeFileSync(resolvedPath, JSON.stringify(this.entries, null, 2));
     } catch (_error) {
       // Ignore save errors
     }
@@ -221,7 +218,7 @@ export class QueryHistory {
       if (Array.isArray(parsed)) {
         this.entries = parsed
           .filter((entry) => typeof entry === LOCAL_STR_STRING && entry.trim())
-          .slice(LOCAL_NUM_ZERO, this.maxEntries);
+          .slice(0, this.maxEntries);
       }
     } catch (_error) {
       // Ignore parse errors
@@ -235,8 +232,8 @@ export class QueryHistory {
    */
   resolvePath(p) {
     if (!p) return p;
-    if (p.startsWith(LOCAL_STR_1XNND)) {
-      return path.join(os.homedir(), p.slice(LOCAL_NUM_ONE));
+    if (p.startsWith(LOCAL_STR_TILDE)) {
+      return path.join(os.homedir(), p.slice(1));
     }
     return p;
   }
@@ -246,7 +243,7 @@ export class QueryHistory {
    * @return {string|null} Most recent query or null
    */
   getMostRecent() {
-    return this.getAt(LOCAL_NUM_ZERO);
+    return this.getAt(0);
   }
 
   /**
@@ -257,8 +254,8 @@ export class QueryHistory {
   remove(query) {
     const trimmed = (query || '').trim();
     const index = this.entries.indexOf(trimmed);
-    if (index !== -LOCAL_NUM_ONE) {
-      this.entries.splice(index, LOCAL_NUM_ONE);
+    if (index !== -1) {
+      this.entries.splice(index, 1);
       if (this.autoSave && this.persistPath) {
         this.save();
       }

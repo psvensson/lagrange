@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_ADMISSION_DECISION_REASON,
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
   PRIORITY_RECOVERY_ADMISSION_SOURCE,
@@ -31,15 +27,15 @@ import {buildPriorityRecoveryTargetServiceEvidence, parsePriorityRecoveryStepsHi
 
 function buildPriorityRecoveryAdmissionPlan(options = {}) {
   const maxConcurrentAdds = Math.max(
-    NUM.ZERO,
-    normalizePriorityRecoveryInteger(options.maxConcurrentAdds) || NUM.ZERO,
+    0,
+    normalizePriorityRecoveryInteger(options.maxConcurrentAdds) || 0,
   );
   const isEmergencyPriorityPartition =
-    typeof options.isEmergencyPriorityPartition === TYPEOF.FUNCTION ?
+    typeof options.isEmergencyPriorityPartition === 'function' ?
       options.isEmergencyPriorityPartition :
       () => false;
   const isPriorityPartition =
-    typeof options.isPriorityPartition === TYPEOF.FUNCTION ?
+    typeof options.isPriorityPartition === 'function' ?
       options.isPriorityPartition :
       isEmergencyPriorityPartition;
   const blockedPartitions = buildPriorityRecoveryBlockedPartitions(
@@ -53,12 +49,12 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
     options.priorityPartitionSummary,
   );
   const blockedPartitionDetailUnavailable =
-    recoveryActive === true && blockedPartitionIds.length === NUM.ZERO;
+    recoveryActive === true && blockedPartitionIds.length === 0;
   const emergencyBlockedPartitionIds = blockedPartitions
     .filter((entry) => isEmergencyPriorityPartition(entry.partitionId))
     .map((entry) => entry.partitionId);
   const emergencyRecoveryActive =
-    emergencyBlockedPartitionIds.length > NUM.ZERO ||
+    emergencyBlockedPartitionIds.length > 0 ||
     blockedPartitionDetailUnavailable;
   const emergencyPriorityOverflowSlotCount = emergencyRecoveryActive ?
     blockedPartitionDetailUnavailable ?
@@ -66,14 +62,14 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
       buildPriorityRecoveryEmergencyBudgetOwnerIds(
         emergencyBlockedPartitionIds,
       ).size :
-    NUM.ZERO;
+    0;
   const ordinaryPriorityAddBudgetLimit = maxConcurrentAdds;
   const emergencyPriorityAddBudgetLimit = emergencyRecoveryActive ?
     maxConcurrentAdds + emergencyPriorityOverflowSlotCount :
     maxConcurrentAdds;
   const admissionSource =
-    typeof options.admissionSource === TYPEOF.STRING &&
-    options.admissionSource.trim().length > NUM.ZERO ?
+    typeof options.admissionSource === 'string' &&
+    options.admissionSource.trim().length > 0 ?
       options.admissionSource.trim() :
       options.priorityPartitionSummary ?
         PRIORITY_RECOVERY_ADMISSION_SOURCE.PUBLICATION_SUMMARY :
@@ -81,7 +77,7 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
   const getPartitionClass = (partitionId) => {
     const normalizedPartitionId = String(partitionId || '').trim();
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
+      normalizedPartitionId.length === 0 ||
       !isPriorityPartition(normalizedPartitionId)
     ) {
       return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY;
@@ -96,15 +92,15 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
       getPartitionClass(partitionId) !==
       PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY
     ) {
-      return NUM.ZERO;
+      return 0;
     }
     return slotType === 'move' ?
       recoveryActive ?
-        NUM.ONE :
-        NUM.ZERO :
+        1 :
+        0 :
       recoveryActive ?
-        NUM.ONE :
-        NUM.ZERO;
+        1 :
+        0;
   };
   const getPriorityAddBudgetLimit = (partitionId) =>
     getPartitionClass(partitionId) ===
@@ -117,9 +113,9 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
       PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY;
   const evaluatePriorityAddAdmission = (partitionId, counts = {}) => {
     const partitionClass = getPartitionClass(partitionId);
-    const priorityCount = Number(counts.priorityCount || NUM.ZERO);
+    const priorityCount = Number(counts.priorityCount || 0);
     const ordinaryPriorityCount = Number(
-      counts.ordinaryPriorityCount || NUM.ZERO,
+      counts.ordinaryPriorityCount || 0,
     );
     const budgetLimit = getPriorityAddBudgetLimit(partitionId);
     if (
@@ -134,7 +130,7 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
         budgetLimit,
       });
     }
-    if (emergencyPriorityAddBudgetLimit <= NUM.ZERO) {
+    if (emergencyPriorityAddBudgetLimit <= 0) {
       return Object.freeze({
         allowed: false,
         reason:
@@ -163,7 +159,7 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
         budgetLimit: emergencyPriorityAddBudgetLimit,
       });
     }
-    if (ordinaryPriorityAddBudgetLimit <= NUM.ZERO) {
+    if (ordinaryPriorityAddBudgetLimit <= 0) {
       return Object.freeze({
         allowed: false,
         reason:
@@ -200,8 +196,8 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
     ]),
     emergencyPriorityOverflowSlotCount,
     blockedPartitionDetailUnavailable,
-    reservedNonPriorityAddSlots: recoveryActive ? NUM.ONE : NUM.ZERO,
-    reservedNonPriorityMoveSlots: recoveryActive ? NUM.ONE : NUM.ZERO,
+    reservedNonPriorityAddSlots: recoveryActive ? 1 : 0,
+    reservedNonPriorityMoveSlots: recoveryActive ? 1 : 0,
     ordinaryPriorityAddBudgetLimit,
     emergencyPriorityAddBudgetLimit,
     getPartitionClass,
@@ -213,12 +209,12 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
       const normalizedPartitionId = String(partitionId || '').trim();
       if (blockedPartitionDetailUnavailable === true) {
         return (
-          normalizedPartitionId.length > NUM.ZERO &&
+          normalizedPartitionId.length > 0 &&
           isEmergencyPriorityPartition(normalizedPartitionId)
         );
       }
       return (
-        normalizedPartitionId.length > NUM.ZERO &&
+        normalizedPartitionId.length > 0 &&
         blockedPartitionIdSet.has(normalizedPartitionId)
       );
     },
@@ -226,7 +222,7 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
 }
 
 function withPriorityRecoveryAdmissionSource(admissionPlan, admissionSource) {
-  if (!admissionPlan || typeof admissionPlan !== TYPEOF.OBJECT) {
+  if (!admissionPlan || typeof admissionPlan !== 'object') {
     return admissionPlan;
   }
   return Object.freeze({...admissionPlan, admissionSource});
@@ -234,32 +230,32 @@ function withPriorityRecoveryAdmissionSource(admissionPlan, admissionSource) {
 
 function resolvePriorityRecoveryAdmissionPlanFromPublication(options = {}) {
   const publicationRow =
-    options.publicationRow && typeof options.publicationRow === TYPEOF.OBJECT ?
+    options.publicationRow && typeof options.publicationRow === 'object' ?
       options.publicationRow :
       null;
   const nowMs = normalizePriorityRecoveryInteger(options.nowMs);
   const staleGraceMs = Math.max(
-    NUM.ZERO,
-    normalizePriorityRecoveryInteger(options.staleGraceMs) || NUM.ZERO,
+    0,
+    normalizePriorityRecoveryInteger(options.staleGraceMs) || 0,
   );
   const lastObservedAdmissionPlan =
     options.lastObservedAdmissionPlan &&
-    typeof options.lastObservedAdmissionPlan === TYPEOF.OBJECT ?
+    typeof options.lastObservedAdmissionPlan === 'object' ?
       options.lastObservedAdmissionPlan :
       null;
   const lastObservedAdmissionPlanAtMs = normalizePriorityRecoveryInteger(
     options.lastObservedAdmissionPlanAtMs,
   );
   const maxConcurrentAdds = Math.max(
-    NUM.ZERO,
-    normalizePriorityRecoveryInteger(options.maxConcurrentAdds) || NUM.ZERO,
+    0,
+    normalizePriorityRecoveryInteger(options.maxConcurrentAdds) || 0,
   );
   const isPriorityPartition =
-    typeof options.isPriorityPartition === TYPEOF.FUNCTION ?
+    typeof options.isPriorityPartition === 'function' ?
       options.isPriorityPartition :
       options.isEmergencyPriorityPartition;
   const isEmergencyPriorityPartition =
-    typeof options.isEmergencyPriorityPartition === TYPEOF.FUNCTION ?
+    typeof options.isEmergencyPriorityPartition === 'function' ?
       options.isEmergencyPriorityPartition :
       () => false;
   const buildAdmissionPlan = (
@@ -289,7 +285,7 @@ function resolvePriorityRecoveryAdmissionPlanFromPublication(options = {}) {
     !priorityPartitionSummary &&
     Boolean(lastObservedAdmissionPlan) &&
     lastObservedAdmissionPlanAtMs !== null &&
-    staleGraceMs > NUM.ZERO &&
+    staleGraceMs > 0 &&
     Number.isFinite(nowMs) &&
     nowMs - lastObservedAdmissionPlanAtMs <= staleGraceMs;
   const admissionDecision = [
@@ -346,7 +342,7 @@ function normalizePriorityRecoveryReplicaOperationContextBuildOptions(
     nowMs: normalizePriorityRecoveryInteger(options.nowMs),
     stepTimeoutMsByWorkflowStep:
       options.stepTimeoutMsByWorkflowStep &&
-      typeof options.stepTimeoutMsByWorkflowStep === TYPEOF.OBJECT ?
+      typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
         options.stepTimeoutMsByWorkflowStep :
         null,
   };
@@ -382,7 +378,7 @@ function buildPriorityRecoveryReplicaOperationContext(
       ) ||
       '',
   ).trim();
-  if (operationId.length === NUM.ZERO) {
+  if (operationId.length === 0) {
     return null;
   }
   const entityType = String(
@@ -400,7 +396,7 @@ function buildPriorityRecoveryReplicaOperationContext(
       normalizedReplicaOperation.entityId ||
       '',
   ).trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return null;
   }
   const timeline = resolvePriorityRecoveryOperationTimeline(
@@ -411,7 +407,7 @@ function buildPriorityRecoveryReplicaOperationContext(
     timeline.map((entry) => String(entry?.step || '').trim()),
   );
   const latestTimelineEntry =
-    timeline.length > NUM.ZERO ? timeline[timeline.length - 1] : null;
+    timeline.length > 0 ? timeline[timeline.length - 1] : null;
   // Stall signal from the raw steps_history (NOT the operationTimelineById entries,
   // whose synthetic current-state entry is timestamped with the churning updatedAt).
   // Computed via the shared helper so this closure builder and the per-partition
@@ -487,7 +483,7 @@ function buildPriorityRecoveryReplicaOperationContext(
 
 function resolveTrackedPriorityRecoveryAdmissionPlan(options = {}) {
   const tracker =
-    options.tracker && typeof options.tracker === TYPEOF.OBJECT ?
+    options.tracker && typeof options.tracker === 'object' ?
       options.tracker :
       null;
   const resolvedAdmission = resolvePriorityRecoveryAdmissionPlanFromPublication(
@@ -529,7 +525,7 @@ function buildPriorityRecoveryReplicaOperationSourceRows(
   const sourceRows = [];
   const sourceRowIndexByOperationId = {};
   const appendSourceRow = (sourceRow) => {
-    if (!sourceRow || typeof sourceRow !== TYPEOF.OBJECT) {
+    if (!sourceRow || typeof sourceRow !== 'object') {
       return;
     }
     const operationId = String(
@@ -539,7 +535,7 @@ function buildPriorityRecoveryReplicaOperationSourceRows(
         'operationId',
       ) || '',
     ).trim();
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       sourceRows.push(sourceRow);
       return;
     }

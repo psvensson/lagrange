@@ -1,6 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const CONTROL_PLANE_ROLLOUT_CONTROL = Object.freeze({
   LIFECYCLE_PROBES: 'lifecycleProbes',
@@ -49,16 +47,16 @@ const CONTROL_PLANE_ROLLOUT_ERROR = Object.freeze({
  * @return {boolean}
  */
 function parseRolloutControlBoolean(value, fallback) {
-  if (value === undefined || value === null || value === LOCAL_STR_EMPTY) {
+  if (value === undefined || value === null || value === '') {
     return fallback;
   }
-  if (typeof value === TYPEOF.BOOLEAN) {
+  if (typeof value === 'boolean') {
     return value;
   }
-  if (typeof value === TYPEOF.NUMBER) {
-    return value === NUM.ONE;
+  if (typeof value === 'number') {
+    return value === 1;
   }
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return fallback;
   }
 
@@ -105,8 +103,8 @@ function resolveControlPlaneRolloutControls(controls = {}) {
  * @return {Object}
  */
 function assertRequiredControlPlaneRollout(options = {}) {
-  const owner = typeof options.owner === TYPEOF.STRING &&
-      options.owner.length > NUM.ZERO ?
+  const owner = typeof options.owner === 'string' &&
+      options.owner.length > 0 ?
     options.owner :
     'control-plane';
   const controls = resolveControlPlaneRolloutControls(options.controls || {});

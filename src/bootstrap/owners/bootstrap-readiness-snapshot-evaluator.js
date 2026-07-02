@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -36,11 +35,11 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
     let snapshot;
     if (
       !readinessState ||
-      typeof readinessState.setDependency !== TYPEOF.FUNCTION
+      typeof readinessState.setDependency !== 'function'
     ) {
-      if (typeof readinessState?.evaluate === TYPEOF.FUNCTION) {
+      if (typeof readinessState?.evaluate === 'function') {
         snapshot = readinessState.evaluate();
-      } else if (typeof readinessState?.getSnapshot === TYPEOF.FUNCTION) {
+      } else if (typeof readinessState?.getSnapshot === 'function') {
         snapshot = readinessState.getSnapshot();
       } else {
         snapshot = {
@@ -48,7 +47,7 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
           phase: LIFECYCLE_PHASE.INIT,
           state: BOOTSTRAP_PHASE.NOT_STARTED,
           reasons: [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE],
-          retryAfterMs: NUM.ZERO,
+          retryAfterMs: 0,
           timestamp: Date.now(),
         };
       }
@@ -70,7 +69,7 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
     let snapshot;
     if (
       !readinessState ||
-      typeof readinessState.setDependency !== TYPEOF.FUNCTION
+      typeof readinessState.setDependency !== 'function'
     ) {
       snapshot = this.evaluateReadinessSnapshot();
     } else {
@@ -261,7 +260,7 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
       ...(startupAuthority?.failure?.state ===
         BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ||
       typeof priorityControlPlaneRecoveryHealth?.details?.failureReason ===
-        TYPEOF.STRING ?
+        'string' ?
         {
           bootstrapJoinAuthorityFailureReason:
               startupAuthority?.failure?.state ===

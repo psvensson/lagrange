@@ -20,16 +20,13 @@ const LOCAL_STR_LITERAL = 'Literal';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_ANONYMOUS = '<anonymous>';
 const LOCAL_STR_MEMBEREXPRESSION = 'MemberExpression';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECTEXPRESSION = 'ObjectExpression';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1NCMF = 'AssignmentExpression';
+const LOCAL_STR_ASSIGNMENTEXPRESSION = 'AssignmentExpression';
 const LOCAL_STR_RETURNSTATEMENT = 'ReturnStatement';
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_STR_1JNGK = 'multiple independent if statements assign the same semantic outcome target';
-const LOCAL_STR_1MBIR = 'multiple independent if statements return semantic outcome objects';
-const LOCAL_STR_1PNFN = 'decision-boundary guideline';
+const LOCAL_STR_COMMA_SPACE = ', ';
+const LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_ASSIG = 'multiple independent if statements assign the same semantic outcome target';
+const LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_RETUR = 'multiple independent if statements return semantic outcome objects';
+const LOCAL_STR_DECISION_BOUNDARY_GUIDELINE = 'decision-boundary guideline';
 
 const RULE_REFERENCE =
   'system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models';
@@ -121,7 +118,7 @@ function extractTargetName(node) {
 }
 
 function isSemanticName(name) {
-  if (typeof name !== LOCAL_STR_STRING || name.length === LOCAL_NUM_ZERO) {
+  if (typeof name !== LOCAL_STR_STRING || name.length === 0) {
     return false;
   }
   const normalized = name.toLowerCase();
@@ -162,7 +159,7 @@ function createViolationEvidence() {
     independentIfLines: new Set(),
     semanticAssignments: new Map(),
     semanticReturnKeys: new Map(),
-    semanticReturnCount: LOCAL_NUM_ZERO,
+    semanticReturnCount: 0,
   };
 }
 
@@ -175,22 +172,22 @@ function collectAssignmentEvidence(currentNode, evidence) {
   addLineToMap(
     evidence.semanticAssignments,
     targetName,
-    currentNode.loc?.start?.line || LOCAL_NUM_ONE,
+    currentNode.loc?.start?.line || 1,
   );
 }
 
 function collectReturnEvidence(currentNode, evidence) {
   const semanticKeys = collectSemanticKeysFromObject(currentNode.argument);
-  if (semanticKeys.length === LOCAL_NUM_ZERO) {
+  if (semanticKeys.length === 0) {
     return;
   }
 
-  evidence.semanticReturnCount += LOCAL_NUM_ONE;
+  evidence.semanticReturnCount += 1;
   for (const key of semanticKeys) {
     addLineToMap(
       evidence.semanticReturnKeys,
       key,
-      currentNode.loc?.start?.line || LOCAL_NUM_ONE,
+      currentNode.loc?.start?.line || 1,
     );
   }
 }
@@ -212,10 +209,10 @@ function traverseFunctionEvidence(
   const insideIf = ancestors.some((ancestor) => ancestor.type === 'IfStatement');
   if (currentNode.type === LOCAL_STR_IFSTATEMENT &&
       !isElseIfBranch(currentNode, currentParent)) {
-    evidence.independentIfLines.add(currentNode.loc?.start?.line || LOCAL_NUM_ONE);
+    evidence.independentIfLines.add(currentNode.loc?.start?.line || 1);
   }
 
-  if (insideIf && currentNode.type === LOCAL_STR_1NCMF) {
+  if (insideIf && currentNode.type === LOCAL_STR_ASSIGNMENTEXPRESSION) {
     collectAssignmentEvidence(currentNode, evidence);
   }
   if (insideIf && currentNode.type === LOCAL_STR_RETURNSTATEMENT) {
@@ -255,7 +252,7 @@ function collectFunctionViolations(node, parent, filePath) {
 
   const violations = [];
   const independentIfCount = evidence.independentIfLines.size;
-  if (independentIfCount < LOCAL_NUM_TWO) {
+  if (independentIfCount < 2) {
     return violations;
   }
 
@@ -263,33 +260,33 @@ function collectFunctionViolations(node, parent, filePath) {
     .filter(([, lines]) => lines.size >= 2)
     .map(([target]) => target)
     .sort();
-  if (repeatedTargets.length > LOCAL_NUM_ZERO) {
+  if (repeatedTargets.length > 0) {
     violations.push({
       filePath,
       line: Math.min(...evidence.independentIfLines),
-      column: LOCAL_NUM_ONE,
+      column: 1,
       functionName,
       independentIfCount,
-      target: repeatedTargets.join(LOCAL_STR_128KJ),
+      target: repeatedTargets.join(LOCAL_STR_COMMA_SPACE),
       kind: VIOLATION_KIND.ASSIGNMENT,
       reason:
-        LOCAL_STR_1JNGK,
+        LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_ASSIG,
       ruleReference: RULE_REFERENCE,
     });
   }
 
   const repeatedReturnKeys = [...evidence.semanticReturnKeys.keys()].sort();
-  if (evidence.semanticReturnCount >= LOCAL_NUM_TWO && repeatedReturnKeys.length > LOCAL_NUM_ZERO) {
+  if (evidence.semanticReturnCount >= 2 && repeatedReturnKeys.length > 0) {
     violations.push({
       filePath,
       line: Math.min(...evidence.independentIfLines),
-      column: LOCAL_NUM_ONE,
+      column: 1,
       functionName,
       independentIfCount,
-      target: repeatedReturnKeys.join(LOCAL_STR_128KJ),
+      target: repeatedReturnKeys.join(LOCAL_STR_COMMA_SPACE),
       kind: VIOLATION_KIND.RETURN,
       reason:
-        LOCAL_STR_1MBIR,
+        LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_RETUR,
       ruleReference: RULE_REFERENCE,
     });
   }
@@ -601,7 +598,7 @@ async function collectDecisionBoundaryViolationsWithBaseline(
 }
 
 function formatHumanSummary(report) {
-  const summary = formatGuidelineHumanSummary(report, LOCAL_STR_1PNFN);
+  const summary = formatGuidelineHumanSummary(report, LOCAL_STR_DECISION_BOUNDARY_GUIDELINE);
   if (!Number.isFinite(report.inheritedViolationCount)) {
     return summary;
   }
@@ -633,7 +630,7 @@ async function writeDecisionBoundaryBaseline(pathsToScan) {
   );
 }
 
-async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
+async function main(argv = process.argv.slice(2)) {
   if (argv.includes(UPDATE_BASELINE_FLAG)) {
     await writeDecisionBoundaryBaseline(
       argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),

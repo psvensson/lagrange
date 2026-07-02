@@ -4,14 +4,14 @@ import {
   ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS,
 } from './admin-websocket-local-observation-methods.js';
 
-const LOCAL_STR_129XF = 'serve not ready: load lane admission denied on node ';
+const LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI = 'serve not ready: load lane admission denied on node ';
 const LOCAL_STR_SERVEELIGIBLE = ' (serveEligible=';
 const LOCAL_STR_REASONS = ', reasons=';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_NONE = 'none';
-const LOCAL_STR_C7ZU6 = ')';
+const LOCAL_STR_RPAREN = ')';
 const LOCAL_STR_TABLENAME = ' (tableName=';
-const LOCAL_STR_5JWN7 = ', benchmarkReady=false, reasons=';
+const LOCAL_STR_BENCHMARKREADY_FALSE_REASONS = ', benchmarkReady=false, reasons=';
 const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_TIMED_OUT = 'timed out';
 const LOCAL_STR_DEADLINE_EXCEEDED = 'deadline exceeded';
@@ -31,9 +31,7 @@ const {
   LOAD_LANE_TABLE_ADMISSION_STATE,
   LOAD_LANE_VOTER_READY_REPLICA_ROLES,
   META_SERVICE_ID,
-  NUM,
   SQLParser,
-  TYPEOF,
   WASM_SERVICE_PROTOCOL,
   buildLoadLaneAdmissionErrorDetails,
   buildLoadLaneQueryAdmissionResult,
@@ -50,14 +48,14 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
   async resolveLoadLaneReadinessSnapshot() {
     if (
       !this.controlPlaneReadinessService ||
-      typeof this.nodeId !== TYPEOF.STRING ||
-      this.nodeId.length === NUM.ZERO
+      typeof this.nodeId !== 'string' ||
+      this.nodeId.length === 0
     ) {
       return null;
     }
     if (
       typeof this.controlPlaneReadinessService.getNodeReadiness ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return this.controlPlaneReadinessService.getNodeReadiness(this.nodeId, {
         allowAuthoritativeRefresh: true,
@@ -68,7 +66,7 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     }
     if (
       typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return this.controlPlaneReadinessService.getNodeReadinessSync(
         this.nodeId,
@@ -99,15 +97,15 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     }
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      LOCAL_STR_129XF +
+      LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI +
         this.nodeId +
         LOCAL_STR_SERVEELIGIBLE +
         String(admission.serveEligible) +
         LOCAL_STR_REASONS +
-        (admission.reasonCodes.length > NUM.ZERO ?
+        (admission.reasonCodes.length > 0 ?
           admission.reasonCodes.join(LOCAL_STR_COMMA) :
           LOCAL_STR_NONE) +
-        LOCAL_STR_C7ZU6,
+        LOCAL_STR_RPAREN,
       {
         details: buildLoadLaneAdmissionErrorDetails(admission),
       },
@@ -122,7 +120,7 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    * @private
    */
   resolveLoadLaneQueryTargetTableName(sql) {
-    if (typeof sql !== TYPEOF.STRING || sql.length === NUM.ZERO) {
+    if (typeof sql !== 'string' || sql.length === 0) {
       return null;
     }
 
@@ -160,14 +158,14 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     const normalized = Array.isArray(reasons) ?
       reasons
         .map((reason) => String(reason?.code || EMPTY_STRING).trim())
-        .filter((code) => code.length > NUM.ZERO) :
+        .filter((code) => code.length > 0) :
       [];
-    if (normalized.length > NUM.ZERO) {
+    if (normalized.length > 0) {
       return [...new Set(normalized)];
     }
     if (
-      typeof fallbackCode === TYPEOF.STRING &&
-      fallbackCode.length > NUM.ZERO
+      typeof fallbackCode === 'string' &&
+      fallbackCode.length > 0
     ) {
       return [fallbackCode];
     }
@@ -183,10 +181,10 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    * @private
    */
   shouldAdmitLoadLaneSoftBenchmarkBlockers(benchmarkAdmission, reasonCodes) {
-    if (!benchmarkAdmission || typeof benchmarkAdmission !== TYPEOF.OBJECT) {
+    if (!benchmarkAdmission || typeof benchmarkAdmission !== 'object') {
       return false;
     }
-    if (!Array.isArray(reasonCodes) || reasonCodes.length <= NUM.ZERO) {
+    if (!Array.isArray(reasonCodes) || reasonCodes.length <= 0) {
       return false;
     }
     if (
@@ -212,7 +210,7 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     return (
       routingReady &&
       localReplicaVoterReady &&
-      degradedByOperationIds.length <= NUM.ZERO
+      degradedByOperationIds.length <= 0
     );
   }
 
@@ -225,10 +223,10 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    * @private
    */
   shouldAdmitLoadLaneSoftReadinessBlockers(readiness, reasonCodes) {
-    if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+    if (!readiness || typeof readiness !== 'object') {
       return false;
     }
-    if (!Array.isArray(reasonCodes) || reasonCodes.length <= NUM.ZERO) {
+    if (!Array.isArray(reasonCodes) || reasonCodes.length <= 0) {
       return false;
     }
     if (
@@ -293,13 +291,13 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
 
   resolveLoadLaneReplicaBenchmarkAdmission(replica) {
     return replica?.benchmarkAdmission &&
-      typeof replica.benchmarkAdmission === TYPEOF.OBJECT ?
+      typeof replica.benchmarkAdmission === 'object' ?
       replica.benchmarkAdmission :
       null;
   }
 
   resolveLoadLaneReplicaReadiness(replica) {
-    return replica?.readiness && typeof replica.readiness === TYPEOF.OBJECT ?
+    return replica?.readiness && typeof replica.readiness === 'object' ?
       replica.readiness :
       null;
   }
@@ -361,7 +359,7 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     blockedState,
     reasonCodes,
   ) {
-    if (ready === true && reasonCodes.length === NUM.ZERO) {
+    if (ready === true && reasonCodes.length === 0) {
       return LOAD_LANE_TABLE_ADMISSION_STATE.READY;
     }
     if (softBlockerAdmitted === true) {
@@ -453,12 +451,12 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    * @private
    */
   shouldCacheLoadLaneTableAdmissionState(snapshot, resolvedState) {
-    if (!resolvedState || typeof resolvedState !== TYPEOF.OBJECT) {
+    if (!resolvedState || typeof resolvedState !== 'object') {
       return false;
     }
     const snapshotObservation =
       snapshot?.snapshotObservation &&
-      typeof snapshot.snapshotObservation === TYPEOF.OBJECT ?
+      typeof snapshot.snapshotObservation === 'object' ?
         snapshot.snapshotObservation :
         null;
     if (!snapshotObservation) {
@@ -492,18 +490,18 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     }
     const reasonCodes =
       Array.isArray(admissionState?.reasonCodes) &&
-      admissionState.reasonCodes.length > NUM.ZERO ?
+      admissionState.reasonCodes.length > 0 ?
         admissionState.reasonCodes :
         ['benchmark_admission_blocked'];
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      LOCAL_STR_129XF +
+      LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI +
         this.nodeId +
         LOCAL_STR_TABLENAME +
         tableName +
-        LOCAL_STR_5JWN7 +
+        LOCAL_STR_BENCHMARKREADY_FALSE_REASONS +
         reasonCodes.join(LOCAL_STR_COMMA) +
-        LOCAL_STR_C7ZU6,
+        LOCAL_STR_RPAREN,
     );
   }
 
@@ -525,13 +523,13 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
 
     const boundedTimeoutMs =
       Number.isFinite(this.loadLaneQueryTimeoutCapMs) &&
-      this.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+      this.loadLaneQueryTimeoutCapMs > 0 ?
         Math.floor(this.loadLaneQueryTimeoutCapMs) :
         LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
     if (normalizedTimeoutMs === null) {
       return boundedTimeoutMs;
     }
-    return Math.max(NUM.ONE, Math.min(normalizedTimeoutMs, boundedTimeoutMs));
+    return Math.max(1, Math.min(normalizedTimeoutMs, boundedTimeoutMs));
   }
 
   /**
@@ -542,11 +540,11 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    */
   resolveLoadLaneRetryAfterMs(value = null) {
     const classifiedRetryAfterMs = getControlPlaneRetryAfterMs(value);
-    if (classifiedRetryAfterMs > NUM.ZERO) {
+    if (classifiedRetryAfterMs > 0) {
       return classifiedRetryAfterMs;
     }
     const retryAfterMs = Number(value?.retryAfterMs);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
       return Math.floor(retryAfterMs);
     }
     return LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
@@ -560,13 +558,13 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
    * @private
    */
   isRetryableLoadLaneExecutionFailure(value = null) {
-    if (!value || typeof value !== TYPEOF.OBJECT) {
+    if (!value || typeof value !== 'object') {
       return false;
     }
     if (value.deferRetry === true) {
       return true;
     }
-    if (getControlPlaneRetryAfterMs(value) > NUM.ZERO) {
+    if (getControlPlaneRetryAfterMs(value) > 0) {
       return true;
     }
     if (isRetryableControlPlaneError(value)) {

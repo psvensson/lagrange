@@ -2,7 +2,6 @@
  * CDC write-router strategies.
  */
 
-import {TYPEOF} from '../../constants/index.js';
 
 const WRITE_ROUTER_ERROR_MSG = Object.freeze({
   EXECUTE_REQUIRED: 'Write router requires an execute function',
@@ -14,7 +13,7 @@ const WRITE_ROUTER_MODE = Object.freeze({
 });
 
 function assertExecuteFunction(execute) {
-  if (typeof execute !== TYPEOF.FUNCTION) {
+  if (typeof execute !== 'function') {
     throw new Error(WRITE_ROUTER_ERROR_MSG.EXECUTE_REQUIRED);
   }
 }

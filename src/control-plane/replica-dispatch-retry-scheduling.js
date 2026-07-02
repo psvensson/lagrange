@@ -10,13 +10,11 @@ const {
   NODE_STATE_UPDATE_RETRY_ACTION,
   NODE_STATE_UPDATE_RETRY_CLASS,
   NODE_STATE_UPDATE_RETRY_POLICY,
-  NUM,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-  TYPEOF,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneNodeStatePublicationProfile,
@@ -39,7 +37,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (!Number.isFinite(numeric)) {
       return DISPATCH_DEFAULT.OPERATION_DISPATCH_QUEUE_SHARD_COUNT;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -53,7 +51,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (!Number.isFinite(numeric)) {
       return REPLICA_DISPATCH_SERVICE_LITERAL.FOUR;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -64,10 +62,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   normalizeNodeStateUpdateRetryAfterMs(value) {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+    if (!Number.isFinite(numeric) || numeric <= 0) {
       return DISPATCH_DEFAULT.NODE_STATE_UPDATE_RETRY_AFTER_MS;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -78,10 +76,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   normalizeOperationDispatchRetryAfterMs(value) {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+    if (!Number.isFinite(numeric) || numeric <= 0) {
       return DISPATCH_DEFAULT.OPERATION_DISPATCH_RETRY_AFTER_MS;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -94,10 +92,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   normalizePriorityControlPlaneDispatchMaxInFlight(value) {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+    if (!Number.isFinite(numeric) || numeric <= 0) {
       return DISPATCH_DEFAULT.PRIORITY_CONTROL_PLANE_DISPATCH_MAX_IN_FLIGHT;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -108,10 +106,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   normalizeReplicaOperationDispatchTimeoutMs(value) {
     const numeric = Number(value);
-    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+    if (!Number.isFinite(numeric) || numeric <= 0) {
       return REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
     }
-    return Math.max(NUM.ONE, Math.floor(numeric));
+    return Math.max(1, Math.floor(numeric));
   }
 
   /**
@@ -132,18 +130,18 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (
       !workflowOwner ||
       typeof workflowOwner.recordOperationDispatchDeferredRetry !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
     const now = Date.now();
     const nextAttemptAt = Number(deferredRetry?.nextAttemptAt);
     const resolvedRetryAfterMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+      Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
         Math.floor(retryAfterMs) :
         (Number.isFinite(nextAttemptAt) && nextAttemptAt > now ?
-          Math.max(NUM.ONE, Math.floor(nextAttemptAt - now)) :
-          NUM.ZERO);
+          Math.max(1, Math.floor(nextAttemptAt - now)) :
+          0);
     return workflowOwner.recordOperationDispatchDeferredRetry(
       operationId,
       Object.freeze({
@@ -164,7 +162,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (
       workflowOwner &&
       typeof workflowOwner.clearOperationDispatchDeferredRetry ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       workflowOwner.clearOperationDispatchDeferredRetry(operationId);
     }
@@ -177,8 +175,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   resolveOperationDispatchRetryAfterMs(errorLike) {
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
-      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+      return Math.max(1, Math.floor(retryAfterMs));
     }
     return this.operationDispatchRetryAfterMs;
   }
@@ -314,7 +312,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       this.operationDispatchQueue.enqueue(
         operationId,
         RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-        Object.keys(context).length > NUM.ZERO ? context : undefined,
+        Object.keys(context).length > 0 ? context : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {
         nodeId: this.nodeId,
@@ -373,7 +371,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @private
    */
   cloneDeferredOperationDispatchRow(row) {
-    if (!row || typeof row !== TYPEOF.OBJECT) {
+    if (!row || typeof row !== 'object') {
       return null;
     }
     return {
@@ -536,7 +534,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (error?.code === REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING) {
       return true;
     }
-    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
       return true;
     }
     if (isRetryableControlPlaneError(error)) {
@@ -545,7 +543,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     const message = error?.message || String(error);
     if (
       typeof this.cdcIntegrationService?.isTransientCdcError ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       this.cdcIntegrationService.isTransientCdcError(message)
     ) {
       return true;
@@ -571,8 +569,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @private
    */
   resolveNodeStateUpdateRetryAfterMs(error) {
-    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
-      return Math.max(NUM.ONE, Math.floor(error.retryAfterMs));
+    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
+      return Math.max(1, Math.floor(error.retryAfterMs));
     }
     return this.nodeStateUpdateRetryAfterMs;
   }
@@ -597,16 +595,16 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
   resolveNodeStateUpdateRetryFailureCount(nodeId, retryClass) {
     const existingState = this.nodeStateUpdateRetryStateByNodeId.get(nodeId);
     if (!existingState || existingState.retryClass !== retryClass) {
-      return NUM.ONE;
+      return 1;
     }
     const currentFailureCount = Number(existingState.failureCount);
     if (
       !Number.isFinite(currentFailureCount) ||
-      currentFailureCount < NUM.ONE
+      currentFailureCount < 1
     ) {
-      return NUM.ONE;
+      return 1;
     }
-    return currentFailureCount + NUM.ONE;
+    return currentFailureCount + 1;
   }
 
   resolveNodeStateUpdateRetryDelayBounds(retryClass, baseRetryAfterMs) {
@@ -640,13 +638,13 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     maxRetryAfterMs,
   ) {
     let retryAfterMs = baseRetryAfterMs;
-    let remainingBackoffSteps = Math.max(NUM.ZERO, failureCount - NUM.ONE);
-    while (remainingBackoffSteps > NUM.ZERO && retryAfterMs < maxRetryAfterMs) {
+    let remainingBackoffSteps = Math.max(0, failureCount - 1);
+    while (remainingBackoffSteps > 0 && retryAfterMs < maxRetryAfterMs) {
       retryAfterMs = Math.min(
         maxRetryAfterMs,
         retryAfterMs * NODE_STATE_UPDATE_RETRY_POLICY.BACKOFF_MULTIPLIER,
       );
-      remainingBackoffSteps -= NUM.ONE;
+      remainingBackoffSteps -= 1;
     }
     return retryAfterMs;
   }

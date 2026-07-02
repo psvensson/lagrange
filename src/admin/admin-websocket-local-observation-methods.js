@@ -3,11 +3,11 @@ import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 const LOCAL_STR_AND = 'AND';
 const LOCAL_STR_OR = 'OR';
 const LOCAL_STR_EQUALS = '=';
-const LOCAL_STR_151ZF = '<>';
-const LOCAL_STR_GDTVK = '>';
-const LOCAL_STR_4PO0L = '>=';
-const LOCAL_STR_FTUO6 = '<';
-const LOCAL_STR_15BZ1 = '<=';
+const LOCAL_STR_LT_GT = '<>';
+const LOCAL_STR_GT = '>';
+const LOCAL_STR_GT_EQUALS = '>=';
+const LOCAL_STR_LT = '<';
+const LOCAL_STR_LT_EQUALS = '<=';
 const LOCAL_STR_IS_NULL = 'IS NULL';
 const LOCAL_STR_IS_NOT_NULL = 'IS NOT NULL';
 const LOCAL_STR_NOT = 'NOT';
@@ -19,9 +19,7 @@ const {
   ADMIN_CACHE_OBSERVATION_TABLES,
   AST_TYPE,
   EXPR_TYPE,
-  NUM,
   SQLParser,
-  TYPEOF,
   normalizeIdentifier,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
@@ -43,8 +41,8 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
   tryExecuteLocalSystemTableObservationQuery(sql, params = []) {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION ||
-      typeof sql !== TYPEOF.STRING
+      typeof this.systemTableCache.getAll !== 'function' ||
+      typeof sql !== 'string'
     ) {
       return null;
     }
@@ -60,7 +58,7 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
       ast?.type !== AST_TYPE.SELECT ||
       !ast.from ||
       ast.from.subquery ||
-      (Array.isArray(ast.joins) && ast.joins.length > NUM.ZERO) ||
+      (Array.isArray(ast.joins) && ast.joins.length > 0) ||
       ast.distinct === true ||
       ast.groupBy ||
       ast.having ||
@@ -175,17 +173,17 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
 
       switch (expr.operator) {
       case LOCAL_STR_EQUALS:
-        return comparison === NUM.ZERO;
-      case LOCAL_STR_151ZF:
-        return comparison !== NUM.ZERO;
-      case LOCAL_STR_GDTVK:
-        return comparison > NUM.ZERO;
-      case LOCAL_STR_4PO0L:
-        return comparison >= NUM.ZERO;
-      case LOCAL_STR_FTUO6:
-        return comparison < NUM.ZERO;
-      case LOCAL_STR_15BZ1:
-        return comparison <= NUM.ZERO;
+        return comparison === 0;
+      case LOCAL_STR_LT_GT:
+        return comparison !== 0;
+      case LOCAL_STR_GT:
+        return comparison > 0;
+      case LOCAL_STR_GT_EQUALS:
+        return comparison >= 0;
+      case LOCAL_STR_LT:
+        return comparison < 0;
+      case LOCAL_STR_LT_EQUALS:
+        return comparison <= 0;
       case LOCAL_STR_IS_NULL:
         return leftValue === null || leftValue === undefined;
       case LOCAL_STR_IS_NOT_NULL:
@@ -212,7 +210,7 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
         );
         return (
           this.compareLocalSystemTableObservationValues(candidate, value) ===
-          NUM.ZERO
+          0
         );
       });
       return expr.negated === true ? !matched : matched;
@@ -321,13 +319,13 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
    */
   compareLocalSystemTableObservationValues(left, right) {
     if (left === right) {
-      return NUM.ZERO;
+      return 0;
     }
     if (left === null || left === undefined) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (right === null || right === undefined) {
-      return NUM.ONE;
+      return 1;
     }
 
     const leftNumber = Number(left);
@@ -335,8 +333,8 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
     if (
       Number.isFinite(leftNumber) &&
       Number.isFinite(rightNumber) &&
-      String(left).trim().length > NUM.ZERO &&
-      String(right).trim().length > NUM.ZERO
+      String(left).trim().length > 0 &&
+      String(right).trim().length > 0
     ) {
       return leftNumber - rightNumber;
     }
@@ -355,7 +353,7 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
   projectLocalSystemTableObservationRows(rows, columns, params = []) {
     if (
       !Array.isArray(columns) ||
-      columns.length === NUM.ZERO ||
+      columns.length === 0 ||
       columns.some((column) => column?.type === EXPR_TYPE.STAR)
     ) {
       return rows.map((row) => ({...row}));
@@ -372,8 +370,8 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
           return null;
         }
         const key =
-          typeof column.alias === TYPEOF.STRING &&
-          column.alias.length > NUM.ZERO ?
+          typeof column.alias === 'string' &&
+          column.alias.length > 0 ?
             column.alias :
             column.expression.column;
         projected[key] = this.resolveLocalSystemTableObservationValue(
@@ -397,7 +395,7 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
    * @private
    */
   sortLocalSystemTableObservationRows(rows, orderBy, params = []) {
-    if (!Array.isArray(orderBy) || orderBy.length === NUM.ZERO) {
+    if (!Array.isArray(orderBy) || orderBy.length === 0) {
       return rows;
     }
 
@@ -417,14 +415,14 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
           leftValue,
           rightValue,
         );
-        if (comparison !== NUM.ZERO) {
+        if (comparison !== 0) {
           return String(ordering.direction || LOCAL_STR_ASC).toUpperCase() ===
             LOCAL_STR_DESC ?
             -comparison :
             comparison;
         }
       }
-      return NUM.ZERO;
+      return 0;
     });
   },
 
@@ -436,18 +434,18 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
    * @private
    */
   limitLocalSystemTableObservationRows(rows, limit) {
-    if (!limit || typeof limit !== TYPEOF.OBJECT) {
+    if (!limit || typeof limit !== 'object') {
       return rows;
     }
 
     const count = Number(limit.count);
     const offset = Number(limit.offset);
     const normalizedOffset =
-      Number.isFinite(offset) && offset > NUM.ZERO ?
+      Number.isFinite(offset) && offset > 0 ?
         Math.floor(offset) :
-        NUM.ZERO;
+        0;
     const normalizedCount =
-      Number.isFinite(count) && count >= NUM.ZERO ? Math.floor(count) : null;
+      Number.isFinite(count) && count >= 0 ? Math.floor(count) : null;
 
     if (normalizedCount === null) {
       return rows.slice(normalizedOffset);

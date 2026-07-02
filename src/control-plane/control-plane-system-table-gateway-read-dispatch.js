@@ -3,10 +3,8 @@ import {
   CONTROL_PLANE_READ_OUTCOME,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  NUM,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  TYPEOF,
   buildPressureAdmissionFailure,
   normalizeCoalescingToken,
   normalizeReadStrategy,
@@ -25,7 +23,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       params,
       options,
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION,
+        'function',
     );
     return this.executeRead(
       readIntent,
@@ -163,7 +161,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
           result.rowCount :
           Array.isArray(result?.rows) ?
             result.rows.length :
-            NUM.ZERO,
+            0,
         source: result?.source || null,
         usedSqlFallback: result?.usedSqlFallback === true,
         error: result?.success === true ? null : result?.error || null,
@@ -188,7 +186,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
         outcome: error?.outcome || CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
         success: false,
-        rowCount: NUM.ZERO,
+        rowCount: 0,
         error: error?.message || String(error),
         ...this.buildOperationLedgerDiagnostics(
           tableName,
@@ -199,7 +197,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       this.recordReadTelemetry(telemetryContext, {
         success: false,
         outcome: error?.outcome || CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        rowCount: NUM.ZERO,
+        rowCount: 0,
       });
       throw error;
     }

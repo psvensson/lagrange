@@ -10,7 +10,7 @@
  * @module cdc/cdc-emitter
  */
 
-import {NUM, SQL, TYPEOF} from '../constants/index.js';
+import {SQL} from '../constants/index.js';
 import {
   CDC_EMITTER_ERROR_MSG,
   CDC_EMITTER_FIELD,
@@ -170,7 +170,7 @@ class CDCEmitter {
    * @private
    */
   async deliverToSubscribers(event) {
-    let index = NUM.ZERO;
+    let index = 0;
     for (const subscriber of this.subscribers) {
       try {
         await subscriber(event);
@@ -196,7 +196,7 @@ class CDCEmitter {
    * @private
    */
   extractOperationFromSQL(sql) {
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       return null;
     }
 
@@ -230,11 +230,11 @@ class CDCEmitter {
   buildDataFromInfo(sql, params, info) {
     const data = {};
 
-    if (info && typeof info === TYPEOF.OBJECT) {
+    if (info && typeof info === 'object') {
       Object.assign(data, info);
     }
 
-    if (params && Array.isArray(params) && params.length > NUM.ZERO) {
+    if (params && Array.isArray(params) && params.length > 0) {
       data.params = params;
     }
 

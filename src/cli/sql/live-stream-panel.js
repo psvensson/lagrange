@@ -1,16 +1,14 @@
 const LOCAL_STR_GREEN = 'green';
 const LOCAL_STR_YELLOW = 'yellow';
 const LOCAL_STR_RED = 'red';
-const LOCAL_NUM_1000 = 1000;
-const LOCAL_NUM_10 = 10;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ONE_THOUSAND = 1000;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_LIVESTREAM_EVENT = 'livestream:event';
 const LOCAL_STR_WHITE = 'white';
 const LOCAL_NUM_SIX = 6;
-const LOCAL_NUM_80 = 80;
-const LOCAL_NUM_77 = 77;
-const LOCAL_STR_2ZI04 = '...';
+const LOCAL_NUM_EIGHTY = 80;
+const LOCAL_NUM_SEVENTY_SEVEN = 77;
+const LOCAL_STR_DOT_DOT_DOT = '...';
 const LOCAL_STR_INVALID_DATA = '[Invalid data]';
 const LOCAL_STR_LIVESTREAM_SCROLL = 'livestream:scroll';
 const LOCAL_STR_LIVESTREAM_CLEARED = 'livestream:cleared';
@@ -59,13 +57,13 @@ export class LiveStreamPanel {
     this.events = [];
 
     /** @type {number} */
-    this.maxEvents = options.maxEvents || LOCAL_NUM_1000;
+    this.maxEvents = options.maxEvents || LOCAL_NUM_ONE_THOUSAND;
 
     /** @type {number} */
-    this.visibleHeight = options.visibleHeight || LOCAL_NUM_10;
+    this.visibleHeight = options.visibleHeight || LOCAL_NUM_TEN;
 
     /** @type {number} */
-    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.scrollPosition = 0;
 
     /** @type {Object|null} */
     this.widget = null;
@@ -86,8 +84,8 @@ export class LiveStreamPanel {
     if (this.events.length > this.maxEvents) {
       this.events.shift();
       // Adjust scroll position if needed
-      if (this.scrollPosition > LOCAL_NUM_ZERO) {
-        this.scrollPosition = Math.max(LOCAL_NUM_ZERO, this.scrollPosition - LOCAL_NUM_ONE);
+      if (this.scrollPosition > 0) {
+        this.scrollPosition = Math.max(0, this.scrollPosition - 1);
       }
     }
 
@@ -129,8 +127,8 @@ export class LiveStreamPanel {
     try {
       const str = JSON.stringify(data);
       // Truncate if too long
-      if (str.length > LOCAL_NUM_80) {
-        return str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04;
+      if (str.length > LOCAL_NUM_EIGHTY) {
+        return str.substring(0, LOCAL_NUM_SEVENTY_SEVEN) + LOCAL_STR_DOT_DOT_DOT;
       }
       return str;
     } catch (_err) {
@@ -146,7 +144,7 @@ export class LiveStreamPanel {
   getVisibleEvents() {
     const totalEvents = this.events.length;
 
-    if (totalEvents === LOCAL_NUM_ZERO) {
+    if (totalEvents === 0) {
       return [];
     }
 
@@ -183,7 +181,7 @@ export class LiveStreamPanel {
    * @return {boolean} True if scrolled
    */
   scrollDown() {
-    if (this.scrollPosition > LOCAL_NUM_ZERO) {
+    if (this.scrollPosition > 0) {
       this.scrollPosition--;
       this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
@@ -198,8 +196,8 @@ export class LiveStreamPanel {
    * @return {boolean} True if scrolled
    */
   scrollToBottom() {
-    if (this.scrollPosition !== LOCAL_NUM_ZERO) {
-      this.scrollPosition = LOCAL_NUM_ZERO;
+    if (this.scrollPosition !== 0) {
+      this.scrollPosition = 0;
       this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
       return true;
@@ -238,7 +236,7 @@ export class LiveStreamPanel {
    * @return {number} Maximum scroll position
    */
   getMaxScrollPosition() {
-    return Math.max(LOCAL_NUM_ZERO, this.events.length - this.visibleHeight);
+    return Math.max(0, this.events.length - this.visibleHeight);
   }
 
   /**
@@ -246,7 +244,7 @@ export class LiveStreamPanel {
    * @return {boolean} True if at bottom
    */
   isAtBottom() {
-    return this.scrollPosition === LOCAL_NUM_ZERO;
+    return this.scrollPosition === 0;
   }
 
   /**
@@ -278,7 +276,7 @@ export class LiveStreamPanel {
    */
   clear() {
     this.events = [];
-    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.scrollPosition = 0;
     this.emitEvent(LOCAL_STR_LIVESTREAM_CLEARED, {});
     this.render();
   }
@@ -288,7 +286,7 @@ export class LiveStreamPanel {
    * @param {number} height - Visible height in rows
    */
   setVisibleHeight(height) {
-    this.visibleHeight = Math.max(LOCAL_NUM_ONE, height);
+    this.visibleHeight = Math.max(1, height);
     // Adjust scroll position if needed
     const maxScroll = this.getMaxScrollPosition();
     if (this.scrollPosition > maxScroll) {

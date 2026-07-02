@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../../src/constants/index.js';
 import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
@@ -15,31 +14,31 @@ import {
 } from './publication-evidence-replay-constants.js';
 
 function isRecord(value) {
-  return Boolean(value) && typeof value === TYPEOF.OBJECT && !Array.isArray(value);
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function normalizeText(value) {
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim() :
     PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
 }
 
 function normalizeScalarText(value) {
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     return normalizeText(value);
   }
-  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
   }
   return PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
 }
 
-function normalizeInteger(value, fallback = NUM.ZERO) {
+function normalizeInteger(value, fallback = 0) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? Math.trunc(normalized) : fallback;
 }
 
-function normalizeTimestampMs(value, fallback = NUM.ZERO) {
+function normalizeTimestampMs(value, fallback = 0) {
   const normalizedTime = Date.parse(normalizeText(value));
   return Number.isFinite(normalizedTime) ? normalizedTime : fallback;
 }
@@ -48,7 +47,7 @@ function normalizeList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
       .map((value) => normalizeScalarText(value))
-      .filter((value) => value.length > NUM.ZERO),
+      .filter((value) => value.length > 0),
   )].sort((left, right) => left.localeCompare(right));
 }
 
@@ -254,11 +253,11 @@ function parseRepairLogRecordFromLine(line) {
   const jsonEndIndex = normalizedLine.lastIndexOf(
     PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.JSON_END,
   );
-  if (jsonStartIndex < NUM.ZERO || jsonEndIndex <= jsonStartIndex) {
+  if (jsonStartIndex < 0 || jsonEndIndex <= jsonStartIndex) {
     return {};
   }
   try {
-    const parsed = JSON.parse(normalizedLine.slice(jsonStartIndex, jsonEndIndex + NUM.ONE));
+    const parsed = JSON.parse(normalizedLine.slice(jsonStartIndex, jsonEndIndex + 1));
     return isRecord(parsed) ? parsed : {};
   } catch (_error) {
     return {};
@@ -276,7 +275,7 @@ function readFailureBundleLogExcerptLines(failureBundle = {}) {
   );
   return Object.values(excerptsByNodeState.value)
     .flatMap((lines) => Array.isArray(lines) ? lines : [])
-    .filter((line) => typeof line === TYPEOF.STRING);
+    .filter((line) => typeof line === 'string');
 }
 
 function normalizeRepairLogEvidence(record = {}) {
@@ -320,7 +319,7 @@ function isOwnerRpcCacheRepairDeferral(evidence = {}) {
 function maxRetryAfterMs(evidenceRecords = []) {
   return evidenceRecords.reduce(
     (maxRetryAfter, evidence) => Math.max(maxRetryAfter, evidence.retryAfterMs),
-    NUM.ZERO,
+    0,
   );
 }
 
@@ -340,11 +339,11 @@ function summarizeOwnerRpcCacheRepairDeferrals({
   const matchingDeferralCount = repairDeferrals.length;
   return {
     [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.AVAILABILITY]:
-      matchingDeferralCount > NUM.ZERO ?
+      matchingDeferralCount > 0 ?
         PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
         PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
     [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.DEFERRAL_STATE]:
-      matchingDeferralCount > NUM.ZERO ?
+      matchingDeferralCount > 0 ?
         PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.REPAIR_DEFERRED :
         PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.MISSING,
     [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_NODE_ID]:
@@ -404,7 +403,7 @@ function hasReconstructedOwnerRpcRepairEvidence(ownerRpcCacheRepair = {}) {
       ownerRpcCacheRepair[
         PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_DEFERRAL_COUNT
       ],
-    ) > NUM.ZERO
+    ) > 0
   );
 }
 

@@ -14,13 +14,10 @@ import {
 } from './managed-split-retry-policy.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_DEFERRED = 'deferred';
-const LOCAL_STR_2RKJB = 'Managed split child provisioning precheck could not satisfy ';
-const LOCAL_STR_1V197 = 'minimum routable cohorts: ';
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_MANAGED_SPLIT_CHILD_PROVISIONING_PRECHEC = 'Managed split child provisioning precheck could not satisfy ';
+const LOCAL_STR_MINIMUM_ROUTABLE_COHORTS = 'minimum routable cohorts: ';
+const LOCAL_STR_SEMI_SPACE = '; ';
 
 class ManagedSplitWorkflowStateMethods {
   /**
@@ -250,18 +247,18 @@ class ManagedSplitWorkflowStateMethods {
       partitionId: sourcePartitionId || null,
     }];
 
-    if (targetPartitionIds.length > LOCAL_NUM_ZERO) {
+    if (targetPartitionIds.length > 0) {
       participantSpecs.push({
         participantKey: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
         participantId: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
-        partitionId: targetPartitionIds[LOCAL_NUM_ZERO] || null,
+        partitionId: targetPartitionIds[0] || null,
       });
     }
-    if (targetPartitionIds.length > LOCAL_NUM_ONE) {
+    if (targetPartitionIds.length > 1) {
       participantSpecs.push({
         participantKey: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
         participantId: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
-        partitionId: targetPartitionIds[LOCAL_NUM_ONE] || null,
+        partitionId: targetPartitionIds[1] || null,
       });
     }
 
@@ -475,7 +472,7 @@ class ManagedSplitWorkflowStateMethods {
 
     return entries.map((entry) => {
       return {
-        targetNodeId: String(entry?.targetNodeId || LOCAL_STR_EMPTY),
+        targetNodeId: String(entry?.targetNodeId || ''),
         decisionType: entry?.decisionType || null,
         blockingReasons: Array.isArray(entry?.blockingReasons) ?
           [...entry.blockingReasons] :
@@ -538,7 +535,7 @@ class ManagedSplitWorkflowStateMethods {
     ).filter(([, admission]) => admission?.allowed !== true)
       .map(([childPartitionId]) => childPartitionId);
 
-    if (failingChildPartitionIds.length === LOCAL_NUM_ZERO) {
+    if (failingChildPartitionIds.length === 0) {
       return null;
     }
 
@@ -621,14 +618,14 @@ class ManagedSplitWorkflowStateMethods {
         childProvisioningAdmissionByPartitionId?.[childPartitionId] || {};
       details.push(
         `${childPartitionId}(required=` +
-          `${admission.minimumRoutableReplicaCount || LOCAL_NUM_ZERO}, ` +
-          `provisionable=${admission.maximumProvisionableReplicaCount || LOCAL_NUM_ZERO}, ` +
+          `${admission.minimumRoutableReplicaCount || 0}, ` +
+          `provisionable=${admission.maximumProvisionableReplicaCount || 0}, ` +
           `decision=${admission.decisionType || LOCAL_STR_DEFERRED})`,
       );
     }
 
-    return LOCAL_STR_2RKJB +
-      LOCAL_STR_1V197 + details.join(LOCAL_STR_1AM9G);
+    return LOCAL_STR_MANAGED_SPLIT_CHILD_PROVISIONING_PRECHEC +
+      LOCAL_STR_MINIMUM_ROUTABLE_COHORTS + details.join(LOCAL_STR_SEMI_SPACE);
   }
 
   /**
@@ -713,7 +710,7 @@ class ManagedSplitWorkflowStateMethods {
    * @private
    */
   isRetryableSplitPlanningError(error) {
-    return String(error?.message || LOCAL_STR_EMPTY) ===
+    return String(error?.message || '') ===
       SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT;
   }
 }

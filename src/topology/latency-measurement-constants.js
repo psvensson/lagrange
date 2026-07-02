@@ -2,7 +2,6 @@
  * Constants for LatencyMeasurementService.
  */
 
-import {NUM} from '../constants/index.js';
 
 const LATENCY_MEASUREMENT_SUBSYSTEM = 'latency-measurement';
 
@@ -25,9 +24,9 @@ const LATENCY_MEASUREMENT_SAMPLE_QUALITY = Object.freeze({
 });
 
 const LATENCY_MEASUREMENT_DEFAULT = Object.freeze({
-  STALE_SAMPLE_AGE_MULTIPLIER: NUM.TWO,
-  MIN_RTT_MS: NUM.ONE,
-  MIN_SAMPLE_COUNT: NUM.ONE,
+  STALE_SAMPLE_AGE_MULTIPLIER: 2,
+  MIN_RTT_MS: 1,
+  MIN_SAMPLE_COUNT: 1,
   EDGE_ID_SEPARATOR: '->',
 });
 

@@ -33,8 +33,8 @@
 // BLOCK_EVIDENCE_INCOMPLETE, or dominantReason in the admission/slot/container-start family
 // (nodeAdmissionBlocked / nodeSlotUnavailable / attemptErrors / container-failed-to-start).
 
-import { readdirSync, statSync, openSync, readSync, closeSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import {readdirSync, statSync, openSync, readSync, closeSync, writeFileSync} from 'node:fs';
+import {join, resolve} from 'node:path';
 
 const REPO_ROOT = resolve(process.argv[2] || process.cwd());
 const CORPUS_DIR = join(REPO_ROOT, 'test-output', 'reports');
@@ -151,7 +151,7 @@ function extractOne(path) {
     F2_leadershipColocationCount: null, // not observable in reports (see header F2)
     F3_drainDeadlineElapsed: f3,
     f1_observable: f1 !== null,
-    f2_observable: false,               // no structured leadership-count field exists
+    f2_observable: false, // no structured leadership-count field exists
     f3_observable: outVerdict !== 'PASS' ? true : false, // PASS reports carry no drain signal to observe
     _rawVerdict: verdict,
     _dominantReason: dominantReason,
@@ -183,8 +183,8 @@ function main() {
 
   const records = files.map(extractOne);
 
-  const counts = { N_total: records.length, N_pass: 0, N_fail: 0, N_invalid: 0, N_unparseable: 0 };
-  let f1obs = 0, f2obs = 0, f3obs = 0;
+  const counts = {N_total: records.length, N_pass: 0, N_fail: 0, N_invalid: 0, N_unparseable: 0};
+  let f1obs = 0; let f2obs = 0; let f3obs = 0;
   for (const r of records) {
     if (r.verdict === 'PASS') counts.N_pass++;
     else if (r.verdict === 'FAIL') counts.N_fail++;

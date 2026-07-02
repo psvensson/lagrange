@@ -1,9 +1,8 @@
 import {CDC_MESSAGE_TYPE} from './worker-constants.js';
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_L556Q = 'Failed to subscribe to partition CDC';
-const LOCAL_STR_1CVR7 = 'Failed to unsubscribe from partition CDC';
+const LOCAL_STR_FAILED_TO_SUBSCRIBE_TO_PARTITION_CDC = 'Failed to subscribe to partition CDC';
+const LOCAL_STR_FAILED_TO_UNSUBSCRIBE_FROM_PARTITION_CDC = 'Failed to unsubscribe from partition CDC';
 const LOCAL_STR_CDC = 'cdc';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -48,7 +47,7 @@ function createMessageGroupWorkerServiceCDCMethods(deps = {}) {
             this.cdcSubscriptions.add(partitionAddress);
           }
         } catch (error) {
-          this.logger.warn(LOCAL_STR_L556Q, {
+          this.logger.warn(LOCAL_STR_FAILED_TO_SUBSCRIBE_TO_PARTITION_CDC, {
             groupId: this.groupId,
             partitionAddress,
             error: error.message,
@@ -91,7 +90,7 @@ function createMessageGroupWorkerServiceCDCMethods(deps = {}) {
           }
         } catch (error) {
           this.logger.warn(
-            LOCAL_STR_1CVR7,
+            LOCAL_STR_FAILED_TO_UNSUBSCRIBE_FROM_PARTITION_CDC,
             {
               groupId: this.groupId,
               partitionAddress,
@@ -231,7 +230,7 @@ function createMessageGroupWorkerServiceCDCMethods(deps = {}) {
      * @private
      */
     createCDCCommitEntryId() {
-      this.nextCDCCommitId += NUM.ONE;
+      this.nextCDCCommitId += 1;
       return `${this.replicaId}:${LOCAL_STR_CDC}:${this.nextCDCCommitId}`;
     }
 

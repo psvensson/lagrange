@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from './control-plane-cache-reconcile-constants.js';
 import {
@@ -26,7 +25,7 @@ function resolveControlPlaneCacheReconcileIntent(value) {
 }
 
 function resolveControlPlaneCacheReconcileDeletePolicy(options = {}) {
-  if (typeof options?.deleteMissing === TYPEOF.BOOLEAN) {
+  if (typeof options?.deleteMissing === 'boolean') {
     return options.deleteMissing === true ?
       CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.DELETE_MISSING :
       CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.PRESERVE_MISSING;
@@ -243,10 +242,10 @@ function resolveControlPlaneReadIntent(
       options?.readStrategy ||
       profileStrategy ||
       (options?.bootstrapSnapshotRows ||
-      typeof options?.readBootstrapSnapshot === TYPEOF.FUNCTION ?
+      typeof options?.readBootstrapSnapshot === 'function' ?
         CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT :
         options?.cachePredicate ||
-            typeof options?.readFromCache === TYPEOF.FUNCTION ?
+            typeof options?.readFromCache === 'function' ?
           CONTROL_PLANE_READ_STRATEGY.CACHE :
           options?.requireAuthoritative === true ?
             CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED :
@@ -297,7 +296,7 @@ function buildAuthoritativeControlPlaneReadRequestOptions(
 }
 
 function applyProfileDefault(options, key, value) {
-  if (typeof options?.[key] !== TYPEOF.UNDEFINED) {
+  if (typeof options?.[key] !== 'undefined') {
     return options;
   }
   return {
@@ -308,8 +307,8 @@ function applyProfileDefault(options, key, value) {
 
 function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
   if (
-    typeof options?.workloadClass !== TYPEOF.STRING ||
-    options.workloadClass.length === NUM.ZERO
+    typeof options?.workloadClass !== 'string' ||
+    options.workloadClass.length === 0
   ) {
     return resolvedOptions;
   }
@@ -317,7 +316,7 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
     options.workloadClass,
   );
   const mergedResourceKeys = normalizeDistinctStringArray([
-    ...(typeof options?.resourceKeys === TYPEOF.UNDEFINED ?
+    ...(typeof options?.resourceKeys === 'undefined' ?
       workloadProfile.resourceKeys :
       []),
     ...(Array.isArray(resolvedOptions?.resourceKeys) ?
@@ -328,15 +327,15 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
     ...resolvedOptions,
     workloadClass: workloadProfile.workloadClass,
     workClass:
-      typeof options?.workClass === TYPEOF.UNDEFINED ?
+      typeof options?.workClass === 'undefined' ?
         workloadProfile.workClass :
         resolvedOptions.workClass,
     allowPressureDegrade:
-      typeof options?.allowPressureDegrade === TYPEOF.UNDEFINED ?
+      typeof options?.allowPressureDegrade === 'undefined' ?
         workloadProfile.allowPressureDegrade :
         resolvedOptions.allowPressureDegrade,
     allowPressureDefer:
-      typeof options?.allowPressureDefer === TYPEOF.UNDEFINED ?
+      typeof options?.allowPressureDefer === 'undefined' ?
         workloadProfile.allowPressureDefer :
         resolvedOptions.allowPressureDefer,
     resourceKeys: mergedResourceKeys,

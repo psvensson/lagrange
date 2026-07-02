@@ -6,7 +6,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION, STRING} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -149,7 +149,7 @@ class DynamicConfigService extends EventEmitter {
         ),
         [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
         [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]:
-          definition.requiresRestart ? NUM.ONE : NUM.ZERO,
+          definition.requiresRestart ? 1 : 0,
         [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
         [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
           definition.defaultValue, definition.type,
@@ -198,7 +198,7 @@ class DynamicConfigService extends EventEmitter {
       mutationResult?.affectedRows,
     );
     if (Number.isFinite(affectedRows)) {
-      return affectedRows > NUM.ZERO;
+      return affectedRows > 0;
     }
 
     return mutationResult?.outcome !== CONTROL_PLANE_MUTATION_OUTCOME.NO_OP &&
@@ -286,7 +286,7 @@ class DynamicConfigService extends EventEmitter {
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
           [CONFIG_TABLE_COLUMN.VALUE_TYPE]: valueType,
           [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition ?
-            (definition.requiresRestart ? NUM.ONE : NUM.ZERO) : NUM.ZERO,
+            (definition.requiresRestart ? 1 : 0) : 0,
           [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition ?
             definition.description : STRING.EMPTY,
           [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
@@ -374,7 +374,7 @@ class DynamicConfigService extends EventEmitter {
       const keyWatchers = this.watchers.get(key);
       if (keyWatchers) {
         keyWatchers.delete(callback);
-        if (keyWatchers.size === NUM.ZERO) {
+        if (keyWatchers.size === 0) {
           this.watchers.delete(key);
         }
       }
@@ -390,7 +390,7 @@ class DynamicConfigService extends EventEmitter {
    */
   async notifyWatchers(key, newValue, oldValueSerialized) {
     const keyWatchers = this.watchers.get(key);
-    if (!keyWatchers || keyWatchers.size === NUM.ZERO) {
+    if (!keyWatchers || keyWatchers.size === 0) {
       return;
     }
 
@@ -511,7 +511,7 @@ class DynamicConfigService extends EventEmitter {
     // Type validation
     switch (definition.type) {
     case ConfigValueType.STRING:
-      if (typeof value !== TYPEOF.STRING) {
+      if (typeof value !== 'string') {
         return {
           valid: false,
           error: `${CONFIG_ERROR_MSG.EXPECTED_STRING_PREFIX}${typeof value}`,
@@ -532,20 +532,20 @@ class DynamicConfigService extends EventEmitter {
       break;
 
     case ConfigValueType.NUMBER:
-      if (typeof value !== TYPEOF.NUMBER || Number.isNaN(value)) {
+      if (typeof value !== 'number' || Number.isNaN(value)) {
         return {
           valid: false,
           error: `${CONFIG_ERROR_MSG.EXPECTED_NUMBER_PREFIX}${typeof value}`,
         };
       }
       // Validate positive numbers for most numeric configs
-      if (value < NUM.ZERO && !key.includes(CONFIG_KEY_FRAGMENT.THRESHOLD)) {
+      if (value < 0 && !key.includes(CONFIG_KEY_FRAGMENT.THRESHOLD)) {
         return {valid: false, error: CONFIG_ERROR_MSG.NON_NEGATIVE_REQUIRED};
       }
       break;
 
     case ConfigValueType.BOOLEAN:
-      if (typeof value !== TYPEOF.BOOLEAN) {
+      if (typeof value !== 'boolean') {
         return {
           valid: false,
           error: `${CONFIG_ERROR_MSG.EXPECTED_BOOLEAN_PREFIX}${typeof value}`,
@@ -554,7 +554,7 @@ class DynamicConfigService extends EventEmitter {
       break;
 
     case ConfigValueType.JSON:
-      if (typeof value !== TYPEOF.OBJECT) {
+      if (typeof value !== 'object') {
         return {
           valid: false,
           error: `${CONFIG_ERROR_MSG.EXPECTED_OBJECT_PREFIX}${typeof value}`,
@@ -579,7 +579,7 @@ class DynamicConfigService extends EventEmitter {
         CONFIG_SELECT_BY_KEY_SQL,
         [key],
       );
-      return result.rows?.[NUM.ZERO] || null;
+      return result.rows?.[0] || null;
     }
     return null;
   }
@@ -670,9 +670,9 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   inferType(value) {
-    if (typeof value === TYPEOF.NUMBER) return ConfigValueType.NUMBER;
-    if (typeof value === TYPEOF.BOOLEAN) return ConfigValueType.BOOLEAN;
-    if (typeof value === TYPEOF.OBJECT) return ConfigValueType.JSON;
+    if (typeof value === 'number') return ConfigValueType.NUMBER;
+    if (typeof value === 'boolean') return ConfigValueType.BOOLEAN;
+    if (typeof value === 'object') return ConfigValueType.JSON;
     return ConfigValueType.STRING;
   }
 
@@ -685,8 +685,8 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   resolveValueType(key, valueType) {
-    if (typeof valueType === TYPEOF.STRING &&
-      valueType.length > NUM.ZERO) {
+    if (typeof valueType === 'string' &&
+      valueType.length > 0) {
       return valueType;
     }
 
@@ -706,7 +706,7 @@ class DynamicConfigService extends EventEmitter {
     return {
       ...this.stats,
       watcherCount: Array.from(this.watchers.values())
-        .reduce((sum, set) => sum + set.size, NUM.ZERO),
+        .reduce((sum, set) => sum + set.size, 0),
       cachedKeys: this.configCache.size,
     };
   }

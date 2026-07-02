@@ -3,7 +3,7 @@
  * trace sessions from SQL/CDC-propagated metadata.
  */
 
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {
   DEBUG_DEFAULT,
   DEBUG_ERROR_MSG,
@@ -54,7 +54,7 @@ class DebugSessionResolver {
       session.serviceName === serviceName &&
       !session.lineageId,
     );
-    return sessions[NUM.ZERO] || null;
+    return sessions[0] || null;
   }
 
   /**
@@ -86,7 +86,7 @@ class DebugSessionResolver {
       return session.stageId === null ||
         session.stageId === stageId;
     });
-    return sessions[NUM.ZERO] || null;
+    return sessions[0] || null;
   }
 
   /**
@@ -95,7 +95,7 @@ class DebugSessionResolver {
    * @return {Object|null}
    */
   resolveSession(scope = {}) {
-    if (!scope || typeof scope !== TYPEOF.OBJECT) {
+    if (!scope || typeof scope !== 'object') {
       throw new Error(DEBUG_ERROR_MSG.TRACE_RESOLVER_SCOPE_REQUIRED);
     }
 
@@ -137,7 +137,7 @@ class DebugSessionResolver {
       sessions.push(normalized);
     }
 
-    sessions.sort((a, b) => (b.updatedAt || NUM.ZERO) - (a.updatedAt || NUM.ZERO));
+    sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     return sessions;
   }
 
@@ -147,7 +147,7 @@ class DebugSessionResolver {
    * @return {boolean}
    */
   isSessionStale(session, now) {
-    if (this.maxSessionAgeMs <= NUM.ZERO) {
+    if (this.maxSessionAgeMs <= 0) {
       return false;
     }
     if (session.updatedAt === null) {
@@ -161,13 +161,13 @@ class DebugSessionResolver {
    * @private
    */
   readSessionRows() {
-    if (typeof this.readSessions === TYPEOF.FUNCTION) {
+    if (typeof this.readSessions === 'function') {
       const rows = this.readSessions();
       return Array.isArray(rows) ? rows : [];
     }
 
     if (this.systemTableCache &&
-      typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(TABLES.DEBUG_SESSIONS);
       return Array.isArray(rows) ? rows : [];
     }
@@ -217,7 +217,7 @@ function inferSource(scope) {
  * @return {Object|null}
  */
 function normalizeSessionRow(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
   const sessionId = normalizeNullableString(
@@ -260,11 +260,11 @@ function normalizeSessionRow(row) {
  * @return {string|null}
  */
 function normalizeNullableString(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmed = value.trim();
-  return trimmed.length > NUM.ZERO ? trimmed : null;
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**

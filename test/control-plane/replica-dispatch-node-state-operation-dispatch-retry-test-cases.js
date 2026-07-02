@@ -4,7 +4,6 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NUM,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -352,7 +351,7 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       );
       t.equal(
         service.dispatchFailureSignaturesByOperationId.size,
-        NUM.ZERO,
+        0,
         'visibility lag should not record one dropped dispatch failure signature',
       );
     } finally {
@@ -614,17 +613,17 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       );
       t.equal(
         scheduled.length,
-        NUM.ZERO,
+        0,
         'authoritative progression should not arm another deferred retry',
       );
       t.equal(
         service.operationDispatchDeferredRetries.size,
-        NUM.ZERO,
+        0,
         'authoritative progression should clear any deferred dispatch retry state',
       );
       t.equal(
         service.dispatchFailureSignaturesByOperationId.size,
-        NUM.ZERO,
+        0,
         'authoritative progression should not record a generic dispatch failure signature',
       );
     } finally {

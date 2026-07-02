@@ -6,14 +6,12 @@ const {
   ControlPlaneField,
   DISPATCH_LOG_MSG,
   DISPATCH_READINESS_ERROR_REASON,
-  NUM,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
   STATE,
   STRING,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   getNodeHeartbeatWatermark,
   isRetryableControlPlaneError,
   wasNodeRecordReadyWhenWritten,
@@ -74,7 +72,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
     const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
     const nodeRow =
-      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT ?
+      payloadNodeRow && typeof payloadNodeRow === 'object' ?
         payloadNodeRow :
         null;
 
@@ -148,12 +146,12 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       ) {
         const publicationAdvancement =
           typeof this.resolveReadyNodePublicationAdvancement ===
-            TYPEOF.FUNCTION ?
+            'function' ?
             this.resolveReadyNodePublicationAdvancement(nodeId) :
             null;
         const publicationReconcileContext =
           typeof this.buildReadyNodePublicationReconcileContext ===
-            TYPEOF.FUNCTION ?
+            'function' ?
             this.buildReadyNodePublicationReconcileContext(
               nodeId,
               existing,
@@ -208,7 +206,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     const updateAffectedRows = Number(
       updateResult?.partitionResult?.affectedRows,
     );
-    if (updateAffectedRows === NUM.ZERO) {
+    if (updateAffectedRows === 0) {
       const bootstrapped = await this.tryBootstrapMissingNodeStateUpdateRow(
         nodeId,
         nextState,
@@ -230,12 +228,12 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       };
       const publicationAdvancement =
         typeof this.resolveReadyNodePublicationAdvancement ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           this.resolveReadyNodePublicationAdvancement(nodeId) :
           null;
       const publicationReconcileContext =
         typeof this.buildReadyNodePublicationReconcileContext ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           this.buildReadyNodePublicationReconcileContext(
             nodeId,
             publicationNodeRow,
@@ -295,7 +293,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
       const capabilities = Array.isArray(payloadCapabilities) ?
         JSON.stringify(payloadCapabilities) :
-        typeof payloadCapabilities === TYPEOF.STRING ?
+        typeof payloadCapabilities === 'string' ?
           payloadCapabilities :
           existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY;
       const heartbeatOnlyRow = {
@@ -326,7 +324,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
     const capabilities = Array.isArray(payloadCapabilities) ?
       JSON.stringify(payloadCapabilities) :
-      typeof payloadCapabilities === TYPEOF.STRING ?
+      typeof payloadCapabilities === 'string' ?
         payloadCapabilities :
         existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY;
 
@@ -335,33 +333,33 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       [COLUMN.NODE_ADDRESS]: baseNodeAddress,
       [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
         nodeRow[COLUMN.CPU_CORES] :
-        existing?.[COLUMN.CPU_CORES] || NUM.ZERO,
+        existing?.[COLUMN.CPU_CORES] || 0,
       [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
         nodeRow[COLUMN.MEMORY_MB] :
-        existing?.[COLUMN.MEMORY_MB] || NUM.ZERO,
+        existing?.[COLUMN.MEMORY_MB] || 0,
       [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
         nodeRow[COLUMN.DISK_GB] :
-        existing?.[COLUMN.DISK_GB] || NUM.ZERO,
+        existing?.[COLUMN.DISK_GB] || 0,
       [COLUMN.CPU_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.CPU_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.CPU_USAGE_PERCENT] :
-        existing?.[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO,
+        existing?.[COLUMN.CPU_USAGE_PERCENT] || 0,
       [COLUMN.MEMORY_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
-        existing?.[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO,
+        existing?.[COLUMN.MEMORY_USAGE_PERCENT] || 0,
       [COLUMN.DISK_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.DISK_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.DISK_USAGE_PERCENT] :
-        existing?.[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO,
+        existing?.[COLUMN.DISK_USAGE_PERCENT] || 0,
       [COLUMN.STATUS]:
         nextState === STATE.READY ?
           SERVICE_STATUS.ACTIVE :
-          typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
-              nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
+          typeof nodeRow?.[COLUMN.STATUS] === 'string' &&
+              nodeRow[COLUMN.STATUS].length > 0 ?
             nodeRow[COLUMN.STATUS] :
             existing?.[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: nextState,
@@ -384,7 +382,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       return false;
     }
     const existingStatus =
-      typeof options.existing?.[COLUMN.STATUS] === TYPEOF.STRING ?
+      typeof options.existing?.[COLUMN.STATUS] === 'string' ?
         options.existing[COLUMN.STATUS].toLowerCase() :
         options.existing?.[COLUMN.STATUS];
     return existingStatus !== SERVICE_STATUS.ACTIVE;
@@ -398,7 +396,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     isHeartbeatOnly,
     payload = null,
   ) {
-    if (!baseRow || typeof baseRow !== TYPEOF.OBJECT) {
+    if (!baseRow || typeof baseRow !== 'object') {
       return false;
     }
     if (existing?.[COLUMN.NODE_ID]) {
@@ -408,12 +406,12 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       return false;
     }
     const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
-    if (nodeAddress.length === NUM.ZERO || nodeAddress === STRING.UNKNOWN) {
+    if (nodeAddress.length === 0 || nodeAddress === STRING.UNKNOWN) {
       return false;
     }
 
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (typeof gateway.upsertSystemTableRow !== TYPEOF.FUNCTION) {
+    if (typeof gateway.upsertSystemTableRow !== 'function') {
       return false;
     }
 

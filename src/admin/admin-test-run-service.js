@@ -23,9 +23,7 @@ import {adminTestRunLifecycleMethods} from './admin-test-run-lifecycle-methods.j
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 
 const FILE_ENCODING = 'utf8';
 const EMPTY_STRING = '';
@@ -215,16 +213,16 @@ class AdminTestRunService {
     }
     if (firstSegment.startsWith(DOCKER_HOST_IPV6_PREFIX)) {
       const suffixIndex = firstSegment.indexOf(DOCKER_HOST_IPV6_SUFFIX);
-      if (suffixIndex > LOCAL_NUM_ONE) {
-        return firstSegment.slice(LOCAL_NUM_ONE, suffixIndex);
+      if (suffixIndex > 1) {
+        return firstSegment.slice(1, suffixIndex);
       }
       return null;
     }
 
     const firstSeparator = firstSegment.indexOf(DOCKER_HOST_PORT_SEPARATOR);
     const lastSeparator = firstSegment.lastIndexOf(DOCKER_HOST_PORT_SEPARATOR);
-    if (firstSeparator >= LOCAL_NUM_ZERO && firstSeparator === lastSeparator) {
-      return firstSegment.slice(LOCAL_NUM_ZERO, lastSeparator) || null;
+    if (firstSeparator >= 0 && firstSeparator === lastSeparator) {
+      return firstSegment.slice(0, lastSeparator) || null;
     }
     return firstSegment;
   }
@@ -244,7 +242,7 @@ class AdminTestRunService {
         .filter((entry) => Boolean(entry)) :
       [];
 
-    if (hosts.length === LOCAL_NUM_ZERO) {
+    if (hosts.length === 0) {
       return buildLocalConfigPrecheck(
         String(docker.socketPath || EMPTY_STRING).trim() || null,
       );
@@ -309,7 +307,7 @@ class AdminTestRunService {
   formatPrecheckSummary(precheck, configName) {
     if (precheck?.mode === RUN_CONFIG_MODE.REMOTE) {
       return `[preflight] config "${configName}" resolved ` +
-        `${precheck.hosts.length} docker host(s): ${precheck.hosts.join(LOCAL_STR_128KJ)}`;
+        `${precheck.hosts.length} docker host(s): ${precheck.hosts.join(LOCAL_STR_COMMA_SPACE)}`;
     }
     const socketPath = precheck?.socketPath || 'default docker socket';
     return `[preflight] config "${configName}" using local socket "${socketPath}"`;

@@ -4,7 +4,6 @@
 
 import {
   RUNTIME_FIELD,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {validateRuntimeDescriptor} from '../../wasm-service/runtime-descriptor-validator.js';
@@ -17,10 +16,10 @@ const RUNTIME_ADAPTER_ERROR = Object.freeze({
 
 function hasRuntimeLifecycleContract(serviceRuntimeLifecycle) {
   return serviceRuntimeLifecycle &&
-    typeof serviceRuntimeLifecycle.prepare === TYPEOF.FUNCTION &&
-    typeof serviceRuntimeLifecycle.start === TYPEOF.FUNCTION &&
-    typeof serviceRuntimeLifecycle.stop === TYPEOF.FUNCTION &&
-    typeof serviceRuntimeLifecycle.health === TYPEOF.FUNCTION;
+    typeof serviceRuntimeLifecycle.prepare === 'function' &&
+    typeof serviceRuntimeLifecycle.start === 'function' &&
+    typeof serviceRuntimeLifecycle.stop === 'function' &&
+    typeof serviceRuntimeLifecycle.health === 'function';
 }
 
 class RuntimeServiceAdapter extends ServiceTypeAdapter {

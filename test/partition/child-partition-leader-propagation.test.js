@@ -19,7 +19,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {COLUMN, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES}
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES}
   from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
@@ -128,7 +128,7 @@ function createMockCdcIntegrationService() {
     updateSystemTableRow:
       async (tableName, whereClause, data, options) => {
         calls.push({tableName, whereClause, data, options});
-        return {success: true, partitionResult: {affectedRows: NUM.ONE}};
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
   };
   return {service, calls};
@@ -183,12 +183,12 @@ async (t) => {
     );
 
     t.ok(
-      partitionWrites.length > NUM.ZERO,
+      partitionWrites.length > 0,
       'leader election should write to partitions table via ' +
       'cdcIntegrationService.updateSystemTableRow',
     );
 
-    const leaderWrite = partitionWrites[NUM.ZERO];
+    const leaderWrite = partitionWrites[0];
     t.equal(
       leaderWrite.tableName,
       SYSTEM_TABLE_NAME.PARTITIONS,
@@ -247,7 +247,7 @@ async (t) => {
       (call) => call.tableName === SYSTEM_TABLE_NAME.PARTITIONS,
     );
     t.ok(
-      partitionWrites.length > NUM.ZERO,
+      partitionWrites.length > 0,
       'write must go through cdcIntegrationService to generate ' +
       'CDC events for system cache propagation',
     );
@@ -272,16 +272,16 @@ test('child partition emits LEADER_ELECTED event on leader election',
       await partition.initialize();
 
       t.equal(
-        leaderEvents.length, NUM.ONE,
+        leaderEvents.length, 1,
         'child partition should emit exactly one LEADER_ELECTED event',
       );
       t.equal(
-        leaderEvents[NUM.ZERO].partitionId,
+        leaderEvents[0].partitionId,
         CHILD_PARTITION_ID,
         'LEADER_ELECTED event should include the child partition ID',
       );
       t.equal(
-        leaderEvents[NUM.ZERO].leaderId,
+        leaderEvents[0].leaderId,
         CHILD_REPLICA_ID,
         'LEADER_ELECTED event should identify the elected leader',
       );

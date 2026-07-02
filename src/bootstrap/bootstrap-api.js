@@ -112,7 +112,7 @@ class BootstrapAPI {
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_API,
     });
     this.controlPlaneWriteHealthProvider =
-      typeof options.controlPlaneWriteHealthProvider === TYPEOF.FUNCTION ?
+      typeof options.controlPlaneWriteHealthProvider === 'function' ?
         options.controlPlaneWriteHealthProvider :
         null;
     this.bootstrapStartupAdapter =
@@ -160,37 +160,37 @@ class BootstrapAPI {
       options.authoritativeControlPlaneView || null;
     this.maxConcurrentBootstrapRequests =
       Number.isFinite(options.maxConcurrentBootstrapRequests) &&
-        options.maxConcurrentBootstrapRequests > NUM.ZERO ?
+        options.maxConcurrentBootstrapRequests > 0 ?
         Math.floor(options.maxConcurrentBootstrapRequests) :
         BOOTSTRAP_API_DEFAULT.MAX_CONCURRENT_BOOTSTRAP_REQUESTS;
     this.bootstrapAdmissionRetryAfterMs =
       Number.isFinite(options.bootstrapAdmissionRetryAfterMs) &&
-        options.bootstrapAdmissionRetryAfterMs > NUM.ZERO ?
+        options.bootstrapAdmissionRetryAfterMs > 0 ?
         Math.floor(options.bootstrapAdmissionRetryAfterMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
     this.bootstrapAdmissionLeaseMs =
       Number.isFinite(options.bootstrapAdmissionLeaseMs) &&
-        options.bootstrapAdmissionLeaseMs > NUM.ZERO ?
+        options.bootstrapAdmissionLeaseMs > 0 ?
         Math.floor(options.bootstrapAdmissionLeaseMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_LEASE_MS;
     this.bootstrapRequestExecutionBudgetMs =
       Number.isFinite(options.bootstrapRequestExecutionBudgetMs) &&
-        options.bootstrapRequestExecutionBudgetMs > NUM.ZERO ?
+        options.bootstrapRequestExecutionBudgetMs > 0 ?
         Math.floor(options.bootstrapRequestExecutionBudgetMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_MS;
-    this.inFlightBootstrapRequestCount = NUM.ZERO;
+    this.inFlightBootstrapRequestCount = 0;
     this.bootstrapAdmissionLeases = new Map();
     this.bootstrapAdmissionPeerHints = new Map();
-    this.bootstrapAdmissionSequence = NUM.ZERO;
+    this.bootstrapAdmissionSequence = 0;
     this.moveReplicaAssignmentLeaseMs = Number.isFinite(options.moveReplicaAssignmentLeaseMs) ?
-      Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentLeaseMs)) :
+      Math.max(1, Math.floor(options.moveReplicaAssignmentLeaseMs)) :
       BOOTSTRAP_API_DEFAULT.MOVE_REPLICA_ASSIGNMENT_LEASE_MS;
     this.moveReplicaAssignmentSweepIntervalMs =
       Number.isFinite(options.moveReplicaAssignmentSweepIntervalMs) ?
-        Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentSweepIntervalMs)) :
+        Math.max(1, Math.floor(options.moveReplicaAssignmentSweepIntervalMs)) :
         BOOTSTRAP_API_DEFAULT.MOVE_REPLICA_ASSIGNMENT_SWEEP_INTERVAL_MS;
     this.ownsMoveReplicaAssignmentLifecycle =
-      typeof options.ownsMoveReplicaAssignmentLifecycle === TYPEOF.BOOLEAN ?
+      typeof options.ownsMoveReplicaAssignmentLifecycle === 'boolean' ?
         options.ownsMoveReplicaAssignmentLifecycle :
         Boolean(options.bootstrapStartupAdapter || options.bootstrapService);
     this.moveReplicaAssignmentReservations = new Map();

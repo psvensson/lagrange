@@ -9,7 +9,6 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM} from '../constants/index.js';
 import {
   PARTITION_SUBSYSTEM,
   SPLIT_MERGE_DEFAULT,
@@ -100,7 +99,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
     this.maxAutoExecuteSplitsPerEvaluation =
         Number.isInteger(options.maxAutoExecuteSplitsPerEvaluation) &&
-        options.maxAutoExecuteSplitsPerEvaluation >= NUM.ZERO ?
+        options.maxAutoExecuteSplitsPerEvaluation >= 0 ?
           options.maxAutoExecuteSplitsPerEvaluation :
           DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION;
     this.storageAdmissionService =
@@ -140,7 +139,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.allowManagedSplitDuringEvaluation = false;
     this.reactiveEvaluationDebounceMs =
         Number.isInteger(options.reactiveEvaluationDebounceMs) &&
-        options.reactiveEvaluationDebounceMs >= NUM.ZERO ?
+        options.reactiveEvaluationDebounceMs >= 0 ?
           options.reactiveEvaluationDebounceMs :
           DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS;
     this.requestedEvaluation = null;

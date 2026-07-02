@@ -5,7 +5,6 @@
  * Requirements: 9.1, 9.2, 9.3, 9.4
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {RAFT_PACKET_TYPES} from './constants.js';
 
 /**
@@ -20,7 +19,7 @@ import {RAFT_PACKET_TYPES} from './constants.js';
 function isRaftPacket(payload) {
   return Boolean(
     payload &&
-    typeof payload.type === TYPEOF.STRING &&
+    typeof payload.type === 'string' &&
     RAFT_PACKET_TYPES.has(payload.type),
   );
 }

@@ -5,19 +5,15 @@ import {
 } from './sql-query-engine-provisioning-admission-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_1000 = 1000;
-const LOCAL_STR_G8F90 = 'dispatch_operations';
-const LOCAL_STR_S70AG = 'wait_replica_metadata';
-const LOCAL_STR_1MMFO = 'wait_minimum_replica_metadata';
+const LOCAL_NUM_ONE_THOUSAND = 1000;
+const LOCAL_STR_DISPATCH_OPERATIONS = 'dispatch_operations';
+const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
+const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
-  NUM,
   OPERATION_METADATA_KEY,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -59,12 +55,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     }
 
     let targetReplicaCount =
-      explicitTargetNodeIds.length > LOCAL_NUM_ZERO ?
+      explicitTargetNodeIds.length > 0 ?
         Math.max(
-          LOCAL_NUM_ONE,
+          1,
           Math.min(requestedReplicaCount, explicitTargetNodeIds.length),
         ) :
-        Math.max(LOCAL_NUM_ONE, requestedReplicaCount);
+        Math.max(1, requestedReplicaCount);
     const hasExplicitMinimumRoutableReplicaCount =
       Number.isInteger(context?.minimumRoutableReplicaCount) &&
       context.minimumRoutableReplicaCount > 0 &&
@@ -96,7 +92,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         this.tablePartitionProvisioningTimeoutMs,
       );
     let provisionTargetDiagnostics =
-      explicitTargetNodeIds.length === LOCAL_NUM_ZERO ?
+      explicitTargetNodeIds.length === 0 ?
         this.resolveProvisionTargetNodeIdsWithDiagnostics(targetReplicaCount)
           .diagnostics :
         null;
@@ -108,7 +104,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     let provisioningContractState = OWNER_CONTRACT_STATE.READY;
     let provisioningNextAction = OWNER_CONTRACT_NEXT_ACTION.PROCEED;
     let provisioningReasonCodes = [];
-    let provisioningRetryAfterMs = NUM.ZERO;
+    let provisioningRetryAfterMs = 0;
     let admissionConvergence =
       context?.admissionConvergence &&
       typeof context.admissionConvergence === LOCAL_STR_OBJECT ?
@@ -129,7 +125,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     }
 
     if (
-      explicitTargetNodeIds.length === LOCAL_NUM_ZERO &&
+      explicitTargetNodeIds.length === 0 &&
       enforceEveryProvisioningOperation &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
@@ -174,11 +170,11 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
       if (
         convergenceResult.nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT &&
-        maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
+        maximumProvisionableReplicaCount > 0 &&
         maximumProvisionableReplicaCount < targetReplicaCount &&
         maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
       ) {
-        targetReplicaCount = Math.max(LOCAL_NUM_ONE, maximumProvisionableReplicaCount);
+        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
         if (!hasExplicitMinimumRoutableReplicaCount) {
           minimumRoutableReplicaCount = Math.min(
             minimumRoutableReplicaCount,
@@ -194,9 +190,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           [];
         provisioningRetryAfterMs =
           Number.isFinite(convergenceResult.retryAfterMs) &&
-          convergenceResult.retryAfterMs > NUM.ZERO ?
+          convergenceResult.retryAfterMs > 0 ?
             Math.floor(convergenceResult.retryAfterMs) :
-            NUM.ZERO;
+            0;
         this.logger.warn(
           QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
           {
@@ -249,12 +245,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       Array.isArray(admissionConvergence.rejectedTargetNodePlans)
     ) {
       for (const targetNodeId of admissionConvergence.candidateTargetNodeIds) {
-        precheckedTargetNodeIds.add(String(targetNodeId || LOCAL_STR_EMPTY));
+        precheckedTargetNodeIds.add(String(targetNodeId || ''));
       }
       admittedTargetNodeIds.push(
         ...admissionConvergence.admittedTargetNodeIds.filter(
           (targetNodeId) =>
-            typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > LOCAL_NUM_ZERO,
+            typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > 0,
         ),
       );
       rejectedTargetNodePlans.push(
@@ -336,13 +332,13 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         });
       if (
         !hasExplicitMinimumRoutableReplicaCount &&
-        maximumPrecheckedProvisionableReplicaCount > LOCAL_NUM_ZERO &&
+        maximumPrecheckedProvisionableReplicaCount > 0 &&
         maximumPrecheckedProvisionableReplicaCount >= fallbackMinimumReplicaCount
       ) {
         const previousTargetReplicaCount = targetReplicaCount;
         const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
         targetReplicaCount = Math.max(
-          LOCAL_NUM_ONE,
+          1,
           maximumPrecheckedProvisionableReplicaCount,
         );
         minimumRoutableReplicaCount = targetReplicaCount;
@@ -402,7 +398,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         const operationCreatedAt = Number(operation?.createdAt);
         if (
           !Number.isFinite(operationCreatedAt) ||
-          operationCreatedAt >= operationPlanningStartedAtMs - LOCAL_NUM_1000
+          operationCreatedAt >= operationPlanningStartedAtMs - LOCAL_NUM_ONE_THOUSAND
         ) {
           createdPlanningOperations.push(operation);
         }
@@ -440,12 +436,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     if (maximumProvisionableReplicaCount < minimumRoutableReplicaCount) {
       if (
         !hasExplicitMinimumRoutableReplicaCount &&
-        maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
+        maximumProvisionableReplicaCount > 0 &&
         maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
       ) {
         const previousTargetReplicaCount = targetReplicaCount;
         const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
-        targetReplicaCount = Math.max(LOCAL_NUM_ONE, maximumProvisionableReplicaCount);
+        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
         minimumRoutableReplicaCount = targetReplicaCount;
         enforceEveryProvisioningOperation =
           minimumRoutableReplicaCount >= targetReplicaCount;
@@ -465,7 +461,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
                   operation?.targetNodeId || operation?.nodeId || null,
               )
               .filter(
-                (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO,
+                (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0,
               ),
             rejectedTargetNodePlans,
           },
@@ -488,7 +484,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
                 operation?.targetNodeId || operation?.nodeId || null,
             )
             .filter(
-              (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO,
+              (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0,
             ),
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount,
@@ -513,7 +509,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       candidateTargetNodeCount: provisionTargetNodeIds.length,
       rejectedTargetNodeCount: rejectedTargetNodePlans.length,
       plannedOperationCount: plannedOperations.length,
-      phase: LOCAL_STR_G8F90,
+      phase: LOCAL_STR_DISPATCH_OPERATIONS,
       remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
         now: this.nowFn,
       }),
@@ -581,17 +577,17 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }
 
       const replicaId = operation?.replicaId || operation?.replica_id || null;
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
         metadataWaitReplicaIds.push(replicaId);
       }
     }
 
     const uniqueMetadataWaitReplicaIds = [...new Set(metadataWaitReplicaIds)];
-    if (uniqueMetadataWaitReplicaIds.length > LOCAL_NUM_ZERO) {
+    if (uniqueMetadataWaitReplicaIds.length > 0) {
       if (enforceEveryProvisioningOperation) {
         this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
           partitionId,
-          phase: LOCAL_STR_S70AG,
+          phase: LOCAL_STR_WAIT_REPLICA_METADATA,
           replicaIds: uniqueMetadataWaitReplicaIds,
           remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
             now: this.nowFn,
@@ -605,7 +601,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       } else {
         this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
           partitionId,
-          phase: LOCAL_STR_1MMFO,
+          phase: LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA,
           replicaIds: uniqueMetadataWaitReplicaIds,
           minimumRoutableReplicaCount,
           remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
@@ -652,27 +648,27 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
   buildProvisioningCompletionSummary(options = {}) {
     const requestedReplicaCount =
       Number.isInteger(options?.requestedReplicaCount) &&
-      options.requestedReplicaCount > NUM.ZERO ?
+      options.requestedReplicaCount > 0 ?
         options.requestedReplicaCount :
         null;
     const resolvedReplicaCount =
       Number.isInteger(options?.resolvedReplicaCount) &&
-      options.resolvedReplicaCount > NUM.ZERO ?
+      options.resolvedReplicaCount > 0 ?
         options.resolvedReplicaCount :
         requestedReplicaCount;
     const minimumRoutableReplicaCount =
       Number.isInteger(options?.minimumRoutableReplicaCount) &&
-      options.minimumRoutableReplicaCount > NUM.ZERO ?
+      options.minimumRoutableReplicaCount > 0 ?
         options.minimumRoutableReplicaCount :
         resolvedReplicaCount;
     const routableReplicaCount =
       Number.isInteger(options?.routableReplicaCount) &&
-      options.routableReplicaCount >= NUM.ZERO ?
+      options.routableReplicaCount >= 0 ?
         options.routableReplicaCount :
-        NUM.ZERO;
+        0;
     const fullReplicaCountConverged =
       !Number.isInteger(requestedReplicaCount) ||
-      requestedReplicaCount <= NUM.ZERO ||
+      requestedReplicaCount <= 0 ||
       routableReplicaCount >= requestedReplicaCount;
     const defaultContractOutcome = buildOwnerContractOutcome({
       contractState: fullReplicaCountConverged ?
@@ -707,9 +703,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         [],
       retryAfterMs:
         Number.isFinite(options?.retryAfterMs) &&
-        options.retryAfterMs > NUM.ZERO ?
+        options.retryAfterMs > 0 ?
           Math.floor(options.retryAfterMs) :
-          NUM.ZERO,
+          0,
     };
   }
 

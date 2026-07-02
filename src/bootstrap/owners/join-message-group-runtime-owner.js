@@ -11,12 +11,10 @@ import {
 } from '../node-joining-constants.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STRING,
   TABLES,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 
@@ -33,7 +31,7 @@ class JoinMessageGroupRuntimeOwner {
     const systemTableCache =
       NodeService.getInstance().getSystemTableCache();
     if (!systemTableCache ||
-        typeof systemTableCache.get !== TYPEOF.FUNCTION) {
+        typeof systemTableCache.get !== 'function') {
       return;
     }
 
@@ -65,8 +63,8 @@ class JoinMessageGroupRuntimeOwner {
       assignment.strategy === AssignmentStrategy.MOVE_REPLICA &&
       assignment.replicaToMove === replicaId &&
       assignment.sourceNodeId === existingNodeId &&
-      typeof assignment.assignmentId === TYPEOF.STRING &&
-      assignment.assignmentId.length > NUM.ZERO;
+      typeof assignment.assignmentId === 'string' &&
+      assignment.assignmentId.length > 0;
     if (authorizedMoveReplicaStartup) {
       return;
     }
@@ -135,11 +133,11 @@ class JoinMessageGroupRuntimeOwner {
         groupId,
         replicaId,
         replicaIds: allReplicaIds,
-        replicaIndex: NUM.ZERO,
+        replicaIndex: 0,
         peerAddresses: peerAddresses || [],
         deferElection: true,
         isJoiningExistingGroup: true,
-        createDelayMs: NUM.ZERO,
+        createDelayMs: 0,
         logEnvelope: LOG_ENVELOPE_DEFAULT,
         logRegistration: LOG_REGISTRATION_DEFAULT,
       },
@@ -171,7 +169,7 @@ class JoinMessageGroupRuntimeOwner {
       groupId,
       replicaId,
       hasMessageRouter: !!messageRouter,
-      peerAddressCount: peerAddresses?.length || NUM.ZERO,
+      peerAddressCount: peerAddresses?.length || 0,
     });
   }
 }

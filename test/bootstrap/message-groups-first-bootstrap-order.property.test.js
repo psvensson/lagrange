@@ -19,7 +19,6 @@
 import {describe, it, mock} from 'node:test';
 import assert from 'node:assert';
 import fc from 'fast-check';
-import {NUM} from '../../src/constants/index.js';
 import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
 
 describe('Property 21: Message Groups First Bootstrap Order', () => {
@@ -53,7 +52,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
   function createMockWorkerManager(options = {}) {
     const {
       leaderReplicaId = null,
-      leaderElectionDelayMs = NUM.ZERO,
+      leaderElectionDelayMs = 0,
     } = options;
 
     const operationLog = [];
@@ -124,14 +123,14 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
         });
 
         // Simulate election delay if configured
-        if (leaderElectionDelayMs > NUM.ZERO) {
+        if (leaderElectionDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, leaderElectionDelayMs));
         }
 
         const isLeader = targetReplicaId === electedLeaderId;
         return {
           isLeader,
-          term: NUM.ONE,
+          term: 1,
           leaderId: electedLeaderId,
         };
       }),
@@ -151,7 +150,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           replicaId,
           messageType: message.type,
         });
-        return {success: true, entriesApplied: message.entries?.length || NUM.ZERO};
+        return {success: true, entriesApplied: message.entries?.length || 0};
       }),
       setElectedLeader: (replicaId) => {
         electedLeaderId = replicaId;
@@ -188,7 +187,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
       workerManager,
       messageGroupReplicaIds,
       partitionConfigs,
-      replicaStaggerDelayMs = NUM.ZERO,
+      replicaStaggerDelayMs = 0,
     } = options;
 
     const result = {
@@ -210,11 +209,11 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
     // Create message group replicas
     const messageGroupHandles = new Map();
-    for (let i = NUM.ZERO; i < messageGroupReplicaIds.length; i++) {
+    for (let i = 0; i < messageGroupReplicaIds.length; i++) {
       const replicaId = messageGroupReplicaIds[i];
 
       // Stagger replica creation
-      if (i > NUM.ZERO && replicaStaggerDelayMs > NUM.ZERO) {
+      if (i > 0 && replicaStaggerDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
       }
 
@@ -255,7 +254,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
     }
 
     // Create SystemCacheProxy after message groups are ready (Requirement 12.3)
-    const leaderReplicaId = messageGroupReplicaIds[NUM.ZERO];
+    const leaderReplicaId = messageGroupReplicaIds[0];
     const systemCacheProxy = createMockSystemCacheProxy(workerManager, leaderReplicaId);
     await systemCacheProxy.initialize();
 
@@ -287,11 +286,11 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
     for (const partitionConfig of partitionConfigs) {
       const {partitionId, tableName, replicaIds} = partitionConfig;
 
-      for (let i = NUM.ZERO; i < replicaIds.length; i++) {
+      for (let i = 0; i < replicaIds.length; i++) {
         const replicaId = replicaIds[i];
 
         // Stagger replica creation
-        if (i > NUM.ZERO && replicaStaggerDelayMs > NUM.ZERO) {
+        if (i > 0 && replicaStaggerDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, replicaStaggerDelayMs));
         }
 
@@ -345,13 +344,13 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
              op.operation === OPERATION_TYPE.CREATE_PARTITION,
     );
 
-    if (createOps.length === NUM.ZERO) {
+    if (createOps.length === 0) {
       return true;
     }
 
     // Find the index of the last message group creation
-    let lastMessageGroupIndex = -NUM.ONE;
-    for (let i = NUM.ZERO; i < createOps.length; i++) {
+    let lastMessageGroupIndex = -1;
+    for (let i = 0; i < createOps.length; i++) {
       if (createOps[i].operation === OPERATION_TYPE.CREATE_MESSAGE_GROUP) {
         lastMessageGroupIndex = i;
       }
@@ -359,7 +358,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
     // Find the index of the first partition creation
     let firstPartitionIndex = createOps.length;
-    for (let i = NUM.ZERO; i < createOps.length; i++) {
+    for (let i = 0; i < createOps.length; i++) {
       if (createOps[i].operation === OPERATION_TYPE.CREATE_PARTITION) {
         firstPartitionIndex = i;
         break;
@@ -377,8 +376,8 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
    */
   function verifyLeaderElectedBeforePartitions(operationLog) {
     // Find the index of leader election
-    let leaderElectedIndex = -NUM.ONE;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    let leaderElectedIndex = -1;
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.LEADER_ELECTED) {
         leaderElectedIndex = i;
         break;
@@ -387,7 +386,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
     // Find the index of the first partition creation
     let firstPartitionIndex = operationLog.length;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.CREATE_PARTITION) {
         firstPartitionIndex = i;
         break;
@@ -395,7 +394,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
     }
 
     // Leader should be elected before any partition is created
-    return leaderElectedIndex >= NUM.ZERO && leaderElectedIndex < firstPartitionIndex;
+    return leaderElectedIndex >= 0 && leaderElectedIndex < firstPartitionIndex;
   }
 
   /**
@@ -405,8 +404,8 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
    */
   function verifySystemCacheProxyBeforePartitions(operationLog) {
     // Find the index of SystemCacheProxy creation
-    let proxyCacheIndex = -NUM.ONE;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    let proxyCacheIndex = -1;
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.SYSTEM_CACHE_PROXY_CREATED) {
         proxyCacheIndex = i;
         break;
@@ -415,7 +414,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
     // Find the index of the first partition creation
     let firstPartitionIndex = operationLog.length;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.CREATE_PARTITION) {
         firstPartitionIndex = i;
         break;
@@ -423,7 +422,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
     }
 
     // SystemCacheProxy should be created before any partition
-    return proxyCacheIndex >= NUM.ZERO && proxyCacheIndex < firstPartitionIndex;
+    return proxyCacheIndex >= 0 && proxyCacheIndex < firstPartitionIndex;
   }
 
   /**
@@ -433,8 +432,8 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
    */
   function verifySeedCacheBeforePartitions(operationLog) {
     // Find the index of SEED_CACHE sent
-    let seedCacheIndex = -NUM.ONE;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    let seedCacheIndex = -1;
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.SEED_CACHE_SENT) {
         seedCacheIndex = i;
         break;
@@ -443,7 +442,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
     // Find the index of the first partition creation
     let firstPartitionIndex = operationLog.length;
-    for (let i = NUM.ZERO; i < operationLog.length; i++) {
+    for (let i = 0; i < operationLog.length; i++) {
       if (operationLog[i].operation === OPERATION_TYPE.CREATE_PARTITION) {
         firstPartitionIndex = i;
         break;
@@ -451,7 +450,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
     }
 
     // SEED_CACHE should be sent before any partition is created
-    return seedCacheIndex >= NUM.ZERO && seedCacheIndex < firstPartitionIndex;
+    return seedCacheIndex >= 0 && seedCacheIndex < firstPartitionIndex;
   }
 
 
@@ -526,7 +525,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
         ),
         async (nodeId, messageGroupReplicaIds, partitionConfigs) => {
           const workerManager = createMockWorkerManager({
-            leaderReplicaId: messageGroupReplicaIds[NUM.ZERO],
+            leaderReplicaId: messageGroupReplicaIds[0],
           });
 
           const result = await simulateSeedNodeBootstrap({
@@ -670,7 +669,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           // Verify deliverMessage was called with SEED_CACHE
           const deliverCalls = workerManager.deliverMessage.mock.calls;
           const seedCacheCall = deliverCalls.find(
-            (call) => call.arguments[NUM.ONE]?.type === 'SEED_CACHE',
+            (call) => call.arguments[1]?.type === 'SEED_CACHE',
           );
 
           assert.ok(
@@ -679,7 +678,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           );
 
           // Verify SEED_CACHE has bootstrapPhase flag
-          const seedCacheMessage = seedCacheCall.arguments[NUM.ONE];
+          const seedCacheMessage = seedCacheCall.arguments[1];
           assert.strictEqual(
             seedCacheMessage.bootstrapPhase,
             true,
@@ -766,8 +765,8 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           );
 
           // Find the index of the last message group creation
-          let lastMessageGroupCreateIndex = -NUM.ONE;
-          for (let i = NUM.ZERO; i < workerManager.operationLog.length; i++) {
+          let lastMessageGroupCreateIndex = -1;
+          for (let i = 0; i < workerManager.operationLog.length; i++) {
             if (workerManager.operationLog[i].operation === OPERATION_TYPE.CREATE_MESSAGE_GROUP) {
               lastMessageGroupCreateIndex = i;
             }
@@ -775,7 +774,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
 
           // Find the index of the first getLeadershipStatus call
           let firstLeadershipCheckIndex = workerManager.operationLog.length;
-          for (let i = NUM.ZERO; i < workerManager.operationLog.length; i++) {
+          for (let i = 0; i < workerManager.operationLog.length; i++) {
             if (workerManager.operationLog[i].operation === OPERATION_TYPE.GET_LEADERSHIP_STATUS) {
               firstLeadershipCheckIndex = i;
               break;
@@ -878,7 +877,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
             'SystemCacheProxy should be created before SEED_CACHE',
           );
 
-          if (firstPartitionIndex >= NUM.ZERO) {
+          if (firstPartitionIndex >= 0) {
             assert.ok(
               seedCacheIndex < firstPartitionIndex,
               'SEED_CACHE should be sent before partition creation',
@@ -942,12 +941,12 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           );
 
           // Verify message groups were created before partitions
-          if (partitionCreations.length > NUM.ZERO) {
+          if (partitionCreations.length > 0) {
             const lastMgIndex = workerManager.operationLog.lastIndexOf(
-              messageGroupCreations[messageGroupCreations.length - NUM.ONE],
+              messageGroupCreations[messageGroupCreations.length - 1],
             );
             const firstPartitionIndex = workerManager.operationLog.indexOf(
-              partitionCreations[NUM.ZERO],
+              partitionCreations[0],
             );
 
             assert.ok(
@@ -967,7 +966,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
         fc.uuid(),
         fc.array(fc.uuid(), {minLength: 1, maxLength: 3}),
         async (nodeId, messageGroupReplicaIds) => {
-          const leaderReplicaId = messageGroupReplicaIds[NUM.ZERO];
+          const leaderReplicaId = messageGroupReplicaIds[0];
           const workerManager = createMockWorkerManager({
             leaderReplicaId,
           });
@@ -987,7 +986,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           // Verify getLeadershipStatus was called
           const leadershipCalls = workerManager.getLeadershipStatus.mock.calls;
           assert.ok(
-            leadershipCalls.length > NUM.ZERO,
+            leadershipCalls.length > 0,
             'getLeadershipStatus should be called to verify leader election',
           );
 

@@ -29,30 +29,28 @@ const LOCAL_STR_RED = 'red';
 const LOCAL_STR_REPLICAS = 'replicas';
 const LOCAL_STR_SHORT_NAME = 'short_name';
 const LOCAL_STR_NAME = 'Name';
-const LOCAL_NUM_15 = 15;
+const LOCAL_NUM_FIFTEEN = 15;
 const LOCAL_STR_UNIFIED_ADDRESS = 'unified_address';
 const LOCAL_STR_UNIFIED_ADDRESS_2 = 'Unified Address';
-const LOCAL_NUM_35 = 35;
+const LOCAL_NUM_THIRTY_FIVE = 35;
 const LOCAL_STR_NODE_ADDRESS = 'node_address';
 const LOCAL_STR_NODE_ADDRESS_2 = 'Node Address';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATE = 'State';
-const LOCAL_NUM_12 = 12;
+const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_EIGHT = 8;
-const LOCAL_NUM_17 = 17;
-const LOCAL_STR_2ZI04 = '...';
+const LOCAL_NUM_SEVENTEEN = 17;
+const LOCAL_STR_DOT_DOT_DOT = '...';
 const LOCAL_STR_LEADER = 'leader';
 const LOCAL_STR_FOLLOWER = 'follower';
 const LOCAL_STR_0S = '0s';
-const LOCAL_NUM_60 = 60;
+const LOCAL_NUM_SIXTY = 60;
 const LOCAL_STR_WHITE = 'white';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_STARTING = 'starting';
 const LOCAL_STR_STOPPING = 'stopping';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
@@ -66,8 +64,7 @@ const LOCAL_STR_TRIGGER_REASON = 'Trigger Reason';
 const LOCAL_STR_FAILURE_REASON = 'Failure Reason';
 const LOCAL_STR_REPLICA_STATE = 'Replica State';
 const LOCAL_STR_SYNC_PROGRESS = 'Sync Progress';
-const LOCAL_NUM_100 = 100;
-const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_SYNC_SOURCE = 'Sync Source';
 const LOCAL_STR_BYTES_SYNCED = 'Bytes Synced';
 const LOCAL_STR_TOTAL_BYTES = 'Total Bytes';
@@ -84,7 +81,7 @@ const LOCAL_STR_PARTITION_ID = 'Partition ID';
 const LOCAL_STR_TABLE_ID = 'Table ID';
 const LOCAL_STR_STORAGE = 'Storage';
 const LOCAL_STR_ROW_COUNT = 'Row Count';
-const LOCAL_STR_1MFBR = 'Message Group Details';
+const LOCAL_STR_MESSAGE_GROUP_DETAILS = 'Message Group Details';
 const LOCAL_STR_GROUP_ID = 'Group ID';
 const LOCAL_STR_MESSAGE_COUNT = 'Message Count';
 const LOCAL_STR_EPOCH_INFORMATION = 'Epoch Information';
@@ -98,7 +95,7 @@ const LOCAL_STR_VIEW_NODE = 'View Node';
 const LOCAL_STR_N = 'n';
 const LOCAL_STR_T = 'T';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_19 = 19;
+const LOCAL_NUM_NINETEEN = 19;
 const LOCAL_STR_0_B = '0 B';
 
 /**
@@ -181,10 +178,11 @@ class ReplicasView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_SHORT_NAME, label: LOCAL_STR_NAME, width: LOCAL_NUM_15},
-      {key: LOCAL_STR_UNIFIED_ADDRESS, label: LOCAL_STR_UNIFIED_ADDRESS_2, width: LOCAL_NUM_35},
-      {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_NODE_ADDRESS_2, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATE, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_SHORT_NAME, label: LOCAL_STR_NAME, width: LOCAL_NUM_FIFTEEN},
+      {key: LOCAL_STR_UNIFIED_ADDRESS, label: LOCAL_STR_UNIFIED_ADDRESS_2,
+        width: LOCAL_NUM_THIRTY_FIVE},
+      {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_NODE_ADDRESS_2, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATE, width: LOCAL_NUM_TWELVE},
     ];
   }
 
@@ -232,16 +230,16 @@ class ReplicasView extends BaseView {
     if (uuidPattern.test(serviceId)) {
       const prefix = serviceType === 'partition' ? 'p' :
         serviceType === 'message_group' ? 'mg' : 's';
-      return `${prefix}-${serviceId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT)}`;
+      return `${prefix}-${serviceId.substring(0, LOCAL_NUM_EIGHT)}`;
     }
 
     // If it's already short, use as-is
-    if (serviceId.length <= LOCAL_NUM_20) {
+    if (serviceId.length <= LOCAL_NUM_TWENTY) {
       return serviceId;
     }
 
     // Truncate long names
-    return serviceId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_17) + LOCAL_STR_2ZI04;
+    return serviceId.substring(0, LOCAL_NUM_SEVENTEEN) + LOCAL_STR_DOT_DOT_DOT;
   }
 
   /**
@@ -319,7 +317,7 @@ class ReplicasView extends BaseView {
     const now = Date.now();
     const elapsed = now - stateEnteredAt;
 
-    if (elapsed < LOCAL_NUM_ZERO) {
+    if (elapsed < 0) {
       return LOCAL_STR_0S;
     }
 
@@ -327,10 +325,10 @@ class ReplicasView extends BaseView {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
 
-    if (hours > LOCAL_NUM_ZERO) {
-      return `${hours}h ${minutes % LOCAL_NUM_60}m`;
-    } else if (minutes > LOCAL_NUM_ZERO) {
-      return `${minutes}m ${seconds % LOCAL_NUM_60}s`;
+    if (hours > 0) {
+      return `${hours}h ${minutes % LOCAL_NUM_SIXTY}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % LOCAL_NUM_SIXTY}s`;
     } else {
       return `${seconds}s`;
     }
@@ -379,7 +377,7 @@ class ReplicasView extends BaseView {
    * @return {string} Unique key (service_id)
    */
   getItemKey(service) {
-    return service.row_key || service.service_id || LOCAL_STR_EMPTY;
+    return service.row_key || service.service_id || '';
   }
 
   /**
@@ -596,7 +594,7 @@ class ReplicasView extends BaseView {
       if (service.sync_progress !== undefined) {
         syncFields.push({
           label: LOCAL_STR_SYNC_PROGRESS,
-          value: `${(service.sync_progress * LOCAL_NUM_100).toFixed(LOCAL_NUM_ONE)}%`,
+          value: `${(service.sync_progress * LOCAL_NUM_ONE_HUNDRED).toFixed(1)}%`,
         });
       }
 
@@ -635,7 +633,7 @@ class ReplicasView extends BaseView {
         });
       }
 
-      if (syncFields.length > LOCAL_NUM_ZERO) {
+      if (syncFields.length > 0) {
         sections.push({
           title: LOCAL_STR_SYNC_PROGRESS,
           fields: syncFields,
@@ -682,7 +680,7 @@ class ReplicasView extends BaseView {
     // Add storage info for message group services
     if (service.service_type === SERVICE_TYPES.MESSAGE_GROUP) {
       sections.push({
-        title: LOCAL_STR_1MFBR,
+        title: LOCAL_STR_MESSAGE_GROUP_DETAILS,
         fields: [
           {label: LOCAL_STR_GROUP_ID, value: service.group_id || LOCAL_STR_N_A},
           {label: LOCAL_STR_STORAGE, value: this.formatBytes(service.storage_bytes)},
@@ -755,7 +753,7 @@ class ReplicasView extends BaseView {
         return LOCAL_STR_N_A;
       }
       return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
-        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+        .substring(0, LOCAL_NUM_NINETEEN);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }
@@ -770,7 +768,7 @@ class ReplicasView extends BaseView {
     if (bytes === null || bytes === undefined) {
       return LOCAL_STR_N_A;
     }
-    if (bytes === LOCAL_NUM_ZERO) {
+    if (bytes === 0) {
       return LOCAL_STR_0_B;
     }
 
@@ -778,7 +776,7 @@ class ReplicasView extends BaseView {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(LOCAL_NUM_ONE)} ${units[i]}`;
+    return `${value.toFixed(1)} ${units[i]}`;
   }
 }
 

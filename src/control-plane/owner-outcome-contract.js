@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 
 const OWNER_OUTCOME_STATE = Object.freeze({
   READY: 'ready',
@@ -27,8 +23,8 @@ const OWNER_OUTCOME_DEFAULT = Object.freeze({
   BOUNDARY: 'unknown_boundary',
   OUTCOME: 'invalid_owner_outcome_envelope',
   NEXT_ACTION: 'stop',
-  REVISION: NUM.ZERO,
-  RETRY_AFTER_MS: NUM.ZERO,
+  REVISION: 0,
+  RETRY_AFTER_MS: 0,
 });
 
 const OWNER_OUTCOME_FIELD = Object.freeze({
@@ -65,11 +61,11 @@ const OWNER_OUTCOME_REQUIRED_FIELDS = Object.freeze([
 ]);
 
 function isOwnerOutcomeRecord(value) {
-  return typeof value === TYPEOF.OBJECT && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function normalizeOwnerOutcomeString(value, fallback) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallback;
 }
@@ -80,7 +76,7 @@ function normalizeOwnerOutcomeReasonCodes(reasonCodes = []) {
   }
   const normalized = [];
   for (const reasonCode of reasonCodes) {
-    if (typeof reasonCode === TYPEOF.STRING && reasonCode.length > NUM.ZERO) {
+    if (typeof reasonCode === 'string' && reasonCode.length > 0) {
       normalized.push(reasonCode);
     }
   }
@@ -88,18 +84,18 @@ function normalizeOwnerOutcomeReasonCodes(reasonCodes = []) {
 }
 
 function normalizeOwnerOutcomeRevision(value) {
-  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+  if (typeof value === 'string' && value.length > 0) {
     return value;
   }
   if (Number.isFinite(value)) {
-    return Math.max(NUM.ZERO, Math.floor(value));
+    return Math.max(0, Math.floor(value));
   }
   return OWNER_OUTCOME_DEFAULT.REVISION;
 }
 
 function normalizeOwnerOutcomeRetryAfterMs(value) {
   return Number.isFinite(value) ?
-    Math.max(NUM.ZERO, Math.floor(value)) :
+    Math.max(0, Math.floor(value)) :
     OWNER_OUTCOME_DEFAULT.RETRY_AFTER_MS;
 }
 
@@ -122,38 +118,38 @@ function collectOwnerOutcomeMissingFields(value = {}) {
 
 function collectOwnerOutcomeInvalidFields(value = {}) {
   const invalidFields = [];
-  if (!(typeof value?.owner === TYPEOF.STRING && value.owner.length > NUM.ZERO)) {
+  if (!(typeof value?.owner === 'string' && value.owner.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.OWNER);
   }
-  if (!(typeof value?.boundary === TYPEOF.STRING && value.boundary.length > NUM.ZERO)) {
+  if (!(typeof value?.boundary === 'string' && value.boundary.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.BOUNDARY);
   }
-  if (!(typeof value?.state === TYPEOF.STRING && value.state.length > NUM.ZERO)) {
+  if (!(typeof value?.state === 'string' && value.state.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.STATE);
   }
-  if (!(typeof value?.outcome === TYPEOF.STRING &&
-      value.outcome.length > NUM.ZERO)) {
+  if (!(typeof value?.outcome === 'string' &&
+      value.outcome.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.OUTCOME);
   }
   if (!Array.isArray(value?.reasonCodes)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.REASON_CODES);
   }
-  if (!(typeof value?.nextAction === TYPEOF.STRING &&
-      value.nextAction.length > NUM.ZERO)) {
+  if (!(typeof value?.nextAction === 'string' &&
+      value.nextAction.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.NEXT_ACTION);
   }
-  if (!(typeof value?.freshness === TYPEOF.STRING &&
-      value.freshness.length > NUM.ZERO)) {
+  if (!(typeof value?.freshness === 'string' &&
+      value.freshness.length > 0)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.FRESHNESS);
   }
-  if (!(typeof value?.revision === TYPEOF.STRING ||
+  if (!(typeof value?.revision === 'string' ||
       Number.isFinite(value?.revision))) {
     invalidFields.push(OWNER_OUTCOME_FIELD.REVISION);
   }
   if (!Number.isFinite(value?.retryAfterMs)) {
     invalidFields.push(OWNER_OUTCOME_FIELD.RETRY_AFTER_MS);
   }
-  if (typeof value?.terminal !== TYPEOF.BOOLEAN) {
+  if (typeof value?.terminal !== 'boolean') {
     invalidFields.push(OWNER_OUTCOME_FIELD.TERMINAL);
   }
   if (!isOwnerOutcomeRecord(value?.evidence)) {
@@ -198,7 +194,7 @@ function buildOwnerOutcomeEnvelope(value = {}) {
   const envelope = isOwnerOutcomeRecord(value) ? value : {};
   const missingFields = collectOwnerOutcomeMissingFields(envelope);
   const invalidFields = collectOwnerOutcomeInvalidFields(envelope);
-  if (missingFields.length > NUM.ZERO || invalidFields.length > NUM.ZERO) {
+  if (missingFields.length > 0 || invalidFields.length > 0) {
     return buildOwnerOutcomeContractFailure(
       envelope,
       missingFields,

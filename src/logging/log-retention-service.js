@@ -20,8 +20,7 @@ import {
   LOG_RETENTION_LOG_MSG,
 } from './logging-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1L6UG = 'LogRetentionService';
+const LOCAL_STR_LOGRETENTIONSERVICE = 'LogRetentionService';
 const LOCAL_STR_WRITE = 'write';
 
 const INITIAL_CLEANUP_DELAY_MS = 5000;
@@ -83,8 +82,8 @@ class LogRetentionService extends EventEmitter {
     this.cleanupTimer = null;
     this.isRunning = false;
     this.lastCleanupTime = null;
-    this.totalDeleted = LOCAL_NUM_ZERO;
-    this.cleanupCount = LOCAL_NUM_ZERO;
+    this.totalDeleted = 0;
+    this.cleanupCount = 0;
 
     // Logging (use console to avoid recursion)
     this.logger = console;
@@ -187,13 +186,13 @@ class LogRetentionService extends EventEmitter {
       return {
         success: false,
         error: LOG_RETENTION_ERROR_MSG.CLEANUP_IN_PROGRESS,
-        deleted: LOCAL_NUM_ZERO,
+        deleted: 0,
       };
     }
 
     this.isRunning = true;
     const startTime = Date.now();
-    let totalDeleted = LOCAL_NUM_ZERO;
+    let totalDeleted = 0;
 
     try {
       // Get retention period from table policy if available
@@ -205,8 +204,8 @@ class LogRetentionService extends EventEmitter {
       );
 
       // Delete in batches to avoid overwhelming the system
-      let deletedInBatch = LOCAL_NUM_ZERO;
-      let iterations = LOCAL_NUM_ZERO;
+      let deletedInBatch = 0;
+      let iterations = 0;
       const maxIterations = Math.ceil(this.maxDeletesPerRun / this.batchSize);
 
       do {
@@ -255,7 +254,7 @@ class LogRetentionService extends EventEmitter {
     const gateway = this.getControlPlaneSystemTableGateway();
     if (!gateway) {
       throw createSystemMetadataGatewayRequiredError({
-        serviceName: LOCAL_STR_1L6UG,
+        serviceName: LOCAL_STR_LOGRETENTIONSERVICE,
         tableName: SYSTEM_TABLE_NAME.LOGS,
         operation: LOCAL_STR_WRITE,
         message: LOG_RETENTION_ERROR_MSG.ENGINE_NOT_AVAILABLE,
@@ -280,8 +279,8 @@ class LogRetentionService extends EventEmitter {
       (Array.isArray(selectResult.rows) ? selectResult.rows : []);
 
     if (!selectResult.success ||
-        selectedRows.length === LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
+        selectedRows.length === 0) {
+      return 0;
     }
 
     // Delete the selected logs
@@ -335,7 +334,7 @@ class LogRetentionService extends EventEmitter {
    * @param {number} periodMs - Retention period in milliseconds.
    */
   setRetentionPeriod(periodMs) {
-    if (periodMs < LOCAL_NUM_ZERO) {
+    if (periodMs < 0) {
       throw new Error(LOG_RETENTION_ERROR_MSG.RETENTION_PERIOD_NEGATIVE);
     }
     this.retentionPeriodMs = periodMs;

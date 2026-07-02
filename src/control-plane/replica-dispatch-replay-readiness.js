@@ -10,13 +10,11 @@ import {
 
 const {
   DISPATCH_LOG_MSG,
-  NUM,
   OperationType,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   WORKFLOW_STEP,
   isCoordinatorOwnedOperationType,
   isSystemTablePartition,
@@ -47,7 +45,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     this.retryInFlightNodes.add(nodeId);
     try {
       const dispatchRows = await this.getDispatchRetryRowsForNode(nodeId);
-      if (dispatchRows.length === NUM.ZERO) {
+      if (dispatchRows.length === 0) {
         return;
       }
 
@@ -72,7 +70,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
             readyNodeId: nodeId,
             readyNodeRow:
               options?.readyNodeRow &&
-              typeof options.readyNodeRow === TYPEOF.OBJECT ?
+              typeof options.readyNodeRow === 'object' ?
                 {...options.readyNodeRow} :
                 null,
           },
@@ -94,7 +92,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    */
   resolveDispatchReplayNodeId(operation) {
     const replayNodeIds = this.resolveDispatchReplayNodeIds(operation);
-    return replayNodeIds[NUM.ZERO] || null;
+    return replayNodeIds[0] || null;
   }
 
   /**
@@ -115,7 +113,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
       ...evidence.targetNodeIds,
     ];
     return [...new Set(nodeIds)].filter((nodeId) => {
-      return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
+      return typeof nodeId === 'string' && nodeId.length > 0;
     });
   }
 
@@ -125,7 +123,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   buildDispatchReplayReadyNodeEvidence(operation) {
-    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+    if (!operation || typeof operation !== 'object') {
       return Object.freeze({
         phase: DISPATCH_REPLAY_READY_NODE_PHASE.NOT_REPLAYABLE,
         sourceNodeIds: Object.freeze([]),
@@ -196,7 +194,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   shouldExecuteOperationFromDispatchReplay(operation) {
-    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+    if (!operation || typeof operation !== 'object') {
       return false;
     }
     return (
@@ -215,7 +213,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   matchesDispatchReplayReadyNode(operation, nodeId) {
-    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+    if (typeof nodeId !== 'string' || nodeId.length === 0) {
       return false;
     }
     return this.resolveDispatchReplayNodeIds(operation).includes(nodeId);
@@ -232,7 +230,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   isDispatchReplayableOperationRow(operation) {
-    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+    if (!operation || typeof operation !== 'object') {
       return false;
     }
     if (
@@ -265,7 +263,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     if (
       membershipPublicationService &&
       typeof membershipPublicationService.getDispatchRetryRowsForNode ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       try {
         const dispatchRows =
@@ -288,7 +286,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     const cacheRows =
       this.replicaOperationsOwner &&
       typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         (await this.replicaOperationsOwner.listReplicaOperationsFromCache())
           .rows || [] :
         this.getSystemTableRowsFromCache(
@@ -353,9 +351,9 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     const readinessService = this.controlPlaneReadinessService;
     const canResolveCoverage =
       Array.isArray(dispatchRows) &&
-      dispatchRows.length > NUM.ZERO &&
+      dispatchRows.length > 0 &&
       readinessService &&
-      typeof readinessService === TYPEOF.OBJECT;
+      typeof readinessService === 'object';
     const publicationConvergence = canResolveCoverage ?
       await this.resolvePriorityRecoveryPublicationConvergence(
         readinessService,
@@ -379,12 +377,12 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
       dispatchRows,
     );
     const partitionCoverageComplete =
-      blockedPartitionIds.length === NUM.ZERO ||
+      blockedPartitionIds.length === 0 ||
       blockedPartitionIds.every((partitionId) =>
         dispatchPartitionIds.has(partitionId),
       );
     const operationCoverageComplete =
-      blockedOperationIds.length === NUM.ZERO ||
+      blockedOperationIds.length === 0 ||
       blockedOperationIds.every((operationId) =>
         dispatchOperationIds.has(operationId),
       );
@@ -421,14 +419,14 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     options = {},
   ) {
     const readinessService = this.controlPlaneReadinessService;
-    if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+    if (!readinessService || typeof readinessService !== 'object') {
       return false;
     }
 
     try {
       const publicationConvergence =
         options?.publicationConvergence &&
-        typeof options.publicationConvergence === TYPEOF.OBJECT ?
+        typeof options.publicationConvergence === 'object' ?
           options.publicationConvergence :
           await this.resolvePriorityRecoveryPublicationConvergence(
             readinessService,
@@ -461,7 +459,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   ) {
     if (
       typeof readinessService.getMembershipPublicationDiagnosticsSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       const syncDiagnostics =
         readinessService.getMembershipPublicationDiagnosticsSync(
@@ -474,7 +472,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     }
     if (
       typeof readinessService.getMembershipPublicationDiagnostics ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getMembershipPublicationDiagnostics(
         nodeId,
@@ -495,7 +493,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     const repository = this.rebalanceCoordinator?.repository || null;
     if (
       !repository ||
-      typeof repository.queryIncompleteOperations !== TYPEOF.FUNCTION
+      typeof repository.queryIncompleteOperations !== 'function'
     ) {
       return [];
     }
@@ -505,7 +503,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-      if (!Array.isArray(operations) || operations.length === NUM.ZERO) {
+      if (!Array.isArray(operations) || operations.length === 0) {
         return [];
       }
 
@@ -538,20 +536,20 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   isReplicaOperationLocallyOwned(operation) {
-    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+    if (!operation || typeof operation !== 'object') {
       return false;
     }
     if (
       this.rebalanceCoordinator &&
       typeof this.rebalanceCoordinator.isOperationLocallyOwned ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.rebalanceCoordinator.isOperationLocallyOwned(operation);
     }
     if (
       this.rebalanceCoordinator &&
       typeof this.rebalanceCoordinator.resolveOperationOwnerNodeId ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return (
         this.rebalanceCoordinator.resolveOperationOwnerNodeId(operation) ===

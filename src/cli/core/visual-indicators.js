@@ -11,15 +11,15 @@ const LOCAL_STR_GRAY = 'gray';
 const LOCAL_STR_CYAN = 'cyan';
 const LOCAL_STR_BLUE = 'blue';
 const LOCAL_STR_OK = '[OK]';
-const LOCAL_STR_WT54N = '[!]';
+const LOCAL_STR_LBRACKET_BANG_RBRACKET = '[!]';
 const LOCAL_STR_X = '[X]';
-const LOCAL_STR_XUXC1 = '[?]';
-const LOCAL_STR_UXP38 = '[...]';
-const LOCAL_STR_XW3L8 = '[+]';
-const LOCAL_STR_1EK0V = '[-]';
-const LOCAL_STR_WQVRR = '[>]';
-const LOCAL_STR_1FMB1 = '[<]';
-const LOCAL_STR_WX3NR = '[~]';
+const LOCAL_STR_LBRACKET_QMARK_RBRACKET = '[?]';
+const LOCAL_STR_LBRACKET_DOT_DOT = '[...]';
+const LOCAL_STR_LBRACKET_PLUS_RBRACKET = '[+]';
+const LOCAL_STR_LBRACKET_DASH_RBRACKET = '[-]';
+const LOCAL_STR_LBRACKET_GT_RBRACKET = '[>]';
+const LOCAL_STR_LBRACKET_LT_RBRACKET = '[<]';
+const LOCAL_STR_LBRACKET_TILDE_RBRACKET = '[~]';
 const LOCAL_STR_L = '[L]';
 const LOCAL_STR_F = '[F]';
 const LOCAL_STR_L58M3 = '◉';
@@ -44,7 +44,7 @@ const LOCAL_STR_T = '[T]';
 const LOCAL_STR_R = '[R]';
 const LOCAL_STR_C = '[C]';
 const LOCAL_STR_Q = '[Q]';
-const LOCAL_STR_1EJP7 = '[.]';
+const LOCAL_STR_LBRACKET_DOT_RBRACKET = '[.]';
 const LOCAL_STR_2K1G8 = '┌';
 const LOCAL_STR_5VWOJ = '┐';
 const LOCAL_STR_4RY9S = '└';
@@ -82,15 +82,12 @@ const LOCAL_STR_LXLK6 = '⠇';
 const LOCAL_STR_2TUF3 = '⠏';
 const LOCAL_STR_BACKSLASH = '\\';
 const LOCAL_STR_SLASH = '/';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_WHITE = 'white';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_LP7TH = '○';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_UNKNOWN_2 = 'Unknown';
 const LOCAL_STR_LOADING_2 = 'Loading';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_INVERSE = 'inverse';
 const LOCAL_STR_NORMAL = 'normal';
 
@@ -143,16 +140,16 @@ export const STATUS_COLORS = {
  */
 export const MONOCHROME_INDICATORS = {
   healthy: LOCAL_STR_OK,
-  warning: LOCAL_STR_WT54N,
+  warning: LOCAL_STR_LBRACKET_BANG_RBRACKET,
   error: LOCAL_STR_X,
   failed: LOCAL_STR_X,
-  unknown: LOCAL_STR_XUXC1,
-  loading: LOCAL_STR_UXP38,
-  active: LOCAL_STR_XW3L8,
-  inactive: LOCAL_STR_1EK0V,
-  starting: LOCAL_STR_WQVRR,
-  stopping: LOCAL_STR_1FMB1,
-  degraded: LOCAL_STR_WX3NR,
+  unknown: LOCAL_STR_LBRACKET_QMARK_RBRACKET,
+  loading: LOCAL_STR_LBRACKET_DOT_DOT,
+  active: LOCAL_STR_LBRACKET_PLUS_RBRACKET,
+  inactive: LOCAL_STR_LBRACKET_DASH_RBRACKET,
+  starting: LOCAL_STR_LBRACKET_GT_RBRACKET,
+  stopping: LOCAL_STR_LBRACKET_LT_RBRACKET,
+  degraded: LOCAL_STR_LBRACKET_TILDE_RBRACKET,
   leader: LOCAL_STR_L,
   follower: LOCAL_STR_F,
 };
@@ -194,10 +191,10 @@ export const MONOCHROME_ENTITY_ICONS = {
   config: LOCAL_STR_C,
   context: LOCAL_STR_X,
   query: LOCAL_STR_Q,
-  healthy: LOCAL_STR_XW3L8,
-  warning: LOCAL_STR_WT54N,
+  healthy: LOCAL_STR_LBRACKET_PLUS_RBRACKET,
+  warning: LOCAL_STR_LBRACKET_BANG_RBRACKET,
   error: LOCAL_STR_X,
-  loading: LOCAL_STR_1EJP7,
+  loading: LOCAL_STR_LBRACKET_DOT_RBRACKET,
 };
 
 /**
@@ -286,7 +283,7 @@ export class VisualIndicators {
    */
   constructor(options = {}) {
     this.monochrome = options.monochrome || false;
-    this.loadingFrame = LOCAL_NUM_ZERO;
+    this.loadingFrame = 0;
     this.loadingInterval = null;
   }
 
@@ -333,7 +330,7 @@ export class VisualIndicators {
       return MONOCHROME_INDICATORS[normalizedStatus] ||
         MONOCHROME_INDICATORS.unknown;
     }
-    return LOCAL_STR_EMPTY;
+    return '';
   }
 
   /**
@@ -345,7 +342,7 @@ export class VisualIndicators {
   getEntityIcon(entityType) {
     const normalizedType = (entityType || '').toLowerCase();
     if (this.monochrome) {
-      return MONOCHROME_ENTITY_ICONS[normalizedType] || LOCAL_STR_XUXC1;
+      return MONOCHROME_ENTITY_ICONS[normalizedType] || LOCAL_STR_LBRACKET_QMARK_RBRACKET;
     }
     return ENTITY_ICONS[normalizedType] || LOCAL_STR_LP7TH;
   }
@@ -431,7 +428,7 @@ export class VisualIndicators {
    */
   advanceLoadingFrame() {
     const frames = this.monochrome ? ASCII_LOADING_FRAMES : LOADING_FRAMES;
-    this.loadingFrame = (this.loadingFrame + LOCAL_NUM_ONE) % frames.length;
+    this.loadingFrame = (this.loadingFrame + 1) % frames.length;
   }
 
   /**
@@ -440,7 +437,7 @@ export class VisualIndicators {
    * @param {Function} callback - Callback to call on each frame
    * @param {number} [interval=100] - Animation interval in ms
    */
-  startLoadingAnimation(callback, interval = LOCAL_NUM_100) {
+  startLoadingAnimation(callback, interval = LOCAL_NUM_ONE_HUNDRED) {
     this.stopLoadingAnimation();
     this.loadingInterval = setInterval(() => {
       this.advanceLoadingFrame();
@@ -458,7 +455,7 @@ export class VisualIndicators {
       clearInterval(this.loadingInterval);
       this.loadingInterval = null;
     }
-    this.loadingFrame = LOCAL_NUM_ZERO;
+    this.loadingFrame = 0;
   }
 
   /**
@@ -530,7 +527,7 @@ export class VisualIndicators {
    * @param {number} width - Bar width in characters
    * @return {Object} Progress bar
    */
-  createProgressBar(progress, width = LOCAL_NUM_20) {
+  createProgressBar(progress, width = LOCAL_NUM_TWENTY) {
     const clampedProgress = Math.max(0, Math.min(100, progress));
     const filledWidth = Math.round((clampedProgress / 100) * (width - 2));
     const emptyWidth = width - 2 - filledWidth;

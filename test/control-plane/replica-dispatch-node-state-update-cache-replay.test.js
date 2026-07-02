@@ -10,7 +10,6 @@ import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js'
 import {
   COLUMN,
   NODE_CAPABILITY,
-  NUM,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -89,7 +88,7 @@ test(HEARTBEAT_READY_CAPABILITY_TEST_NAME, async (t) => {
     cdcIntegrationService: {
       updateSystemTableRow: async (...args) => {
         updateCalls.push(args);
-        return {partitionResult: {affectedRows: NUM.ONE}};
+        return {partitionResult: {affectedRows: 1}};
       },
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -114,7 +113,7 @@ test(HEARTBEAT_READY_CAPABILITY_TEST_NAME, async (t) => {
       HEARTBEAT_READY_CAPABILITY_ASSERT_UPDATE,
     );
     t.equal(
-      updateCalls[NUM.ZERO]?.[NUM.TWO]?.[COLUMN.CAPABILITIES],
+      updateCalls[0]?.[2]?.[COLUMN.CAPABILITIES],
       HEARTBEAT_READY_CAPABILITY_JSON,
       HEARTBEAT_READY_CAPABILITY_ASSERT_CAPABILITIES,
     );
@@ -249,12 +248,12 @@ test(CREATING_REARM_REPLAY_TEST_NAME, async (t) => {
       CREATING_REARM_REPLAY_ASSERT_DISPATCHED,
     );
     t.equal(
-      dispatchCalls[NUM.ZERO]?.operationId,
+      dispatchCalls[0]?.operationId,
       CREATING_REARM_REPLAY_OPERATION_ID,
       CREATING_REARM_REPLAY_ASSERT_OPERATION_ID,
     );
     t.equal(
-      dispatchCalls[NUM.ZERO]?.workflowStep,
+      dispatchCalls[0]?.workflowStep,
       WORKFLOW_STEP.CREATING,
       CREATING_REARM_REPLAY_ASSERT_WORKFLOW_STEP,
     );
@@ -319,12 +318,12 @@ test('ReplicaDispatchService enqueues CREATING system-table cache replay',
         CREATING_REARM_REPLAY_ASSERT_DISPATCHED,
       );
       t.equal(
-        dispatchCalls[NUM.ZERO]?.operationId,
+        dispatchCalls[0]?.operationId,
         CREATING_REARM_REPLAY_OPERATION_ID,
         CREATING_REARM_REPLAY_ASSERT_OPERATION_ID,
       );
       t.equal(
-        dispatchCalls[NUM.ZERO]?.workflowStep,
+        dispatchCalls[0]?.workflowStep,
         WORKFLOW_STEP.CREATING,
         CREATING_REARM_REPLAY_ASSERT_WORKFLOW_STEP,
       );
@@ -451,17 +450,17 @@ test('ReplicaDispatchService ignores remote-owned dispatch rows before ' +
 
     t.equal(
       readinessChecks,
-      NUM.ZERO,
+      0,
       'remote-owned rows should skip readiness evaluation entirely',
     );
     t.equal(
       dispatchCalls,
-      NUM.ZERO,
+      0,
       'remote-owned rows should not reach coordinator dispatch',
     );
     t.equal(
       scheduled.length,
-      NUM.ZERO,
+      0,
       'remote-owned rows should not arm deferred retries',
     );
   } finally {

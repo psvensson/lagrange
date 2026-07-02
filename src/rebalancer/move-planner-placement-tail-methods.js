@@ -10,7 +10,6 @@
  * @module rebalancer/move-planner
  */
 
-import {NUM} from '../constants/index.js';
 import {
   MOVE_REASON,
   REBALANCER_ENTITY_TYPE,
@@ -98,7 +97,7 @@ class MovePlannerPlacementTailMethods {
   sortNodesByLoad(nodes) {
     return this.buildPlacementOwnerPolicyDecision({
       nodes,
-      targetCount: Array.isArray(nodes) ? nodes.length : NUM.ZERO,
+      targetCount: Array.isArray(nodes) ? nodes.length : 0,
       policy: {},
       placementPolicy: PLACEMENT_OWNER_POLICY.MESSAGE_GROUP_LOCAL_ACCESS,
       scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.LOAD,
@@ -116,7 +115,7 @@ class MovePlannerPlacementTailMethods {
   sortNodesBySuitability(nodes, policy) {
     return this.buildPlacementOwnerPolicyDecision({
       nodes,
-      targetCount: Array.isArray(nodes) ? nodes.length : NUM.ZERO,
+      targetCount: Array.isArray(nodes) ? nodes.length : 0,
       policy,
       placementPolicy:
         this.entityType === EntityType.RUNTIME_SERVICE ?
@@ -132,9 +131,9 @@ class MovePlannerPlacementTailMethods {
    * @return {number} Load score (0-300, lower is better).
    */
   calculateNodeLoad(node) {
-    const cpuLoad = node.cpu_usage_percent || NUM.ZERO;
-    const memoryLoad = node.memory_usage_percent || NUM.ZERO;
-    const diskLoad = node.disk_usage_percent || NUM.ZERO;
+    const cpuLoad = node.cpu_usage_percent || 0;
+    const memoryLoad = node.memory_usage_percent || 0;
+    const diskLoad = node.disk_usage_percent || 0;
     return cpuLoad + memoryLoad + diskLoad;
   }
 
@@ -155,7 +154,7 @@ class MovePlannerPlacementTailMethods {
    * @return {Promise<Array<Object>>} Filtered/annotated moves.
    */
   async applyPressureGating(moves) {
-    if (moves.length === NUM.ZERO) {
+    if (moves.length === 0) {
       return moves;
     }
     if (

@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate.js';
@@ -62,8 +61,8 @@ function resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(
           .SELECTED_MISSING_PUBLISHED_NODE_IDS
       ],
     );
-    return explicitSelectedMissingPublishedNodeIds.length === NUM.ZERO &&
-      expectedNodeCount > NUM.ZERO &&
+    return explicitSelectedMissingPublishedNodeIds.length === 0 &&
+      expectedNodeCount > 0 &&
       selectedPublishedActiveCount === expectedNodeCount ?
       buildPublicationRecoverySelectedMissingEvidence(
         PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
@@ -75,7 +74,7 @@ function resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(
         explicitSelectedMissingPublishedNodeIds,
       );
   }
-  return expectedNodeCount > NUM.ZERO &&
+  return expectedNodeCount > 0 &&
     selectedPublishedActiveCount === expectedNodeCount ?
     buildPublicationRecoverySelectedMissingEvidence(
       PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
@@ -141,8 +140,8 @@ function resolveActiveGateSelectedPublicationMembershipNodeIds(
       ...selectedMissingPublishedEvidence.nodeIds,
     ]);
     if (
-      expectedNodeCount > NUM.ZERO &&
-      selectedPublishedActiveNodeIds.length > NUM.ZERO &&
+      expectedNodeCount > 0 &&
+      selectedPublishedActiveNodeIds.length > 0 &&
       selectedPublicationMembershipNodeIds.length === expectedNodeCount
     ) {
       return selectedPublicationMembershipNodeIds;
@@ -184,9 +183,9 @@ function hasActiveGateProgressPrioritySpreadClosure(progress = null) {
     PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
       .PRIORITY_SPREAD_SATISFIED
   ] === true &&
-    unresolvedClassCount === NUM.ZERO &&
-    unresolvedSemanticStateCount === NUM.ZERO &&
-    blockedPartitionCount === NUM.ZERO;
+    unresolvedClassCount === 0 &&
+    unresolvedSemanticStateCount === 0 &&
+    blockedPartitionCount === 0;
 }
 
 function hasSelectedPublicationMembershipClosureEvidence({
@@ -198,8 +197,8 @@ function hasSelectedPublicationMembershipClosureEvidence({
     publicationStatus !== PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN ||
     pendingAckEvidence?.evidenceState !==
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
-    pendingAckEvidence?.pendingAckCount !== NUM.ZERO ||
-    pendingAckEvidence?.pendingAckNodeIds?.length !== NUM.ZERO
+    pendingAckEvidence?.pendingAckCount !== 0 ||
+    pendingAckEvidence?.pendingAckNodeIds?.length !== 0
   ) {
     return false;
   }
@@ -218,11 +217,11 @@ function hasActiveGateSelectedPublicationMembershipCohortProof(
       resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(progress);
     if (
       Array.isArray(selectedPublicationMembershipNodeIds) &&
-      selectedPublicationMembershipNodeIds.length > NUM.ZERO &&
+      selectedPublicationMembershipNodeIds.length > 0 &&
       selectedMissingPublishedEvidence.state ===
         PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
           .EXPLICIT_NODE_LIST &&
-      selectedMissingPublishedEvidence.nodeIds.length > NUM.ZERO &&
+      selectedMissingPublishedEvidence.nodeIds.length > 0 &&
       hasActiveGateProgressPrioritySpreadClosure(progress)
     ) {
       return true;
@@ -241,11 +240,11 @@ function hasActiveGateSelectedPublicationMembershipOpenEvidence(
       resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(progress);
     if (
       Array.isArray(selectedPublicationMembershipNodeIds) &&
-      selectedPublicationMembershipNodeIds.length > NUM.ZERO &&
+      selectedPublicationMembershipNodeIds.length > 0 &&
       selectedMissingPublishedEvidence.state ===
         PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
           .EXPLICIT_NODE_LIST &&
-      selectedMissingPublishedEvidence.nodeIds.length > NUM.ZERO &&
+      selectedMissingPublishedEvidence.nodeIds.length > 0 &&
       !hasActiveGateProgressPrioritySpreadClosure(progress)
     ) {
       return true;
@@ -262,7 +261,7 @@ function resolveEffectivePublicationMembershipNodeIds({
 } = {}) {
   return selectedPublicationMembershipOpen === true &&
     Array.isArray(selectedPublicationMembershipNodeIds) &&
-    selectedPublicationMembershipNodeIds.length > NUM.ZERO ?
+    selectedPublicationMembershipNodeIds.length > 0 ?
     normalizeDistinctStringArray([
       ...normalizeDistinctStringArray(
         authoritativePublicationMembershipNodeIds,
@@ -277,9 +276,9 @@ function hasSteadyPublishedSelectedPublicationMembershipOpen({
   publicationConvergenceGate = null,
   priorityRecoveryObservation = null,
   activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
-  pendingAckCount = NUM.ZERO,
+  pendingAckCount = 0,
 } = {}) {
-  if (pendingAckCount > NUM.ZERO) {
+  if (pendingAckCount > 0) {
     return false;
   }
   const activeGatePublicationStatus = resolveActiveGateProgressString(
@@ -338,8 +337,8 @@ function hasSteadyPublishedSelectedPublicationMembershipOpen({
     );
     if (
       Array.isArray(selectedPublicationMembershipNodeIds) &&
-      selectedPublicationMembershipNodeIds.length > NUM.ZERO &&
-      selectedMissingPublishedEvidence.nodeIds.length > NUM.ZERO &&
+      selectedPublicationMembershipNodeIds.length > 0 &&
+      selectedMissingPublishedEvidence.nodeIds.length > 0 &&
       hasActiveGateProgressPrioritySpreadClosure(progress) &&
       (
         progressPublicationStatus === null ||

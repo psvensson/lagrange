@@ -5,7 +5,6 @@ const {
   NodeService,
   NodeStatePublicationOwner,
   TABLES,
-  TYPEOF,
   resolveMembershipJoinIntentType,
 } = NODE_JOINING_SERVICE_SHARED;
 
@@ -112,7 +111,7 @@ function installNodeJoiningStatePublicationOwner(service) {
       getControlPlaneKernelIngress: () => service.controlPlaneKernelIngress,
       resolveLegacyTargetCandidates: (publicationOptions = {}) =>
         typeof service.resolveControlPlaneTargetAddressCandidates ===
-        TYPEOF.FUNCTION ?
+        'function' ?
           service.resolveControlPlaneTargetAddressCandidates(
             publicationOptions,
           ) :
@@ -347,7 +346,7 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
     },
     peekSystemTableCache() {
       for (const messageGroupService of this.messageGroupServices.values()) {
-        if (typeof messageGroupService?.getReadOnlyCache === TYPEOF.FUNCTION) {
+        if (typeof messageGroupService?.getReadOnlyCache === 'function') {
           const readOnlyCache = messageGroupService.getReadOnlyCache();
           if (readOnlyCache) {
             return readOnlyCache;

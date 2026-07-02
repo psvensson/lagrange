@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   isRecord,
   PUBLICATION_RECOVERY_LEASE_DEFAULT_DURATION_MS,
@@ -21,17 +20,17 @@ const RECOVERY_PREEMPTION_REASON = Object.freeze({
 });
 
 class TopologyEpochFencer {
-  constructor(currentEpoch = NUM.ZERO) {
-    this.currentEpoch = Number(currentEpoch) || NUM.ZERO;
+  constructor(currentEpoch = 0) {
+    this.currentEpoch = Number(currentEpoch) || 0;
   }
 
   advanceEpoch() {
-    this.currentEpoch += NUM.ONE;
+    this.currentEpoch += 1;
     return this.currentEpoch;
   }
 
   assertEpochValid(incomingEpoch) {
-    const epochNum = Number(incomingEpoch) || NUM.ZERO;
+    const epochNum = Number(incomingEpoch) || 0;
     if (epochNum < this.currentEpoch) {
       throw new Error(
         `Fencing Violation: Upstream operation epoch ${epochNum} ` +
@@ -76,10 +75,10 @@ function adjudicateRecoveryPreemption(evidenceSnapshot) {
   const hasDownstreamPendingHandoff =
     Boolean(evidenceSnapshot?.publicationActiveGateHandoffPendingReconcileCount &&
     evidenceSnapshot.publicationActiveGateHandoffPendingReconcileCount >
-      NUM.ZERO);
+      0);
 
-  const localEpoch = Number(evidenceSnapshot?.localEpoch) || NUM.ZERO;
-  const globalEpoch = Number(evidenceSnapshot?.globalEpoch) || NUM.ZERO;
+  const localEpoch = Number(evidenceSnapshot?.localEpoch) || 0;
+  const globalEpoch = Number(evidenceSnapshot?.globalEpoch) || 0;
   const hasEpochMismatch = localEpoch < globalEpoch;
 
   if (hasDownstreamPendingHandoff || hasEpochMismatch) {

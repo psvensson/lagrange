@@ -1,5 +1,5 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {COLUMN, TYPEOF} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {
   buildNodeHeartbeatStructuralSignature,
@@ -147,7 +147,7 @@ class HeartbeatServiceReporterVisibilityMethods {
       const timeoutHandle = this.setTimeoutFn(async () => {
         try {
           if (
-            typeof this.nodeStateReporter !== TYPEOF.FUNCTION ||
+            typeof this.nodeStateReporter !== 'function' ||
             this.verifyReporterVisibilityOnSuccess !== true
           ) {
             return;
@@ -159,7 +159,7 @@ class HeartbeatServiceReporterVisibilityMethods {
           if (reporterVisible) {
             this.lastReporterVisibilityVerifiedAt = this.now();
             this.lastReporterVisibilityTargetAddress = normalizedDiagnostics.targetAddress || null;
-            if (typeof options.onVisible === TYPEOF.FUNCTION) {
+            if (typeof options.onVisible === 'function') {
               options.onVisible();
             }
             return;
@@ -185,7 +185,7 @@ class HeartbeatServiceReporterVisibilityMethods {
           resolve();
         }
       }, ZERO);
-      if (typeof timeoutHandle?.unref === TYPEOF.FUNCTION) {
+      if (typeof timeoutHandle?.unref === 'function') {
         timeoutHandle.unref();
       }
     });
@@ -229,7 +229,7 @@ class HeartbeatServiceReporterVisibilityMethods {
     const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
     if (
       !authoritativeControlPlaneView ||
-      typeof authoritativeControlPlaneView.canRead !== TYPEOF.FUNCTION ||
+      typeof authoritativeControlPlaneView.canRead !== 'function' ||
       authoritativeControlPlaneView.canRead() !== true
     ) {
       return true;
@@ -260,14 +260,14 @@ class HeartbeatServiceReporterVisibilityMethods {
         return false;
       }
       if (
-        typeof options.expectedStatus === TYPEOF.STRING &&
+        typeof options.expectedStatus === 'string' &&
         nodeRow?.[COLUMN.STATUS] !== options.expectedStatus &&
         nodeRow?.status !== options.expectedStatus
       ) {
         return false;
       }
       if (
-        typeof options.expectedConnectionState === TYPEOF.STRING &&
+        typeof options.expectedConnectionState === 'string' &&
         nodeRow?.[COLUMN.CONNECTION_STATE] !== options.expectedConnectionState &&
         nodeRow?.connection_state !== options.expectedConnectionState
       ) {

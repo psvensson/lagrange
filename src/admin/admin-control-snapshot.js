@@ -114,19 +114,19 @@ const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
  */
 function toNonNegativeInteger(value) {
   const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue) || parsedValue < NUM.ZERO) {
-    return NUM.ZERO;
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    return 0;
   }
   return Math.floor(parsedValue);
 }
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     ADMIN_CACHE_DUMP.EMPTY;
   return (
-    causeChain.length > NUM.ZERO &&
+    causeChain.length > 0 &&
     causeChain.every(
       (value) => value === AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP,
     )
@@ -135,7 +135,7 @@ function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
 function hasPressureOrTimeoutRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     ADMIN_CACHE_DUMP.EMPTY;
   return (
@@ -146,7 +146,7 @@ function hasPressureOrTimeoutRepairCause(repair = null) {
 function isRecoverableControlSnapshotPublicationReadError(error = null) {
   const message = String(error?.message || error || '').toLowerCase();
   return (
-    message.length > NUM.ZERO &&
+    message.length > 0 &&
     CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS.some((fragment) =>
       message.includes(fragment),
     )
@@ -162,7 +162,7 @@ function buildMembershipPublicationReadOptions(options = {}) {
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }
 function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return snapshot;
   }
   const activeProjection =
@@ -189,7 +189,7 @@ function resolvePublicationOrderingValue(row, keys = []) {
       return value;
     }
   }
-  return NUM.ZERO;
+  return 0;
 }
 function isMembershipPublicationRow(row) {
   const normalizedRow = normalizeControlPlanePublicationRow(row);
@@ -197,7 +197,7 @@ function isMembershipPublicationRow(row) {
     normalizedRow.publicationKind || '',
   ).toLowerCase();
   return (
-    publicationKind.length === NUM.ZERO ||
+    publicationKind.length === 0 ||
     publicationKind === MEMBERSHIP_PUBLICATION_KIND
   );
 }
@@ -206,11 +206,11 @@ function resolveLatestMembershipPublicationRow(
   options = {},
 ) {
   const expectedStatus =
-    typeof options.status === TYPEOF.STRING ?
+    typeof options.status === 'string' ?
       options.status.toUpperCase() :
       null;
   const normalizedRows = (Array.isArray(publicationRows) ? publicationRows : [])
-    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .filter((row) => row && typeof row === 'object')
     .filter((row) => isMembershipPublicationRow(row))
     .map((row) => normalizeControlPlanePublicationRow(row))
     .filter((row) => {
@@ -222,10 +222,10 @@ function resolveLatestMembershipPublicationRow(
         row.publicationEpoch ||
         row.status ||
         (Array.isArray(row.publishedActiveNodeIds) &&
-          row.publishedActiveNodeIds.length > NUM.ZERO),
+          row.publishedActiveNodeIds.length > 0),
       );
     });
-  if (normalizedRows.length === NUM.ZERO) {
+  if (normalizedRows.length === 0) {
     return null;
   }
   normalizedRows.sort((left, right) => {
@@ -238,13 +238,13 @@ function resolveLatestMembershipPublicationRow(
         'publicationEpoch',
         'publication_epoch',
       ]);
-    if (publicationEpochDelta !== NUM.ZERO) {
+    if (publicationEpochDelta !== 0) {
       return publicationEpochDelta;
     }
     const publishedAtDelta =
       resolvePublicationOrderingValue(right, ['publishedAt', 'published_at']) -
       resolvePublicationOrderingValue(left, ['publishedAt', 'published_at']);
-    if (publishedAtDelta !== NUM.ZERO) {
+    if (publishedAtDelta !== 0) {
       return publishedAtDelta;
     }
     return (
@@ -258,7 +258,7 @@ function resolveLatestMembershipPublicationRow(
       ])
     );
   });
-  return normalizedRows[NUM.ZERO] || null;
+  return normalizedRows[0] || null;
 }
 const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
   AVAILABLE: 'available',
@@ -268,7 +268,7 @@ function hasDurablePublishedMembershipObservation(
 ) {
   if (
     !publicationDiagnostics ||
-    typeof publicationDiagnostics !== TYPEOF.OBJECT
+    typeof publicationDiagnostics !== 'object'
   ) {
     return false;
   }

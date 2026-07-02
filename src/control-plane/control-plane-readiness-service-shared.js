@@ -82,15 +82,14 @@ import {
 } from './startup-authority-snapshot-owner.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_READY = 'ready';
 const LOCAL_STR_DEFERRED = 'deferred';
-const LOCAL_STR_151IA = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
-const LOCAL_STR_1UN26 = 'CONTROL_PLANE_PARTICIPATION_DEFERRED';
-const LOCAL_STR_XYV2U = 'CONTROL_PLANE_PARTICIPATION_BLOCKED';
-const LOCAL_STR_1R6W2 = 'Control-plane participation deferred by canonical readiness';
-const LOCAL_STR_8JH3G = 'Control-plane participation blocked by canonical readiness';
+const LOCAL_STR_ROUTER_QUERY_TRANSPORT_NOT_READY = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+const LOCAL_STR_CONTROL_PLANE_PARTICIPATION_DEFERRED = 'CONTROL_PLANE_PARTICIPATION_DEFERRED';
+const LOCAL_STR_CONTROL_PLANE_PARTICIPATION_BLOCKED = 'CONTROL_PLANE_PARTICIPATION_BLOCKED';
+const LOCAL_STR_CONTROL_PLANE_PARTICIPATION_DEFERRED_BY = 'Control-plane participation deferred by canonical readiness';
+const LOCAL_STR_CONTROL_PLANE_PARTICIPATION_BLOCKED_BY_C = 'Control-plane participation blocked by canonical readiness';
 
 const PUBLICATION_REASON_CONFIG_SAFE_MODE = 'config_safe_mode';
 const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
@@ -178,7 +177,7 @@ function resolveMembershipPublicationReadOptions({
       MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS :
       MEMBERSHIP_PUBLICATION_READ_OPTIONS;
   const normalizedQueryTimeoutMs =
-    Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+    Number.isFinite(queryTimeoutMs) && queryTimeoutMs > 0 ?
       Math.floor(queryTimeoutMs) :
       null;
   return Object.freeze({
@@ -227,8 +226,8 @@ function normalizeIsoTimestamp(nowValue) {
   return new Date(nowValue).toISOString();
 }
 
-function normalizePositiveInteger(value, fallback = NUM.ZERO) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+function normalizePositiveInteger(value, fallback = 0) {
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
@@ -237,7 +236,7 @@ function normalizeDiagnosticTimestampMs(value) {
   if (Number.isFinite(value)) {
     return value;
   }
-  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+  if (typeof value === 'string' && value.length > 0) {
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -248,14 +247,14 @@ function normalizeNodeIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .map((value) => String(value || '').trim())
+        .filter((value) => value.length > 0),
     ),
   ];
 }
 
 function normalizeLocalQueryTransportEvidence(readiness) {
-  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+  if (!readiness || typeof readiness !== 'object') {
     return Object.freeze({
       state: LOCAL_STR_UNKNOWN,
       ready: null,
@@ -272,23 +271,23 @@ function normalizeLocalQueryTransportEvidence(readiness) {
       ready === false ? LOCAL_STR_DEFERRED : LOCAL_STR_UNKNOWN,
     ready,
     reason:
-      typeof readiness.reason === TYPEOF.STRING &&
-      readiness.reason.length > NUM.ZERO ?
+      typeof readiness.reason === 'string' &&
+      readiness.reason.length > 0 ?
         readiness.reason :
         null,
     reasonCode:
-      typeof readiness.reasonCode === TYPEOF.STRING &&
-      readiness.reasonCode.length > NUM.ZERO ?
+      typeof readiness.reasonCode === 'string' &&
+      readiness.reasonCode.length > 0 ?
         readiness.reasonCode :
         null,
     errorCode:
-      typeof readiness.errorCode === TYPEOF.STRING &&
-      readiness.errorCode.length > NUM.ZERO ?
+      typeof readiness.errorCode === 'string' &&
+      readiness.errorCode.length > 0 ?
         readiness.errorCode :
         null,
     retryAfterMs:
       Number.isFinite(readiness.retryAfterMs) &&
-      readiness.retryAfterMs > NUM.ZERO ?
+      readiness.retryAfterMs > 0 ?
         Math.floor(readiness.retryAfterMs) :
         null,
   });
@@ -309,8 +308,8 @@ function resolveParticipationDecisionDimension(
   decisionDimension,
 ) {
   if (
-    typeof decisionDimension === TYPEOF.STRING &&
-    decisionDimension.length > NUM.ZERO
+    typeof decisionDimension === 'string' &&
+    decisionDimension.length > 0
   ) {
     return decisionDimension;
   }
@@ -329,25 +328,25 @@ function buildParticipationErrorCode(participation) {
     participation?.reasonCode ===
     CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY
   ) {
-    return LOCAL_STR_151IA;
+    return LOCAL_STR_ROUTER_QUERY_TRANSPORT_NOT_READY;
   }
   return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
-    LOCAL_STR_1UN26 :
-    LOCAL_STR_XYV2U;
+    LOCAL_STR_CONTROL_PLANE_PARTICIPATION_DEFERRED :
+    LOCAL_STR_CONTROL_PLANE_PARTICIPATION_BLOCKED;
 }
 
 function buildParticipationErrorMessage(participation) {
   if (
     participation?.reasonCode ===
       CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY &&
-    typeof participation?.localQueryTransport?.reason === TYPEOF.STRING &&
-    participation.localQueryTransport.reason.length > NUM.ZERO
+    typeof participation?.localQueryTransport?.reason === 'string' &&
+    participation.localQueryTransport.reason.length > 0
   ) {
     return participation.localQueryTransport.reason;
   }
   return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
-    LOCAL_STR_1R6W2 :
-    LOCAL_STR_8JH3G;
+    LOCAL_STR_CONTROL_PLANE_PARTICIPATION_DEFERRED_BY :
+    LOCAL_STR_CONTROL_PLANE_PARTICIPATION_BLOCKED_BY_C;
 }
 
 function shouldAllowLocalExecutionForParticipation({

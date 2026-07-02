@@ -2,7 +2,6 @@
  * Build DWARF mapping indexes and lookup helpers.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DWARF_INDEX_DEFAULT as DEF,
   DWARF_INDEX_ERROR_MSG as ERR,
@@ -154,7 +153,7 @@ function lookupSymbolRangesByName(index, symbolName) {
  * @param {Object} parseResult - Candidate parse result.
  */
 function validateParseResult(parseResult) {
-  if (!parseResult || typeof parseResult !== TYPEOF.OBJECT) {
+  if (!parseResult || typeof parseResult !== 'object') {
     throw new Error(ERR.PARSE_RESULT_REQUIRED);
   }
   if (!Array.isArray(parseResult.sourceMappings)) {
@@ -171,7 +170,7 @@ function validateParseResult(parseResult) {
  * @param {Object} index - Candidate index.
  */
 function ensureIndex(index) {
-  if (!index || typeof index !== TYPEOF.OBJECT) {
+  if (!index || typeof index !== 'object') {
     throw new Error(ERR.INDEX_REQUIRED);
   }
 }
@@ -186,7 +185,7 @@ function normalizeSourceMappings(sourceMappings) {
   const normalized = [];
 
   for (const mapping of sourceMappings) {
-    if (!mapping || typeof mapping !== TYPEOF.OBJECT) {
+    if (!mapping || typeof mapping !== 'object') {
       continue;
     }
     if (!isNonEmptyString(mapping.sourceFileUrl)) {
@@ -228,7 +227,7 @@ function normalizeSymbolMappings(symbolMappings) {
   const normalized = [];
 
   for (const symbolMapping of symbolMappings) {
-    if (!symbolMapping || typeof symbolMapping !== TYPEOF.OBJECT) {
+    if (!symbolMapping || typeof symbolMapping !== 'object') {
       continue;
     }
     if (!isNonEmptyString(symbolMapping.symbolName)) {
@@ -386,7 +385,7 @@ function symbolMappingKey(symbolMapping) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 /**
@@ -394,8 +393,8 @@ function isNonNegativeInteger(value) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

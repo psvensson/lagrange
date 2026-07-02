@@ -2,7 +2,6 @@
  * Session-scoped breakpoint manager with source->offset resolution.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   lookupOffsetsForSource,
 } from './dwarf-index-builder.js';
@@ -12,7 +11,6 @@ import {
   BREAKPOINT_MANAGER_ERROR_MSG as ERR,
 } from './breakpoint-manager-constants.js';
 
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_BREAKPOINT = 'breakpoint';
 const LOCAL_STR_PAUSE = 'pause';
 const LOCAL_STR_RUNNING = 'running';
@@ -83,7 +81,7 @@ class BreakpointManager {
 
       const resolved = resolutionError === null &&
         Array.isArray(offsetRanges) &&
-        offsetRanges.length > NUM.ZERO;
+        offsetRanges.length > 0;
 
       const record = {
         breakpointId: session.nextBreakpointId++,
@@ -99,7 +97,7 @@ class BreakpointManager {
         ),
         offsetRanges: resolved ? cloneRanges(offsetRanges) : [],
         createdAt: this._now(),
-        hitCount: NUM.ZERO,
+        hitCount: 0,
       };
 
       records.push(record);
@@ -177,13 +175,13 @@ class BreakpointManager {
           continue;
         }
 
-        record.hitCount += LOCAL_NUM_ONE;
+        record.hitCount += 1;
         hits.push({...record});
       }
     }
 
     return {
-      hit: hits.length > NUM.ZERO,
+      hit: hits.length > 0,
       breakpoints: hits,
     };
   }
@@ -320,7 +318,7 @@ class BreakpointManager {
   async _resumeWithStepAction(request, stepAction) {
     validateStepRequest(request);
     if (!this._runtimeAdapter ||
-      typeof this._runtimeAdapter.resume !== TYPEOF.FUNCTION) {
+      typeof this._runtimeAdapter.resume !== 'function') {
       throw new Error(ERR.RUNTIME_ADAPTER_REQUIRED);
     }
 
@@ -355,7 +353,7 @@ class BreakpointManager {
     session = {
       sessionId,
       createdAt: this._now(),
-      nextBreakpointId: NUM.ONE,
+      nextBreakpointId: 1,
       pendingStepAction: null,
       modules: new Map(),
     };
@@ -389,7 +387,7 @@ class BreakpointManager {
  */
 function validateSetBreakpointsRequest(request) {
   validateSessionModuleRequest(request);
-  if (!request.index || typeof request.index !== TYPEOF.OBJECT) {
+  if (!request.index || typeof request.index !== 'object') {
     throw new Error(ERR.INDEX_REQUIRED);
   }
   if (!isNonEmptyString(request.sourceFileUrl)) {
@@ -416,7 +414,7 @@ function validateHitRequest(request) {
 function validateStepRequest(request) {
   validateSessionRequest(request);
   if (!request.instanceHandle ||
-    typeof request.instanceHandle !== TYPEOF.OBJECT) {
+    typeof request.instanceHandle !== 'object') {
     throw new Error(ERR.INSTANCE_HANDLE_REQUIRED);
   }
 }
@@ -435,7 +433,7 @@ function validateSessionModuleRequest(request) {
  * @param {Object} request
  */
 function validateSessionRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
   if (!isNonEmptyString(request.sessionId)) {
@@ -477,8 +475,8 @@ function rangeListContainsOffset(ranges, codeOffset) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 /**
@@ -486,7 +484,7 @@ function isNonEmptyString(value) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 export {

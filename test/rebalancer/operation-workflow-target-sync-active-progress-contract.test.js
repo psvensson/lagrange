@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -124,7 +124,7 @@ function buildPlanningSnapshot(options = {}) {
       TEST_TARGET_NODE_ID,
     ]),
     pendingAckNodeIds: TEST_EMPTY_LIST,
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     priorityRecoveryDecisionSnapshots: Object.freeze({
       capturedAt: TEST_CAPTURED_AT_MS,
       publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -199,16 +199,16 @@ function buildSqlQueryEngine(operationRow) {
   return {
     async executeQuery(sql) {
       if (String(sql).includes(TEST_REPLICA_OPERATIONS_TABLE)) {
-        return {success: true, rows: [operationRow], affectedRows: NUM.ONE};
+        return {success: true, rows: [operationRow], affectedRows: 1};
       }
       if (String(sql).includes(TEST_SERVICES_TABLE)) {
         return {
           success: true,
           rows: TEST_EMPTY_ROWS,
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       }
-      return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: NUM.ZERO};
+      return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
     },
   };
 }
@@ -232,7 +232,7 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
-        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: NUM.ZERO};
+        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },
     },
     controlPlaneReadinessService: {
@@ -273,7 +273,7 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
 
 async function flushReentryQueue() {
   await new Promise((resolve) => {
-    setTimeout(resolve, NUM.ZERO);
+    setTimeout(resolve, 0);
   });
 }
 
@@ -355,7 +355,7 @@ test(
         [operation.operationId],
         TEST_ASSERT_TARGET_SYNC_REENTRY,
       );
-      t.equal(deliveries.length, NUM.ZERO, TEST_ASSERT_TARGET_SYNC_REENTRY);
+      t.equal(deliveries.length, 0, TEST_ASSERT_TARGET_SYNC_REENTRY);
     } finally {
       Date.now = originalDateNow;
       await coordinator.shutdown();
@@ -410,11 +410,11 @@ test(
       );
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_REMOTE_TARGET_SYNC_WAKE,
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         TEST_REPLICA_DISPATCH_TARGET,
         TEST_ASSERT_REMOTE_TARGET_SYNC_WAKE,
       );
@@ -463,7 +463,7 @@ test(
         [operation.operationId],
         TEST_ASSERT_TARGET_SYNC_REENTRY,
       );
-      t.equal(deliveries.length, NUM.ZERO, TEST_ASSERT_TARGET_SYNC_REENTRY);
+      t.equal(deliveries.length, 0, TEST_ASSERT_TARGET_SYNC_REENTRY);
     } finally {
       Date.now = originalDateNow;
       await coordinator.shutdown();
@@ -517,7 +517,7 @@ test(
         [operation.operationId],
         TEST_ASSERT_SOURCE_REMOVAL_REENTRY,
       );
-      t.equal(deliveries.length, NUM.ZERO, TEST_ASSERT_SOURCE_REMOVAL_REENTRY);
+      t.equal(deliveries.length, 0, TEST_ASSERT_SOURCE_REMOVAL_REENTRY);
     } finally {
       Date.now = originalDateNow;
       await coordinator.shutdown();

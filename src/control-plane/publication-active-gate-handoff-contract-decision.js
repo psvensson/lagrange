@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   OWNER_OUTCOME_FRESHNESS,
   OWNER_OUTCOME_STATE,
@@ -48,7 +47,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
     runtimePromotionAllowed: false,
     matches: (evidence) =>
       Array.isArray(evidence.ownerAckCompletionPendingNodeIds) &&
-      evidence.ownerAckCompletionPendingNodeIds.length > NUM.ZERO,
+      evidence.ownerAckCompletionPendingNodeIds.length > 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
@@ -68,15 +67,15 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       const activePendingReconcileNodeIds =
         collectPublicationActiveGateActivePendingReconcileNodeIds(evidence);
       if (
-        activePendingReconcileNodeIds.length === NUM.ZERO &&
-        evidence.pendingRecoveryNodeIds.length > NUM.ZERO
+        activePendingReconcileNodeIds.length === 0 &&
+        evidence.pendingRecoveryNodeIds.length > 0
       ) {
         return false;
       }
-      if (activePendingReconcileNodeIds.length === NUM.ZERO) {
+      if (activePendingReconcileNodeIds.length === 0) {
         return true;
       }
-      return activePendingReconcileNodeIds.length > NUM.ZERO;
+      return activePendingReconcileNodeIds.length > 0;
     },
   }),
   Object.freeze({
@@ -87,7 +86,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
     runtimePromotionAllowed: false,
     matches: (evidence) =>
-      evidence.expectedNodeIds.length === NUM.ZERO,
+      evidence.expectedNodeIds.length === 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
@@ -99,7 +98,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
     runtimePromotionAllowed: false,
     matches: (evidence) =>
       collectPublicationActiveGateActivePendingReconcileNodeIds(evidence)
-        .length > NUM.ZERO,
+        .length > 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
@@ -109,7 +108,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
     runtimePromotionAllowed: false,
     matches: (evidence) =>
-      evidence.pendingRecoveryNodeIds.length > NUM.ZERO,
+      evidence.pendingRecoveryNodeIds.length > 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED,
@@ -120,7 +119,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
     runtimePromotionAllowed: false,
     matches: (evidence) =>
-      evidence.missingPublishedNodeIds.length > NUM.ZERO,
+      evidence.missingPublishedNodeIds.length > 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE,
@@ -157,7 +156,7 @@ const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES = Object.freeze([
     nextLegalAction:
       PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION.OBSERVE_ACTIVE_GATE_TARGETS,
     matches: (evidence) =>
-      evidence.targetNodeIds.length === NUM.ZERO,
+      evidence.targetNodeIds.length === 0,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_BLOCKED,
@@ -237,15 +236,15 @@ function buildPublicationActiveGateOwnerOutcomeContract(value = {}) {
     boundary: PUBLICATION_OWNER_OUTCOME_ENVELOPE.BOUNDARY,
     state: ownerOutcomeState,
     outcome:
-      typeof value?.state === TYPEOF.STRING ?
+      typeof value?.state === 'string' ?
         value.state :
         PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
     reasonCodes:
-      typeof value?.reasonCode === TYPEOF.STRING ?
+      typeof value?.reasonCode === 'string' ?
         [value.reasonCode] :
         PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
     nextAction:
-      typeof value?.nextAction === TYPEOF.STRING ?
+      typeof value?.nextAction === 'string' ?
         value.nextAction :
         PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
     freshness: resolvePublicationActiveGateOwnerOutcomeFreshness(value),
@@ -286,7 +285,7 @@ function buildPublicationActiveGateAcknowledgementRule(value = {}) {
     requiredAckNodeIds,
     acknowledgedNodeIds,
     pendingAckNodeIds,
-    acknowledgementSatisfied: pendingAckNodeIds.length === NUM.ZERO,
+    acknowledgementSatisfied: pendingAckNodeIds.length === 0,
   });
 }
 
@@ -374,7 +373,7 @@ function buildPublicationActiveGateCrossOwnerHandoffContract(value = {}) {
 
 function isPublicationActiveGateHandoffRecord(value) {
   return Boolean(value) &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value);
 }
 

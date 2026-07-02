@@ -1,4 +1,4 @@
-import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PLACEMENT_OWNER,
@@ -34,16 +34,16 @@ function normalizeNodeId(value) {
 
 function normalizePositiveInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue > 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeNonNegativeNumber(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue > 0 ?
     numericValue :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeTransitionNodeSet(transitionSnapshot, fieldName) {
@@ -52,14 +52,14 @@ function normalizeTransitionNodeSet(transitionSnapshot, fieldName) {
     return new Set(
       Array.from(candidate)
         .map(normalizeNodeId)
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
+        .filter((nodeId) => nodeId.length > 0),
     );
   }
   if (Array.isArray(candidate)) {
     return new Set(
       candidate
         .map(normalizeNodeId)
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
+        .filter((nodeId) => nodeId.length > 0),
     );
   }
   return new Set();
@@ -72,15 +72,15 @@ function normalizeCandidateNodes(nodes) {
   return nodes
     .map((node, index) => {
       const nodeId = normalizeNodeId(node?.[COLUMN.NODE_ID]);
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         return Object.freeze({
           node,
           nodeId,
           valid: false,
           ordinal: index,
-          cpuUsagePercent: NUM.ZERO,
-          memoryUsagePercent: NUM.ZERO,
-          diskUsagePercent: NUM.ZERO,
+          cpuUsagePercent: 0,
+          memoryUsagePercent: 0,
+          diskUsagePercent: 0,
           latencyGroupId: PLACEMENT_OWNER_EMPTY_STRING,
         });
       }
@@ -104,7 +104,7 @@ function normalizeCandidateNodes(nodes) {
 }
 
 function normalizeRaftRole(value) {
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim().toLowerCase() :
     PLACEMENT_OWNER_EMPTY_STRING;
 }
@@ -120,7 +120,7 @@ function normalizeCurrentReplicas(currentReplicas) {
         replica,
         nodeId,
         raftRole: normalizeRaftRole(replica?.[COLUMN.RAFT_ROLE]),
-        valid: nodeId.length > NUM.ZERO,
+        valid: nodeId.length > 0,
       });
     });
 }
@@ -176,14 +176,14 @@ function resolveIncumbentRetentionNodeIds(currentReplicas, retainHealthyIncumben
 
 function normalizeCapacityDiagnostics(capacityDiagnostics, fallbackCount) {
   const diagnostics =
-    capacityDiagnostics && typeof capacityDiagnostics === TYPEOF.OBJECT ?
+    capacityDiagnostics && typeof capacityDiagnostics === 'object' ?
       capacityDiagnostics :
       {};
   const rejectionsByReason =
     diagnostics[PLACEMENT_OWNER_DIAGNOSTIC_FIELD.REJECTIONS_BY_REASON] &&
       typeof diagnostics[
         PLACEMENT_OWNER_DIAGNOSTIC_FIELD.REJECTIONS_BY_REASON
-      ] === TYPEOF.OBJECT ?
+      ] === 'object' ?
       {
         ...diagnostics[
           PLACEMENT_OWNER_DIAGNOSTIC_FIELD.REJECTIONS_BY_REASON
@@ -215,7 +215,7 @@ function normalizePlacementConstraints(policy) {
     policy?.[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS] &&
       typeof policy[
         PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS
-      ] === TYPEOF.OBJECT ?
+      ] === 'object' ?
       policy[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS] :
       {};
   return Object.freeze({
@@ -239,7 +239,7 @@ function normalizePlacementConstraints(policy) {
 function buildLatencyGroupContext(candidateNodes, currentReplicas) {
   const nodeGroupById = new Map();
   for (const candidate of candidateNodes) {
-    if (candidate.valid !== true || candidate.latencyGroupId.length === NUM.ZERO) {
+    if (candidate.valid !== true || candidate.latencyGroupId.length === 0) {
       continue;
     }
     nodeGroupById.set(candidate.nodeId, candidate.latencyGroupId);
@@ -251,12 +251,12 @@ function buildLatencyGroupContext(candidateNodes, currentReplicas) {
     }
     const groupId =
       nodeGroupById.get(replica.nodeId) || PLACEMENT_OWNER_EMPTY_STRING;
-    if (groupId.length === NUM.ZERO) {
+    if (groupId.length === 0) {
       continue;
     }
     existingGroupCounts.set(
       groupId,
-      (existingGroupCounts.get(groupId) || NUM.ZERO) + NUM.ONE,
+      (existingGroupCounts.get(groupId) || 0) + 1,
     );
   }
   return Object.freeze({

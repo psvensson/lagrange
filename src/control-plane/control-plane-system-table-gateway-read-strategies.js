@@ -4,8 +4,6 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
-  NUM,
-  TYPEOF,
   buildAuthoritativeControlPlaneReadRequestOptions,
   normalizePhaseScope,
 } from './control-plane-system-table-gateway-shared.js';
@@ -21,11 +19,11 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
   async executeCacheRead(tableName, readIntent, options) {
     const systemTableCache = this.resolveSystemTableCache();
     const readFromCache =
-      typeof readIntent?.readFromCache === TYPEOF.FUNCTION ?
+      typeof readIntent?.readFromCache === 'function' ?
         readIntent.readFromCache :
         null;
     const cachePredicate =
-      typeof readIntent?.cachePredicate === TYPEOF.FUNCTION ?
+      typeof readIntent?.cachePredicate === 'function' ?
         readIntent.cachePredicate :
         null;
     if (!systemTableCache && !readFromCache) {
@@ -50,10 +48,10 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       rows = Array.isArray(cacheRows) ? cacheRows : [];
     } else if (
       cachePredicate &&
-      typeof systemTableCache?.filter === TYPEOF.FUNCTION
+      typeof systemTableCache?.filter === 'function'
     ) {
       rows = systemTableCache.filter(tableName, cachePredicate) || [];
-    } else if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
+    } else if (typeof systemTableCache?.getAll === 'function') {
       rows = systemTableCache.getAll(tableName) || [];
     }
 
@@ -180,14 +178,14 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     const allowSqlFallback = authoritativeReadModeContract.allowSqlFallback;
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
-      TYPEOF.FUNCTION
+      'function'
     ) {
       if (
         allowSqlFallback &&
         strategy !== CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
       ) {
         const sqlQueryEngine = this.resolveSqlQueryEngine();
-        if (typeof sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION) {
+        if (typeof sqlQueryEngine?.executeQuery === 'function') {
           const result = await sqlQueryEngine.executeQuery(
             sql,
             params,
@@ -254,7 +252,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     );
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       const authoritativeResult =
         await cdcIntegrationService.executeAuthoritativeSystemTableRead(
@@ -275,12 +273,12 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
             authoritativeResult.rowCount :
             Array.isArray(authoritativeResult?.rows) ?
               authoritativeResult.rows.length :
-              NUM.ZERO,
+              0,
         },
       );
     }
     const sqlQueryEngine = this.resolveSqlQueryEngine();
-    if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+    if (typeof sqlQueryEngine?.executeQuery !== 'function') {
       return this.buildUnavailableGatewayReadResult(
         tableName,
         CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
@@ -319,7 +317,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
         tableName,
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.BOOTSTRAP_SNAPSHOT_PHASE_SCOPE_REQUIRED,
       );
-    } else if (typeof readIntent?.readBootstrapSnapshot === TYPEOF.FUNCTION) {
+    } else if (typeof readIntent?.readBootstrapSnapshot === 'function') {
       const rows = await readIntent.readBootstrapSnapshot(readIntent, options);
       return this.buildBootstrapSnapshotSuccessResult(
         tableName,

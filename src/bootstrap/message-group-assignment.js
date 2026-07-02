@@ -5,7 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM, STRING} from '../constants/index.js';
+import {STRING} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_DEFAULT,
@@ -57,7 +57,7 @@ class MessageGroupAssignment {
       excludedReplicaCount:
         options.excludedReplicaIds instanceof Set ?
           options.excludedReplicaIds.size :
-          NUM.ZERO,
+          0,
     });
 
     // If the joining node already has a message group replica,
@@ -86,7 +86,7 @@ class MessageGroupAssignment {
       return {
         strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
         groupId: newGroupId,
-        replicaCount: existingReplicas.length > NUM.ZERO ?
+        replicaCount: existingReplicas.length > 0 ?
           existingReplicas.length :
           MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
         reuseExistingGroup: true,
@@ -100,7 +100,7 @@ class MessageGroupAssignment {
         options.excludedSourceNodeIds :
         [],
     );
-    if (typeof newNodeId === LOCAL_STR_STRING && newNodeId.length > NUM.ZERO) {
+    if (typeof newNodeId === LOCAL_STR_STRING && newNodeId.length > 0) {
       excludedSourceNodeIds.add(newNodeId);
     }
     const movableReplica = this.findMovableReplica(messageGroups, {
@@ -173,7 +173,7 @@ class MessageGroupAssignment {
    * @return {string|null} Existing canonical group ID or null.
    */
   findExistingMembershipGroupId(nodeId, messageGroups, options = {}) {
-    if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === NUM.ZERO) {
+    if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === 0) {
       return null;
     }
     const canonicalGroupId = this.generateGroupId(nodeId);
@@ -190,7 +190,7 @@ class MessageGroupAssignment {
       const ownedReplicaCount = replicas.filter((replica) =>
         replica?.node_id === nodeId,
       ).length;
-      if (ownedReplicaCount > NUM.ZERO) {
+      if (ownedReplicaCount > 0) {
         ownedGroupIds.push(group.group_id || null);
       }
       if (ownedReplicaCount >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
@@ -198,13 +198,13 @@ class MessageGroupAssignment {
       }
     }
 
-    if (fullyOwnedGroupIds.length > NUM.ZERO) {
-      return fullyOwnedGroupIds[NUM.ZERO];
+    if (fullyOwnedGroupIds.length > 0) {
+      return fullyOwnedGroupIds[0];
     }
 
     if (options.allowRejoinSingleOwnedGroup === true &&
-        ownedGroupIds.length === NUM.ONE) {
-      return ownedGroupIds[NUM.ZERO];
+        ownedGroupIds.length === 1) {
+      return ownedGroupIds[0];
     }
 
     return null;
@@ -256,9 +256,9 @@ class MessageGroupAssignment {
           const nonLeaderReplicas = nodeReplicas.filter((replica) =>
             replica.raft_role !== RAFT_ROLE.LEADER,
           );
-          const replicaToMove = nonLeaderReplicas.length > NUM.ZERO ?
-            nonLeaderReplicas[NUM.ZERO] :
-            nodeReplicas[NUM.ZERO];
+          const replicaToMove = nonLeaderReplicas.length > 0 ?
+            nonLeaderReplicas[0] :
+            nodeReplicas[0];
 
           return {
             groupId: group.group_id,
@@ -302,7 +302,7 @@ class MessageGroupAssignment {
     const normalizedNodeId = typeof nodeId === 'string' ?
       nodeId.replace(/[^a-zA-Z0-9]/g, STRING.EMPTY) :
       STRING.EMPTY;
-    if (normalizedNodeId.length === NUM.ZERO) {
+    if (normalizedNodeId.length === 0) {
       return `${MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX}` +
         MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_FALLBACK;
     }
@@ -311,7 +311,7 @@ class MessageGroupAssignment {
     const tailLength = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_TAIL_LENGTH;
     const groupPrefix = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX;
     const separator = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_SEGMENT_SEPARATOR;
-    const headSegment = normalizedNodeId.slice(NUM.ZERO, headLength);
+    const headSegment = normalizedNodeId.slice(0, headLength);
 
     if (normalizedNodeId.length <= headLength) {
       return `${groupPrefix}${headSegment}`;
@@ -329,7 +329,7 @@ class MessageGroupAssignment {
    */
   generateReplicaIds(groupId, count = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
     const replicaIds = [];
-    for (let i = NUM.ZERO; i < count; i++) {
+    for (let i = 0; i < count; i++) {
       replicaIds.push(`${groupId}-r${i}`);
     }
     return replicaIds;
@@ -384,7 +384,7 @@ class MessageGroupAssignment {
         errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_TO_MOVE_REQUIRED);
       }
       if (!assignment.replicaAddresses ||
-          assignment.replicaAddresses.length === NUM.ZERO) {
+          assignment.replicaAddresses.length === 0) {
         errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_ADDRESSES_REQUIRED);
       }
     }
@@ -394,13 +394,13 @@ class MessageGroupAssignment {
           assignment.replicaCount < MESSAGE_GROUP_ASSIGNMENT_DEFAULT.RAFT_MIN_REPLICA_COUNT) {
         errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_COUNT_MIN);
       }
-      if (assignment.replicaCount % MESSAGE_GROUP_ASSIGNMENT_DEFAULT.RAFT_ODD_MODULO === NUM.ZERO) {
+      if (assignment.replicaCount % MESSAGE_GROUP_ASSIGNMENT_DEFAULT.RAFT_ODD_MODULO === 0) {
         errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_COUNT_ODD);
       }
     }
 
     return {
-      isValid: errors.length === NUM.ZERO,
+      isValid: errors.length === 0,
       errors,
     };
   }

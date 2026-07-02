@@ -18,9 +18,7 @@ import {
 } from './examples-runner-constants.js';
 
 const LOCAL_STR_HYPHEN = '-';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Normalize semver-like values for stable function IDs.
@@ -38,7 +36,7 @@ function normalizeVersion(version) {
   return String(version || EXAMPLE_DEFAULT.VERSION)
     .replace(VERSION_SANITIZE_REGEX, LOCAL_STR_HYPHEN)
     .replace(/-+/g, LOCAL_STR_HYPHEN)
-    .replace(/^-|-$/g, LOCAL_STR_EMPTY);
+    .replace(/^-|-$/g, '');
 }
 
 /**
@@ -225,10 +223,10 @@ async function packageExample(exampleDir) {
  * @return {boolean}
  */
 function shouldIncludeExample(exampleId, includeSet, excludeSet) {
-  if (includeSet && includeSet.size > LOCAL_NUM_ZERO && !includeSet.has(exampleId)) {
+  if (includeSet && includeSet.size > 0 && !includeSet.has(exampleId)) {
     return false;
   }
-  if (excludeSet && excludeSet.size > LOCAL_NUM_ZERO && excludeSet.has(exampleId)) {
+  if (excludeSet && excludeSet.size > 0 && excludeSet.has(exampleId)) {
     return false;
   }
   return true;

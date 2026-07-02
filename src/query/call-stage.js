@@ -11,7 +11,6 @@
  * @module query/call-stage
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {
   DEFAULT_BATCH_SIZE,
   DEFAULT_EXCHANGE_MODE,
@@ -23,7 +22,6 @@ import {
 } from './runtime-constants.js';
 import {classifyNestedCall} from './nested-call-classifier.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Build a stage context that exposes the execution context's
@@ -44,7 +42,7 @@ function buildStageContext(execCtx, planDiagnostics) {
     broadcast: (ref, dataset) => execCtx.broadcast(ref, dataset),
     useBroadcast: (ref) => execCtx.useBroadcast(ref),
     call: (query, params, handler, opts) => {
-      if (typeof query === TYPEOF.STRING) {
+      if (typeof query === 'string') {
         const result = classifyNestedCall(query);
         if (planDiagnostics) {
           planDiagnostics.recordClassification(
@@ -72,7 +70,7 @@ function buildStageContext(execCtx, planDiagnostics) {
         throw error;
       }
       if (callResult &&
-          typeof callResult.then === TYPEOF.FUNCTION) {
+          typeof callResult.then === 'function') {
         return Promise.resolve(callResult).finally(() => {
           budgetEnforcer.decrementInflight();
         });
@@ -94,7 +92,7 @@ function buildStageContext(execCtx, planDiagnostics) {
  */
 function batchRows(rows, batchSize) {
   const batches = [];
-  for (let i = LOCAL_NUM_ZERO; i < rows.length; i += batchSize) {
+  for (let i = 0; i < rows.length; i += batchSize) {
     batches.push(rows.slice(i, i + batchSize));
   }
   return batches;

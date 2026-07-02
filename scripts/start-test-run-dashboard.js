@@ -16,10 +16,8 @@ import {
 } from '../src/admin/standalone-test-run-server.js';
 import {ADMIN_STANDALONE_DEFAULT} from '../src/admin/admin-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_STR_2BCWL = 'Standalone test dashboard started\n';
+const LOCAL_STR_STANDALONE_TEST_DASHBOARD_STARTED = 'Standalone test dashboard started\n';
 
 const ARG = Object.freeze({
   HOST: '--host',
@@ -65,24 +63,24 @@ function parseArgs(argv) {
     help: false,
   };
 
-  for (let index = LOCAL_NUM_ZERO; index < argv.length; index++) {
+  for (let index = 0; index < argv.length; index++) {
     const token = argv[index];
     if (token === ARG.HELP_LONG || token === ARG.HELP_SHORT) {
       parsed.help = true;
       continue;
     }
-    if (token === ARG.HOST && index + LOCAL_NUM_ONE < argv.length) {
-      parsed.host = argv[index + LOCAL_NUM_ONE];
+    if (token === ARG.HOST && index + 1 < argv.length) {
+      parsed.host = argv[index + 1];
       index++;
       continue;
     }
-    if (token === ARG.PORT && index + LOCAL_NUM_ONE < argv.length) {
-      parsed.port = argv[index + LOCAL_NUM_ONE];
+    if (token === ARG.PORT && index + 1 < argv.length) {
+      parsed.port = argv[index + 1];
       index++;
       continue;
     }
-    if (token === ARG.WORKSPACE && index + LOCAL_NUM_ONE < argv.length) {
-      parsed.workspaceRoot = argv[index + LOCAL_NUM_ONE];
+    if (token === ARG.WORKSPACE && index + 1 < argv.length) {
+      parsed.workspaceRoot = argv[index + 1];
       index++;
       continue;
     }
@@ -123,7 +121,7 @@ async function main() {
   });
   const info = await server.start();
 
-  process.stdout.write(LOCAL_STR_2BCWL);
+  process.stdout.write(LOCAL_STR_STANDALONE_TEST_DASHBOARD_STARTED);
   process.stdout.write(`  URL: ${info.url}\n`);
   process.stdout.write(`  Dashboard: ${info.dashboardUrl}\n`);
   process.stdout.write(`  Workspace: ${info.workspaceRoot}\n`);

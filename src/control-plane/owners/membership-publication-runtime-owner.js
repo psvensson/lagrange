@@ -1,6 +1,5 @@
 import {createControlPlaneRuntimeBundle} from
   '../control-plane-runtime-bundle.js';
-import {NUM} from '../../constants/index.js';
 import {createSystemMetadataOwners} from './create-system-metadata-owners.js';
 import {NodeEndpointsOwner} from './node-endpoints-owner.js';
 
@@ -13,7 +12,7 @@ function normalizeNonNegativeInteger(value, fallback = null) {
     return fallback;
   }
   const normalized = Math.floor(value);
-  return normalized >= NUM.ZERO ? normalized : fallback;
+  return normalized >= 0 ? normalized : fallback;
 }
 
 function applyOwnerDependencies(owner, options = {}) {
@@ -114,10 +113,10 @@ class MembershipPublicationRuntimeOwner {
       mutationOptions.queryTimeoutMs = queryTimeoutMs;
       mutationOptions.controlPlaneWriteRetryTimeoutMs = queryTimeoutMs;
     }
-    if (retryBaseDelayMs !== null && retryBaseDelayMs > NUM.ZERO) {
+    if (retryBaseDelayMs !== null && retryBaseDelayMs > 0) {
       mutationOptions.controlPlaneWriteRetryBaseDelayMs = retryBaseDelayMs;
     }
-    if (retryMaxDelayMs !== null && retryMaxDelayMs > NUM.ZERO) {
+    if (retryMaxDelayMs !== null && retryMaxDelayMs > 0) {
       mutationOptions.controlPlaneWriteRetryMaxDelayMs = retryMaxDelayMs;
     }
     if (typeof options.controlPlaneWriteRetryNow !== LOCAL_STR_FUNCTION &&

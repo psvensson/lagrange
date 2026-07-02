@@ -21,7 +21,6 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_EXECUTED = 'executed';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_SPLIT_PLAN = 'split_plan';
 
 const OperationState = SPLIT_MERGE_STATE;
@@ -93,7 +92,7 @@ class PartitionSplitMergeManagerTransitionMethods {
    * @private
    */
   resolveManagedSplitExecutionError(execution) {
-    if (typeof execution?.error === LOCAL_STR_STRING && execution.error.length > LOCAL_NUM_ZERO) {
+    if (typeof execution?.error === LOCAL_STR_STRING && execution.error.length > 0) {
       return execution.error;
     }
     return SPLIT_MERGE_ERROR_MSG.MANAGED_SPLIT_EXECUTION_FAILED;
@@ -184,7 +183,7 @@ class PartitionSplitMergeManagerTransitionMethods {
     }
 
     this.deferredRetryEvaluationDueAtMs = normalizedDueAtMs;
-    const retryDelayMs = Math.max(NUM.ZERO, normalizedDueAtMs - nowMs);
+    const retryDelayMs = Math.max(0, normalizedDueAtMs - nowMs);
     this.deferredRetryEvaluationTimer = setTimeout(() => {
       this.flushDeferredRetryEvaluation();
     }, retryDelayMs);
@@ -318,9 +317,9 @@ class PartitionSplitMergeManagerTransitionMethods {
 
       // Generate new partition IDs
       const leftPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
-        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.LEFT_SUFFIX}`;
+        `${uuidv4().substring(0, NUM.EIGHT)}${SPLIT_MERGE_ID.LEFT_SUFFIX}`;
       const rightPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
-        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.RIGHT_SUFFIX}`;
+        `${uuidv4().substring(0, NUM.EIGHT)}${SPLIT_MERGE_ID.RIGHT_SUFFIX}`;
 
       // Create new key ranges
       const leftRange = new KeyRange(currentRange.start, medianKey);
@@ -433,7 +432,7 @@ class PartitionSplitMergeManagerTransitionMethods {
 
       // Generate merged partition ID
       const mergedPartitionId = `${tableId}${SPLIT_MERGE_ID.PARTITION_SEPARATOR}` +
-        `${uuidv4().substring(NUM.ZERO, NUM.EIGHT)}${SPLIT_MERGE_ID.MERGED_SUFFIX}`;
+        `${uuidv4().substring(0, NUM.EIGHT)}${SPLIT_MERGE_ID.MERGED_SUFFIX}`;
 
       // Create merged key range
       const mergedRange = new KeyRange(leftRange.start, rightRange.end);

@@ -32,8 +32,8 @@ const PARTITION_ID = 'cl-038-partition';
 const NODE_1 = 'node-1';
 const NODE_2 = 'node-2';
 const NODE_3 = 'node-3';
-const CPU_LOW = NUM.ONE;
-const CPU_MID = NUM.TWO;
+const CPU_LOW = 1;
+const CPU_MID = 2;
 const CPU_HIGH = NUM.THREE;
 const ESTIMATED_BYTES = NUM.BYTES_PER_MIB;
 
@@ -42,8 +42,8 @@ function createNode(nodeId, cpu) {
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
     cpu_usage_percent: cpu,
-    memory_usage_percent: NUM.ZERO,
-    disk_usage_percent: NUM.ZERO,
+    memory_usage_percent: 0,
+    disk_usage_percent: 0,
   };
 }
 
@@ -107,8 +107,8 @@ function accountingService() {
 }
 
 const PARTITION_POLICY = {
-  targetReplicaCount: NUM.TWO,
-  minReplicaCount: NUM.ONE,
+  targetReplicaCount: 2,
+  minReplicaCount: 1,
   maxReplicaCount: NUM.THREE,
   placementConstraints: {considerCpuLoad: true},
 };
@@ -142,14 +142,14 @@ test('CL-038 surplus drain retains the leader node', async (t) => {
         targetState.targetNodes.includes(NODE_3),
         'a non-leader node is dropped from the target cohort instead',
       );
-      t.equal(moves.length, NUM.ONE, 'still exactly one surplus-drain move');
-      t.equal(moves[NUM.ZERO].type, REBALANCER_MOVE_TYPE.REMOVE);
+      t.equal(moves.length, 1, 'still exactly one surplus-drain move');
+      t.equal(moves[0].type, REBALANCER_MOVE_TYPE.REMOVE);
       t.equal(
-        moves[NUM.ZERO].nodeId,
+        moves[0].nodeId,
         NODE_3,
         'the drained replica is the non-leader, not the leader',
       );
-      t.equal(moves[NUM.ZERO].reason, MOVE_REASON.NODE_NOT_IN_TARGET);
+      t.equal(moves[0].reason, MOVE_REASON.NODE_NOT_IN_TARGET);
       t.ok(
         targetState.placementOwnerDecision.reservationResult.reasons.includes(
           PLACEMENT_OWNER_RESERVATION_REASON.LEADER_RETENTION,
@@ -232,7 +232,7 @@ test('CL-038 surplus drain retains the leader node', async (t) => {
           createReplica('replica-2', NODE_2, 'follower'),
           createReplica('replica-3', NODE_3, 'leader'),
         ],
-        targetCount: NUM.TWO,
+        targetCount: 2,
         policy: {placementConstraints: {considerCpuLoad: true}},
         transitionSnapshot: {
           nodesWithEntityAddTransitional: new Set([NODE_1, NODE_2]),

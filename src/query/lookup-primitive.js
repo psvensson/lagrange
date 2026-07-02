@@ -8,7 +8,6 @@
  * Requirements: 5.1, 5.2
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   LOOKUP_MAX_KEYS,
   LOOKUP_MAX_BYTES,
@@ -45,7 +44,7 @@ function validateLookupArgs(table, keys, budgets) {
   if (!table) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.LOOKUP_TABLE_REQUIRED};
   }
-  if (typeof table !== TYPEOF.STRING) {
+  if (typeof table !== 'string') {
     return {
       valid: false,
       error: PRIMITIVE_ERROR_MSG.LOOKUP_TABLE_MUST_BE_STRING,
@@ -57,7 +56,7 @@ function validateLookupArgs(table, keys, budgets) {
   if (!Array.isArray(keys)) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.LOOKUP_KEYS_MUST_BE_ARRAY};
   }
-  if (keys.length === NUM.ZERO) {
+  if (keys.length === 0) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.LOOKUP_KEYS_EMPTY};
   }
 
@@ -157,7 +156,7 @@ function groupKeysByPartition(keys, partitionResolver) {
  * @return {number} Estimated byte count.
  */
 function estimateLookupBytes(rows) {
-  let total = NUM.ZERO;
+  let total = 0;
   for (const row of rows) {
     total += JSON.stringify(row).length;
   }
@@ -259,13 +258,13 @@ async function executeLookup(options) {
 
   if (lineageTracker) {
     lineageTracker.attachLineage(
-      result, stageIndex ?? NUM.ZERO, PRIMITIVE_TYPE.LOOKUP,
-      sequenceNum ?? NUM.ZERO,
+      result, stageIndex ?? 0, PRIMITIVE_TYPE.LOOKUP,
+      sequenceNum ?? 0,
     );
   }
 
   // Report telemetry
-  if (typeof onTelemetry === TYPEOF.FUNCTION) {
+  if (typeof onTelemetry === 'function') {
     onTelemetry({
       primitive: PRIMITIVE_TYPE.LOOKUP,
       table,

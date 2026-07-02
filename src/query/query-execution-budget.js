@@ -1,4 +1,4 @@
-import {ERRORS, NUM, TYPEOF} from '../constants/index.js';
+import {ERRORS} from '../constants/index.js';
 
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
   DELIVERY_SOURCE: 'deliverySource',
@@ -7,23 +7,23 @@ const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
 });
 
 export function normalizeParticipantFailureString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
 
 export function normalizeParticipantRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ? Math.floor(value) : null;
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 }
 
 export function resolveParticipantBackpressureState(result = {}) {
-  if (typeof result?.backpressured === TYPEOF.BOOLEAN) {
+  if (typeof result?.backpressured === 'boolean') {
     return result.backpressured;
   }
   if (result?.deferRetry === true) {
     return true;
   }
-  return Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > NUM.ZERO;
+  return Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0;
 }
 
 export function buildParticipantFailureEntry(result) {
@@ -35,7 +35,7 @@ export function buildParticipantFailureEntry(result) {
     error: result.error || ERRORS.QUERY_FAILED,
     durationMs:
       Number.isFinite(result?.durationMs) ?
-        Math.max(NUM.ZERO, Math.floor(result.durationMs)) :
+        Math.max(0, Math.floor(result.durationMs)) :
         null,
     retryAfterMs: normalizeParticipantRetryAfterMs(result?.retryAfterMs),
     deferRetry: result?.deferRetry === true,
@@ -53,8 +53,8 @@ export function buildDistributedFailureSummary(failedResults) {
     partitionErrors: participantFailures,
     participantFailures,
     firstFailedParticipant:
-      participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      participantFailures.length > 0 ?
+        participantFailures[0] :
         null,
   };
 }
@@ -91,7 +91,7 @@ export function resolvePartitionRetryDelayMs(
   failureDetails = null,
 ) {
   return Number.isFinite(failureDetails?.retryAfterMs) &&
-    failureDetails.retryAfterMs > NUM.ZERO ?
+    failureDetails.retryAfterMs > 0 ?
     Math.max(defaultRetryDelayMs, failureDetails.retryAfterMs) :
     defaultRetryDelayMs;
 }
@@ -105,25 +105,25 @@ export function createPartitionExecutionBudget({
 } = {}) {
   const executionTimeoutMs =
     Number.isFinite(executionOptions?.timeoutMs) &&
-    executionOptions.timeoutMs > NUM.ZERO ?
+    executionOptions.timeoutMs > 0 ?
       Math.floor(executionOptions.timeoutMs) :
       null;
   const executionDeadlineMs =
     executionTimeoutMs === null ? null : nowFn() + executionTimeoutMs;
-  let routerDeliveryAttemptCount = NUM.ZERO;
+  let routerDeliveryAttemptCount = 0;
 
   const getRemainingExecutionBudgetMs = () => {
     if (executionDeadlineMs === null) {
       return null;
     }
-    return Math.max(NUM.ZERO, executionDeadlineMs - nowFn());
+    return Math.max(0, executionDeadlineMs - nowFn());
   };
 
   const getRouterDeliveryTimeoutMs = () => {
     if (executionTimeoutMs === null) {
       return null;
     }
-    if (routerDeliveryAttemptCount === NUM.ZERO) {
+    if (routerDeliveryAttemptCount === 0) {
       return executionTimeoutMs;
     }
     return getRemainingExecutionBudgetMs();
@@ -136,66 +136,66 @@ export function createPartitionExecutionBudget({
       if (
         typeof executionOptions?.[
           QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_PRIORITY
-        ] === TYPEOF.STRING &&
-        executionOptions.deliveryPriority.length > NUM.ZERO
+        ] === 'string' &&
+        executionOptions.deliveryPriority.length > 0
       ) {
         routerOptions.deliveryPriority = executionOptions.deliveryPriority;
       }
       if (
         typeof executionOptions?.[
           QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_SOURCE
-        ] === TYPEOF.STRING &&
-        executionOptions.deliverySource.length > NUM.ZERO
+        ] === 'string' &&
+        executionOptions.deliverySource.length > 0
       ) {
         routerOptions.deliverySource = executionOptions.deliverySource;
       }
       if (
         typeof executionOptions?.[
           QUERY_EXECUTION_BUDGET_FIELD.REPLACE_PENDING_KEY
-        ] === TYPEOF.STRING &&
-        executionOptions.replacePendingKey.length > NUM.ZERO
+        ] === 'string' &&
+        executionOptions.replacePendingKey.length > 0
       ) {
         routerOptions.replacePendingKey = executionOptions.replacePendingKey;
       }
       const routerDeliveryTimeoutMs = getRouterDeliveryTimeoutMs();
       if (routerDeliveryTimeoutMs !== null) {
-        if (routerDeliveryTimeoutMs <= NUM.ZERO) {
+        if (routerDeliveryTimeoutMs <= 0) {
           return null;
         }
         routerOptions.timeoutMs = routerDeliveryTimeoutMs;
       }
-      return Object.keys(routerOptions).length === NUM.ZERO ?
+      return Object.keys(routerOptions).length === 0 ?
         undefined :
         routerOptions;
     },
     recordRouterDeliveryAttempt() {
-      routerDeliveryAttemptCount += NUM.ONE;
+      routerDeliveryAttemptCount += 1;
     },
     async waitForRetryBudget(retryDelayMs) {
       const normalizedRetryDelayMs =
-        Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO ?
+        Number.isFinite(retryDelayMs) && retryDelayMs > 0 ?
           Math.floor(retryDelayMs) :
-          NUM.ZERO;
+          0;
       const remainingBudgetMs = getRemainingExecutionBudgetMs();
       if (remainingBudgetMs === null) {
-        if (normalizedRetryDelayMs > NUM.ZERO) {
+        if (normalizedRetryDelayMs > 0) {
           await delay(normalizedRetryDelayMs);
           throwIfCancelled(cancellationToken);
         }
         return true;
       }
-      if (remainingBudgetMs <= NUM.ZERO) {
+      if (remainingBudgetMs <= 0) {
         return false;
       }
       if (normalizedRetryDelayMs > remainingBudgetMs) {
         return false;
       }
-      if (normalizedRetryDelayMs > NUM.ZERO) {
+      if (normalizedRetryDelayMs > 0) {
         await delay(normalizedRetryDelayMs);
         throwIfCancelled(cancellationToken);
       }
       const nextRemainingBudgetMs = getRemainingExecutionBudgetMs();
-      return nextRemainingBudgetMs === null || nextRemainingBudgetMs > NUM.ZERO;
+      return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;
     },
   });
 }

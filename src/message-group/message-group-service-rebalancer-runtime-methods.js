@@ -7,7 +7,6 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_ERROR_MSG,
     MESSAGE_GROUP_SERVICE_LITERAL,
     RebalancerEntityType,
-    TYPEOF,
     UnifiedRebalancer,
   } = deps;
 
@@ -88,7 +87,7 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
           this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
           this.rebalancer.tablePolicyService = this.tablePolicyService;
           if (
-            typeof this.rebalancer.setRebalanceCoordinator !== TYPEOF.FUNCTION
+            typeof this.rebalancer.setRebalanceCoordinator !== 'function'
           ) {
             throw new Error(
               MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REBALANCER_SET_COORDINATOR,

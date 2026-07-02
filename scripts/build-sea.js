@@ -20,14 +20,13 @@ const LOCAL_STR_NODE22 = 'node22';
 const LOCAL_STR_DIST = 'dist';
 const LOCAL_STR_CJS = 'cjs';
 const LOCAL_STR_TRUE = '"true"';
-const LOCAL_STR_1523G = '=== Building SEA Bundles ===\n';
-const LOCAL_STR_JD32F = 'Created dist directory\n';
-const LOCAL_STR_53PKQ = '\nStaging runtime dependencies...';
+const LOCAL_STR_BUILDING_SEA_BUNDLES = '=== Building SEA Bundles ===\n';
+const LOCAL_STR_CREATED_DIST_DIRECTORY = 'Created dist directory\n';
+const LOCAL_STR_STAGING_RUNTIME_DEPENDENCIES = '\nStaging runtime dependencies...';
 const LOCAL_STR_BUILD_COMPLETE = '\n=== Build Complete ===';
-const LOCAL_STR_1PL2X = 'Bundles created in dist/';
-const LOCAL_STR_1MECL = '  - node_modules/ (runtime dependencies)';
+const LOCAL_STR_BUNDLES_CREATED_IN_DIST = 'Bundles created in dist/';
+const LOCAL_STR_NODE_MODULES_RUNTIME_DEPENDENCIES = '  - node_modules/ (runtime dependencies)';
 const LOCAL_STR_BUILD_FAILED = '\nBuild failed:';
-const LOCAL_NUM_ONE = 1;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -139,12 +138,12 @@ function stageRuntimePackages() {
  * Main build function.
  */
 async function main() {
-  console.log(LOCAL_STR_1523G);
+  console.log(LOCAL_STR_BUILDING_SEA_BUNDLES);
 
   const distDir = join(projectRoot, 'dist');
   if (!existsSync(distDir)) {
     mkdirSync(distDir, {recursive: true});
-    console.log(LOCAL_STR_JD32F);
+    console.log(LOCAL_STR_CREATED_DIST_DIRECTORY);
   }
 
   try {
@@ -157,18 +156,18 @@ async function main() {
       );
     }
 
-    console.log(LOCAL_STR_53PKQ);
+    console.log(LOCAL_STR_STAGING_RUNTIME_DEPENDENCIES);
     stageRuntimePackages();
 
     console.log(LOCAL_STR_BUILD_COMPLETE);
-    console.log(LOCAL_STR_1PL2X);
+    console.log(LOCAL_STR_BUNDLES_CREATED_IN_DIST);
     for (const bundle of BUNDLES) {
       console.log(`  - ${bundle.outputFile} (${bundle.name})`);
     }
-    console.log(LOCAL_STR_1MECL);
+    console.log(LOCAL_STR_NODE_MODULES_RUNTIME_DEPENDENCIES);
   } catch (error) {
     console.error(LOCAL_STR_BUILD_FAILED, error.message);
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
 }
 

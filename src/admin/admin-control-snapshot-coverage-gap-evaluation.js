@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from '../partition/partition-constants.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -42,7 +42,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
   evaluateConnectedNodeCoverageGap(nodeRows = []) {
     if (
       !this.messageRouter ||
-      typeof this.messageRouter.getConnectedNodes !== TYPEOF.FUNCTION
+      typeof this.messageRouter.getConnectedNodes !== 'function'
     ) {
       return Object.freeze({
         hasCoverageGap: false,
@@ -65,8 +65,8 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
     const connectedNodeIds = uniqueSorted(
       (this.messageRouter.getConnectedNodes() || []).filter(
         (nodeId) =>
-          typeof nodeId === TYPEOF.STRING &&
-          nodeId.length > NUM.ZERO &&
+          typeof nodeId === 'string' &&
+          nodeId.length > 0 &&
           nodeId !== this.nodeId,
       ),
     );
@@ -74,7 +74,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       (nodeId) => !observedNodeIds.has(nodeId),
     );
     return Object.freeze({
-      hasCoverageGap: missingNodeIds.length > NUM.ZERO,
+      hasCoverageGap: missingNodeIds.length > 0,
       missingNodeIds: Object.freeze(missingNodeIds),
     });
   }
@@ -105,7 +105,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
     )) {
       const readinessDimensions =
         readinessEntry?.dimensions &&
-        typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+        typeof readinessEntry.dimensions === 'object' ?
           readinessEntry.dimensions :
           null;
       if (
@@ -134,10 +134,10 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
     }
     if (
       this.messageRouter &&
-      typeof this.messageRouter.getConnectedNodes === TYPEOF.FUNCTION
+      typeof this.messageRouter.getConnectedNodes === 'function'
     ) {
       for (const nodeId of this.messageRouter.getConnectedNodes() || []) {
-        if (typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO) {
+        if (typeof nodeId === 'string' && nodeId.length > 0) {
           visibleNodeIds.add(nodeId);
         }
       }
@@ -146,7 +146,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       [...visibleNodeIds].filter((nodeId) => !activeNodeIds.has(nodeId)),
     );
     return Object.freeze({
-      hasCoverageGap: missingNodeIds.length > NUM.ZERO,
+      hasCoverageGap: missingNodeIds.length > 0,
       missingNodeIds: Object.freeze(missingNodeIds),
     });
   }
@@ -166,8 +166,8 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       partitionRows :
       ADMIN_CACHE_DUMP.EMPTY;
     if (
-      normalizedTableRows.length === NUM.ZERO ||
-      normalizedPartitionRows.length === NUM.ZERO
+      normalizedTableRows.length === 0 ||
+      normalizedPartitionRows.length === 0
     ) {
       return false;
     }
@@ -189,7 +189,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       if (
         !tableId ||
         !Number.isInteger(partitionVersion) ||
-        partitionVersion < NUM.ONE
+        partitionVersion < 1
       ) {
         continue;
       }
@@ -204,7 +204,7 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       const key = `${tableId}:${partitionVersion}`;
       activePartitionCountByTableVersion.set(
         key,
-        (activePartitionCountByTableVersion.get(key) || NUM.ZERO) + NUM.ONE,
+        (activePartitionCountByTableVersion.get(key) || 0) + 1,
       );
     }
     for (const tableRow of normalizedTableRows) {
@@ -220,13 +220,13 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       );
       if (
         Number.isInteger(activePartitionVersion) &&
-        activePartitionVersion >= NUM.ONE &&
+        activePartitionVersion >= 1 &&
         Number.isInteger(expectedPartitionCount) &&
-        expectedPartitionCount > NUM.ZERO
+        expectedPartitionCount > 0
       ) {
         const key = `${tableId}:${activePartitionVersion}`;
         const observedPartitionCount =
-          activePartitionCountByTableVersion.get(key) || NUM.ZERO;
+          activePartitionCountByTableVersion.get(key) || 0;
         if (observedPartitionCount !== expectedPartitionCount) {
           return true;
         }

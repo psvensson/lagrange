@@ -6,7 +6,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, STATE, TABLES} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
@@ -127,13 +127,13 @@ class SystemTableCache {
    */
   recordAppliedSchemaVersion(tableName, version) {
     this.validateTableName(tableName);
-    if (version === null || typeof version === TYPEOF.UNDEFINED) {
+    if (version === null || typeof version === 'undefined') {
       return this.getAppliedSchemaVersion(tableName);
     }
 
     const currentVersion = this.appliedSchemaVersions.get(tableName);
-    if (typeof currentVersion === TYPEOF.UNDEFINED ||
-        this.compareSchemaVersions(version, currentVersion) >= NUM.ZERO) {
+    if (typeof currentVersion === 'undefined' ||
+        this.compareSchemaVersions(version, currentVersion) >= 0) {
       this.appliedSchemaVersions.set(tableName, version);
       return version;
     }
@@ -202,15 +202,15 @@ class SystemTableCache {
    * @throws {Error} If epoch is invalid or missing required fields
    */
   updateFromEpoch(epoch) {
-    if (!epoch || typeof epoch !== TYPEOF.OBJECT) {
+    if (!epoch || typeof epoch !== 'object') {
       throw new Error(CACHE_ERROR_MSG.EPOCH_INVALID_OBJECT);
     }
 
-    if (typeof epoch.epoch !== TYPEOF.NUMBER) {
+    if (typeof epoch.epoch !== 'number') {
       throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_NUMBER);
     }
 
-    if (!epoch.assignments || typeof epoch.assignments !== TYPEOF.OBJECT) {
+    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
       throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_ASSIGNMENTS);
     }
 
@@ -276,8 +276,8 @@ class SystemTableCache {
 
     // Sort by priority (lower value = higher preference)
     return endpoints.sort((a, b) => {
-      const priorityA = a[COLUMN.PRIORITY] ?? NUM.ZERO;
-      const priorityB = b[COLUMN.PRIORITY] ?? NUM.ZERO;
+      const priorityA = a[COLUMN.PRIORITY] ?? 0;
+      const priorityB = b[COLUMN.PRIORITY] ?? 0;
       return priorityA - priorityB;
     });
   }
@@ -304,7 +304,7 @@ class SystemTableCache {
    * @param {Function} listener - Called with (tableName, operation, record)
    */
   onCacheChange(listener) {
-    if (typeof listener !== TYPEOF.FUNCTION) {
+    if (typeof listener !== 'function') {
       throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
     }
     this.listeners.add(listener);
@@ -328,11 +328,11 @@ class SystemTableCache {
    * @private
    */
   notifyListeners(tableName, operation, record, metadata) {
-    if (this.listeners.size === NUM.ZERO) {
+    if (this.listeners.size === 0) {
       return;
     }
 
-    const normalizedMetadata = metadata && typeof metadata === TYPEOF.OBJECT ?
+    const normalizedMetadata = metadata && typeof metadata === 'object' ?
       metadata :
       null;
 
@@ -513,7 +513,7 @@ class SystemTableCache {
   writeSupersedesTombstone(data, tombstone) {
     const incoming = this.versionStampsOf(data);
     if (incoming.hlc && tombstone.hlc) {
-      return incoming.hlc.compare(tombstone.hlc) > NUM.ZERO;
+      return incoming.hlc.compare(tombstone.hlc) > 0;
     }
     if (Number.isFinite(incoming.updatedAt) &&
         Number.isFinite(tombstone.updatedAt)) {
@@ -649,7 +649,7 @@ class SystemTableCache {
           // Derive keys exactly as applySystemTableChange does (`||` fallback) so
           // they align with how rows are stored; a mismatch would evict live rows.
           .map((row) => row?.[pkField] || row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
-          .filter((key) => typeof key !== TYPEOF.UNDEFINED),
+          .filter((key) => typeof key !== 'undefined'),
       );
       for (const key of [...table.keys()]) {
         if (authoritativeKeys.has(key)) {
@@ -698,7 +698,7 @@ class SystemTableCache {
     const pkField = getSystemCachePrimaryKeyField(tableName);
     const key = data[pkField] || data[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
-    if (!data || typeof key === TYPEOF.UNDEFINED) {
+    if (!data || typeof key === 'undefined') {
       throw new Error(CACHE_ERROR_MSG.primaryKeyMissing(pkField));
     }
 

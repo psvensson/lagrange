@@ -19,10 +19,8 @@ import {
   FUNCTION_SEPARATOR,
   FUNCTION_SUBSCRIPTION_TYPE,
   FUNCTION_SUBSYSTEM,
-  TYPEOF,
 } from './function-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Subscription types.
@@ -96,7 +94,7 @@ class CDCSubscriptionManager extends EventEmitter {
    * @return {Promise<Object>} Subscription result with subscriptionId.
    */
   async subscribe(subscriberId, tableName, predicate, callback) {
-    if (typeof callback !== TYPEOF.FUNCTION) {
+    if (typeof callback !== 'function') {
       throw new Error(FUNCTION_ERROR_MSG.CALLBACK_MUST_BE_FUNCTION);
     }
 
@@ -225,11 +223,11 @@ class CDCSubscriptionManager extends EventEmitter {
   async unsubscribeAll(subscriberId) {
     const subscriptionIds = this.subscriberSubscriptions.get(subscriberId);
 
-    if (!subscriptionIds || subscriptionIds.size === LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
+    if (!subscriptionIds || subscriptionIds.size === 0) {
+      return 0;
     }
 
-    let count = LOCAL_NUM_ZERO;
+    let count = 0;
     for (const subscriptionId of subscriptionIds) {
       if (await this.unsubscribe(subscriptionId)) {
         count++;
@@ -344,7 +342,7 @@ class CDCSubscriptionManager extends EventEmitter {
 
     // The live-query compilePredicate expects an AST object, not a string.
     // For string predicates, use our simple predicate parser.
-    if (typeof predicate === TYPEOF.STRING) {
+    if (typeof predicate === 'string') {
       return this.createSimplePredicate(predicate);
     }
 
@@ -459,7 +457,7 @@ class CDCSubscriptionManager extends EventEmitter {
     const subscriptions = this.subscriberSubscriptions.get(subscriberId);
     if (subscriptions) {
       subscriptions.delete(subscriptionId);
-      if (subscriptions.size === LOCAL_NUM_ZERO) {
+      if (subscriptions.size === 0) {
         this.subscriberSubscriptions.delete(subscriberId);
       }
     }
@@ -500,7 +498,7 @@ class CDCSubscriptionManager extends EventEmitter {
    * @return {Object} Manager statistics.
    */
   getStats() {
-    let totalEvents = LOCAL_NUM_ZERO;
+    let totalEvents = 0;
     for (const subscription of this.subscriptions.values()) {
       totalEvents += subscription.eventCount;
     }

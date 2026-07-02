@@ -8,8 +8,8 @@
 
 import {BaseError} from '../utils/base-error.js';
 
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_STR_19YX9 = 'BootstrapPartitionWriter has been disabled after registration phase';
+const LOCAL_STR_COMMA_SPACE = ', ';
+const LOCAL_STR_BOOTSTRAPPARTITIONWRITER_HAS_BEEN_DISABL = 'BootstrapPartitionWriter has been disabled after registration phase';
 
 /**
  * Error thrown when a required dependency is missing.
@@ -89,7 +89,7 @@ class PhaseTransitionError extends BaseError {
   constructor(currentPhase, targetPhase, validTransitions, options = {}) {
     super(
       `Cannot transition from ${currentPhase} to ${targetPhase}. ` +
-      `Valid: ${validTransitions.join(LOCAL_STR_128KJ)}`,
+      `Valid: ${validTransitions.join(LOCAL_STR_COMMA_SPACE)}`,
       {
         cause: options.cause,
         context: {
@@ -150,7 +150,7 @@ class WriterDisabledError extends BaseError {
    * Create a WriterDisabledError.
    */
   constructor() {
-    super(LOCAL_STR_19YX9);
+    super(LOCAL_STR_BOOTSTRAPPARTITIONWRITER_HAS_BEEN_DISABL);
   }
 }
 

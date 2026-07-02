@@ -16,7 +16,6 @@ import {
 } from './phase-exit-constants.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Build a frozen gate result from evaluation inputs.
@@ -104,8 +103,8 @@ function evaluateAllPhases(gateResults) {
     new Map();
 
   const phases = [];
-  let passedPhases = LOCAL_NUM_ZERO;
-  let failedPhases = LOCAL_NUM_ZERO;
+  let passedPhases = 0;
+  let failedPhases = 0;
 
   for (const phaseId of MIGRATION_PHASE_ORDER) {
     const result = evaluatePhase(phaseId, resultMap);

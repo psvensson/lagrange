@@ -1,7 +1,4 @@
 import {
-  TYPEOF,
-} from '../../constants/index.js';
-import {
   BOOTSTRAP_TOPOLOGY_SNAPSHOT_CACHE,
   LOCAL_STR_COLON,
   LOCAL_STR_EMPTY,
@@ -30,7 +27,7 @@ import {
 class BootstrapTopologySnapshotOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.nowFn = typeof options.nowFn === TYPEOF.FUNCTION ?
+    this.nowFn = typeof options.nowFn === 'function' ?
       options.nowFn :
       Date.now;
     this.authoritativeSnapshotCacheTtlMs =
@@ -75,15 +72,15 @@ class BootstrapTopologySnapshotOwner {
     warningKey,
     payload = {},
   ) {
-    const tableName = typeof payload?.tableName === TYPEOF.STRING ?
+    const tableName = typeof payload?.tableName === 'string' ?
       payload.tableName :
       '';
-    const partitionId = typeof payload?.partitionId === TYPEOF.STRING ?
+    const partitionId = typeof payload?.partitionId === 'string' ?
       payload.partitionId :
       '';
     const partitionIds = Array.isArray(payload?.partitionIds) ?
       payload.partitionIds
-        .filter((value) => typeof value === TYPEOF.STRING && value.length > 0)
+        .filter((value) => typeof value === 'string' && value.length > 0)
         .join('|') :
       '';
     return [

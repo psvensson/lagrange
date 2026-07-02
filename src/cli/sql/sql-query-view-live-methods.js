@@ -1,9 +1,8 @@
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_PAUSED = 'paused';
 const LOCAL_STR_EXPIRED = 'expired';
 const LOCAL_STR_CANCELLED = 'cancelled';
-const LOCAL_STR_1RDRD = 'livequery:initialized';
+const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
 const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
@@ -37,17 +36,17 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
     }
 
     // Display initial results
-    if (data.data && data.data.length > LOCAL_NUM_ZERO) {
+    if (data.data && data.data.length > 0) {
       this.resultsPanel.displaySelectResult({
         results: data.data,
         count: data.data.length,
-      }, LOCAL_NUM_ZERO);
+      }, 0);
     }
 
     // Update status
     // Requirements: 32.6
     this.liveQueryStatus = LOCAL_LIVE_QUERY_STATUS.ACTIVE;
-    this.emitEvent(LOCAL_STR_1RDRD, {
+    this.emitEvent(LOCAL_STR_LIVEQUERY_INITIALIZED, {
       subscriptionId: data.subscriptionId,
       partitions: data.partitions,
     });
@@ -199,13 +198,13 @@ export const SQL_QUERY_VIEW_LIVE_METHODS = {
    */
   getLiveQueryEventRate() {
     if (!this.activeLiveQueryId || !this.liveQueryManager) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
 
     const subscription = this.liveQueryManager.getSubscription(
       this.activeLiveQueryId,
     );
-    return subscription ? subscription.eventRate : LOCAL_NUM_ZERO;
+    return subscription ? subscription.eventRate : 0;
   },
 
   /**

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 
 const TRANSPORT_SEMANTIC_OUTCOME_STATE = Object.freeze({
@@ -52,13 +51,13 @@ const ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE =
   'ROUTER_QUERY_TRANSPORT_NOT_READY';
 
 function normalizePositiveRetryAfterMs(value, fallback = null) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
@@ -142,7 +141,7 @@ function buildTransportSemanticOutcome(options = {}) {
     retryAfterMs,
     service:
       options.service &&
-        typeof options.service.sendMessage === TYPEOF.FUNCTION ?
+        typeof options.service.sendMessage === 'function' ?
         options.service :
         null,
   });
@@ -197,12 +196,12 @@ function buildQueryTransportSemanticOutcome(
   options = {},
 ) {
   const resolvedSelection =
-    selection && typeof selection === TYPEOF.OBJECT ?
+    selection && typeof selection === 'object' ?
       selection :
       {};
   const service =
     resolvedSelection.service &&
-      typeof resolvedSelection.service.sendMessage === TYPEOF.FUNCTION ?
+      typeof resolvedSelection.service.sendMessage === 'function' ?
       resolvedSelection.service :
       null;
 
@@ -233,7 +232,7 @@ function buildQueryTransportSemanticOutcome(
 }
 
 function classifyTransportSemanticOutcome(value = null, options = {}) {
-  const resolvedValue = value && typeof value === TYPEOF.OBJECT ? value : {};
+  const resolvedValue = value && typeof value === 'object' ? value : {};
   return buildTransportSemanticOutcome({
     ready: resolvedValue.ready === true,
     reason:
@@ -256,7 +255,7 @@ function classifyTransportSemanticOutcome(value = null, options = {}) {
 }
 
 function classifyTransportDeliveryOutcome(value = null, options = {}) {
-  const resolvedValue = value && typeof value === TYPEOF.OBJECT ? value : {};
+  const resolvedValue = value && typeof value === 'object' ? value : {};
   return buildTransportDeliveryOutcome({
     ...resolvedValue,
     acknowledged: resolvedValue.acknowledged === true,

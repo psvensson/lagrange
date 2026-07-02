@@ -4,9 +4,7 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   INITIAL_PARTITION_IDS,
-  NUM,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,
@@ -20,13 +18,13 @@ import {
  * @return {string|null}
  */
 function resolveGatewaySystemTablePartitionId(gateway, tableName) {
-  if (typeof tableName !== TYPEOF.STRING || tableName.length === NUM.ZERO) {
+  if (typeof tableName !== 'string' || tableName.length === 0) {
     return null;
   }
   const cdcIntegrationService = gateway.resolveCdcIntegrationService();
   if (
     typeof cdcIntegrationService?.resolveSystemTablePartitionIds ===
-    TYPEOF.FUNCTION
+    'function'
   ) {
     const partitionIds =
       cdcIntegrationService.resolveSystemTablePartitionIds(tableName);
@@ -34,7 +32,7 @@ function resolveGatewaySystemTablePartitionId(gateway, tableName) {
       const partitionId =
         partitionIds.find(
           (entry) =>
-            typeof entry === TYPEOF.STRING && entry.length > NUM.ZERO,
+            typeof entry === 'string' && entry.length > 0,
         ) || null;
       if (partitionId) {
         return partitionId;
@@ -70,7 +68,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
     partitionId &&
     sqlQueryEngine?.queryExecutor &&
     typeof sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot ===
-      TYPEOF.FUNCTION
+      'function'
   ) {
     try {
       routingSnapshot =
@@ -89,7 +87,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
   const systemTableCache = gateway.resolveSystemTableCache();
   if (
     systemTableCache &&
-    typeof systemTableCache.filter === TYPEOF.FUNCTION
+    typeof systemTableCache.filter === 'function'
   ) {
     const partitionRows =
       systemTableCache.filter(SYSTEM_TABLE_NAME.PARTITIONS, (row) => {
@@ -100,7 +98,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
         }
         return row?.table_name === tableName || row?.tableName === tableName;
       }) || [];
-    partitionRow = partitionRows[NUM.ZERO] || null;
+    partitionRow = partitionRows[0] || null;
     if (partitionId) {
       serviceRows =
         systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (row) => {
@@ -114,7 +112,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
   }
 
   const hasRoutingSnapshot =
-    routingSnapshot && typeof routingSnapshot === TYPEOF.OBJECT;
+    routingSnapshot && typeof routingSnapshot === 'object';
   const fallbackCanonicalLeaderIdentity = hasRoutingSnapshot ?
     null :
     resolveCanonicalLeaderIdentitySnapshot({
@@ -130,7 +128,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
   const canonicalLeaderIdentityState = hasRoutingSnapshot ?
     typeof routingSnapshot[
       CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
-    ] === TYPEOF.STRING ?
+    ] === 'string' ?
       routingSnapshot[
         CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
       ] :
@@ -143,8 +141,8 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
     serviceRows.filter(
       (row) =>
         row?.status === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ACTIVE &&
-          typeof row?.address === TYPEOF.STRING &&
-          row.address.length > NUM.ZERO,
+          typeof row?.address === 'string' &&
+          row.address.length > 0,
     ).length;
   const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount) ?
     routingSnapshot.serviceRowCount :
@@ -153,7 +151,7 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
     typeof routingSnapshot[
       CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
         .CANONICAL_LEADER_ROUTING_GAP_STATE
-    ] === TYPEOF.STRING ?
+    ] === 'string' ?
       routingSnapshot[
         CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
           .CANONICAL_LEADER_ROUTING_GAP_STATE
@@ -167,18 +165,18 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
     });
   return {
     partitionId,
-    ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
+    ...(typeof canonicalLeaderIdentityState === 'string' ?
       {
         canonicalLeaderIdentityState,
       } :
       {}),
-    ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
+    ...(typeof canonicalLeaderRoutingGapState === 'string' ?
       {
         canonicalLeaderRoutingGapState,
       } :
       {}),
-    ...(typeof leaderNodeId === TYPEOF.STRING &&
-    leaderNodeId.length > NUM.ZERO ?
+    ...(typeof leaderNodeId === 'string' &&
+    leaderNodeId.length > 0 ?
       {
         leaderNodeId,
       } :
@@ -187,8 +185,8 @@ function buildGatewayFallbackSystemTableRoutingDiagnostics(
     routableServiceCount,
     deniedByReadiness:
       routingSnapshot &&
-      typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
-        Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
+      typeof routingSnapshot.deniedByNodeId === 'object' ?
+        Object.keys(routingSnapshot.deniedByNodeId).length > 0 :
         false,
   };
 }
@@ -211,12 +209,12 @@ function buildGatewayOperationLedgerDiagnostics(
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
   const hasFailureSignals =
     result?.success === false ||
-    typeof result?.error === TYPEOF.STRING ||
-    typeof result?.message === TYPEOF.STRING ||
+    typeof result?.error === 'string' ||
+    typeof result?.message === 'string' ||
     Array.isArray(result?.participantFailures);
   const systemTableDiagnostics =
     result?.systemTableDiagnostics &&
-    typeof result.systemTableDiagnostics === TYPEOF.OBJECT ?
+    typeof result.systemTableDiagnostics === 'object' ?
       result.systemTableDiagnostics :
       {};
   const failureSummary = hasFailureSignals ?
@@ -224,7 +222,7 @@ function buildGatewayOperationLedgerDiagnostics(
     null;
   const retryAfterMs = hasFailureSignals ?
     getControlPlaneRetryAfterMs(result) :
-    NUM.ZERO;
+    0;
   const errorCode = hasFailureSignals ?
     getControlPlaneErrorCode(result) || null :
     null;
@@ -248,11 +246,11 @@ function buildGatewayOperationLedgerDiagnostics(
     fallbackDiagnostics.canonicalLeaderRoutingGapState ||
     null;
   const leaderNodeId =
-    typeof systemTableDiagnostics.leaderNodeId === TYPEOF.STRING &&
-    systemTableDiagnostics.leaderNodeId.length > NUM.ZERO ?
+    typeof systemTableDiagnostics.leaderNodeId === 'string' &&
+    systemTableDiagnostics.leaderNodeId.length > 0 ?
       systemTableDiagnostics.leaderNodeId :
-      typeof fallbackDiagnostics.leaderNodeId === TYPEOF.STRING &&
-          fallbackDiagnostics.leaderNodeId.length > NUM.ZERO ?
+      typeof fallbackDiagnostics.leaderNodeId === 'string' &&
+          fallbackDiagnostics.leaderNodeId.length > 0 ?
         fallbackDiagnostics.leaderNodeId :
         null;
   const queryTimeoutMs = Number.isFinite(
@@ -293,8 +291,8 @@ function buildGatewayOperationLedgerDiagnostics(
     localReplicaFallbackHit:
       result?.localReplicaFallbackHit === true ||
       systemTableDiagnostics.localReplicaFallbackHit === true,
-    ...(typeof routedToNode === TYPEOF.STRING &&
-    routedToNode.length > NUM.ZERO ?
+    ...(typeof routedToNode === 'string' &&
+    routedToNode.length > 0 ?
       {
         routedToNode,
       } :
@@ -305,18 +303,18 @@ function buildGatewayOperationLedgerDiagnostics(
       result?.errorCode ===
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTER_QUERY_TRANSPORT_NOT_READY ||
       (result?.success === false && result?.deferRetry === true),
-    ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
+    ...(typeof canonicalLeaderIdentityState === 'string' ?
       {
         canonicalLeaderIdentityState,
       } :
       {}),
-    ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
+    ...(typeof canonicalLeaderRoutingGapState === 'string' ?
       {
         canonicalLeaderRoutingGapState,
       } :
       {}),
-    ...(typeof leaderNodeId === TYPEOF.STRING &&
-    leaderNodeId.length > NUM.ZERO ?
+    ...(typeof leaderNodeId === 'string' &&
+    leaderNodeId.length > 0 ?
       {
         leaderNodeId,
       } :
@@ -330,20 +328,20 @@ function buildGatewayOperationLedgerDiagnostics(
       systemTableDiagnostics.routableServiceCount :
       fallbackDiagnostics.routableServiceCount,
     queryTimeoutMs:
-      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > 0 ?
         Math.floor(queryTimeoutMs) :
         null,
-    ...(typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO ?
+    ...(typeof errorCode === 'string' && errorCode.length > 0 ?
       {
         errorCode,
       } :
       {}),
-    ...(retryAfterMs > NUM.ZERO ?
+    ...(retryAfterMs > 0 ?
       {
         retryAfterMs,
       } :
       {}),
-    ...(failureSummary && failureSummary.linkedFailureCount > NUM.ZERO ?
+    ...(failureSummary && failureSummary.linkedFailureCount > 0 ?
       {
         canonicalFailureReason: failureSummary.primaryReason,
         linkedFailureCount: failureSummary.linkedFailureCount,
@@ -357,10 +355,10 @@ function buildGatewayOperationLedgerDiagnostics(
       {}),
     ...(Number.isFinite(result?.queueWaitMs) ?
       {
-        queueWaitMs: Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)),
+        queueWaitMs: Math.max(0, Math.floor(result.queueWaitMs)),
       } :
       {}),
-    ...(typeof result?.queueState === TYPEOF.STRING ?
+    ...(typeof result?.queueState === 'string' ?
       {
         queueState: result.queueState,
       } :

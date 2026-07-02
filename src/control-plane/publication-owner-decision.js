@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_EVIDENCE_STATE,
@@ -44,18 +43,18 @@ function hasPublicationOwnerOpenCountOnlyPublishDebt(evidence) {
   return evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
     evidence.pendingAckEvidenceState ===
       PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-    evidence.pendingAckNodeIds.length === NUM.ZERO &&
-    evidence.missingPublishedCount > NUM.ZERO;
+    evidence.pendingAckNodeIds.length === 0 &&
+    evidence.missingPublishedCount > 0;
 }
 
 function hasPublicationOwnerUnknownCountOnlyPublishDebt(evidence) {
   return evidence.publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN &&
     evidence.pendingAckEvidenceState ===
       PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-    evidence.pendingAckCount === NUM.ZERO &&
-    evidence.pendingAckNodeIds.length === NUM.ZERO &&
-    evidence.missingPublishedCount > NUM.ZERO &&
-    evidence.missingPublishedNodeIds.length === NUM.ZERO &&
+    evidence.pendingAckCount === 0 &&
+    evidence.pendingAckNodeIds.length === 0 &&
+    evidence.missingPublishedCount > 0 &&
+    evidence.missingPublishedNodeIds.length === 0 &&
     evidence.prioritySpreadPending !== true &&
     evidence.prioritySpreadEvidenceUnavailable !== true;
 }
@@ -67,10 +66,10 @@ function hasPublicationOwnerUnknownNoDebtNotStartedEvidence(
   return evidence.publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN &&
     isPublicationOwnerUnpublishedObservation(evidence) &&
     ackState === PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED &&
-    evidence.pendingAckCount === NUM.ZERO &&
-    evidence.pendingAckNodeIds.length === NUM.ZERO &&
-    evidence.missingPublishedCount === NUM.ZERO &&
-    evidence.missingPublishedNodeIds.length === NUM.ZERO &&
+    evidence.pendingAckCount === 0 &&
+    evidence.pendingAckNodeIds.length === 0 &&
+    evidence.missingPublishedCount === 0 &&
+    evidence.missingPublishedNodeIds.length === 0 &&
     evidence.prioritySpreadPending !== true &&
     evidence.prioritySpreadEvidenceUnavailable !== true;
 }
@@ -78,7 +77,7 @@ function hasPublicationOwnerUnknownNoDebtNotStartedEvidence(
 const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK,
-    matches: (evidence) => evidence.pendingAckCount > NUM.ZERO &&
+    matches: (evidence) => evidence.pendingAckCount > 0 &&
       hasPublicationOwnerOpenCountOnlyPublishDebt(evidence) !== true,
   }),
   Object.freeze({
@@ -86,20 +85,20 @@ const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
     matches: (evidence) =>
       evidence.pendingAckEvidenceState ===
         PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST &&
-      evidence.requiredAckNodeIds.length === NUM.ZERO,
+      evidence.requiredAckNodeIds.length === 0,
   }),
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED,
     matches: (evidence) =>
       evidence.pendingAckEvidenceState ===
         PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST &&
-      evidence.requiredAckNodeIds.length > NUM.ZERO,
+      evidence.requiredAckNodeIds.length > 0,
   }),
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED,
     matches: (evidence) =>
       evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-      evidence.pendingAckCount === NUM.ZERO,
+      evidence.pendingAckCount === 0,
   }),
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE,
@@ -234,8 +233,8 @@ const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
       (
         hasPublicationOwnerRevision(snapshot.evidence) !== true &&
         snapshot.evidence.publicationPendingHint !== true &&
-        snapshot.evidence.pendingAckCount === NUM.ZERO &&
-        snapshot.evidence.missingPublishedCount === NUM.ZERO
+        snapshot.evidence.pendingAckCount === 0 &&
+        snapshot.evidence.missingPublishedCount === 0
       ),
   }),
   Object.freeze({
@@ -261,7 +260,7 @@ const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
     matches: (snapshot) =>
-      snapshot.evidence.missingPublishedCount > NUM.ZERO,
+      snapshot.evidence.missingPublishedCount > 0,
   }),
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.RECOVERY_LAG,
@@ -420,7 +419,7 @@ const PUBLICATION_OWNER_REASON_RULES = Object.freeze([
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.MISSING_PUBLISHED_MEMBERS,
     matches: (snapshot) =>
-      snapshot.evidence.missingPublishedCount > NUM.ZERO,
+      snapshot.evidence.missingPublishedCount > 0,
   }),
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.PUBLICATION_PENDING_HINT,
@@ -485,7 +484,7 @@ function resolvePublicationOwnerReasonCodes(snapshot) {
     PUBLICATION_OWNER_TEXT.EMPTY;
   return Object.freeze([
     ...new Set([
-      ...(statusReason.length > NUM.ZERO ? [statusReason] : []),
+      ...(statusReason.length > 0 ? [statusReason] : []),
       ...PUBLICATION_OWNER_REASON_RULES
         .filter((rule) => rule.matches(snapshot))
         .map((rule) => rule.reason),
@@ -524,7 +523,7 @@ function resolvePublicationOwnerMergedPublicationStatus(options = {}) {
   }
   if (
     statusCandidates.includes(CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING) ||
-    ownerEvidence.acknowledgedNodeIds.length > NUM.ZERO
+    ownerEvidence.acknowledgedNodeIds.length > 0
   ) {
     return CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING;
   }

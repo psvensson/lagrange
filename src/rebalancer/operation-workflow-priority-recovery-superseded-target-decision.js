@@ -4,9 +4,7 @@ const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
-  NUM,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
-  TYPEOF,
   buildPriorityRecoveryBlockedPartitionIds,
   hasPriorityRecoverySpreadGap,
   normalizeNodeIdList,
@@ -51,7 +49,7 @@ const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE = Object.freeze([
 
 function normalizePriorityRecoverySupersededReasonCodes(readiness) {
   const runtimeAuthority =
-    readiness?.runtimeAuthority && typeof readiness.runtimeAuthority === TYPEOF.OBJECT ?
+    readiness?.runtimeAuthority && typeof readiness.runtimeAuthority === 'object' ?
       readiness.runtimeAuthority :
       null;
   const reasonCodes = [
@@ -65,7 +63,7 @@ function normalizePriorityRecoverySupersededReasonCodes(readiness) {
   for (const reasonCode of reasonCodes) {
     const normalizedReasonCode = String(reasonCode || '').trim();
     if (
-      normalizedReasonCode.length === NUM.ZERO ||
+      normalizedReasonCode.length === 0 ||
       seenReasonCodes.has(normalizedReasonCode)
     ) {
       continue;
@@ -88,17 +86,17 @@ function buildPriorityRecoverySupersededTargetEvidence({
     buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) :
     [];
   const blockedPartitionScopeApplies =
-    blockedPartitionIds.length === NUM.ZERO ||
+    blockedPartitionIds.length === 0 ||
     blockedPartitionIds.includes(operation?.partitionId);
   const targetOutsideEligibleCohort =
     hasPriorityRecoverySpreadGap(priorityPartitionSummary) &&
-    eligibleNodeIds.length > NUM.ZERO &&
-    targetNodeId.length > NUM.ZERO &&
+    eligibleNodeIds.length > 0 &&
+    targetNodeId.length > 0 &&
     !eligibleNodeIds.includes(targetNodeId) &&
     blockedPartitionScopeApplies === true;
   const dimensions =
     targetReadiness?.dimensions &&
-    typeof targetReadiness.dimensions === TYPEOF.OBJECT ?
+    typeof targetReadiness.dimensions === 'object' ?
       targetReadiness.dimensions :
       null;
   const reasonCodes = normalizePriorityRecoverySupersededReasonCodes(targetReadiness);
@@ -143,7 +141,7 @@ function resolvePriorityRecoverySupersededTargetDecision({
   targetLifecycleStatus,
 }) {
   const targetNodeId = String(operation?.targetNodeId || '').trim();
-  if (!operation || targetNodeId.length === NUM.ZERO) {
+  if (!operation || targetNodeId.length === 0) {
     return Object.freeze({
       isFailure: false,
       targetNodeId,
@@ -152,7 +150,7 @@ function resolvePriorityRecoverySupersededTargetDecision({
   }
   if (
     !priorityRecoveryContext ||
-    typeof priorityRecoveryContext !== TYPEOF.OBJECT
+    typeof priorityRecoveryContext !== 'object'
   ) {
     return Object.freeze({
       isFailure: false,

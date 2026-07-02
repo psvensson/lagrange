@@ -1,9 +1,7 @@
 import {NodeService} from '../node/node-service.js';
 import {
   COLUMN,
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   normalizeNodeRow,
@@ -11,7 +9,6 @@ import {
 import {NODE_STATE} from '../constants/node-state.js';
 import {CONNECTION_STATE} from '../constants/transport.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_SYSTEM_TABLE_CACHE = 'system_table_cache';
 const LOCAL_STR_BOOTSTRAP_SNAPSHOT = 'bootstrap_snapshot';
 const LOCAL_STR_SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT =
@@ -29,8 +26,8 @@ const MESH_CONNECTIVITY_ROW_SELECTION_RULES = Object.freeze([
       .CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
     source: LOCAL_STR_SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
     matches: (evidence) =>
-      evidence.cacheRows.length > NUM.ZERO &&
-      evidence.supplementalBootstrapRows.length > NUM.ZERO,
+      evidence.cacheRows.length > 0 &&
+      evidence.supplementalBootstrapRows.length > 0,
     resolveRows: (evidence) =>
       evidence.cacheRows.concat(evidence.supplementalBootstrapRows),
     resolveBootstrapSupplementNodeIds: (evidence) =>
@@ -39,7 +36,7 @@ const MESH_CONNECTIVITY_ROW_SELECTION_RULES = Object.freeze([
   Object.freeze({
     kind: MESH_CONNECTIVITY_ROW_SELECTION_KIND.SYSTEM_TABLE_CACHE,
     source: LOCAL_STR_SYSTEM_TABLE_CACHE,
-    matches: (evidence) => evidence.cacheRows.length > NUM.ZERO,
+    matches: (evidence) => evidence.cacheRows.length > 0,
     resolveRows: (evidence) => evidence.cacheRows,
     resolveBootstrapSupplementNodeIds: () => [],
   }),
@@ -106,8 +103,8 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
         row?.connection_state,
         row?.connectionState,
       ].map((value) => {
-        return String(value || LOCAL_STR_EMPTY).toLowerCase();
-      }).filter((value) => value.length > NUM.ZERO)));
+        return String(value || '').toLowerCase();
+      }).filter((value) => value.length > 0)));
     },
 
     /**
@@ -117,13 +114,13 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
      */
     isMeshEligibleNodeRow(row) {
       const nodeId = this.resolveMeshConnectivityNodeId(row);
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         return false;
       }
 
       const lifecycleTokens =
         this.resolveMeshConnectivityLifecycleTokens(row);
-      if (lifecycleTokens.length === NUM.ZERO) {
+      if (lifecycleTokens.length === 0) {
         return true;
       }
 
@@ -157,9 +154,9 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
         bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
           const nodeId = this.resolveMeshConnectivityNodeId(row);
           const belongsToPublishedActiveSet =
-            bootstrapActiveNodeIds.size === NUM.ZERO ||
+            bootstrapActiveNodeIds.size === 0 ||
             (
-              nodeId.length > NUM.ZERO &&
+              nodeId.length > 0 &&
               bootstrapActiveNodeIds.has(nodeId)
             );
           return (
@@ -180,10 +177,10 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
     resolveBootstrapMeshConnectivitySupplement(cacheRows, bootstrapRows) {
       const cacheNodeIds = new Set(cacheRows.map((row) =>
         this.resolveMeshConnectivityNodeId(row),
-      ).filter((nodeId) => nodeId.length > NUM.ZERO));
+      ).filter((nodeId) => nodeId.length > 0));
       const supplementalRows = bootstrapRows.filter((row) => {
         const nodeId = this.resolveMeshConnectivityNodeId(row);
-        return nodeId.length > NUM.ZERO && !cacheNodeIds.has(nodeId);
+        return nodeId.length > 0 && !cacheNodeIds.has(nodeId);
       });
       const supplementalNodeIds = supplementalRows.map((row) =>
         this.resolveMeshConnectivityNodeId(row),
@@ -212,7 +209,7 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
       let cacheRows = [];
       if (
         systemTableCache &&
-        typeof systemTableCache.getAll === TYPEOF.FUNCTION
+        typeof systemTableCache.getAll === 'function'
       ) {
         cacheRows =
           (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
@@ -239,15 +236,15 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
      * @return {string}
      */
     buildClusterMeshSignature(nodeRows) {
-      if (!Array.isArray(nodeRows) || nodeRows.length === NUM.ZERO) {
-        return LOCAL_STR_EMPTY;
+      if (!Array.isArray(nodeRows) || nodeRows.length === 0) {
+        return '';
       }
 
       const members = nodeRows
         .map((row) => {
           const nodeId = this.resolveMeshConnectivityNodeId(row);
           if (
-            nodeId.length === NUM.ZERO ||
+            nodeId.length === 0 ||
             nodeId === this.nodeId ||
             !this.isMeshEligibleNodeRow(row)
           ) {
@@ -284,7 +281,7 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
       const {rows: nodesSnapshot} = this.resolveMeshConnectivityNodeRows();
       if (
         !Array.isArray(nodesSnapshot) ||
-        nodesSnapshot.length === NUM.ZERO
+        nodesSnapshot.length === 0
       ) {
         return false;
       }
@@ -295,14 +292,14 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
       }
 
       const hasConnectionState =
-        typeof messageRouter.getConnectionState === TYPEOF.FUNCTION;
+        typeof messageRouter.getConnectionState === 'function';
       if (!hasConnectionState) {
         return false;
       }
 
       return nodesSnapshot.some((node) => {
         const nodeId = this.resolveMeshConnectivityNodeId(node);
-        return nodeId.length > NUM.ZERO &&
+        return nodeId.length > 0 &&
           nodeId !== this.nodeId &&
           !meshConnectedOrInFlightStates.has(
             messageRouter.getConnectionState(nodeId),

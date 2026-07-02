@@ -11,7 +11,6 @@ import {
   NUM,
   STRING,
   TIME_MS,
-  TYPEOF,
 } from '../constants/index.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
@@ -79,7 +78,7 @@ class MessageGroupService extends EventEmitter {
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
     this.now =
-      typeof options.now === TYPEOF.FUNCTION ?
+      typeof options.now === 'function' ?
         options.now :
         MESSAGE_GROUP_OPERATION_LEDGER_NOW;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
@@ -124,39 +123,39 @@ class MessageGroupService extends EventEmitter {
       MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR;
     this.leaderActivationStabilizationMs =
       Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+      options.leaderActivationStabilizationMs >= 0 ?
         Math.floor(options.leaderActivationStabilizationMs) :
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
           MESSAGE_GROUP_SERVICE_LITERAL.VALUE_250);
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+      options.leaderActivationNodeSpacingMs >= 0 ?
         Math.floor(options.leaderActivationNodeSpacingMs) :
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           MESSAGE_GROUP_SERVICE_LITERAL.VALUE_25);
     this.forwardTargetSuppressionMs =
       Number.isFinite(options.forwardTargetSuppressionMs) &&
-      options.forwardTargetSuppressionMs > NUM.ZERO ?
+      options.forwardTargetSuppressionMs > 0 ?
         Math.floor(options.forwardTargetSuppressionMs) :
         Math.min(this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE);
     this.forwardTopologyRepairCooldownMs =
       Number.isFinite(options.forwardTopologyRepairCooldownMs) &&
-      options.forwardTopologyRepairCooldownMs > NUM.ZERO ?
+      options.forwardTopologyRepairCooldownMs > 0 ?
         Math.floor(options.forwardTopologyRepairCooldownMs) :
         FORWARD_TOPOLOGY_REPAIR_DEFAULT.COOLDOWN_MS;
     this.forwardTopologyRepairFailureCooldownMs =
       Number.isFinite(options.forwardTopologyRepairFailureCooldownMs) &&
-      options.forwardTopologyRepairFailureCooldownMs > NUM.ZERO ?
+      options.forwardTopologyRepairFailureCooldownMs > 0 ?
         Math.floor(options.forwardTopologyRepairFailureCooldownMs) :
         FORWARD_TOPOLOGY_REPAIR_DEFAULT.FAILURE_COOLDOWN_MS;
     this.forwardTopologyRepairNoChangeCooldownMs =
       Number.isFinite(options.forwardTopologyRepairNoChangeCooldownMs) &&
-      options.forwardTopologyRepairNoChangeCooldownMs > NUM.ZERO ?
+      options.forwardTopologyRepairNoChangeCooldownMs > 0 ?
         Math.floor(options.forwardTopologyRepairNoChangeCooldownMs) :
         FORWARD_TOPOLOGY_REPAIR_DEFAULT.NO_CHANGE_COOLDOWN_MS;
     this.forwardTopologyRepairQueryTimeoutMs =
       Number.isFinite(options.forwardTopologyRepairQueryTimeoutMs) &&
-      options.forwardTopologyRepairQueryTimeoutMs > NUM.ZERO ?
+      options.forwardTopologyRepairQueryTimeoutMs > 0 ?
         Math.floor(options.forwardTopologyRepairQueryTimeoutMs) :
         FORWARD_TOPOLOGY_REPAIR_DEFAULT.QUERY_TIMEOUT_MS;
     // Raft state - using liferaft library
@@ -261,7 +260,7 @@ class MessageGroupService extends EventEmitter {
     if (
       previousCache &&
       previousCache !== systemTableCache &&
-      typeof previousCache.offCacheChange === TYPEOF.FUNCTION &&
+      typeof previousCache.offCacheChange === 'function' &&
       this.systemTableCacheChangeListener
     ) {
       previousCache.offCacheChange(this.systemTableCacheChangeListener);
@@ -275,7 +274,7 @@ class MessageGroupService extends EventEmitter {
     if (
       systemTableCache &&
       systemTableCache !== previousCache &&
-      typeof systemTableCache.onCacheChange === TYPEOF.FUNCTION &&
+      typeof systemTableCache.onCacheChange === 'function' &&
       this.systemTableCacheChangeListener
     ) {
       systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
@@ -301,7 +300,7 @@ class MessageGroupService extends EventEmitter {
   set metadataPublicationReadinessState(readinessState) {
     if (
       typeof this.releaseMetadataPublicationReadinessListener ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       this.releaseMetadataPublicationReadinessListener();
     }

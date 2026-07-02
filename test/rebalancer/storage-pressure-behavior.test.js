@@ -10,7 +10,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NUM} from '../../src/constants/index.js';
 import {
   MOVE_CRITICALITY,
   PRESSURE_BEHAVIOR_DECISION,
@@ -230,7 +229,7 @@ test('StoragePressureBehavior', async (t) => {
       await behavior.shouldAllowMove(
         'n1', MOVE_CRITICALITY.CRITICAL,
       );
-      t.equal(behavior.getMetricEvents().length, NUM.ZERO,
+      t.equal(behavior.getMetricEvents().length, 0,
         'no event on first observation');
 
       // Transition normal -> soft
@@ -240,13 +239,13 @@ test('StoragePressureBehavior', async (t) => {
       );
 
       const events = behavior.getMetricEvents();
-      t.equal(events.length, NUM.ONE, 'one transition event');
-      t.equal(events[NUM.ZERO].type,
+      t.equal(events.length, 1, 'one transition event');
+      t.equal(events[0].type,
         PRESSURE_BEHAVIOR_EVENT.PRESSURE_TRANSITION);
-      t.equal(events[NUM.ZERO].nodeId, 'n1');
-      t.equal(events[NUM.ZERO].previousState, PRESSURE_STATE.NORMAL);
-      t.equal(events[NUM.ZERO].currentState, PRESSURE_STATE.SOFT);
-      t.ok(events[NUM.ZERO].timestamp > NUM.ZERO,
+      t.equal(events[0].nodeId, 'n1');
+      t.equal(events[0].previousState, PRESSURE_STATE.NORMAL);
+      t.equal(events[0].currentState, PRESSURE_STATE.SOFT);
+      t.ok(events[0].timestamp > 0,
         'timestamp should be positive');
     });
 
@@ -264,7 +263,7 @@ test('StoragePressureBehavior', async (t) => {
       'n1', MOVE_CRITICALITY.CRITICAL,
     );
 
-    t.equal(behavior.getMetricEvents().length, NUM.ZERO,
+    t.equal(behavior.getMetricEvents().length, 0,
       'no event when state unchanged');
   });
 
@@ -289,8 +288,8 @@ test('StoragePressureBehavior', async (t) => {
     );
 
     const drained = behavior.drainMetricEvents();
-    t.equal(drained.length, NUM.ONE, 'drained one event');
-    t.equal(behavior.getMetricEvents().length, NUM.ZERO,
+    t.equal(drained.length, 1, 'drained one event');
+    t.equal(behavior.getMetricEvents().length, 0,
       'buffer is empty after drain');
   });
 
@@ -328,8 +327,8 @@ test('StoragePressureBehavior', async (t) => {
       );
 
       const events = behavior.getMetricEvents();
-      t.equal(events.length, NUM.ONE,
+      t.equal(events.length, 1,
         'only n1 transition emitted');
-      t.equal(events[NUM.ZERO].nodeId, 'n1');
+      t.equal(events[0].nodeId, 'n1');
     });
 });

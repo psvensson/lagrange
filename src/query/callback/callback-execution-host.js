@@ -18,7 +18,7 @@
  * Requirements: 1.3, 14.2, 14.3
  */
 
-import {NUM, TIME_MS, TYPEOF, METRICS_LOG_TAG} from '../../constants/index.js';
+import {TIME_MS, METRICS_LOG_TAG} from '../../constants/index.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   ADAPTER_ERROR_MSG,
@@ -38,7 +38,6 @@ import {buildCallbackContext} from './callback-context.js';
 import {DebugEmitter} from '../../debug/debug-emitter.js';
 import {DEBUG_TRACE_SOURCE} from '../../debug/debug-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const SUBSYSTEM = 'callback-execution-host';
 
@@ -127,7 +126,7 @@ class CallbackExecutionHost {
     this.lineageTracker = deps.lineageTracker || null;
     this.dedupeRegistry = deps.dedupeRegistry || null;
     this.cancellationToken = deps.cancellationToken || null;
-    this.stageIndex = deps.stageIndex ?? NUM.ZERO;
+    this.stageIndex = deps.stageIndex ?? 0;
     this.runtimeDriverRegistry =
       deps.runtimeDriverRegistry || null;
     this.executionContext = deps.executionContext || null;
@@ -185,10 +184,10 @@ class CallbackExecutionHost {
       const cancelResult = this._buildCancelledResult(batches);
       this._emitTelemetry({
         [CTF.EVENT_TYPE]: CTE.CANCELLED,
-        [CTF.TOTAL_BATCHES]: NUM.ZERO,
-        [CTF.TOTAL_ROWS]: NUM.ZERO,
-        [CTF.TOTAL_BYTES]: NUM.ZERO,
-        [CTF.TOTAL_DURATION_MS]: NUM.ZERO,
+        [CTF.TOTAL_BATCHES]: 0,
+        [CTF.TOTAL_ROWS]: 0,
+        [CTF.TOTAL_BYTES]: 0,
+        [CTF.TOTAL_DURATION_MS]: 0,
         [CTF.STATE]: STAGE_STATE.CANCELLED,
       });
       return cancelResult;
@@ -208,11 +207,11 @@ class CallbackExecutionHost {
     const partitionResults = [];
     let hasFailure = false;
     let wasCancelled = false;
-    let totalRows = NUM.ZERO;
-    let totalBytes = NUM.ZERO;
-    let totalDurationMs = NUM.ZERO;
+    let totalRows = 0;
+    let totalBytes = 0;
+    let totalDurationMs = 0;
 
-    for (let i = NUM.ZERO; i < batches.length; i++) {
+    for (let i = 0; i < batches.length; i++) {
       if (this._isCancelled()) {
         wasCancelled = true;
         break;
@@ -228,9 +227,9 @@ class CallbackExecutionHost {
         break;
       }
 
-      totalRows += result[SF.ROW_COUNT] || NUM.ZERO;
-      totalBytes += result.byteEstimate || NUM.ZERO;
-      totalDurationMs += result[SF.DURATION_MS] || NUM.ZERO;
+      totalRows += result[SF.ROW_COUNT] || 0;
+      totalBytes += result.byteEstimate || 0;
+      totalDurationMs += result[SF.DURATION_MS] || 0;
 
       partitionResults.push(result);
       if (result[SF.STATE] === STAGE_STATE.FAILED) {
@@ -265,10 +264,10 @@ class CallbackExecutionHost {
         totalRows,
         totalBytes,
         totalDurationMs,
-        rowsPerSecond: totalDurationMs > LOCAL_NUM_ZERO ?
-          Math.round(totalRows / (totalDurationMs / TIME_MS.SECOND)) : LOCAL_NUM_ZERO,
-        avgBatchDurationMs: batches.length > LOCAL_NUM_ZERO ?
-          Math.round(totalDurationMs / batches.length) : LOCAL_NUM_ZERO,
+        rowsPerSecond: totalDurationMs > 0 ?
+          Math.round(totalRows / (totalDurationMs / TIME_MS.SECOND)) : 0,
+        avgBatchDurationMs: batches.length > 0 ?
+          Math.round(totalDurationMs / batches.length) : 0,
         failedPartitions: stageResult.failedPartitions,
       });
     } catch (metricsErr) {
@@ -281,7 +280,7 @@ class CallbackExecutionHost {
     if (this.lineageTracker) {
       this.lineageTracker.attachLineage(
         stageResult, this.stageIndex,
-        CALLBACK_HOST_ARTIFACT_TYPE, NUM.ZERO,
+        CALLBACK_HOST_ARTIFACT_TYPE, 0,
       );
     }
 
@@ -366,7 +365,7 @@ class CallbackExecutionHost {
       const byteEstimate = this._estimateBytes(rowArr);
 
       // Record output bytes in budget enforcer
-      if (this.budgetEnforcer && byteEstimate > NUM.ZERO) {
+      if (this.budgetEnforcer && byteEstimate > 0) {
         this.budgetEnforcer.recordOutBytes(byteEstimate);
       }
 
@@ -439,11 +438,11 @@ class CallbackExecutionHost {
       return {
         [SF.PARTITION_ID]: partitionId,
         [SF.ROWS]: [],
-        [SF.ROW_COUNT]: NUM.ZERO,
+        [SF.ROW_COUNT]: 0,
         [SF.STATE]: STAGE_STATE.FAILED,
         [SF.ERROR]: err.message,
         [SF.DURATION_MS]: duration,
-        byteEstimate: NUM.ZERO,
+        byteEstimate: 0,
       };
     }
   }
@@ -611,7 +610,7 @@ class CallbackExecutionHost {
    * @private
    */
   _emitTelemetry(data) {
-    if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
+    if (typeof this.onTelemetry === 'function') {
       this.onTelemetry(data);
     }
   }
@@ -628,14 +627,14 @@ class CallbackExecutionHost {
    * @private
    */
   _estimateBytes(rows) {
-    if (!rows || rows.length === NUM.ZERO) {
-      return NUM.ZERO;
+    if (!rows || rows.length === 0) {
+      return 0;
     }
     try {
       return JSON.stringify(rows).length *
         BYTE_ESTIMATE_MULTIPLIER;
     } catch (_estimateErr) {
-      return NUM.ZERO;
+      return 0;
     }
   }
 
@@ -663,8 +662,8 @@ class CallbackExecutionHost {
       partitionResults: [],
       [SF.STATE]: STAGE_STATE.CANCELLED,
       totalPartitions: batches.length,
-      processedPartitions: NUM.ZERO,
-      failedPartitions: NUM.ZERO,
+      processedPartitions: 0,
+      failedPartitions: 0,
       cancelReason: reason,
     };
   }
@@ -684,7 +683,7 @@ class CallbackExecutionHost {
     return {
       [SF.PARTITION_ID]: partitionId,
       [SF.ROWS]: [],
-      [SF.ROW_COUNT]: NUM.ZERO,
+      [SF.ROW_COUNT]: 0,
       [SF.STATE]: STAGE_STATE.CANCELLED,
       [SF.ERROR]: reason,
       [SF.DURATION_MS]: duration,

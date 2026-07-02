@@ -5,11 +5,9 @@ import {
   COLUMN,
   ENTITY_TYPE,
   HTTP_STATUS,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {NODE_STATE} from '../../constants/node-state.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
@@ -133,19 +131,19 @@ class BootstrapJoinAdmissionOwner {
   }
 
   getBootstrapAdmissionRetryAfterMs() {
-    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || NUM.ZERO;
+    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || 0;
   }
 
   hasRemainingBootstrapRequestExecutionBudget(
     timeoutBudget,
     now = Date.now(),
   ) {
-    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+    if (!timeoutBudget || typeof timeoutBudget !== 'object') {
       return true;
     }
     return getRemainingBudgetMs(timeoutBudget, {
       now: () => now,
-    }) > NUM.ZERO;
+    }) > 0;
   }
 
   assertBootstrapRequestExecutionBudget(timeoutBudget) {
@@ -163,7 +161,7 @@ class BootstrapJoinAdmissionOwner {
       BOOTSTRAP_API_PROBE_REASON
         .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED;
     error.retryAfterMs = Math.max(
-      NUM.ZERO,
+      0,
       this.getBootstrapAdmissionRetryAfterMs(),
     );
     return error;
@@ -182,7 +180,7 @@ class BootstrapJoinAdmissionOwner {
       return BOOTSTRAP_API_ERROR.NODE_ADDRESS_REQUIRED;
     }
 
-    if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === NUM.ZERO) {
+    if (typeof nodeAddress !== 'string' || nodeAddress.length === 0) {
       return BOOTSTRAP_API_ERROR.NODE_ADDRESS_INVALID;
     }
 
@@ -326,7 +324,7 @@ class BootstrapJoinAdmissionOwner {
       const row = rows.find((candidate) => {
         return candidate?.[COLUMN.NODE_ID] === nodeId ||
           candidate?.node_id === nodeId;
-      }) || rows[NUM.ZERO] || null;
+      }) || rows[0] || null;
       return {
         available: true,
         row,
@@ -366,8 +364,8 @@ class BootstrapJoinAdmissionOwner {
     );
 
     const seedNodeId = this.getSeedNodeId();
-    if (typeof seedNodeId === TYPEOF.STRING &&
-        seedNodeId.length > NUM.ZERO) {
+    if (typeof seedNodeId === 'string' &&
+        seedNodeId.length > 0) {
       for (const group of messageGroups) {
         for (const replica of group?.replicas || []) {
           const replicaNodeId = replica?.node_id;
@@ -385,7 +383,7 @@ class BootstrapJoinAdmissionOwner {
       excludedSourceNodeCount: excludedSourceNodeIds.size,
       messageGroups: messageGroups.map((group) => ({
         groupId: group.group_id,
-        replicaCount: group.replicas?.length || NUM.ZERO,
+        replicaCount: group.replicas?.length || 0,
         replicas: group.replicas?.map((replica) => ({
           replicaId: replica.replica_id,
           nodeId: replica.node_id,
@@ -417,13 +415,13 @@ class BootstrapJoinAdmissionOwner {
     previousLock,
     timeoutBudget,
   ) {
-    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+    if (!timeoutBudget || typeof timeoutBudget !== 'object') {
       await previousLock;
       return MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.ACQUIRED;
     }
 
     const remainingBudgetMs = getRemainingBudgetMs(timeoutBudget);
-    if (remainingBudgetMs <= NUM.ZERO) {
+    if (remainingBudgetMs <= 0) {
       return MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED;
     }
 
@@ -499,7 +497,7 @@ class BootstrapJoinAdmissionOwner {
         [...activeReservations, ...exclusionReservations]
           .map((reservation) => reservation?.replicaId)
           .filter((replicaId) =>
-            typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO,
+            typeof replicaId === 'string' && replicaId.length > 0,
           ),
       );
       const assignment = this.determineMessageGroupAssignment(newNodeId, {
@@ -610,11 +608,11 @@ class BootstrapJoinAdmissionOwner {
       partition.table_id === tableName || partition.table_name === tableName,
     ) || [];
 
-    if (partitions.length === NUM.ZERO) {
+    if (partitions.length === 0) {
       return null;
     }
 
-    const partition = partitions[NUM.ZERO];
+    const partition = partitions[0];
     const services = systemTableCache.filter(TABLES.SERVICES, (service) =>
       service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
@@ -622,17 +620,17 @@ class BootstrapJoinAdmissionOwner {
       service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     ) || [];
 
-    if (services.length === NUM.ZERO) {
+    if (services.length === 0) {
       return null;
     }
 
     return {
       partitionId: partition[COLUMN.PARTITION_ID],
       tableName,
-      leaderNodeId: services[NUM.ZERO][COLUMN.NODE_ID],
-      replicaId: services[NUM.ZERO][COLUMN.REPLICA_ID] ||
-        services[NUM.ZERO][COLUMN.SERVICE_ID],
-      address: services[NUM.ZERO][COLUMN.ADDRESS],
+      leaderNodeId: services[0][COLUMN.NODE_ID],
+      replicaId: services[0][COLUMN.REPLICA_ID] ||
+        services[0][COLUMN.SERVICE_ID],
+      address: services[0][COLUMN.ADDRESS],
     };
   }
 
@@ -653,7 +651,7 @@ class BootstrapJoinAdmissionOwner {
         groupsFromServices.set(groupId, {
           group_id: groupId,
           replicas: [],
-          replica_count: NUM.ZERO,
+          replica_count: 0,
         });
       }
 
@@ -667,7 +665,7 @@ class BootstrapJoinAdmissionOwner {
       group.replica_count = group.replicas.length;
     }
 
-    if (groupsFromServices.size > NUM.ZERO) {
+    if (groupsFromServices.size > 0) {
       return Array.from(groupsFromServices.values());
     }
 

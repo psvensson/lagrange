@@ -166,8 +166,8 @@ function resolveReadyNodePublicationAdvancementState({
   nodeIncluded,
 } = {}) {
   if (
-    typeof latestPublicationStatus !== TYPEOF.STRING ||
-    latestPublicationStatus.length === NUM.ZERO
+    typeof latestPublicationStatus !== 'string' ||
+    latestPublicationStatus.length === 0
   ) {
     return READY_NODE_PUBLICATION_ADVANCEMENT_STATE.NO_PUBLICATION;
   }

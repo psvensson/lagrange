@@ -22,7 +22,6 @@ import {
 import {
   SEED_CACHE_MESSAGE_TYPE,
 } from '../../src/worker/worker-constants.js';
-import {NUM} from '../../src/constants/index.js';
 
 /**
  * Test constants for SEED_CACHE property tests.
@@ -204,7 +203,7 @@ describe('Property 22: SEED_CACHE Bootstrap Restriction', () => {
             );
             assert.strictEqual(
               response.entriesApplied,
-              NUM.ZERO,
+              0,
               'No entries should be applied when rejected',
             );
             assert.strictEqual(
@@ -258,7 +257,7 @@ describe('Property 22: SEED_CACHE Bootstrap Restriction', () => {
             );
             assert.strictEqual(
               response.entriesApplied,
-              NUM.ZERO,
+              0,
               'No entries should be applied when rejected',
             );
             assert.strictEqual(
@@ -590,7 +589,7 @@ describe('Property 22: SEED_CACHE Bootstrap Restriction', () => {
             // Verify no entries were applied to cache
             assert.strictEqual(
               appliedEvents.length,
-              NUM.ZERO,
+              0,
               'No entries should be applied when rejected',
             );
           } finally {

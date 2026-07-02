@@ -26,31 +26,29 @@ const LOCAL_STR_REMOVED_2 = 'REMOVED';
 const LOCAL_STR_OPERATIONS = 'operations';
 const LOCAL_STR_OPERATION_ID = 'operation_id';
 const LOCAL_STR_OPERATION_ID_2 = 'Operation ID';
-const LOCAL_NUM_12 = 12;
+const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_TYPE = 'type';
 const LOCAL_STR_TYPE_2 = 'Type';
 const LOCAL_NUM_EIGHT = 8;
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_PARTITION = 'Partition';
-const LOCAL_NUM_15 = 15;
+const LOCAL_NUM_FIFTEEN = 15;
 const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
 const LOCAL_STR_TARGET_NODE = 'Target Node';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_WORKFLOW_STEP = 'workflow_step';
 const LOCAL_STR_STEP = 'Step';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
 const LOCAL_STR_UPDATED = 'Updated';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_DOT_DOT_DOT = '...';
 const LOCAL_STR_T = 'T';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_19 = 19;
-const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_NINETEEN = 19;
 const LOCAL_STR_ENTER = 'enter';
 const LOCAL_STR_RETURN = 'return';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
@@ -111,13 +109,13 @@ export class OperationsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_OPERATION_ID, label: LOCAL_STR_OPERATION_ID_2, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_OPERATION_ID, label: LOCAL_STR_OPERATION_ID_2, width: LOCAL_NUM_TWELVE},
       {key: LOCAL_STR_TYPE, label: LOCAL_STR_TYPE_2, width: LOCAL_NUM_EIGHT},
-      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION, width: LOCAL_NUM_15},
-      {key: LOCAL_STR_TARGET_NODE_ID, label: LOCAL_STR_TARGET_NODE, width: LOCAL_NUM_15},
-      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_10},
-      {key: LOCAL_STR_WORKFLOW_STEP, label: LOCAL_STR_STEP, width: LOCAL_NUM_10},
-      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_UPDATED, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION, width: LOCAL_NUM_FIFTEEN},
+      {key: LOCAL_STR_TARGET_NODE_ID, label: LOCAL_STR_TARGET_NODE, width: LOCAL_NUM_FIFTEEN},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_TEN},
+      {key: LOCAL_STR_WORKFLOW_STEP, label: LOCAL_STR_STEP, width: LOCAL_NUM_TEN},
+      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_UPDATED, width: LOCAL_NUM_TWENTY},
     ];
   }
 
@@ -146,8 +144,8 @@ export class OperationsView extends BaseView {
    */
   truncateId(id) {
     if (!id) return LOCAL_STR_N_A;
-    if (id.length <= LOCAL_NUM_12) return id;
-    return id.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT) + LOCAL_STR_2ZI04;
+    if (id.length <= LOCAL_NUM_TWELVE) return id;
+    return id.substring(0, LOCAL_NUM_EIGHT) + LOCAL_STR_DOT_DOT_DOT;
   }
 
   /**
@@ -159,7 +157,7 @@ export class OperationsView extends BaseView {
     if (!timestamp) return LOCAL_STR_N_A;
     const date = new Date(timestamp);
     return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
-      .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      .substring(0, LOCAL_NUM_NINETEEN);
   }
 
   /**
@@ -202,7 +200,7 @@ export class OperationsView extends BaseView {
    * @return {string} Unique key (operation_id)
    */
   getItemKey(operation) {
-    return operation.operation_id || LOCAL_STR_EMPTY;
+    return operation.operation_id || '';
   }
 
   /**
@@ -299,7 +297,7 @@ export class OperationsView extends BaseView {
     }
 
     // Add workflow history section
-    if (stepsHistory.length > LOCAL_NUM_ZERO) {
+    if (stepsHistory.length > 0) {
       const historyFields = stepsHistory.map((step, index) => ({
         label: `Step ${index + 1}`,
         value: `${step.step} at ${this.formatTimestamp(step.timestamp)}`,

@@ -3,10 +3,7 @@ import {
   RAFT_ID_MAPPER_ERROR_MSG,
 } from './raft-id-mapper-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_EMPTY = '';
 
 /**
  * Build deterministic external<->internal ID maps for a replica set.
@@ -20,7 +17,7 @@ const LOCAL_STR_EMPTY = '';
  * }}
  */
 function buildDeterministicRaftIdMaps(externalIds, options = {}) {
-  if (!Array.isArray(externalIds) || externalIds.length === LOCAL_NUM_ZERO) {
+  if (!Array.isArray(externalIds) || externalIds.length === 0) {
     throw new Error(RAFT_ID_MAPPER_ERROR_MSG.INVALID_EXTERNAL_IDS);
   }
 
@@ -31,7 +28,7 @@ function buildDeterministicRaftIdMaps(externalIds, options = {}) {
     options.clusterNodeIdStep :
     RAFT_ID_MAPPER_DEFAULT.CLUSTER_NODE_ID_STEP;
 
-  if (minInternalNodeId < LOCAL_NUM_ONE || clusterNodeIdStep < LOCAL_NUM_ONE) {
+  if (minInternalNodeId < 1 || clusterNodeIdStep < 1) {
     throw new Error(RAFT_ID_MAPPER_ERROR_MSG.INVALID_INTERNAL_ID_OPTIONS);
   }
 
@@ -40,7 +37,7 @@ function buildDeterministicRaftIdMaps(externalIds, options = {}) {
 
   let nextId = minInternalNodeId;
   for (const externalIdValue of externalIds) {
-    if (typeof externalIdValue !== LOCAL_STR_STRING || externalIdValue.trim() === LOCAL_STR_EMPTY) {
+    if (typeof externalIdValue !== LOCAL_STR_STRING || externalIdValue.trim() === '') {
       throw new Error(RAFT_ID_MAPPER_ERROR_MSG.INVALID_EXTERNAL_ID);
     }
 

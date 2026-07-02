@@ -1,4 +1,4 @@
-import {NUM, TYPEOF, SERVICE_PROFILE} from '../constants/index.js';
+import {NUM, SERVICE_PROFILE} from '../constants/index.js';
 import {RUNTIME_KIND} from '../constants/runtime.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {createControlPlaneRuntimeBundle} from
@@ -11,7 +11,7 @@ import {
 import {RB_FIELD} from './wasm-service-models.js';
 import {validateRuntimeDescriptor} from './runtime-descriptor-validator.js';
 
-const LOCAL_STR_1JW4B = 'non-negative number';
+const LOCAL_STR_NON_NEGATIVE_NUMBER = 'non-negative number';
 
 /**
  * SQL query to check if a handler function exists in the code table.
@@ -107,7 +107,7 @@ class ServiceDefinitionValidator {
     );
 
     return {
-      valid: errors.length === NUM.ZERO,
+      valid: errors.length === 0,
       errors,
     };
   }
@@ -148,7 +148,7 @@ class ServiceDefinitionValidator {
       SQL_CHECK_HANDLER,
       [handlerFunctionId],
     );
-    if (!result.rows || result.rows.length === NUM.ZERO) {
+    if (!result.rows || result.rows.length === 0) {
       errors.push(
         WASM_SERVICE_ERROR_MSG.HANDLER_FUNCTION_NOT_FOUND,
       );
@@ -162,7 +162,7 @@ class ServiceDefinitionValidator {
    * @private
    */
   _validateReplicaCount(replicaCount, errors) {
-    const isOdd = replicaCount % NUM.TWO !== NUM.ZERO;
+    const isOdd = replicaCount % 2 !== 0;
     const isAtLeastThree = replicaCount >= NUM.THREE;
     if (!isOdd || !isAtLeastThree) {
       errors.push(
@@ -205,10 +205,10 @@ class ServiceDefinitionValidator {
       if (value === undefined || value === null) {
         continue;
       }
-      if (typeof value !== TYPEOF.NUMBER || value < NUM.ZERO) {
+      if (typeof value !== 'number' || value < 0) {
         errors.push(
           `Resource budget field '${field}' must be a ` +
-          LOCAL_STR_1JW4B,
+          LOCAL_STR_NON_NEGATIVE_NUMBER,
         );
       }
     }

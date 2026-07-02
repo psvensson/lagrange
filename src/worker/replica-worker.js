@@ -18,10 +18,10 @@ import {PartitionWorkerService} from './partition-worker-service.js';
 import {MessageGroupWorkerService} from './message-group-worker-service.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_18IOJ = 'Creating partition replica';
-const LOCAL_STR_1DWG6 = 'Partition replica created';
-const LOCAL_STR_1XMWC = 'Creating message group replica';
-const LOCAL_STR_1BYQ9 = 'Message group replica created';
+const LOCAL_STR_CREATING_PARTITION_REPLICA = 'Creating partition replica';
+const LOCAL_STR_PARTITION_REPLICA_CREATED = 'Partition replica created';
+const LOCAL_STR_CREATING_MESSAGE_GROUP_REPLICA = 'Creating message group replica';
+const LOCAL_STR_MESSAGE_GROUP_REPLICA_CREATED = 'Message group replica created';
 const LOCAL_STR_STOPPING_REPLICA = 'Stopping replica';
 const LOCAL_STR_REPLICA_STOPPED = 'Replica stopped';
 const LOCAL_STR_RECEIVED_OPERATION = 'Received operation';
@@ -176,7 +176,7 @@ async function createPartitionReplica(options) {
     throw new Error(WORKER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
   }
 
-  logger.info(LOCAL_STR_18IOJ, {replicaId, threadId});
+  logger.info(LOCAL_STR_CREATING_PARTITION_REPLICA, {replicaId, threadId});
 
   const service = new PartitionWorkerService({
     nodeId: options.nodeId,
@@ -202,7 +202,7 @@ async function createPartitionReplica(options) {
 
   replicas.set(replicaId, service);
 
-  logger.info(LOCAL_STR_1DWG6, {replicaId, threadId});
+  logger.info(LOCAL_STR_PARTITION_REPLICA_CREATED, {replicaId, threadId});
 
   return buildReplicaCreationResult(replicaId);
 }
@@ -219,7 +219,7 @@ async function createMessageGroupReplica(options) {
     throw new Error(WORKER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
   }
 
-  logger.info(LOCAL_STR_1XMWC, {replicaId, threadId});
+  logger.info(LOCAL_STR_CREATING_MESSAGE_GROUP_REPLICA, {replicaId, threadId});
 
   const service = new MessageGroupWorkerService({
     nodeId: options.nodeId,
@@ -241,7 +241,7 @@ async function createMessageGroupReplica(options) {
 
   replicas.set(replicaId, service);
 
-  logger.info(LOCAL_STR_1BYQ9, {replicaId, threadId});
+  logger.info(LOCAL_STR_MESSAGE_GROUP_REPLICA_CREATED, {replicaId, threadId});
 
   return buildReplicaCreationResult(replicaId);
 }

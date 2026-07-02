@@ -4,7 +4,7 @@ import {
   LOCAL_NUM_ZERO,
   LOCAL_STR_100,
   LOCAL_STR_WHITE,
-  LOCAL_NUM_10,
+  LOCAL_NUM_TEN,
   LOCAL_STR_60,
   LOCAL_STR_EMPTY,
   LOCAL_STR_SQL,
@@ -79,10 +79,10 @@ const ADMIN_CLI_NAVIGATION_METHODS = {
       this.navigateDown();
       break;
     case LOCAL_STR_NAVIGATE_PAGEUP:
-      this.navigateUp(action.count || LOCAL_NUM_10);
+      this.navigateUp(action.count || LOCAL_NUM_TEN);
       break;
     case LOCAL_STR_NAVIGATE_PAGEDOWN:
-      this.navigateDown(action.count || LOCAL_NUM_10);
+      this.navigateDown(action.count || LOCAL_NUM_TEN);
       break;
     case LOCAL_STR_NAVIGATE_FIRST:
       this.navigateFirst();

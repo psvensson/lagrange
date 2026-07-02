@@ -9,8 +9,6 @@ import {
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_NUMBER = 'number';
@@ -146,7 +144,7 @@ class DistributedWriteCoordinator {
       plan.partitionStatements.keys(),
     ).sort();
 
-    if (orderedPartitions.length === LOCAL_NUM_ONE) {
+    if (orderedPartitions.length === 1) {
       const partitionId = orderedPartitions[0];
       const participant = plan.partitionStatements.get(partitionId);
       const result = await this.executePartitionStatement(
@@ -196,11 +194,11 @@ class DistributedWriteCoordinator {
         }
       }
       participantResults.sort((a, b) => {
-        if (a.partitionId === null && b.partitionId === null) return LOCAL_NUM_ZERO;
-        if (a.partitionId === null) return LOCAL_NUM_ONE;
-        if (b.partitionId === null) return -LOCAL_NUM_ONE;
-        return a.partitionId < b.partitionId ? -LOCAL_NUM_ONE :
-          a.partitionId > b.partitionId ? LOCAL_NUM_ONE : LOCAL_NUM_ZERO;
+        if (a.partitionId === null && b.partitionId === null) return 0;
+        if (a.partitionId === null) return 1;
+        if (b.partitionId === null) return -1;
+        return a.partitionId < b.partitionId ? -1 :
+          a.partitionId > b.partitionId ? 1 : 0;
       });
     }
 
@@ -216,7 +214,7 @@ class DistributedWriteCoordinator {
       .map((result) => result.partitionId)
       .filter(Boolean);
     const rows = [];
-    let affectedRows = LOCAL_NUM_ZERO;
+    let affectedRows = 0;
     const retryCount = participantResults.reduce((sum, result) => {
       const attempts = Number.isInteger(result.attempts) ?
         result.attempts : 1;
@@ -229,13 +227,13 @@ class DistributedWriteCoordinator {
       if (result.role === PARTICIPANT_ROLE_MIRROR) {
         continue;
       }
-      affectedRows += result.affectedRows || LOCAL_NUM_ZERO;
-      if (Array.isArray(result.rows) && result.rows.length > LOCAL_NUM_ZERO) {
+      affectedRows += result.affectedRows || 0;
+      if (Array.isArray(result.rows) && result.rows.length > 0) {
         rows.push(...result.rows);
       }
     }
 
-    if (failedParticipants.length > LOCAL_NUM_ZERO) {
+    if (failedParticipants.length > 0) {
       const participantFailures = failedParticipants.map((result) => ({
         partitionId: result.partitionId,
         participantNodeId:
@@ -302,7 +300,7 @@ class DistributedWriteCoordinator {
               QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
           retryAfterMs:
               Number.isFinite(result?.retryAfterMs) &&
-              result.retryAfterMs > LOCAL_NUM_ZERO ?
+              result.retryAfterMs > 0 ?
                 Math.floor(result.retryAfterMs) :
                 null,
         })),
@@ -314,7 +312,7 @@ class DistributedWriteCoordinator {
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,
-        retryAfterMs: retryAfterMs > LOCAL_NUM_ZERO ? retryAfterMs : null,
+        retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
       };
     }
 
@@ -348,7 +346,7 @@ class DistributedWriteCoordinator {
     params,
     executionOptions = {},
   ) {
-    for (let attempt = LOCAL_NUM_ZERO; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         const result = await this.executePartitionStatementOnce(
           statementType,
@@ -360,13 +358,13 @@ class DistributedWriteCoordinator {
         if (result.success !== false) {
           return {
             ...result,
-            attempts: attempt + LOCAL_NUM_ONE,
+            attempts: attempt + 1,
           };
         }
         if (attempt >= this.maxRetries) {
           return {
             ...result,
-            attempts: attempt + LOCAL_NUM_ONE,
+            attempts: attempt + 1,
           };
         }
       } catch (error) {
@@ -376,15 +374,15 @@ class DistributedWriteCoordinator {
             error: error.message,
             errorCode:
               typeof error?.code === LOCAL_STR_STRING &&
-              error.code.length > LOCAL_NUM_ZERO ?
+              error.code.length > 0 ?
                 error.code :
                 (typeof error?.errorCode === LOCAL_STR_STRING &&
-                error.errorCode.length > LOCAL_NUM_ZERO ?
+                error.errorCode.length > 0 ?
                   error.errorCode :
                   null),
             retryAfterMs:
               Number.isFinite(error?.retryAfterMs) &&
-              error.retryAfterMs > LOCAL_NUM_ZERO ?
+              error.retryAfterMs > 0 ?
                 Math.floor(error.retryAfterMs) :
                 null,
             deferRetry: error?.deferRetry === true,
@@ -402,7 +400,7 @@ class DistributedWriteCoordinator {
                 (typeof error?.tableName === LOCAL_STR_STRING ?
                   error.tableName :
                   null),
-            attempts: attempt + LOCAL_NUM_ONE,
+            attempts: attempt + 1,
           };
         }
       }
@@ -410,7 +408,7 @@ class DistributedWriteCoordinator {
     return {
       success: false,
       error: WRITE_EXHAUSTED_RETRIES_MSG,
-      attempts: this.maxRetries + LOCAL_NUM_ONE,
+      attempts: this.maxRetries + 1,
     };
   }
 
@@ -500,10 +498,10 @@ class DistributedWriteCoordinator {
    */
   resolvePrimaryKeyColumns(tableInfo) {
     const primaryKey = tableInfo?.primaryKey || tableInfo?.primary_key;
-    if (Array.isArray(primaryKey) && primaryKey.length > LOCAL_NUM_ZERO) {
+    if (Array.isArray(primaryKey) && primaryKey.length > 0) {
       return primaryKey;
     }
-    if (typeof primaryKey === LOCAL_STR_STRING && primaryKey.length > LOCAL_NUM_ZERO) {
+    if (typeof primaryKey === LOCAL_STR_STRING && primaryKey.length > 0) {
       return [primaryKey];
     }
     return [DEFAULT_PRIMARY_KEY_COLUMN];
@@ -517,14 +515,14 @@ class DistributedWriteCoordinator {
    * @private
    */
   findPrimaryKeyIndex(ast, primaryKey) {
-    if (!Array.isArray(ast.columns) || ast.columns.length === LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
+    if (!Array.isArray(ast.columns) || ast.columns.length === 0) {
+      return 0;
     }
     const index = ast.columns.findIndex(
       (columnName) => String(columnName).toLowerCase() ===
         String(primaryKey).toLowerCase(),
     );
-    return index >= LOCAL_NUM_ZERO ? index : LOCAL_NUM_ZERO;
+    return index >= 0 ? index : 0;
   }
 
   /**
@@ -543,11 +541,11 @@ class DistributedWriteCoordinator {
     }
     if (expr.type === QUERY_AST_NODE.PARAMETER) {
       if (typeof expr.index === LOCAL_STR_NUMBER &&
-          expr.index >= LOCAL_NUM_ZERO &&
+          expr.index >= 0 &&
           expr.index < params.length) {
         return params[expr.index];
       }
-      return params[LOCAL_NUM_ZERO];
+      return params[0];
     }
     if (expr.type === QUERY_AST_NODE.UNARY) {
       const operand = this.extractKeyValue(expr.operand, params);

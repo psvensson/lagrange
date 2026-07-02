@@ -351,7 +351,7 @@ const WORKER_DEFAULT = Object.freeze({
   /** Default health check interval in milliseconds */
   HEALTH_CHECK_INTERVAL_MS: TIME_MS.SECOND * NUM.FIVE,
   /** Default health check timeout in milliseconds */
-  HEALTH_CHECK_TIMEOUT_MS: TIME_MS.SECOND * NUM.TWO,
+  HEALTH_CHECK_TIMEOUT_MS: TIME_MS.SECOND * 2,
   /** Maximum time to detect a crash in milliseconds */
   CRASH_DETECTION_THRESHOLD_MS: TIME_MS.SECOND * NUM.FIVE,
   /** Default operation timeout in milliseconds */

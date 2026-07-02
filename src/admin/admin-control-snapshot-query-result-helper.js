@@ -1,6 +1,5 @@
 import {CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME} from
   '../control-plane/control-plane-error-classification.js';
-import {TYPEOF} from '../constants/index.js';
 
 const CONTROL_SNAPSHOT_QUERY_RESULT_ROW_INDEX = 0;
 const CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
@@ -35,7 +34,7 @@ const resolveControlSnapshotQueryResult = (result = null) => {
     result.rows[CONTROL_SNAPSHOT_QUERY_RESULT_ROW_INDEX] :
     null;
   const convergence = resolveControlSnapshotConvergence(snapshot);
-  if (!convergence || typeof convergence !== TYPEOF.OBJECT) {
+  if (!convergence || typeof convergence !== 'object') {
     return result;
   }
 

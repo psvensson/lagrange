@@ -26,7 +26,6 @@ import {
   ADDRESS,
   ENTITY_TYPE,
   NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
@@ -40,7 +39,7 @@ const LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED =
   'failed join admission withdrawal owner is unavailable';
 const LOCAL_STR_WITHDRAWAL_NOT_APPLIED =
   'failed join admission withdrawal was not applied';
-const LOCAL_STR_1CO3M = 'rebalanceCoordinator.shutdown';
+const LOCAL_STR_REBALANCECOORDINATOR_SHUTDOWN = 'rebalanceCoordinator.shutdown';
 const LOCAL_STR_FUNCTION = 'function';
 
 /**
@@ -50,10 +49,10 @@ const LOCAL_STR_FUNCTION = 'function';
  * @type {Object<string, number>}
  */
 const JOINING_PHASE_TO_CLEANUP_INDEX = Object.freeze({
-  [JOINING_PHASE.QUERYING_STATE]: NUM.ZERO,
-  [JOINING_PHASE.WAITING_LEADERSHIP]: NUM.ONE,
-  [JOINING_PHASE.CREATING_MESSAGE_GROUP]: NUM.TWO,
-  [JOINING_PHASE.JOINING_MESSAGE_GROUP]: NUM.TWO,
+  [JOINING_PHASE.QUERYING_STATE]: 0,
+  [JOINING_PHASE.WAITING_LEADERSHIP]: 1,
+  [JOINING_PHASE.CREATING_MESSAGE_GROUP]: 2,
+  [JOINING_PHASE.JOINING_MESSAGE_GROUP]: 2,
   [JOINING_PHASE.CONNECTING_WEBSOCKET]: NUM.THREE,
   [JOINING_PHASE.CONTACTING_SEED]: NUM.FOUR,
 });
@@ -152,8 +151,8 @@ class JoinCleanupHandler {
         phase: failedPhase,
         retryable: resolveJoinFailureRetryable(error),
         retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
-          Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
-          NUM.ZERO,
+          Math.max(0, Math.floor(error.retryAfterMs)) :
+          0,
       };
     }
 
@@ -191,8 +190,8 @@ class JoinCleanupHandler {
       phase: failedPhase,
       retryable: resolveJoinFailureRetryable(error),
       retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
-        NUM.ZERO,
+        Math.max(0, Math.floor(error.retryAfterMs)) :
+        0,
     };
   }
 
@@ -224,7 +223,7 @@ class JoinCleanupHandler {
       JOINING_PHASE_TO_CLEANUP_INDEX[failedPhase];
     const effectiveStart = startIndex !== undefined ?
       startIndex :
-      NUM.ZERO;
+      0;
 
     const stepsToRun =
       JOINING_CLEANUP_STEPS_REVERSE.slice(effectiveStart);
@@ -351,12 +350,12 @@ class JoinCleanupHandler {
 
   async withdrawFailedJoinAdmission(registeredNodeId, logger) {
     if (
-      typeof registeredNodeId !== TYPEOF.STRING ||
-      registeredNodeId.length === NUM.ZERO
+      typeof registeredNodeId !== 'string' ||
+      registeredNodeId.length === 0
     ) {
       throw new Error(LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED);
     }
-    if (typeof this.delegates.withdrawFailedJoinAdmission !== TYPEOF.FUNCTION) {
+    if (typeof this.delegates.withdrawFailedJoinAdmission !== 'function') {
       throw new Error(LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED);
     }
     try {
@@ -380,7 +379,7 @@ class JoinCleanupHandler {
   }
 
   resolveMembershipPublicationService() {
-    if (typeof this.delegates.getRebalanceCoordinator !== TYPEOF.FUNCTION) {
+    if (typeof this.delegates.getRebalanceCoordinator !== 'function') {
       return null;
     }
     const rebalanceCoordinator =
@@ -391,14 +390,14 @@ class JoinCleanupHandler {
       readinessService?.membershipPublicationService;
     return membershipPublicationService &&
       typeof membershipPublicationService.enqueueClusterMembershipReconcile ===
-        TYPEOF.FUNCTION ?
+        'function' ?
       membershipPublicationService :
       null;
   }
 
   enqueueMembershipPublicationReconcile(cleanupContext) {
-    if (typeof cleanupContext?.registeredNodeId !== TYPEOF.STRING ||
-        cleanupContext.registeredNodeId.length === NUM.ZERO) {
+    if (typeof cleanupContext?.registeredNodeId !== 'string' ||
+        cleanupContext.registeredNodeId.length === 0) {
       return false;
     }
     const membershipPublicationService =
@@ -662,7 +661,7 @@ class JoinCleanupHandler {
     } catch (error) {
       logger.warn(JOINING_LOG_MSG.CLEANUP_STEP_FAILED, {
         nodeId: this.nodeId,
-        step: LOCAL_STR_1CO3M,
+        step: LOCAL_STR_REBALANCECOORDINATOR_SHUTDOWN,
         error: error.message,
       });
     }
@@ -737,7 +736,7 @@ class JoinCleanupHandler {
       return;
     }
     service.stop();
-    if (typeof setter === TYPEOF.FUNCTION) {
+    if (typeof setter === 'function') {
       setter.call(this.delegates, null);
     }
   }

@@ -3,7 +3,6 @@ import {resolveAdvertisedWebSocketAddress} from
 import {
   HTTP_STATUS,
   NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -26,9 +25,8 @@ import {
   normalizeBootstrapRequestClientAttemptDeadlineSnapshot,
 } from './bootstrap-request-owner-deadline.js';
 
-const LOCAL_STR_836HW = 'move_replica_handoff_stabilizing';
+const LOCAL_STR_MOVE_REPLICA_HANDOFF_STABILIZING = 'move_replica_handoff_stabilizing';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
   REQUEST_START: 'request_start',
   BOOTSTRAP_JOIN_ADMISSION: 'bootstrap_join_admission',
@@ -54,14 +52,14 @@ function resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline) {
   const remainingBudgetMs = Number(clientAttemptDeadline?.remainingBudgetMs);
   if (
     !Number.isFinite(deadlineMs) ||
-    deadlineMs <= NUM.ZERO ||
+    deadlineMs <= 0 ||
     !Number.isFinite(remainingBudgetMs) ||
-    remainingBudgetMs <= NUM.ZERO
+    remainingBudgetMs <= 0
   ) {
-    return NUM.ZERO;
+    return 0;
   }
   return Math.max(
-    NUM.ONE,
+    1,
     Math.floor(remainingBudgetMs) -
       CLIENT_ATTEMPT_DEADLINE_RESPONSE_GUARD_MS,
   );
@@ -70,7 +68,7 @@ function resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline) {
 async function awaitClientAttemptBoundedWork(action, clientAttemptDeadline) {
   const timeoutMs =
     resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline);
-  if (timeoutMs <= NUM.ZERO) {
+  if (timeoutMs <= 0) {
     return {
       outcome: BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.COMPLETED,
       value: await action(),
@@ -368,8 +366,8 @@ const bootstrapRequestOwnerHandlerMethods = {
           },
         );
       }
-      if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
-        const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
+      if (blockingMoveReplicaAdmissions.length > 0) {
+        const blockingReservation = blockingMoveReplicaAdmissions[0];
         const retryAfterMs =
           this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
             blockingReservation,
@@ -381,7 +379,7 @@ const bootstrapRequestOwnerHandlerMethods = {
             nodeId,
             nodeAddress,
             seedNodeId: this.getSeedNodeId(),
-            admissionBlock: LOCAL_STR_836HW,
+            admissionBlock: LOCAL_STR_MOVE_REPLICA_HANDOFF_STABILIZING,
             assignmentId: blockingReservation.assignmentId,
             replicaId: blockingReservation.replicaId,
             groupId: blockingReservation.groupId || null,
@@ -593,8 +591,8 @@ const bootstrapRequestOwnerHandlerMethods = {
             responseTimestamp,
           ) !== true;
         const reasonCode =
-          typeof error?.reasonCode === TYPEOF.STRING &&
-          error.reasonCode.length > NUM.ZERO ?
+          typeof error?.reasonCode === 'string' &&
+          error.reasonCode.length > 0 ?
             error.reasonCode :
             requestExecutionBudgetExhausted ?
               BOOTSTRAP_API_PROBE_REASON
@@ -622,7 +620,7 @@ const bootstrapRequestOwnerHandlerMethods = {
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
           code:
             typeof error?.errorCode === LOCAL_STR_STRING &&
-            error.errorCode.length > LOCAL_NUM_ZERO ?
+            error.errorCode.length > 0 ?
               error.errorCode :
               BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
           reasonCode,

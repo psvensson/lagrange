@@ -1,7 +1,7 @@
 /**
  * Publication handoff refresh and deferral helpers for admin control snapshots.
  */
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
@@ -79,48 +79,48 @@ const CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD = 'pressureOutcome';
 const CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
 const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
 const CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK = Object.freeze({
-  [OWNER_OUTCOME_STATE.FAILED]: NUM.ZERO,
-  [OWNER_OUTCOME_STATE.BLOCKED]: NUM.ONE,
-  [OWNER_OUTCOME_STATE.DEFERRED]: NUM.TWO,
+  [OWNER_OUTCOME_STATE.FAILED]: 0,
+  [OWNER_OUTCOME_STATE.BLOCKED]: 1,
+  [OWNER_OUTCOME_STATE.DEFERRED]: 2,
   [OWNER_OUTCOME_STATE.PENDING]: NUM.THREE,
   [OWNER_OUTCOME_STATE.READY]: NUM.FOUR,
 });
 const CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK = Object.freeze({
-  [OWNER_OUTCOME_FRESHNESS.UNKNOWN]: NUM.ZERO,
-  [OWNER_OUTCOME_FRESHNESS.STALE]: NUM.ONE,
-  [OWNER_OUTCOME_FRESHNESS.FRESH]: NUM.TWO,
+  [OWNER_OUTCOME_FRESHNESS.UNKNOWN]: 0,
+  [OWNER_OUTCOME_FRESHNESS.STALE]: 1,
+  [OWNER_OUTCOME_FRESHNESS.FRESH]: 2,
 });
 function normalizeControlSnapshotNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
       .map((value) =>
-        typeof value === TYPEOF.STRING ?
+        typeof value === 'string' ?
           value.trim() :
           ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
       )
-      .filter((value) => value.length > NUM.ZERO),
+      .filter((value) => value.length > 0),
   )].sort((left, right) => left.localeCompare(right));
 }
 function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
   if (
     !snapshot ||
-    typeof snapshot !== TYPEOF.OBJECT ||
+    typeof snapshot !== 'object' ||
     !outcome ||
-    typeof outcome !== TYPEOF.OBJECT
+    typeof outcome !== 'object'
   ) {
     return snapshot;
   }
   const controlPlaneDiagnostics =
     snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] &&
       typeof snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] ===
-        TYPEOF.OBJECT ?
+        'object' ?
       snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] :
       {};
   const activeGateOwnerCohort =
     controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] &&
       typeof controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
-      ] === TYPEOF.OBJECT ?
+      ] === 'object' ?
       controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
       ] :
@@ -129,7 +129,7 @@ function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
     controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD] &&
       typeof controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
-      ] === TYPEOF.OBJECT &&
+      ] === 'object' &&
       !Array.isArray(
         controlPlaneDiagnostics[
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
@@ -142,13 +142,13 @@ function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
   const controlPlaneConvergence =
     outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] &&
       typeof outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] ===
-        TYPEOF.OBJECT ?
+        'object' ?
       outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] :
       null;
   const pressureOutcome =
     typeof controlPlaneConvergence?.[
       CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD
-    ] === TYPEOF.STRING ?
+    ] === 'string' ?
       controlPlaneConvergence[CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD] :
       outcome.controlPlanePressureOutcome;
   const criticalConvergenceDeferred =
@@ -210,7 +210,7 @@ function selectMembershipPublicationHandoffOutcome(snapshot = null) {
     snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
   if (
     !controlPlaneDiagnostics ||
-    typeof controlPlaneDiagnostics !== TYPEOF.OBJECT ||
+    typeof controlPlaneDiagnostics !== 'object' ||
     Array.isArray(controlPlaneDiagnostics)
   ) {
     return CONTROL_SNAPSHOT_ABSENT_HANDOFF_OUTCOME;
@@ -228,7 +228,7 @@ function selectMembershipPublicationHandoffOutcome(snapshot = null) {
   ];
   return outcomeCandidates.find((candidate) =>
     candidate &&
-    typeof candidate === TYPEOF.OBJECT &&
+    typeof candidate === 'object' &&
     !Array.isArray(candidate),
   ) || CONTROL_SNAPSHOT_ABSENT_HANDOFF_OUTCOME;
 }
@@ -236,7 +236,7 @@ function selectMembershipPublicationHandoffOutcome(snapshot = null) {
 function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
   return (
     outcome &&
-    typeof outcome === TYPEOF.OBJECT &&
+    typeof outcome === 'object' &&
     !Array.isArray(outcome) &&
     outcome[
       CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD.STATE
@@ -250,7 +250,7 @@ function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
     typeof outcome[
       CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
         .PUBLICATION_ROW
-    ] === TYPEOF.OBJECT &&
+    ] === 'object' &&
     !Array.isArray(
       outcome[
         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
@@ -262,7 +262,7 @@ function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
 
 function normalizeControlSnapshotRetryAfterMs(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue > 0 ?
     Math.floor(numericValue) :
     null;
 }
@@ -309,7 +309,7 @@ function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD
           .PENDING_RECOVERY_COUNT
       ],
-    ) > NUM.ZERO
+    ) > 0
   );
 }
 
@@ -319,7 +319,7 @@ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
     selectMembershipPublicationHandoffOutcomeRetryAfterMs(outcome);
   if (
     !outcome ||
-    typeof outcome !== TYPEOF.OBJECT ||
+    typeof outcome !== 'object' ||
     Array.isArray(outcome) ||
     outcome[
       CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD.STATE
@@ -351,7 +351,7 @@ function buildControlSnapshotHandoffRetryOptions(
   }
   const repair =
     options.repair &&
-      typeof options.repair === TYPEOF.OBJECT &&
+      typeof options.repair === 'object' &&
       !Array.isArray(options.repair) ?
       {
         ...options.repair,
@@ -395,7 +395,7 @@ function buildControlSnapshotHandoffDeferredOptions(
 
 function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
   const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
-  return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
+  return Array.isArray(nodeIds) ? nodeIds.length : 0;
 }
 
 function buildControlSnapshotHandoffRefreshResult(snapshot, refreshed) {
@@ -406,26 +406,26 @@ function buildControlSnapshotHandoffRefreshResult(snapshot, refreshed) {
 }
 
 function normalizeControlSnapshotHandoffText(value) {
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim() :
     ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
 }
 
-function normalizeControlSnapshotHandoffInteger(value, fallback = NUM.ZERO) {
+function normalizeControlSnapshotHandoffInteger(value, fallback = 0) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ?
-    Math.max(NUM.ZERO, Math.floor(numericValue)) :
+    Math.max(0, Math.floor(numericValue)) :
     fallback;
 }
 
 function normalizeControlSnapshotHandoffOwnerOutcomeRevision(value) {
   if (Number.isFinite(value)) {
-    return Math.max(NUM.ZERO, Math.floor(value));
+    return Math.max(0, Math.floor(value));
   }
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ?
-    Math.max(NUM.ZERO, Math.floor(numericValue)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(numericValue)) :
+    0;
 }
 
 function resolveControlSnapshotHandoffOwnerOutcomeStateProgressRank(
@@ -435,7 +435,7 @@ function resolveControlSnapshotHandoffOwnerOutcomeStateProgressRank(
     CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK[state],
   ) ?
     CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK[state] :
-    NUM.ZERO;
+    0;
 }
 
 function resolveControlSnapshotHandoffOwnerOutcomeFreshnessProgressRank(
@@ -445,7 +445,7 @@ function resolveControlSnapshotHandoffOwnerOutcomeFreshnessProgressRank(
     CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK[freshness],
   ) ?
     CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK[freshness] :
-    NUM.ZERO;
+    0;
 }
 
 function hasControlSnapshotHandoffOwnerOutcomeProgress(
@@ -492,7 +492,7 @@ function selectControlSnapshotHandoffEvidence(snapshot = null) {
     buildPublicationActiveGateOwnerOutcomeEnvelope(controlPlaneDiagnostics);
   const hasHandoff =
     handoff &&
-    typeof handoff === TYPEOF.OBJECT &&
+    typeof handoff === 'object' &&
     !Array.isArray(handoff);
   const pendingReconcileNodeIds = hasHandoff ?
     normalizeControlSnapshotNodeIdList(
@@ -634,13 +634,13 @@ function buildControlSnapshotHandoffRefreshDecision(
 }
 
 function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return snapshot;
   }
   const controlPlaneDiagnostics =
     snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] &&
       typeof snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] ===
-        TYPEOF.OBJECT ?
+        'object' ?
       snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] :
       {};
   const criticalConvergenceDeferred =

@@ -12,7 +12,6 @@ import {
   NODE_STATE,
   NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -93,7 +92,7 @@ class NodeStorageBudgetService {
    */
   getDiskBytesFromNodeRow(nodeRow) {
     const diskGb = Number(nodeRow?.[COLUMN.DISK_GB]);
-    if (!Number.isFinite(diskGb) || diskGb <= NUM.ZERO) {
+    if (!Number.isFinite(diskGb) || diskGb <= 0) {
       return null;
     }
     return Math.floor(diskGb * NUM.BYTES_PER_GIB);
@@ -106,7 +105,7 @@ class NodeStorageBudgetService {
    */
   resolveBudget(nodeRow) {
     assertCritical(
-      nodeRow && typeof nodeRow === TYPEOF.OBJECT,
+      nodeRow && typeof nodeRow === 'object',
       NODE_STORAGE_BUDGET_ERROR_MSG.INVALID_NODE_ROW,
     );
 
@@ -150,7 +149,7 @@ class NodeStorageBudgetService {
     if (!error) {
       if (!Number.isFinite(budgetBytes)) {
         error = STORAGE_CAPACITY_ERROR_MSG.BUDGET_MALFORMED;
-      } else if (budgetBytes <= NUM.ZERO) {
+      } else if (budgetBytes <= 0) {
         error = STORAGE_CAPACITY_ERROR_MSG.BUDGET_NON_POSITIVE;
       } else if (budgetBytes < STORAGE_BUDGET_VALIDATION.MIN_BUDGET_BYTES) {
         error = STORAGE_CAPACITY_ERROR_MSG.BUDGET_TOO_SMALL;
@@ -219,11 +218,11 @@ class NodeStorageBudgetService {
   async registerNodeBudget(options = {}) {
     const nodeRow = options.nodeRow;
     const upsertOptions = options.upsertOptions &&
-      typeof options.upsertOptions === TYPEOF.OBJECT ?
+      typeof options.upsertOptions === 'object' ?
       options.upsertOptions :
       undefined;
     assertCritical(
-      nodeRow && typeof nodeRow === TYPEOF.OBJECT,
+      nodeRow && typeof nodeRow === 'object',
       NODE_STORAGE_BUDGET_ERROR_MSG.INVALID_NODE_ROW,
     );
 

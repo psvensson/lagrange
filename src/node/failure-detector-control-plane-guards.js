@@ -1,10 +1,9 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
   };
-  if (typeof node?.status === TYPEOF.STRING && node.status.length > NUM.ZERO) {
+  if (typeof node?.status === 'string' && node.status.length > 0) {
     whereClause.status = node.status;
   }
   if (Number.isFinite(node?.last_heartbeat)) {
@@ -24,14 +23,14 @@ function buildObservedReplicaWhereClause(replica) {
     service_id: replica.service_id,
   };
   if (
-    typeof replica?.node_id === TYPEOF.STRING &&
-    replica.node_id.length > NUM.ZERO
+    typeof replica?.node_id === 'string' &&
+    replica.node_id.length > 0
   ) {
     whereClause.node_id = replica.node_id;
   }
   if (
-    typeof replica?.status === TYPEOF.STRING &&
-    replica.status.length > NUM.ZERO
+    typeof replica?.status === 'string' &&
+    replica.status.length > 0
   ) {
     whereClause.status = replica.status;
   }
@@ -46,7 +45,7 @@ function guardedUpdateApplied(result) {
     return false;
   }
   const affectedRows = Number(result?.partitionResult?.affectedRows);
-  return !Number.isFinite(affectedRows) || affectedRows > NUM.ZERO;
+  return !Number.isFinite(affectedRows) || affectedRows > 0;
 }
 
 export {

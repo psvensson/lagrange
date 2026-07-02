@@ -1,8 +1,8 @@
 import {CDC_SQL} from './cdc-constants.js';
-import {CDC_OPERATION, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION} from '../constants/index.js';
 
 function serializeMutationValue(value) {
-  if (value !== null && typeof value === TYPEOF.OBJECT) {
+  if (value !== null && typeof value === 'object') {
     return JSON.stringify(value);
   }
   return value;

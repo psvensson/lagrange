@@ -20,7 +20,6 @@ import {
   JOIN_PLAN_SEGMENT,
   JOINING_PHASE,
 } from '../../../src/bootstrap/bootstrap-constants.js';
-import {NUM} from '../../../src/constants/index.js';
 
 // -- Suite-local fixture constants --
 
@@ -113,10 +112,10 @@ test('createJoinStartupPlan - every phase has a name and run function', async (t
   const service = buildStubJoinService();
   const plan = createJoinStartupPlan(service);
 
-  for (let i = NUM.ZERO; i < plan.phases.length; i++) {
+  for (let i = 0; i < plan.phases.length; i++) {
     const phase = plan.phases[i];
     t.ok(
-      typeof phase.name === 'string' && phase.name.length > NUM.ZERO,
+      typeof phase.name === 'string' && phase.name.length > 0,
       `phase[${i}] should have a non-empty name`,
     );
     t.ok(
@@ -187,7 +186,7 @@ test('createJoinStartupPlan - each segment is a non-empty array of phases', asyn
   for (const segmentName of REQUIRED_SEGMENT_NAMES) {
     const segment = plan.segments[segmentName];
     t.ok(
-      Array.isArray(segment) && segment.length > NUM.ZERO,
+      Array.isArray(segment) && segment.length > 0,
       `segment "${segmentName}" should be a non-empty array (D4.1)`,
     );
   }
@@ -253,7 +252,7 @@ test('assertJoinPlanSegments - throws when a required segment is missing', async
     incompleteSegments[name] = [{name: `stub-${name}`, run: async () => {}}];
   }
   // Remove one segment to trigger fast-fail
-  delete incompleteSegments[REQUIRED_SEGMENT_NAMES[NUM.ZERO]];
+  delete incompleteSegments[REQUIRED_SEGMENT_NAMES[0]];
 
   const incompletePlan = {
     phases: [],
@@ -293,7 +292,7 @@ test('assertJoinPlanSegments - throws when a required segment is empty', async (
     ];
   }
   // Make one segment empty to trigger fast-fail
-  emptySegmentPlan.segments[REQUIRED_SEGMENT_NAMES[NUM.ZERO]] = [];
+  emptySegmentPlan.segments[REQUIRED_SEGMENT_NAMES[0]] = [];
 
   t.throws(
     () => assertFn(emptySegmentPlan),

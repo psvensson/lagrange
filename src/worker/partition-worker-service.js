@@ -16,7 +16,6 @@ import {
   CDC_MESSAGE_TYPE,
   FACADE_MESSAGE_TYPE,
 } from './worker-constants.js';
-import {NUM} from '../constants/index.js';
 import {RaftGroup} from '../raft/raft-group.js';
 import {
   RAFT_GROUP_EVENT,
@@ -278,7 +277,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     // Initialize and join peers
     this.raftGroup.initialize();
     this.raftGroup.joinPeers();
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.raftGroup.startElection();
     }
 
@@ -595,7 +594,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    */
   handleCDCUnsubscribe(message) {
     this.cdcSubscribers.delete(message.subscriberAddress);
-    if (this.cdcSubscribers.size === NUM.ZERO) {
+    if (this.cdcSubscribers.size === 0) {
       this.removeCDCForwarder();
     }
     return {status: LOCAL_STR_OK, replicaId: this.replicaId};
@@ -720,7 +719,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    */
   getCurrentTerm() {
     return this.raftGroup ?
-      this.raftGroup.getCurrentTerm() : NUM.ZERO;
+      this.raftGroup.getCurrentTerm() : 0;
   }
 
   /**

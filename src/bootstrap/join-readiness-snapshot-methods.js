@@ -13,11 +13,9 @@ import {
 import {
   ENDPOINT_STATUS,
   NODE_STATE,
-  NUM,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
@@ -56,10 +54,10 @@ class JoinReadinessEvaluatorSnapshotMethods {
    */
   resolveJoinReadinessTableName() {
     const config = this.delegates.getConfig();
-    if (typeof config.joinReadinessTableName === TYPEOF.STRING) {
+    if (typeof config.joinReadinessTableName === 'string') {
       const normalized =
         config.joinReadinessTableName.trim().toLowerCase();
-      if (normalized.length > NUM.ZERO) {
+      if (normalized.length > 0) {
         return normalized;
       }
     }
@@ -126,7 +124,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
       this.resolveAppliedTopologyEpoch(systemTableCache);
     const targetCandidates =
       this.resolveJoinReadinessTargetCandidates();
-    const targetAddress = targetCandidates[NUM.ZERO] || null;
+    const targetAddress = targetCandidates[0] || null;
     const routingReady =
       this.isControlPlaneAddressReachable(targetAddress);
     const topology =
@@ -144,8 +142,8 @@ class JoinReadinessEvaluatorSnapshotMethods {
       systemTableCache,
     );
     const expectedResumeToken =
-      typeof context.expectedResumeToken === TYPEOF.STRING &&
-      context.expectedResumeToken.length > NUM.ZERO ?
+      typeof context.expectedResumeToken === 'string' &&
+      context.expectedResumeToken.length > 0 ?
         context.expectedResumeToken :
         this.highestObservedSnapshotResumeToken;
     const snapshotRevisionMetadata =
@@ -221,13 +219,13 @@ class JoinReadinessEvaluatorSnapshotMethods {
    * @return {boolean}
    */
   isControlPlaneAddressReachable(targetAddress) {
-    if (typeof targetAddress !== TYPEOF.STRING ||
-        targetAddress.length === NUM.ZERO) {
+    if (typeof targetAddress !== 'string' ||
+        targetAddress.length === 0) {
       return false;
     }
 
     const match = targetAddress.match(/^([^/]+)\//);
-    const targetNodeId = match ? match[NUM.ONE] : null;
+    const targetNodeId = match ? match[1] : null;
     if (!targetNodeId) {
       return false;
     }
@@ -243,7 +241,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
     }
 
     const messageRouter = this.delegates.getMessageRouter();
-    if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
+    if (typeof messageRouter?.getConnectionState !== 'function') {
       return true;
     }
     return messageRouter.getConnectionState(targetNodeId) ===
@@ -259,7 +257,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
   resolveJoinReadinessTargetCandidates() {
     if (
       typeof this.delegates.resolveControlPlaneTargetAddressCandidates ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       const candidates =
         this.delegates.resolveControlPlaneTargetAddressCandidates({
@@ -272,13 +270,13 @@ class JoinReadinessEvaluatorSnapshotMethods {
         });
       return Array.isArray(candidates) ?
         [...new Set(candidates.filter((value) =>
-          typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+          typeof value === 'string' && value.length > 0,
         ))] :
         [];
     }
 
     if (typeof this.delegates.resolveControlPlaneTargetAddress !==
-        TYPEOF.FUNCTION) {
+        'function') {
       return [];
     }
 
@@ -301,7 +299,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
       }),
     ];
     return [...new Set(candidates.filter((value) =>
-      typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      typeof value === 'string' && value.length > 0,
     ))];
   }
 
@@ -312,19 +310,19 @@ class JoinReadinessEvaluatorSnapshotMethods {
    */
   resolveControlPlaneTargetConnectionStates(targetCandidates) {
     if (!Array.isArray(targetCandidates) ||
-        targetCandidates.length === NUM.ZERO) {
+        targetCandidates.length === 0) {
       return null;
     }
 
     const messageRouter = this.delegates.getMessageRouter();
     const connectionStates = {};
     for (const targetAddress of targetCandidates) {
-      if (typeof targetAddress !== TYPEOF.STRING ||
-          targetAddress.length === NUM.ZERO) {
+      if (typeof targetAddress !== 'string' ||
+          targetAddress.length === 0) {
         continue;
       }
       const match = targetAddress.match(/^([^/]+)\//);
-      const targetNodeId = match ? match[NUM.ONE] : null;
+      const targetNodeId = match ? match[1] : null;
       if (!targetNodeId) {
         connectionStates[targetAddress] = null;
         continue;
@@ -339,14 +337,14 @@ class JoinReadinessEvaluatorSnapshotMethods {
             `self:${readiness.state || LOCAL_STR_UNKNOWN}`;
         continue;
       }
-      if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
+      if (typeof messageRouter?.getConnectionState !== 'function') {
         connectionStates[targetAddress] = null;
         continue;
       }
       connectionStates[targetAddress] =
         messageRouter.getConnectionState(targetNodeId) || null;
     }
-    return Object.keys(connectionStates).length > NUM.ZERO ?
+    return Object.keys(connectionStates).length > 0 ?
       connectionStates :
       null;
   }
@@ -373,14 +371,14 @@ class JoinReadinessEvaluatorSnapshotMethods {
       return {
         ready: false,
         missingLeaders: null,
-        inFlightReplicaOperations: NUM.ZERO,
+        inFlightReplicaOperations: 0,
         inFlightReplicaOperationDetails: [],
-        excludedSelfTargetedCount: NUM.ZERO,
-        excludedWarmingTargetCount: NUM.ZERO,
-        excludedNonDiscoveryPartitionCount: NUM.ZERO,
-        excludedRemotePriorityControlPlaneCount: NUM.ZERO,
+        excludedSelfTargetedCount: 0,
+        excludedWarmingTargetCount: 0,
+        excludedNonDiscoveryPartitionCount: 0,
+        excludedRemotePriorityControlPlaneCount: 0,
         excludedRemotePriorityControlPlaneOperationDetails: [],
-        excludedSelfSourcePriorityControlPlaneCount: NUM.ZERO,
+        excludedSelfSourcePriorityControlPlaneCount: 0,
         excludedSelfSourcePriorityControlPlaneOperationDetails: [],
         missingNodeEndpointNodeIds: [],
         missingPostgresWireNodeIds: [],
@@ -421,8 +419,8 @@ class JoinReadinessEvaluatorSnapshotMethods {
     const excludedSelfSourcePriorityControlPlaneCount =
       operationDetails.excludedSelfSourcePriorityControlPlaneCount;
     return {
-      ready: missingCount === NUM.ZERO &&
-        inFlightReplicaOperations === NUM.ZERO,
+      ready: missingCount === 0 &&
+        inFlightReplicaOperations === 0,
       missingLeaders,
       inFlightReplicaOperations,
       inFlightReplicaOperationDetails,
@@ -455,7 +453,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
    */
   evaluateCanonicalJoinEndpointVisibility(systemTableCache) {
     if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
+        typeof systemTableCache.getAll !== 'function') {
       return {
         ready: false,
         missingNodeEndpointNodeIds: [],
@@ -475,7 +473,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
     for (const row of nodeEndpointRows) {
       const normalizedRow = normalizeNodeEndpointRow(row);
       const {nodeId, transportType, status} = normalizedRow;
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       if (status !==
@@ -492,7 +490,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
     for (const row of serviceEndpointRows) {
       const normalizedRow = normalizeServiceEndpointRow(row);
       const {nodeId, serviceId, healthStatus} = normalizedRow;
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       if (serviceId !== META_SERVICE_ID.POSTGRES_WIRE) {
@@ -513,8 +511,8 @@ class JoinReadinessEvaluatorSnapshotMethods {
     );
 
     return {
-      ready: missingNodeEndpointNodeIds.length === NUM.ZERO &&
-        missingPostgresWireNodeIds.length === NUM.ZERO,
+      ready: missingNodeEndpointNodeIds.length === 0 &&
+        missingPostgresWireNodeIds.length === 0,
       missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds,
     };
@@ -542,7 +540,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
       this.delegates.getControlPlaneReadinessService?.() || null;
     const cacheNodeRows =
       systemTableCache &&
-      typeof systemTableCache.getAll === TYPEOF.FUNCTION ?
+      typeof systemTableCache.getAll === 'function' ?
         systemTableCache.getAll(TABLES.NODES) || [] :
         [];
     const startupAuthority =
@@ -563,7 +561,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
       nodeIds: readinessActiveNodeIds,
     }]);
     const selected = candidates.find((candidate) =>
-      candidate.nodeIds.length > NUM.ZERO,
+      candidate.nodeIds.length > 0,
     );
     return Object.freeze(selected || {
       kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.UNAVAILABLE,
@@ -576,7 +574,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
     for (const row of Array.isArray(nodeRows) ? nodeRows : []) {
       const normalizedRow = normalizeNodeRow(row);
       const {nodeId, status} = normalizedRow;
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       if (status === String(NODE_STATE.ACTIVE).toLowerCase()) {
@@ -587,14 +585,14 @@ class JoinReadinessEvaluatorSnapshotMethods {
   }
 
   getReadinessActiveNodeIds(readinessService, nodeRows) {
-    if (typeof readinessService?.getNodeReadinessSync !== TYPEOF.FUNCTION) {
+    if (typeof readinessService?.getNodeReadinessSync !== 'function') {
       return [];
     }
     const activeNodeIds = [];
     for (const row of nodeRows) {
       const normalizedRow = normalizeNodeRow(row);
       const {nodeId} = normalizedRow;
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       const readiness = readinessService.getNodeReadinessSync(
@@ -617,7 +615,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
 
   resolveStartupAuthorityActiveNodeAuthority(readinessService) {
     if (typeof readinessService?.getStartupAuthoritySnapshotSync !==
-        TYPEOF.FUNCTION) {
+        'function') {
       return Object.freeze({available: false, nodeIds: []});
     }
     const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
@@ -634,7 +632,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
       available: true,
       nodeIds: [...new Set(
         startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
-          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+          typeof nodeId === 'string' && nodeId.length > 0,
         ),
       )],
     });

@@ -13,7 +13,6 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
     countReplayServiceRows,
     it,
     join,
-    NUM,
     OWNER_CONTRACT_NEXT_ACTION,
     OWNER_CONTRACT_STATE,
     PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
@@ -234,7 +233,7 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
     );
     assert.equal(
       replaySummary.replayedPublication.epoch,
-      REPLAY_TEST_145246Z_PUBLICATION_EPOCH + NUM.ONE,
+      REPLAY_TEST_145246Z_PUBLICATION_EPOCH + 1,
     );
     assert.equal(
       replaySummary.replayedPublication.status,
@@ -369,11 +368,11 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
     );
     assert.equal(
       replaySummary.ownerRpcCacheRepair.matchingDeferralCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.ownerRpcCacheRepair.selectedWitnessDeferralCount,
-      NUM.ZERO,
+      0,
     );
     assert.deepEqual(replaySummary.ownerRpcCacheRepair.nodeIds, []);
     assert.deepEqual(replaySummary.ownerRpcCacheRepair.failedTableNames, []);
@@ -530,7 +529,7 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalRebalanceMoveCount,
-      NUM.ONE,
+      1,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
@@ -540,38 +539,38 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecutionHandoffTimeMs,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalMoveLimit,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalLimitedMoveCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalExecutableMoveCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecuteSkippedMoveCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalReadinessGroupCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalReadyReadinessGroupCount,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalBlockedReadinessGroupCount,
-      NUM.ZERO,
+      0,
     );
     assert.deepEqual(
       replaySummary.rebalancerFollowUpHandoff.postTerminalReadinessGroups,

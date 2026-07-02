@@ -54,9 +54,9 @@ class MessageGroupForwardingOwner {
     this.boundCdcForwardErrorDetail =
       options.boundCdcForwardErrorDetail;
     this.forwardTargetSuppression = new Map();
-    this.lastForwardTopologyRepairAtMs = NUM.ZERO;
+    this.lastForwardTopologyRepairAtMs = 0;
     this.lastForwardTopologyRepairCooldownMs =
-      this.service?.forwardTopologyRepairCooldownMs || NUM.ZERO;
+      this.service?.forwardTopologyRepairCooldownMs || 0;
     this.forwardTopologyRepairInFlight = null;
   }
 
@@ -91,7 +91,7 @@ class MessageGroupForwardingOwner {
       decision.strictForwardRetryAfterMs,
     ) ?
       decision.strictForwardRetryAfterMs :
-      NUM.ZERO;
+      0;
     const normalizedDecision = {
       action: decision.action,
       state: decision.state,
@@ -109,19 +109,19 @@ class MessageGroupForwardingOwner {
       targets: Array.isArray(decision.targets) ? decision.targets : [],
       suppressedCount: Number.isInteger(decision.suppressedCount) ?
         decision.suppressedCount :
-        NUM.ZERO,
+        0,
       localIngress: decision.localIngress === true,
       recoveryCandidateWidening: decision.recoveryCandidateWidening === true,
       strictRecoveryRoutingState:
-        typeof decision.strictRecoveryRoutingState === TYPEOF.STRING &&
-          decision.strictRecoveryRoutingState.length > NUM.ZERO ?
+        typeof decision.strictRecoveryRoutingState === 'string' &&
+          decision.strictRecoveryRoutingState.length > 0 ?
           decision.strictRecoveryRoutingState :
           null,
       shouldRepairAuthoritativeTopology:
         decision.shouldRepairAuthoritativeTopology === true,
     };
-    if (typeof decision.reason === TYPEOF.STRING &&
-        decision.reason.length > NUM.ZERO) {
+    if (typeof decision.reason === 'string' &&
+        decision.reason.length > 0) {
       normalizedDecision.reason = decision.reason;
     }
     return normalizedDecision;
@@ -149,18 +149,18 @@ class MessageGroupForwardingOwner {
 
   resolveForwardRetryAfterMs(baseRetryAfterMs, errorLike = null) {
     const normalizedBaseRetryAfterMs = Number.isFinite(baseRetryAfterMs) &&
-      baseRetryAfterMs > NUM.ZERO ?
+      baseRetryAfterMs > 0 ?
       Math.floor(baseRetryAfterMs) :
-      NUM.ZERO;
+      0;
     const boundedErrorRetryAfterMs = Number.isFinite(errorLike?.retryAfterMs) &&
-      errorLike.retryAfterMs > NUM.ZERO ?
+      errorLike.retryAfterMs > 0 ?
       Math.floor(errorLike.retryAfterMs) :
-      NUM.ZERO;
+      0;
     return Math.max(normalizedBaseRetryAfterMs, boundedErrorRetryAfterMs);
   }
 
   isRetryableForwardDeliveryFailure(deliveryResult = null, errorMessage = null) {
-    const normalizedErrorMessage = typeof errorMessage === TYPEOF.STRING ?
+    const normalizedErrorMessage = typeof errorMessage === 'string' ?
       errorMessage :
       '';
     if (deliveryResult?.deferRetry === true) {
@@ -194,9 +194,9 @@ class MessageGroupForwardingOwner {
   }
 
   resolveForwardFailureState(deliveryResult = null, errorLike = null) {
-    const errorMessage = typeof errorLike?.message === TYPEOF.STRING ?
+    const errorMessage = typeof errorLike?.message === 'string' ?
       errorLike.message :
-      typeof errorLike === TYPEOF.STRING ?
+      typeof errorLike === 'string' ?
         errorLike :
         null;
     if (errorLike?.deferRetry === true ||
@@ -215,8 +215,8 @@ class MessageGroupForwardingOwner {
         MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.RETRYABLE_DEFER) {
       error.retryable = true;
     }
-    if (typeof options.code === TYPEOF.STRING &&
-        options.code.length > NUM.ZERO) {
+    if (typeof options.code === 'string' &&
+        options.code.length > 0) {
       error.code = options.code;
     }
     return error;
@@ -256,12 +256,12 @@ class MessageGroupForwardingOwner {
 
   resolveCdcIngressDecision(logContext = {}, options = {}) {
     const service = this.service;
-    const tableName = typeof logContext?.tableName === TYPEOF.STRING &&
-      logContext.tableName.length > NUM.ZERO ?
+    const tableName = typeof logContext?.tableName === 'string' &&
+      logContext.tableName.length > 0 ?
       logContext.tableName :
       null;
-    const operation = typeof logContext?.operation === TYPEOF.STRING &&
-      logContext.operation.length > NUM.ZERO ?
+    const operation = typeof logContext?.operation === 'string' &&
+      logContext.operation.length > 0 ?
       logContext.operation :
       null;
     const initializationRequirement =
@@ -275,7 +275,7 @@ class MessageGroupForwardingOwner {
     });
     const strictForwardRetryAfterMs = strictForwarding === true ?
       service.resolveStrictCdcForwardRetryAfterMs() :
-      NUM.ZERO;
+      0;
 
     if (initializationRequirement ===
           MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED &&
@@ -356,7 +356,7 @@ class MessageGroupForwardingOwner {
       });
     }
 
-    if (selection.targets.length > NUM.ZERO) {
+    if (selection.targets.length > 0) {
       const strictRecoveryRoutingState =
         selection?.strictRecoveryRoutingContract?.state || null;
       return this.buildCdcIngressDecision({
@@ -421,11 +421,11 @@ class MessageGroupForwardingOwner {
     const requiredTables = [...new Set(
       (Array.isArray(options.requiredTables) ? options.requiredTables : [])
         .filter((tableName) =>
-          typeof tableName === TYPEOF.STRING &&
-          tableName.length > NUM.ZERO,
+          typeof tableName === 'string' &&
+          tableName.length > 0,
         ),
     )];
-    if (requiredTables.length === NUM.ZERO) {
+    if (requiredTables.length === 0) {
       return this.buildIngressReadinessResult(
         false,
         MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
@@ -433,7 +433,7 @@ class MessageGroupForwardingOwner {
       );
     }
 
-    let retryAfterMs = NUM.ZERO;
+    let retryAfterMs = 0;
     for (const tableName of requiredTables) {
       const decision = this.resolveCdcIngressDecision(
         {
@@ -471,7 +471,7 @@ class MessageGroupForwardingOwner {
     return this.buildIngressReadinessResult(
       true,
       null,
-      retryAfterMs > NUM.ZERO ? retryAfterMs : undefined,
+      retryAfterMs > 0 ? retryAfterMs : undefined,
     );
   }
 
@@ -479,19 +479,19 @@ class MessageGroupForwardingOwner {
     const requiredTables = [...new Set(
       (Array.isArray(options.requiredTables) ? options.requiredTables : [])
         .filter((tableName) =>
-          typeof tableName === TYPEOF.STRING &&
-          tableName.length > NUM.ZERO,
+          typeof tableName === 'string' &&
+          tableName.length > 0,
         ),
     )];
     const tableName = requiredTables.find((candidate) =>
       STRICT_CDC_FORWARD_SYSTEM_TABLES.has(candidate),
-    ) || requiredTables[NUM.ZERO] || null;
+    ) || requiredTables[0] || null;
     if (!tableName) {
       return this.buildMetadataForwardSelectionResult({
         strictForwarding: false,
-        strictForwardRetryAfterMs: NUM.ZERO,
+        strictForwardRetryAfterMs: 0,
         targets: [],
-        suppressedCount: NUM.ZERO,
+        suppressedCount: 0,
       });
     }
 
@@ -519,22 +519,22 @@ class MessageGroupForwardingOwner {
       targets,
       suppressedCount,
     } = selection;
-    if (!Array.isArray(targets) || targets.length === NUM.ZERO) {
+    if (!Array.isArray(targets) || targets.length === 0) {
       const error = strictForwarding ?
         this.buildDeferredCdcForwardError(
           MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
           strictForwardRetryAfterMs,
         ) :
         new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-      if (suppressedCount > NUM.ZERO) {
+      if (suppressedCount > 0) {
         error.retryable = false;
       }
       throw error;
     }
 
     const forwardedByNodeId =
-      typeof options.forwardedByNodeId === TYPEOF.STRING &&
-      options.forwardedByNodeId.length > NUM.ZERO ?
+      typeof options.forwardedByNodeId === 'string' &&
+      options.forwardedByNodeId.length > 0 ?
         options.forwardedByNodeId :
         service.nodeId;
     const forwardedBy = Array.isArray(payload?.[ControlPlaneField.FORWARDED_BY]) ?
@@ -556,12 +556,12 @@ class MessageGroupForwardingOwner {
 
     let lastError = null;
     for (const target of targets) {
-      const targetAddress = typeof target?.address === TYPEOF.STRING &&
-        target.address.length > NUM.ZERO ?
+      const targetAddress = typeof target?.address === 'string' &&
+        target.address.length > 0 ?
         target.address :
         service.buildPeerAddress(target?.serviceId || null);
-      if (typeof targetAddress !== TYPEOF.STRING ||
-          targetAddress.length === NUM.ZERO) {
+      if (typeof targetAddress !== 'string' ||
+          targetAddress.length === 0) {
         lastError = new Error(
           MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
         );
@@ -587,14 +587,14 @@ class MessageGroupForwardingOwner {
   isStrictForwardTargetEligible(target = null) {
     const service = this.service;
     if (!target ||
-        typeof target !== TYPEOF.OBJECT ||
-        typeof target.serviceId !== TYPEOF.STRING ||
-        target.serviceId.length === NUM.ZERO) {
+        typeof target !== 'object' ||
+        typeof target.serviceId !== 'string' ||
+        target.serviceId.length === 0) {
       return false;
     }
 
     const nodeId = service.resolveForwardTargetNodeId(target);
-    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+    if (typeof nodeId !== 'string' || nodeId.length === 0) {
       return false;
     }
 
@@ -612,19 +612,19 @@ class MessageGroupForwardingOwner {
   resolveJoinConvergenceBootstrapForwardTarget() {
     const service = this.service;
     if (!Array.isArray(service.peerAddresses) ||
-        service.peerAddresses.length === NUM.ZERO) {
+        service.peerAddresses.length === 0) {
       return null;
     }
 
     const leaderNodeId =
       this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId;
-    if (typeof leaderNodeId !== TYPEOF.STRING ||
-        leaderNodeId.length === NUM.ZERO) {
+    if (typeof leaderNodeId !== 'string' ||
+        leaderNodeId.length === 0) {
       return null;
     }
 
     for (const address of service.peerAddresses) {
-      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+      if (typeof address !== 'string' || address.length === 0) {
         continue;
       }
       try {

@@ -24,8 +24,6 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
-import {NUM} from '../constants/index.js';
-import {TYPEOF} from '../constants/types.js';
 import {RuntimeDriver, PREPARE_STATUS, START_STATUS, HEALTH_STATUS} from './runtime-driver.js';
 import {DriverValidationError, DriverLifecycleError} from './runtime-driver-errors.js';
 
@@ -63,10 +61,10 @@ const LIFECYCLE_METHODS = Object.freeze(['prepare', 'start', 'stop', 'health']);
  * @return {boolean}
  */
 function isLifecycleModule(handler) {
-  if (!handler || typeof handler !== TYPEOF.OBJECT) {
+  if (!handler || typeof handler !== 'object') {
     return false;
   }
-  return LIFECYCLE_METHODS.every((m) => typeof handler[m] === TYPEOF.FUNCTION);
+  return LIFECYCLE_METHODS.every((m) => typeof handler[m] === 'function');
 }
 /**
  * Native_JS_Driver — executes existing in-process JS handlers
@@ -117,19 +115,19 @@ class NativeJsDriver extends RuntimeDriver {
    */
   validateDescriptor(definition) {
     const errors = [];
-    if (!definition || typeof definition !== TYPEOF.OBJECT) {
+    if (!definition || typeof definition !== 'object') {
       errors.push(NATIVE_JS_ERROR.DEFINITION_REQUIRED);
       return {valid: false, errors};
     }
     const ref = definition[RUNTIME_FIELD.RUNTIME_REF] ?? definition.runtimeRef;
     if (ref === undefined || ref === null) {
       errors.push(NATIVE_JS_ERROR.REF_REQUIRED);
-    } else if (typeof ref !== TYPEOF.STRING) {
+    } else if (typeof ref !== 'string') {
       errors.push(NATIVE_JS_ERROR.REF_MUST_BE_STRING);
-    } else if (ref.trim().length === NUM.ZERO) {
+    } else if (ref.trim().length === 0) {
       errors.push(NATIVE_JS_ERROR.REF_EMPTY);
     }
-    if (errors.length > NUM.ZERO) {
+    if (errors.length > 0) {
       return {valid: false, errors};
     }
     return {valid: true};
@@ -168,7 +166,7 @@ class NativeJsDriver extends RuntimeDriver {
     const ref = definition[RUNTIME_FIELD.RUNTIME_REF] ?? definition.runtimeRef;
     const serviceId = definition.serviceId ?? definition.service_id;
     const handlerMap = context?.handlerMap;
-    if (!handlerMap || typeof handlerMap !== TYPEOF.OBJECT) {
+    if (!handlerMap || typeof handlerMap !== 'object') {
       throw new DriverLifecycleError(
         this.kind,
         NATIVE_JS_DRIVER_LITERAL.PREPARE,
@@ -192,7 +190,7 @@ class NativeJsDriver extends RuntimeDriver {
       this._prepared.set(serviceId, handler);
       return this.buildPrepareResult(PREPARE_STATUS.READY);
     }
-    if (typeof handler !== TYPEOF.FUNCTION) {
+    if (typeof handler !== 'function') {
       return this.buildPrepareResult(PREPARE_STATUS.FAILED, {
         error: `${NATIVE_JS_ERROR.HANDLER_INVALID_TYPE}: '${ref}'`,
       });
@@ -215,7 +213,7 @@ class NativeJsDriver extends RuntimeDriver {
    *   error?: string}>}
    */
   async start(replicaContext) {
-    if (!replicaContext || typeof replicaContext !== TYPEOF.OBJECT) {
+    if (!replicaContext || typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind,
         NATIVE_JS_DRIVER_LITERAL.START,
@@ -272,7 +270,7 @@ class NativeJsDriver extends RuntimeDriver {
    * @return {Promise<void>}
    */
   async stop(replicaContext) {
-    if (!replicaContext || typeof replicaContext !== TYPEOF.OBJECT) {
+    if (!replicaContext || typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind,
         NATIVE_JS_DRIVER_LITERAL.STOP,
@@ -310,7 +308,7 @@ class NativeJsDriver extends RuntimeDriver {
    * @return {Promise<{status: string, detail?: string}>}
    */
   async health(replicaContext) {
-    if (!replicaContext || typeof replicaContext !== TYPEOF.OBJECT) {
+    if (!replicaContext || typeof replicaContext !== 'object') {
       return this.buildHealthResult(HEALTH_STATUS.UNKNOWN, {
         detail: NATIVE_JS_ERROR.REPLICA_CONTEXT_REQUIRED,
       });

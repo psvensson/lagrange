@@ -14,10 +14,8 @@ import {
   FUNCTION_LOG_LIMIT,
   FUNCTION_LOG_MSG,
   FUNCTION_SUBSYSTEM,
-  TYPEOF,
 } from './function-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * FunctionQueryExecutor provides programmatic query execution for
@@ -98,7 +96,7 @@ class FunctionQueryExecutor {
     const startTime = Date.now();
 
     this.logger.debug(FUNCTION_LOG_MSG.QUERY_EXECUTE_START, {
-      sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       paramCount: params.length,
       timeout,
     });
@@ -123,21 +121,21 @@ class FunctionQueryExecutor {
       const duration = Date.now() - startTime;
 
       this.logger.debug(FUNCTION_LOG_MSG.QUERY_EXECUTE_SUCCESS, {
-        sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
-        rowCount: result.results?.length || result.rows?.length || LOCAL_NUM_ZERO,
-        affectedRows: result.affectedRows || LOCAL_NUM_ZERO,
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+        rowCount: result.results?.length || result.rows?.length || 0,
+        affectedRows: result.affectedRows || 0,
         durationMs: duration,
       });
 
       return {
         rows: result.results || result.rows || [],
-        affectedRows: result.affectedRows || LOCAL_NUM_ZERO,
+        affectedRows: result.affectedRows || 0,
         partitions: result.partitions || [],
         success: true,
       };
     } catch (error) {
       this.logger.error(FUNCTION_LOG_MSG.QUERY_EXECUTE_FAILURE, {
-        sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
         error: error.message,
       });
       throw error;
@@ -160,7 +158,7 @@ class FunctionQueryExecutor {
       throw new Error(FUNCTION_ERROR_MSG.SQL_ENGINE_UNAVAILABLE);
     }
 
-    if (typeof callback !== TYPEOF.FUNCTION) {
+    if (typeof callback !== 'function') {
       throw new Error(FUNCTION_ERROR_MSG.CALLBACK_MUST_BE_FUNCTION);
     }
 
@@ -168,13 +166,13 @@ class FunctionQueryExecutor {
     const startTime = Date.now();
 
     this.logger.debug(FUNCTION_LOG_MSG.STREAMING_EXECUTE_START, {
-      sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       batchSize,
     });
 
     // Check if engine supports streaming
-    if (typeof this.sqlQueryEngine.executeStreaming === TYPEOF.FUNCTION) {
-      let totalRows = LOCAL_NUM_ZERO;
+    if (typeof this.sqlQueryEngine.executeStreaming === 'function') {
+      let totalRows = 0;
 
       await this.sqlQueryEngine.executeStreaming(sql, params, async (rows) => {
         totalRows += rows.length;
@@ -184,7 +182,7 @@ class FunctionQueryExecutor {
       const duration = Date.now() - startTime;
 
       this.logger.debug(FUNCTION_LOG_MSG.STREAMING_EXECUTE_COMPLETE, {
-        sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
         totalRows,
         durationMs: duration,
       });
@@ -199,8 +197,8 @@ class FunctionQueryExecutor {
     const result = await this.executeQuery(sql, params, options);
     const rows = result.rows || [];
 
-    let totalRows = LOCAL_NUM_ZERO;
-    for (let i = LOCAL_NUM_ZERO; i < rows.length; i += batchSize) {
+    let totalRows = 0;
+    for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
       totalRows += batch.length;
       await callback(batch);
@@ -209,7 +207,7 @@ class FunctionQueryExecutor {
     const duration = Date.now() - startTime;
 
     this.logger.debug(FUNCTION_LOG_MSG.BATCHED_EXECUTE_COMPLETE, {
-      sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       totalRows,
       durationMs: duration,
     });
@@ -239,7 +237,7 @@ class FunctionQueryExecutor {
 
     this.logger.info(FUNCTION_LOG_MSG.QUERY_INVOKE_START, {
       invocationId,
-      sql: sql.substring(LOCAL_NUM_ZERO, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+      sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
       nextFunctionId,
     });
 
@@ -259,7 +257,7 @@ class FunctionQueryExecutor {
       this.logger.info(FUNCTION_LOG_MSG.QUERY_INVOKE_SUCCESS, {
         invocationId,
         nextFunctionId,
-        rowCount: result.rows?.length || LOCAL_NUM_ZERO,
+        rowCount: result.rows?.length || 0,
         durationMs: duration,
       });
 

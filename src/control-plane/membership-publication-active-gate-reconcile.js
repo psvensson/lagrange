@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   CONTROL_PLANE_FAILURE_REASON,
@@ -32,7 +31,7 @@ import {SnapshotService} from './snapshot-service.js';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON = 'active_gate_handoff_owner_reconcile';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE = 'diagnostics';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS = NUM.TWO;
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS = 2;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT = '';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK = true;
@@ -85,12 +84,12 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBILITY_CONTEXT =
   });
 function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {}) {
   const expectedStatus =
-    typeof options.status === TYPEOF.STRING ?
+    typeof options.status === 'string' ?
       options.status.toUpperCase() :
       null;
   const normalizedRows = (Array.isArray(rows) ? rows : [])
     .map((row) => {
-      if (!row || typeof row !== TYPEOF.OBJECT) {
+      if (!row || typeof row !== 'object') {
         return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
       }
       return normalizeControlPlanePublicationRow(
@@ -106,41 +105,41 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
         row.publicationId ||
         row.publicationEpoch ||
         row.status ||
-        normalizeNodeIdList(row.publishedActiveNodeIds).length > NUM.ZERO
+        normalizeNodeIdList(row.publishedActiveNodeIds).length > 0
       ),
     );
-  if (normalizedRows.length === NUM.ZERO) {
+  if (normalizedRows.length === 0) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   normalizedRows.sort((left, right) => {
     const epochDelta =
-      (right.publicationEpoch || NUM.ZERO) -
-      (left.publicationEpoch || NUM.ZERO);
-    if (epochDelta !== NUM.ZERO) {
+      (right.publicationEpoch || 0) -
+      (left.publicationEpoch || 0);
+    if (epochDelta !== 0) {
       return epochDelta;
     }
     return (
-      (right.updatedAt || right.publishedAt || NUM.ZERO) -
-      (left.updatedAt || left.publishedAt || NUM.ZERO)
+      (right.updatedAt || right.publishedAt || 0) -
+      (left.updatedAt || left.publishedAt || 0)
     );
   });
-  return normalizedRows[NUM.ZERO] ||
+  return normalizedRows[0] ||
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
 function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
   const handoffContract =
-    target?.handoffContract && typeof target.handoffContract === TYPEOF.OBJECT ?
+    target?.handoffContract && typeof target.handoffContract === 'object' ?
       target.handoffContract :
       null;
   const publishedActiveNodeIds = normalizeNodeIdList(
     handoffContract?.publishedActiveNodeIds,
   );
-  if (publishedActiveNodeIds.length === NUM.ZERO) {
+  if (publishedActiveNodeIds.length === 0) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   const publicationEpoch = normalizePositiveInteger(
     handoffContract?.publicationEpoch,
-    NUM.ONE,
+    1,
   );
   return {
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
@@ -158,7 +157,7 @@ function resolveActiveGateMembershipPublicationLatestRow(
 ) {
   if (
     !publicationActiveGateHandoff ||
-    typeof publicationActiveGateHandoff !== TYPEOF.OBJECT ||
+    typeof publicationActiveGateHandoff !== 'object' ||
     Array.isArray(publicationActiveGateHandoff)
   ) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
@@ -241,7 +240,7 @@ function isActiveGateMembershipPublicationRowVisibleForTarget(
     target?.publishedActiveNodeIds,
   );
   if (
-    targetPublishedNodeIds.length === NUM.ZERO ||
+    targetPublishedNodeIds.length === 0 ||
     normalizedRow.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
   ) {
     return false;
@@ -267,7 +266,7 @@ function buildActiveGateMembershipPublicationVisibleReadRows(
 ) {
   const candidate = reconcileOutcome?.candidate;
   const candidateRow =
-    candidate && typeof candidate === TYPEOF.OBJECT ?
+    candidate && typeof candidate === 'object' ?
       buildMembershipPublicationRow({candidate, nowMs}) :
       null;
   const publicationRows = [
@@ -293,8 +292,8 @@ function resolveActiveGateMembershipPublicationReconcileOutcomeRow(
     reconcileOutcome,
     nowMs,
   );
-  return publicationRows.length > NUM.ZERO ?
-    normalizeControlPlanePublicationRow(publicationRows[NUM.ZERO]) :
+  return publicationRows.length > 0 ?
+    normalizeControlPlanePublicationRow(publicationRows[0]) :
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
 }
 function buildActiveGateMembershipPublicationReconcileContext({
@@ -394,7 +393,7 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
   options = {},
 ) {
   const publicationRow =
-    options.publicationRow && typeof options.publicationRow === TYPEOF.OBJECT ?
+    options.publicationRow && typeof options.publicationRow === 'object' ?
       normalizeControlPlanePublicationRow(options.publicationRow) :
       null;
   return Object.freeze({
@@ -403,15 +402,15 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
     target: options.target || null,
     publicationRow,
     enqueued: options.enqueued === true,
-    ...(Number.isFinite(options.retryAfterMs) && options.retryAfterMs > NUM.ZERO ?
+    ...(Number.isFinite(options.retryAfterMs) && options.retryAfterMs > 0 ?
       {retryAfterMs: Math.floor(options.retryAfterMs)} :
       {}),
-    ...(typeof options.reasonCode === TYPEOF.STRING &&
-      options.reasonCode.length > NUM.ZERO ?
+    ...(typeof options.reasonCode === 'string' &&
+      options.reasonCode.length > 0 ?
       {reasonCode: options.reasonCode} :
       {}),
     ...(options.controlPlaneConvergence &&
-      typeof options.controlPlaneConvergence === TYPEOF.OBJECT ?
+      typeof options.controlPlaneConvergence === 'object' ?
       {
         [CONTROL_PLANE_CONVERGENCE_FIELD
           .CONTROL_PLANE_CONVERGENCE]: Object.freeze({
@@ -433,7 +432,7 @@ function resolveActiveGateMembershipPublicationHandoffRetryAfterMs(
 ) {
   if (
     Number.isFinite(controlPlaneConvergence?.retryAfterMs) &&
-    controlPlaneConvergence.retryAfterMs > NUM.ZERO
+    controlPlaneConvergence.retryAfterMs > 0
   ) {
     return normalizeControlPlaneConvergenceRetryAfterMs(
       controlPlaneConvergence.retryAfterMs,
@@ -514,14 +513,14 @@ function resolveActiveGateMembershipPublicationDeferredReasonCode(
 ) {
   const convergenceReasonCode = controlPlaneConvergence?.reasonCode;
   if (
-    typeof convergenceReasonCode === TYPEOF.STRING &&
-    convergenceReasonCode.length > NUM.ZERO
+    typeof convergenceReasonCode === 'string' &&
+    convergenceReasonCode.length > 0
   ) {
     return convergenceReasonCode;
   }
   const handoffReasonCode = target?.handoffContract?.reasonCode;
-  return typeof handoffReasonCode === TYPEOF.STRING &&
-    handoffReasonCode.length > NUM.ZERO ?
+  return typeof handoffReasonCode === 'string' &&
+    handoffReasonCode.length > 0 ?
     handoffReasonCode :
     null;
 }
@@ -529,16 +528,16 @@ function resolveActiveGateMembershipPublicationOwnerRecoveryOwnerKey(
   coordinator,
   target,
 ) {
-  if (typeof coordinator?.buildOwnerKey === TYPEOF.FUNCTION) {
+  if (typeof coordinator?.buildOwnerKey === 'function') {
     const ownerKey = coordinator.buildOwnerKey();
-    if (typeof ownerKey === TYPEOF.STRING && ownerKey.length > NUM.ZERO) {
+    if (typeof ownerKey === 'string' && ownerKey.length > 0) {
       return ownerKey;
     }
   }
   const pendingRecoveryNodeIds = normalizeNodeIdList(
     target?.pendingRecoveryNodeIds,
   );
-  return pendingRecoveryNodeIds[NUM.ZERO] ||
+  return pendingRecoveryNodeIds[0] ||
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT;
 }
 function resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
@@ -546,8 +545,8 @@ function resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
   enqueued,
 ) {
   const pressureOutcome = queueOutcome?.pressureOutcome;
-  return typeof pressureOutcome === TYPEOF.STRING &&
-    pressureOutcome.length > NUM.ZERO ?
+  return typeof pressureOutcome === 'string' &&
+    pressureOutcome.length > 0 ?
     pressureOutcome :
     (
       enqueued === true ?
@@ -592,12 +591,12 @@ function isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(
 ) {
   return target?.handoffContract?.nextAction ===
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-    target.pendingRecoveryCount > NUM.ZERO;
+    target.pendingRecoveryCount > 0;
 }
 async function drainActiveGateMembershipPublicationSnapshotQueue() {
   const queuePressureDetected = SnapshotService.isQueuePressureDetected();
   const drainedCount = await SnapshotService.drainQueueForSnapshot();
-  return queuePressureDetected === true || drainedCount > NUM.ZERO;
+  return queuePressureDetected === true || drainedCount > 0;
 }
 async function readActiveGateMembershipPublicationVisibleRow(
   coordinator,
@@ -611,7 +610,7 @@ async function readActiveGateMembershipPublicationVisibleRow(
     !normalizedPublicationRow.publicationId ||
     !coordinator.controlPlanePublicationsOwner ||
     typeof coordinator.controlPlanePublicationsOwner.getPublication !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
@@ -699,7 +698,7 @@ async function reconcileActiveGateMembershipPublication(
     const rawEnqueueOutcome =
       ownerRecoveryWait &&
       typeof coordinator?.enqueueClusterMembershipReconcile ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         coordinator.enqueueClusterMembershipReconcile(
           ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
           {
@@ -755,10 +754,10 @@ async function reconcileActiveGateMembershipPublication(
     let reconcileOutcome =
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
     for (
-      let visibilityAttempt = NUM.ZERO;
+      let visibilityAttempt = 0;
       visibilityAttempt <
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS;
-      visibilityAttempt += NUM.ONE
+      visibilityAttempt += 1
     ) {
       try {
         reconcileOutcome = await coordinator.reconcileClusterMembership(context);
@@ -790,7 +789,7 @@ async function reconcileActiveGateMembershipPublication(
         }
       } catch (error) {
         if (
-          visibilityAttempt + NUM.ONE >=
+          visibilityAttempt + 1 >=
           ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS
         ) {
           throw error;

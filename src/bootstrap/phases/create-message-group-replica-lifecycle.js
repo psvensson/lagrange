@@ -6,7 +6,6 @@ import {
 import {
   ADDRESS,
   ENTITY_TYPE,
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   UNIFIED_SERVICE_TYPE,
@@ -46,7 +45,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
-    if (options.createDelayMs > NUM.ZERO) {
+    if (options.createDelayMs > 0) {
       const sleep = this.delegates.getSleep();
       await sleep(options.createDelayMs);
     }
@@ -212,21 +211,21 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
     const config = this.delegates.getConfig?.() || {};
     const configuredMinimumDelay =
       Number.isFinite(config.replicaStaggerDelayMs) &&
-      config.replicaStaggerDelayMs > NUM.ZERO ?
+      config.replicaStaggerDelayMs > 0 ?
         Math.floor(config.replicaStaggerDelayMs) :
-        NUM.ZERO;
+        0;
     let computedDelayMs = configuredMinimumDelay;
 
     for (const replica of replicas) {
       const electionMaxMs = replica?.raftTimingConfig?.electionMaxMs;
       const heartbeatMs = replica?.raftTimingConfig?.heartbeatMs;
-      if (!Number.isFinite(electionMaxMs) || electionMaxMs <= NUM.ZERO) {
+      if (!Number.isFinite(electionMaxMs) || electionMaxMs <= 0) {
         continue;
       }
       const heartbeatAllowanceMs =
-        Number.isFinite(heartbeatMs) && heartbeatMs > NUM.ZERO ?
+        Number.isFinite(heartbeatMs) && heartbeatMs > 0 ?
           Math.floor(heartbeatMs * 2) :
-          NUM.ZERO;
+          0;
       computedDelayMs = Math.max(
         computedDelayMs,
         Math.floor(electionMaxMs) + heartbeatAllowanceMs,
@@ -265,11 +264,11 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       },
     );
 
-    for (let index = NUM.ZERO; index < replicas.length; index += NUM.ONE) {
+    for (let index = 0; index < replicas.length; index += 1) {
       const messageGroup = replicas[index];
       messageGroup.startElection();
-      if (index < replicas.length - NUM.ONE &&
-          electionReleaseDelayMs > NUM.ZERO &&
+      if (index < replicas.length - 1 &&
+          electionReleaseDelayMs > 0 &&
           typeof sleep === LOCAL_STR_FUNCTION) {
         await sleep(electionReleaseDelayMs);
       }

@@ -4,10 +4,8 @@
  * Requirements: 23.7, 23.8
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {HLC_ERROR_MSG, HLC_PART, HLC_SEPARATOR} from './hlc-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * HLCTimestamp represents a hybrid logical clock timestamp.
@@ -41,7 +39,7 @@ class HLCTimestamp {
    * @return {HLCTimestamp} Parsed timestamp.
    */
   static fromString(str) {
-    if (typeof str !== TYPEOF.STRING) {
+    if (typeof str !== 'string') {
       throw new Error(`${HLC_ERROR_MSG.NOT_STRING_PREFIX}${typeof str}`);
     }
     const parts = str.split(HLC_SEPARATOR.FIELD);
@@ -68,7 +66,7 @@ class HLCTimestamp {
    * @return {HLCTimestamp|null} Parsed timestamp, or null if not parseable.
    */
   static tryFromString(str) {
-    if (typeof str !== TYPEOF.STRING || str.length === LOCAL_NUM_ZERO) {
+    if (typeof str !== 'string' || str.length === 0) {
       return null;
     }
     try {
@@ -99,7 +97,7 @@ class HLCTimestamp {
    * @return {boolean} True if this timestamp is before the other.
    */
   isBefore(other) {
-    return this.compare(other) < LOCAL_NUM_ZERO;
+    return this.compare(other) < 0;
   }
 
   /**
@@ -108,7 +106,7 @@ class HLCTimestamp {
    * @return {boolean} True if this timestamp is after the other.
    */
   isAfter(other) {
-    return this.compare(other) > LOCAL_NUM_ZERO;
+    return this.compare(other) > 0;
   }
 
   /**
@@ -117,7 +115,7 @@ class HLCTimestamp {
    * @return {boolean} True if timestamps are equal.
    */
   equals(other) {
-    return this.compare(other) === LOCAL_NUM_ZERO;
+    return this.compare(other) === 0;
   }
 
   /**

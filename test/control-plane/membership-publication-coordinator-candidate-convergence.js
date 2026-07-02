@@ -17,7 +17,7 @@ import {
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
-import {NUM, TABLES} from '../../src/constants/index.js';
+import {TABLES} from '../../src/constants/index.js';
 import {ControlPlanePublicationsOwner} from
   '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {registerMembershipPublicationCoordinatorTailTests} from './membership-publication-coordinator-tail-test-cases.js';
@@ -743,11 +743,11 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
   );
   t.equal(
     persistedRows.length,
-    NUM.ONE,
+    1,
     MEMBERSHIP_PUBLICATION_RECONCILE_PERSIST_ASSERTION,
   );
   t.match(
-    persistedRows[NUM.ZERO],
+    persistedRows[0],
     {
       publication_epoch: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH,
       status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,

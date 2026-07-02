@@ -3,7 +3,6 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   LOG_MSG,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
@@ -62,7 +61,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       serviceRows.filter(
         (service) => service?.node_id === canonicalLeaderNodeId,
       ).length :
-      NUM.ZERO;
+      0;
     const canonicalLeaderRoutingGapState =
       resolveCanonicalLeaderRoutingGapState({
         canonicalLeaderNodeId,
@@ -155,7 +154,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         ) || [];
       services.push(...cacheRows);
     }
-    if (services.length === NUM.ZERO) {
+    if (services.length === 0) {
       return [];
     }
     const deduped = [];
@@ -185,13 +184,13 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     activeAddressedServices,
     routableServices,
   ) {
-    if (serviceRows.length === NUM.ZERO) {
+    if (serviceRows.length === 0) {
       return QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS;
     }
-    if (activeAddressedServices.length === NUM.ZERO) {
+    if (activeAddressedServices.length === 0) {
       return QUERY_ROUTING_DIAGNOSTIC_REASON.NO_ACTIVE_ADDRESSED_SERVICES;
     }
-    if (routableServices.length === NUM.ZERO) {
+    if (routableServices.length === 0) {
       return QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS;
     }
     return QUERY_ROUTING_DIAGNOSTIC_REASON.OK;
@@ -280,15 +279,15 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       reasonCode: routingSnapshot.reasonCode || null,
       routingReadinessDimension:
         routingSnapshot.routingReadinessDimension || null,
-      serviceRowCount: Number(routingSnapshot.serviceRowCount || NUM.ZERO),
+      serviceRowCount: Number(routingSnapshot.serviceRowCount || 0),
       activeAddressedServiceCount: Number(
-        routingSnapshot.activeAddressedServiceCount || NUM.ZERO,
+        routingSnapshot.activeAddressedServiceCount || 0,
       ),
       routableServiceCount: Number(
-        routingSnapshot.routableServiceCount || NUM.ZERO,
+        routingSnapshot.routableServiceCount || 0,
       ),
       canonicalLeaderServiceCount: Number(
-        routingSnapshot.canonicalLeaderServiceCount || NUM.ZERO,
+        routingSnapshot.canonicalLeaderServiceCount || 0,
       ),
       leaderKnown: routingSnapshot.leaderKnown === true,
       canonicalLeaderNodeId: routingSnapshot.canonicalLeaderNodeId || null,
@@ -358,7 +357,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     if (
       allowReadinessAuthoritativeRefresh &&
       canRefreshReadiness &&
-      repairNodeIds.size > NUM.ZERO
+      repairNodeIds.size > 0
     ) {
       attemptedRepair = true;
       await Promise.all(
@@ -404,12 +403,12 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     if (
       routingSnapshot?.reasonCode !==
         QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
-      Number(routingSnapshot.activeAddressedServiceCount) <= NUM.ZERO
+      Number(routingSnapshot.activeAddressedServiceCount) <= 0
     ) {
       return [];
     }
     const deniedNodeIds = Object.keys(routingSnapshot.deniedByNodeId || {});
-    if (deniedNodeIds.length > NUM.ZERO) {
+    if (deniedNodeIds.length > 0) {
       return deniedNodeIds;
     }
     const serviceRows =
@@ -419,7 +418,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
           routingSnapshot.serviceRows.filter((service) =>
             service?.status !== SERVICE_STATUS.INACTIVE &&
             typeof service?.address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-            service.address.length > NUM.ZERO,
+            service.address.length > 0,
           ) :
           [];
     const nodeIds = [];
@@ -428,7 +427,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       const nodeId = service?.node_id || service?.nodeId || null;
       if (
         typeof nodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        nodeId.length === NUM.ZERO ||
+        nodeId.length === 0 ||
         seen.has(nodeId)
       ) {
         continue;
@@ -452,10 +451,10 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
       routingSnapshot.routingReadinessDimension !==
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ||
-      Number(routingSnapshot.activeAddressedServiceCount) <= NUM.ZERO ||
+      Number(routingSnapshot.activeAddressedServiceCount) <= 0 ||
       typeof routingSnapshot.partitionId !==
         QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      routingSnapshot.partitionId.length === NUM.ZERO
+      routingSnapshot.partitionId.length === 0
     ) {
       return false;
     }
@@ -481,10 +480,10 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       routingSnapshot.leaderKnown === true &&
       typeof routingSnapshot.canonicalLeaderNodeId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO &&
-      Number(routingSnapshot.canonicalLeaderServiceCount) === NUM.ZERO &&
-      (Number(routingSnapshot.activeAddressedServiceCount) > NUM.ZERO ||
-        Number(routingSnapshot.serviceRowCount) === NUM.ZERO),
+      routingSnapshot.canonicalLeaderNodeId.length > 0 &&
+      Number(routingSnapshot.canonicalLeaderServiceCount) === 0 &&
+      (Number(routingSnapshot.activeAddressedServiceCount) > 0 ||
+        Number(routingSnapshot.serviceRowCount) === 0),
     );
   },
 
@@ -544,7 +543,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
   ) {
     return (
       this.getPartitionRoutingSnapshot(partitionId, routingReadinessDimension)
-        .routableServiceCount > NUM.ZERO
+        .routableServiceCount > 0
     );
   },
 
@@ -576,7 +575,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
           this.systemCache.filter(
             TABLES.PARTITIONS,
             (partition) => partition.partition_id === partitionId,
-          ).length > NUM.ZERO
+          ).length > 0
         ) {
           return true;
         }

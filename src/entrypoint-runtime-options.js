@@ -11,10 +11,7 @@ import {
   ENTRYPOINT_TEXT,
 } from './constants/entrypoint.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_OPTIONS = 'Options:';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Check for version flag.
@@ -35,9 +32,9 @@ function checkVersionFlag(version) {
     args.includes(ENTRYPOINT_FLAG.HELP_SHORT)
   ) {
     console.log(ENTRYPOINT_TEXT.headerLine(version));
-    console.log(LOCAL_STR_EMPTY);
+    console.log('');
     console.log(ENTRYPOINT_TEXT.USAGE_LINE);
-    console.log(LOCAL_STR_EMPTY);
+    console.log('');
     console.log(LOCAL_STR_OPTIONS);
     for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
       console.log(line);
@@ -55,15 +52,15 @@ function parseCommandLineArgs() {
   const args = process.argv.slice(2);
   const result = {};
 
-  for (let i = LOCAL_NUM_ZERO; i < args.length; i++) {
-    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + LOCAL_NUM_ONE < args.length) {
-      result.dataDir = args[i + LOCAL_NUM_ONE];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + 1 < args.length) {
+      result.dataDir = args[i + 1];
       i++;
-    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + LOCAL_NUM_ONE < args.length) {
-      result.seedNodeAddress = args[i + LOCAL_NUM_ONE];
+    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + 1 < args.length) {
+      result.seedNodeAddress = args[i + 1];
       i++;
-    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + LOCAL_NUM_ONE < args.length) {
-      result.configPath = args[i + LOCAL_NUM_ONE];
+    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + 1 < args.length) {
+      result.configPath = args[i + 1];
       i++;
     } else if (args[i] === ENTRYPOINT_FLAG.DRY_RUN) {
       result.dryRun = true;
@@ -80,7 +77,7 @@ function parseCommandLineArgs() {
  */
 function parsePositiveTimeoutMs(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ONE) {
+  if (!Number.isFinite(parsed) || parsed < 1) {
     return null;
   }
   return Math.floor(parsed);

@@ -7,9 +7,7 @@ const CLOSE_STALE_SOCKET_BEFORE_RETRY_MSG =
 const {
   ADMIN_CACHE_DUMP,
   EMPTY_STRING,
-  NUM,
   TABLES,
-  TYPEOF,
   normalizeIdentifier,
   ADMIN_STREAM_LANE_SNAPSHOT,
 } = ADMIN_WEBSOCKET_API_SHARED;
@@ -48,8 +46,8 @@ const ADMIN_WEBSOCKET_OBSERVATION_METHODS = {
         .map((row) => row?.partition_id || row?.partitionId || null)
         .filter(
           (partitionId) =>
-            typeof partitionId === TYPEOF.STRING &&
-            partitionId.length > NUM.ZERO,
+            typeof partitionId === 'string' &&
+            partitionId.length > 0,
         );
     }
 
@@ -63,14 +61,14 @@ const ADMIN_WEBSOCKET_OBSERVATION_METHODS = {
             .map((row) => row?.partition_id || row?.partitionId || null)
             .filter(
               (partitionId) =>
-                typeof partitionId === TYPEOF.STRING &&
-                partitionId.length > NUM.ZERO,
+                typeof partitionId === 'string' &&
+                partitionId.length > 0,
             ),
         ),
       ];
     }
 
-    if (typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter !== 'function') {
       return ADMIN_CACHE_DUMP.EMPTY;
     }
 
@@ -87,7 +85,7 @@ const ADMIN_WEBSOCKET_OBSERVATION_METHODS = {
       .map((row) => row?.partition_id || row?.partitionId || null)
       .filter(
         (partitionId) =>
-          typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO,
+          typeof partitionId === 'string' && partitionId.length > 0,
       );
   },
 

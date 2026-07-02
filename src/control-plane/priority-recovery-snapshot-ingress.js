@@ -1,4 +1,4 @@
-import {NUM, TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
 import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from '../bootstrap/system-partition-classification.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
@@ -28,9 +28,9 @@ import {isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecovery
 function readFirstStringField(row, ...keys) {
   for (const key of keys) {
     const value = row?.[key];
-    if (typeof value === TYPEOF.STRING) {
+    if (typeof value === 'string') {
       const trimmedValue = value.trim();
-      if (trimmedValue.length > NUM.ZERO) {
+      if (trimmedValue.length > 0) {
         return trimmedValue;
       }
     }
@@ -41,7 +41,7 @@ function readFirstStringField(row, ...keys) {
 function readFirstIntegerField(row, ...keys) {
   for (const key of keys) {
     const value = normalizePriorityRecoveryInteger(row?.[key]);
-    if (Number.isFinite(value) && value > NUM.ZERO) {
+    if (Number.isFinite(value) && value > 0) {
       return value;
     }
   }
@@ -88,13 +88,13 @@ function isPriorityRecoverySpreadSatisfyingOperationContext(
   options = {},
 ) {
   const targetNodeId = String(operationContext?.targetNodeId || '').trim();
-  if (targetNodeId.length === NUM.ZERO) {
+  if (targetNodeId.length === 0) {
     return false;
   }
   const eligibleTargetNodeIds = new Set(
     normalizePriorityRecoveryStringList(options.eligibleTargetNodeIds),
   );
-  if (eligibleTargetNodeIds.size === NUM.ZERO) {
+  if (eligibleTargetNodeIds.size === 0) {
     return false;
   }
   if (!eligibleTargetNodeIds.has(targetNodeId)) {
@@ -153,7 +153,7 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
   const blockingOperationIds = [];
   for (const operationContext of activeOperationContexts) {
     const operationId = String(operationContext?.operationId || '').trim();
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       continue;
     }
     if (
@@ -180,7 +180,7 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
       blockingOperationCount: blockingOperationIds.length,
     });
   }
-  if (satisfyingOperationIds.length > NUM.ZERO) {
+  if (satisfyingOperationIds.length > 0) {
     return Object.freeze({
       satisfied: true,
       reasonCode: resolvePriorityRecoverySpreadSatisfyingReasonCode(
@@ -195,11 +195,11 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
   return Object.freeze({
     satisfied: false,
     reasonCode:
-      blockingOperationIds.length > NUM.ZERO ?
+      blockingOperationIds.length > 0 ?
         PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.ACTIVE_OPERATION_STILL_BLOCKS_SPREAD :
         PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.UNSATISFIED,
     satisfyingOperationIds: Object.freeze([]),
-    satisfyingOperationCount: NUM.ZERO,
+    satisfyingOperationCount: 0,
     blockingOperationIds: Object.freeze([...blockingOperationIds]),
     blockingOperationCount: blockingOperationIds.length,
   });
@@ -208,7 +208,7 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
 function normalizePriorityRecoveryOperationContextList(operationContexts = []) {
   return Array.isArray(operationContexts) ? operationContexts.filter(
     (operationContext) =>
-      operationContext && typeof operationContext === TYPEOF.OBJECT,
+      operationContext && typeof operationContext === 'object',
   ) : [];
 }
 
@@ -223,14 +223,14 @@ function resolvePriorityRecoveryOperationContextPartitionId(operationContext) {
 }
 
 function hasPriorityRecoverySeenOperationId(operationId, seenOperationIds) {
-  return operationId.length > NUM.ZERO && seenOperationIds.has(operationId);
+  return operationId.length > 0 && seenOperationIds.has(operationId);
 }
 
 function isPriorityRecoveryOperationIdSuperseded(
   operationId,
   supersededOperationIds,
 ) {
-  return operationId.length > NUM.ZERO && supersededOperationIds.has(operationId);
+  return operationId.length > 0 && supersededOperationIds.has(operationId);
 }
 
 function isPriorityRecoveryTerminalNonPlacementOperationContext(
@@ -281,7 +281,7 @@ function buildPriorityRecoverySpreadRelevantOperationContexts(
     ) {
       continue;
     }
-    if (operationId.length > NUM.ZERO) {
+    if (operationId.length > 0) {
       seenOperationIds.add(operationId);
     }
     spreadRelevantOperationContexts.push(operationContext);
@@ -297,8 +297,8 @@ function resolvePriorityRecoveryOperationContextFreshnessMs(operationContext) {
   ]
     .map((candidate) => normalizePriorityRecoveryInteger(candidate))
     .filter((candidate) => Number.isFinite(candidate));
-  if (freshnessCandidates.length === NUM.ZERO) {
-    return NUM.NEGATIVE_ONE;
+  if (freshnessCandidates.length === 0) {
+    return -1;
   }
   return Math.max(...freshnessCandidates);
 }
@@ -316,7 +316,7 @@ function isPriorityRecoveryDispatchPendingWorkflowStep(operationContext) {
 function isPriorityRecoverySupersedableInFlightOperationContext(
   operationContext,
 ) {
-  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+  if (!operationContext || typeof operationContext !== 'object') {
     return false;
   }
   if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
@@ -348,7 +348,7 @@ function recordPriorityRecoveryTerminalFreshness(
 ) {
   const partitionId =
     resolvePriorityRecoveryOperationContextPartitionId(operationContext);
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return;
   }
   const terminalFreshness =
@@ -357,7 +357,7 @@ function recordPriorityRecoveryTerminalFreshness(
     return;
   }
   const previousFreshness =
-    latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.ZERO;
+    latestTerminalFreshnessByPartitionId.get(partitionId) || 0;
   if (terminalFreshness > previousFreshness) {
     latestTerminalFreshnessByPartitionId.set(partitionId, terminalFreshness);
   }
@@ -385,13 +385,13 @@ function shouldSupersedePriorityRecoveryOperationContext(
 ) {
   const partitionId =
     resolvePriorityRecoveryOperationContextPartitionId(operationContext);
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return false;
   }
   const operationFreshness =
     resolvePriorityRecoveryOperationContextFreshnessMs(operationContext);
   const latestTerminalFreshness =
-    latestTerminalFreshnessByPartitionId.get(partitionId) || NUM.NEGATIVE_ONE;
+    latestTerminalFreshnessByPartitionId.get(partitionId) || -1;
   return (
     Number.isFinite(operationFreshness) &&
     Number.isFinite(latestTerminalFreshness) &&
@@ -407,7 +407,7 @@ function collectPriorityRecoverySupersededOperationIdSet(
   for (const operationContext of normalizedOperationContexts) {
     const operationId =
       resolvePriorityRecoveryOperationContextOperationId(operationContext);
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       continue;
     }
     if (
@@ -485,26 +485,26 @@ function resolvePriorityRecoveryReasonCodesFromReadiness(readinessEntry) {
 }
 
 function buildPriorityRecoveryPlannerReasons(spreadGap) {
-  return spreadGap > NUM.ZERO ?
+  return spreadGap > 0 ?
     [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP] :
     [];
 }
 
 function buildPriorityRecoveryExclusionReasonCounts(partition) {
   return partition?.exclusionReasonCounts &&
-    typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
+    typeof partition.exclusionReasonCounts === 'object' ?
     {exclusionReasonCounts: {...partition.exclusionReasonCounts}} :
     {};
 }
 
 function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
   const partitionId = String(partition?.partitionId || '').trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE;
   }
   const spreadGap = Math.max(
-    NUM.ZERO,
-    normalizePriorityRecoveryInteger(partition?.spreadGap) || NUM.ZERO,
+    0,
+    normalizePriorityRecoveryInteger(partition?.spreadGap) || 0,
   );
   return {
     partitionId,
@@ -520,7 +520,7 @@ function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
     // CL-021 witness pass-through: why rows were excluded before diagnostics.
     ...buildPriorityRecoveryExclusionReasonCounts(partition),
     spreadGap,
-    ready: spreadGap === NUM.ZERO,
+    ready: spreadGap === 0,
     reasons: buildPriorityRecoveryPlannerReasons(spreadGap),
   };
 }
@@ -552,11 +552,11 @@ function buildPriorityRecoveryMissingPartitionPlanner(
     requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
       normalizedSummary?.requiredDistinctNodeCount,
     ),
-    readyDistinctNodeCount: NUM.ZERO,
+    readyDistinctNodeCount: 0,
     spreadGap:
       normalizePriorityRecoveryInteger(
         normalizedSummary?.requiredDistinctNodeCount,
-      ) || NUM.ONE,
+      ) || 1,
     ready: false,
     reasons: [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING],
   };
@@ -584,7 +584,7 @@ function appendPriorityRecoveryMissingPartitionPlanner(
 function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
   const normalizedSummary =
     priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof priorityPartitionSummary === 'object' ?
       priorityPartitionSummary :
       null;
   const blockedPartitions = Array.isArray(normalizedSummary?.blockedPartitions) ?
@@ -624,16 +624,16 @@ function buildPriorityRecoveryPlannerEntry(
   plannerByPartitionId = null,
 ) {
   const normalizedPartitionId = String(partitionId || '').trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return buildUnknownPriorityRecoveryPlanner(normalizedPartitionId);
   }
   const normalizedSummary =
     priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof priorityPartitionSummary === 'object' ?
       priorityPartitionSummary :
       null;
   const plannerById =
-    plannerByPartitionId && typeof plannerByPartitionId === TYPEOF.OBJECT ?
+    plannerByPartitionId && typeof plannerByPartitionId === 'object' ?
       plannerByPartitionId :
       buildPriorityRecoveryPlannerByPartitionId(normalizedSummary);
   if (plannerById[normalizedPartitionId]) {
@@ -646,7 +646,7 @@ function buildPriorityRecoveryPlannerEntry(
     buildPriorityRecoveryBlockedPartitionIds(normalizedSummary);
   if (
     hasPriorityRecoverySpreadGap(normalizedSummary) &&
-    blockedPartitionIds.length === NUM.ZERO
+    blockedPartitionIds.length === 0
   ) {
     return buildUnknownPriorityRecoveryPlanner(normalizedPartitionId);
   }
@@ -656,7 +656,7 @@ function buildPriorityRecoveryPlannerEntry(
       normalizedSummary.requiredDistinctNodeCount,
     ),
     readyDistinctNodeCount: PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE,
-    spreadGap: NUM.ZERO,
+    spreadGap: 0,
     ready: true,
     reasons: PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION,
   };
@@ -677,7 +677,7 @@ function buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) {
 function hasPriorityRecoverySpreadGap(priorityPartitionSummary) {
   const normalizedSummary =
     priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof priorityPartitionSummary === 'object' ?
       priorityPartitionSummary :
       null;
   if (!normalizedSummary) {
@@ -685,7 +685,7 @@ function hasPriorityRecoverySpreadGap(priorityPartitionSummary) {
   }
   if (
     buildPriorityRecoveryBlockedPartitionIds(normalizedSummary).length >
-    NUM.ZERO
+    0
   ) {
     return true;
   }
@@ -694,7 +694,7 @@ function hasPriorityRecoverySpreadGap(priorityPartitionSummary) {
 
 function buildPriorityRecoveryDecisionPartitionIdSet(decisionSnapshots = null) {
   const partitionIds = new Set();
-  if (!decisionSnapshots || typeof decisionSnapshots !== TYPEOF.OBJECT) {
+  if (!decisionSnapshots || typeof decisionSnapshots !== 'object') {
     return partitionIds;
   }
   addPriorityRecoveryDecisionSnapshotPartitionIds(
@@ -716,7 +716,7 @@ function addPriorityRecoveryDecisionSnapshotPartitionIds(
     decisionSnapshots.snapshots :
     []) {
     const partitionId = String(snapshot?.partitionId || '').trim();
-    if (partitionId.length > NUM.ZERO) {
+    if (partitionId.length > 0) {
       partitionIds.add(partitionId);
     }
   }
@@ -728,7 +728,7 @@ function addPriorityRecoveryDecisionSemanticPartitionIds(
 ) {
   const partitionIdsBySemanticState =
     decisionSnapshots.partitionIdsBySemanticState &&
-    typeof decisionSnapshots.partitionIdsBySemanticState === TYPEOF.OBJECT ?
+    typeof decisionSnapshots.partitionIdsBySemanticState === 'object' ?
       decisionSnapshots.partitionIdsBySemanticState :
       {};
   for (const partitionIdsForState of Object.values(
@@ -744,7 +744,7 @@ function addPriorityRecoveryDecisionSemanticPartitionIds(
 
 function isPriorityRecoveryTrackedPartitionId(partitionId) {
   const normalizedPartitionId = String(partitionId || '').trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return false;
   }
   const tableId = inferPriorityRecoveryTableNameFromPartitionId(

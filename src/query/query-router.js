@@ -26,8 +26,6 @@ import {
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
@@ -44,7 +42,7 @@ import {
 } from './canonical-leader-routing.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 
-const LOCAL_STR_1WW3O = 'Unknown routing error';
+const LOCAL_STR_UNKNOWN_ROUTING_ERROR = 'Unknown routing error';
 
 /**
  * QueryRouter handles routing queries to partition leaders with retry logic,
@@ -142,7 +140,7 @@ class QueryRouter {
       localNodeId,
     });
 
-    for (let attempt = NUM.ZERO; attempt < this.retryAttempts; attempt++) {
+    for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
       // Check timeout (Requirements 3.5)
       const elapsed = Date.now() - startTime;
       if (elapsed >= this.timeoutMs) {
@@ -158,7 +156,7 @@ class QueryRouter {
       }
 
       // Check if we have candidates
-      if (candidates.length === NUM.ZERO) {
+      if (candidates.length === 0) {
         this.logger.warn(QUERY_ROUTER_LOG_MSG.NO_CANDIDATES, {
           partitionId,
           correlationId,
@@ -166,7 +164,7 @@ class QueryRouter {
         });
 
         // Refresh candidates on retry
-        if (attempt < this.retryAttempts - NUM.ONE) {
+        if (attempt < this.retryAttempts - 1) {
           await this.delay(this.calculateBackoffDelay(attempt));
           candidates = this.findServiceCandidates(partitionId, preferLeader, {
             preferSameLatencyGroup,
@@ -214,12 +212,12 @@ class QueryRouter {
       }
 
       // Retry with backoff (Requirements 3.3)
-      if (attempt < this.retryAttempts - NUM.ONE) {
+      if (attempt < this.retryAttempts - 1) {
         const backoffDelay = this.calculateBackoffDelay(attempt);
         this.logger.debug(QUERY_ROUTER_LOG_MSG.RETRY_ATTEMPT, {
           partitionId,
           correlationId,
-          attempt: attempt + NUM.ONE,
+          attempt: attempt + 1,
           backoffDelay,
         });
         await this.delay(backoffDelay);
@@ -254,7 +252,7 @@ class QueryRouter {
    */
   findServiceCandidates(partitionId, preferLeader = true, options = {}) {
     if (!this.systemCache ||
-      typeof this.systemCache.filter !== TYPEOF.FUNCTION) {
+      typeof this.systemCache.filter !== 'function') {
       return [];
     }
 
@@ -265,7 +263,7 @@ class QueryRouter {
       s.status === SERVICE_STATUS.ACTIVE,
     ) || [];
 
-    if (services.length === NUM.ZERO) {
+    if (services.length === 0) {
       return [];
     }
 
@@ -291,7 +289,7 @@ class QueryRouter {
       },
     );
     const canonicalLeaderNodeId =
-      typeof canonicalLeaderObservation.leaderNodeId === TYPEOF.STRING ?
+      typeof canonicalLeaderObservation.leaderNodeId === 'string' ?
         canonicalLeaderObservation.leaderNodeId :
         null;
     const candidates = [];
@@ -319,8 +317,8 @@ class QueryRouter {
     };
 
     if (preferLeader) {
-      if (typeof canonicalLeaderNodeId === TYPEOF.STRING &&
-        canonicalLeaderNodeId.length > NUM.ZERO) {
+      if (typeof canonicalLeaderNodeId === 'string' &&
+        canonicalLeaderNodeId.length > 0) {
         orderedServices
           .filter((service) => service?.node_id === canonicalLeaderNodeId)
           .forEach(addService);
@@ -340,7 +338,7 @@ class QueryRouter {
    * @private
    */
   resolveNodeLatencyGroupId(nodeId) {
-    if (!nodeId || typeof this.systemCache?.get !== TYPEOF.FUNCTION) {
+    if (!nodeId || typeof this.systemCache?.get !== 'function') {
       return null;
     }
     const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
@@ -354,22 +352,22 @@ class QueryRouter {
    * @private
    */
   getPartitionRecord(partitionId) {
-    if (typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO) {
+    if (typeof partitionId !== 'string' ||
+      partitionId.length === 0) {
       return null;
     }
 
-    if (typeof this.systemCache?.get === TYPEOF.FUNCTION) {
+    if (typeof this.systemCache?.get === 'function') {
       const partitionRow = this.systemCache.get(TABLES.PARTITIONS, partitionId);
       if (partitionRow) {
         return partitionRow;
       }
     }
 
-    if (typeof this.systemCache?.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemCache?.filter === 'function') {
       return (this.systemCache.filter(TABLES.PARTITIONS, (partition) => {
         return partition?.[COLUMN.PARTITION_ID] === partitionId;
-      }) || [])[NUM.ZERO] || null;
+      }) || [])[0] || null;
     }
 
     return null;
@@ -392,17 +390,17 @@ class QueryRouter {
   ) {
     const resolvedPartitionRow = partitionRow || this.getPartitionRecord(partitionId);
     if (typeof this.bootstrapTopologySnapshotOwner
-      ?.resolveCanonicalPartitionLeaderIdentity === TYPEOF.FUNCTION) {
+      ?.resolveCanonicalPartitionLeaderIdentity === 'function') {
       const ownerIdentity = this.bootstrapTopologySnapshotOwner
         .resolveCanonicalPartitionLeaderIdentity(partitionId, serviceRows);
-      if (ownerIdentity && typeof ownerIdentity === TYPEOF.OBJECT) {
+      if (ownerIdentity && typeof ownerIdentity === 'object') {
         return ownerIdentity;
       }
     }
 
     let ownerLeaderNodeId = null;
     if (typeof this.bootstrapTopologySnapshotOwner
-      ?.resolveCanonicalPartitionLeaderNodeId === TYPEOF.FUNCTION) {
+      ?.resolveCanonicalPartitionLeaderNodeId === 'function') {
       ownerLeaderNodeId = this.bootstrapTopologySnapshotOwner
         .resolveCanonicalPartitionLeaderNodeId(partitionId);
     }
@@ -439,7 +437,7 @@ class QueryRouter {
    */
   orderServicesByLatencyPreference(services, localGroupId, preferSameLatencyGroup) {
     if (!preferSameLatencyGroup || !localGroupId ||
-      typeof this.systemCache?.get !== TYPEOF.FUNCTION) {
+      typeof this.systemCache?.get !== 'function') {
       return services;
     }
 
@@ -452,12 +450,12 @@ class QueryRouter {
       const leftPreferred = leftGroupId === localGroupId;
       const rightPreferred = rightGroupId === localGroupId;
       if (leftPreferred && !rightPreferred) {
-        return NUM.NEGATIVE_ONE;
+        return -1;
       }
       if (!leftPreferred && rightPreferred) {
-        return NUM.ONE;
+        return 1;
       }
-      return NUM.ZERO;
+      return 0;
     });
   }
 
@@ -525,7 +523,7 @@ class QueryRouter {
       }
 
       // Track error for reporting
-      lastError = response.error || LOCAL_STR_1WW3O;
+      lastError = response.error || LOCAL_STR_UNKNOWN_ROUTING_ERROR;
     }
 
     return {
@@ -546,7 +544,7 @@ class QueryRouter {
    */
   calculateBackoffDelay(attempt) {
     // Exponential backoff: baseDelay * 2^attempt
-    return this.retryDelayMs * Math.pow(NUM.TWO, attempt);
+    return this.retryDelayMs * Math.pow(2, attempt);
   }
 
   /**

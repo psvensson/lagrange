@@ -1,10 +1,8 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
@@ -22,7 +20,7 @@ const ID_COLUMN_BY_SERVICE_TYPE = Object.freeze({
   [SERVICE_TYPE.MESSAGE_GROUP]: COLUMN.GROUP_ID,
 });
 
-const isFunction = (value) => typeof value === TYPEOF.FUNCTION;
+const isFunction = (value) => typeof value === 'function';
 
 const getAllRecords = (cache, tableName) => {
   if (!cache) {
@@ -55,7 +53,7 @@ const hasPartitionRecord = (cache, partitionId) => {
   const partitions = filterRecords(cache, TABLES.PARTITIONS, (partition) =>
     partition[COLUMN.PARTITION_ID] === partitionId,
   );
-  return partitions.length > NUM.ZERO;
+  return partitions.length > 0;
 };
 
 const getOwnerTableName = (serviceType) =>
@@ -110,18 +108,18 @@ const findCanonicalLeaderService = (
     service?.[COLUMN.NODE_ID] === leaderNodeId &&
     (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
   );
-  if (leaderNodeServices.length === NUM.ZERO) {
+  if (leaderNodeServices.length === 0) {
     return null;
   }
-  if (leaderNodeServices.length === NUM.ONE) {
-    return leaderNodeServices[NUM.ZERO];
+  if (leaderNodeServices.length === 1) {
+    return leaderNodeServices[0];
   }
 
   const explicitLeaderServices = leaderNodeServices.filter((service) =>
     String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE.LEADER,
   );
-  if (explicitLeaderServices.length === NUM.ONE) {
-    return explicitLeaderServices[NUM.ZERO];
+  if (explicitLeaderServices.length === 1) {
+    return explicitLeaderServices[0];
   }
 
   // Services.raft_role is advisory follower metadata for many replicas. When
@@ -140,7 +138,7 @@ const findCanonicalLeaderService = (
       right?.[COLUMN.ADDRESS] ||
       '';
     return String(leftKey).localeCompare(String(rightKey));
-  })[NUM.ZERO] || null;
+  })[0] || null;
 };
 
 const findObservableLeaderService = (
@@ -155,8 +153,8 @@ const findObservableLeaderService = (
     service?.[COLUMN.SERVICE_TYPE] === serviceType &&
     service?.[idColumn] === entityId &&
     service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-    typeof service?.[COLUMN.NODE_ID] === TYPEOF.STRING &&
-    service[COLUMN.NODE_ID].length > NUM.ZERO &&
+    typeof service?.[COLUMN.NODE_ID] === 'string' &&
+    service[COLUMN.NODE_ID].length > 0 &&
     (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
   ) || null;
 };
@@ -365,7 +363,7 @@ const getBlockingSystemServiceLeaders = (
   options = {},
 ) => {
   const isTableWriteSatisfied =
-    typeof options.isTableWriteSatisfied === TYPEOF.FUNCTION ?
+    typeof options.isTableWriteSatisfied === 'function' ?
       options.isTableWriteSatisfied :
       isSystemTableWriteReady;
   const missing = getMissingSystemServiceLeaders(systemTableCache, {
@@ -412,12 +410,12 @@ const getBlockingSystemServiceLeaders = (
 };
 
 const getMissingSystemServiceLeaderCount = (missing = {}) =>
-  (missing.missingPartitionLeaders?.length || NUM.ZERO) +
-  (missing.missingMessageGroupLeaders?.length || NUM.ZERO) +
-  (missing.missingPartitionLeaderNodes?.length || NUM.ZERO) +
-  (missing.missingMessageGroupLeaderNodes?.length || NUM.ZERO) +
-  (missing.missingPartitionLeaderAddresses?.length || NUM.ZERO) +
-  (missing.missingMessageGroupLeaderAddresses?.length || NUM.ZERO);
+  (missing.missingPartitionLeaders?.length || 0) +
+  (missing.missingMessageGroupLeaders?.length || 0) +
+  (missing.missingPartitionLeaderNodes?.length || 0) +
+  (missing.missingMessageGroupLeaderNodes?.length || 0) +
+  (missing.missingPartitionLeaderAddresses?.length || 0) +
+  (missing.missingMessageGroupLeaderAddresses?.length || 0);
 
 export {
   getBlockingSystemServiceLeaders,

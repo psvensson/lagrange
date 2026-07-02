@@ -5,7 +5,6 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   KEY_RANGE_ERROR_MSG,
   KEY_RANGE_LOG_MSG,
@@ -41,15 +40,15 @@ class KeyRange {
     }
 
     if (this.start === null) {
-      return this.compareKeys(key, this.end) < NUM.ZERO;
+      return this.compareKeys(key, this.end) < 0;
     }
 
     if (this.end === null) {
-      return this.compareKeys(key, this.start) >= NUM.ZERO;
+      return this.compareKeys(key, this.start) >= 0;
     }
 
-    return this.compareKeys(key, this.start) >= NUM.ZERO &&
-           this.compareKeys(key, this.end) < NUM.ZERO;
+    return this.compareKeys(key, this.start) >= 0 &&
+           this.compareKeys(key, this.end) < 0;
   }
 
   /**
@@ -59,15 +58,15 @@ class KeyRange {
    * @return {number} Negative if a < b, positive if a > b, 0 if equal.
    */
   compareKeys(a, b) {
-    if (a === null && b === null) return NUM.ZERO;
-    if (a === null) return NUM.NEGATIVE_ONE;
-    if (b === null) return NUM.ONE;
+    if (a === null && b === null) return 0;
+    if (a === null) return -1;
+    if (b === null) return 1;
 
-    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
+    if (typeof a === 'string' && typeof b === 'string') {
       return a.localeCompare(b);
     }
 
-    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
+    if (typeof a === 'number' && typeof b === 'number') {
       return a - b;
     }
 
@@ -84,7 +83,7 @@ class KeyRange {
     if (this.end === null || other.start === null) {
       return false;
     }
-    return this.compareKeys(this.end, other.start) === NUM.ZERO;
+    return this.compareKeys(this.end, other.start) === 0;
   }
 
   /**
@@ -95,13 +94,13 @@ class KeyRange {
   overlaps(other) {
     // Check if one range is completely before the other
     if (this.end !== null && other.start !== null) {
-      if (this.compareKeys(this.end, other.start) <= NUM.ZERO) {
+      if (this.compareKeys(this.end, other.start) <= 0) {
         return false;
       }
     }
 
     if (other.end !== null && this.start !== null) {
-      if (this.compareKeys(other.end, this.start) <= NUM.ZERO) {
+      if (this.compareKeys(other.end, this.start) <= 0) {
         return false;
       }
     }
@@ -269,8 +268,8 @@ class KeyRangeManager {
       .map(([partitionId, range]) => ({partitionId, range}));
 
     entries.sort((a, b) => {
-      if (a.range.start === null) return NUM.NEGATIVE_ONE;
-      if (b.range.start === null) return NUM.ONE;
+      if (a.range.start === null) return -1;
+      if (b.range.start === null) return 1;
       return a.range.compareKeys(a.range.start, b.range.start);
     });
 
@@ -304,37 +303,37 @@ class KeyRangeManager {
     const errors = [];
     const sorted = this.getSortedPartitions();
 
-    if (sorted.length === NUM.ZERO) {
+    if (sorted.length === 0) {
       return {valid: true, errors: []};
     }
 
     // Check first partition starts at NULL (unbounded)
-    if (sorted[NUM.ZERO].range.start !== null) {
+    if (sorted[0].range.start !== null) {
       errors.push(
-        KEY_RANGE_ERROR_MSG.firstPartitionStarts(sorted[NUM.ZERO].partitionId),
+        KEY_RANGE_ERROR_MSG.firstPartitionStarts(sorted[0].partitionId),
       );
     }
 
     // Check last partition ends at NULL (unbounded)
-    if (sorted[sorted.length - NUM.ONE].range.end !== null) {
+    if (sorted[sorted.length - 1].range.end !== null) {
       errors.push(
         KEY_RANGE_ERROR_MSG.lastPartitionEnds(
-          sorted[sorted.length - NUM.ONE].partitionId,
+          sorted[sorted.length - 1].partitionId,
         ),
       );
     }
 
     // Check contiguity and no overlaps
-    for (let i = NUM.ZERO; i < sorted.length - NUM.ONE; i++) {
+    for (let i = 0; i < sorted.length - 1; i++) {
       const current = sorted[i];
-      const next = sorted[i + NUM.ONE];
+      const next = sorted[i + 1];
 
       // Check for gap
       if (!current.range.isAdjacentTo(next.range)) {
         const currentEnd = current.range.end;
         const nextStart = next.range.start;
 
-        if (current.range.compareKeys(currentEnd, nextStart) < NUM.ZERO) {
+        if (current.range.compareKeys(currentEnd, nextStart) < 0) {
           errors.push(
             KEY_RANGE_ERROR_MSG.gapBetweenPartitions(
               current.partitionId,
@@ -343,7 +342,7 @@ class KeyRangeManager {
               nextStart,
             ),
           );
-        } else if (current.range.compareKeys(currentEnd, nextStart) > NUM.ZERO) {
+        } else if (current.range.compareKeys(currentEnd, nextStart) > 0) {
           errors.push(
             KEY_RANGE_ERROR_MSG.overlapBetweenPartitions(
               current.partitionId,
@@ -355,7 +354,7 @@ class KeyRangeManager {
     }
 
     return {
-      valid: errors.length === NUM.ZERO,
+      valid: errors.length === 0,
       errors,
     };
   }

@@ -90,7 +90,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   OUTBOUND_QUEUE_CONCURRENCY: 32,
   OUTBOUND_QUEUE_MAX_PENDING: 64,
   OUTBOUND_QUEUE_CRITICAL_RESERVE: NUM.SIXTEEN,
-  OUTBOUND_QUEUE_READINESS_RESERVE: NUM.ZERO,
+  OUTBOUND_QUEUE_READINESS_RESERVE: 0,
   // READINESS in-flight overflow reserve: a small bounded number of readiness
   // (convergence/publication) reads may dispatch even when the queue is at its
   // concurrency limit, mirroring the critical source reserve. This breaks the
@@ -101,14 +101,14 @@ const TRANSPORT_DEFAULT = Object.freeze({
   // constructor (see bootstrap/shared/message-router-setup.js). The bound is
   // deliberately much smaller than the pending readiness reserve so it does not
   // translate pending headroom into many extra concurrent sends.
-  OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: NUM.ZERO,
+  OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: 0,
   // Production node routers reserve outbound headroom so readiness/publication
   // reads survive CRITICAL recovery backpressure during rolling restart. The
   // global default above stays 0 so isolated queue-mechanics unit tests keep
   // their critical-capacity assumptions; production opts in explicitly via the
   // MessageRouter constructor (see bootstrap/shared/message-router-setup.js).
   PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE: NUM.EIGHT,
-  PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: NUM.TWO,
+  PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: 2,
   SHUTDOWN_WAIT_MS: 100,
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
@@ -151,7 +151,7 @@ const TRANSPORT_FORMAT = Object.freeze({
  * @return {string|null} WebSocket address or null.
  */
 function normalizeToWebSocketAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+  if (!nodeAddress || typeof nodeAddress !== 'string') {
     return null;
   }
   if (nodeAddress.startsWith(PROTOCOL.WS) ||
@@ -160,16 +160,16 @@ function normalizeToWebSocketAddress(nodeAddress) {
   }
 
   const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex <= NUM.ZERO) {
+  if (colonIndex <= 0) {
     return null;
   }
 
-  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+  const hostname = nodeAddress.substring(0, colonIndex);
   const restPort = Number(
-    nodeAddress.substring(colonIndex + NUM.ONE),
+    nodeAddress.substring(colonIndex + 1),
   );
   if (!hostname || !Number.isFinite(restPort) ||
-      restPort <= NUM.ZERO) {
+      restPort <= 0) {
     return null;
   }
 
@@ -372,9 +372,9 @@ const TRANSPORT_TYPEOF = Object.freeze({
 });
 
 const TRANSPORT_NUM = Object.freeze({
-  ZERO: NUM.ZERO,
-  ONE: NUM.ONE,
-  TWO: NUM.TWO,
+  ZERO: 0,
+  ONE: 1,
+  TWO: 2,
   THREE: NUM.THREE,
   FOUR: NUM.FOUR,
   FIVE: NUM.FIVE,

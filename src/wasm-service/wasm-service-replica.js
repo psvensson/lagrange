@@ -10,7 +10,7 @@
 import {RaftReplicaBase} from '../raft/raft-replica-base.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {SERVICE_TYPE} from '../constants/service.js';
-import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
@@ -31,7 +31,6 @@ import {
 } from './wasm-service-constants.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 // Entry type scalar values
 const ENTRY_TYPE_KV_SET = 'kv_set';
@@ -274,7 +273,7 @@ class WasmServiceReplica extends RaftReplicaBase {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
         if (typeof cachedRow?.[COLUMN.RAFT_ROLE] === LOCAL_STR_STRING &&
-          cachedRow[COLUMN.RAFT_ROLE].length > LOCAL_NUM_ZERO) {
+          cachedRow[COLUMN.RAFT_ROLE].length > 0) {
           whereClause[COLUMN.RAFT_ROLE] = cachedRow[COLUMN.RAFT_ROLE];
         }
         if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
@@ -312,7 +311,7 @@ class WasmServiceReplica extends RaftReplicaBase {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
         if (typeof cachedRow?.[COLUMN.NODE_ID] === LOCAL_STR_STRING &&
-          cachedRow[COLUMN.NODE_ID].length > LOCAL_NUM_ZERO) {
+          cachedRow[COLUMN.NODE_ID].length > 0) {
           whereClause[COLUMN.NODE_ID] = cachedRow[COLUMN.NODE_ID];
         }
         if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
@@ -621,7 +620,7 @@ class WasmServiceReplica extends RaftReplicaBase {
     };
 
     if (this.roleUpdateWriter &&
-      typeof this.roleUpdateWriter === TYPEOF.FUNCTION) {
+      typeof this.roleUpdateWriter === 'function') {
       await this.roleUpdateWriter(writerPayload);
       return {success: true};
     }
@@ -663,7 +662,7 @@ class WasmServiceReplica extends RaftReplicaBase {
     };
 
     if (this.leaderNodeUpdateWriter &&
-      typeof this.leaderNodeUpdateWriter === TYPEOF.FUNCTION) {
+      typeof this.leaderNodeUpdateWriter === 'function') {
       await this.leaderNodeUpdateWriter(writerPayload);
       return {success: true};
     }

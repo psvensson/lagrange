@@ -1,7 +1,6 @@
 import {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
-  TYPEOF,
 } from '../constants/index.js';
 
 const LOCAL_NUM_ZERO = 0;
@@ -137,7 +136,7 @@ function cloneReplicaHandle(replica) {
 
 async function defaultPlacementPolicyCheck(policyContext) {
   const action = policyContext?.action;
-  if (!action || typeof action !== TYPEOF.OBJECT) {
+  if (!action || typeof action !== 'object') {
     throw new Error(RECONCILER_PLACEMENT_POLICY_ERROR.ACTION_REQUIRED);
   }
 

@@ -1,4 +1,3 @@
-import {TYPEOF} from '../constants/index.js';
 import {
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
 } from './rejoin-hints-constants.js';
@@ -12,7 +11,7 @@ const BOOTSTRAP_LEADER_READINESS_OPTION_FIELD = Object.freeze({
 
 function normalizeBootstrapLeaderReadinessOptions(options = {}) {
   const normalizedOptions =
-    options && typeof options === TYPEOF.OBJECT && !Array.isArray(options) ?
+    options && typeof options === 'object' && !Array.isArray(options) ?
       options :
       {};
   const membershipOwnerOutcome = buildMembershipOwnerOutcome({

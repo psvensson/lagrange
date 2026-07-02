@@ -5,12 +5,10 @@ const {
   AUTHORITATIVE_FALLBACK_PHASE,
   CDC_ERROR_MSG,
   CDC_OPERATION,
-  NUM,
   PRESSURE_GOVERNOR_ACTION,
   READ_MODEL_DIVERGENCE_TYPE,
   SYSTEM_TABLE_VISIBILITY_STATE,
   TIMEOUT_BUDGET_CLASSIFICATION,
-  TYPEOF,
   buildPendingVisibilityTimeoutResult,
   buildSystemTableVisibilityResult,
   canonicalizeSystemTableRow,
@@ -69,15 +67,15 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return buildSystemTableVisibilityResult();
     }
     const cache = this.systemTableCache;
-    if (!cache || typeof cache.onCacheChange !== TYPEOF.FUNCTION) {
+    if (!cache || typeof cache.onCacheChange !== 'function') {
       return buildSystemTableVisibilityResult();
     }
     const expectedFields =
-      options?.expectedFields && typeof options.expectedFields === TYPEOF.OBJECT ?
+      options?.expectedFields && typeof options.expectedFields === 'object' ?
         options.expectedFields :
         null;
     const minimumFields =
-      options?.minimumFields && typeof options.minimumFields === TYPEOF.OBJECT ?
+      options?.minimumFields && typeof options.minimumFields === 'object' ?
         options.minimumFields :
         null;
     const normalizedExpectedFields = this.normalizeExpectedFieldsForMinimums(
@@ -92,14 +90,14 @@ class CDCIntegrationServiceCacheVisibilityWait {
       options?.fallbackPhase,
     );
     const authoritativeRepairBudgetMs = Math.max(
-      NUM.ONE,
+      1,
       Math.min(
         this.authoritativeFallbackRepairBudgetMs,
-        Math.max(NUM.ONE, Math.floor(timeoutMs / 2)),
+        Math.max(1, Math.floor(timeoutMs / 2)),
       ),
     );
     const cacheWaitBudgetMs = Math.max(
-      NUM.ONE,
+      1,
       timeoutMs - authoritativeRepairBudgetMs,
     );
     const isSatisfied = () =>
@@ -126,7 +124,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           return;
         }
         settled = true;
-        if (typeof cache.offCacheChange === TYPEOF.FUNCTION) {
+        if (typeof cache.offCacheChange === 'function') {
           cache.offCacheChange(listener);
         }
         if (timer) {
@@ -242,27 +240,27 @@ class CDCIntegrationServiceCacheVisibilityWait {
               TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
             nestedOperation: `cache_wait:${tableName}`,
           });
-          if (typeof visibilityResult?.visibilityState === TYPEOF.STRING) {
+          if (typeof visibilityResult?.visibilityState === 'string') {
             timeoutError.visibilityState = visibilityResult.visibilityState;
           }
-          if (typeof visibilityResult?.contractState === TYPEOF.STRING) {
+          if (typeof visibilityResult?.contractState === 'string') {
             timeoutError.contractState = visibilityResult.contractState;
           }
-          if (typeof visibilityResult?.nextAction === TYPEOF.STRING) {
+          if (typeof visibilityResult?.nextAction === 'string') {
             timeoutError.nextAction = visibilityResult.nextAction;
           }
           if (visibilityResult?.authoritativeVisibilityConfirmed === true) {
             timeoutError.authoritativeVisibilityConfirmed = true;
           }
-          if (typeof visibilityResult?.pressureAction === TYPEOF.STRING) {
+          if (typeof visibilityResult?.pressureAction === 'string') {
             timeoutError.pressureAction = visibilityResult.pressureAction;
           }
-          if (typeof visibilityResult?.pressureReason === TYPEOF.STRING) {
+          if (typeof visibilityResult?.pressureReason === 'string') {
             timeoutError.pressureReason = visibilityResult.pressureReason;
           }
           if (Number.isFinite(visibilityResult?.retryAfterMs)) {
             timeoutError.retryAfterMs = visibilityResult.retryAfterMs;
-            if (timeoutError.retryAfterMs > NUM.ZERO) {
+            if (timeoutError.retryAfterMs > 0) {
               timeoutError.deferRetry = true;
             }
           }
@@ -284,7 +282,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       visibilityState: null,
     });
     const maxAttempts = 2;
-    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       lastResult = normalizeSystemTableVisibilityResult(
         await this.repairCacheVisibilityHole(
           tableName,
@@ -306,7 +304,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       const remainingBudgetMs = getRemainingBudgetMs(options?.timeoutBudget, {
         now: this.now,
       });
-      if (attempt >= maxAttempts || remainingBudgetMs <= NUM.ZERO) {
+      if (attempt >= maxAttempts || remainingBudgetMs <= 0) {
         break;
       }
       await delay(
@@ -362,10 +360,10 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (!cache) {
       return false;
     }
-    if (typeof cache.has === TYPEOF.FUNCTION) {
+    if (typeof cache.has === 'function') {
       return cache.has(tableName, key);
     }
-    if (typeof cache.get === TYPEOF.FUNCTION) {
+    if (typeof cache.get === 'function') {
       return Boolean(cache.get(tableName, key));
     }
     return false;
@@ -380,7 +378,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
    */
   getCacheRecord(tableName, key) {
     const cache = this.systemTableCache;
-    if (!cache || typeof cache.get !== TYPEOF.FUNCTION) {
+    if (!cache || typeof cache.get !== 'function') {
       return undefined;
     }
     return cache.get(tableName, key);
@@ -418,7 +416,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (!queryResult?.success) {
       const retryAfterMs = getControlPlaneRetryAfterMs(queryResult);
       if (
-        retryAfterMs > NUM.ZERO ||
+        retryAfterMs > 0 ||
         queryResult?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ||
         queryResult?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ||
         isRetryableControlPlaneError(queryResult)
@@ -507,7 +505,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
         cacheRepaired,
       });
     }
-    if (rows.length > NUM.ZERO) {
+    if (rows.length > 0) {
       return buildSystemTableVisibilityResult({
         visibilityState: null,
       });
@@ -565,9 +563,9 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (
       !this.cacheMutationTarget ||
       typeof this.cacheMutationTarget.applySystemTableChange !==
-        TYPEOF.FUNCTION ||
+        'function' ||
       !row ||
-      typeof row !== TYPEOF.OBJECT
+      typeof row !== 'object'
     ) {
       return false;
     }
@@ -602,19 +600,19 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (
       !this.cacheMutationTarget ||
       typeof this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth !==
-        TYPEOF.FUNCTION ||
+        'function' ||
       !Array.isArray(authoritativeRows)
     ) {
-      return NUM.ZERO;
+      return 0;
     }
     const canonicalRows = authoritativeRows
-      .filter((row) => row && typeof row === TYPEOF.OBJECT)
+      .filter((row) => row && typeof row === 'object')
       .map((row) => canonicalizeSystemTableRow(tableName, row));
     const result = this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth(
       {[tableName]: canonicalRows},
       Number.isFinite(readStartedAtMs) ? {evictOlderThanMs: readStartedAtMs} : {},
     );
-    return Array.isArray(result?.removed) ? result.removed.length : NUM.ZERO;
+    return Array.isArray(result?.removed) ? result.removed.length : 0;
   }
 
   /**
@@ -624,7 +622,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @private
    */
   resolveAuthoritativeFallbackPhase(phase) {
-    if (typeof phase === TYPEOF.STRING && phase.length > NUM.ZERO) {
+    if (typeof phase === 'string' && phase.length > 0) {
       return normalizeAuthoritativeFallbackPhase(phase);
     }
     if (this.bootstrapMode) {

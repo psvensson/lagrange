@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {buildReadinessByNodeId} from './active-node-projection.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
@@ -23,19 +22,19 @@ const PRIORITY_RECOVERY_PENDING_PUBLICATION_DIMENSIONS = Object.freeze({
 });
 
 function normalizePriorityRecoveryClosureWitness(value) {
-  return value && typeof value === TYPEOF.OBJECT ?
+  return value && typeof value === 'object' ?
     value :
     null;
 }
 
 function normalizeReadinessReasonCodeValue(reason) {
-  if (typeof reason === TYPEOF.STRING) {
+  if (typeof reason === 'string') {
     return reason;
   }
   if (
     reason &&
-    typeof reason === TYPEOF.OBJECT &&
-    typeof reason[READINESS_REASON_CODE_KEY] === TYPEOF.STRING
+    typeof reason === 'object' &&
+    typeof reason[READINESS_REASON_CODE_KEY] === 'string'
   ) {
     return reason[READINESS_REASON_CODE_KEY];
   }
@@ -43,7 +42,7 @@ function normalizeReadinessReasonCodeValue(reason) {
 }
 
 function normalizeReadinessReasonCodes(readinessEntry = null) {
-  if (!readinessEntry || typeof readinessEntry !== TYPEOF.OBJECT) {
+  if (!readinessEntry || typeof readinessEntry !== 'object') {
     return [];
   }
   return normalizeMembershipPublicationStringList([
@@ -60,7 +59,7 @@ function normalizeReadinessReasonCodes(readinessEntry = null) {
 
 function resolveReadinessDimensions(readinessEntry = null) {
   return readinessEntry?.dimensions &&
-    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    typeof readinessEntry.dimensions === 'object' ?
     readinessEntry.dimensions :
     null;
 }
@@ -68,7 +67,7 @@ function resolveReadinessDimensions(readinessEntry = null) {
 function hasPriorityRecoveryPendingPublicationRepairEvidence(
   readinessEntry = null,
 ) {
-  if (!readinessEntry || typeof readinessEntry !== TYPEOF.OBJECT) {
+  if (!readinessEntry || typeof readinessEntry !== 'object') {
     return false;
   }
   const priorityRecoveryPending = normalizeReadinessReasonCodes(
@@ -124,11 +123,11 @@ function buildPriorityRecoveryDecisionPublicationConvergence(options = {}, helpe
     null,
   );
   const publicationStatus =
-    typeof latestPublicationRow?.status === TYPEOF.STRING &&
-      latestPublicationRow.status.length > NUM.ZERO ?
+    typeof latestPublicationRow?.status === 'string' &&
+      latestPublicationRow.status.length > 0 ?
       latestPublicationRow.status :
-      typeof latestPublishedPublicationRow?.status === TYPEOF.STRING &&
-        latestPublishedPublicationRow.status.length > NUM.ZERO ?
+      typeof latestPublishedPublicationRow?.status === 'string' &&
+        latestPublishedPublicationRow.status.length > 0 ?
         latestPublishedPublicationRow.status :
         MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
   return {
@@ -160,7 +159,7 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
       priorityRecoveryDecisionSnapshots: null,
     },
     {
-      matches: replicaOperationRows.length === NUM.ZERO,
+      matches: replicaOperationRows.length === 0,
       priorityRecoveryClosureWitness: null,
       priorityRecoveryDecisionSnapshots: null,
     },

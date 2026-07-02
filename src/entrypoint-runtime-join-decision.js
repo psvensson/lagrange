@@ -17,10 +17,9 @@ import {
   ENTRYPOINT_ENV,
   ENTRYPOINT_LOG_MSG,
 } from './constants/entrypoint.js';
-import {HTTP_STATUS, NUM, STRING, TYPEOF} from './constants/index.js';
+import {HTTP_STATUS, STRING} from './constants/index.js';
 import {resolveRuntimeAddresses} from './entrypoint-runtime-options.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const STARTUP_JOIN_DECISION_SOURCE = Object.freeze({
   EXPLICIT: 'explicit',
@@ -69,7 +68,7 @@ const UNKNOWN_EXPLICIT_SEED_DECISION_STATE_ERROR_PREFIX =
  */
 async function probeAutoRejoinPeerAddress(peerAddress) {
   const normalizedPeerAddress = String(peerAddress || '');
-  if (normalizedPeerAddress.length === LOCAL_NUM_ZERO) {
+  if (normalizedPeerAddress.length === 0) {
     return false;
   }
 
@@ -131,15 +130,15 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
  */
 function buildExplicitSeedDecisionSnapshot(autoRejoinDecision) {
   const peerAddress =
-    typeof autoRejoinDecision?.peerAddress === TYPEOF.STRING &&
-    autoRejoinDecision.peerAddress.length > NUM.ZERO ?
+    typeof autoRejoinDecision?.peerAddress === 'string' &&
+    autoRejoinDecision.peerAddress.length > 0 ?
       autoRejoinDecision.peerAddress :
       STRING.EMPTY;
   const hasDurablePeerAddress =
     autoRejoinDecision?.mode === STARTUP_JOIN_DECISION_MODE.JOIN &&
     autoRejoinDecision?.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN &&
-    typeof peerAddress === TYPEOF.STRING &&
-    peerAddress.length > NUM.ZERO;
+    typeof peerAddress === 'string' &&
+    peerAddress.length > 0;
 
   return {
     identityMismatch: autoRejoinDecision?.identityMismatch === true,
@@ -230,7 +229,7 @@ async function resolveStartupJoinDecision(options) {
     nodeId,
     nodeAddress: nodeHttpAddress,
     probePeerAddress:
-      typeof options.probePeerAddress === TYPEOF.FUNCTION ?
+      typeof options.probePeerAddress === 'function' ?
         options.probePeerAddress :
         probeAutoRejoinPeerAddress,
   });

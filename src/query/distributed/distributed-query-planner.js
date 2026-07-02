@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {NUM, TYPEOF} from '../../constants/index.js';
+import {NUM} from '../../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -16,9 +16,8 @@ import {
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_NULL = 'NULL';
-const LOCAL_STR_Y2288 = '\'\'';
+const LOCAL_STR_SQUOTE_SQUOTE = '\'\'';
 const LOCAL_STR_QUESTION = '?';
 
 const PLAN_HASH = Object.freeze({
@@ -371,7 +370,7 @@ class DistributedQueryPlanner {
    * @return {Object[]|null} Join plan edges.
    */
   buildJoinPlan(ast, tablePlans) {
-    if (!ast.joins || ast.joins.length === NUM.ZERO) {
+    if (!ast.joins || ast.joins.length === 0) {
       return null;
     }
 
@@ -408,8 +407,8 @@ class DistributedQueryPlanner {
       return DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP;
     }
 
-    const leftPartitions = leftPlan?.partitions?.length || NUM.ZERO;
-    const rightPartitions = rightPlan?.partitions?.length || NUM.ZERO;
+    const leftPartitions = leftPlan?.partitions?.length || 0;
+    const rightPartitions = rightPlan?.partitions?.length || 0;
     const minPartitions = Math.min(leftPartitions, rightPartitions);
     const maxPartitions = Math.max(leftPartitions, rightPartitions);
 
@@ -497,7 +496,7 @@ class DistributedQueryPlanner {
     const digest = createHash(PLAN_HASH.SHA1)
       .update(JSON.stringify(payload))
       .digest(PLAN_HASH.HEX)
-      .slice(NUM.ZERO, PLAN_HASH.LENGTH);
+      .slice(0, PLAN_HASH.LENGTH);
     return `${PLAN_HASH.PREFIX}${digest}`;
   }
 
@@ -510,7 +509,7 @@ class DistributedQueryPlanner {
     if (Array.isArray(value)) {
       return value.map((entry) => this.normalizePlanPayload(entry));
     }
-    if (!value || typeof value !== TYPEOF.OBJECT) {
+    if (!value || typeof value !== 'object') {
       return value;
     }
 
@@ -518,7 +517,7 @@ class DistributedQueryPlanner {
     const keys = Object.keys(value).sort();
     for (const key of keys) {
       const entry = value[key];
-      if (typeof entry === TYPEOF.FUNCTION || entry === undefined) {
+      if (typeof entry === 'function' || entry === undefined) {
         continue;
       }
       normalized[key] = this.normalizePlanPayload(entry);
@@ -570,7 +569,7 @@ class DistributedQueryPlanner {
    * @return {boolean} True when local to target alias.
    */
   expressionReferencesAlias(expr, tableAlias) {
-    if (!expr || typeof expr !== TYPEOF.OBJECT) {
+    if (!expr || typeof expr !== 'object') {
       return true;
     }
     if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
@@ -634,7 +633,7 @@ class DistributedQueryPlanner {
     for (const join of ast.joins || []) {
       this.collectProjectedColumns(join.condition, tableAlias, projected);
     }
-    if (projected.size === NUM.ZERO) {
+    if (projected.size === 0) {
       return null;
     }
     return Array.from(projected.values());
@@ -647,7 +646,7 @@ class DistributedQueryPlanner {
    * @param {Set<string>} out - Output column set.
    */
   collectProjectedColumns(expr, tableAlias, out) {
-    if (!expr || typeof expr !== TYPEOF.OBJECT) {
+    if (!expr || typeof expr !== 'object') {
       return;
     }
     if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
@@ -694,7 +693,7 @@ class DistributedQueryPlanner {
    */
   buildFragmentSql(tablePlan) {
     const projection = Array.isArray(tablePlan.projectedColumns) &&
-      tablePlan.projectedColumns.length > NUM.ZERO ?
+      tablePlan.projectedColumns.length > 0 ?
       tablePlan.projectedColumns.join(', ') :
       '*';
     const aliasSuffix = tablePlan.tableAlias &&
@@ -715,16 +714,16 @@ class DistributedQueryPlanner {
    * @private
    */
   renderExpression(expr) {
-    if (!expr || typeof expr !== TYPEOF.OBJECT) {
-      return LOCAL_STR_EMPTY;
+    if (!expr || typeof expr !== 'object') {
+      return '';
     }
 
     if (expr.type === QUERY_AST_NODE.LITERAL) {
       if (expr.value === null) {
         return LOCAL_STR_NULL;
       }
-      if (typeof expr.value === TYPEOF.STRING) {
-        return `'${expr.value.replace(/'/g, LOCAL_STR_Y2288)}'`;
+      if (typeof expr.value === 'string') {
+        return `'${expr.value.replace(/'/g, LOCAL_STR_SQUOTE_SQUOTE)}'`;
       }
       return String(expr.value);
     }
@@ -768,7 +767,7 @@ class DistributedQueryPlanner {
         `${this.renderExpression(expr.pattern)}`;
     }
 
-    return LOCAL_STR_EMPTY;
+    return '';
   }
 }
 

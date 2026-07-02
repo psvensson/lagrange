@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -53,24 +52,24 @@ function normalizePriorityRecoveryStringList(values = []) {
   return uniqueSorted(
     (Array.isArray(values) ? values : [])
       .map((value) => String(value || EMPTY_TEXT).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .filter((value) => value.length > 0),
   );
 }
 
 function inferPriorityRecoveryTableNameFromPartitionId(partitionId) {
   const normalizedPartitionId = String(partitionId || '');
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return null;
   }
   const partitionSuffixIndex = normalizedPartitionId.lastIndexOf('-p');
-  if (partitionSuffixIndex <= NUM.ZERO) {
+  if (partitionSuffixIndex <= 0) {
     return normalizedPartitionId;
   }
   const suffix = normalizedPartitionId.slice(partitionSuffixIndex + 2);
   if (!/^\d+$/.test(suffix)) {
     return normalizedPartitionId;
   }
-  return normalizedPartitionId.slice(NUM.ZERO, partitionSuffixIndex);
+  return normalizedPartitionId.slice(0, partitionSuffixIndex);
 }
 
 function resolvePriorityRecoveryReasonCodesFromReadiness(readinessEntry) {
@@ -85,7 +84,7 @@ function resolvePriorityRecoveryReasonCodesFromReadiness(readinessEntry) {
 function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
   const normalizedSummary =
     priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof priorityPartitionSummary === 'object' ?
       priorityPartitionSummary :
       null;
   const blockedPartitions = Array.isArray(normalizedSummary?.blockedPartitions) ?
@@ -97,12 +96,12 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
   const plannerByPartitionId = {};
   for (const partition of blockedPartitions) {
     const partitionId = String(partition?.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     const spreadGap = Math.max(
-      NUM.ZERO,
-      normalizePriorityRecoveryInteger(partition?.spreadGap) || NUM.ZERO,
+      0,
+      normalizePriorityRecoveryInteger(partition?.spreadGap) || 0,
     );
     plannerByPartitionId[partitionId] = {
       partitionId,
@@ -113,9 +112,9 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
         partition?.readyDistinctNodeCount,
       ),
       spreadGap,
-      ready: spreadGap === NUM.ZERO,
+      ready: spreadGap === 0,
       reasons:
-        spreadGap > NUM.ZERO ?
+        spreadGap > 0 ?
           [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP] :
           [],
     };
@@ -138,11 +137,11 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
       requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
         normalizedSummary?.requiredDistinctNodeCount,
       ),
-      readyDistinctNodeCount: NUM.ZERO,
+      readyDistinctNodeCount: 0,
       spreadGap:
         normalizePriorityRecoveryInteger(
           normalizedSummary?.requiredDistinctNodeCount,
-        ) || NUM.ONE,
+        ) || 1,
       ready: false,
       reasons: [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING],
     };
@@ -156,7 +155,7 @@ function buildPriorityRecoveryReplicaOperationContexts(
 ) {
   const operationTimelineById =
     replicaOperationsSummary?.operationTimelineById &&
-    typeof replicaOperationsSummary.operationTimelineById === TYPEOF.OBJECT ?
+    typeof replicaOperationsSummary.operationTimelineById === 'object' ?
       replicaOperationsSummary.operationTimelineById :
       {};
   const byOperationId = {};
@@ -203,7 +202,7 @@ function buildPriorityRecoveryReplicaOperationContexts(
       timeline.map((entry) => String(entry?.step || '').trim()),
     );
     const latestTimelineEntry =
-      timeline.length > NUM.ZERO ? timeline[timeline.length - 1] : null;
+      timeline.length > 0 ? timeline[timeline.length - 1] : null;
     const context = {
       operationId,
       partitionId,
@@ -287,15 +286,15 @@ function buildPriorityRecoveryAdmissionByPartitionId(
 ) {
   const admissionByPartitionId = {};
   for (const workflow of Object.values(workflowAdmissionsByWorkflowId || {})) {
-    if (!workflow || typeof workflow !== TYPEOF.OBJECT) {
+    if (!workflow || typeof workflow !== 'object') {
       continue;
     }
     const workflowId = String(workflow.workflowId || '').trim();
-    if (workflowId.length === NUM.ZERO) {
+    if (workflowId.length === 0) {
       continue;
     }
     const admission =
-      workflow.admission && typeof workflow.admission === TYPEOF.OBJECT ?
+      workflow.admission && typeof workflow.admission === 'object' ?
         workflow.admission :
         null;
     const partitionIds = normalizePriorityRecoveryStringList([
@@ -323,7 +322,7 @@ function buildPriorityRecoveryAdmissionByPartitionId(
                 entry?.reasonCodes,
               ),
             }))
-            .filter((entry) => entry.nodeId.length > NUM.ZERO) :
+            .filter((entry) => entry.nodeId.length > 0) :
           [],
         blockingReasons: normalizePriorityRecoveryStringList(
           workflow.blockingReasons,
@@ -390,7 +389,7 @@ function buildPriorityRecoveryLearnerPromotionByPartitionId(
     for (const nodeId of normalizePriorityRecoveryStringList(learnerNodeIds)) {
       const readiness = readinessByNodeId[nodeId] || null;
       const dimensions =
-        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+        readiness?.dimensions && typeof readiness.dimensions === 'object' ?
           readiness.dimensions :
           {};
       const repairEligible =
@@ -428,7 +427,7 @@ function buildPriorityRecoveryLearnerPromotionByPartitionId(
 function buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence) {
   const projectionDiagnostics =
     publicationConvergence?.projectionDiagnostics &&
-    typeof publicationConvergence.projectionDiagnostics === TYPEOF.OBJECT ?
+    typeof publicationConvergence.projectionDiagnostics === 'object' ?
       publicationConvergence.projectionDiagnostics :
       null;
   const inclusionReasonsByNodeId = {};

@@ -4,9 +4,7 @@ import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane
 const {
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
-  NUM,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
-  TYPEOF,
   buildCanonicalPublicationRecoveryEvidence,
   resolveMembershipPublicationPlanningSource,
   resolveMembershipPublicationReadLane,
@@ -24,7 +22,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     });
     const providedPlanningSnapshot =
       context?.membershipPublicationPlanningSnapshot &&
-      typeof context.membershipPublicationPlanningSnapshot === TYPEOF.OBJECT ?
+      typeof context.membershipPublicationPlanningSnapshot === 'object' ?
         context.membershipPublicationPlanningSnapshot :
         null;
     if (!providedPlanningSnapshot) {
@@ -50,13 +48,13 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       );
     const directPublicationRecoveryGate =
       directPlanningSnapshot.publicationRecoveryGate &&
-      typeof directPlanningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof directPlanningSnapshot.publicationRecoveryGate === 'object' ?
         directPlanningSnapshot.publicationRecoveryGate :
         null;
     const providedPublicationRecoveryGate =
       providedPlanningSnapshot.publicationRecoveryGate &&
       typeof providedPlanningSnapshot.publicationRecoveryGate ===
-        TYPEOF.OBJECT ?
+        'object' ?
         providedPlanningSnapshot.publicationRecoveryGate :
         null;
     const directPendingAckEvidenceState =
@@ -90,21 +88,21 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     const directPendingAckCount = Number(
       directPlanningSnapshot.pendingAckCount ??
       directPlanningSnapshot.publicationRecoveryGate?.pendingAckCount ??
-      NUM.ZERO,
+      0,
     );
     const directHasPendingAckDebt =
       Number.isFinite(directPendingAckCount) &&
-      directPendingAckCount > NUM.ZERO;
+      directPendingAckCount > 0;
     const directHasRequiredAckNodeListDebt =
       directPendingAckEvidenceState ===
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
           .REQUIRED_ACK_NODE_LIST &&
-      directRequiredAckNodeIds.length > NUM.ZERO;
+      directRequiredAckNodeIds.length > 0;
     const providedHasCountOnlyAckDebt =
       providedPendingAckEvidenceState ===
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
       Number.isFinite(providedPendingAckCount) &&
-      providedPendingAckCount > NUM.ZERO;
+      providedPendingAckCount > 0;
     const directCanAcceptProvidedCountOnlyAckDebt =
       directPendingAckEvidenceState ===
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
@@ -115,7 +113,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     const shouldUseProvidedAckNodeList =
       providedPendingAckEvidenceState !==
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-      providedRequiredAckNodeIds.length > NUM.ZERO &&
+      providedRequiredAckNodeIds.length > 0 &&
       (
         directPendingAckEvidenceState ===
           PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
@@ -236,7 +234,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       shouldUseProvidedPriorityRecoveryDecisionSnapshots &&
       providedPlanningSnapshot.priorityRecoveryObservation &&
       typeof providedPlanningSnapshot.priorityRecoveryObservation ===
-        TYPEOF.OBJECT ?
+        'object' ?
         providedPlanningSnapshot.priorityRecoveryObservation :
         null;
     const providedPriorityRecoveryDecisionSnapshots =
@@ -366,7 +364,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         publicationConvergenceGate?.pendingAckCount ??
         directPlanningSnapshot.pendingAckCount ??
         providedPlanningSnapshot.pendingAckCount ??
-        NUM.ZERO,
+        0,
       recoveryProtocolState:
         priorityRecoveryObservation?.recoveryProtocolState ??
         publicationConvergenceGate?.recoveryProtocolState ??
@@ -508,7 +506,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
   resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(context = {}) {
     const provided = context?.membershipPublicationPlanningSnapshot;
     const memo = this.membershipPublicationPlanningSnapshotContextMemo;
-    if (!memo || !provided || typeof provided !== TYPEOF.OBJECT) {
+    if (!memo || !provided || typeof provided !== 'object') {
       return this.resolveMembershipPublicationPlanningSnapshot(context);
     }
     const membershipPublication = context?.membershipPublication ?? null;
@@ -622,7 +620,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       lane: resolveMembershipPublicationReadLane(readOptions?.lane),
       queryTimeoutMs:
         Number.isFinite(readOptions?.queryTimeoutMs) &&
-        readOptions.queryTimeoutMs > NUM.ZERO ?
+        readOptions.queryTimeoutMs > 0 ?
           readOptions.queryTimeoutMs :
           this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
@@ -630,7 +628,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
 
   getLatestMembershipPublicationRowSync(nodeId, readOptions = {}) {
     const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     const normalizedReadOptions =
@@ -640,17 +638,17 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     );
     if (
       normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
-      typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION
+      typeof service.getLatestClusterPublicationSync === 'function'
     ) {
       return service.getLatestClusterPublicationSync(normalizedReadOptions);
     }
-    if (typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION) {
+    if (typeof service.getLatestPublicationForNodeSync === 'function') {
       return service.getLatestPublicationForNodeSync(
         nodeId,
         normalizedReadOptions,
       );
     }
-    if (typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION) {
+    if (typeof service.getLatestClusterPublicationSync === 'function') {
       return service.getLatestClusterPublicationSync(normalizedReadOptions);
     }
     return null;
@@ -658,7 +656,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
 
   async getLatestMembershipPublicationRow(nodeId, readOptions = {}) {
     const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     const normalizedReadOptions =
@@ -668,14 +666,14 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     );
     if (
       normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
-      typeof service.getLatestClusterPublication === TYPEOF.FUNCTION
+      typeof service.getLatestClusterPublication === 'function'
     ) {
       return service.getLatestClusterPublication(normalizedReadOptions);
     }
-    if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
+    if (typeof service.getLatestPublicationForNode === 'function') {
       return service.getLatestPublicationForNode(nodeId, normalizedReadOptions);
     }
-    if (typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
+    if (typeof service.getLatestClusterPublication === 'function') {
       return service.getLatestClusterPublication(normalizedReadOptions);
     }
     return null;
@@ -685,9 +683,9 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     const service = this.membershipPublicationService;
     if (
       !service ||
-      typeof service !== TYPEOF.OBJECT ||
+      typeof service !== 'object' ||
       typeof service.getLatestPublishedClusterPublicationSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }

@@ -4,21 +4,18 @@ import {
   COLUMN,
   ENDPOINT_STATUS,
   HOST,
-  NUM,
   PROTOCOL,
   TABLES,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
 
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_1PLYW = '[';
-const LOCAL_STR_1NY19 = ']';
+const LOCAL_STR_LBRACKET = '[';
+const LOCAL_STR_RBRACKET = ']';
 const LOCAL_STR_COLON = ':';
 const LOCAL_STR_127_0_0_1 = '127.0.0.1';
-const LOCAL_STR_1 = '::1';
+const LOCAL_STR_COLON_COLON_1 = '::1';
 const LOCAL_STR_HOST = 'host';
 const LOCAL_STR_PORT = 'port';
 
@@ -66,9 +63,9 @@ const NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE = Object.freeze({
 const ADDRESS_PROTOCOL_SEPARATOR = '://';
 
 function normalizeAddressString(value) {
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim() :
-    LOCAL_STR_EMPTY;
+    '';
 }
 
 function buildAddressStateResult(state) {
@@ -76,7 +73,7 @@ function buildAddressStateResult(state) {
 }
 
 function buildAddressStringPart(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     Object.freeze({
       state: ADDRESS_PART_STATE.PRESENT,
       value,
@@ -87,7 +84,7 @@ function buildAddressStringPart(value) {
 }
 
 function buildAddressPortPart(value) {
-  return Number.isInteger(value) && value > NUM.ZERO ?
+  return Number.isInteger(value) && value > 0 ?
     Object.freeze({
       state: ADDRESS_PART_STATE.PRESENT,
       value,
@@ -107,10 +104,10 @@ function buildParsedAddressResult(options = {}) {
 }
 
 function normalizeParsedUrlHost(host) {
-  return typeof host === TYPEOF.STRING &&
-    host.startsWith(LOCAL_STR_1PLYW) &&
-    host.endsWith(LOCAL_STR_1NY19) ?
-    host.substring(NUM.ONE, host.length - NUM.ONE) :
+  return typeof host === 'string' &&
+    host.startsWith(LOCAL_STR_LBRACKET) &&
+    host.endsWith(LOCAL_STR_RBRACKET) ?
+    host.substring(1, host.length - 1) :
     host;
 }
 
@@ -135,19 +132,19 @@ function parseUrlAddressParts(normalizedAddress) {
 }
 
 function parseBracketedAddressParts(normalizedAddress) {
-  if (!normalizedAddress.startsWith(LOCAL_STR_1PLYW)) {
+  if (!normalizedAddress.startsWith(LOCAL_STR_LBRACKET)) {
     return null;
   }
 
   const closingBracket = normalizedAddress.indexOf(']');
-  if (closingBracket <= NUM.ZERO) {
+  if (closingBracket <= 0) {
     return null;
   }
 
-  const host = normalizedAddress.substring(NUM.ONE, closingBracket);
-  const remainder = normalizedAddress.substring(closingBracket + NUM.ONE);
+  const host = normalizedAddress.substring(1, closingBracket);
+  const remainder = normalizedAddress.substring(closingBracket + 1);
   const port = remainder.startsWith(':') ?
-    Number(remainder.substring(NUM.ONE)) :
+    Number(remainder.substring(1)) :
     null;
   return buildParsedAddressResult({
     host,
@@ -158,19 +155,19 @@ function parseBracketedAddressParts(normalizedAddress) {
 function parseSingleColonAddressParts(normalizedAddress) {
   const firstColon = normalizedAddress.indexOf(':');
   const lastColon = normalizedAddress.lastIndexOf(':');
-  if (firstColon <= NUM.ZERO || firstColon !== lastColon) {
+  if (firstColon <= 0 || firstColon !== lastColon) {
     return null;
   }
 
   return buildParsedAddressResult({
-    host: normalizedAddress.substring(NUM.ZERO, lastColon),
-    port: Number(normalizedAddress.substring(lastColon + NUM.ONE)),
+    host: normalizedAddress.substring(0, lastColon),
+    port: Number(normalizedAddress.substring(lastColon + 1)),
   });
 }
 
 function parseAddressPartsResult(address) {
   const normalized = normalizeAddressString(address);
-  if (normalized.length === NUM.ZERO) {
+  if (normalized.length === 0) {
     return buildAddressStateResult(ADDRESS_PARSE_STATE.EMPTY);
   }
 
@@ -194,35 +191,35 @@ function parseAddressPartsResult(address) {
 }
 
 function formatHostForWebSocketUrl(host) {
-  if (typeof host !== TYPEOF.STRING || host.length === NUM.ZERO) {
+  if (typeof host !== 'string' || host.length === 0) {
     return null;
   }
-  return host.includes(LOCAL_STR_COLON) && !host.startsWith(LOCAL_STR_1PLYW) ?
+  return host.includes(LOCAL_STR_COLON) && !host.startsWith(LOCAL_STR_LBRACKET) ?
     `[${host}]` :
     host;
 }
 
 function buildWebSocketAddress(host, port) {
   const formattedHost = formatHostForWebSocketUrl(host);
-  if (!formattedHost || !Number.isInteger(port) || port <= NUM.ZERO) {
+  if (!formattedHost || !Number.isInteger(port) || port <= 0) {
     return null;
   }
   return `${PROTOCOL.WS}${formattedHost}:${port}`;
 }
 
 function isIpv4Literal(host) {
-  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(host || LOCAL_STR_EMPTY));
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(host || ''));
 }
 
 function isIpv6Literal(host) {
-  return String(host || LOCAL_STR_EMPTY).includes(LOCAL_STR_COLON);
+  return String(host || '').includes(LOCAL_STR_COLON);
 }
 
 function isLocalOnlyHost(host) {
   const normalized = String(host || '').toLowerCase();
   return normalized === HOST.LOCALHOST ||
     normalized === LOCAL_STR_127_0_0_1 ||
-    normalized === LOCAL_STR_1;
+    normalized === LOCAL_STR_COLON_COLON_1;
 }
 
 function isIpLiteral(host) {
@@ -240,12 +237,12 @@ function resolveRoutableLocalIpAddress() {
     }
     for (const entry of interfaceEntries) {
       if (!entry || entry.internal === true ||
-        typeof entry.address !== TYPEOF.STRING ||
-        entry.address.length === NUM.ZERO) {
+        typeof entry.address !== 'string' ||
+        entry.address.length === 0) {
         continue;
       }
 
-      const family = typeof entry.family === TYPEOF.STRING ?
+      const family = typeof entry.family === 'string' ?
         entry.family :
         String(entry.family || '');
       if (family === NETWORK_FAMILY.IPV4) {
@@ -256,13 +253,13 @@ function resolveRoutableLocalIpAddress() {
     }
   }
 
-  return ipv4Candidates[NUM.ZERO] ||
-    fallbackCandidates[NUM.ZERO] ||
+  return ipv4Candidates[0] ||
+    fallbackCandidates[0] ||
     null;
 }
 
 function resolveExplicitWebSocketPort(wsPort) {
-  return Number.isInteger(wsPort) && wsPort > NUM.ZERO ?
+  return Number.isInteger(wsPort) && wsPort > 0 ?
     Math.floor(wsPort) :
     null;
 }
@@ -271,7 +268,7 @@ function resolveExplicitAdvertisedWebSocketAddress(
   explicitAddress,
   explicitWsPort,
 ) {
-  if (explicitAddress.length === NUM.ZERO) {
+  if (explicitAddress.length === 0) {
     return null;
   }
   if (explicitAddress.startsWith(PROTOCOL.WS) ||
@@ -290,12 +287,12 @@ function resolveDerivedAdvertisedWebSocketPort(
   parsedNodeAddress,
   explicitWsPort,
 ) {
-  if (Number.isInteger(explicitWsPort) && explicitWsPort > NUM.ZERO) {
+  if (Number.isInteger(explicitWsPort) && explicitWsPort > 0) {
     return explicitWsPort;
   }
 
   const nodeAddressPort = readParsedAddressPartValue(parsedNodeAddress, 'port');
-  if (!Number.isInteger(nodeAddressPort) || nodeAddressPort <= NUM.ZERO) {
+  if (!Number.isInteger(nodeAddressPort) || nodeAddressPort <= 0) {
     return null;
   }
 
@@ -311,8 +308,8 @@ function resolveDerivedAdvertisedWebSocketPort(
 function shouldPreferRoutableAdvertisedHost(options, host) {
   return options.preferRoutableInterface === true ||
     (options.wsHost === HOST.ANY &&
-      typeof host === TYPEOF.STRING &&
-      host.length > NUM.ZERO &&
+      typeof host === 'string' &&
+      host.length > 0 &&
       !isIpLiteral(host) &&
       !isLocalOnlyHost(host));
 }
@@ -362,14 +359,14 @@ function resolveAdvertisedEndpointHost(options = {}) {
   if (nodeHost) {
     return nodeHost;
   }
-  return typeof options.fallbackHost === TYPEOF.STRING &&
-    options.fallbackHost.length > NUM.ZERO ?
+  return typeof options.fallbackHost === 'string' &&
+    options.fallbackHost.length > 0 ?
     options.fallbackHost :
     null;
 }
 
 function getActiveWebSocketEndpointRows(rows, targetNodeId) {
-  if (!Array.isArray(rows) || rows.length === NUM.ZERO || !targetNodeId) {
+  if (!Array.isArray(rows) || rows.length === 0 || !targetNodeId) {
     return [];
   }
 
@@ -378,12 +375,12 @@ function getActiveWebSocketEndpointRows(rows, targetNodeId) {
       return row?.[COLUMN.NODE_ID] === targetNodeId &&
         row?.[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
         row?.[COLUMN.TRANSPORT_TYPE] === TRANSPORT_TYPE.WEBSOCKET &&
-        typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        row[COLUMN.ADDRESS].length > NUM.ZERO;
+        typeof row?.[COLUMN.ADDRESS] === 'string' &&
+        row[COLUMN.ADDRESS].length > 0;
     })
     .sort((left, right) => {
-      return Number(left?.[COLUMN.PRIORITY] || NUM.ZERO) -
-        Number(right?.[COLUMN.PRIORITY] || NUM.ZERO);
+      return Number(left?.[COLUMN.PRIORITY] || 0) -
+        Number(right?.[COLUMN.PRIORITY] || 0);
     });
 }
 
@@ -391,7 +388,7 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
   if (!systemTableCache || !targetNodeId) {
     return [];
   }
-  if (typeof systemTableCache.filter === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.filter === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.filter(
         TABLES.NODE_ENDPOINTS,
@@ -400,7 +397,7 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
       targetNodeId,
     );
   }
-  if (typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.getAll === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [],
       targetNodeId,
@@ -433,10 +430,10 @@ function resolveNodeWebSocketAddressResult(options = {}) {
   const systemTableCache = options.systemTableCache;
   const cacheEndpointRows =
     getCacheEndpointRows(systemTableCache, targetNodeId);
-  const cacheEndpointAddress = cacheEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
+  const cacheEndpointAddress = cacheEndpointRows[0]?.[COLUMN.ADDRESS];
   const hasCanonicalCacheRow =
-    typeof cacheEndpointAddress === TYPEOF.STRING &&
-    cacheEndpointAddress.length > NUM.ZERO;
+    typeof cacheEndpointAddress === 'string' &&
+    cacheEndpointAddress.length > 0;
 
   // The seed pin (bootstrapResponse.seedNodeWsAddress) and the canonical
   // node_endpoints cache row are the SAME self-advertised value; the pin is a
@@ -446,8 +443,8 @@ function resolveNodeWebSocketAddressResult(options = {}) {
   // authority only during cold start, before CDC has populated the cache.
   if (!hasCanonicalCacheRow &&
       targetNodeId === bootstrapResponse?.seedNodeId &&
-      typeof bootstrapResponse?.seedNodeWsAddress === TYPEOF.STRING &&
-      bootstrapResponse.seedNodeWsAddress.length > NUM.ZERO) {
+      typeof bootstrapResponse?.seedNodeWsAddress === 'string' &&
+      bootstrapResponse.seedNodeWsAddress.length > 0) {
     return Object.freeze({
       state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
       address: bootstrapResponse.seedNodeWsAddress,
@@ -477,9 +474,9 @@ function resolveNodeWebSocketAddressResult(options = {}) {
   const bootstrapEndpointRows =
     getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId);
   const bootstrapEndpointAddress =
-    bootstrapEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
-  if (typeof bootstrapEndpointAddress === TYPEOF.STRING &&
-      bootstrapEndpointAddress.length > NUM.ZERO) {
+    bootstrapEndpointRows[0]?.[COLUMN.ADDRESS];
+  if (typeof bootstrapEndpointAddress === 'string' &&
+      bootstrapEndpointAddress.length > 0) {
     return Object.freeze({
       state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
       address:

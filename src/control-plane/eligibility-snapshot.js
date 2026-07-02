@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -11,7 +10,6 @@ import {
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from './control-plane-readiness-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const PROJECTION_READINESS_CONTRACT_RULES = Object.freeze([
   Object.freeze({
@@ -32,17 +30,17 @@ const PROJECTION_READINESS_CONTRACT_RULES = Object.freeze([
 ]);
 
 function freezeObject(value) {
-  return value && typeof value === TYPEOF.OBJECT ?
+  return value && typeof value === 'object' ?
     Object.freeze({...value}) :
     null;
 }
 
 function normalizeReasons(reasons) {
-  if (!Array.isArray(reasons) || reasons.length === NUM.ZERO) {
+  if (!Array.isArray(reasons) || reasons.length === 0) {
     return Object.freeze([]);
   }
   return Object.freeze(reasons.map((reason) => {
-    return reason && typeof reason === TYPEOF.OBJECT ?
+    return reason && typeof reason === 'object' ?
       Object.freeze({...reason}) :
       reason;
   }));
@@ -55,7 +53,7 @@ function collectReasonCodes(snapshot) {
     snapshot.reasons :
     []) {
     const code = String(reason?.code || '');
-    if (code.length === NUM.ZERO || seen.has(code)) {
+    if (code.length === 0 || seen.has(code)) {
       continue;
     }
     seen.add(code);
@@ -65,13 +63,13 @@ function collectReasonCodes(snapshot) {
 }
 
 function normalizeStringList(values) {
-  if (!Array.isArray(values) || values.length === NUM.ZERO) {
+  if (!Array.isArray(values) || values.length === 0) {
     return Object.freeze([]);
   }
   return Object.freeze([...new Set(
     values
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0),
   )]);
 }
 
@@ -83,24 +81,24 @@ function resolveProjectionReadinessContractDecision(evidence) {
 
 function getMembershipPublicationBoundaryOutcome(membershipPublication) {
   return membershipPublication?.publicationBoundaryOutcome &&
-    typeof membershipPublication.publicationBoundaryOutcome === TYPEOF.OBJECT ?
+    typeof membershipPublication.publicationBoundaryOutcome === 'object' ?
     membershipPublication.publicationBoundaryOutcome :
     null;
 }
 
 function buildProjectionReadinessContract(snapshot = {}) {
   const dimensions =
-    snapshot.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+    snapshot.dimensions && typeof snapshot.dimensions === 'object' ?
       snapshot.dimensions :
       Object.freeze({});
   const priorityControlPlaneRecovery =
     snapshot.priorityControlPlaneRecovery &&
-    typeof snapshot.priorityControlPlaneRecovery === TYPEOF.OBJECT ?
+    typeof snapshot.priorityControlPlaneRecovery === 'object' ?
       snapshot.priorityControlPlaneRecovery :
       null;
   const publicationBoundaryOutcome =
     snapshot.publicationBoundaryOutcome &&
-      typeof snapshot.publicationBoundaryOutcome === TYPEOF.OBJECT ?
+      typeof snapshot.publicationBoundaryOutcome === 'object' ?
       snapshot.publicationBoundaryOutcome :
       getMembershipPublicationBoundaryOutcome(snapshot.membershipPublication);
   const priorityReasonCodes = normalizeStringList(
@@ -111,7 +109,7 @@ function buildProjectionReadinessContract(snapshot = {}) {
   );
   const evidence = Object.freeze({
     publicationReady:
-      typeof publicationBoundaryOutcome?.ready === TYPEOF.BOOLEAN ?
+      typeof publicationBoundaryOutcome?.ready === 'boolean' ?
         publicationBoundaryOutcome.ready :
         dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
@@ -175,71 +173,71 @@ function buildProjectionReadinessContract(snapshot = {}) {
 }
 
 function freezeRuntimeAuthoritySummary(runtimeAuthority) {
-  if (!runtimeAuthority || typeof runtimeAuthority !== TYPEOF.OBJECT) {
+  if (!runtimeAuthority || typeof runtimeAuthority !== 'object') {
     return null;
   }
   const publication = runtimeAuthority.publication &&
-    typeof runtimeAuthority.publication === TYPEOF.OBJECT ?
+    typeof runtimeAuthority.publication === 'object' ?
     Object.freeze({
-      state: typeof runtimeAuthority.publication.state === TYPEOF.STRING ?
+      state: typeof runtimeAuthority.publication.state === 'string' ?
         runtimeAuthority.publication.state :
         RUNTIME_AUTHORITY_PUBLICATION_STATE.DEGRADED,
       healthy: runtimeAuthority.publication.healthy === true,
-      mode: typeof runtimeAuthority.publication.mode === TYPEOF.STRING ?
+      mode: typeof runtimeAuthority.publication.mode === 'string' ?
         runtimeAuthority.publication.mode :
         null,
-      reason: typeof runtimeAuthority.publication.reason === TYPEOF.STRING ?
+      reason: typeof runtimeAuthority.publication.reason === 'string' ?
         runtimeAuthority.publication.reason :
         null,
     }) :
     null;
   const visibility = runtimeAuthority.visibility &&
-    typeof runtimeAuthority.visibility === TYPEOF.OBJECT ?
+    typeof runtimeAuthority.visibility === 'object' ?
     Object.freeze({
-      state: typeof runtimeAuthority.visibility.state === TYPEOF.STRING ?
+      state: typeof runtimeAuthority.visibility.state === 'string' ?
         runtimeAuthority.visibility.state :
         RUNTIME_AUTHORITY_VISIBILITY_STATE.UNAVAILABLE,
       published: runtimeAuthority.visibility.published === true,
       observedAt: typeof runtimeAuthority.visibility.observedAt ===
-        TYPEOF.STRING ?
+        'string' ?
         runtimeAuthority.visibility.observedAt :
         null,
     }) :
     null;
   const repair = runtimeAuthority.repair &&
-    typeof runtimeAuthority.repair === TYPEOF.OBJECT ?
+    typeof runtimeAuthority.repair === 'object' ?
     Object.freeze({
-      state: typeof runtimeAuthority.repair.state === TYPEOF.STRING ?
+      state: typeof runtimeAuthority.repair.state === 'string' ?
         runtimeAuthority.repair.state :
         RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED,
       applied: runtimeAuthority.repair.applied === true,
-      observedAt: typeof runtimeAuthority.repair.observedAt === TYPEOF.STRING ?
+      observedAt: typeof runtimeAuthority.repair.observedAt === 'string' ?
         runtimeAuthority.repair.observedAt :
         null,
     }) :
     null;
   const provisioning = runtimeAuthority.provisioning &&
-    typeof runtimeAuthority.provisioning === TYPEOF.OBJECT ?
+    typeof runtimeAuthority.provisioning === 'object' ?
     Object.freeze({
-      state: typeof runtimeAuthority.provisioning.state === TYPEOF.STRING ?
+      state: typeof runtimeAuthority.provisioning.state === 'string' ?
         runtimeAuthority.provisioning.state :
         PROVISIONING_ELIGIBILITY_STATE.BLOCKED,
       eligible: runtimeAuthority.provisioning.eligible === true,
     }) :
     null;
   const failure = runtimeAuthority.failure &&
-    typeof runtimeAuthority.failure === TYPEOF.OBJECT ?
+    typeof runtimeAuthority.failure === 'object' ?
     Object.freeze({
-      state: typeof runtimeAuthority.failure.state === TYPEOF.STRING ?
+      state: typeof runtimeAuthority.failure.state === 'string' ?
         runtimeAuthority.failure.state :
         AUTHORITY_DESCRIPTOR_STATE.NONE,
-      reason: typeof runtimeAuthority.failure.reason === TYPEOF.STRING ?
+      reason: typeof runtimeAuthority.failure.reason === 'string' ?
         runtimeAuthority.failure.reason :
         null,
     }) :
     null;
   return Object.freeze({
-    state: typeof runtimeAuthority.state === TYPEOF.STRING ?
+    state: typeof runtimeAuthority.state === 'string' ?
       runtimeAuthority.state :
       RUNTIME_AUTHORITY_STATE.UNAVAILABLE,
     authorityAvailable: runtimeAuthority.authorityAvailable === true,
@@ -265,7 +263,7 @@ function createEligibilitySnapshot(snapshot = {}) {
     snapshot.priorityControlPlaneRecovery,
   );
   const dimensions = snapshot.dimensions &&
-    typeof snapshot.dimensions === TYPEOF.OBJECT ?
+    typeof snapshot.dimensions === 'object' ?
     Object.freeze({...snapshot.dimensions}) :
     Object.freeze({});
   const projectionReadinessContract = buildProjectionReadinessContract({

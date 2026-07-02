@@ -12,7 +12,6 @@
  * Requirements: 7.1, 7.2, 7.3
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   MODULE_MANIFEST_FIELD as MF,
   MODULE_MANIFEST_ERROR_MSG as ERR,
@@ -42,7 +41,7 @@ const RUNTIME_VALIDATION_ERROR_MSG = Object.freeze({
 function validateRunExportExists(moduleExports, runExportName) {
   const errors = [];
 
-  if (!moduleExports || typeof moduleExports !== TYPEOF.OBJECT) {
+  if (!moduleExports || typeof moduleExports !== 'object') {
     errors.push(ERR.MODULE_INSTANCE_REQUIRED);
     return {valid: false, errors};
   }
@@ -59,7 +58,7 @@ function validateRunExportExists(moduleExports, runExportName) {
     return {valid: false, errors};
   }
 
-  if (typeof exportFn !== TYPEOF.FUNCTION) {
+  if (typeof exportFn !== 'function') {
     errors.push(ERR.RUN_EXPORT_NOT_FUNCTION);
     return {valid: false, errors};
   }
@@ -77,7 +76,7 @@ function validateRunExportExists(moduleExports, runExportName) {
 function validateRunExportSignature(exportFn) {
   const errors = [];
 
-  if (typeof exportFn !== TYPEOF.FUNCTION) {
+  if (typeof exportFn !== 'function') {
     errors.push(ERR.RUN_EXPORT_NOT_FUNCTION);
     return {valid: false, errors};
   }
@@ -88,7 +87,7 @@ function validateRunExportSignature(exportFn) {
     errors.push(ERR.RUN_EXPORT_SIGNATURE_MISMATCH);
   }
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -111,7 +110,7 @@ function validateManifestRuntime(manifest, moduleExports) {
     return {valid: false, errors: allErrors};
   }
 
-  if (!moduleExports || typeof moduleExports !== TYPEOF.OBJECT) {
+  if (!moduleExports || typeof moduleExports !== 'object') {
     allErrors.push(ERR.MODULE_INSTANCE_REQUIRED);
     return {valid: false, errors: allErrors};
   }
@@ -135,7 +134,7 @@ function validateManifestRuntime(manifest, moduleExports) {
   const sigResult = validateRunExportSignature(exportFn);
   allErrors.push(...sigResult.errors);
 
-  return {valid: allErrors.length === NUM.ZERO, errors: allErrors};
+  return {valid: allErrors.length === 0, errors: allErrors};
 }
 
 /**
@@ -165,15 +164,15 @@ async function validateManifestRuntimeWithAdapter(
     return {valid: false, errors: allErrors};
   }
 
-  if (!moduleEntry || typeof moduleEntry !== TYPEOF.OBJECT) {
+  if (!moduleEntry || typeof moduleEntry !== 'object') {
     allErrors.push(RUNTIME_VALIDATION_ERROR_MSG.MODULE_ENTRY_REQUIRED);
     return {valid: false, errors: allErrors};
   }
 
   if (!runtimeAdapter ||
-    typeof runtimeAdapter.createInstance !== TYPEOF.FUNCTION ||
-    typeof runtimeAdapter.inspect !== TYPEOF.FUNCTION ||
-    typeof runtimeAdapter.destroyInstance !== TYPEOF.FUNCTION) {
+    typeof runtimeAdapter.createInstance !== 'function' ||
+    typeof runtimeAdapter.inspect !== 'function' ||
+    typeof runtimeAdapter.destroyInstance !== 'function') {
     allErrors.push(RUNTIME_VALIDATION_ERROR_MSG.ADAPTER_REQUIRED);
     return {valid: false, errors: allErrors};
   }
@@ -222,7 +221,7 @@ async function validateManifestRuntimeWithAdapter(
   const sigResult = validateRunExportSignature(exportFn);
   allErrors.push(...sigResult.errors);
 
-  return {valid: allErrors.length === NUM.ZERO, errors: allErrors};
+  return {valid: allErrors.length === 0, errors: allErrors};
 }
 
 export {

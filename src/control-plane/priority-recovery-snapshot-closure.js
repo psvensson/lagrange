@@ -1,6 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {buildActiveMembershipSnapshot as buildPriorityRecoveryPublicationContext} from './active-node-projection.js';
@@ -30,7 +28,7 @@ import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPa
 function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   const publicationConvergence =
     options.publicationConvergence &&
-    typeof options.publicationConvergence === TYPEOF.OBJECT ?
+    typeof options.publicationConvergence === 'object' ?
       options.publicationConvergence :
       null;
   const publicationEpoch = normalizePriorityRecoveryInteger(
@@ -38,7 +36,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   );
   const readinessByNodeId =
     options.readinessByNodeId &&
-    typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const priorityPartitionSummary =
@@ -173,7 +171,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   const unresolvedSemanticStateIds =
     PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS.filter(
       (semanticState) =>
-        normalizedPartitionIdsBySemanticState[semanticState].length > NUM.ZERO,
+        normalizedPartitionIdsBySemanticState[semanticState].length > 0,
     );
   const unresolvedSemanticPartitionIds = normalizePriorityRecoveryStringList(
     unresolvedSemanticStateIds.flatMap(
@@ -182,7 +180,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   );
 
   const decisionSnapshotSummary = {
-    schemaVersion: options.schemaVersion || NUM.ONE,
+    schemaVersion: options.schemaVersion || 1,
     capturedAt: options.capturedAt || null,
     publicationEpoch,
     priorityPartitionSummary,
@@ -221,18 +219,18 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
       options.plannerByPartitionId,
     );
   const admission =
-    options.admission && typeof options.admission === TYPEOF.OBJECT ?
+    options.admission && typeof options.admission === 'object' ?
       options.admission :
       {};
   const learnerPromotion =
     options.learnerPromotion &&
-    typeof options.learnerPromotion === TYPEOF.OBJECT ?
+    typeof options.learnerPromotion === 'object' ?
       options.learnerPromotion :
       {
         activeLearnerNodeIds: [],
         promotableLearnerNodeIds: [],
-        activeLearnerNodeCount: NUM.ZERO,
-        promotableLearnerNodeCount: NUM.ZERO,
+        activeLearnerNodeCount: 0,
+        promotableLearnerNodeCount: 0,
         learnerHoldByNodeId: {},
       };
   const operationContexts = Array.isArray(options.operationContexts) ?
@@ -255,7 +253,7 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
     eligibleTargetNodeIds: admission.effectiveEligibleNodeIds,
   });
   const blockingOperationIdSet = new Set(spreadCompletion.blockingOperationIds);
-  const hasActiveOperationContexts = activeOperationContexts.length > NUM.ZERO;
+  const hasActiveOperationContexts = activeOperationContexts.length > 0;
   const blockingActiveOperationContexts = activeOperationContexts.filter(
     (context) => blockingOperationIdSet.has(context.operationId),
   );
@@ -270,19 +268,19 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
   ).filter((nodeId) => ineligibleNodeIds.includes(nodeId));
   const operationTargetsOutsideEligibleCohort =
     normalizePriorityRecoveryStringList(admission.effectiveEligibleNodeIds)
-      .length > NUM.ZERO &&
+      .length > 0 &&
     activeOperationContexts
       .filter((context) => blockingOperationIdSet.has(context.operationId))
       .some((context) => {
         const targetNodeId = String(context?.targetNodeId || '').trim();
         return (
-          targetNodeId.length > NUM.ZERO &&
+          targetNodeId.length > 0 &&
           !admission.effectiveEligibleNodeIds.includes(targetNodeId)
         );
       });
   const eligibleButNoOperation =
     planner.ready === false &&
-    admission.effectiveEligibleNodeCount !== NUM.ZERO &&
+    admission.effectiveEligibleNodeCount !== 0 &&
     hasActiveOperationContexts === false &&
     hasCompletedPlacementOperationContext === false;
   const serialWaitOperationContexts =
@@ -293,11 +291,11 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
     });
   const priorityOperationSerialWait =
     eligibleButNoOperation &&
-    serialWaitOperationContexts.length > NUM.ZERO;
+    serialWaitOperationContexts.length > 0;
   const operationCreatedNoStepTransitions =
     spreadCompletion.satisfied !== true &&
     hasActiveOperationContexts &&
-    spreadCompletion.blockingOperationCount > NUM.ZERO &&
+    spreadCompletion.blockingOperationCount > 0 &&
     arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions(
       blockingActiveOperationContexts,
       {
@@ -306,13 +304,13 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
       },
     );
   const learnerActiveNeverPromotable =
-    learnerPromotion.activeLearnerNodeCount > NUM.ZERO &&
-    learnerPromotion.promotableLearnerNodeCount === NUM.ZERO;
+    learnerPromotion.activeLearnerNodeCount > 0 &&
+    learnerPromotion.promotableLearnerNodeCount === 0;
   const spreadCompletionUnsatisfied = spreadCompletion.satisfied !== true;
   const publicationRecoveryEligibleButCoordinatorExcludesNode =
     spreadCompletionUnsatisfied &&
     (
-      recoveryEligibleExcludedNodeIds.length > NUM.ZERO ||
+      recoveryEligibleExcludedNodeIds.length > 0 ||
       operationTargetsOutsideEligibleCohort
     );
   const blockerReasons = [];
@@ -413,7 +411,7 @@ function buildPriorityRecoveryOperationAssessment(options = {}) {
 }
 
 function shouldPriorityRecoveryOperationBlockPlanning(assessment) {
-  if (!assessment || typeof assessment !== TYPEOF.OBJECT) {
+  if (!assessment || typeof assessment !== 'object') {
     return true;
   }
   if (
@@ -434,12 +432,12 @@ function shouldPriorityRecoveryOperationBlockPlanning(assessment) {
 function buildPriorityRecoveryRediscoveryState(options = {}) {
   const publicationConvergence =
     options.publicationConvergence &&
-    typeof options.publicationConvergence === TYPEOF.OBJECT ?
+    typeof options.publicationConvergence === 'object' ?
       options.publicationConvergence :
       null;
   const priorityPartitionSummary =
     options.priorityPartitionSummary &&
-    typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof options.priorityPartitionSummary === 'object' ?
       options.priorityPartitionSummary :
       publicationConvergence?.priorityPartitionSummary || null;
   const publicationContext = buildPriorityRecoveryPublicationContext(
@@ -450,18 +448,18 @@ function buildPriorityRecoveryRediscoveryState(options = {}) {
     priorityPartitionSummary,
   );
   const targetNodeInConcreteEligibleCohort =
-    nodeId.length > NUM.ZERO &&
+    nodeId.length > 0 &&
     publicationContext.concreteEligibleNodeIds.includes(nodeId);
   const targetNodePublishedActive =
-    nodeId.length > NUM.ZERO &&
+    nodeId.length > 0 &&
     publicationContext.publishedActiveNodeIds.includes(nodeId);
   const targetNodeMissingPublished =
-    nodeId.length > NUM.ZERO &&
+    nodeId.length > 0 &&
     publicationContext.missingPublishedEligibleNodeIds.includes(nodeId);
   const requiresAuthoritativeRediscovery =
     options.cacheVisible !== true &&
     spreadGapPending &&
-    (publicationContext.concreteEligibleNodeIds.length === NUM.ZERO ||
+    (publicationContext.concreteEligibleNodeIds.length === 0 ||
       targetNodeInConcreteEligibleCohort ||
       targetNodePublishedActive ||
       targetNodeMissingPublished);

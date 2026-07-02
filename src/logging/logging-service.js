@@ -19,7 +19,6 @@ import {
   installLoggingServiceMetricsDiagnostics,
 } from './logging-service-metrics-diagnostics.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_TRACE = 'trace';
 const LOCAL_STR_DEBUG = 'debug';
 const LOCAL_STR_INFO = 'info';
@@ -27,8 +26,8 @@ const LOCAL_STR_WARN = 'warn';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_FATAL = 'fatal';
 const LOCAL_STR_BACKGROUND = 'background';
-const LOCAL_NUM_10 = 10;
-const LOCAL_STR_KRDOX = 'metrics.logging.buffer_flush.background.started';
+const LOCAL_NUM_TEN = 10;
+const LOCAL_STR_METRICS_LOGGING_BUFFER_FLUSH_BACKGROUND = 'metrics.logging.buffer_flush.background.started';
 const LOCAL_STR_FUNCTION = 'function';
 
 /**
@@ -439,7 +438,7 @@ class LoggingService {
     this.buffer = [];
 
     const flushedCount = entriesToFlush.length;
-    if (flushMode === LOCAL_STR_BACKGROUND && flushedCount > LOCAL_NUM_ZERO && writeCallback) {
+    if (flushMode === LOCAL_STR_BACKGROUND && flushedCount > 0 && writeCallback) {
       this.flushBufferedEntriesInBackground(writeCallback, entriesToFlush, options);
       return flushedCount;
     }
@@ -466,10 +465,10 @@ class LoggingService {
     const yieldMs = Number.isFinite(options.yieldMs) && options.yieldMs >= 0 ?
       Math.floor(options.yieldMs) : 0;
     const startedAt = Date.now();
-    let index = LOCAL_NUM_ZERO;
-    let nextProgressMark = chunkSize * LOCAL_NUM_10;
+    let index = 0;
+    let nextProgressMark = chunkSize * LOCAL_NUM_TEN;
 
-    this.info(LOCAL_STR_KRDOX, {
+    this.info(LOCAL_STR_METRICS_LOGGING_BUFFER_FLUSH_BACKGROUND, {
       bufferedEntries: entries.length,
       chunkSize,
       yieldMs,
@@ -486,7 +485,7 @@ class LoggingService {
 
     const processChunk = async () => {
       try {
-        let processedInChunk = LOCAL_NUM_ZERO;
+        let processedInChunk = 0;
         while (index < entries.length && processedInChunk < chunkSize) {
           await writeCallback(entries[index]);
           index++;

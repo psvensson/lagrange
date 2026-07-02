@@ -7,7 +7,6 @@ import {
   WORKER_ADDRESS,
   WORKER_RESPONSE_STATUS,
 } from './worker-constants.js';
-import {NUM} from '../constants/index.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 
 const LOCAL_STR_STRING = 'string';
@@ -54,7 +53,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         });
       } else {
         leaderAddress = this.resolveLeaderAddress();
-        const relayCount = Number(message.cdcRelayCount) || NUM.ZERO;
+        const relayCount = Number(message.cdcRelayCount) || 0;
         const shouldRelay = leaderAddress &&
           leaderAddress !== this.unifiedAddress &&
           relayCount < MESSAGE_GROUP_WORKER_DEFAULT.CDC_RELAY_MAX_HOPS &&
@@ -64,7 +63,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
             this.messageBridge.sendFireAndForget(leaderAddress, {
               type: CDC_MESSAGE_TYPE.CDC_EVENT,
               cdcEvent,
-              cdcRelayCount: relayCount + NUM.ONE,
+              cdcRelayCount: relayCount + 1,
             });
           } catch (error) {
             this.logger.warn(
@@ -329,7 +328,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
           groupId: this.groupId,
           replicaId: this.replicaId,
           entryCount: message.entries ?
-            message.entries.length : NUM.ZERO,
+            message.entries.length : 0,
           bootstrapPhase: message.bootstrapPhase,
         },
       );
@@ -348,7 +347,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         return {
           type: SEED_CACHE_MESSAGE_TYPE.SEED_CACHE_RESPONSE,
           success: false,
-          entriesApplied: NUM.ZERO,
+          entriesApplied: 0,
           error: MESSAGE_GROUP_WORKER_ERROR_MSG
             .SEED_CACHE_NOT_BOOTSTRAP_PHASE,
         };
@@ -368,7 +367,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         return {
           type: SEED_CACHE_MESSAGE_TYPE.SEED_CACHE_RESPONSE,
           success: false,
-          entriesApplied: NUM.ZERO,
+          entriesApplied: 0,
           error: MESSAGE_GROUP_WORKER_ERROR_MSG
             .SEED_CACHE_NOT_BOOTSTRAP_PHASE,
         };
@@ -388,7 +387,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         return {
           type: SEED_CACHE_MESSAGE_TYPE.SEED_CACHE_RESPONSE,
           success: false,
-          entriesApplied: NUM.ZERO,
+          entriesApplied: 0,
           error: MESSAGE_GROUP_WORKER_ERROR_MSG
             .SEED_CACHE_MISSING_ENTRIES,
         };
@@ -399,7 +398,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         return {
           type: SEED_CACHE_MESSAGE_TYPE.SEED_CACHE_RESPONSE,
           success: false,
-          entriesApplied: NUM.ZERO,
+          entriesApplied: 0,
           error: MESSAGE_GROUP_WORKER_ERROR_MSG.NOT_INITIALIZED,
         };
       }
@@ -413,7 +412,7 @@ function createMessageGroupWorkerServiceMessageMethods(deps = {}) {
         },
       );
 
-      let entriesApplied = NUM.ZERO;
+      let entriesApplied = 0;
 
       // Apply each entry to the system cache
       for (const entry of message.entries) {

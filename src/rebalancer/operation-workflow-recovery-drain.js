@@ -4,7 +4,6 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './opera
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   FAILURE_LOG_LEVEL,
-  NUM,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -30,7 +29,6 @@ const {
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   REBALANCE_COORDINATOR_LOG_MSG,
   STOPPING_REPLICA_OBSERVATION_STATE,
-  TYPEOF,
   isPriorityControlPlanePartition,
   normalizeNodeIdList,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
@@ -97,7 +95,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     if (
       !this.isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) ||
       !priorityRecoveryContext ||
-      typeof priorityRecoveryContext !== TYPEOF.OBJECT
+      typeof priorityRecoveryContext !== 'object'
     ) {
       return null;
     }
@@ -119,8 +117,8 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       priorityRecoveryContext.effectiveEligibleNodeIds,
     );
     if (
-      targetNodeId.length === NUM.ZERO ||
-      eligibleNodeIds.length === NUM.ZERO ||
+      targetNodeId.length === 0 ||
+      eligibleNodeIds.length === 0 ||
       eligibleNodeIds.includes(targetNodeId)
     ) {
       return null;
@@ -158,7 +156,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         .satisfyingOperationIds :
       [];
     if (
-      operationId.length > NUM.ZERO &&
+      operationId.length > 0 &&
       satisfyingOperationIds.includes(operationId)
     ) {
       return true;
@@ -166,7 +164,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     if (
       !this.repository ||
       typeof this.repository.getObservedReplicaStatusFromCache !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -217,7 +215,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     if (
       !this.repository ||
       typeof this.repository.getObservedReplicaStatusFromCache !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE
         .EVIDENCE_UNAVAILABLE;
@@ -424,7 +422,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
 
   hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId, now = Date.now()) {
     return (
-      operationId.length > NUM.ZERO &&
+      operationId.length > 0 &&
       this.hasActiveCreatedOperationHandoffRetry(operationId, now) &&
       this.hasActiveTransitionRetryGrace(operationId, now)
     );
@@ -452,7 +450,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       return true;
     }
     if (
-      operationId.length > NUM.ZERO &&
+      operationId.length > 0 &&
       this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
     ) {
       this.clearCreatedOperationHandoffRetry(operationId);

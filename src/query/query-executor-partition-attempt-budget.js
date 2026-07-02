@@ -2,12 +2,11 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   isPriorityControlPlanePartition,
 } = QUERY_EXECUTOR_SHARED;
 
-const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = NUM.ONE;
+const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1;
 const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
 const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
@@ -26,7 +25,7 @@ function createPartitionAttemptBudget({
 }) {
   const executionTimeoutMs =
     Number.isFinite(executionOptions?.timeoutMs) &&
-    executionOptions.timeoutMs > NUM.ZERO ?
+    executionOptions.timeoutMs > 0 ?
       Math.floor(executionOptions.timeoutMs) :
       null;
   const executionDeadlineMs =
@@ -35,15 +34,15 @@ function createPartitionAttemptBudget({
     if (executionDeadlineMs === null) {
       return null;
     }
-    return Math.max(NUM.ZERO, executionDeadlineMs - Date.now());
+    return Math.max(0, executionDeadlineMs - Date.now());
   };
   const resolveRecoveryCandidateConnectionState = (candidate) => {
     const candidateNodeId =
       typeof candidate?.nodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      candidate.nodeId.length > NUM.ZERO ?
+      candidate.nodeId.length > 0 ?
         candidate.nodeId :
         typeof candidate?.node_id === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        candidate.node_id.length > NUM.ZERO ?
+        candidate.node_id.length > 0 ?
           candidate.node_id :
           null;
     if (candidateNodeId && candidateNodeId === executor.nodeId) {
@@ -91,7 +90,7 @@ function createPartitionAttemptBudget({
     ) {
       return true;
     }
-    if (Array.isArray(queue) && queue.length > NUM.ONE) {
+    if (Array.isArray(queue) && queue.length > 1) {
       const hasConnected = queue.some((cand) => {
         const state = resolveRecoveryCandidateConnectionState(cand);
         return state === RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE;
@@ -121,21 +120,21 @@ function createPartitionAttemptBudget({
     attemptedAddresses,
   ) => {
     if (!forRead || !Array.isArray(candidateQueue)) {
-      return NUM.ONE;
+      return 1;
     }
-    let remainingCount = NUM.ONE;
+    let remainingCount = 1;
     for (
-      let index = currentCandidateIndex + NUM.ONE;
+      let index = currentCandidateIndex + 1;
       index < candidateQueue.length;
-      index += NUM.ONE
+      index += 1
     ) {
       const address = candidateQueue[index]?.address;
       if (
         typeof address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        address.length > NUM.ZERO &&
+        address.length > 0 &&
         !attemptedAddresses.has(address)
       ) {
-        remainingCount += NUM.ONE;
+        remainingCount += 1;
       }
     }
     return remainingCount;
@@ -171,7 +170,7 @@ function createPartitionAttemptBudget({
       );
       if (
         !Number.isFinite(reconnectIntervalMs) ||
-        reconnectIntervalMs <= NUM.ZERO
+        reconnectIntervalMs <= 0
       ) {
         return deliveryTimeoutMs;
       }
@@ -183,7 +182,7 @@ function createPartitionAttemptBudget({
         ),
       );
     };
-    if (remainingReadCandidates <= NUM.ONE) {
+    if (remainingReadCandidates <= 1) {
       return capRecoveryCandidateBudget(remainingBudgetMs);
     }
     return capRecoveryCandidateBudget(Math.max(
@@ -193,34 +192,34 @@ function createPartitionAttemptBudget({
   };
   const buildRouterDeliveryOptions = (
     candidateQueue = null,
-    currentCandidateIndex = NUM.ZERO,
+    currentCandidateIndex = 0,
     attemptedAddresses = new Set(),
   ) => {
     const routerOptions = {};
     if (
       typeof executionOptions?.deliveryPriority ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      executionOptions.deliveryPriority.length > NUM.ZERO
+      executionOptions.deliveryPriority.length > 0
     ) {
       routerOptions.deliveryPriority = executionOptions.deliveryPriority;
     }
     if (
       typeof executionOptions?.deliverySource ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      executionOptions.deliverySource.length > NUM.ZERO
+      executionOptions.deliverySource.length > 0
     ) {
       routerOptions.deliverySource = executionOptions.deliverySource;
     }
     if (
       typeof executionOptions?.replacePendingKey ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      executionOptions.replacePendingKey.length > NUM.ZERO
+      executionOptions.replacePendingKey.length > 0
     ) {
       routerOptions.replacePendingKey = executionOptions.replacePendingKey;
     }
     const remainingBudgetMs = getRemainingExecutionBudgetMs();
     if (remainingBudgetMs !== null) {
-      if (remainingBudgetMs <= NUM.ZERO) {
+      if (remainingBudgetMs <= 0) {
         return null;
       }
       routerOptions.timeoutMs = resolveRouterDeliveryTimeoutMs(
@@ -230,7 +229,7 @@ function createPartitionAttemptBudget({
         attemptedAddresses,
       );
     }
-    if (Object.keys(routerOptions).length === NUM.ZERO) {
+    if (Object.keys(routerOptions).length === 0) {
       return undefined;
     }
     return routerOptions;
@@ -246,29 +245,29 @@ function createPartitionAttemptBudget({
       return false;
     }
     const normalizedRetryDelayMs =
-      Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO ?
+      Number.isFinite(retryDelayMs) && retryDelayMs > 0 ?
         Math.floor(retryDelayMs) :
-        NUM.ZERO;
+        0;
     const remainingBudgetMs = getRemainingExecutionBudgetMs();
     if (remainingBudgetMs === null) {
-      if (normalizedRetryDelayMs > NUM.ZERO) {
+      if (normalizedRetryDelayMs > 0) {
         await executor.delay(normalizedRetryDelayMs);
         executor.throwIfCancelled(cancellationToken);
       }
       return true;
     }
-    if (remainingBudgetMs <= NUM.ZERO) {
+    if (remainingBudgetMs <= 0) {
       return false;
     }
     if (normalizedRetryDelayMs > remainingBudgetMs) {
       return false;
     }
-    if (normalizedRetryDelayMs > NUM.ZERO) {
+    if (normalizedRetryDelayMs > 0) {
       await executor.delay(normalizedRetryDelayMs);
       executor.throwIfCancelled(cancellationToken);
     }
     const nextRemainingBudgetMs = getRemainingExecutionBudgetMs();
-    return nextRemainingBudgetMs === null || nextRemainingBudgetMs > NUM.ZERO;
+    return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;
   };
   return Object.freeze({
     buildRouterDeliveryOptions,

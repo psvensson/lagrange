@@ -5,13 +5,11 @@ import {TIME_MS} from '../constants/time.js';
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   INITIAL_PARTITION_IDS,
-  NUM,
   OperationType,
   PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   decidePriorityPublicationFollowerSourceRemovalSafety,
 } = SHARED;
 
@@ -109,7 +107,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     options = {},
   ) {
     const partitionId =
-      typeof operation?.partitionId === TYPEOF.STRING ?
+      typeof operation?.partitionId === 'string' ?
         operation.partitionId :
         null;
     const publicationPartitionId =
@@ -146,32 +144,32 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
     const rawSourceNodeId =
-      typeof sourceReplicaRow?.node_id === TYPEOF.STRING ?
+      typeof sourceReplicaRow?.node_id === 'string' ?
         sourceReplicaRow.node_id.trim() :
-        typeof operation?.sourceNodeId === TYPEOF.STRING ?
+        typeof operation?.sourceNodeId === 'string' ?
           operation.sourceNodeId.trim() :
           null;
     const sourceNodeId =
-      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO ?
+      rawSourceNodeId && rawSourceNodeId.length > 0 ?
         rawSourceNodeId :
         null;
     const replacementReplicaId =
       this.getReplicaRowIdentity(replacementReplicaRow) ||
       this.repository.getReplaceTargetReplicaId(operation) ||
-      (typeof operation?.replicaId === TYPEOF.STRING &&
-      operation.replicaId.length > NUM.ZERO ?
+      (typeof operation?.replicaId === 'string' &&
+      operation.replicaId.length > 0 ?
         operation.replicaId :
         null);
     const replacementRoleState =
       this.getPriorityPublicationReplacementRoleState(replacementReplicaRow);
     const rawReplacementNodeId =
-      typeof replacementReplicaRow?.node_id === TYPEOF.STRING ?
+      typeof replacementReplicaRow?.node_id === 'string' ?
         replacementReplicaRow.node_id.trim() :
-        typeof operation?.targetNodeId === TYPEOF.STRING ?
+        typeof operation?.targetNodeId === 'string' ?
           operation.targetNodeId.trim() :
           null;
     const replacementNodeId =
-      rawReplacementNodeId && rawReplacementNodeId.length > NUM.ZERO ?
+      rawReplacementNodeId && rawReplacementNodeId.length > 0 ?
         rawReplacementNodeId :
         null;
     const completedLeaderHandoffEvidence =
@@ -190,8 +188,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       );
     const replacementReplicaNotFoundByElection =
       Array.isArray(replacementLeaderElectionEvidence?.notFoundReplicaIds) &&
-      typeof replacementReplicaId === TYPEOF.STRING &&
-      replacementReplicaId.length > NUM.ZERO &&
+      typeof replacementReplicaId === 'string' &&
+      replacementReplicaId.length > 0 &&
       replacementLeaderElectionEvidence.notFoundReplicaIds.includes(
         replacementReplicaId,
       );
@@ -261,7 +259,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     // never authorizes a removal.
     const sourceLeaderHandoffStallMs =
       typeof this.getPriorityPublicationSourceLeaderHandoffStallMs ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.getPriorityPublicationSourceLeaderHandoffStallMs(operation) :
         null;
     const sourceLeaderHandoffStalled =
@@ -582,7 +580,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     options = {},
   ) {
     const replacementReplicaId =
-      typeof safetySnapshot?.replacementReplicaId === TYPEOF.STRING ?
+      typeof safetySnapshot?.replacementReplicaId === 'string' ?
         safetySnapshot.replacementReplicaId :
         null;
     const completedReplicaIds = Array.isArray(
@@ -592,10 +590,10 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       [];
     const replacementElectionCompletedForCurrentReplica =
       replacementReplicaId !== null &&
-      replacementReplicaId.length > NUM.ZERO &&
+      replacementReplicaId.length > 0 &&
       completedReplicaIds.includes(replacementReplicaId);
     const replacementElectionCompletedForAnyReplica =
-      completedReplicaIds.length > NUM.ZERO;
+      completedReplicaIds.length > 0;
     const replacementElectionCompletionReady =
       replacementElectionCompletedForCurrentReplica ||
       (

@@ -85,7 +85,6 @@ const LOCAL_STR_GRAY = 'gray';
 const LOCAL_STR_CYAN = 'cyan';
 const LOCAL_STR_PIPE = '|';
 const LOCAL_STR_GI = 'gi';
-const LOCAL_STR_EMPTY = '';
 
 /**
  * SQLSyntaxHighlighter - Syntax highlighting for SQL queries
@@ -191,7 +190,7 @@ export class SQLSyntaxHighlighter {
    * @return {string} Highlighted text with blessed color tags
    */
   highlight(sql) {
-    if (!sql) return LOCAL_STR_EMPTY;
+    if (!sql) return '';
 
     let result = sql;
 
@@ -337,7 +336,7 @@ export class SQLSyntaxHighlighter {
    * @return {string} Plain text without color tags
    */
   stripHighlighting(text) {
-    if (!text) return LOCAL_STR_EMPTY;
-    return text.replace(/\{[a-z]+-fg\}|\{\/\}/g, LOCAL_STR_EMPTY);
+    if (!text) return '';
+    return text.replace(/\{[a-z]+-fg\}|\{\/\}/g, '');
   }
 }

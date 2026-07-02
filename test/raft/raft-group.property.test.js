@@ -217,7 +217,7 @@ test('Property 1: RaftGroup initialize wires all expected events',
             // All six liferaft events must have listeners
             for (const event of EXPECTED_LIFERAFT_EVENTS) {
               const count = raft.listeners(event).length;
-              if (count < NUM.ONE) return false;
+              if (count < 1) return false;
             }
 
             return true;
@@ -254,7 +254,7 @@ test('Property 2: RaftGroup joinPeers resolves all non-self peers',
           const uniqueOthers = [...new Set(
             otherIds.filter((id) => id !== selfId),
           )];
-          if (uniqueOthers.length < NUM.ONE) return true;
+          if (uniqueOthers.length < 1) return true;
 
           const allIds = [selfId, ...uniqueOthers];
           const resolver = createTrackingResolver();
@@ -323,7 +323,7 @@ test(
           const uniqueOthers = [...new Set(
             otherIds.filter((id) => id !== selfId),
           )];
-          if (uniqueOthers.length < NUM.ONE) return true;
+          if (uniqueOthers.length < 1) return true;
 
           const allIds = [selfId, ...uniqueOthers];
 
@@ -468,7 +468,7 @@ test(
             // Use term 0 to match liferaft's initial term
             const packet = {
               type: packetType,
-              term: NUM.ZERO,
+              term: 0,
               address: senderAddress,
               state: LIFERAFT_FOLLOWER_STATE,
               leader: senderAddress,

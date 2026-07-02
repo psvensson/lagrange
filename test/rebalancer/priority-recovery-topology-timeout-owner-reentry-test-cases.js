@@ -3,7 +3,6 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
   dependencies,
 }) {
   const {
-    NUM,
     OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
     OPERATION_WORKFLOW_OUTCOME_VALUES,
     OPERATION_WORKFLOW_OWNER,
@@ -143,7 +142,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       const observation = buildPriorityRecoveryObservationSnapshot({
         publicationConvergence: buildDispatchPendingReentryPlanningSnapshot(),
         priorityRecoveryDecisionSnapshots: Object.freeze({
-          schemaVersion: NUM.ONE,
+          schemaVersion: 1,
           capturedAt: TEST_CAPTURED_AT_MS,
           publicationEpoch: TEST_PUBLICATION_EPOCH,
           snapshots: Object.freeze([snapshot]),
@@ -400,7 +399,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           'the retryable claim failure should arm one transition retry',
         );
         t.equal(
@@ -409,20 +408,20 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
           'the transition retry should retain the adapter operation snapshot',
         );
 
-        await deferredTimers[NUM.ZERO].fn();
+        await deferredTimers[0].fn();
 
         t.equal(
           resumedDispatchOperations.length,
-          NUM.ONE,
+          1,
           'deferred visibility should re-enter dispatch from the retained snapshot',
         );
         t.equal(
-          resumedDispatchOperations[NUM.ZERO]?.operationId,
+          resumedDispatchOperations[0]?.operationId,
           TEST_OPERATION_ID,
           'deferred retry dispatch should use the original operation id',
         );
         t.equal(
-          resumedDispatchOperations[NUM.ZERO]?.workflowStep,
+          resumedDispatchOperations[0]?.workflowStep,
           TEST_STEP_PENDING,
           'deferred retry dispatch should preserve the dispatch-pending workflow step',
         );
@@ -436,7 +435,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
   async (t) => {
     const deferredTimers = [];
     const resumedDispatchOperations = [];
-    let claimAttempts = NUM.ZERO;
+    let claimAttempts = 0;
     const originalDateNow = Date.now;
     Date.now = () => TEST_CAPTURED_AT_MS;
     const operationCreatedAt =
@@ -517,8 +516,8 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     });
     coordinator.workflowOwner.claimPendingDispatchOperation =
     async (dispatchOperation) => {
-      claimAttempts += NUM.ONE;
-      if (claimAttempts === NUM.ONE) {
+      claimAttempts += 1;
+      if (claimAttempts === 1) {
         throw buildRetryableTransitionFailure();
       }
       return {
@@ -544,7 +543,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         'the transition failure should arm one retry timer',
       );
       t.equal(
@@ -555,15 +554,15 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         'priority control-plane dispatch retries should keep operation-budget grace after the step timeout',
       );
 
-      await deferredTimers[NUM.ZERO].fn();
+      await deferredTimers[0].fn();
 
       t.equal(
         resumedDispatchOperations.length,
-        NUM.ONE,
+        1,
         'deferred transition retry should re-enter dispatch instead of timeout reconcile',
       );
       t.equal(
-        resumedDispatchOperations[NUM.ZERO]?.partitionId,
+        resumedDispatchOperations[0]?.partitionId,
         TEST_LOCAL_OWNER_PARTITION_ID,
         'deferred retry dispatch should preserve the priority partition context',
       );
@@ -883,20 +882,20 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
             return {
               success: true,
               rows: [{...operationRow}],
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };

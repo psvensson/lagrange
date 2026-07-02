@@ -1,5 +1,4 @@
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 
 const TIMEOUT_BUDGET_CLASSIFICATION = Object.freeze({
@@ -30,8 +29,8 @@ function resolveNow(now) {
   return typeof now === LOCAL_STR_FUNCTION ? now : Date.now;
 }
 
-function normalizePositiveInteger(value, fallback = LOCAL_NUM_ZERO) {
-  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
+function normalizePositiveInteger(value, fallback = 0) {
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
@@ -60,7 +59,7 @@ function getBudgetTiming(budget, now) {
   return {
     nowMs,
     rawRemainingMs,
-    remainingBudgetMs: Math.max(LOCAL_NUM_ZERO, rawRemainingMs),
+    remainingBudgetMs: Math.max(0, rawRemainingMs),
   };
 }
 
@@ -81,7 +80,7 @@ function resolveControlPlaneQueryTimeoutMs(options = {}) {
   const remainingBudgetMs = getRemainingBudgetMs(timeoutBudget, {
     now: options.now,
   });
-  if (remainingBudgetMs <= LOCAL_NUM_ZERO) {
+  if (remainingBudgetMs <= 0) {
     return TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS;
   }
 

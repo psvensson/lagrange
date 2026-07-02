@@ -52,7 +52,7 @@ const JOIN_LEADERSHIP_WAIT_TIMEOUT_MS = 8000;
 const WAIT_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 50;
 const SERVICE_DISCOVERY_QUERY_PREFIX = 'SELECT * FROM service_discovery_local';
-const METADATA_MIN_LENGTH = NUM.ONE;
+const METADATA_MIN_LENGTH = 1;
 
 function getAllMessageGroupServices(bootstrapResult, joinResults) {
   const seedMessageGroups = bootstrapResult?.messageGroupServices ?
@@ -73,17 +73,17 @@ function getAllMessageGroupServices(bootstrapResult, joinResults) {
 function selectFollowerMessageGroup(messageGroups) {
   for (const messageGroup of messageGroups) {
     if (!messageGroup ||
-        typeof messageGroup.isCurrentRaftLeader !== TYPEOF.FUNCTION) {
+        typeof messageGroup.isCurrentRaftLeader !== 'function') {
       continue;
     }
     if (!Array.isArray(messageGroup.replicaIds) ||
-        messageGroup.replicaIds.length <= NUM.ONE) {
+        messageGroup.replicaIds.length <= 1) {
       continue;
     }
     if (messageGroup.isCurrentRaftLeader()) {
       continue;
     }
-    const leaderId = typeof messageGroup.getLeaderId === TYPEOF.FUNCTION ?
+    const leaderId = typeof messageGroup.getLeaderId === 'function' ?
       messageGroup.getLeaderId() :
       messageGroup.leaderId;
     if (!leaderId) {
@@ -108,7 +108,7 @@ function assertEndpointRow(t, row, expectedNodeId) {
     TYPEOF.NUMBER,
     'port should be a number',
   );
-  t.ok(Number.isInteger(row[EP_COL.PORT]) && row[EP_COL.PORT] > NUM.ZERO, 'port should be > 0');
+  t.ok(Number.isInteger(row[EP_COL.PORT]) && row[EP_COL.PORT] > 0, 'port should be > 0');
   t.equal(
     typeof row[EP_COL.METADATA],
     TYPEOF.STRING,
@@ -194,7 +194,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     seedApi.setSqlQueryEngine(seedQueryEngine);
 
     const httpPost = createInProcHttpPost(seedApi);
-    for (let index = NUM.ZERO; index < joiningNodeIds.length; index += NUM.ONE) {
+    for (let index = 0; index < joiningNodeIds.length; index += 1) {
       const joiningNodeId = joiningNodeIds[index];
       const joiningWsPort = joiningWsPorts[index];
       const joiningService = new NodeJoiningService({
@@ -258,7 +258,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
 
     await t.test('CDC forwarding advances cache watermarks', async (t) => {
       const messageGroups = getAllMessageGroupServices(bootstrapResult, joinResults);
-      t.ok(messageGroups.length > NUM.ZERO, 'should have message group services');
+      t.ok(messageGroups.length > 0, 'should have message group services');
 
       const followerReady = await waitFor(() => {
         return selectFollowerMessageGroup(messageGroups) !== null;
@@ -274,7 +274,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       );
       const leaderId = follower?.getLeaderId?.();
       t.equal(typeof leaderId, TYPEOF.STRING, 'follower should have a leaderId string');
-      t.ok(leaderId && leaderId.length > NUM.ZERO, 'follower should know the leader replica id');
+      t.ok(leaderId && leaderId.length > 0, 'follower should know the leader replica id');
       t.equal(
         leaderId === follower?.replicaId,
         false,
@@ -287,10 +287,10 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       const beforeAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
       const beforeWatermark = systemTableCache.getAppliedSchemaVersion(TABLES.NODES);
 
-      const existingCpu = Number(seedNodeRow?.[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO);
-      const existingUpdatedAt = Number(seedNodeRow?.[COLUMN.UPDATED_AT] || NUM.ZERO);
-      const updatedAt = Math.max(Date.now(), existingUpdatedAt + NUM.ONE);
-      const nextCpu = existingCpu + NUM.ONE;
+      const existingCpu = Number(seedNodeRow?.[COLUMN.CPU_USAGE_PERCENT] || 0);
+      const existingUpdatedAt = Number(seedNodeRow?.[COLUMN.UPDATED_AT] || 0);
+      const updatedAt = Math.max(Date.now(), existingUpdatedAt + 1);
+      const nextCpu = existingCpu + 1;
       const causeId = `hop-test-cdc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const updateRow = {
         ...seedNodeRow,
@@ -328,9 +328,9 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     });
 
     await t.test('discovery returns endpoints once rows and cache are healthy', async (t) => {
-      const discoveryNodeId = joiningNodeIds[joiningNodeIds.length - NUM.ONE] || seedNodeId;
+      const discoveryNodeId = joiningNodeIds[joiningNodeIds.length - 1] || seedNodeId;
       const discoveryJoiningService =
-        joiningServices[joiningServices.length - NUM.ONE] || null;
+        joiningServices[joiningServices.length - 1] || null;
       adminApi = new AdminWebSocketAPI({
         nodeId: discoveryNodeId,
         systemTableCache,
@@ -347,7 +347,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
           sql,
           params: [],
         });
-        const snapshot = Array.isArray(result?.rows) ? result.rows[NUM.ZERO] : null;
+        const snapshot = Array.isArray(result?.rows) ? result.rows[0] : null;
         if (!snapshot) {
           return false;
         }
@@ -386,7 +386,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     if (adminApi) {
       await adminApi.shutdown().catch(() => {});
     }
-    for (let index = joiningServices.length - NUM.ONE; index >= NUM.ZERO; index -= NUM.ONE) {
+    for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
       await gracefulJoiningShutdown(joiningServices[index]);
     }
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);

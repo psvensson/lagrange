@@ -1,7 +1,4 @@
 import {
-  TYPEOF,
-} from './control-plane-system-table-gateway-shared.js';
-import {
   buildGatewayFallbackSystemTableRoutingDiagnostics,
   buildGatewayOperationLedgerDiagnostics,
   resolveGatewaySystemTablePartitionId,
@@ -64,8 +61,8 @@ const controlPlaneSystemTableGatewayCapabilityDiagnosticsMethods = {
     return (
       Boolean(systemTableCache) ||
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION ||
-      typeof sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION
+        'function' ||
+      typeof sqlQueryEngine?.executeQuery === 'function'
     );
   },
 
@@ -75,10 +72,10 @@ const controlPlaneSystemTableGatewayCapabilityDiagnosticsMethods = {
   supportsMutationSubmission() {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     return (
-      typeof cdcIntegrationService?.insertSystemTableRow === TYPEOF.FUNCTION ||
-      typeof cdcIntegrationService?.updateSystemTableRow === TYPEOF.FUNCTION ||
-      typeof cdcIntegrationService?.upsertSystemTableRow === TYPEOF.FUNCTION ||
-      typeof cdcIntegrationService?.deleteSystemTableRow === TYPEOF.FUNCTION
+      typeof cdcIntegrationService?.insertSystemTableRow === 'function' ||
+      typeof cdcIntegrationService?.updateSystemTableRow === 'function' ||
+      typeof cdcIntegrationService?.upsertSystemTableRow === 'function' ||
+      typeof cdcIntegrationService?.deleteSystemTableRow === 'function'
     );
   },
 

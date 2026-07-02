@@ -6,7 +6,6 @@
  * admin-websocket-api.js. Single-use helpers live in their consuming module.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const EMPTY_STRING = '';
 const SINGLE_SPACE = ' ';
@@ -14,7 +13,7 @@ const SQL_NORMALIZE_WHITESPACE_PATTERN = /\s+/g;
 const SQL_TRAILING_SEMICOLON_PATTERN = /;\s*$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SERVICE_DISCOVERY_TABLE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const DEFAULT_PARTITION_VERSION = NUM.ONE;
+const DEFAULT_PARTITION_VERSION = 1;
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 
 /**
@@ -48,7 +47,7 @@ function uniqueSorted(values) {
 function firstStringField(record, ...keys) {
   for (const key of keys) {
     const value = record?.[key];
-    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+    if (typeof value === 'string' && value.length > 0) {
       return value;
     }
   }
@@ -61,14 +60,14 @@ function firstStringField(record, ...keys) {
  * @return {string|null}
  */
 function normalizeSchemaVersionValue(value) {
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     const normalized = value.trim();
-    return normalized.length > NUM.ZERO ? normalized : null;
+    return normalized.length > 0 ? normalized : null;
   }
-  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
   }
-  if (typeof value === TYPEOF.BIGINT) {
+  if (typeof value === 'bigint') {
     return String(value);
   }
   return null;
@@ -80,11 +79,11 @@ function normalizeSchemaVersionValue(value) {
  * @return {string|null}
  */
 function normalizeIdentifier(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmedValue = value.trim();
-  if (trimmedValue.length === NUM.ZERO) {
+  if (trimmedValue.length === 0) {
     return null;
   }
   if (!IDENTIFIER_PATTERN.test(trimmedValue)) {
@@ -99,11 +98,11 @@ function normalizeIdentifier(value) {
  * @return {string|null}
  */
 function normalizeDiscoveryTableId(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmedValue = value.trim();
-  if (trimmedValue.length === NUM.ZERO) {
+  if (trimmedValue.length === 0) {
     return null;
   }
   if (!SERVICE_DISCOVERY_TABLE_ID_PATTERN.test(trimmedValue)) {

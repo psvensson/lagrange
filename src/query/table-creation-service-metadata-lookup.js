@@ -5,7 +5,7 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {NUM, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {
   TABLE_CREATION_SERVICE_LITERAL,
   TABLE_CREATION_SQL,
@@ -52,8 +52,8 @@ const METADATA_LOOKUP_METHODS = Object.freeze({
           readProfile: 'table_lifecycle',
         },
       );
-      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO ?
-        result.rows[NUM.ZERO] :
+      return Array.isArray(result?.rows) && result.rows.length > 0 ?
+        result.rows[0] :
         null;
     } catch {
       return null;
@@ -89,8 +89,8 @@ const METADATA_LOOKUP_METHODS = Object.freeze({
           readProfile: 'table_lifecycle',
         },
       );
-      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO ?
-        result.rows[NUM.ZERO] :
+      return Array.isArray(result?.rows) && result.rows.length > 0 ?
+        result.rows[0] :
         null;
     } catch {
       return null;

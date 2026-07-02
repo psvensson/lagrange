@@ -8,12 +8,10 @@ import {AuthoritativeControlPlaneView} from
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  NUM,
   SERVICE_STATUS,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
@@ -49,8 +47,8 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       authoritativeNodeRow[COLUMN.NODE_ADDRESS],
     );
     const currentNodeAddress = normalizeString(this.nodeAddress);
-    if (cachedNodeAddress.length > NUM.ZERO &&
-      currentNodeAddress.length > NUM.ZERO &&
+    if (cachedNodeAddress.length > 0 &&
+      currentNodeAddress.length > 0 &&
       cachedNodeAddress !== currentNodeAddress) {
       return null;
     }
@@ -101,7 +99,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   canReuseObservedJoinAdmissionNodeRow(nodeRow) {
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    if (!nodeRow || typeof nodeRow !== 'object') {
       return false;
     }
 
@@ -109,8 +107,8 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       nodeRow[COLUMN.NODE_ADDRESS],
     );
     const currentNodeAddress = normalizeString(this.nodeAddress);
-    if (cachedNodeAddress.length > NUM.ZERO &&
-      currentNodeAddress.length > NUM.ZERO &&
+    if (cachedNodeAddress.length > 0 &&
+      currentNodeAddress.length > 0 &&
       cachedNodeAddress !== currentNodeAddress) {
       return false;
     }
@@ -147,7 +145,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
 
   async durableRejoinBlockedByClusterIncarnationFence() {
     const fence = await this.resolveClusterIncarnationFence();
-    if (!fence || typeof fence !== TYPEOF.OBJECT) {
+    if (!fence || typeof fence !== 'object') {
       return false;
     }
     return fence.allowed !== true;
@@ -157,13 +155,13 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     if (hasFunction(this.delegates.getClusterIncarnationFence)) {
       const delegatedFence = await this.delegates.getClusterIncarnationFence();
       return delegatedFence &&
-        typeof delegatedFence === TYPEOF.OBJECT ?
+        typeof delegatedFence === 'object' ?
         delegatedFence :
         null;
     }
 
     const dataDir = normalizeString(this.delegates.getDataDir?.());
-    if (dataDir.length === NUM.ZERO) {
+    if (dataDir.length === 0) {
       return null;
     }
 
@@ -174,7 +172,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
         nodeAddress: this.nodeAddress,
       });
       return startupDecision?.clusterIncarnationFence &&
-        typeof startupDecision.clusterIncarnationFence === TYPEOF.OBJECT ?
+        typeof startupDecision.clusterIncarnationFence === 'object' ?
         startupDecision.clusterIncarnationFence :
         null;
     } catch (_error) {
@@ -198,7 +196,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   activateExistingDurableRejoinMembership(existingMembership) {
-    if (!existingMembership || typeof existingMembership !== TYPEOF.OBJECT) {
+    if (!existingMembership || typeof existingMembership !== 'object') {
       return;
     }
     this.seedJoinTimeCacheRow(TABLES.NODES, existingMembership.nodeRow);
@@ -217,8 +215,8 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   getJoinLifecycleIntentType() {
     const joinLifecycleIntentType =
       this.delegates.getJoinLifecycleIntentType?.();
-    if (typeof joinLifecycleIntentType === TYPEOF.STRING &&
-        joinLifecycleIntentType.length > NUM.ZERO) {
+    if (typeof joinLifecycleIntentType === 'string' &&
+        joinLifecycleIntentType.length > 0) {
       return joinLifecycleIntentType;
     }
     const membershipOwnerOutcome =

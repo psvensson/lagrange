@@ -3,7 +3,7 @@
  */
 
 import LifeRaft from './liferaft.js';
-import {NUM, STRING, TYPEOF} from '../constants/index.js';
+import {NUM, STRING} from '../constants/index.js';
 
 const RAFT_TIMING_DEFAULT = Object.freeze({
   HASH_MODULO: NUM.TEN,
@@ -23,18 +23,18 @@ function computeReplicaElectionTimeouts(options = {}) {
   const replicaId = options.replicaId || STRING.EMPTY;
   const replicaIds = Array.isArray(options.replicaIds) ? options.replicaIds : [];
   const baseElectionMinMs = Number.isFinite(options.baseElectionMinMs) ?
-    options.baseElectionMinMs : NUM.ZERO;
+    options.baseElectionMinMs : 0;
   const baseElectionMaxMs = Number.isFinite(options.baseElectionMaxMs) ?
-    options.baseElectionMaxMs : NUM.ZERO;
+    options.baseElectionMaxMs : 0;
   const electionJitterPerReplicaMs =
     Number.isFinite(options.electionJitterPerReplicaMs) ?
       options.electionJitterPerReplicaMs :
-      NUM.ZERO;
+      0;
 
   let replicaIndex = replicaIds.indexOf(replicaId);
-  if (replicaIndex < NUM.ZERO) {
+  if (replicaIndex < 0) {
     const hashCode = replicaId.split(STRING.EMPTY).reduce(
-      (acc, char) => acc + char.charCodeAt(NUM.ZERO), NUM.ZERO,
+      (acc, char) => acc + char.charCodeAt(0), 0,
     );
     replicaIndex = replicaIds.length +
       (hashCode % RAFT_TIMING_DEFAULT.HASH_MODULO);
@@ -73,15 +73,15 @@ function applyRuntimeRaftTiming(options = {}) {
   }
 
   raft.beat = heartbeatMs;
-  if (!raft.election || typeof raft.election !== TYPEOF.OBJECT) {
+  if (!raft.election || typeof raft.election !== 'object') {
     raft.election = {};
   }
   raft.election.min = electionMinMs;
   raft.election.max = electionMaxMs;
 
   if (options.rearmTimer &&
-    typeof raft.heartbeat === TYPEOF.FUNCTION &&
-    typeof raft.timeout === TYPEOF.FUNCTION) {
+    typeof raft.heartbeat === 'function' &&
+    typeof raft.timeout === 'function') {
     const nextDuration = raft.state === LifeRaft.LEADER ?
       raft.beat :
       raft.timeout();

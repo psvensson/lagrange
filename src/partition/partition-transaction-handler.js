@@ -4,7 +4,6 @@
  * Requirements: 6.3, 6.4, 6.6
  */
 
-import {NUM} from '../constants/numbers.js';
 import {
   TRANSACTION_STATE,
   TRANSACTION_ISOLATION_LEVEL,
@@ -270,7 +269,7 @@ class PartitionTransactionHandler {
    */
   getDuration() {
     if (!this.activeTransaction) {
-      return NUM.ZERO;
+      return 0;
     }
     return Date.now() - this.activeTransaction.startTime;
   }

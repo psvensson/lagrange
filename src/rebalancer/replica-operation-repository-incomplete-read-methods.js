@@ -9,7 +9,6 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS,
     INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS,
     INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
-    NUM,
     OperationType,
     REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
@@ -96,8 +95,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         .filter((operation) =>
           this.shouldExposeIncompleteOperationToOwnerRead(operation))
         .sort((left, right) => {
-          const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
-          const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
+          const leftUpdatedAt = Number(left?.updatedAt) || 0;
+          const rightUpdatedAt = Number(right?.updatedAt) || 0;
           if (leftUpdatedAt !== rightUpdatedAt) {
             return leftUpdatedAt - rightUpdatedAt;
           }
@@ -216,7 +215,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
       return Boolean(
         operation &&
         operation.type === OperationType.REPLACE &&
-        sourceNodeId.length > NUM.ZERO &&
+        sourceNodeId.length > 0 &&
         sourceNodeId === this.nodeId &&
         isSystemTablePartition({
           partitionId: operation.partitionId,
@@ -281,13 +280,13 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
 
       if (visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
         if (
-          cachedOperations.length === NUM.ZERO &&
+          cachedOperations.length === 0 &&
         this.nextIncompleteOperationSqlRetryAtMs > Date.now()
         ) {
           return this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
         }
         if (
-          cachedOperations.length > NUM.ZERO ||
+          cachedOperations.length > 0 ||
         visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
         ) {
           this.recordIncompleteOperationObservation(cachedOperations);
@@ -313,7 +312,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         authoritativeReadOptions,
       );
       const queryDurationMs = Date.now() - queryStartedAtMs;
-      const rowCount = Array.isArray(result?.rows) ? result.rows.length : NUM.ZERO;
+      const rowCount = Array.isArray(result?.rows) ? result.rows.length : 0;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
 
       if (!result.success || !result.rows) {
@@ -356,7 +355,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         return [];
       }
 
-      this.nextIncompleteOperationSqlRetryAtMs = NUM.ZERO;
+      this.nextIncompleteOperationSqlRetryAtMs = 0;
 
       const shouldWarnOnQueryPressure =
       queryDurationMs >= INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS ||

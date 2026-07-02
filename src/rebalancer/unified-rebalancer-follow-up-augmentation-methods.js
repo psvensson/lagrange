@@ -2,7 +2,6 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 
 const {
   MoveType,
-  NUM,
   PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION,
   PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION_BY_STATE,
   PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE,
@@ -10,7 +9,6 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   REBALANCER_MOVE_FIELD,
   REBALANCER_TARGET_READINESS_MODE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 const {buildPriorityRecoveryBlockedPartitions} = SHARED.UNIFIED_REBALANCER_SHARED;
@@ -38,7 +36,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
         this.hasPriorityBudgetBypassCandidateMove(moves),
       followUpPartitionId,
       followUpTargetsCurrentEntity:
-        followUpPartitionId.length > NUM.ZERO &&
+        followUpPartitionId.length > 0 &&
         followUpPartitionId === this.entityId,
     });
   }
@@ -50,7 +48,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
         move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (explicitPartitionId.length > NUM.ZERO) {
+    if (explicitPartitionId.length > 0) {
       return explicitPartitionId;
     }
     if (move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) {
@@ -74,7 +72,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
     const currentMovePartitionId =
       this.resolvePriorityRecoveryCurrentFollowUpPartitionId(move);
     return (
-      followUpPartitionId.length > NUM.ZERO &&
+      followUpPartitionId.length > 0 &&
       currentMovePartitionId === followUpPartitionId
     );
   }
@@ -110,17 +108,17 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
   resolvePriorityRecoveryPlanningPriorityPartitionSummary(
     planningSnapshot = null,
   ) {
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
     const directSummary = planningSnapshot.priorityPartitionSummary;
-    if (directSummary && typeof directSummary === TYPEOF.OBJECT) {
+    if (directSummary && typeof directSummary === 'object') {
       return directSummary;
     }
     const recoveryGateSummary =
       planningSnapshot[PRIORITY_RECOVERY_FOLLOW_UP_FIELD
         .PUBLICATION_RECOVERY_GATE]?.priorityPartitionSummary;
-    return recoveryGateSummary && typeof recoveryGateSummary === TYPEOF.OBJECT ?
+    return recoveryGateSummary && typeof recoveryGateSummary === 'object' ?
       recoveryGateSummary :
       null;
   }
@@ -147,7 +145,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
       return (
         partitionId === this.entityId &&
         Number.isFinite(spreadGap) &&
-        spreadGap > NUM.ZERO
+        spreadGap > 0
       );
     });
   }
@@ -228,7 +226,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
     const currentFollowUpPartitionId =
       this.resolvePriorityRecoveryFollowUpPartitionId(decision);
     const currentFollowUpAlreadyPlanned =
-      currentFollowUpPartitionId.length > NUM.ZERO &&
+      currentFollowUpPartitionId.length > 0 &&
       currentRecoveryMoves.some((move) =>
         this.isPriorityRecoveryCurrentFollowUpMove(
           move,
@@ -321,7 +319,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
       const surrogatePartitionId =
         this.resolvePriorityRecoveryFollowUpPartitionId(surrogateDecision);
       if (
-        surrogatePartitionId.length === NUM.ZERO ||
+        surrogatePartitionId.length === 0 ||
         followUpPartitionIds.has(surrogatePartitionId)
       ) {
         continue;
@@ -336,7 +334,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
       followUpPartitionIds.add(surrogatePartitionId);
       followUpMoves.push(surrogateMove);
     }
-    if (followUpMoves.length === NUM.ZERO) {
+    if (followUpMoves.length === 0) {
       return normalizedMoves;
     }
     return [...followUpMoves, ...normalizedMoves];

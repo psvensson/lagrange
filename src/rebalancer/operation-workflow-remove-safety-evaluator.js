@@ -1,8 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  NUM,
-  TYPEOF,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -78,7 +76,7 @@ function projectQuorumAfterRemoval(input) {
     ).length;
     floorSatisfied =
       !Number.isFinite(requiredDistinctNodeCount) ||
-      requiredDistinctNodeCount <= NUM.ONE ||
+      requiredDistinctNodeCount <= 1 ||
       projectedDistinctNodeCount >= requiredDistinctNodeCount;
     if (!floorSatisfied) {
       reason = {kind: 'below-spread', got: projectedDistinctNodeCount, need: requiredDistinctNodeCount};
@@ -127,7 +125,7 @@ async function resolvePriorityRecoveryQuorumProjection(
   const planningSnapshot =
     await context.getPriorityRecoveryPlanningSnapshot(operation);
   let recoveryProjectionNodeIds = null;
-  if (planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT) {
+  if (planningSnapshot && typeof planningSnapshot === 'object') {
     const priorityRecoveryContext =
       context.buildPriorityRecoveryAssessmentContextForOperation(
         operation,
@@ -166,7 +164,7 @@ async function evaluatePriorityRecoveryCompletionRemoveSafety(context, operation
 
   const planningSnapshot =
     await context.getPriorityRecoveryPlanningSnapshot(operation);
-  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+  if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return null;
   }
 
@@ -218,7 +216,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
 
   const planningSnapshot =
     await context.getPriorityRecoveryPlanningSnapshot(operation);
-  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+  if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CONTROL_DASH_PLANE_PARTITION +
@@ -279,8 +277,8 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     );
   if (
     !membershipSnapshot.publishedActiveNodeIdsPresent &&
-    membershipSnapshot.recoveryProjectionNodeIds.length === NUM.ZERO &&
-    projectedVoterReadyRows.length > NUM.ZERO
+    membershipSnapshot.recoveryProjectionNodeIds.length === 0 &&
+    projectedVoterReadyRows.length > 0
   ) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
@@ -293,7 +291,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     );
   }
 
-  if (membershipSnapshot.missingMembershipNodeIds.length > NUM.ZERO) {
+  if (membershipSnapshot.missingMembershipNodeIds.length > 0) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CONTROL_DASH_PLANE_PARTITION +
@@ -420,7 +418,7 @@ async function evaluateRemoveSafety(context, operation) {
   );
   if (
     !Array.isArray(criticalReplicaRows) ||
-    criticalReplicaRows.length === NUM.ZERO
+    criticalReplicaRows.length === 0
   ) {
     return context.buildFailedRemoveSafetyEvaluation(
       `Critical partition ${operation.partitionId}` +
@@ -465,8 +463,8 @@ async function evaluateRemoveSafety(context, operation) {
   const replacementReplicaId =
     operation.type === OperationType.REPLACE ?
       context.repository.getReplaceTargetReplicaId(operation) ||
-        (typeof operation.replicaId === TYPEOF.STRING &&
-        operation.replicaId.length > NUM.ZERO ?
+        (typeof operation.replicaId === 'string' &&
+        operation.replicaId.length > 0 ?
           operation.replicaId :
           null) :
       null;

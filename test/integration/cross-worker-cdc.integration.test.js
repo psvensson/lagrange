@@ -34,7 +34,6 @@ import {
   CDC_MESSAGE_TYPE,
   CACHE_MESSAGE_TYPE,
 } from '../../src/worker/worker-constants.js';
-import {NUM} from '../../src/constants/index.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -174,7 +173,7 @@ async function waitForReplicaRows(
         );
 
         if (cacheResponse.rows &&
-          cacheResponse.rows.length > NUM.ZERO) {
+          cacheResponse.rows.length > 0) {
           replicasWithRow.add(handle.replicaId);
         }
       }
@@ -264,13 +263,13 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const partitionReplicaIds = [];
       const partitionPeerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         partitionReplicaIds.push(replicaId);
         partitionPeerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: partitionReplicaIds[i],
@@ -299,13 +298,13 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const mgReplicaIds = [];
       const mgPeerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.MESSAGE_GROUP_ID}-r${i}`;
         mgReplicaIds.push(replicaId);
         mgPeerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const handle = await workerManager.createMessageGroupReplica({
           groupId: TEST_CONFIG.MESSAGE_GROUP_ID,
           replicaId: mgReplicaIds[i],
@@ -410,7 +409,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
             },
           );
 
-          return cacheResponse.rows && cacheResponse.rows.length > NUM.ZERO;
+          return cacheResponse.rows && cacheResponse.rows.length > 0;
         },
         TEST_CONFIG.CDC_PROPAGATION_TIMEOUT_MS,
         TEST_CONFIG.CDC_PROPAGATION_POLL_MS,
@@ -429,9 +428,9 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       );
 
       t.ok(finalCacheResponse.rows, 'Cache query returned rows');
-      t.equal(finalCacheResponse.rows.length, NUM.ONE, 'Exactly one record in cache');
-      t.equal(finalCacheResponse.rows[NUM.ZERO].id, testId, 'Record ID matches');
-      t.equal(finalCacheResponse.rows[NUM.ZERO].value, testValue, 'Record value matches');
+      t.equal(finalCacheResponse.rows.length, 1, 'Exactly one record in cache');
+      t.equal(finalCacheResponse.rows[0].id, testId, 'Record ID matches');
+      t.equal(finalCacheResponse.rows[0].value, testValue, 'Record value matches');
     } finally {
       // =====================================================================
       // CLEANUP
@@ -498,13 +497,13 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const partitionReplicaIds = [];
       const partitionPeerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         partitionReplicaIds.push(replicaId);
         partitionPeerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.PARTITION_REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: partitionReplicaIds[i],
@@ -530,13 +529,13 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const mgReplicaIds = [];
       const mgPeerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.MESSAGE_GROUP_ID}-r${i}`;
         mgReplicaIds.push(replicaId);
         mgPeerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const handle = await workerManager.createMessageGroupReplica({
           groupId: TEST_CONFIG.MESSAGE_GROUP_ID,
           replicaId: mgReplicaIds[i],
@@ -573,7 +572,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
 
       const mgLeaderElected = await waitFor(
         async () => {
-          mgFollowerHandles.length = NUM.ZERO;
+          mgFollowerHandles.length = 0;
           mgLeaderHandle = null;
           for (const handle of messageGroupHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
@@ -589,14 +588,14 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
               mgFollowerHandles.push(handle);
             }
           }
-          return mgLeaderHandle !== null && mgFollowerHandles.length > NUM.ZERO;
+          return mgLeaderHandle !== null && mgFollowerHandles.length > 0;
         },
         TEST_CONFIG.LEADER_ELECTION_TIMEOUT_MS,
         TEST_CONFIG.LEADER_ELECTION_POLL_MS,
       );
 
       t.ok(mgLeaderElected, 'Message group leader elected');
-      t.ok(mgFollowerHandles.length > NUM.ZERO, 'Message group has followers');
+      t.ok(mgFollowerHandles.length > 0, 'Message group has followers');
 
       // =====================================================================
       // PHASE 4: Subscribe message group leader to partition CDC events
@@ -639,7 +638,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
             },
           );
 
-          return cacheResponse.rows && cacheResponse.rows.length > NUM.ZERO;
+          return cacheResponse.rows && cacheResponse.rows.length > 0;
         },
         TEST_CONFIG.CDC_PROPAGATION_TIMEOUT_MS,
         TEST_CONFIG.CDC_PROPAGATION_POLL_MS,
@@ -677,9 +676,9 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
         );
 
         t.ok(cacheResponse.rows, `Replica ${handle.replicaId} has cache data`);
-        t.equal(cacheResponse.rows.length, NUM.ONE,
+        t.equal(cacheResponse.rows.length, 1,
           `Replica ${handle.replicaId} has exactly one record`);
-        const replicatedRow = cacheResponse.rows[NUM.ZERO];
+        const replicatedRow = cacheResponse.rows[0];
         t.ok(replicatedRow, `Replica ${handle.replicaId} has replicated row payload`);
         if (replicatedRow) {
           t.equal(replicatedRow.id, testId,
@@ -771,13 +770,13 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const mgReplicaIds = [];
       const mgPeerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.MESSAGE_GROUP_ID}-r${i}`;
         mgReplicaIds.push(replicaId);
         mgPeerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.MESSAGE_GROUP_REPLICA_COUNT; i++) {
         const handle = await workerManager.createMessageGroupReplica({
           groupId: TEST_CONFIG.MESSAGE_GROUP_ID,
           replicaId: mgReplicaIds[i],
@@ -808,7 +807,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
 
       await waitFor(
         async () => {
-          mgFollowerHandles.length = NUM.ZERO;
+          mgFollowerHandles.length = 0;
           mgLeaderHandle = null;
           for (const handle of messageGroupHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
@@ -832,7 +831,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
 
       t.ok(partitionLeaderHandle, 'Partition leader elected');
       t.ok(mgLeaderHandle, 'Message group leader elected');
-      t.ok(mgFollowerHandles.length > NUM.ZERO, 'Message group has followers');
+      t.ok(mgFollowerHandles.length > 0, 'Message group has followers');
 
       // Subscribe ONLY the leader to CDC events
       const leaderSubscribeResponse = await workerManager.deliverMessage(
@@ -875,7 +874,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
             },
           );
 
-          return cacheResponse.rows && cacheResponse.rows.length > NUM.ZERO;
+          return cacheResponse.rows && cacheResponse.rows.length > 0;
         },
         TEST_CONFIG.CDC_PROPAGATION_TIMEOUT_MS,
         TEST_CONFIG.CDC_PROPAGATION_POLL_MS,

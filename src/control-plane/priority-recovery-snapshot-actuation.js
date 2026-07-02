@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_BLOCKER_REASON,
@@ -112,7 +108,7 @@ function resolvePriorityRecoveryActuationDecision(evidence = {}) {
 }
 
 function resolvePriorityRecoveryObjectOption(value) {
-  return value && typeof value === TYPEOF.OBJECT ? value : null;
+  return value && typeof value === 'object' ? value : null;
 }
 
 function resolvePriorityRecoveryOperationContextsOption(options = {}) {
@@ -414,9 +410,9 @@ function buildPriorityRecoveryProgressContext(options = {}) {
     workflowState,
     hasOperationContext: inputContext.latestOperationContext !== null,
     hasTimelineEvidence:
-      Number(inputContext.latestOperationContext?.timelineLength || NUM.ZERO) >
-        NUM.ZERO,
-    hasBlockerReasons: blockerReasons.length > NUM.ZERO,
+      Number(inputContext.latestOperationContext?.timelineLength || 0) >
+        0,
+    hasBlockerReasons: blockerReasons.length > 0,
     lastProgressAtMs,
   });
   return {

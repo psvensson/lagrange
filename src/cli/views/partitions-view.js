@@ -12,29 +12,26 @@ import {BaseView, ROW_STATUS} from '../core/base-view.js';
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_PARTITION_ID_2 = 'Partition ID';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_KEY_RANGE = 'key_range';
 const LOCAL_STR_KEY_RANGE_2 = 'Key Range';
-const LOCAL_NUM_25 = 25;
+const LOCAL_NUM_TWENTY_FIVE = 25;
 const LOCAL_STR_REPLICA_COUNT = 'replica_count';
 const LOCAL_STR_REPLICAS = 'Replicas';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_LEADER_NODE_ID = 'leader_node_id';
 const LOCAL_STR_LEADER_NODE = 'Leader Node';
 const LOCAL_STR_SIZE_BYTES = 'size_bytes';
 const LOCAL_STR_SIZE = 'Size';
-const LOCAL_NUM_12 = 12;
+const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_NO_LEADER = 'No Leader';
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_0_B = '0 B';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_REPLICAS_2 = 'replicas';
 const LOCAL_STR_JUMPTOENTITY = 'jumpToEntity';
@@ -49,8 +46,8 @@ const LOCAL_STR_COMMIT_INDEX = 'Commit Index';
 const LOCAL_STR_APPLIED_INDEX = 'Applied Index';
 const LOCAL_STR_LAST_LOG_INDEX = 'Last Log Index';
 const LOCAL_STR_ROLE = 'Role';
-const LOCAL_STR_8XEJZ = 'Replica Sync Status';
-const LOCAL_STR_NFN9W = 'No replica information available';
+const LOCAL_STR_REPLICA_SYNC_STATUS = 'Replica Sync Status';
+const LOCAL_STR_NO_REPLICA_INFORMATION_AVAILABLE = 'No replica information available';
 const LOCAL_STR_REPLICA_LOCATIONS = 'Replica Locations';
 const LOCAL_STR_RECENT_CDC_EVENTS = 'Recent CDC Events';
 const LOCAL_STR_GO_TO_LEADER_NODE = 'Go to Leader Node';
@@ -60,7 +57,7 @@ const LOCAL_STR_TABLES = 'tables';
 const LOCAL_STR_T = 't';
 const LOCAL_STR_T_2 = 'T';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_19 = 19;
+const LOCAL_NUM_NINETEEN = 19;
 
 /**
  * Size units for formatting
@@ -93,12 +90,12 @@ export class PartitionsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION_ID_2, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_KEY_RANGE, label: LOCAL_STR_KEY_RANGE_2, width: LOCAL_NUM_25},
-      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
-      {key: LOCAL_STR_LEADER_NODE_ID, label: LOCAL_STR_LEADER_NODE, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_SIZE_BYTES, label: LOCAL_STR_SIZE, width: LOCAL_NUM_12},
-      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION_ID_2, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_KEY_RANGE, label: LOCAL_STR_KEY_RANGE_2, width: LOCAL_NUM_TWENTY_FIVE},
+      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_TEN},
+      {key: LOCAL_STR_LEADER_NODE_ID, label: LOCAL_STR_LEADER_NODE, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_SIZE_BYTES, label: LOCAL_STR_SIZE, width: LOCAL_NUM_TWELVE},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_TWELVE},
     ];
   }
 
@@ -157,14 +154,14 @@ export class PartitionsView extends BaseView {
     if (bytes === null || bytes === undefined) {
       return LOCAL_STR_N_A;
     }
-    if (bytes === LOCAL_NUM_ZERO) {
+    if (bytes === 0) {
       return LOCAL_STR_0_B;
     }
 
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(LOCAL_NUM_ONE)} ${SIZE_UNITS[i]}`;
+    return `${value.toFixed(1)} ${SIZE_UNITS[i]}`;
   }
 
   /**
@@ -226,7 +223,7 @@ export class PartitionsView extends BaseView {
    * @return {string} Unique key (partition_id)
    */
   getItemKey(partition) {
-    return partition.partition_id || LOCAL_STR_EMPTY;
+    return partition.partition_id || '';
   }
 
   /**
@@ -365,18 +362,18 @@ export class PartitionsView extends BaseView {
     sections.push({
       title: LOCAL_STR_RAFT_STATE,
       fields: [
-        {label: LOCAL_STR_TERM, value: String(partition.raft_term ?? LOCAL_NUM_ZERO)},
+        {label: LOCAL_STR_TERM, value: String(partition.raft_term ?? 0)},
         {
           label: LOCAL_STR_COMMIT_INDEX,
-          value: String(partition.raft_commit_index ?? LOCAL_NUM_ZERO),
+          value: String(partition.raft_commit_index ?? 0),
         },
         {
           label: LOCAL_STR_APPLIED_INDEX,
-          value: String(partition.raft_applied_index ?? LOCAL_NUM_ZERO),
+          value: String(partition.raft_applied_index ?? 0),
         },
         {
           label: LOCAL_STR_LAST_LOG_INDEX,
-          value: String(partition.raft_last_log_index ?? LOCAL_NUM_ZERO),
+          value: String(partition.raft_last_log_index ?? 0),
         },
         {label: LOCAL_STR_ROLE, value: partition.raft_role || LOCAL_STR_N_A},
       ],
@@ -392,9 +389,9 @@ export class PartitionsView extends BaseView {
       }));
 
       sections.push({
-        title: LOCAL_STR_8XEJZ,
-        fields: replicaFields.length > LOCAL_NUM_ZERO ? replicaFields : [
-          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NFN9W},
+        title: LOCAL_STR_REPLICA_SYNC_STATUS,
+        fields: replicaFields.length > 0 ? replicaFields : [
+          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NO_REPLICA_INFORMATION_AVAILABLE},
         ],
       });
     } else if (partition.replica_nodes && Array.isArray(partition.replica_nodes)) {
@@ -405,8 +402,8 @@ export class PartitionsView extends BaseView {
 
       sections.push({
         title: LOCAL_STR_REPLICA_LOCATIONS,
-        fields: replicaFields.length > LOCAL_NUM_ZERO ? replicaFields : [
-          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NFN9W},
+        fields: replicaFields.length > 0 ? replicaFields : [
+          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NO_REPLICA_INFORMATION_AVAILABLE},
         ],
       });
     }
@@ -419,7 +416,7 @@ export class PartitionsView extends BaseView {
         value: `${this.formatTimestamp(event.timestamp)} - ${event.key || 'N/A'}`,
       }));
 
-      if (cdcFields.length > LOCAL_NUM_ZERO) {
+      if (cdcFields.length > 0) {
         sections.push({
           title: LOCAL_STR_RECENT_CDC_EVENTS,
           fields: cdcFields,
@@ -471,7 +468,7 @@ export class PartitionsView extends BaseView {
         return LOCAL_STR_N_A;
       }
       return date.toISOString().replace(LOCAL_STR_T_2, LOCAL_STR_SPACE)
-        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+        .substring(0, LOCAL_NUM_NINETEEN);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }

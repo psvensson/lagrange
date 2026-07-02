@@ -20,7 +20,6 @@
  *   clearInterval(handle): void
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 
 // A repeating timer with a 0ms (or negative) interval would reschedule onto the
 // same instant and spin forever inside a single advance(); clamp the reschedule
@@ -84,13 +83,13 @@ class VirtualTimeSource {
    */
   constructor(options = {}) {
     const startMs = Number(options.startMs);
-    this._now = Number.isFinite(startMs) ? startMs : NUM.ZERO;
+    this._now = Number.isFinite(startMs) ? startMs : 0;
     // id -> {id, fn, args, intervalMs, dueAt, repeating, seq}
     this._timers = new Map();
-    this._seq = NUM.ZERO;
+    this._seq = 0;
     const scheduler = options && options.scheduler;
     this._scheduler =
-      scheduler && typeof scheduler.pick === TYPEOF.FUNCTION ? scheduler : null;
+      scheduler && typeof scheduler.pick === 'function' ? scheduler : null;
   }
 
   now() {
@@ -122,13 +121,13 @@ class VirtualTimeSource {
   }
 
   _schedule(fn, ms, args, repeating) {
-    if (typeof fn !== TYPEOF.FUNCTION) {
+    if (typeof fn !== 'function') {
       throw new TypeError('VirtualTimeSource timer callback must be a function');
     }
     const rawMs = Number(ms);
-    const delayMs = Number.isFinite(rawMs) && rawMs > NUM.ZERO ?
+    const delayMs = Number.isFinite(rawMs) && rawMs > 0 ?
       rawMs :
-      NUM.ZERO;
+      0;
     const id = ++this._seq;
     this._timers.set(id, {
       id,
@@ -150,9 +149,9 @@ class VirtualTimeSource {
    */
   advance(ms) {
     const rawMs = Number(ms);
-    const stepMs = Number.isFinite(rawMs) && rawMs > NUM.ZERO ? rawMs : NUM.ZERO;
+    const stepMs = Number.isFinite(rawMs) && rawMs > 0 ? rawMs : 0;
     const target = this._now + stepMs;
-    let iterations = NUM.ZERO;
+    let iterations = 0;
     for (;;) {
       const next = this._pickDueTimer(target);
       if (!next) {
@@ -167,7 +166,7 @@ class VirtualTimeSource {
       }
       this._now = next.dueAt;
       if (next.repeating) {
-        const step = next.delayMs > NUM.ZERO ?
+        const step = next.delayMs > 0 ?
           next.delayMs :
           LOCAL_MIN_INTERVAL_MS;
         next.dueAt += step;
@@ -237,7 +236,7 @@ class VirtualTimeSource {
  */
 function resolveTimeSource(options = {}) {
   const candidate = options && options.timeSource;
-  if (candidate && typeof candidate.now === TYPEOF.FUNCTION) {
+  if (candidate && typeof candidate.now === 'function') {
     return candidate;
   }
   return new RealTimeSource();

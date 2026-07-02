@@ -9,10 +9,8 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
-  NUM,
   STATE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
@@ -36,7 +34,7 @@ import {
   LEASE_SUBSYSTEM,
 } from './lease-service-constants.js';
 
-const LOCAL_STR_M52QG = 'LeaseService requires controlPlaneSystemTableGateway';
+const LOCAL_STR_LEASESERVICE_REQUIRES_CONTROLPLANESYSTEM = 'LeaseService requires controlPlaneSystemTableGateway';
 
 const createDefaultMessageGroupServices = () => new Set();
 
@@ -75,13 +73,13 @@ class LeaseService extends EventEmitter {
     // LEASE_NOW/setInterval/clearInterval) so the convergence harness can advance the
     // lease deterministically. Explicit per-fn options keep precedence.
     this.timeSource = resolveTimeSource(options);
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => this.timeSource.now();
-    this.setIntervalFn = typeof options.setIntervalFn === TYPEOF.FUNCTION ?
+    this.setIntervalFn = typeof options.setIntervalFn === 'function' ?
       options.setIntervalFn :
       (fn, ms) => this.timeSource.setInterval(fn, ms);
-    this.clearIntervalFn = typeof options.clearIntervalFn === TYPEOF.FUNCTION ?
+    this.clearIntervalFn = typeof options.clearIntervalFn === 'function' ?
       options.clearIntervalFn :
       (handle) => this.timeSource.clearInterval(handle);
 
@@ -153,7 +151,7 @@ class LeaseService extends EventEmitter {
         this.sweepInFlight = false;
       });
     }, this.sweepIntervalMs);
-    if (typeof this.sweepTimer?.unref === TYPEOF.FUNCTION) {
+    if (typeof this.sweepTimer?.unref === 'function') {
       this.sweepTimer.unref();
     }
 
@@ -216,7 +214,7 @@ class LeaseService extends EventEmitter {
           now,
         );
       const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
-      if (!(affectedRows > NUM.ZERO)) {
+      if (!(affectedRows > 0)) {
         emitInvariant(this, {
           invariantId: INVARIANT_ID.NODE_LEASE_STATE_NOT_REGRESSED,
           passed: true,
@@ -247,7 +245,7 @@ class LeaseService extends EventEmitter {
       this.emit(LEASE_EVENT.LEASE_EXPIRED, {nodeId: node.node_id});
     }
 
-    if (expiredIds.length > NUM.ZERO) {
+    if (expiredIds.length > 0) {
       this.logger.info(LEASE_LOG_MSG.SWEEP_EXPIRED, {
         count: expiredIds.length,
         nodeIds: expiredIds,
@@ -280,7 +278,7 @@ class LeaseService extends EventEmitter {
   isNodeTransportConnected(nodeId) {
     if (!this.messageRouter ||
         typeof this.messageRouter.getConnectionState !==
-          TYPEOF.FUNCTION) {
+          'function') {
       return false;
     }
     const routerState = String(
@@ -298,7 +296,7 @@ class LeaseService extends EventEmitter {
   getControlPlaneSystemTableGateway() {
     assertCritical(
       this.controlPlaneSystemTableGateway,
-      LOCAL_STR_M52QG,
+      LOCAL_STR_LEASESERVICE_REQUIRES_CONTROLPLANESYSTEM,
     );
     return this.controlPlaneSystemTableGateway;
   }

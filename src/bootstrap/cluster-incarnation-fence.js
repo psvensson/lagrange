@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const LOCAL_STR_CURRENT = 'current';
 const LOCAL_STR_IDENTITY_MISMATCH = 'identity_mismatch';
@@ -11,9 +10,8 @@ const LOCAL_STR_ABSENT = 'absent';
 const LOCAL_STR_PRESENT = 'present';
 const LOCAL_STR_MISSING = 'missing';
 const LOCAL_STR_RECOVERED = 'recovered';
-const LOCAL_STR_H0QXZ = 'cluster_incarnation_identity_mismatch';
-const LOCAL_STR_1YOIV = 'cluster_incarnation_peer_proof_missing';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_CLUSTER_INCARNATION_IDENTITY_MISMATCH = 'cluster_incarnation_identity_mismatch';
+const LOCAL_STR_CLUSTER_INCARNATION_PEER_PROOF_MISSING = 'cluster_incarnation_peer_proof_missing';
 
 export const CLUSTER_INCARNATION_FENCE_STATE = Object.freeze({
   CURRENT: LOCAL_STR_CURRENT,
@@ -40,8 +38,8 @@ export const CLUSTER_INCARNATION_PEER_PROOF_STATE = Object.freeze({
 });
 
 export const CLUSTER_INCARNATION_FENCE_REASON = Object.freeze({
-  IDENTITY_MISMATCH: LOCAL_STR_H0QXZ,
-  PEER_PROOF_MISSING: LOCAL_STR_1YOIV,
+  IDENTITY_MISMATCH: LOCAL_STR_CLUSTER_INCARNATION_IDENTITY_MISMATCH,
+  PEER_PROOF_MISSING: LOCAL_STR_CLUSTER_INCARNATION_PEER_PROOF_MISSING,
 });
 
 function normalizeDistinctReasonCodes(values = []) {
@@ -49,8 +47,8 @@ function normalizeDistinctReasonCodes(values = []) {
     [...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) =>
-          typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY)
-        .filter((value) => value.length > NUM.ZERO),
+          typeof value === 'string' ? value.trim() : '')
+        .filter((value) => value.length > 0),
     )],
   );
 }
@@ -69,7 +67,7 @@ function resolvePeerProofState(options = {}) {
     return CLUSTER_INCARNATION_PEER_PROOF_STATE.NOT_REQUIRED;
   }
   return Array.isArray(options.peerAddresses) &&
-    options.peerAddresses.length > NUM.ZERO ?
+    options.peerAddresses.length > 0 ?
     CLUSTER_INCARNATION_PEER_PROOF_STATE.RECOVERED :
     CLUSTER_INCARNATION_PEER_PROOF_STATE.MISSING;
 }

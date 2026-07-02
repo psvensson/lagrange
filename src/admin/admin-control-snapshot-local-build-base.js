@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
@@ -97,9 +97,9 @@ const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FAILED;
 function toControlSnapshotNonNegativeInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue > 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 function buildControlSnapshotMembershipOwnerQueueDiagnostics(readinessService) {
   const membershipPublicationService =
@@ -107,13 +107,13 @@ function buildControlSnapshotMembershipOwnerQueueDiagnostics(readinessService) {
   if (
     !membershipPublicationService ||
     typeof membershipPublicationService.getControlPlaneOwnerQueueDepth !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return null;
   }
   const ownerQueueDepth =
     membershipPublicationService.getControlPlaneOwnerQueueDepth();
-  return ownerQueueDepth && typeof ownerQueueDepth === TYPEOF.OBJECT ?
+  return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
     ownerQueueDepth :
     null;
 }
@@ -121,7 +121,7 @@ function mergeControlSnapshotLogsTableDiagnostics(logsTable, ownerQueueDepth) {
   if (!ownerQueueDepth) {
     return logsTable;
   }
-  const base = logsTable && typeof logsTable === TYPEOF.OBJECT ?
+  const base = logsTable && typeof logsTable === 'object' ?
     logsTable :
     {};
   return {
@@ -167,7 +167,7 @@ function hasDurablePublishedMembershipObservation(
 ) {
   if (
     !publicationDiagnostics ||
-    typeof publicationDiagnostics !== TYPEOF.OBJECT
+    typeof publicationDiagnostics !== 'object'
   ) {
     return false;
   }
@@ -219,7 +219,7 @@ function resolveControlSnapshotPublicationEpochDescriptor(
 function attachControlSnapshotAuthorityCertificateRevision(snapshot) {
   if (
     !snapshot ||
-    typeof snapshot !== TYPEOF.OBJECT ||
+    typeof snapshot !== 'object' ||
     Array.isArray(snapshot)
   ) {
     return snapshot;
@@ -232,7 +232,7 @@ function attachControlSnapshotAuthorityCertificateRevision(snapshot) {
     snapshot[CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY];
   if (
     !authority ||
-    typeof authority !== TYPEOF.OBJECT ||
+    typeof authority !== 'object' ||
     Array.isArray(authority)
   ) {
     return snapshot;
@@ -241,7 +241,7 @@ function attachControlSnapshotAuthorityCertificateRevision(snapshot) {
   for (const [partitionId, certificate] of Object.entries(authority)) {
     if (
       !certificate ||
-      typeof certificate !== TYPEOF.OBJECT ||
+      typeof certificate !== 'object' ||
       Array.isArray(certificate)
     ) {
       continue;
@@ -349,7 +349,7 @@ function buildControlSnapshotAdminObservation(snapshot, mode, options = {}) {
 function attachControlSnapshotObservationMode(snapshot, options = {}) {
   if (
     !snapshot ||
-    typeof snapshot !== TYPEOF.OBJECT ||
+    typeof snapshot !== 'object' ||
     Array.isArray(snapshot)
   ) {
     return snapshot;
@@ -397,19 +397,19 @@ class AdminControlSnapshotLocalBuildBase {
     this.heartbeatService = deps.heartbeatService || null;
     this.readinessSnapshotCacheMaxAgeMs =
       Number.isFinite(deps.readinessSnapshotCacheMaxAgeMs) &&
-      deps.readinessSnapshotCacheMaxAgeMs > NUM.ZERO ?
+      deps.readinessSnapshotCacheMaxAgeMs > 0 ?
         Math.floor(deps.readinessSnapshotCacheMaxAgeMs) :
         CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS;
     this.ensureAuthoritativeDiscoveryCacheRepair =
-      typeof deps.ensureAuthoritativeDiscoveryCacheRepair === TYPEOF.FUNCTION ?
+      typeof deps.ensureAuthoritativeDiscoveryCacheRepair === 'function' ?
         deps.ensureAuthoritativeDiscoveryCacheRepair :
         null;
     this.resolveLocalPartitionServices =
-      typeof deps.resolveLocalPartitionServices === TYPEOF.FUNCTION ?
+      typeof deps.resolveLocalPartitionServices === 'function' ?
         deps.resolveLocalPartitionServices :
         null;
     this.nowFn =
-      typeof deps.nowFn === TYPEOF.FUNCTION ? deps.nowFn : () => Date.now();
+      typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
   }
   /**
    * Build local control snapshot payload from system cache only.
@@ -418,7 +418,7 @@ class AdminControlSnapshotLocalBuildBase {
   async buildLocalControlSnapshot(options = {}) {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
     }
@@ -480,7 +480,7 @@ class AdminControlSnapshotLocalBuildBase {
     );
     if (
       controlPlaneDiagnostics &&
-      typeof controlPlaneDiagnostics === TYPEOF.OBJECT
+      typeof controlPlaneDiagnostics === 'object'
     ) {
       const publicationActiveGateHandoff =
         this.resolvePublicationActiveGateHandoffContract({
@@ -533,7 +533,7 @@ class AdminControlSnapshotLocalBuildBase {
         ] &&
         typeof controlPlaneDiagnostics[
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
-        ] === TYPEOF.OBJECT
+        ] === 'object'
       ) {
         controlPlaneDiagnostics[
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
@@ -555,7 +555,7 @@ class AdminControlSnapshotLocalBuildBase {
       if (
         reconcileAuthoritativeMembershipPublication === true &&
         typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff ===
-          TYPEOF.FUNCTION
+          'function'
       ) {
         const membershipPublicationHandoffOutcome =
           await this.reconcileAuthoritativeMembershipPublicationFromHandoff(
@@ -567,7 +567,7 @@ class AdminControlSnapshotLocalBuildBase {
           );
         if (
           membershipPublicationHandoffOutcome &&
-          typeof membershipPublicationHandoffOutcome === TYPEOF.OBJECT
+          typeof membershipPublicationHandoffOutcome === 'object'
         ) {
           controlPlaneDiagnostics[
             CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
@@ -578,7 +578,7 @@ class AdminControlSnapshotLocalBuildBase {
             ];
           if (
             publicationConvergence &&
-            typeof publicationConvergence === TYPEOF.OBJECT &&
+            typeof publicationConvergence === 'object' &&
             !Array.isArray(publicationConvergence)
           ) {
             controlPlaneDiagnostics[
@@ -704,7 +704,7 @@ class AdminControlSnapshotLocalBuildBase {
     if (
       !owner ||
       typeof owner[CONTROL_PLANE_SNAPSHOT_OWNER_RESOLVE_METHOD] !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return attachControlSnapshotObservationMode(localSnapshot, {
         ...options,
@@ -733,18 +733,18 @@ const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
 const CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD = 'readinessByNodeId';
 const CONTROL_SNAPSHOT_REASON_CODES_FIELD = 'reasonCodes';
 function isControlSnapshotPlainRecord(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value);
+  return value && typeof value === 'object' && !Array.isArray(value);
 }
 function resolveControlSnapshotLocalNodeId(snapshot = null, owner = null) {
   const snapshotNodeId = snapshot?.[ADMIN_CONTROL_SNAPSHOT_LITERAL.NODEID];
   if (
-    typeof snapshotNodeId === TYPEOF.STRING &&
-    snapshotNodeId.length > NUM.ZERO
+    typeof snapshotNodeId === 'string' &&
+    snapshotNodeId.length > 0
   ) {
     return snapshotNodeId;
   }
-  return typeof owner?.nodeId === TYPEOF.STRING &&
-    owner.nodeId.length > NUM.ZERO ?
+  return typeof owner?.nodeId === 'string' &&
+    owner.nodeId.length > 0 ?
     owner.nodeId :
     ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
 }
@@ -760,8 +760,8 @@ function buildControlSnapshotObservationReadinessByNodeId(
     normalizeControlSnapshotObservationReasonCodes(snapshot, options);
   if (
     !isControlSnapshotPlainRecord(controlPlaneDiagnostics) ||
-    nodeId.length === NUM.ZERO ||
-    observationReasonCodes.length === NUM.ZERO
+    nodeId.length === 0 ||
+    observationReasonCodes.length === 0
   ) {
     return controlPlaneDiagnostics?.[
       CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD
@@ -841,7 +841,7 @@ function attachControlSnapshotObservationActiveGateHandoff(
     !isControlSnapshotPlainRecord(snapshot) ||
     !isControlSnapshotPlainRecord(controlPlaneDiagnostics) ||
     typeof owner?.resolvePublicationActiveGateHandoffContract !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return snapshot;
   }

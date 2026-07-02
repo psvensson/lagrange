@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -63,19 +59,19 @@ function buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot) {
   const progress =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] :
       null;
   const conditions =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] :
       null;
   const actuation =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] :
       null;
   const coordinatorOperation =
@@ -85,7 +81,7 @@ function buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot) {
     typeof snapshot[
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR
     ]?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR][
         PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
       ] :
@@ -138,7 +134,7 @@ function hasPriorityRecoverySyntheticSerialWaitWorkflowSummarySource(
     sourceEvidence &&
     sourceEvidence.progressOwner ===
       PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-    sourceEvidence.latestOperationId.length > NUM.ZERO &&
+    sourceEvidence.latestOperationId.length > 0 &&
     sourceEvidence.operationIds.includes(sourceEvidence.latestOperationId) ===
       true
   );
@@ -154,14 +150,14 @@ function buildPriorityRecoverySyntheticSerialWaitWorkflowOwnedOperationContext(
       sourceEvidence,
     ) !== true ||
     !baseOperationContext ||
-    typeof baseOperationContext !== TYPEOF.OBJECT
+    typeof baseOperationContext !== 'object'
   ) {
     return null;
   }
   const baseOperationId = String(
     baseOperationContext.operationId || LOCAL_STR_EMPTY,
   ).trim();
-  if (baseOperationId.length === NUM.ZERO) {
+  if (baseOperationId.length === 0) {
     return null;
   }
   if (
@@ -186,22 +182,22 @@ function buildPriorityRecoverySyntheticSerialWaitWorkflowOwnedOperationContext(
           LOCAL_STR_EMPTY,
       ).trim(),
     status:
-      sourceEvidence.latestOperationStatus.length > NUM.ZERO ?
+      sourceEvidence.latestOperationStatus.length > 0 ?
         sourceEvidence.latestOperationStatus :
         baseOperationContext.status,
     workflowStep:
-      sourceEvidence.latestOperationWorkflowStep.length > NUM.ZERO ?
+      sourceEvidence.latestOperationWorkflowStep.length > 0 ?
         sourceEvidence.latestOperationWorkflowStep :
         baseOperationContext.workflowStep,
-    ...(sourceEvidence.latestOperationWorkflowStep.length > NUM.ZERO ?
+    ...(sourceEvidence.latestOperationWorkflowStep.length > 0 ?
       {latestTimelineStep: sourceEvidence.latestOperationWorkflowStep} :
       {}),
     ...(Number.isFinite(sourceEvidence.lastProgressAtMs) &&
-    sourceEvidence.lastProgressAtMs > NUM.ZERO ?
+    sourceEvidence.lastProgressAtMs > 0 ?
       {updatedAtMs: sourceEvidence.lastProgressAtMs} :
       {}),
     ...(Number.isFinite(sourceEvidence.stepTimeoutMs) &&
-    sourceEvidence.stepTimeoutMs > NUM.ZERO ?
+    sourceEvidence.stepTimeoutMs > 0 ?
       {stepTimeoutMs: sourceEvidence.stepTimeoutMs} :
       {}),
     latestTimelineInFlight: true,
@@ -249,7 +245,7 @@ function resolvePriorityRecoverySyntheticSerialWaitSiblingOperationContext(
     ];
   if (
     !siblingOperationContext ||
-    typeof siblingOperationContext !== TYPEOF.OBJECT
+    typeof siblingOperationContext !== 'object'
   ) {
     return null;
   }
@@ -373,7 +369,7 @@ function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
       ],
     )) {
       if (
-        sourcePartitionId.length > NUM.ZERO &&
+        sourcePartitionId.length > 0 &&
         sourcePartitionId !== partitionId
       ) {
         subordinatedPartitionIds.add(sourcePartitionId);
@@ -431,13 +427,13 @@ function isPriorityRecoveryOperationWorkflowProgressAdvancementSnapshot(
   const progress =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] :
       null;
   const actuation =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] :
       null;
   return (
@@ -471,13 +467,13 @@ function isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(
     ],
   );
   return (
-    blockerReasons.length === NUM.ZERO &&
+    blockerReasons.length === 0 &&
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true &&
     isPriorityRecoveryOperationWorkflowProgressAdvancementSnapshot(snapshot) !==
       true &&
     (
-      serialWaitPartitionIds.length > NUM.ZERO ||
-      serialWaitOperationIds.length > NUM.ZERO
+      serialWaitPartitionIds.length > 0 ||
+      serialWaitOperationIds.length > 0
     )
   );
 }
@@ -489,8 +485,8 @@ function isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.BLOCKER_REASONS],
   );
   return (
-    blockerReasons.length === NUM.ONE &&
-    blockerReasons[NUM.ZERO] ===
+    blockerReasons.length === 1 &&
+    blockerReasons[0] ===
       PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT &&
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) !== true
   );
@@ -508,8 +504,8 @@ function hasPriorityRecoverySerialWaitSourceReferences(snapshot) {
     ],
   );
   return (
-    serialWaitPartitionIds.length > NUM.ZERO ||
-    serialWaitOperationIds.length > NUM.ZERO
+    serialWaitPartitionIds.length > 0 ||
+    serialWaitOperationIds.length > 0
   );
 }
 
@@ -532,7 +528,7 @@ function hasPriorityRecoveryLiveSerialWaitSourcePartition(
       ],
     ),
   );
-  if (sourcePartitionIdSet.size === NUM.ZERO) {
+  if (sourcePartitionIdSet.size === 0) {
     return false;
   }
   for (const latestSnapshot of Array.isArray(latestSnapshots) ?
@@ -543,7 +539,7 @@ function hasPriorityRecoveryLiveSerialWaitSourcePartition(
         LOCAL_STR_EMPTY,
     ).trim();
     if (
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       !sourcePartitionIdSet.has(partitionId) ||
       isPriorityRecoverySpreadProgressDecisionSnapshot(latestSnapshot) === true
     ) {
@@ -561,7 +557,7 @@ function hasPriorityRecoveryLiveSerialWaitSourcePartition(
       isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
         sourceContext,
       ) &&
-      sourceOperationId.length > NUM.ZERO &&
+      sourceOperationId.length > 0 &&
       sourceOperationIdSet.has(sourceOperationId)
     ) {
       return true;
@@ -592,8 +588,8 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
       },
     );
   if (
-    syntheticSerialWaitSourceContexts.length === NUM.ZERO &&
-    retainedSerialWaitSourceContexts.length === NUM.ZERO
+    syntheticSerialWaitSourceContexts.length === 0 &&
+    retainedSerialWaitSourceContexts.length === 0
   ) {
     return normalizedSnapshots;
   }
@@ -636,7 +632,7 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
           snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ADMISSION]
             ?.effectiveEligibleNodeIds,
       });
-    if (serialWaitOperationContexts.length === NUM.ZERO) {
+    if (serialWaitOperationContexts.length === 0) {
       return isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(
         snapshot,
       ) ?
@@ -656,7 +652,7 @@ function normalizePriorityRecoveryReleasedSerialWaitSnapshots(snapshots = []) {
     buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId(
       normalizedSnapshots,
     );
-  if (releasedFreshnessByOperationId.size === NUM.ZERO) {
+  if (releasedFreshnessByOperationId.size === 0) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.map((snapshot) => {

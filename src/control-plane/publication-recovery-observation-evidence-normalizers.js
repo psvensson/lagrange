@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from './control-plane-readiness-constants.js';
@@ -48,15 +47,15 @@ function hasClosedUnknownNoDebtPublicationGate(
     normalizeOptionalString(publicationConvergenceGate.recoveryOutcome) ===
       PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED &&
     normalizeNonNegativeInteger(publicationConvergenceGate.pendingAckCount) ===
-      NUM.ZERO &&
+      0 &&
     normalizeDistinctStringArray(publicationConvergenceGate.pendingAckNodeIds)
-      .length === NUM.ZERO &&
+      .length === 0 &&
     normalizeNonNegativeInteger(
       publicationConvergenceGate.missingPublishedCount,
-    ) === NUM.ZERO &&
+    ) === 0 &&
     normalizeDistinctStringArray(
       publicationConvergenceGate.missingPublishedNodeIds,
-    ).length === NUM.ZERO &&
+    ).length === 0 &&
     publicationConvergenceGate.prioritySpreadPending !== true &&
     publicationConvergenceGate.prioritySpreadEvidenceUnavailable !== true;
 }
@@ -108,9 +107,9 @@ function normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
       priorityRecoveryObservation.publicationConvergenceGateReasons,
     ),
     pendingAckNodeIds: PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     missingPublishedNodeIds: PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
-    missingPublishedCount: NUM.ZERO,
+    missingPublishedCount: 0,
   });
 }
 
@@ -180,7 +179,7 @@ function normalizePriorityRecoveryObservationFromPublicationGate(
 
 function hasUnavailablePublicationRecoveryEpoch(value) {
   const publicationEpoch = normalizePublicationEpoch(value);
-  return publicationEpoch === null || publicationEpoch === NUM.ZERO;
+  return publicationEpoch === null || publicationEpoch === 0;
 }
 
 function hasUnknownPublicationRecoveryStatus(value) {
@@ -191,7 +190,7 @@ function hasUnknownPublicationRecoveryStatus(value) {
 
 function hasPublicationRecoveryNodeListEvidence(...nodeIdLists) {
   return nodeIdLists.some((nodeIds) =>
-    normalizeDistinctStringArray(nodeIds).length > NUM.ZERO,
+    normalizeDistinctStringArray(nodeIds).length > 0,
   );
 }
 
@@ -217,7 +216,7 @@ function hasCountOnlyUnknownPublicationDeficit({
     hasUnavailablePublicationRecoveryEpoch(publicationEpoch) &&
     prioritySpreadPending !== true &&
     normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) ===
-      NUM.ZERO &&
+      0 &&
     hasPublicationRecoveryNodeListEvidence(
       pendingAckEvidence?.requiredAckNodeIds,
       pendingAckEvidence?.acknowledgedNodeIds,

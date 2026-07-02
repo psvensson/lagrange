@@ -11,7 +11,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
     COLUMN,
     DISCOVERY_ROUTING_SNAPSHOT_FIELD,
     LEADER_RAFT_ROLE,
-    NUM,
     SERVICE_TYPE_PARTITION,
     STATUS_ACTIVE,
     filterActiveServingPartitionRows,
@@ -62,8 +61,8 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
       );
       return {
         tableFound:
-          tableContext.matchingTableRows.length > NUM.ZERO ||
-          partitionContext.matchingPartitionRows.length > NUM.ZERO,
+          tableContext.matchingTableRows.length > 0 ||
+          partitionContext.matchingPartitionRows.length > 0,
         partitionIds: this.buildDiscoveryPartitionIdSet(
           activeServingPartitionRows,
         ),
@@ -206,7 +205,7 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
      * @return {boolean}
      */
     resolveDiscoverySchemaReady(partitionIds, serviceRows) {
-      if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      if (!(partitionIds instanceof Set) || partitionIds.size === 0) {
         return false;
       }
       const readyPartitionIds = new Set();
@@ -261,7 +260,7 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
      * @return {boolean}
      */
     resolveDiscoveryLeadershipStable(partitionIds, partitionRows, serviceRows) {
-      if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      if (!(partitionIds instanceof Set) || partitionIds.size === 0) {
         return true;
       }
       const activeReplicaCoverage = this.buildDiscoveryActiveReplicaCoverage(

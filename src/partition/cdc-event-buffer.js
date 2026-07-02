@@ -13,7 +13,6 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM} from '../constants/index.js';
 import {
   CDC_EVENT_BUFFER_CAPACITY,
   CDC_EVENT_SLIDING_WINDOW_CAPACITY,
@@ -88,7 +87,7 @@ class CDCEventBuffer {
         loggingService.forSubsystem(BUFFER_SUBSYSTEM) : console);
     this.events = [];
     this.recentEvents = [];
-    this.recentEventsHead = NUM.ZERO;
+    this.recentEventsHead = 0;
   }
 
   /**
@@ -114,7 +113,7 @@ class CDCEventBuffer {
     if (this.events.length >= this.capacity) {
       const dropped = this.events.shift();
       this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_DROPPED_OVERFLOW, {
-        droppedCount: NUM.ONE,
+        droppedCount: 1,
         bufferCapacity: this.capacity,
         tableName: dropped.tableName,
         operation: dropped.operation,
@@ -141,8 +140,8 @@ class CDCEventBuffer {
     const eventsToReplay = this.events.slice();
     this.events = [];
 
-    let replayedCount = NUM.ZERO;
-    for (let index = NUM.ZERO; index < eventsToReplay.length; index++) {
+    let replayedCount = 0;
+    for (let index = 0; index < eventsToReplay.length; index++) {
       const cdcEvent = eventsToReplay[index];
       const identity = buildEventIdentity(cdcEvent);
       if (seen.has(identity)) {
@@ -174,7 +173,7 @@ class CDCEventBuffer {
    * @return {boolean} true if buffer has events
    */
   hasEvents() {
-    return this.events.length > NUM.ZERO;
+    return this.events.length > 0;
   }
 
   /**
@@ -198,7 +197,7 @@ class CDCEventBuffer {
     } else {
       this.recentEvents[this.recentEventsHead] = cdcEvent;
       this.recentEventsHead =
-        (this.recentEventsHead + NUM.ONE) % this.slidingWindowCapacity;
+        (this.recentEventsHead + 1) % this.slidingWindowCapacity;
     }
   }
 
@@ -213,7 +212,7 @@ class CDCEventBuffer {
     }
     return [
       ...this.recentEvents.slice(this.recentEventsHead),
-      ...this.recentEvents.slice(NUM.ZERO, this.recentEventsHead),
+      ...this.recentEvents.slice(0, this.recentEventsHead),
     ];
   }
 
@@ -229,7 +228,7 @@ class CDCEventBuffer {
    */
   clearRecentEvents() {
     this.recentEvents = [];
-    this.recentEventsHead = NUM.ZERO;
+    this.recentEventsHead = 0;
   }
 }
 

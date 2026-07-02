@@ -14,7 +14,7 @@ import {
   RAFT_GROUP_EVENT,
   RAFT_GROUP_ROLE,
 } from '../../src/raft/raft-group-constants.js';
-import {ENTITY_TYPE, NUM} from '../../src/constants/index.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 
 /**
  * Create a silent logger for tests.
@@ -338,7 +338,7 @@ test('double startElection is idempotent', async (t) => {
 
     group.initialize();
 
-    let leaderEventCount = NUM.ZERO;
+    let leaderEventCount = 0;
     group.on(RAFT_GROUP_EVENT.LEADER, () => {
       leaderEventCount++;
     });
@@ -347,7 +347,7 @@ test('double startElection is idempotent', async (t) => {
     group.startElection();
 
     t.equal(
-      leaderEventCount, NUM.ONE,
+      leaderEventCount, 1,
       'leader event should be emitted only once',
     );
     t.equal(
@@ -372,7 +372,7 @@ test('leader activation is canceled when candidate follows before stabilization'
 
       group.initialize();
 
-      let leaderEvents = NUM.ZERO;
+      let leaderEvents = 0;
       group.on(RAFT_GROUP_EVENT.LEADER, () => {
         leaderEvents += 1;
       });
@@ -382,7 +382,7 @@ test('leader activation is canceled when candidate follows before stabilization'
 
       await new Promise((resolve) => setTimeout(resolve, 40));
 
-      t.equal(leaderEvents, NUM.ZERO);
+      t.equal(leaderEvents, 0);
       t.equal(group.getRole(), RAFT_GROUP_ROLE.CANDIDATE);
     } finally {
       await safeShutdown(group);

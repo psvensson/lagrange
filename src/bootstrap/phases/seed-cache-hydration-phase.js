@@ -39,7 +39,6 @@ import {
   INITIAL_REPLICA_IDS,
 } from '../system-table-schemas-constants.js';
 import {
-  NUM,
   TABLES,
   CDC_OPERATION,
 } from '../../constants/index.js';
@@ -57,7 +56,6 @@ import {
 } from '../../cache/leader-readiness-gate.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_EMPTY = '';
 
 const LOG_HYDRATION_STEP_COMPLETE = 'Cache hydration step complete';
 const HYDRATION_STEP = Object.freeze({
@@ -444,7 +442,7 @@ class SeedCacheHydrationPhase {
       }
     }
 
-    if (result.errors.length > NUM.ZERO) {
+    if (result.errors.length > 0) {
       result.success = false;
     }
 
@@ -481,13 +479,13 @@ class SeedCacheHydrationPhase {
       }
 
       const rows = systemTableCache.getAll(tableName);
-      if (!rows || rows.length === NUM.ZERO) {
+      if (!rows || rows.length === 0) {
         emptyTables.push(tableName);
       }
     }
 
-    if (missingTables.length > NUM.ZERO ||
-        emptyTables.length > NUM.ZERO) {
+    if (missingTables.length > 0 ||
+        emptyTables.length > 0) {
       logger.error(
         BOOTSTRAP_LOG_MSG.CACHE_HYDRATION_INCOMPLETE, {
           missingTables,
@@ -520,7 +518,7 @@ class SeedCacheHydrationPhase {
    * @return {number}
    */
   countTotalRows(result) {
-    let total = NUM.ZERO;
+    let total = 0;
     for (const tableResult of Object.values(result.tables)) {
       if (tableResult.success && tableResult.rowCount) {
         total += tableResult.rowCount;
@@ -539,7 +537,7 @@ class SeedCacheHydrationPhase {
       const replicaIds =
         INITIAL_REPLICA_IDS[tableName] || [];
       if (!partitionId ||
-          replicaIds.length === NUM.ZERO) {
+          replicaIds.length === 0) {
         continue;
       }
 
@@ -612,7 +610,7 @@ class SeedCacheHydrationPhase {
           ),
         );
         error.missingLeaders = missing;
-        error.missingCount = readiness?.missingCount || NUM.ZERO;
+        error.missingCount = readiness?.missingCount || 0;
         error.timeoutMs = timeoutMs;
         error.timeoutKind = context.timeoutKind;
         return error;
@@ -626,7 +624,7 @@ class SeedCacheHydrationPhase {
     }
 
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
-    if (!Array.isArray(replicaIds) || replicaIds.length === NUM.ZERO) {
+    if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
       return false;
     }
 
@@ -664,13 +662,13 @@ class SeedCacheHydrationPhase {
     );
     if (result?.success === false ||
         (Array.isArray(result?.errors) &&
-         result.errors.length > NUM.ZERO)) {
+         result.errors.length > 0)) {
       const errorDetails = (result?.errors || [])
         .map((entry) => `${entry.tableName}:${entry.error}`)
         .join(', ');
       throw new Error(
         LOG_REPAIR_ERROR_PREFIX +
-        (errorDetails ? ` (${errorDetails})` : LOCAL_STR_EMPTY),
+        (errorDetails ? ` (${errorDetails})` : ''),
       );
     }
 

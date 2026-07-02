@@ -1,7 +1,5 @@
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 const MEMBERSHIP_LIFECYCLE_STATE = Object.freeze({
   ABSENT: 'absent',
@@ -283,7 +281,7 @@ function normalizeNodeIdList(values = []) {
 function normalizeStringList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
+      .map((value) => String(value || '').trim())
       .filter(Boolean),
   )].sort();
 }
@@ -350,12 +348,12 @@ function normalizeParticipationByNodeId(values = {}) {
           participation?.suspectedOrTransitioning === true,
         recoverySource:
           typeof participation?.recoverySource === LOCAL_STR_STRING &&
-            participation.recoverySource.trim().length > LOCAL_NUM_ZERO ?
+            participation.recoverySource.trim().length > 0 ?
             participation.recoverySource.trim() :
             null,
         recoveryEpoch:
           typeof participation?.recoveryEpoch === LOCAL_STR_STRING &&
-            participation.recoveryEpoch.trim().length > LOCAL_NUM_ZERO ?
+            participation.recoveryEpoch.trim().length > 0 ?
             participation.recoveryEpoch.trim() :
             null,
         admissionState,
@@ -448,7 +446,7 @@ function normalizeParticipationStateCounts(values = {}) {
     .reduce((accumulator, state) => {
       const normalizedState = normalizeNodeParticipationState(state);
       const count = Number(values[state]);
-      if (!normalizedState || !Number.isFinite(count) || count <= LOCAL_NUM_ZERO) {
+      if (!normalizedState || !Number.isFinite(count) || count <= 0) {
         return accumulator;
       }
       accumulator[normalizedState] = Math.trunc(count);

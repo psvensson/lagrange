@@ -21,7 +21,6 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BOOTSTRAP_EVENT, BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NUM} from '../../src/constants/index.js';
 
 /**
  * Check if all replica resources are cleared after cleanup.
@@ -31,14 +30,14 @@ import {NUM} from '../../src/constants/index.js';
  */
 function areReplicaResourcesCleared(bootstrap) {
   // Check in-process mode resources
-  const messageGroupsCleared = bootstrap.messageGroupServices.size === NUM.ZERO;
-  const partitionsCleared = bootstrap.partitionServices.size === NUM.ZERO;
+  const messageGroupsCleared = bootstrap.messageGroupServices.size === 0;
+  const partitionsCleared = bootstrap.partitionServices.size === 0;
 
   // Check worker mode resources (if they exist)
   const workerMessageGroupsCleared = !bootstrap.workerMessageGroupHandles ||
-    bootstrap.workerMessageGroupHandles.size === NUM.ZERO;
+    bootstrap.workerMessageGroupHandles.size === 0;
   const workerPartitionsCleared = !bootstrap.workerPartitionHandles ||
-    bootstrap.workerPartitionHandles.size === NUM.ZERO;
+    bootstrap.workerPartitionHandles.size === 0;
 
   return messageGroupsCleared && partitionsCleared &&
     workerMessageGroupsCleared && workerPartitionsCleared;

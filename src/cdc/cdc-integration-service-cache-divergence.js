@@ -1,8 +1,6 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 
 const {
-  TYPEOF,
-  NUM,
   buildDivergenceEvent,
   SQL_RECONCILIATION_REASON,
   CDC_EVENT,
@@ -22,8 +20,8 @@ export function areCacheFieldValuesEqual(actualValue, expectedValue) {
     return true;
   }
   if (
-    (actualValue === null || typeof actualValue !== TYPEOF.OBJECT) &&
-    (expectedValue === null || typeof expectedValue !== TYPEOF.OBJECT)
+    (actualValue === null || typeof actualValue !== 'object') &&
+    (expectedValue === null || typeof expectedValue !== 'object')
   ) {
     return false;
   }
@@ -40,10 +38,10 @@ export function areCacheFieldValuesEqual(actualValue, expectedValue) {
  * @return {number|null} Comparable value or null.
  */
 export function normalizeComparableCacheFieldValue(value) {
-  if (typeof value === TYPEOF.NUMBER) {
+  if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
   }
-  if (typeof value === TYPEOF.BIGINT) {
+  if (typeof value === 'bigint') {
     const normalized = Number(value);
     return Number.isFinite(normalized) ? normalized : null;
   }
@@ -51,8 +49,8 @@ export function normalizeComparableCacheFieldValue(value) {
     const timestamp = value.getTime();
     return Number.isFinite(timestamp) ? timestamp : null;
   }
-  if (typeof value === TYPEOF.STRING) {
-    if (value.length === NUM.ZERO) {
+  if (typeof value === 'string') {
+    if (value.length === 0) {
       return null;
     }
     const asNumber = Number(value);
@@ -93,7 +91,7 @@ export function doesCacheRecordMatchExpectedFields(record, expectedFields) {
   if (!expectedFields) {
     return Boolean(record);
   }
-  if (!record || typeof record !== TYPEOF.OBJECT) {
+  if (!record || typeof record !== 'object') {
     return false;
   }
   for (const [fieldName, expectedValue] of Object.entries(expectedFields)) {
@@ -124,7 +122,7 @@ export function normalizeExpectedFieldsForMinimums(expectedFields, minimumFields
     }
     normalized[fieldName] = expectedValue;
   }
-  return Object.keys(normalized).length > NUM.ZERO ? normalized : null;
+  return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 /**
@@ -137,7 +135,7 @@ export function doesCacheRecordMeetMinimumFields(record, minimumFields) {
   if (!minimumFields) {
     return true;
   }
-  if (!record || typeof record !== TYPEOF.OBJECT) {
+  if (!record || typeof record !== 'object') {
     return false;
   }
   for (const [fieldName, minimumValue] of Object.entries(minimumFields)) {

@@ -32,15 +32,14 @@ import {AssignmentEpoch} from './assignment-epoch.js';
 const LOCAL_STR_EPOCHMISMATCHERROR = 'EpochMismatchError';
 const LOCAL_STR_STALEEPOCHERROR = 'StaleEpochError';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_898IU = 'nodeId is required and must be a non-empty string';
-const LOCAL_STR_VFLNU = 'initialEpoch must be an AssignmentEpoch instance';
-const LOCAL_STR_1QGAD = 'AssignmentEpochManager not initialized';
+const LOCAL_STR_NODEID_IS_REQUIRED_AND_MUST_BE_A_NON_EMP = 'nodeId is required and must be a non-empty string';
+const LOCAL_STR_INITIALEPOCH_MUST_BE_AN_ASSIGNMENTEPOCH = 'initialEpoch must be an AssignmentEpoch instance';
+const LOCAL_STR_ASSIGNMENTEPOCHMANAGER_NOT_INITIALIZED = 'AssignmentEpochManager not initialized';
 const LOCAL_STR_NUMBER = 'number';
-const LOCAL_STR_509RH = 'expectedEpoch must be an integer';
+const LOCAL_STR_EXPECTEDEPOCH_MUST_BE_AN_INTEGER = 'expectedEpoch must be an integer';
 const LOCAL_STR_EPOCHCHANGE = 'epochChange';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_PROPOSALRETRY = 'proposalRetry';
-const LOCAL_STR_1QSPJ = 'Max retries exceeded';
+const LOCAL_STR_MAX_RETRIES_EXCEEDED = 'Max retries exceeded';
 const LOCAL_STR_EPOCHAPPLIED = 'epochApplied';
 const LOCAL_STR_CDC = 'cdc';
 
@@ -135,7 +134,7 @@ class AssignmentEpochManager extends EventEmitter {
     super();
 
     if (!options.nodeId || typeof options.nodeId !== LOCAL_STR_STRING) {
-      throw new Error(LOCAL_STR_898IU);
+      throw new Error(LOCAL_STR_NODEID_IS_REQUIRED_AND_MUST_BE_A_NON_EMP);
     }
 
     this._nodeId = options.nodeId;
@@ -152,7 +151,7 @@ class AssignmentEpochManager extends EventEmitter {
   initialize(initialEpoch = null) {
     if (initialEpoch) {
       if (!(initialEpoch instanceof AssignmentEpoch)) {
-        throw new Error(LOCAL_STR_VFLNU);
+        throw new Error(LOCAL_STR_INITIALEPOCH_MUST_BE_AN_ASSIGNMENTEPOCH);
       }
       this._currentEpoch = initialEpoch;
     } else {
@@ -178,7 +177,7 @@ class AssignmentEpochManager extends EventEmitter {
    */
   getCurrentEpoch() {
     if (!this._currentEpoch) {
-      throw new Error(LOCAL_STR_1QGAD);
+      throw new Error(LOCAL_STR_ASSIGNMENTEPOCHMANAGER_NOT_INITIALIZED);
     }
     return this._currentEpoch;
   }
@@ -224,7 +223,7 @@ class AssignmentEpochManager extends EventEmitter {
     if (!this._currentEpoch) {
       return {
         success: false,
-        error: LOCAL_STR_1QGAD,
+        error: LOCAL_STR_ASSIGNMENTEPOCHMANAGER_NOT_INITIALIZED,
       };
     }
 
@@ -232,7 +231,7 @@ class AssignmentEpochManager extends EventEmitter {
     if (typeof expectedEpoch !== LOCAL_STR_NUMBER || !Number.isInteger(expectedEpoch)) {
       return {
         success: false,
-        error: LOCAL_STR_509RH,
+        error: LOCAL_STR_EXPECTEDEPOCH_MUST_BE_AN_INTEGER,
       };
     }
 
@@ -302,7 +301,7 @@ class AssignmentEpochManager extends EventEmitter {
         DEFAULT_RETRY_CONFIG.backoffMultiplier,
     };
 
-    let attempts = LOCAL_NUM_ZERO;
+    let attempts = 0;
     let currentDelay = config.initialDelayMs;
 
     while (attempts <= config.maxRetries) {
@@ -363,7 +362,7 @@ class AssignmentEpochManager extends EventEmitter {
     // Should not reach here, but return failure just in case
     return {
       success: false,
-      error: LOCAL_STR_1QSPJ,
+      error: LOCAL_STR_MAX_RETRIES_EXCEEDED,
       attempts,
     };
   }

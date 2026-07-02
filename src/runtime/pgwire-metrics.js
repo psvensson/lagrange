@@ -12,7 +12,6 @@
 
 import {METRICS_LOG_TAG} from '../constants/metrics-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Emit a metrics log entry. Failures are silently swallowed
@@ -76,7 +75,7 @@ function emitQueryMetric(logger, dims) {
     statementType: dims.statementType,
     durationMs: dims.durationMs,
     success: dims.success,
-    rowCount: dims.rowCount ?? LOCAL_NUM_ZERO,
+    rowCount: dims.rowCount ?? 0,
   });
 }
 

@@ -8,7 +8,6 @@
  * Requirements: 5.1, 5.3
  */
 
-import {NUM} from '../constants/index.js';
 import {isValidDigest} from './module-manifest-models.js';
 import {
   MODULE_DEPENDENCY_FIELD as DF,
@@ -45,7 +44,7 @@ function resolveDependencies(
   const auditLog = [];
 
   if (!deps || !Array.isArray(deps) ||
-      deps.length === NUM.ZERO) {
+      deps.length === 0) {
     return {resolved: true, resolvedDependencies: [], auditLog};
   }
 
@@ -115,7 +114,7 @@ function resolveDependencies(
     });
   }
 
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {resolved: false, errors, auditLog};
   }
 
@@ -135,7 +134,7 @@ function validateDependencyDigests(
   dependencies, availableModules,
 ) {
   if (!dependencies || !Array.isArray(dependencies) ||
-      dependencies.length === NUM.ZERO) {
+      dependencies.length === 0) {
     return {valid: true};
   }
 
@@ -172,7 +171,7 @@ function validateDependencyDigests(
     }
   }
 
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
 
@@ -193,7 +192,7 @@ function detectUndeclaredImports(
   actualImports, declaredDependencies,
 ) {
   if (!actualImports || !Array.isArray(actualImports) ||
-      actualImports.length === NUM.ZERO) {
+      actualImports.length === 0) {
     return {valid: true};
   }
 
@@ -208,7 +207,7 @@ function detectUndeclaredImports(
     }
   }
 
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
 

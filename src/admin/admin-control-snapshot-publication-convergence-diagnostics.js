@@ -58,7 +58,6 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
 ) {
   const {
     ADMIN_CONTROL_SNAPSHOT_LITERAL,
-    TYPEOF,
     buildPublicationRecoveryProtocolSnapshot,
   } = factoryOptions;
 
@@ -132,7 +131,7 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
           ].sort((left, right) => left.localeCompare(right)),
         );
       const selectPublicationActiveGateHandoff = (value = null) => {
-        if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
           return LOCAL_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE;
         }
         const nestedHandoff =
@@ -142,7 +141,7 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
           ];
         if (
           nestedHandoff &&
-          typeof nestedHandoff === TYPEOF.OBJECT &&
+          typeof nestedHandoff === 'object' &&
           !Array.isArray(nestedHandoff)
         ) {
           return nestedHandoff;
@@ -308,14 +307,14 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
             diagnostics.publishedActiveNodeIds : [];
         const priorityPartitionSummary =
           diagnostics.priorityPartitionSummary &&
-          typeof diagnostics.priorityPartitionSummary === TYPEOF.OBJECT ?
+          typeof diagnostics.priorityPartitionSummary === 'object' ?
             diagnostics.priorityPartitionSummary :
             LOCAL_PUBLICATION_SELECTION_EMPTY_SOURCE;
         const hasSourcePriorityControlPlaneRecovery =
           Boolean(
             sourceEvidence.priorityControlPlaneRecovery &&
             typeof sourceEvidence.priorityControlPlaneRecovery ===
-              TYPEOF.OBJECT,
+              'object',
           );
         const ownerRecoveryEvidenceAvailable =
           hasSourcePriorityControlPlaneRecovery === true ||
@@ -371,7 +370,7 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
         const membershipPublication = readiness?.membershipPublication;
         if (
           !membershipPublication ||
-          typeof membershipPublication !== TYPEOF.OBJECT
+          typeof membershipPublication !== 'object'
         ) {
           continue;
         }
@@ -385,7 +384,7 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
         break;
       }
       let fallbackCandidate = unavailablePublicationCandidate;
-      if (fallbackPublication && typeof fallbackPublication === TYPEOF.OBJECT) {
+      if (fallbackPublication && typeof fallbackPublication === 'object') {
         fallbackCandidate = buildPublicationCandidate(fallbackPublication, {
           publishedAt:
             fallbackPublication.publishedAt ?? fallbackPublication.published_at,

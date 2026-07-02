@@ -1,19 +1,19 @@
 const LOCAL_STR_SIDE = 'side';
 const LOCAL_STR_BOTTOM = 'bottom';
 const LOCAL_STR_OVERLAY = 'overlay';
-const LOCAL_STR_6YESZ = 'viewManager:viewSwitched';
-const LOCAL_STR_186WV = 'view:selectionChanged';
-const LOCAL_STR_39DJ7 = 'viewManager:refresh';
-const LOCAL_STR_1T9YB = 'detailCoordinator:viewRegistered';
-const LOCAL_STR_111I3 = 'detailCoordinator:viewUnregistered';
-const LOCAL_STR_1D1Y4 = 'detailCoordinator:viewSwitched';
+const LOCAL_STR_VIEWMANAGER_VIEWSWITCHED = 'viewManager:viewSwitched';
+const LOCAL_STR_VIEW_SELECTIONCHANGED = 'view:selectionChanged';
+const LOCAL_STR_VIEWMANAGER_REFRESH = 'viewManager:refresh';
+const LOCAL_STR_DETAILCOORDINATOR_VIEWREGISTERED = 'detailCoordinator:viewRegistered';
+const LOCAL_STR_DETAILCOORDINATOR_VIEWUNREGISTERED = 'detailCoordinator:viewUnregistered';
+const LOCAL_STR_DETAILCOORDINATOR_VIEWSWITCHED = 'detailCoordinator:viewSwitched';
 const LOCAL_STR_DEFAULT = 'default';
-const LOCAL_STR_1N3ZR = 'detailCoordinator:detailUpdated';
-const LOCAL_STR_1I2PP = 'detailCoordinator:detailCleared';
-const LOCAL_STR_1MVFP = 'detailCoordinator:panelShown';
-const LOCAL_STR_1N52F = 'detailCoordinator:panelHidden';
-const LOCAL_STR_1W18L = 'detailCoordinator:layoutChanged';
-const LOCAL_STR_FTUV8 = 'detailCoordinator:destroyed';
+const LOCAL_STR_DETAILCOORDINATOR_DETAILUPDATED = 'detailCoordinator:detailUpdated';
+const LOCAL_STR_DETAILCOORDINATOR_DETAILCLEARED = 'detailCoordinator:detailCleared';
+const LOCAL_STR_DETAILCOORDINATOR_PANELSHOWN = 'detailCoordinator:panelShown';
+const LOCAL_STR_DETAILCOORDINATOR_PANELHIDDEN = 'detailCoordinator:panelHidden';
+const LOCAL_STR_DETAILCOORDINATOR_LAYOUTCHANGED = 'detailCoordinator:layoutChanged';
+const LOCAL_STR_DETAILCOORDINATOR_DESTROYED = 'detailCoordinator:destroyed';
 
 /**
  * ViewDetailCoordinator - Automatic coordination between views and detail panels
@@ -75,17 +75,17 @@ export class ViewDetailCoordinator {
   setupEventListeners() {
     if (this.eventBus) {
       // Listen for view switches
-      this.eventBus.on(LOCAL_STR_6YESZ, (data) => {
+      this.eventBus.on(LOCAL_STR_VIEWMANAGER_VIEWSWITCHED, (data) => {
         this.handleViewSwitch(data);
       });
 
       // Listen for selection changes
-      this.eventBus.on(LOCAL_STR_186WV, (data) => {
+      this.eventBus.on(LOCAL_STR_VIEW_SELECTIONCHANGED, (data) => {
         this.handleSelectionChange(data);
       });
 
       // Listen for view refresh
-      this.eventBus.on(LOCAL_STR_39DJ7, (data) => {
+      this.eventBus.on(LOCAL_STR_VIEWMANAGER_REFRESH, (data) => {
         this.handleViewRefresh(data);
       });
     }
@@ -108,7 +108,7 @@ export class ViewDetailCoordinator {
     this.viewConfigs.set(viewName, {...defaultConfig, ...config});
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1T9YB, {
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_VIEWREGISTERED, {
         viewName,
         config: this.viewConfigs.get(viewName),
       });
@@ -123,7 +123,7 @@ export class ViewDetailCoordinator {
     this.viewConfigs.delete(viewName);
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_111I3, {viewName});
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_VIEWUNREGISTERED, {viewName});
     }
   }
 
@@ -165,7 +165,7 @@ export class ViewDetailCoordinator {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1D1Y4, {
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_VIEWSWITCHED, {
         viewName,
         layout: this.currentLayout,
         detailVisible: this.detailPanelVisible,
@@ -247,7 +247,7 @@ export class ViewDetailCoordinator {
     this.currentDetailData = detailData;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1N3ZR, {
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_DETAILUPDATED, {
         detailData,
         layout: this.currentLayout,
         visible: this.detailPanelVisible,
@@ -263,7 +263,7 @@ export class ViewDetailCoordinator {
     this.currentDetailData = null;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1I2PP, {});
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_DETAILCLEARED, {});
     }
   }
 
@@ -274,7 +274,7 @@ export class ViewDetailCoordinator {
     this.detailPanelVisible = true;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1MVFP, {
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_PANELSHOWN, {
         layout: this.currentLayout,
         detailData: this.currentDetailData,
       });
@@ -288,7 +288,7 @@ export class ViewDetailCoordinator {
     this.detailPanelVisible = false;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1N52F, {});
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_PANELHIDDEN, {});
     }
   }
 
@@ -316,7 +316,7 @@ export class ViewDetailCoordinator {
     this.currentLayout = layout;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1W18L, {
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_LAYOUTCHANGED, {
         layout,
         visible: this.detailPanelVisible,
       });
@@ -403,7 +403,7 @@ export class ViewDetailCoordinator {
     this.detailPanelVisible = false;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_FTUV8, {});
+      this.eventBus.emit(LOCAL_STR_DETAILCOORDINATOR_DESTROYED, {});
     }
   }
 }

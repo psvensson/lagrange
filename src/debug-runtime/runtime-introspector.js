@@ -2,7 +2,6 @@
  * Runtime introspection for stack frames, locals, and memory.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   lookupSourceForOffset,
   lookupSymbolsForOffset,
@@ -119,7 +118,7 @@ class RuntimeIntrospector {
     ) : null;
 
     const locals = getRawLocalsForFrame(inspectState, frameId);
-    const limitedLocals = locals.slice(NUM.ZERO, requestedLimit);
+    const limitedLocals = locals.slice(0, requestedLimit);
 
     const variables = limitedLocals.map((local, index) => {
       const variable = normalizeLocalVariable(local, index);
@@ -173,8 +172,8 @@ class RuntimeIntrospector {
     if (request.offset >= memoryBytes.byteLength) {
       return {
         offset: request.offset,
-        length: NUM.ZERO,
-        bytes: new Uint8Array(NUM.ZERO),
+        length: 0,
+        bytes: new Uint8Array(0),
       };
     }
 
@@ -219,7 +218,7 @@ class RuntimeIntrospector {
    */
   _assertRuntimeAdapter() {
     if (!this._runtimeAdapter ||
-      typeof this._runtimeAdapter.inspect !== TYPEOF.FUNCTION) {
+      typeof this._runtimeAdapter.inspect !== 'function') {
       throw new Error(ERR.RUNTIME_ADAPTER_REQUIRED);
     }
   }
@@ -229,14 +228,14 @@ class RuntimeIntrospector {
  * @param {Object} request
  */
 function validateBaseRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
   if (!request.instanceHandle ||
-    typeof request.instanceHandle !== TYPEOF.OBJECT) {
+    typeof request.instanceHandle !== 'object') {
     throw new Error(ERR.INSTANCE_HANDLE_REQUIRED);
   }
-  if (!request.index || typeof request.index !== TYPEOF.OBJECT) {
+  if (!request.index || typeof request.index !== 'object') {
     throw new Error(ERR.INDEX_REQUIRED);
   }
 }
@@ -260,7 +259,7 @@ function validateMemoryRequest(request) {
  */
 function normalizeFrames(inspectState) {
   const rawFrames = inspectState?.stackFrames;
-  if (Array.isArray(rawFrames) && rawFrames.length > NUM.ZERO) {
+  if (Array.isArray(rawFrames) && rawFrames.length > 0) {
     return rawFrames
       .filter((frame) => isNonNegativeInteger(frame?.codeOffset))
       .map((frame, index) => ({
@@ -304,7 +303,7 @@ function findFrameById(inspectState, frameId) {
 function getRawLocalsForFrame(inspectState, frameId) {
   const localsByFrame = inspectState?.localsByFrame;
   if (localsByFrame &&
-    typeof localsByFrame === TYPEOF.OBJECT &&
+    typeof localsByFrame === 'object' &&
     Array.isArray(localsByFrame[frameId])) {
     return localsByFrame[frameId];
   }
@@ -323,7 +322,7 @@ function getRawLocalsForFrame(inspectState, frameId) {
  * @return {Object}
  */
 function normalizeLocalVariable(local, index) {
-  if (local && typeof local === TYPEOF.OBJECT) {
+  if (local && typeof local === 'object') {
     return {
       name: isNonEmptyString(local.name) ? local.name : `local_${index}`,
       value: local.value,
@@ -361,7 +360,7 @@ function extractMemoryBytes(inspectState) {
     ));
   }
   if (memory instanceof ArrayBuffer) {
-    return new Uint8Array(memory.slice(NUM.ZERO));
+    return new Uint8Array(memory.slice(0));
   }
   return null;
 }
@@ -383,7 +382,7 @@ function toSourceView(source) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 /**
@@ -391,8 +390,8 @@ function isNonNegativeInteger(value) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

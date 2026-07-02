@@ -1,33 +1,28 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate.js';
 
-const LOCAL_STR_EMPTY = '';
 
 function normalizeNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0),
   )].sort();
 }
 
 function normalizeStringList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0),
   )];
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizePendingAckEvidenceState(value) {
@@ -42,7 +37,7 @@ function normalizePendingAckEvidenceState(value) {
 }
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
 }

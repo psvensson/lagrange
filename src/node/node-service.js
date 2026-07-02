@@ -345,8 +345,8 @@ class NodeService extends EventEmitter {
     const usedMemory = totalMemory - freeMemory;
 
     // Calculate CPU usage
-    let totalIdle = NUM.ZERO;
-    let totalTick = NUM.ZERO;
+    let totalIdle = 0;
+    let totalTick = 0;
     for (const cpu of cpus) {
       for (const type of Object.keys(cpu.times)) {
         totalTick += cpu.times[type];
@@ -369,7 +369,7 @@ class NodeService extends EventEmitter {
       timestamp: Date.now(),
       cpu: {
         count: cpus.length,
-        model: cpus[NUM.ZERO]?.model || STRING.UNKNOWN,
+        model: cpus[0]?.model || STRING.UNKNOWN,
         usagePercent: Math.round(cpuUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
       },
       memory: {
@@ -505,10 +505,10 @@ class NodeService extends EventEmitter {
    * @return {number} Number of running services.
    */
   getRunningServiceCount() {
-    let count = NUM.ZERO;
+    let count = 0;
     for (const serviceInfo of this.services.values()) {
       if (serviceInfo.status === ServiceStatus.RUNNING) {
-        count += NUM.ONE;
+        count += 1;
       }
     }
     return count;
@@ -629,7 +629,7 @@ class NodeService extends EventEmitter {
    * @return {boolean} True if node has message group replicas.
    */
   hasLocalMessageGroupReplica() {
-    return this.messageGroupServices.size > NUM.ZERO;
+    return this.messageGroupServices.size > 0;
   }
 
   /**

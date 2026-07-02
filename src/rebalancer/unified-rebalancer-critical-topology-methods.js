@@ -8,7 +8,6 @@ const {
   ENDPOINT_STATUS,
   ENDPOINT_SYNC_HEALTH,
   META_SERVICE_ID,
-  NUM,
   NodeStatus,
   REBALANCER_LOG_MSG,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -16,7 +15,6 @@ const {
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   isNodeReadyLeaseExplicitlyCleared,
   normalizeNodeEndpointRow,
@@ -45,7 +43,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
       return null;
     }
     const nodeRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
         [];
     if (
@@ -60,7 +58,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
     const constrainToStartupAuthority =
       startupAuthorityNodeIds instanceof Set &&
-      startupAuthorityNodeIds.size > NUM.ZERO;
+      startupAuthorityNodeIds.size > 0;
     const bypassPriorityStartupReadiness =
       this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
     const readinessDecisionDimension =
@@ -98,7 +96,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
       const readiness =
         this.controlPlaneReadinessService &&
         typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
             allowStaleOnCacheChange: false,
           }) :
@@ -174,8 +172,8 @@ class UnifiedRebalancerCriticalTopologyMethods {
           })
           .filter(
             (nodeId) =>
-              typeof nodeId === TYPEOF.STRING &&
-              nodeId.length > NUM.ZERO &&
+              typeof nodeId === 'string' &&
+              nodeId.length > 0 &&
               (
                 !constrainToStartupAuthority ||
                 startupAuthorityNodeIds.has(nodeId)
@@ -238,7 +236,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
         // not serialize every other partition behind one active move.
         scopeToEntity: true,
       });
-    if (inFlightTopologyOperations.count > NUM.ZERO) {
+    if (inFlightTopologyOperations.count > 0) {
       return Object.freeze({
         reason:
           CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT,
@@ -286,7 +284,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
             []),
         ].filter(
           (nodeId) =>
-            typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            typeof nodeId === 'string' && nodeId.length > 0,
         ),
       ),
     ];
@@ -310,7 +308,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     if (
       !this.controlPlaneSystemTableGateway ||
       typeof this.controlPlaneSystemTableGateway.readAuthoritativeRows !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
@@ -318,11 +316,11 @@ class UnifiedRebalancerCriticalTopologyMethods {
       ...new Set(
         (Array.isArray(requiredNodeIds) ? requiredNodeIds : []).filter(
           (nodeId) =>
-            typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            typeof nodeId === 'string' && nodeId.length > 0,
         ),
       ),
     ];
-    if (normalizedNodeIds.length === NUM.ZERO) {
+    if (normalizedNodeIds.length === 0) {
       return null;
     }
 
@@ -332,8 +330,8 @@ class UnifiedRebalancerCriticalTopologyMethods {
       `SELECT * FROM ${tableName} ` +
       `WHERE ${COLUMN.NODE_ID} IN (${placeholders})`;
     if (
-      typeof options?.serviceId === TYPEOF.STRING &&
-      options.serviceId.length > NUM.ZERO
+      typeof options?.serviceId === 'string' &&
+      options.serviceId.length > 0
     ) {
       sql += ` AND ${COLUMN.SERVICE_ID} = ?`;
       params.push(options.serviceId);
@@ -375,7 +373,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
         ...new Set(
           requiredNodeIds.filter(
             (nodeId) =>
-              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+              typeof nodeId === 'string' && nodeId.length > 0,
           ),
         ),
       ] :
@@ -383,25 +381,25 @@ class UnifiedRebalancerCriticalTopologyMethods {
     const allowReadinessBackfill = options?.allowReadinessBackfill !== false;
     const configuredRequiredReadyNodeCount =
       Number.isInteger(options?.requiredReadyNodeCount) &&
-      options.requiredReadyNodeCount > NUM.ZERO ?
+      options.requiredReadyNodeCount > 0 ?
         options.requiredReadyNodeCount :
         normalizedRequiredNodeIds.length;
     const requiredReadyNodeCount =
-      normalizedRequiredNodeIds.length > NUM.ZERO ?
+      normalizedRequiredNodeIds.length > 0 ?
         Math.max(
-          NUM.ONE,
+          1,
           Math.min(
             normalizedRequiredNodeIds.length,
             configuredRequiredReadyNodeCount,
           ),
         ) :
-        NUM.ZERO;
-    if (normalizedRequiredNodeIds.length === NUM.ZERO) {
+        0;
+    if (normalizedRequiredNodeIds.length === 0) {
       return Object.freeze({
         ready: false,
         missingNodeEndpointNodeIds: [],
         missingPostgresWireNodeIds: [],
-        endpointReadyNodeCount: NUM.ZERO,
+        endpointReadyNodeCount: 0,
         requiredReadyNodeCount,
         endpointReadyNodeIds: [],
       });
@@ -443,7 +441,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     if (
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       for (const nodeId of normalizedRequiredNodeIds) {
         const readiness =
@@ -539,7 +537,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     ) {
       const requiredNodeIds =
         this.getCriticalSystemEndpointVisibilityRequiredNodeIds(blocker);
-      if (requiredNodeIds.length === NUM.ZERO) {
+      if (requiredNodeIds.length === 0) {
         return blocker;
       }
       try {
@@ -558,7 +556,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
           ),
         ]);
         const nodeEndpointRows =
-          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+          typeof this.systemTableCache?.getAll === 'function' ?
             [
               ...this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
               ...(authoritativeNodeEndpointRead?.success === true ?
@@ -569,7 +567,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
               authoritativeNodeEndpointRead.rows || [] :
               [];
         const serviceEndpointRows =
-          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+          typeof this.systemTableCache?.getAll === 'function' ?
             [
               ...this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS),
               ...(authoritativeServiceEndpointRead?.success === true ?
@@ -616,7 +614,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     }
     if (
       !this.rebalanceCoordinator ||
-      typeof this.rebalanceCoordinator.getOperationsByEntity !== TYPEOF.FUNCTION
+      typeof this.rebalanceCoordinator.getOperationsByEntity !== 'function'
     ) {
       return blocker;
     }
@@ -646,7 +644,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
         blocker.activeNodeIds :
         []
       ).filter(
-        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ),
     );
     const inFlightDetails = [];
@@ -664,7 +662,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
         operation?.operationId || operation?.operation_id || '',
       ).trim();
       if (
-        operationId.length > NUM.ZERO &&
+        operationId.length > 0 &&
         nonBlockingPriorityOperationIds.has(operationId)
       ) {
         continue;
@@ -675,7 +673,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
         continue;
       }
       if (
-        activeNodeIds.size > NUM.ZERO &&
+        activeNodeIds.size > 0 &&
         !activeNodeIds.has(detail.targetNodeId)
       ) {
         continue;
@@ -683,7 +681,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
       inFlightDetails.push(detail);
     }
 
-    if (inFlightDetails.length === NUM.ZERO) {
+    if (inFlightDetails.length === 0) {
       return null;
     }
 

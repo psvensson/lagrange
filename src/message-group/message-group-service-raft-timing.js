@@ -3,7 +3,6 @@
  * log-entry application to the local state machine.
  * Requirements: 6.1, 6.2, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4
  */
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   RAFT_ELECTION_TIMING,
 } from '../raft/constants.js';
@@ -50,7 +49,7 @@ function assignRaftTiming(serviceClass) {
         !Number.isFinite(baseElectionMinMs) ||
         !Number.isFinite(baseElectionMaxMs) ||
         (hasTickInterval &&
-          (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= NUM.ZERO)) ||
+          (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0)) ||
         baseElectionMinMs > baseElectionMaxMs
       ) {
         return false;
@@ -75,7 +74,7 @@ function assignRaftTiming(serviceClass) {
           this.raftTimingConfig?.tickIntervalMs || null,
       };
       const shouldRearmTimer =
-        this.replicaIds.length > NUM.ONE &&
+        this.replicaIds.length > 1 &&
         (!this.deferElection || this.electionStarted);
       const applied = applyRuntimeRaftTiming({
         raft: this.raft,
@@ -116,15 +115,15 @@ function assignRaftTiming(serviceClass) {
       if (
         !this.raft ||
         !Number.isFinite(tickIntervalMs) ||
-        tickIntervalMs <= NUM.ZERO
+        tickIntervalMs <= 0
       ) {
         return false;
       }
-      if (typeof this.raft.setTickInterval === TYPEOF.FUNCTION) {
+      if (typeof this.raft.setTickInterval === 'function') {
         this.raft.setTickInterval(tickIntervalMs);
         return true;
       }
-      if (typeof this.raft.configureTickInterval === TYPEOF.FUNCTION) {
+      if (typeof this.raft.configureTickInterval === 'function') {
         this.raft.configureTickInterval(tickIntervalMs);
         return true;
       }

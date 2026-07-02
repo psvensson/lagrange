@@ -8,7 +8,6 @@
  */
 
 import Database from 'better-sqlite3';
-import {NUM} from '../constants/index.js';
 import {
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
@@ -66,14 +65,14 @@ const KV_SQL = Object.freeze({
     `DELETE FROM ${KV_TABLE_NAME} ` +
     `WHERE ${KV_COL.SESSION_ID} = ?`,
   SESSION_SIZE:
-    `SELECT COALESCE(SUM(LENGTH(${KV_COL.VALUE})), ${NUM.ZERO}) ` +
+    `SELECT COALESCE(SUM(LENGTH(${KV_COL.VALUE})), ${0}) ` +
     `AS total_bytes FROM ${KV_TABLE_NAME} ` +
     `WHERE ${KV_COL.SESSION_ID} = ?`,
   TOTAL_SIZE:
-    `SELECT COALESCE(SUM(LENGTH(${KV_COL.VALUE})), ${NUM.ZERO}) ` +
+    `SELECT COALESCE(SUM(LENGTH(${KV_COL.VALUE})), ${0}) ` +
     `AS total_bytes FROM ${KV_TABLE_NAME}`,
   VALUE_SIZE:
-    `SELECT COALESCE(LENGTH(${KV_COL.VALUE}), ${NUM.ZERO}) ` +
+    `SELECT COALESCE(LENGTH(${KV_COL.VALUE}), ${0}) ` +
     `AS value_bytes FROM ${KV_TABLE_NAME} ` +
     `WHERE ${KV_COL.SESSION_ID} = ? AND ${KV_COL.KEY} = ?`,
 });
@@ -261,7 +260,7 @@ class SessionKVStore {
   _getValueSize(sessionId, key) {
     const row = this._stmtValueSize.get(sessionId, key);
     if (!row) {
-      return NUM.ZERO;
+      return 0;
     }
     return row.value_bytes;
   }

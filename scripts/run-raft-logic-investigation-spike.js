@@ -14,63 +14,59 @@ import {
   RAFT_LOGIC_SPIKE_TIME,
 } from '../src/raft/spike/raft-logic-spike-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_REPORT_DIR = '--report-dir';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_IDLE_SOAK_MS = '--idle-soak-ms';
 const LOCAL_STR_SAMPLE_INTERVAL_MS = '--sample-interval-ms';
 const LOCAL_STR_LOAD_WRITES = '--load-writes';
 const LOCAL_STR_1 = '1';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_REPLICA_1 = 'replica-1';
-const LOCAL_STR_1TK2K = 'single node should elect itself';
-const LOCAL_STR_1UXKL = 'single_node_leadership';
-const LOCAL_STR_1THER = 'three_node_leader_election';
-const LOCAL_STR_UUGS4 = 'a follower replica should exist';
-const LOCAL_STR_1O8WU = 'follower_write_forwarding';
+const LOCAL_STR_SINGLE_NODE_SHOULD_ELECT_ITSELF = 'single node should elect itself';
+const LOCAL_STR_SINGLE_NODE_LEADERSHIP = 'single_node_leadership';
+const LOCAL_STR_THREE_NODE_LEADER_ELECTION = 'three_node_leader_election';
+const LOCAL_STR_A_FOLLOWER_REPLICA_SHOULD_EXIST = 'a follower replica should exist';
+const LOCAL_STR_FOLLOWER_WRITE_FORWARDING = 'follower_write_forwarding';
 const LOCAL_STR_COMMIT_DELIVERY = 'commit_delivery';
 const LOCAL_NUM_THREE = 3;
-const LOCAL_STR_PIM6S = 'commit entry should apply on all replicas';
-const LOCAL_STR_Z9OVR = 'commit_delivery_and_apply';
+const LOCAL_STR_COMMIT_ENTRY_SHOULD_APPLY_ON_ALL_REPLICA = 'commit entry should apply on all replicas';
+const LOCAL_STR_COMMIT_DELIVERY_AND_APPLY = 'commit_delivery_and_apply';
 const LOCAL_STR_LOAD_WRITE = 'load_write';
-const LOCAL_STR_1KX6B = 'leader_failover_and_re_election';
+const LOCAL_STR_LEADER_FAILOVER_AND_RE_ELECTION = 'leader_failover_and_re_election';
 const LOCAL_STR_CORRECTNESS_SUITE = 'correctness_suite';
 const LOCAL_NUM_FIVE = 5;
-const LOCAL_STR_KF9LH = 'transport_message_flow';
-const LOCAL_STR_2DC26 = 'sqlite_restart_single_replica_recovery';
-const LOCAL_STR_1WOYV = 'single_before_restart';
+const LOCAL_STR_TRANSPORT_MESSAGE_FLOW = 'transport_message_flow';
+const LOCAL_STR_SQLITE_RESTART_SINGLE_REPLICA_RECOVERY = 'sqlite_restart_single_replica_recovery';
+const LOCAL_STR_SINGLE_BEFORE_RESTART = 'single_before_restart';
 const LOCAL_STR_V1 = 'v1';
-const LOCAL_STR_1JKWB = 'sqlite_restart_rolling_recovery';
-const LOCAL_STR_1J0K6 = 'rolling restart should process all replicas';
-const LOCAL_STR_1CKDW = 'sqlite_restart_leader_recovery';
-const LOCAL_STR_BW4EJ = 'leader restart should target current stable leader';
-const LOCAL_STR_1LSWS = 'sqlite_restart_crash_recovery';
-const LOCAL_STR_1FPBP = 'transport_storage_suite';
+const LOCAL_STR_SQLITE_RESTART_ROLLING_RECOVERY = 'sqlite_restart_rolling_recovery';
+const LOCAL_STR_ROLLING_RESTART_SHOULD_PROCESS_ALL_REPLI = 'rolling restart should process all replicas';
+const LOCAL_STR_SQLITE_RESTART_LEADER_RECOVERY = 'sqlite_restart_leader_recovery';
+const LOCAL_STR_LEADER_RESTART_SHOULD_TARGET_CURRENT_STA = 'leader restart should target current stable leader';
+const LOCAL_STR_SQLITE_RESTART_CRASH_RECOVERY = 'sqlite_restart_crash_recovery';
+const LOCAL_STR_TRANSPORT_STORAGE_SUITE = 'transport_storage_suite';
 const LOCAL_STR_RESOURCE_WRITE = 'resource_write';
 const LOCAL_STR_BLOCKER = 'blocker';
 const LOCAL_STR_CORRECTNESS = 'correctness';
-const LOCAL_STR_10MIY = 'Correctness checks did not pass.';
+const LOCAL_STR_CORRECTNESS_CHECKS_DID_NOT_PASS = 'Correctness checks did not pass.';
 const LOCAL_STR_TRANSPORT_STORAGE = 'transport_storage';
-const LOCAL_STR_RKBR1 = 'Transport/storage checks did not pass.';
+const LOCAL_STR_TRANSPORT_STORAGE_CHECKS_DID_NOT_PASS = 'Transport/storage checks did not pass.';
 const LOCAL_STR_HIGH = 'high';
 const LOCAL_STR_RESOURCE = 'resource';
-const LOCAL_STR_1O8N1 = 'Resource viability checks did not complete successfully.';
-const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_RESOURCE_VIABILITY_CHECKS_DID_NOT_COMPLE = 'Resource viability checks did not complete successfully.';
 const LOCAL_STR_GO_CANDIDATE = 'go_candidate';
 const LOCAL_STR_NO_GO = 'no_go';
-const LOCAL_STR_1WSR0 = '# Raft-Logic Spike Final Report';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_RAFT_LOGIC_SPIKE_FINAL_REPORT = '# Raft-Logic Spike Final Report';
 const LOCAL_STR_CORRECTNESS_CHECKS = '## Correctness Checks';
-const LOCAL_STR_15Z9Y = '## Transport and Storage Checks';
+const LOCAL_STR_TRANSPORT_AND_STORAGE_CHECKS = '## Transport and Storage Checks';
 const LOCAL_STR_RESOURCE_SUMMARY = '## Resource Summary';
-const LOCAL_STR_XUAG7 = '- idle soak: unavailable';
+const LOCAL_STR_IDLE_SOAK_UNAVAILABLE = '- idle soak: unavailable';
 const LOCAL_STR_ISSUES = '## Issues';
 const LOCAL_STR_NONE = '- none';
 const LOCAL_STR_NEXT_ACTION = '## Next Action';
-const LOCAL_STR_1X5N4 = '- Proceed to phase-2 migration design with scoped integration hardening.';
-const LOCAL_STR_13YDT = '- No-go for migration; keep liferaft as default and address blockers first.';
+const LOCAL_STR_PROCEED_TO_PHASE_2_MIGRATION_DESIGN_WITH = '- Proceed to phase-2 migration design with scoped integration hardening.';
+const LOCAL_STR_NO_GO_FOR_MIGRATION_KEEP_LIFERAFT_AS_DEF = '- No-go for migration; keep liferaft as default and address blockers first.';
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_STR_JIY0E = ' to run the contained spike.';
+const LOCAL_STR_TO_RUN_THE_CONTAINED_SPIKE = ' to run the contained spike.';
 
 const REPORT_DEFAULT = Object.freeze({
   REPORT_DIR: '_legacy_work/specs-archive/raft-logic-investigation/reports',
@@ -113,15 +109,15 @@ function parseArgs(argv) {
     loadWrites: REPORT_DEFAULT.LOAD_WRITES,
   };
 
-  for (let i = LOCAL_NUM_ZERO; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === LOCAL_STR_REPORT_DIR && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === LOCAL_STR_REPORT_DIR && i + 1 < argv.length) {
       args.reportDir = String(argv[++i]);
-    } else if (arg === LOCAL_STR_IDLE_SOAK_MS && i + LOCAL_NUM_ONE < argv.length) {
+    } else if (arg === LOCAL_STR_IDLE_SOAK_MS && i + 1 < argv.length) {
       args.idleSoakMs = Number.parseInt(argv[++i], 10);
-    } else if (arg === LOCAL_STR_SAMPLE_INTERVAL_MS && i + LOCAL_NUM_ONE < argv.length) {
+    } else if (arg === LOCAL_STR_SAMPLE_INTERVAL_MS && i + 1 < argv.length) {
       args.sampleIntervalMs = Number.parseInt(argv[++i], 10);
-    } else if (arg === LOCAL_STR_LOAD_WRITES && i + LOCAL_NUM_ONE < argv.length) {
+    } else if (arg === LOCAL_STR_LOAD_WRITES && i + 1 < argv.length) {
       args.loadWrites = Number.parseInt(argv[++i], 10);
     }
   }
@@ -215,10 +211,10 @@ async function runCorrectnessChecks(options) {
       assert.equal(
         leaderId,
         LOCAL_STR_REPLICA_1,
-        LOCAL_STR_1TK2K,
+        LOCAL_STR_SINGLE_NODE_SHOULD_ELECT_ITSELF,
       );
       results.push({
-        check: LOCAL_STR_1UXKL,
+        check: LOCAL_STR_SINGLE_NODE_LEADERSHIP,
         status: STATUS.PASS,
         evidence: {leaderId},
       });
@@ -230,7 +226,7 @@ async function runCorrectnessChecks(options) {
     const leaderId = await cluster.waitForStableLeader();
     const statusSnapshots = await cluster.getStatusSnapshots();
     results.push({
-      check: LOCAL_STR_1THER,
+      check: LOCAL_STR_THREE_NODE_LEADER_ELECTION,
       status: STATUS.PASS,
       evidence: {leaderId, statusSnapshots},
     });
@@ -238,14 +234,14 @@ async function runCorrectnessChecks(options) {
     const follower = statusSnapshots.find((snapshot) =>
       snapshot.replicaId !== leaderId,
     );
-    assert.ok(follower, LOCAL_STR_UUGS4);
+    assert.ok(follower, LOCAL_STR_A_FOLLOWER_REPLICA_SHOULD_EXIST);
     const forwardedResult = await cluster.proposeFromReplica(
       follower.replicaId,
       {type: 'forwarded_write', value: 'follower-forward'},
       {autoForward: true},
     );
     results.push({
-      check: LOCAL_STR_1O8WU,
+      check: LOCAL_STR_FOLLOWER_WRITE_FORWARDING,
       status: STATUS.PASS,
       evidence: {
         followerId: follower.replicaId,
@@ -276,10 +272,10 @@ async function runCorrectnessChecks(options) {
     assert.equal(
       appliedReplicas.size,
       LOCAL_NUM_THREE,
-      LOCAL_STR_PIM6S,
+      LOCAL_STR_COMMIT_ENTRY_SHOULD_APPLY_ON_ALL_REPLICA,
     );
     results.push({
-      check: LOCAL_STR_Z9OVR,
+      check: LOCAL_STR_COMMIT_DELIVERY_AND_APPLY,
       status: STATUS.PASS,
       evidence: {
         commitResult,
@@ -287,7 +283,7 @@ async function runCorrectnessChecks(options) {
       },
     });
 
-    for (let i = LOCAL_NUM_ZERO; i < options.loadWrites; i++) {
+    for (let i = 0; i < options.loadWrites; i++) {
       await cluster.proposeFromLeader({
         type: LOCAL_STR_LOAD_WRITE,
         value: i,
@@ -296,7 +292,7 @@ async function runCorrectnessChecks(options) {
 
     const failoverResult = await cluster.triggerLeaderFailover();
     results.push({
-      check: LOCAL_STR_1KX6B,
+      check: LOCAL_STR_LEADER_FAILOVER_AND_RE_ELECTION,
       status: STATUS.PASS,
       evidence: failoverResult,
     });
@@ -465,14 +461,14 @@ async function runTransportStorageChecks(reportDir) {
       }
     };
 
-    await runCheck(LOCAL_STR_KF9LH, async () => {
+    await runCheck(LOCAL_STR_TRANSPORT_MESSAGE_FLOW, async () => {
       const stableLeader = await cluster.waitForStableLeader();
       return {stableLeader};
     });
 
-    await runCheck(LOCAL_STR_2DC26, async () => {
+    await runCheck(LOCAL_STR_SQLITE_RESTART_SINGLE_REPLICA_RECOVERY, async () => {
       await cluster.proposeFromLeader({
-        type: LOCAL_STR_1WOYV,
+        type: LOCAL_STR_SINGLE_BEFORE_RESTART,
         value: LOCAL_STR_V1,
       });
 
@@ -504,12 +500,12 @@ async function runTransportStorageChecks(reportDir) {
       };
     });
 
-    await runCheck(LOCAL_STR_1JKWB, async () => {
+    await runCheck(LOCAL_STR_SQLITE_RESTART_ROLLING_RECOVERY, async () => {
       const rolling = await cluster.rollingRestart({graceful: true});
       assert.equal(
         rolling.steps.length,
         cluster.replicaIds.length,
-        LOCAL_STR_1J0K6,
+        LOCAL_STR_ROLLING_RESTART_SHOULD_PROCESS_ALL_REPLI,
       );
 
       const proposal = await cluster.proposeFromLeader({
@@ -528,13 +524,13 @@ async function runTransportStorageChecks(reportDir) {
       };
     });
 
-    await runCheck(LOCAL_STR_1CKDW, async () => {
+    await runCheck(LOCAL_STR_SQLITE_RESTART_LEADER_RECOVERY, async () => {
       const expectedLeader = await cluster.waitForStableLeader();
       const leaderRestart = await cluster.restartLeader({graceful: true});
       assert.equal(
         leaderRestart.previousLeaderId,
         expectedLeader,
-        LOCAL_STR_BW4EJ,
+        LOCAL_STR_LEADER_RESTART_SHOULD_TARGET_CURRENT_STA,
       );
       const restartedLeaderStatus = await waitForReplicaStatus(
         cluster,
@@ -559,7 +555,7 @@ async function runTransportStorageChecks(reportDir) {
       };
     });
 
-    await runCheck(LOCAL_STR_1LSWS, async () => {
+    await runCheck(LOCAL_STR_SQLITE_RESTART_CRASH_RECOVERY, async () => {
       const crashTarget = cluster.replicaIds[cluster.replicaIds.length - 1];
       const crashRecovery = await cluster.restartReplica(crashTarget, {
         graceful: false,
@@ -590,12 +586,12 @@ async function runTransportStorageChecks(reportDir) {
     });
   } catch (error) {
     checks.push({
-      check: LOCAL_STR_1FPBP,
+      check: LOCAL_STR_TRANSPORT_STORAGE_SUITE,
       status: STATUS.FAIL,
       error: error.message,
       stack: error.stack,
       artifact: await captureRestartAnomalyArtifact(cluster, {
-        check: LOCAL_STR_1FPBP,
+        check: LOCAL_STR_TRANSPORT_STORAGE_SUITE,
       }),
     });
   } finally {
@@ -636,7 +632,7 @@ async function runResourceChecks(options) {
     result.idleSoak = idleSoak;
 
     const startMs = Date.now();
-    for (let i = LOCAL_NUM_ZERO; i < options.loadWrites; i++) {
+    for (let i = 0; i < options.loadWrites; i++) {
       await cluster.proposeFromLeader({type: LOCAL_STR_RESOURCE_WRITE, value: i});
     }
     const durationMs = Date.now() - startMs;
@@ -678,7 +674,7 @@ function buildFinalRecommendation(reports) {
     issues.push({
       severity: LOCAL_STR_BLOCKER,
       component: LOCAL_STR_CORRECTNESS,
-      message: LOCAL_STR_10MIY,
+      message: LOCAL_STR_CORRECTNESS_CHECKS_DID_NOT_PASS,
     });
   }
 
@@ -687,7 +683,7 @@ function buildFinalRecommendation(reports) {
     issues.push({
       severity: LOCAL_STR_BLOCKER,
       component: LOCAL_STR_TRANSPORT_STORAGE,
-      message: LOCAL_STR_RKBR1,
+      message: LOCAL_STR_TRANSPORT_STORAGE_CHECKS_DID_NOT_PASS,
     });
   }
 
@@ -696,7 +692,7 @@ function buildFinalRecommendation(reports) {
     issues.push({
       severity: LOCAL_STR_HIGH,
       component: LOCAL_STR_RESOURCE,
-      message: LOCAL_STR_1O8N1,
+      message: LOCAL_STR_RESOURCE_VIABILITY_CHECKS_DID_NOT_COMPLE,
     });
   }
 
@@ -709,7 +705,7 @@ function buildFinalRecommendation(reports) {
         severity: LOCAL_STR_HIGH,
         component: LOCAL_STR_RESOURCE,
         message:
-          `Idle CPU ${idleSummary.cpuPercent.toFixed(LOCAL_NUM_TWO)}% exceeds ` +
+          `Idle CPU ${idleSummary.cpuPercent.toFixed(2)}% exceeds ` +
           `${cpuThreshold}% threshold.`,
       });
     }
@@ -737,8 +733,8 @@ function buildFinalRecommendation(reports) {
  */
 function buildMarkdownSummary(summary, correctness, transportStorage, resource) {
   const lines = [];
-  lines.push(LOCAL_STR_1WSR0);
-  lines.push(LOCAL_STR_EMPTY);
+  lines.push(LOCAL_STR_RAFT_LOGIC_SPIKE_FINAL_REPORT);
+  lines.push('');
   lines.push(`- generatedAt: ${summary.generatedAt}`);
   lines.push(`- recommendation: ${summary.recommendation}`);
   lines.push(`- correctnessPassed: ${String(summary.correctnessPassed)}`);
@@ -746,44 +742,44 @@ function buildMarkdownSummary(summary, correctness, transportStorage, resource) 
     `- transportStoragePassed: ${String(summary.transportStoragePassed)}`,
   );
   lines.push(`- resourcePassed: ${String(summary.resourcePassed)}`);
-  lines.push(LOCAL_STR_EMPTY);
+  lines.push('');
   lines.push(LOCAL_STR_CORRECTNESS_CHECKS);
   for (const check of correctness.checks) {
     lines.push(`- ${check.check}: ${check.status}`);
   }
-  lines.push(LOCAL_STR_EMPTY);
-  lines.push(LOCAL_STR_15Z9Y);
+  lines.push('');
+  lines.push(LOCAL_STR_TRANSPORT_AND_STORAGE_CHECKS);
   for (const check of transportStorage.checks) {
     lines.push(`- ${check.check}: ${check.status}`);
   }
-  lines.push(LOCAL_STR_EMPTY);
+  lines.push('');
   lines.push(LOCAL_STR_RESOURCE_SUMMARY);
   if (resource.idleSoak && resource.idleSoak.summary) {
     const idle = resource.idleSoak.summary;
-    lines.push(`- idleCpuPercent: ${idle.cpuPercent.toFixed(LOCAL_NUM_TWO)}`);
+    lines.push(`- idleCpuPercent: ${idle.cpuPercent.toFixed(2)}`);
     lines.push(`- rssGrowthBytes: ${idle.rssGrowthBytes}`);
-    lines.push(`- writeBytesPerSec: ${idle.writeBytesPerSec.toFixed(LOCAL_NUM_TWO)}`);
+    lines.push(`- writeBytesPerSec: ${idle.writeBytesPerSec.toFixed(2)}`);
   } else {
-    lines.push(LOCAL_STR_XUAG7);
+    lines.push(LOCAL_STR_IDLE_SOAK_UNAVAILABLE);
   }
   if (resource.writeLoad) {
-    lines.push(`- writeOpsPerSecond: ${resource.writeLoad.writesPerSecond.toFixed(LOCAL_NUM_TWO)}`);
+    lines.push(`- writeOpsPerSecond: ${resource.writeLoad.writesPerSecond.toFixed(2)}`);
   }
-  lines.push(LOCAL_STR_EMPTY);
+  lines.push('');
   lines.push(LOCAL_STR_ISSUES);
-  if (summary.issues.length === LOCAL_NUM_ZERO) {
+  if (summary.issues.length === 0) {
     lines.push(LOCAL_STR_NONE);
   } else {
     for (const issue of summary.issues) {
       lines.push(`- [${issue.severity}] ${issue.component}: ${issue.message}`);
     }
   }
-  lines.push(LOCAL_STR_EMPTY);
+  lines.push('');
   lines.push(LOCAL_STR_NEXT_ACTION);
   if (summary.goCandidate) {
-    lines.push(LOCAL_STR_1X5N4);
+    lines.push(LOCAL_STR_PROCEED_TO_PHASE_2_MIGRATION_DESIGN_WITH);
   } else {
-    lines.push(LOCAL_STR_13YDT);
+    lines.push(LOCAL_STR_NO_GO_FOR_MIGRATION_KEEP_LIFERAFT_AS_DEF);
   }
   return lines.join(LOCAL_STR_NEWLINE);
 }
@@ -800,7 +796,7 @@ async function main() {
     if (!isRaftLogicSpikeEnabled(process.env)) {
       throw new Error(
         `Set ${RAFT_PROVIDER_CONTROL.ENV_KEY}=${RAFT_PROVIDER_CONTROL.RAFT_LOGIC_SPIKE}` +
-      LOCAL_STR_JIY0E,
+      LOCAL_STR_TO_RUN_THE_CONTAINED_SPIKE,
       );
     }
 
@@ -825,19 +821,19 @@ async function main() {
 
     await writeFile(
       join(args.reportDir, REPORT_FILE.CORRECTNESS),
-      JSON.stringify(correctness, null, LOCAL_NUM_TWO),
+      JSON.stringify(correctness, null, 2),
     );
     await writeFile(
       join(args.reportDir, REPORT_FILE.TRANSPORT_STORAGE),
-      JSON.stringify(transportStorage, null, LOCAL_NUM_TWO),
+      JSON.stringify(transportStorage, null, 2),
     );
     await writeFile(
       join(args.reportDir, REPORT_FILE.RESOURCE),
-      JSON.stringify(resource, null, LOCAL_NUM_TWO),
+      JSON.stringify(resource, null, 2),
     );
     await writeFile(
       join(args.reportDir, REPORT_FILE.SUMMARY),
-      JSON.stringify(summary, null, LOCAL_NUM_TWO),
+      JSON.stringify(summary, null, 2),
     );
     await writeFile(
       join(args.reportDir, REPORT_FILE.SUMMARY_MD),
@@ -850,5 +846,5 @@ async function main() {
 
 main().catch((error) => {
   console.error(error.stack || error.message);
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

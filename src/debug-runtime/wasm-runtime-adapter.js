@@ -5,7 +5,6 @@
  * for instantiate/execute/suspend/inspect lifecycle.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   WASM_RUNTIME_ADAPTER_KIND,
   WASM_RUNTIME_OPERATION as OP,
@@ -138,15 +137,15 @@ class WasmRuntimeAdapter {
  * @return {Object} Instance record.
  */
 function getInstanceRecord(instances, request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
   if (!request.instanceHandle ||
-      typeof request.instanceHandle !== TYPEOF.OBJECT) {
+      typeof request.instanceHandle !== 'object') {
     throw new Error(ERR.INSTANCE_HANDLE_REQUIRED);
   }
   const instanceId = request.instanceHandle.instanceId;
-  if (!instanceId || typeof instanceId !== TYPEOF.STRING) {
+  if (!instanceId || typeof instanceId !== 'string') {
     throw new Error(ERR.INSTANCE_ID_REQUIRED);
   }
   const record = instances.get(instanceId) || null;
@@ -172,7 +171,7 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
   constructor(options = {}) {
     super(WASM_RUNTIME_ADAPTER_KIND.IN_PROCESS);
     this._instances = new Map();
-    this._nextInstanceId = NUM.ONE;
+    this._nextInstanceId = 1;
     this._now = options.now || (() => Date.now());
     this._setTimeoutFn = options.setTimeoutFn || setTimeout;
     this._clearTimeoutFn = options.clearTimeoutFn || clearTimeout;
@@ -186,16 +185,16 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
    * @return {Promise<{instanceHandle: WasmRuntimeInstanceHandle, createdAt: number}>}
    */
   async createInstance(request) {
-    if (!request || typeof request !== TYPEOF.OBJECT) {
+    if (!request || typeof request !== 'object') {
       throw new Error(ERR.REQUEST_REQUIRED);
     }
     if (!request.moduleRef ||
-        typeof request.moduleRef !== TYPEOF.STRING ||
-        request.moduleRef.trim().length === NUM.ZERO) {
+        typeof request.moduleRef !== 'string' ||
+        request.moduleRef.trim().length === 0) {
       throw new Error(ERR.MODULE_REF_REQUIRED);
     }
     if (!request.moduleEntry ||
-        typeof request.moduleEntry !== TYPEOF.OBJECT) {
+        typeof request.moduleEntry !== 'object') {
       throw new Error(ERR.MODULE_ENTRY_REQUIRED);
     }
 
@@ -227,12 +226,12 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
   async execute(request) {
     const record = getInstanceRecord(this._instances, request);
     const manifest = request.manifest || record.moduleEntry.manifest;
-    if (!manifest || typeof manifest !== TYPEOF.OBJECT) {
+    if (!manifest || typeof manifest !== 'object') {
       throw new Error(ERR.MANIFEST_REQUIRED);
     }
 
     const runExport = request.runExport || manifest.runExport;
-    if (!runExport || typeof runExport !== TYPEOF.STRING) {
+    if (!runExport || typeof runExport !== 'string') {
       throw new Error(ERR.RUN_EXPORT_REQUIRED);
     }
 
@@ -241,7 +240,7 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
       throw new Error(ERR.RUN_EXPORT_NOT_FOUND);
     }
     const handler = moduleExports[runExport];
-    if (typeof handler !== TYPEOF.FUNCTION) {
+    if (typeof handler !== 'function') {
       throw new Error(ERR.RUN_EXPORT_NOT_CALLABLE);
     }
 
@@ -250,7 +249,7 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
       request.options?.cancellationToken || null;
 
     if (cancellationToken &&
-      typeof cancellationToken.throwIfCancelled === TYPEOF.FUNCTION) {
+      typeof cancellationToken.throwIfCancelled === 'function') {
       cancellationToken.throwIfCancelled();
     }
 
@@ -267,7 +266,7 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
     });
 
     const racers = [executionPromise];
-    if (timeoutMs > NUM.ZERO) {
+    if (timeoutMs > 0) {
       racers.push(new Promise((_resolve, reject) => {
         timeoutId = this._setTimeoutFn(() => {
           reject(new Error(ERR.EXECUTION_TIMEOUT));
@@ -276,7 +275,7 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
     }
 
     if (cancellationToken &&
-      typeof cancellationToken.onCancel === TYPEOF.FUNCTION) {
+      typeof cancellationToken.onCancel === 'function') {
       racers.push(new Promise((_resolve, reject) => {
         cancellationToken.onCancel((reason) => {
           if (settled) {
@@ -354,11 +353,11 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
    */
   async destroyInstance(instanceHandle) {
     if (!instanceHandle ||
-      typeof instanceHandle !== TYPEOF.OBJECT) {
+      typeof instanceHandle !== 'object') {
       throw new Error(ERR.INSTANCE_HANDLE_REQUIRED);
     }
     if (!instanceHandle.instanceId ||
-      typeof instanceHandle.instanceId !== TYPEOF.STRING) {
+      typeof instanceHandle.instanceId !== 'string') {
       throw new Error(ERR.INSTANCE_ID_REQUIRED);
     }
 
@@ -384,9 +383,9 @@ class InProcessWasmRuntimeAdapter extends WasmRuntimeAdapter {
    */
   _resolveTimeoutMs(options) {
     const timeoutMs = options?.timeoutMs;
-    if (typeof timeoutMs === TYPEOF.NUMBER &&
+    if (typeof timeoutMs === 'number' &&
       Number.isFinite(timeoutMs) &&
-      timeoutMs > NUM.ZERO) {
+      timeoutMs > 0) {
       return timeoutMs;
     }
     return this._defaultExecutionTimeoutMs;

@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from './control-plane-readiness-constants.js';
@@ -161,7 +160,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         requiredAckNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
         acknowledgedNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
         pendingAckNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
-        pendingAckCount: NUM.ZERO,
+        pendingAckCount: 0,
       } :
       options,
   );
@@ -173,7 +172,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     pendingAckEvidence.evidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
         .REQUIRED_ACK_NODE_LIST &&
-    pendingAckCount === NUM.ZERO;
+    pendingAckCount === 0;
   const missingPublishedNodeIds = pressureDeferred ?
     PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
     normalizeDistinctStringArray(
@@ -181,7 +180,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         options.missingPublishedRecoveryActiveNodeIds,
     );
   const missingPublishedCount = pressureDeferred ?
-    NUM.ZERO :
+    0 :
     Math.max(
       missingPublishedNodeIds.length,
       normalizeNonNegativeInteger(options.missingPublishedCount),
@@ -213,10 +212,10 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   const prioritySpreadEvidenceUnavailableReasonActive =
     prioritySpreadEvidenceUnavailable === true &&
     publicationPendingEvidenceActive !== true &&
-    pendingAckCount === NUM.ZERO;
+    pendingAckCount === 0;
   const publicationEpochReasonActive =
     publicationPendingEvidenceActive === true ||
-    pendingAckCount > NUM.ZERO;
+    pendingAckCount > 0;
   const retainedProvidedReasonCodes = filterProvidedPriorityRecoveryReasonCodes(
     providedReasonCodes,
     prioritySpreadDecision,
@@ -325,8 +324,8 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
             pendingAckCount,
             missingPublishedCount,
           ) ||
-          pendingAckCount > NUM.ZERO,
-        ackPending: pendingAckCount > NUM.ZERO,
+          pendingAckCount > 0,
+        ackPending: pendingAckCount > 0,
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
         ...pressureEvidence,
@@ -341,7 +340,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   const effectivePrioritySpreadEvidenceUnavailableReasonActive =
     streamCompatibilityEvidence.prioritySpreadEvidenceUnavailable === true &&
     streamCompatibilityEvidence.publicationPending !== true &&
-    streamCompatibilityEvidence.pendingAckCount === NUM.ZERO;
+    streamCompatibilityEvidence.pendingAckCount === 0;
   const effectiveRetainedProvidedReasonCodes =
     filterProvidedPriorityRecoveryReasonCodes(
       providedReasonCodes,

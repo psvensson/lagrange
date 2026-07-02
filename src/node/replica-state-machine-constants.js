@@ -1,7 +1,6 @@
 import {NUM, TIME_MS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const REPLICA_STATE_MACHINE_SUBSYSTEM = 'replica-state-machine';
 
@@ -134,9 +133,9 @@ const REPLICA_STATE_MACHINE_ERROR_MSG = Object.freeze({
 });
 
 const REPLICA_STATE_MACHINE_NUM = Object.freeze({
-  ZERO: NUM.ZERO,
-  ONE: NUM.ONE,
-  TWO: NUM.TWO,
+  ZERO: 0,
+  ONE: 1,
+  TWO: 2,
 });
 
 // CL-021: backoff ceiling for re-attempting deferred durable services-row
@@ -168,13 +167,13 @@ const REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES = Object.freeze([
 
 function isLoadReadyReplicaRaftRole(role) {
   return REPLICA_RAFT_ROLE_LOAD_READY_STATES.includes(
-    String(role || LOCAL_STR_EMPTY).toLowerCase(),
+    String(role || '').toLowerCase(),
   );
 }
 
 function isRepairOnlyReplicaRaftRole(role) {
   return REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES.includes(
-    String(role || LOCAL_STR_EMPTY).toLowerCase(),
+    String(role || '').toLowerCase(),
   );
 }
 

@@ -32,7 +32,6 @@ import {
   OPERATION_WORKFLOW_OWNER_SHARED,
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {
-  NUM,
   SERVICE_STATUS,
   STATE,
   TIME_MS,
@@ -103,7 +102,7 @@ async function waitForOperationDispatchQueueDrain(service = null) {
     await Promise.resolve();
   }
   await new Promise((resolve) => {
-    setTimeout(resolve, NUM.ZERO);
+    setTimeout(resolve, 0);
   });
   if (Array.isArray(service?.operationDispatchQueues)) {
     await Promise.all(
@@ -947,8 +946,8 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
       },
       clearTimeoutFn(handle) {
         const timerIndex = deferredTimers.indexOf(handle);
-        if (timerIndex >= NUM.ZERO) {
-          deferredTimers.splice(timerIndex, NUM.ONE);
+        if (timerIndex >= 0) {
+          deferredTimers.splice(timerIndex, 1);
         }
       },
       rebalanceCoordinator: {
@@ -1089,7 +1088,7 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       READY_RETRY_ASSERT_RETRY_SLOT_CLEARED,
     );
 
@@ -1142,8 +1141,8 @@ test(READY_RETRY_OWNER_DEFERRED_TEST_NAME, async (t) => {
     },
     clearTimeoutFn(handle) {
       const timerIndex = deferredTimers.indexOf(handle);
-      if (timerIndex >= NUM.ZERO) {
-        deferredTimers.splice(timerIndex, NUM.ONE);
+      if (timerIndex >= 0) {
+        deferredTimers.splice(timerIndex, 1);
       }
     },
     rebalanceCoordinator: {
@@ -1222,7 +1221,7 @@ test(READY_RETRY_OWNER_DEFERRED_TEST_NAME, async (t) => {
   );
   t.equal(
     service.operationDispatchDeferredRetries.size,
-    NUM.ZERO,
+    0,
     READY_RETRY_ASSERT_RETRY_SLOT_CLEARED,
   );
 

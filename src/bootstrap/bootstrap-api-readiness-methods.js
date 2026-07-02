@@ -1,4 +1,3 @@
-import {TYPEOF} from '../constants/index.js';
 import {
   BOOTSTRAP_API_PROBE_SCOPE,
 } from './bootstrap-api-constants.js';
@@ -122,17 +121,17 @@ const bootstrapApiReadinessMethods = {
    */
   getStartupAuthoritySnapshotForBootstrapResponse(observedAt = Date.now()) {
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     try {
-      if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
+      if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
         return service.getStartupAuthoritySnapshotSync(
           this.seedNodeId,
           observedAt,
         );
       }
-      if (typeof service.getStartupAuthoritySnapshot !== TYPEOF.FUNCTION) {
+      if (typeof service.getStartupAuthoritySnapshot !== 'function') {
         return null;
       }
       const startupAuthority = service.getStartupAuthoritySnapshot(
@@ -141,11 +140,11 @@ const bootstrapApiReadinessMethods = {
       );
       if (
         startupAuthority &&
-        typeof startupAuthority.then === TYPEOF.FUNCTION
+        typeof startupAuthority.then === 'function'
       ) {
         return null;
       }
-      return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+      return startupAuthority && typeof startupAuthority === 'object' ?
         startupAuthority :
         null;
     } catch (_error) {

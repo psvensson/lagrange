@@ -6,7 +6,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, NUM, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
@@ -21,7 +21,7 @@ import {
   STORAGE_CAPACITY_SUBSYSTEM,
 } from './storage-capacity-constants.js';
 
-const LOCAL_STR_X0MHC = 'disk_gb unavailable';
+const LOCAL_STR_DISK_GB_UNAVAILABLE = 'disk_gb unavailable';
 const LOCAL_STR_CRITICAL = 'critical';
 
 const MIGRATION_ERROR_MSG = Object.freeze({
@@ -57,7 +57,7 @@ class StorageCapacityMigration {
    */
   getBackfillBudget(nodeRow) {
     const diskGb = Number(nodeRow?.[COLUMN.DISK_GB]);
-    if (!Number.isFinite(diskGb) || diskGb <= NUM.ZERO) {
+    if (!Number.isFinite(diskGb) || diskGb <= 0) {
       return null;
     }
     return Math.floor(diskGb * NUM.BYTES_PER_GIB * BACKFILL_DEFAULT_RATIO);
@@ -77,16 +77,16 @@ class StorageCapacityMigration {
       throw new Error(MIGRATION_ERROR_MSG.CDC_REQUIRED);
     }
 
-    let backfilled = NUM.ZERO;
-    let skipped = NUM.ZERO;
+    let backfilled = 0;
+    let skipped = 0;
 
     for (const row of nodeRows) {
       const nodeId = row[COLUMN.NODE_ID];
       const existingBudget = row[COLUMN.STORAGE_BUDGET_BYTES];
 
-      if (typeof existingBudget === TYPEOF.NUMBER &&
+      if (typeof existingBudget === 'number' &&
           Number.isFinite(existingBudget) &&
-          existingBudget > NUM.ZERO) {
+          existingBudget > 0) {
         this.logger.info(STORAGE_CAPACITY_LOG_MSG.BACKFILL_SKIPPED, {
           nodeId,
           existingBudget,
@@ -99,7 +99,7 @@ class StorageCapacityMigration {
       if (budgetBytes === null) {
         this.logger.warn(STORAGE_CAPACITY_LOG_MSG.BACKFILL_SKIPPED, {
           nodeId,
-          reason: LOCAL_STR_X0MHC,
+          reason: LOCAL_STR_DISK_GB_UNAVAILABLE,
         });
         skipped++;
         continue;

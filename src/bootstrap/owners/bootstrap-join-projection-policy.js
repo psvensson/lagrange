@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../bootstrap-constants.js';
 import {BOOTSTRAP_API_PROBE_SCOPE} from '../bootstrap-api-constants.js';
 import {
@@ -49,11 +48,11 @@ const BOOTSTRAP_JOIN_PROJECTION_BLOCKER = Object.freeze({
 });
 
 function normalizeReasonCode(reason) {
-  if (typeof reason !== TYPEOF.STRING) {
+  if (typeof reason !== 'string') {
     return null;
   }
   const normalized = reason.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeReasonCodeArray(reasonCodes) {
@@ -71,14 +70,14 @@ function normalizeReasonCodeArray(reasonCodes) {
 
 function normalizeLifecyclePhaseFromSnapshot(snapshot) {
   const phase =
-    typeof snapshot?.phase === TYPEOF.STRING ?
+    typeof snapshot?.phase === 'string' ?
       snapshot.phase.trim().toUpperCase() :
       '';
   if (Object.values(LIFECYCLE_PHASE).includes(phase)) {
     return phase;
   }
   const resolvedState =
-    typeof snapshot?.state === TYPEOF.STRING ?
+    typeof snapshot?.state === 'string' ?
       snapshot.state.trim().toLowerCase() :
       '';
   switch (resolvedState) {
@@ -99,7 +98,7 @@ function normalizeLifecyclePhaseFromSnapshot(snapshot) {
 function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
   if (
     !priorityRecoveryHealth ||
-    typeof priorityRecoveryHealth !== TYPEOF.OBJECT
+    typeof priorityRecoveryHealth !== 'object'
   ) {
     return false;
   }
@@ -108,7 +107,7 @@ function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
   }
   const details =
     priorityRecoveryHealth.details &&
-    typeof priorityRecoveryHealth.details === TYPEOF.OBJECT ?
+    typeof priorityRecoveryHealth.details === 'object' ?
       priorityRecoveryHealth.details :
       null;
   if (details && hasTransitionalStartupAuthorityEvidence(details)) {
@@ -116,8 +115,8 @@ function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
   }
   return (
     !details ||
-    typeof details.failureReason !== TYPEOF.STRING ||
-    details.failureReason.length === NUM.ZERO
+    typeof details.failureReason !== 'string' ||
+    details.failureReason.length === 0
   );
 }
 
@@ -138,13 +137,13 @@ function resolveControlPhaseBootstrapJoinProjection(
   normalizedReasons,
   blockingReasons,
 ) {
-  if (normalizedReasons.length === NUM.ZERO) {
+  if (normalizedReasons.length === 0) {
     return buildBootstrapJoinProjectionResult({
       blockerReason:
         BOOTSTRAP_JOIN_PROJECTION_BLOCKER.CONTROL_DEGRADED_NO_REASONS,
     });
   }
-  const canProjectFromControlPhase = blockingReasons.length === NUM.ZERO;
+  const canProjectFromControlPhase = blockingReasons.length === 0;
   return buildBootstrapJoinProjectionResult({
     canProjectReady: canProjectFromControlPhase,
     projectionRule: canProjectFromControlPhase ?
@@ -158,7 +157,7 @@ function resolveControlPhaseBootstrapJoinProjection(
 
 const BOOTSTRAP_JOIN_PROJECTION_METHODS = Object.freeze({
   resolveReadinessSnapshotForScope(snapshot, scope) {
-    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    if (!snapshot || typeof snapshot !== 'object') {
       return snapshot;
     }
     if (
@@ -201,7 +200,7 @@ const BOOTSTRAP_JOIN_PROJECTION_METHODS = Object.freeze({
       ...snapshot,
       ready: true,
       reasons: [],
-      retryAfterMs: NUM.ZERO,
+      retryAfterMs: 0,
     };
   },
   evaluateBootstrapJoinProjection(snapshot, options = {}) {
@@ -228,8 +227,8 @@ const BOOTSTRAP_JOIN_PROJECTION_METHODS = Object.freeze({
         BOOTSTRAP_JOIN_PROJECTION_BLOCKER.CONTROL_SNAPSHOT_AUTHORITY_UNAVAILABLE;
     } else if (normalizedPhase === LIFECYCLE_PHASE.JOIN_READY) {
       const joinStableWindowOnly =
-        normalizedReasons.length === NUM.ONE &&
-        normalizedReasons[NUM.ZERO] ===
+        normalizedReasons.length === 1 &&
+        normalizedReasons[0] ===
           LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
       canProjectReady = joinStableWindowOnly;
       projectionRule = joinStableWindowOnly ?

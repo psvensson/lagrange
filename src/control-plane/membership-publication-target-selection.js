@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -74,7 +73,7 @@ const MEMBERSHIP_PUBLICATION_ACK_CARRY_RULES = Object.freeze([
     ],
     matches: (evidence) =>
       evidence.publicationChanged !== true &&
-      evidence.publishableRecoveryActiveNodeIds.length > NUM.ZERO,
+      evidence.publishableRecoveryActiveNodeIds.length > 0,
   }),
   Object.freeze({
     state: MEMBERSHIP_PUBLICATION_ACK_CARRY_STATE.OBSERVED_ACK,
@@ -101,13 +100,13 @@ function buildMembershipPublicationTargetEvidence(options = {}, helperFns = {}) 
   );
   const projectedServingNodeIdSet = new Set(projectedServingNodeIds);
   const publishedTrimDebt =
-    publishedBaselineNodeIds.length > NUM.ZERO &&
-    projectedServingNodeIds.length > NUM.ZERO &&
+    publishedBaselineNodeIds.length > 0 &&
+    projectedServingNodeIds.length > 0 &&
     publishedBaselineNodeIds.some(
       (nodeId) => !projectedServingNodeIdSet.has(nodeId),
     );
   const priorityRecoverySpreadPending =
-    typeof options.priorityRecoverySpreadPending === TYPEOF.BOOLEAN ?
+    typeof options.priorityRecoverySpreadPending === 'boolean' ?
       options.priorityRecoverySpreadPending :
       options.priorityRecoverySpreadGapPending === true;
   const canPublishSteadyTrim =
@@ -118,11 +117,11 @@ function buildMembershipPublicationTargetEvidence(options = {}, helperFns = {}) 
   return {
     decisions: Object.freeze({
       [MEMBERSHIP_PUBLICATION_TARGET_STATE.EXPLICIT_PUBLICATION]:
-        explicitPublishedNodeIds.length > NUM.ZERO,
+        explicitPublishedNodeIds.length > 0,
       [MEMBERSHIP_PUBLICATION_TARGET_STATE.PROJECTED_STEADY_TRIM]:
         canPublishSteadyTrim,
       [MEMBERSHIP_PUBLICATION_TARGET_STATE.RECOVERY_COHORT]:
-        publishedBaselineNodeIds.length > NUM.ZERO,
+        publishedBaselineNodeIds.length > 0,
       [MEMBERSHIP_PUBLICATION_TARGET_STATE.OBSERVED_ACTIVE]: true,
     }),
     nodeIdsByState: Object.freeze({
@@ -155,7 +154,7 @@ function buildMembershipPublicationTargetSnapshot(options = {}, helperFns = {}) 
 
 function buildPublicationAcknowledgementReadinessDecision(readinessEntry = null) {
   const dimensions =
-    readinessEntry?.dimensions && typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    readinessEntry?.dimensions && typeof readinessEntry.dimensions === 'object' ?
       readinessEntry.dimensions :
       null;
   if (!dimensions) {
@@ -192,7 +191,7 @@ function buildPublicationAckTargetSnapshot(options = {}, helperFns = {}) {
     options.recoveryEligibleIncludedNodeIds,
   );
   const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const publishedBaselineNodeIdSet = new Set(publishedBaselineNodeIds);
@@ -240,7 +239,7 @@ function buildPublicationAckProjectionDiagnostics(
   publicationAckTargetSnapshot,
 ) {
   const normalizedProjectionDiagnostics =
-    projectionDiagnostics && typeof projectionDiagnostics === TYPEOF.OBJECT ?
+    projectionDiagnostics && typeof projectionDiagnostics === 'object' ?
       projectionDiagnostics :
       {};
   return {
@@ -260,7 +259,7 @@ function hasRecoveryEligiblePublicationRepairEvidence(options = {}, helperFns = 
     options.publishableRecoveryActiveNodeIds,
   );
   const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const publishedBaselineNodeIdSet = new Set(publishedBaselineNodeIds);
@@ -271,7 +270,7 @@ function hasRecoveryEligiblePublicationRepairEvidence(options = {}, helperFns = 
     }
     const dimensions = readinessByNodeId[nodeId]?.dimensions;
     return dimensions &&
-      typeof dimensions === TYPEOF.OBJECT &&
+      typeof dimensions === 'object' &&
       dimensions[
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
       ] === true;
@@ -289,8 +288,8 @@ function buildMembershipPublicationAckCompletionSnapshot(options = {}, helperFns
     (nodeId) => !acknowledgedNodeIds.includes(nodeId),
   );
   const state =
-    requiredAckNodeIds.length > NUM.ZERO &&
-      pendingAckNodeIds.length === NUM.ZERO ?
+    requiredAckNodeIds.length > 0 &&
+      pendingAckNodeIds.length === 0 ?
       MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE.COMPLETE :
       MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE.PENDING;
 

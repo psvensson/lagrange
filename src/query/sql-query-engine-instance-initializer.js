@@ -1,7 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 
 const {
@@ -93,17 +92,17 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     });
   engine.tablePartitionProvisioningTimeoutMs =
     Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
-    options.tablePartitionProvisioningTimeoutMs > LOCAL_NUM_ZERO ?
+    options.tablePartitionProvisioningTimeoutMs > 0 ?
       Math.floor(options.tablePartitionProvisioningTimeoutMs) :
       QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
   engine.tablePartitionProvisioningPollIntervalMs =
     Number.isFinite(options.tablePartitionProvisioningPollIntervalMs) &&
-    options.tablePartitionProvisioningPollIntervalMs > LOCAL_NUM_ZERO ?
+    options.tablePartitionProvisioningPollIntervalMs > 0 ?
       Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
       QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
   engine.tablePartitionTargetNodeConvergenceTimeoutMs =
     Number.isFinite(options.tablePartitionTargetNodeConvergenceTimeoutMs) &&
-    options.tablePartitionTargetNodeConvergenceTimeoutMs > LOCAL_NUM_ZERO ?
+    options.tablePartitionTargetNodeConvergenceTimeoutMs > 0 ?
       Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
       QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
 

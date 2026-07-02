@@ -25,10 +25,9 @@ import {
 } from './threading-constants.js';
 
 const LOCAL_STR_SERVICE_WORKER_JS = 'service-worker.js';
-const LOCAL_STR_DNQMM = 'service-worker.bundle.cjs';
+const LOCAL_STR_SERVICE_WORKER_BUNDLE_CJS = 'service-worker.bundle.cjs';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_NUM_ZERO = 0;
 
 const THREADING_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
 
@@ -36,7 +35,7 @@ function resolveServiceWorkerPath() {
   return resolvePackagedRuntimeFile({
     moduleDir: THREADING_MODULE_DIR,
     sourceFileName: LOCAL_STR_SERVICE_WORKER_JS,
-    bundledFileName: LOCAL_STR_DNQMM,
+    bundledFileName: LOCAL_STR_SERVICE_WORKER_BUNDLE_CJS,
   });
 }
 
@@ -352,11 +351,11 @@ class ServiceThreadManager extends EventEmitter {
     }
 
     return {
-      threads: this.pool.threads?.length || LOCAL_NUM_ZERO,
-      completed: this.pool.completed || LOCAL_NUM_ZERO,
-      runTime: this.pool.runTime || LOCAL_NUM_ZERO,
-      waitTime: this.pool.waitTime || LOCAL_NUM_ZERO,
-      queueSize: this.pool.queueSize || LOCAL_NUM_ZERO,
+      threads: this.pool.threads?.length || 0,
+      completed: this.pool.completed || 0,
+      runTime: this.pool.runTime || 0,
+      waitTime: this.pool.waitTime || 0,
+      queueSize: this.pool.queueSize || 0,
     };
   }
 

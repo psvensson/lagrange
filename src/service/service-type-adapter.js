@@ -7,7 +7,7 @@ import {
   assertKnownServiceType,
 } from './service-lifecycle-errors.js';
 
-const LOCAL_STR_5JQKT = 'ServiceTypeAdapter is abstract and cannot be instantiated directly';
+const LOCAL_STR_SERVICETYPEADAPTER_IS_ABSTRACT_AND_CANNO = 'ServiceTypeAdapter is abstract and cannot be instantiated directly';
 const LOCAL_STR_SERVICETYPE = 'serviceType';
 const LOCAL_STR_VALIDATEDEFINITION = 'validateDefinition';
 const LOCAL_STR_CREATEREPLICA = 'createReplica';
@@ -22,7 +22,7 @@ class ServiceTypeAdapter {
   constructor(serviceType) {
     if (new.target === ServiceTypeAdapter) {
       throw new Error(
-        LOCAL_STR_5JQKT,
+        LOCAL_STR_SERVICETYPEADAPTER_IS_ABSTRACT_AND_CANNO,
       );
     }
 

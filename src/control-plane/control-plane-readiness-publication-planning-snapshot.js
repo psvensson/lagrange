@@ -3,8 +3,6 @@ import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
-  NUM,
-  TYPEOF,
   buildPublicationRecoveryGateSnapshot,
   buildPublicationRecoveryProtocolSnapshot,
   normalizeDiagnosticTimestampMs,
@@ -23,19 +21,19 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     }
     if (
       Array.isArray(priorityRecoveryProjection.priorityRecoveryReasonCodes) &&
-      priorityRecoveryProjection.priorityRecoveryReasonCodes.length > NUM.ZERO
+      priorityRecoveryProjection.priorityRecoveryReasonCodes.length > 0
     ) {
       return true;
     }
     if (
       priorityRecoveryProjection.priorityPartitionSummary &&
-      typeof priorityRecoveryProjection.priorityPartitionSummary === TYPEOF.OBJECT
+      typeof priorityRecoveryProjection.priorityPartitionSummary === 'object'
     ) {
       return true;
     }
     return (
-      typeof priorityRecoveryProjection.publicationStatus === TYPEOF.STRING &&
-      priorityRecoveryProjection.publicationStatus.length > NUM.ZERO &&
+      typeof priorityRecoveryProjection.publicationStatus === 'string' &&
+      priorityRecoveryProjection.publicationStatus.length > 0 &&
       priorityRecoveryProjection.publicationStatus.toUpperCase() !==
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
     );
@@ -45,7 +43,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     planningSnapshot = null,
     retainedSnapshot = null,
   ) {
-    if (!retainedSnapshot || typeof retainedSnapshot !== TYPEOF.OBJECT) {
+    if (!retainedSnapshot || typeof retainedSnapshot !== 'object') {
       return this.getMembershipPublicationRecoveryGate(planningSnapshot);
     }
     const planningGate =
@@ -64,18 +62,18 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       retainedGate?.reasonCodes || [];
     const priorityPartitionSummary =
       planningSnapshot?.priorityPartitionSummary &&
-      typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof planningSnapshot.priorityPartitionSummary === 'object' ?
         planningSnapshot.priorityPartitionSummary :
         retainedSnapshot?.priorityPartitionSummary &&
-            typeof retainedSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+            typeof retainedSnapshot.priorityPartitionSummary === 'object' ?
           retainedSnapshot.priorityPartitionSummary :
           null;
     const recoveryProtocolState =
-      typeof planningSnapshot?.recoveryProtocolState === TYPEOF.STRING &&
-      planningSnapshot.recoveryProtocolState.length > NUM.ZERO ?
+      typeof planningSnapshot?.recoveryProtocolState === 'string' &&
+      planningSnapshot.recoveryProtocolState.length > 0 ?
         planningSnapshot.recoveryProtocolState :
-        typeof retainedSnapshot?.recoveryProtocolState === TYPEOF.STRING &&
-            retainedSnapshot.recoveryProtocolState.length > NUM.ZERO ?
+        typeof retainedSnapshot?.recoveryProtocolState === 'string' &&
+            retainedSnapshot.recoveryProtocolState.length > 0 ?
           retainedSnapshot.recoveryProtocolState :
           null;
     return buildPublicationRecoveryGateSnapshot({
@@ -85,28 +83,28 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
           retainedSnapshot.publicationEpoch :
           (planningGate?.publicationEpoch ?? retainedGate?.publicationEpoch),
       publicationStatus:
-        typeof planningSnapshot?.publicationStatus === TYPEOF.STRING &&
-        planningSnapshot.publicationStatus.length > NUM.ZERO ?
+        typeof planningSnapshot?.publicationStatus === 'string' &&
+        planningSnapshot.publicationStatus.length > 0 ?
           planningSnapshot.publicationStatus :
-          typeof planningSnapshot?.status === TYPEOF.STRING &&
-              planningSnapshot.status.length > NUM.ZERO ?
+          typeof planningSnapshot?.status === 'string' &&
+              planningSnapshot.status.length > 0 ?
             planningSnapshot.status :
-            typeof retainedSnapshot?.publicationStatus === TYPEOF.STRING &&
-                retainedSnapshot.publicationStatus.length > NUM.ZERO ?
+            typeof retainedSnapshot?.publicationStatus === 'string' &&
+                retainedSnapshot.publicationStatus.length > 0 ?
               retainedSnapshot.publicationStatus :
-              typeof retainedSnapshot?.status === TYPEOF.STRING &&
-                  retainedSnapshot.status.length > NUM.ZERO ?
+              typeof retainedSnapshot?.status === 'string' &&
+                  retainedSnapshot.status.length > 0 ?
                 retainedSnapshot.status :
                 planningGate?.publicationStatus ||
                   retainedGate?.publicationStatus,
       publicationObservationState:
         typeof planningSnapshot?.publicationObservationState ===
-          TYPEOF.STRING &&
-        planningSnapshot.publicationObservationState.length > NUM.ZERO ?
+          'string' &&
+        planningSnapshot.publicationObservationState.length > 0 ?
           planningSnapshot.publicationObservationState :
           typeof retainedSnapshot?.publicationObservationState ===
-                TYPEOF.STRING &&
-              retainedSnapshot.publicationObservationState.length > NUM.ZERO ?
+                'string' &&
+              retainedSnapshot.publicationObservationState.length > 0 ?
             retainedSnapshot.publicationObservationState :
             planningGate?.publicationObservationState ||
               retainedGate?.publicationObservationState,
@@ -138,7 +136,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
         retainedSnapshot?.pendingAckCount ??
         planningGate?.pendingAckCount ??
         retainedGate?.pendingAckCount ??
-        NUM.ZERO,
+        0,
       pendingAckEvidenceState: this.resolveRetainedPendingAckEvidenceState(
         planningSnapshot,
         retainedSnapshot,
@@ -166,9 +164,9 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
                   planningGate?.missingPublishedNodeIds ||
                     retainedGate?.missingPublishedNodeIds,
       publicationExcludesTargetNode:
-        typeof planningSnapshot?.publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+        typeof planningSnapshot?.publicationExcludesTargetNode === 'boolean' ?
           planningSnapshot.publicationExcludesTargetNode :
-          typeof planningGate?.publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+          typeof planningGate?.publicationExcludesTargetNode === 'boolean' ?
             planningGate.publicationExcludesTargetNode :
             retainedSnapshot?.publicationExcludesTargetNode === true ||
             retainedGate?.publicationExcludesTargetNode === true,
@@ -235,13 +233,13 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     let latestPub = null;
     if (
       typeof service.getLatestMembershipPublicationEpochStatusForNodeSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       latestPub = service.getLatestMembershipPublicationEpochStatusForNodeSync(
         nodeId,
       );
     } else if (
-      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION
+      typeof service.getLatestPublicationForNodeSync === 'function'
     ) {
       latestPub = service.getLatestPublicationForNodeSync(nodeId);
     } else {
@@ -336,7 +334,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     );
     const timeoutMs =
       this.membershipPublicationPlanningSnapshotRefreshTimeoutMs;
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       const asyncSnapshot = await this.getMembershipPublicationPlanningSnapshot(
         nodeId,
         observedAt,
@@ -361,7 +359,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
               ),
             );
           }, timeoutMs);
-          if (typeof timeoutHandle?.unref === TYPEOF.FUNCTION) {
+          if (typeof timeoutHandle?.unref === 'function') {
             timeoutHandle.unref();
           }
         }),
@@ -431,7 +429,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     );
     if (
       Number.isInteger(publishedPlanningEpoch) &&
-      publishedPlanningEpoch >= NUM.ZERO
+      publishedPlanningEpoch >= 0
     ) {
       return publishedPlanningEpoch;
     }

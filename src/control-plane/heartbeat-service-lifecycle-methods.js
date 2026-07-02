@@ -1,6 +1,6 @@
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
+import {SERVICE_STATUS, STATE, STRING} from '../constants/index.js';
 import {TABLES} from '../constants/tables.js';
 import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
 import {TRANSPORT_CONFIG_KEY, TRANSPORT_DEFAULT} from '../constants/transport.js';
@@ -192,7 +192,7 @@ class HeartbeatServiceLifecycleMethods {
         };
         finalize(reject, timeoutError);
       }, boundedTimeoutMs);
-      if (typeof timeoutHandle?.unref === TYPEOF.FUNCTION) {
+      if (typeof timeoutHandle?.unref === 'function') {
         timeoutHandle.unref();
       }
       Promise.resolve()
@@ -209,7 +209,7 @@ class HeartbeatServiceLifecycleMethods {
    * Set the node-state reporter used for control-plane mediated heartbeats.
    * @param {Function|null} reporter - Async reporter callback.
    */ setNodeStateReporter(reporter) {
-    this.nodeStateReporter = typeof reporter === TYPEOF.FUNCTION ? reporter : null;
+    this.nodeStateReporter = typeof reporter === 'function' ? reporter : null;
   }
   /**
    * Enable or disable reporter success visibility verification.
@@ -274,13 +274,13 @@ class HeartbeatServiceLifecycleMethods {
           return;
         }
         this.heartbeatCount++;
-        if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
+        if (this.heartbeatConsecutiveFailures > 0) {
           this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
             nodeId: this.nodeId,
             previousFailures: this.heartbeatConsecutiveFailures,
           });
-          this.heartbeatConsecutiveFailures = NUM.ZERO;
-          this.heartbeatPublicationDiagnostics.consecutiveFailures = NUM.ZERO;
+          this.heartbeatConsecutiveFailures = 0;
+          this.heartbeatPublicationDiagnostics.consecutiveFailures = 0;
         }
         this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
           nodeId: this.nodeId,
@@ -300,7 +300,7 @@ class HeartbeatServiceLifecycleMethods {
       this.runScheduledMembershipPublicationReconcileTick();
     };
     this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
-    if (typeof this.heartbeatTimer?.unref === TYPEOF.FUNCTION) {
+    if (typeof this.heartbeatTimer?.unref === 'function') {
       this.heartbeatTimer.unref();
     }
     heartbeatTick();
@@ -437,18 +437,18 @@ class HeartbeatServiceLifecycleMethods {
     }
     const shutdownRow = {
       node_address: this.nodeAddress || existing?.node_address || STRING.UNKNOWN,
-      cpu_cores: Number.isFinite(existing?.cpu_cores) ? existing.cpu_cores : NUM.ZERO,
-      memory_mb: Number.isFinite(existing?.memory_mb) ? existing.memory_mb : NUM.ZERO,
-      disk_gb: Number.isFinite(existing?.disk_gb) ? existing.disk_gb : NUM.ZERO,
+      cpu_cores: Number.isFinite(existing?.cpu_cores) ? existing.cpu_cores : 0,
+      memory_mb: Number.isFinite(existing?.memory_mb) ? existing.memory_mb : 0,
+      disk_gb: Number.isFinite(existing?.disk_gb) ? existing.disk_gb : 0,
       cpu_usage_percent: Number.isFinite(existing?.cpu_usage_percent) ?
         existing.cpu_usage_percent :
-        NUM.ZERO,
+        0,
       memory_usage_percent: Number.isFinite(existing?.memory_usage_percent) ?
         existing.memory_usage_percent :
-        NUM.ZERO,
+        0,
       disk_usage_percent: Number.isFinite(existing?.disk_usage_percent) ?
         existing.disk_usage_percent :
-        NUM.ZERO,
+        0,
       status: SERVICE_STATUS.STOPPED,
       connection_state: STATE.DISCONNECTED,
       capabilities: existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
@@ -463,7 +463,7 @@ class HeartbeatServiceLifecycleMethods {
       heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
       startedAtMs: now,
     });
-    if (typeof this.nodeStateReporter === TYPEOF.FUNCTION) {
+    if (typeof this.nodeStateReporter === 'function') {
       try {
         const reporterResult = await this.callNodeStateReporterWithTimeout(
           {
@@ -536,7 +536,7 @@ class HeartbeatServiceLifecycleMethods {
       {skipCacheWait: true, queryTimeoutMs},
     );
     const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
-    if (affectedRows === NUM.ZERO) {
+    if (affectedRows === 0) {
       this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_SKIPPED, {
         nodeId: this.nodeId,
         reason: HEARTBEAT_SERVICE_LITERAL.NODE_ROW_MISSING_FROM_STORAGE,
@@ -589,7 +589,7 @@ class HeartbeatServiceLifecycleMethods {
         this.heartbeatInFlight = false;
       }
     }, this.heartbeatAttemptTimeoutMs);
-    if (typeof attempt.timeoutHandle?.unref === TYPEOF.FUNCTION) {
+    if (typeof attempt.timeoutHandle?.unref === 'function') {
       attempt.timeoutHandle.unref();
     }
     return attempt;

@@ -11,7 +11,7 @@
  * @module wasm-service/module-mirror
  */
 
-import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {validateManifestRuntimeWithAdapter} from
   './manifest-runtime-validator.js';
@@ -21,7 +21,6 @@ import {InProcessWasmRuntimeAdapter} from
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BASE64 = 'base64';
-const LOCAL_STR_EMPTY = '';
 
 const CODE_CDC_EVENTS = Object.freeze([
   CDC_EVENT.INSERT,
@@ -114,10 +113,10 @@ class ModuleMirror {
    * @return {Promise<void>}
    */
   async setModule(functionId, moduleEntry) {
-    if (!functionId || typeof functionId !== TYPEOF.STRING) {
+    if (!functionId || typeof functionId !== 'string') {
       throw new Error(MODULE_MIRROR_ERROR_MSG.FUNCTION_ID_REQUIRED);
     }
-    if (!moduleEntry || typeof moduleEntry !== TYPEOF.OBJECT) {
+    if (!moduleEntry || typeof moduleEntry !== 'object') {
       throw new Error(MODULE_MIRROR_ERROR_MSG.INVALID_MODULE_ENTRY);
     }
 
@@ -197,10 +196,10 @@ class ModuleMirror {
     const payloadVersion = modulePayload.version ?? version;
     const payloadManifest = modulePayload.manifest;
     const payloadExports = modulePayload.exports;
-    if (!payloadManifest || typeof payloadManifest !== TYPEOF.OBJECT) {
+    if (!payloadManifest || typeof payloadManifest !== 'object') {
       throw new Error(MODULE_MIRROR_ERROR_MSG.MANIFEST_REQUIRED);
     }
-    if (!payloadExports || typeof payloadExports !== TYPEOF.OBJECT) {
+    if (!payloadExports || typeof payloadExports !== 'object') {
       throw new Error(MODULE_MIRROR_ERROR_MSG.EXPORTS_REQUIRED);
     }
 
@@ -209,14 +208,14 @@ class ModuleMirror {
       wasmBytes = Buffer.from(wasmBytes);
     } else if (wasmBytes instanceof Uint8Array) {
       wasmBytes = Buffer.from(wasmBytes);
-    } else if (typeof wasmBytes === TYPEOF.STRING) {
+    } else if (typeof wasmBytes === 'string') {
       wasmBytes = Buffer.from(wasmBytes, LOCAL_STR_BASE64);
     } else {
       throw new Error(MODULE_MIRROR_ERROR_MSG.WASM_BYTES_REQUIRED);
     }
 
     return {
-      version: String(payloadVersion ?? LOCAL_STR_EMPTY),
+      version: String(payloadVersion ?? ''),
       wasmBytes,
       manifest: payloadManifest,
       exports: payloadExports,
@@ -276,8 +275,8 @@ class ModuleMirror {
    */
   bindCdcIntegrationService(cdcIntegrationService) {
     if (!cdcIntegrationService ||
-      typeof cdcIntegrationService.on !== TYPEOF.FUNCTION ||
-      typeof cdcIntegrationService.off !== TYPEOF.FUNCTION) {
+      typeof cdcIntegrationService.on !== 'function' ||
+      typeof cdcIntegrationService.off !== 'function') {
       return false;
     }
 
@@ -298,7 +297,7 @@ class ModuleMirror {
    */
   unbindCdcIntegrationService() {
     if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.off !== TYPEOF.FUNCTION) {
+      typeof this.cdcIntegrationService.off !== 'function') {
       this.cdcIntegrationService = null;
       this.boundCdcHandlers.clear();
       return;

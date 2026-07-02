@@ -22,8 +22,7 @@ const REUSED_OPERATION_REARM_ACTION = Object.freeze({
   SKIP_LIVE_DEFERRED_RETRY: 'skip_live_deferred_retry',
   REARM_DISPATCH: 'rearm_dispatch',
 });
-const LOCAL_STR_1F209 = 'Failed to refresh recent operation intent from cache-visible state';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN = 'Failed to refresh recent operation intent from cache-visible state';
 const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES = new Set([
   OperationType.ADD,
   OperationType.REPLACE,
@@ -45,7 +44,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       return null;
     }
     const normalized = moveType.toUpperCase();
-    if (normalized.length === NUM.ZERO) {
+    if (normalized.length === 0) {
       return null;
     }
     return normalized;
@@ -167,7 +166,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const cachedOperationId = cachedOperation.operationId;
     if (
       typeof cachedOperationId !== LOCAL_STR_STRING ||
-      cachedOperationId.length === NUM.ZERO
+      cachedOperationId.length === 0
     ) {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
@@ -178,7 +177,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
     } catch (error) {
       this.logger.debug(
-        LOCAL_STR_1F209,
+        LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN,
         {
           operationId: cachedOperationId,
           dedupeKey,
@@ -275,7 +274,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       operation.partitionId || operation.entityId || '',
     ).trim();
     if (
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       !this.isPriorityControlPlanePartition(partitionId)
     ) {
       return Object.freeze({
@@ -289,7 +288,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const entityId = String(
       operation.entityId || operation.partitionId || '',
     ).trim();
-    if (entityId.length === NUM.ZERO) {
+    if (entityId.length === 0) {
       return Object.freeze({
         state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.DEFERRED,
         operation: null,
@@ -330,7 +329,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
     if (
       !Array.isArray(observation?.operations) ||
-      observation.operations.length === NUM.ZERO
+      observation.operations.length === 0
     ) {
       return Object.freeze({
         state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.DEFERRED,
@@ -395,7 +394,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       intentKeys :
       Array.from(intentKeys || []);
     for (const key of keys) {
-      if (typeof key !== LOCAL_STR_STRING || key.length === NUM.ZERO) {
+      if (typeof key !== LOCAL_STR_STRING || key.length === 0) {
         continue;
       }
       this.rememberOperationIntent(key, operation);
@@ -482,9 +481,9 @@ class RebalanceCoordinatorOperationIntentMethods {
    */
   hasLiveDeferredDispatchRetry(operation) {
     const operationId = String(
-      operation?.operationId || operation?.operation_id || LOCAL_STR_EMPTY,
+      operation?.operationId || operation?.operation_id || '',
     ).trim();
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       return false;
     }
     const owner = this.workflowOwner;
@@ -516,11 +515,11 @@ class RebalanceCoordinatorOperationIntentMethods {
     const operationId = String(
       operation?.operationId || operation?.operation_id || '',
     ).trim();
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       return;
     }
     for (const [dedupeKey, entry] of this.recentOperationIntents.entries()) {
-      if (String(entry?.operation?.operationId || LOCAL_STR_EMPTY).trim() !== operationId) {
+      if (String(entry?.operation?.operationId || '').trim() !== operationId) {
         continue;
       }
       this.recentOperationIntents.delete(dedupeKey);
@@ -544,7 +543,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
     const configuredPendingTimeoutMs =
       Number.isFinite(this.config?.pendingTimeoutMs) &&
-      this.config.pendingTimeoutMs > NUM.ZERO ?
+      this.config.pendingTimeoutMs > 0 ?
         Math.floor(this.config.pendingTimeoutMs) :
         RECENT_INTENT_TTL_MS;
     return Math.max(
@@ -570,7 +569,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     ).trim();
     const operationType = this.normalizeMoveType(operation?.type);
     const priorityPartition =
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       this.isPriorityControlPlanePartition(partitionId);
     const usePriorityCreatePhaseBudget =
       priorityPartition &&
@@ -637,13 +636,13 @@ class RebalanceCoordinatorOperationIntentMethods {
     const updatedAt = Number(operation?.updatedAt);
     const createdAt = Number(operation?.createdAt);
     const startedAt =
-      Number.isFinite(updatedAt) && updatedAt > NUM.ZERO ?
+      Number.isFinite(updatedAt) && updatedAt > 0 ?
         updatedAt :
         createdAt;
-    if (!Number.isFinite(startedAt) || startedAt <= NUM.ZERO) {
-      return NUM.ZERO;
+    if (!Number.isFinite(startedAt) || startedAt <= 0) {
+      return 0;
     }
-    return Math.max(NUM.ZERO, Date.now() - startedAt);
+    return Math.max(0, Date.now() - startedAt);
   }
 
   /**
@@ -673,7 +672,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
 
     const reuseBudgetMs = this.getRecentOperationMissReuseBudgetMs(operation);
-    if (!Number.isFinite(reuseBudgetMs) || reuseBudgetMs <= NUM.ZERO) {
+    if (!Number.isFinite(reuseBudgetMs) || reuseBudgetMs <= 0) {
       return false;
     }
 

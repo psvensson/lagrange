@@ -1,10 +1,8 @@
 import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
-  NUM,
   SERVICE_STATUS,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {CONFIG_CATEGORY} from '../../config/config-constants.js';
 import {
@@ -17,7 +15,7 @@ import {
 
 function canTreatSeedAsBootstrapReady(readiness) {
   return !!readiness &&
-    typeof readiness === TYPEOF.OBJECT &&
+    typeof readiness === 'object' &&
     readiness.ready === true;
 }
 
@@ -36,7 +34,7 @@ function addCandidateNodeIds(candidateNodeIds, rows) {
 
 function filterReadyNodeIds(candidateNodeIds, nodeIds) {
   return nodeIds.filter((nodeId) =>
-    candidateNodeIds.size === NUM.ZERO || candidateNodeIds.has(nodeId),
+    candidateNodeIds.size === 0 || candidateNodeIds.has(nodeId),
   );
 }
 
@@ -78,7 +76,7 @@ class BootstrapClusterViewOwner {
     const readinessService = this.getControlPlaneReadinessService();
     if (!readinessService ||
         typeof readinessService.getStartupAuthoritySnapshotSync !==
-          TYPEOF.FUNCTION) {
+          'function') {
       return [];
     }
     try {
@@ -89,7 +87,7 @@ class BootstrapClusterViewOwner {
         );
       return Array.isArray(startupAuthority?.canonicalStartupNodeIds) ?
         [...new Set(startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
-          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+          typeof nodeId === 'string' && nodeId.length > 0,
         ))] :
         [];
     } catch (_error) {
@@ -129,12 +127,12 @@ class BootstrapClusterViewOwner {
       options.requirePublishedMembership === true ?
         [] :
         this.getStartupAuthorityReadyNodeIds(seedNodeId);
-    if (startupAuthorityReadyNodeIds.length > NUM.ZERO) {
+    if (startupAuthorityReadyNodeIds.length > 0) {
       const filteredReadyNodeIds = filterReadyNodeIds(
         candidateNodeIds,
         startupAuthorityReadyNodeIds,
       );
-      if (filteredReadyNodeIds.length > NUM.ZERO) {
+      if (filteredReadyNodeIds.length > 0) {
         return filteredReadyNodeIds;
       }
     }
@@ -150,13 +148,13 @@ class BootstrapClusterViewOwner {
 
   buildReadinessByNodeId(readinessService, candidateNodeIds) {
     if (!readinessService ||
-        typeof readinessService.getNodeReadinessSync !== TYPEOF.FUNCTION) {
+        typeof readinessService.getNodeReadinessSync !== 'function') {
       return {};
     }
     const readinessByNodeId = {};
     for (const nodeId of candidateNodeIds) {
       const readiness = readinessService.getNodeReadinessSync(nodeId);
-      if (readiness && typeof readiness === TYPEOF.OBJECT) {
+      if (readiness && typeof readiness === 'object') {
         readinessByNodeId[nodeId] = readiness;
       }
     }
@@ -178,7 +176,7 @@ class BootstrapClusterViewOwner {
       }
 
       let policy = table.table_policies;
-      if (typeof policy === TYPEOF.STRING && policy.length > NUM.ZERO) {
+      if (typeof policy === 'string' && policy.length > 0) {
         try {
           policy = JSON.parse(policy);
         } catch (error) {
@@ -201,7 +199,7 @@ class BootstrapClusterViewOwner {
     }
 
     const epoch = epochManager.getCurrentEpoch();
-    return typeof epoch?.toObject === TYPEOF.FUNCTION ? epoch.toObject() : epoch;
+    return typeof epoch?.toObject === 'function' ? epoch.toObject() : epoch;
   }
 
   getClusterConfiguration() {
@@ -254,7 +252,7 @@ class BootstrapClusterViewOwner {
     for (const group of groups) {
       messageGroups.push({
         groupId: group.group_id,
-        replicaCount: group.replicas?.length || NUM.ZERO,
+        replicaCount: group.replicas?.length || 0,
         replicas: group.replicas || [],
       });
     }

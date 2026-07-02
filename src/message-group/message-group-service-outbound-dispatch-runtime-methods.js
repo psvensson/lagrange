@@ -8,9 +8,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     MESSAGE_DELIVERY_MODE,
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
-    NUM,
     QUERY_MESSAGE_TYPE,
-    TYPEOF,
     buildDeferredDeliveryError,
     normalizeMessageDeliveryMode,
     resolveTransportDeliveryOptions,
@@ -153,15 +151,15 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
       }
       let lastError = null;
       const maxAttempts =
-        Number.isInteger(options?.maxAttempts) && options.maxAttempts > NUM.ZERO ?
+        Number.isInteger(options?.maxAttempts) && options.maxAttempts > 0 ?
           options.maxAttempts :
           this.retryMaxAttempts;
       const disableRetryDelay = options?.disableRetryDelay === true;
-      for (let attempt = NUM.ZERO; attempt < maxAttempts; attempt++) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         messageEnvelope.attempts++;
         try {
           // Calculate delay with exponential backoff and jitter
-          if (!disableRetryDelay && attempt > NUM.ZERO) {
+          if (!disableRetryDelay && attempt > 0) {
             const baseDelay = Math.min(
               this.retryInitialDelayMs *
                 Math.pow(this.retryBackoffMultiplier, attempt - 1),
@@ -195,14 +193,14 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             // Spread transport result directly - ACK structure is flat
             return {
               delivered: true,
-              attempt: attempt + NUM.ONE,
+              attempt: attempt + 1,
               ...result,
             };
           }
           if (shouldDeferImmediateDeliveryRetry(result)) {
             return {
               delivered: false,
-              attempt: attempt + NUM.ONE,
+              attempt: attempt + 1,
               error:
                 result?.error ||
                 MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
@@ -222,7 +220,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             {
               messageId,
               targetService,
-              attempt: attempt + NUM.ONE,
+              attempt: attempt + 1,
               error: error.message,
             },
           );
@@ -236,10 +234,10 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
           deferRetry: true,
           retryAfterMs: Number.isFinite(lastError.retryAfterMs) ?
-            Math.max(NUM.ZERO, Math.floor(lastError.retryAfterMs)) :
-            NUM.ZERO,
+            Math.max(0, Math.floor(lastError.retryAfterMs)) :
+            0,
           errorCode:
-            typeof lastError.code === TYPEOF.STRING ? lastError.code : null,
+            typeof lastError.code === 'string' ? lastError.code : null,
         };
       }
       return {
@@ -258,7 +256,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     isQueryDeliveryPayload(payload) {
       return Boolean(
         payload &&
-        typeof payload === TYPEOF.OBJECT &&
+        typeof payload === 'object' &&
         payload.type === QUERY_MESSAGE_TYPE.QUERY,
       );
     }
@@ -272,7 +270,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     isDirectOnlyControlPlanePayload(payload) {
       return Boolean(
         payload &&
-        typeof payload === TYPEOF.OBJECT &&
+        typeof payload === 'object' &&
         DIRECT_ONLY_MESSAGE_TYPES.has(payload.type),
       );
     }
@@ -312,7 +310,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
         const deliveryResult = await this.attemptDirectDelivery(
           messageEnvelope,
           {
-            maxAttempts: NUM.ONE,
+            maxAttempts: 1,
             disableRetryDelay: true,
             transportDeliveryOptions: options?.transportDeliveryOptions || null,
           },

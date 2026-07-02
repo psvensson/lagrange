@@ -32,8 +32,8 @@ const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
   'Opportunistic join backfill failed for non-critical propagated tables';
 const LOG_NODE_REGISTRATION_RETRY =
   'Retrying join node registration after retryable admission failure';
-const JOIN_NODE_REGISTRATION_MAX_ATTEMPTS = NUM.TWO;
-const JOIN_NODE_REGISTRATION_RETRY_DELAY_MS = NUM.TWO * NUM.HUNDRED;
+const JOIN_NODE_REGISTRATION_MAX_ATTEMPTS = 2;
+const JOIN_NODE_REGISTRATION_RETRY_DELAY_MS = 2 * NUM.HUNDRED;
 const JOIN_NODE_REGISTRATION_MAX_DELAY_MS = NUM.THOUSAND;
 
 export {

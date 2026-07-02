@@ -1,8 +1,7 @@
-import {TYPEOF} from '../../constants/index.js';
 import {BOOTSTRAP_API_RESPONSE_FIELD} from '../bootstrap-api-constants.js';
 
 function isStartupAuthoritySnapshot(value) {
-  return Boolean(value && typeof value === TYPEOF.OBJECT);
+  return Boolean(value && typeof value === 'object');
 }
 
 function isUsableStartupAuthoritySnapshot(value) {
@@ -35,13 +34,13 @@ const BOOTSTRAP_STARTUP_AUTHORITY_EVIDENCE_METHODS = Object.freeze({
       null;
   },
   resolveLocalStartupAuthoritySnapshot(service, observedAt) {
-    if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
+    if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
       return service.getStartupAuthoritySnapshotSync(
         this.getSeedNodeId(),
         observedAt,
       );
     }
-    if (typeof service.getStartupAuthoritySnapshot !== TYPEOF.FUNCTION) {
+    if (typeof service.getStartupAuthoritySnapshot !== 'function') {
       return null;
     }
     const localStartupAuthority = service.getStartupAuthoritySnapshot(
@@ -49,7 +48,7 @@ const BOOTSTRAP_STARTUP_AUTHORITY_EVIDENCE_METHODS = Object.freeze({
       observedAt,
     );
     return localStartupAuthority &&
-      typeof localStartupAuthority.then === TYPEOF.FUNCTION ?
+      typeof localStartupAuthority.then === 'function' ?
       null :
       localStartupAuthority;
   },
@@ -57,7 +56,7 @@ const BOOTSTRAP_STARTUP_AUTHORITY_EVIDENCE_METHODS = Object.freeze({
     const seedContactStartupAuthority =
       this.getSeedContactStartupAuthoritySnapshot();
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return seedContactStartupAuthority;
     }
     try {

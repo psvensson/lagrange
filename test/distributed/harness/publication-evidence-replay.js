@@ -8,7 +8,6 @@ import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from
   '../../../src/control-plane/priority-recovery-snapshot.js';
-import {NUM, TYPEOF} from '../../../src/constants/index.js';
 import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
@@ -155,9 +154,9 @@ function buildPublicationRowStateFromConvergence(publicationConvergenceState) {
         normalizeText(convergence[PUBLICATION_EVIDENCE_REPLAY_FIELD.STATUS]),
       publishedActiveNodeIds,
       requiredAckNodeIds:
-        requiredAckNodeIds.length > NUM.ZERO ? requiredAckNodeIds : publishedActiveNodeIds,
+        requiredAckNodeIds.length > 0 ? requiredAckNodeIds : publishedActiveNodeIds,
       acknowledgedNodeIds:
-        acknowledgedNodeIds.length > NUM.ZERO ?
+        acknowledgedNodeIds.length > 0 ?
           acknowledgedNodeIds :
           publishedActiveNodeIds.filter((nodeId) => !pendingAckNodeIds.has(nodeId)),
       priorityPartitionSummary:
@@ -180,12 +179,12 @@ function selectLatestPublicationRowState(snapshot = {}, publicationConvergenceSt
       PUBLICATION_EVIDENCE_REPLAY_FIELD.CONTROL_PLANE_PUBLICATIONS_SNAKE,
     ),
   ].filter(isRecord);
-  if (snapshotPublicationRows.length > NUM.ZERO) {
+  if (snapshotPublicationRows.length > 0) {
     const sortedPublicationRows = snapshotPublicationRows.slice().sort((left, right) => {
       const epochDelta =
         normalizeInteger(right.publication_epoch ?? right.publicationEpoch) -
         normalizeInteger(left.publication_epoch ?? left.publicationEpoch);
-      if (epochDelta !== NUM.ZERO) {
+      if (epochDelta !== 0) {
         return epochDelta;
       }
       return normalizeInteger(right.updated_at ?? right.updatedAt) -
@@ -193,7 +192,7 @@ function selectLatestPublicationRowState(snapshot = {}, publicationConvergenceSt
     });
     return {
       availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
-      value: sortedPublicationRows[NUM.ZERO],
+      value: sortedPublicationRows[0],
     };
   }
   return buildPublicationRowStateFromConvergence(publicationConvergenceState);
@@ -215,7 +214,7 @@ function summarizePriorityPartitionSummary(summary = {}) {
     blockedPartitionIds: normalizeList(
       blockedPartitions
         .map((entry) => entry?.partitionId ?? entry?.partition_id)
-        .filter((partitionId) => normalizeScalarText(partitionId).length > NUM.ZERO),
+        .filter((partitionId) => normalizeScalarText(partitionId).length > 0),
     ),
   };
 }
@@ -284,9 +283,9 @@ function summarizePriorityRecoveryClosureWitness(closureWitness = null) {
         PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED
       ] === true,
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.CLOSURE_RECORD_ID]:
-      closureRecordId.length > NUM.ZERO ? closureRecordId : null,
+      closureRecordId.length > 0 ? closureRecordId : null,
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.CLOSURE_WITNESS_CLASS]:
-      closureWitnessClass.length > NUM.ZERO ? closureWitnessClass : null,
+      closureWitnessClass.length > 0 ? closureWitnessClass : null,
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.BLOCKED_PARTITION_IDS]:
       normalizeList(
         readArrayField(
@@ -301,7 +300,7 @@ function classifyPublicationEvidenceClosureWitness(closureWitness = {}) {
   const closureWitnessState = normalizeText(
     closureWitness[PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.STATE],
   );
-  if (closureWitnessState.length === NUM.ZERO) {
+  if (closureWitnessState.length === 0) {
     return PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION.ABSENT;
   }
   if (
@@ -374,7 +373,7 @@ function classifyPublicationEvidenceDrift(options = {}) {
 function buildReplayDerivationOptions(options = {}) {
   const latestPublicationRowState =
     options.latestPublicationRowState &&
-      typeof options.latestPublicationRowState === TYPEOF.OBJECT ?
+      typeof options.latestPublicationRowState === 'object' ?
       options.latestPublicationRowState :
       {
         availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
@@ -400,7 +399,7 @@ function buildReplayDerivationOptions(options = {}) {
 function replayPublicationPriorityEvidenceFromRows(options = {}) {
   const publicationConvergenceState =
     options.publicationConvergenceState &&
-      typeof options.publicationConvergenceState === TYPEOF.OBJECT ?
+      typeof options.publicationConvergenceState === 'object' ?
       options.publicationConvergenceState :
       {
         availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
@@ -408,7 +407,7 @@ function replayPublicationPriorityEvidenceFromRows(options = {}) {
       };
   const latestPublicationRowState =
     options.latestPublicationRowState &&
-      typeof options.latestPublicationRowState === TYPEOF.OBJECT ?
+      typeof options.latestPublicationRowState === 'object' ?
       options.latestPublicationRowState :
       buildPublicationRowStateFromConvergence(publicationConvergenceState);
   const candidate = deriveMembershipPublicationCandidate(
@@ -423,7 +422,7 @@ function replayPublicationPriorityEvidenceFromRows(options = {}) {
   ).value;
   const replayedPriorityPartitionSummary =
     candidate.priorityPartitionSummary &&
-      typeof candidate.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof candidate.priorityPartitionSummary === 'object' ?
       candidate.priorityPartitionSummary :
       {};
   const replayedClosureWitness = summarizePriorityRecoveryClosureWitness(
@@ -436,12 +435,12 @@ function replayPublicationPriorityEvidenceFromRows(options = {}) {
   return {
     source: PUBLICATION_EVIDENCE_REPLAY_SOURCE.SNAPSHOT,
     rowCounts: {
-      nodes: Array.isArray(options.nodeRows) ? options.nodeRows.length : NUM.ZERO,
+      nodes: Array.isArray(options.nodeRows) ? options.nodeRows.length : 0,
       nodeEndpoints: Array.isArray(options.nodeEndpointRows) ?
         options.nodeEndpointRows.length :
-        NUM.ZERO,
-      partitions: Array.isArray(options.partitionRows) ? options.partitionRows.length : NUM.ZERO,
-      services: Array.isArray(options.serviceRows) ? options.serviceRows.length : NUM.ZERO,
+        0,
+      partitions: Array.isArray(options.partitionRows) ? options.partitionRows.length : 0,
+      services: Array.isArray(options.serviceRows) ? options.serviceRows.length : 0,
     },
     durablePublication: {
       [PUBLICATION_EVIDENCE_REPLAY_DURABLE_FIELD.EPOCH]:
@@ -498,7 +497,7 @@ function replayPublicationPriorityEvidenceFromRows(options = {}) {
 
 function parseSnapshotLine(line, index) {
   const normalizedLine = normalizeText(line);
-  if (normalizedLine.length === NUM.ZERO) {
+  if (normalizedLine.length === 0) {
     return {
       availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
       value: {},
@@ -510,7 +509,7 @@ function parseSnapshotLine(line, index) {
       value: JSON.parse(normalizedLine),
     };
   } catch (error) {
-    error.message = `invalid snapshots.ndjson line ${index + NUM.ONE}: ${error.message}`;
+    error.message = `invalid snapshots.ndjson line ${index + 1}: ${error.message}`;
     throw error;
   }
 }
@@ -522,7 +521,7 @@ function selectLatestSnapshot(snapshots = []) {
     )
     .map((snapshotState) => snapshotState.value)
     .filter(isRecord);
-  if (availableSnapshots.length === NUM.ZERO) {
+  if (availableSnapshots.length === 0) {
     return {
       availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
       value: {},
@@ -534,7 +533,7 @@ function selectLatestSnapshot(snapshots = []) {
   );
   return {
     availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
-    value: sortedSnapshots[NUM.ZERO],
+    value: sortedSnapshots[0],
   };
 }
 
@@ -558,7 +557,7 @@ async function readOptionalLogLines(filePath) {
     const raw = await readFile(filePath, PUBLICATION_EVIDENCE_REPLAY_ENCODING);
     return raw
       .split(PUBLICATION_EVIDENCE_REPLAY_NEWLINE)
-      .filter((line) => normalizeText(line).length > NUM.ZERO);
+      .filter((line) => normalizeText(line).length > 0);
   } catch (_error) {
     return [];
   }
@@ -566,7 +565,7 @@ async function readOptionalLogLines(filePath) {
 
 async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
   const normalizedReportDir = normalizeText(reportDir);
-  if (normalizedReportDir.length === NUM.ZERO) {
+  if (normalizedReportDir.length === 0) {
     throw new Error(PUBLICATION_EVIDENCE_REPLAY_ERROR_MESSAGE.REPORT_DIR_REQUIRED);
   }
   const failureBundle = await readJsonFile(
@@ -692,7 +691,7 @@ function formatPublicationEvidenceReplaySummary(summary = {}) {
 }
 
 async function runPublicationEvidenceReplayCli(argv = process.argv) {
-  const reportDir = argv[NUM.TWO];
+  const reportDir = argv[2];
   const summary = await replayPublicationPriorityEvidenceFromReportDir(reportDir);
   process.stdout.write(
     formatPublicationEvidenceReplaySummary(summary) +
@@ -700,7 +699,7 @@ async function runPublicationEvidenceReplayCli(argv = process.argv) {
   );
 }
 
-if (process.argv[NUM.ONE] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   runPublicationEvidenceReplayCli().catch((error) => {
     process.stderr.write(
       JSON.stringify(

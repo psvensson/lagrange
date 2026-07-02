@@ -211,7 +211,7 @@ function resolveSystemTableVisibilityContractOutcome(visibilityState) {
 function buildSystemTableVisibilityResult(options = {}) {
   const hasExplicitVisibilityState =
     options &&
-    typeof options === TYPEOF.OBJECT &&
+    typeof options === 'object' &&
     Object.hasOwn(options, 'visibilityState');
   const visibilityState = normalizeSystemTableVisibilityState(
     options?.visibilityState,
@@ -228,15 +228,15 @@ function buildSystemTableVisibilityResult(options = {}) {
     contractState: contractOutcome?.contractState || null,
     nextAction: contractOutcome?.nextAction || null,
     pressureAction:
-      typeof options?.pressureAction === TYPEOF.STRING ?
+      typeof options?.pressureAction === 'string' ?
         options.pressureAction :
         null,
     pressureReason:
-      typeof options?.pressureReason === TYPEOF.STRING ?
+      typeof options?.pressureReason === 'string' ?
         options.pressureReason :
         null,
     retryAfterMs:
-      Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > NUM.ZERO ?
+      Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > 0 ?
         Math.floor(options.retryAfterMs) :
         null,
   });
@@ -244,7 +244,7 @@ function buildSystemTableVisibilityResult(options = {}) {
 function normalizeSystemTableVisibilityResult(result, fallbackState = null) {
   if (
     result &&
-    typeof result === TYPEOF.OBJECT &&
+    typeof result === 'object' &&
     Object.hasOwn(result, CDC_INTEGRATION_SERVICE_LITERAL.VISIBILITYSTATE)
   ) {
     return buildSystemTableVisibilityResult({
@@ -283,58 +283,58 @@ function buildCDCNodeJoinedResult(options = {}) {
   return result;
 }
 function normalizeDeliveryPriority(value, fallback = null) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallback;
 }
 function buildSystemTableMutationError(result, fallbackMessage) {
   const error = new Error(result?.error || fallbackMessage);
   if (
-    typeof result?.errorCode === TYPEOF.STRING &&
-    result.errorCode.length > NUM.ZERO
+    typeof result?.errorCode === 'string' &&
+    result.errorCode.length > 0
   ) {
     error.code = result.errorCode;
     error.errorCode = result.errorCode;
   }
   if (
-    typeof result?.pressureAction === TYPEOF.STRING &&
-    result.pressureAction.length > NUM.ZERO
+    typeof result?.pressureAction === 'string' &&
+    result.pressureAction.length > 0
   ) {
     error.pressureAction = result.pressureAction;
   }
   if (
-    typeof result?.pressureReason === TYPEOF.STRING &&
-    result.pressureReason.length > NUM.ZERO
+    typeof result?.pressureReason === 'string' &&
+    result.pressureReason.length > 0
   ) {
     error.pressureReason = result.pressureReason;
   }
   if (
-    typeof result?.outcome === TYPEOF.STRING &&
-    result.outcome.length > NUM.ZERO
+    typeof result?.outcome === 'string' &&
+    result.outcome.length > 0
   ) {
     error.outcome = result.outcome;
   }
   if (
-    typeof result?.contractState === TYPEOF.STRING &&
-    result.contractState.length > NUM.ZERO
+    typeof result?.contractState === 'string' &&
+    result.contractState.length > 0
   ) {
     error.contractState = result.contractState;
   }
   if (
-    typeof result?.nextAction === TYPEOF.STRING &&
-    result.nextAction.length > NUM.ZERO
+    typeof result?.nextAction === 'string' &&
+    result.nextAction.length > 0
   ) {
     error.nextAction = result.nextAction;
   }
   if (
-    typeof result?.completionState === TYPEOF.STRING &&
-    result.completionState.length > NUM.ZERO
+    typeof result?.completionState === 'string' &&
+    result.completionState.length > 0
   ) {
     error.completionState = result.completionState;
   }
   if (
-    typeof result?.reasonCode === TYPEOF.STRING &&
-    result.reasonCode.length > NUM.ZERO
+    typeof result?.reasonCode === 'string' &&
+    result.reasonCode.length > 0
   ) {
     error.reasonCode = result.reasonCode;
   }
@@ -344,20 +344,20 @@ function buildSystemTableMutationError(result, fallbackMessage) {
   if (Array.isArray(result?.failedDimensions)) {
     error.failedDimensions = [...result.failedDimensions];
   }
-  if (result?.details && typeof result.details === TYPEOF.OBJECT) {
+  if (result?.details && typeof result.details === 'object') {
     error.details = {...result.details};
   }
   if (
-    typeof result?.tableName === TYPEOF.STRING &&
-    result.tableName.length > NUM.ZERO
+    typeof result?.tableName === 'string' &&
+    result.tableName.length > 0
   ) {
     error.tableName = result.tableName;
   }
   const retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
-    Math.max(NUM.ZERO, Math.floor(result.retryAfterMs)) :
+    Math.max(0, Math.floor(result.retryAfterMs)) :
     null;
   if (result?.deferRetry === true ||
-      (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO)) {
+      (Number.isFinite(retryAfterMs) && retryAfterMs > 0)) {
     error.deferRetry = true;
   }
   if (Number.isFinite(retryAfterMs)) {
@@ -365,18 +365,18 @@ function buildSystemTableMutationError(result, fallbackMessage) {
   }
   if (
     result?.pressureSummary &&
-    typeof result.pressureSummary === TYPEOF.OBJECT
+    typeof result.pressureSummary === 'object'
   ) {
     error.pressureSummary = result.pressureSummary;
   }
   if (Array.isArray(result?.participantFailures)) {
     error.participantFailures = result.participantFailures.map((entry) =>
-      entry && typeof entry === TYPEOF.OBJECT ? {...entry} : entry,
+      entry && typeof entry === 'object' ? {...entry} : entry,
     );
   }
   if (
     result?.firstFailedParticipant &&
-    typeof result.firstFailedParticipant === TYPEOF.OBJECT
+    typeof result.firstFailedParticipant === 'object'
   ) {
     error.firstFailedParticipant = {
       ...result.firstFailedParticipant,
@@ -389,11 +389,11 @@ function resolveSystemTableOwnerHandoffFailureTableName(
   fallbackTableName = null,
 ) {
   const candidateTableName =
-    typeof value?.failedTable === TYPEOF.STRING &&
-    value.failedTable.length > NUM.ZERO ?
+    typeof value?.failedTable === 'string' &&
+    value.failedTable.length > 0 ?
       value.failedTable :
-      typeof value?.tableName === TYPEOF.STRING &&
-          value.tableName.length > NUM.ZERO ?
+      typeof value?.tableName === 'string' &&
+          value.tableName.length > 0 ?
         value.tableName :
         fallbackTableName;
   if (!VALID_SYSTEM_TABLES.includes(candidateTableName)) {
@@ -438,7 +438,7 @@ function hasSystemTableOwnerHandoffFailureSignature(
     [];
   if (
     value?.firstFailedParticipant &&
-    typeof value.firstFailedParticipant === TYPEOF.OBJECT &&
+    typeof value.firstFailedParticipant === 'object' &&
     isSystemTableOwnerHandoffFailure(
       value.firstFailedParticipant,
       fallbackTableName,
@@ -449,7 +449,7 @@ function hasSystemTableOwnerHandoffFailureSignature(
   return participantFailures.some(
     (entry) =>
       entry &&
-      typeof entry === TYPEOF.OBJECT &&
+      typeof entry === 'object' &&
       isSystemTableOwnerHandoffFailure(entry, fallbackTableName),
   );
 }
@@ -457,7 +457,7 @@ function sortMutationKeyObject(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => sortMutationKeyObject(entry));
   }
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return value;
   }
   return Object.keys(value)
@@ -471,7 +471,7 @@ function stableSerializeMutationKey(value) {
   return JSON.stringify(sortMutationKeyObject(value));
 }
 function normalizeSystemWriteRecoveryCandidateSelectionKeyValue(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
@@ -509,7 +509,7 @@ function normalizeAuthoritativeFallbackOutcome(value) {
     AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
 }
 function normalizeLocalQueryTransportReadiness(readiness) {
-  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+  if (!readiness || typeof readiness !== 'object') {
     return null;
   }
   const ready = readiness.ready === true;
@@ -519,15 +519,15 @@ function normalizeLocalQueryTransportReadiness(readiness) {
       CDC_INTEGRATION_SERVICE_LITERAL.DEFERRED,
     ready,
     reason:
-      typeof readiness.reason === TYPEOF.STRING &&
-      readiness.reason.length > NUM.ZERO ?
+      typeof readiness.reason === 'string' &&
+      readiness.reason.length > 0 ?
         readiness.reason :
         null,
     retryAfterMs:
       Number.isFinite(readiness.retryAfterMs) &&
-      readiness.retryAfterMs > NUM.ZERO ?
+      readiness.retryAfterMs > 0 ?
         Math.floor(readiness.retryAfterMs) :
-        NUM.ZERO,
+        0,
   };
 }
 function shouldEmitTableWriteMetric(tableName) {
@@ -538,8 +538,8 @@ function shouldLogTableWriteFailure(tableName) {
 }
 function normalizeSystemTableWriteMode(service, error) {
   if (
-    typeof error?.writeMode === TYPEOF.STRING &&
-    error.writeMode.length > NUM.ZERO
+    typeof error?.writeMode === 'string' &&
+    error.writeMode.length > 0
   ) {
     return error.writeMode;
   }
@@ -558,15 +558,15 @@ function isCacheVisibilityTimeoutError(error) {
   );
 }
 function annotateSystemTableMutationError(error, context = {}) {
-  if (!error || typeof error !== TYPEOF.OBJECT) {
+  if (!error || typeof error !== 'object') {
     return error;
   }
   if (Number.isFinite(context.attempt)) {
-    error.attempt = Math.max(NUM.ONE, Math.floor(context.attempt));
+    error.attempt = Math.max(1, Math.floor(context.attempt));
   }
   if (
-    typeof context.writeMode === TYPEOF.STRING &&
-    context.writeMode.length > NUM.ZERO
+    typeof context.writeMode === 'string' &&
+    context.writeMode.length > 0
   ) {
     error.writeMode = context.writeMode;
   }
@@ -580,18 +580,18 @@ function logSystemTableWriteFailure(service, logMessage, details, error) {
     ...details,
     code: getControlPlaneErrorCode(error) || null,
     retryAfterMs: getControlPlaneRetryAfterMs(error),
-    causeId: typeof details?.causeId === TYPEOF.STRING ? details.causeId : null,
+    causeId: typeof details?.causeId === 'string' ? details.causeId : null,
     operation:
-      typeof details?.operation === TYPEOF.STRING ? details.operation : null,
+      typeof details?.operation === 'string' ? details.operation : null,
     writeMode: normalizeSystemTableWriteMode(service, error),
     bootstrapMode:
       service?.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ||
       service?.bootstrapMode === true,
     primaryKey: sortMutationKeyObject(details?.primaryKey || null),
     attempt: Number.isFinite(details?.attempt) ?
-      Math.max(NUM.ONE, Math.floor(details.attempt)) :
+      Math.max(1, Math.floor(details.attempt)) :
       Number.isFinite(error?.attempt) ?
-        Math.max(NUM.ONE, Math.floor(error.attempt)) :
+        Math.max(1, Math.floor(error.attempt)) :
         null,
     cacheWaitTimedOut:
       details?.cacheWaitTimedOut === true ||
@@ -608,7 +608,7 @@ function logSystemTableWriteFailure(service, logMessage, details, error) {
   // tolerance) decision needs. Additive: only attached when present.
   if (
     error?.firstFailedParticipant &&
-    typeof error.firstFailedParticipant === TYPEOF.OBJECT
+    typeof error.firstFailedParticipant === 'object'
   ) {
     payload.firstFailedParticipant = error.firstFailedParticipant;
   }
@@ -616,11 +616,11 @@ function logSystemTableWriteFailure(service, logMessage, details, error) {
     payload.participantFailureCount = error.participantFailures.length;
     payload.failedParticipantNodeIds = error.participantFailures
       .map((entry) =>
-        entry && typeof entry === TYPEOF.OBJECT ?
+        entry && typeof entry === 'object' ?
           entry.participantNodeId || null :
           null,
       )
-      .filter((value) => typeof value === TYPEOF.STRING);
+      .filter((value) => typeof value === 'string');
   }
   if (isRetryableControlPlaneError(error)) {
     service.logger.warn(logMessage, payload);

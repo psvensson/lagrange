@@ -2,7 +2,6 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSelectExecution} from './sql-query-engine-select-execution.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_ERRORCODE = 'errorCode';
 const LOCAL_STR_OUTCOME = 'outcome';
@@ -29,7 +28,7 @@ class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
   applyWriteExecutionDeliverySource(writeExecutionOptions, queryOptions = {}) {
     if (
       typeof queryOptions?.deliverySource !== LOCAL_STR_STRING ||
-      queryOptions.deliverySource.length <= LOCAL_NUM_ZERO
+      queryOptions.deliverySource.length <= 0
     ) {
       return writeExecutionOptions;
     }
@@ -104,7 +103,7 @@ class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
     if (
       !this.isRetryableControlPlaneMutationFailure(error) ||
       typeof sqlRequest?.statement !== LOCAL_STR_STRING ||
-      sqlRequest.statement.length === LOCAL_NUM_ZERO
+      sqlRequest.statement.length === 0
     ) {
       return null;
     }
@@ -236,7 +235,7 @@ class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
       addDependencyTable(participantFailure?.failedTable);
     }
 
-    return dependencyTables.size > LOCAL_NUM_ZERO ? [...dependencyTables] : null;
+    return dependencyTables.size > 0 ? [...dependencyTables] : null;
   }
 
   /**
@@ -315,7 +314,7 @@ class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
     }
     if (
       Number.isFinite(failureResult.retryAfterMs) &&
-      failureResult.retryAfterMs > LOCAL_NUM_ZERO
+      failureResult.retryAfterMs > 0
     ) {
       trackedFailure.retryAfterMs = Math.floor(failureResult.retryAfterMs);
     }
@@ -361,7 +360,7 @@ class SQLQueryEngineWriteFailureMethods extends SQLQueryEngineSelectExecution {
     fieldName,
     fieldValue,
   ) {
-    if (typeof fieldValue === LOCAL_STR_STRING && fieldValue.length > LOCAL_NUM_ZERO) {
+    if (typeof fieldValue === LOCAL_STR_STRING && fieldValue.length > 0) {
       trackedFailure[fieldName] = fieldValue;
     }
   }

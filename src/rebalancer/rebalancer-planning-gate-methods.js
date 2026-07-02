@@ -25,7 +25,6 @@ const {
   TriggerType,
   RECONCILE_REASON,
   REBALANCER_LOG_MSG,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -429,8 +428,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
           gateSnapshot.evidence.topologySettlingBlockedByOperationCreationTarget,
         blockerReason: topologySettlingBlocker.reason || null,
         connectedNodeId:
-          typeof topologySettlingBlocker.connectedNodeId === TYPEOF.STRING &&
-          topologySettlingBlocker.connectedNodeId.length > NUM.ZERO ?
+          typeof topologySettlingBlocker.connectedNodeId === 'string' &&
+          topologySettlingBlocker.connectedNodeId.length > 0 ?
             topologySettlingBlocker.connectedNodeId :
             null,
         unreadyNodeIds: Array.isArray(topologySettlingBlocker.unreadyNodeIds) ?
@@ -653,8 +652,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
   async resolveCheckRebalanceGateDecision() {
     const planningGateDecisions =
       await this.collectRebalancePlanningGateDecisions();
-    return planningGateDecisions.length > NUM.ZERO ?
-      planningGateDecisions[NUM.ZERO] :
+    return planningGateDecisions.length > 0 ?
+      planningGateDecisions[0] :
       null;
   },
 

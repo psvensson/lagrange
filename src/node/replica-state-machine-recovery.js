@@ -1,7 +1,6 @@
 import {
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -172,7 +171,7 @@ async function handleNodeRecovery(stateMachine, options = {}) {
  * @return {boolean} True when registration succeeded.
  */
 function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
-  if (!replicaId || typeof replicaId !== TYPEOF.STRING) {
+  if (!replicaId || typeof replicaId !== 'string') {
     return false;
   }
 

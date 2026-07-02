@@ -63,9 +63,7 @@ const {
   ADMIN_STREAM_LANE_SNAPSHOT,
   ErrorCode,
   MessageType,
-  NUM,
   SQLParser,
-  TYPEOF,
   adaptAdminMessageToServiceMessage,
   appendStructuredQueryMetadata,
   isAdminMessageDispatchable,
@@ -113,7 +111,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       return;
     }
 
-    if (!message || typeof message.type !== TYPEOF.STRING) {
+    if (!message || typeof message.type !== 'string') {
       this.sendError(
         clientInfo,
         null,
@@ -173,7 +171,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       );
       return;
     }
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       this.sendError(
         clientInfo,
         null,
@@ -204,7 +202,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
         id: clientInfo.id,
         send: (data) => {
           const payload =
-            typeof data === TYPEOF.STRING ? JSON.parse(data) : data;
+            typeof data === 'string' ? JSON.parse(data) : data;
           const innerType = payload.type;
           this.sendToClient(clientInfo, {
             type: MessageType.LIVE_QUERY_EVENT,
@@ -317,7 +315,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
         const cacheDump =
           deliveryPayload.cacheDump || deliveryPayload.data || null;
-        if (!cacheDump || typeof cacheDump !== TYPEOF.OBJECT) {
+        if (!cacheDump || typeof cacheDump !== 'object') {
           throw new Error(ADMIN_ERROR_MESSAGE.SYSTEM_CACHE_EMPTY);
         }
         this.sendCacheDumpPayload(clientInfo, cacheDump);
@@ -326,7 +324,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
 
       if (
         deliveryPayload.queryResult &&
-        typeof deliveryPayload.queryResult === TYPEOF.OBJECT
+        typeof deliveryPayload.queryResult === 'object'
       ) {
         this.sendQueryResult(
           clientInfo,
@@ -407,9 +405,9 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     if (hint) {
       message.hint = hint;
     }
-    if (options?.adminDetails && typeof options.adminDetails === TYPEOF.OBJECT) {
+    if (options?.adminDetails && typeof options.adminDetails === 'object') {
       message.details = options.adminDetails;
-    } else if (options?.details && typeof options.details === TYPEOF.OBJECT) {
+    } else if (options?.details && typeof options.details === 'object') {
       message.details = options.details;
     }
 
@@ -418,7 +416,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     }
     if (Number.isFinite(options?.retryAfterMs)) {
       message.retryAfterMs = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(options.retryAfterMs),
       );
     }
@@ -434,7 +432,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       // UTF-8 byte length, so under-threshold sends pay no measurement cost
       // on this hot path; member sizes are only computed past the threshold.
       if (
-        typeof json === TYPEOF.STRING &&
+        typeof json === 'string' &&
         json.length > ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES
       ) {
         try {
@@ -463,22 +461,22 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     // (project lesson CL-009).
     const now = Date.now();
     const lastWarnAtMs =
-      Number(this._payloadSizeAttributionLastWarnAtMs) || NUM.ZERO;
+      Number(this._payloadSizeAttributionLastWarnAtMs) || 0;
     if (now - lastWarnAtMs < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_WARN_INTERVAL_MS) {
       return;
     }
     this._payloadSizeAttributionLastWarnAtMs = now;
     const messageMemberBytes = buildAdminPayloadMemberBytes(message);
-    const largestMember = messageMemberBytes[NUM.ZERO] || null;
+    const largestMember = messageMemberBytes[0] || null;
     const attributionPath = [];
     let attributionMemberBytes = messageMemberBytes;
     let container = message;
     for (
-      let depth = NUM.ZERO;
+      let depth = 0;
       depth < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MAX_DEPTH;
       depth += 1
     ) {
-      const largest = attributionMemberBytes[NUM.ZERO];
+      const largest = attributionMemberBytes[0];
       if (
         !largest ||
         largest.bytes < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES
@@ -494,20 +492,20 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
           value.length,
           ADMIN_PAYLOAD_SIZE_ATTRIBUTION_ARRAY_SCAN_LIMIT,
         );
-        for (let i = NUM.ZERO; i < scanCount; i += 1) {
+        for (let i = 0; i < scanCount; i += 1) {
           const elementBytes = measureAdminPayloadMemberBytes(value[i]);
           if (elementBytes > largestElementBytes) {
             largestElementBytes = elementBytes;
             largestIndex = i;
           }
         }
-        if (largestIndex < NUM.ZERO) {
+        if (largestIndex < 0) {
           break;
         }
         value = value[largestIndex];
         pathSegment = largest.key + '[' + largestIndex + ']';
       }
-      if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
         break;
       }
       attributionPath.push(pathSegment);
@@ -517,13 +515,13 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     this.logger.warn(ADMIN_PAYLOAD_SIZE_ATTRIBUTION_LOG_MSG, {
       clientId: clientInfo?.id || null,
       totalBytes,
-      type: typeof message?.type === TYPEOF.STRING ? message.type : null,
+      type: typeof message?.type === 'string' ? message.type : null,
       lane: message?.lane || clientInfo?.lane || null,
       payloadMember: largestMember ? largestMember.key : null,
       payloadMemberBytes: largestMember ? largestMember.bytes : null,
       attributionPath: attributionPath.join('.'),
       topLevelMemberBytes: attributionMemberBytes.slice(
-        NUM.ZERO,
+        0,
         ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT,
       ),
     });
@@ -544,7 +542,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
   },
 
   getErrorCode(error) {
-    if (error && typeof error.adminErrorCode === TYPEOF.STRING) {
+    if (error && typeof error.adminErrorCode === 'string') {
       return error.adminErrorCode;
     }
     const message = error.message.toLowerCase();

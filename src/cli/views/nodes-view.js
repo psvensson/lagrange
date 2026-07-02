@@ -9,21 +9,21 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
-const LOCAL_NUM_80 = 80;
-const LOCAL_NUM_85 = 85;
+const LOCAL_NUM_EIGHTY = 80;
+const LOCAL_NUM_EIGHTY_FIVE = 85;
 const LOCAL_STR_NODES = 'nodes';
 const LOCAL_STR_NODE_ID = 'node_id';
 const LOCAL_STR_NODE_ID_2 = 'Node ID';
-const LOCAL_NUM_20 = 20;
+const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_NODE_ADDRESS = 'node_address';
 const LOCAL_STR_ADDRESS = 'Address';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_CPU_USAGE_PERCENT = 'cpu_usage_percent';
 const LOCAL_STR_CPU = 'CPU%';
 const LOCAL_NUM_EIGHT = 8;
-const LOCAL_STR_1QS1P = 'memory_usage_percent';
+const LOCAL_STR_MEMORY_USAGE_PERCENT = 'memory_usage_percent';
 const LOCAL_STR_MEM = 'Mem%';
 const LOCAL_STR_DISK_USAGE_PERCENT = 'disk_usage_percent';
 const LOCAL_STR_DISK = 'Disk%';
@@ -31,11 +31,8 @@ const LOCAL_STR_SERVICES_COUNT = 'services_count';
 const LOCAL_STR_REPLICAS = 'Replicas';
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_REPLICAS_2 = 'replicas';
 const LOCAL_STR_ENTER = 'enter';
@@ -53,9 +50,9 @@ const LOCAL_STR_0_B = '0 B';
  * Warning thresholds for resource usage
  */
 export const WARNING_THRESHOLDS = {
-  CPU_PERCENT: LOCAL_NUM_80,
-  MEMORY_PERCENT: LOCAL_NUM_85,
-  DISK_PERCENT: LOCAL_NUM_80,
+  CPU_PERCENT: LOCAL_NUM_EIGHTY,
+  MEMORY_PERCENT: LOCAL_NUM_EIGHTY_FIVE,
+  DISK_PERCENT: LOCAL_NUM_EIGHTY,
 };
 
 /**
@@ -81,13 +78,13 @@ export class NodesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_NODE_ID, label: LOCAL_STR_NODE_ID_2, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_ADDRESS, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_NODE_ID, label: LOCAL_STR_NODE_ID_2, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_ADDRESS, width: LOCAL_NUM_TWENTY},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_TEN},
       {key: LOCAL_STR_CPU_USAGE_PERCENT, label: LOCAL_STR_CPU, width: LOCAL_NUM_EIGHT},
-      {key: LOCAL_STR_1QS1P, label: LOCAL_STR_MEM, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_MEMORY_USAGE_PERCENT, label: LOCAL_STR_MEM, width: LOCAL_NUM_EIGHT},
       {key: LOCAL_STR_DISK_USAGE_PERCENT, label: LOCAL_STR_DISK, width: LOCAL_NUM_EIGHT},
-      {key: LOCAL_STR_SERVICES_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_SERVICES_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_TEN},
     ];
   }
 
@@ -105,7 +102,7 @@ export class NodesView extends BaseView {
       this.formatPercent(node.cpu_usage_percent),
       this.formatPercent(node.memory_usage_percent),
       this.formatPercent(node.disk_usage_percent),
-      String(node.services_count ?? LOCAL_NUM_ZERO),
+      String(node.services_count ?? 0),
     ];
   }
 
@@ -118,7 +115,7 @@ export class NodesView extends BaseView {
     if (value === null || value === undefined) {
       return LOCAL_STR_N_A;
     }
-    return `${Number(value).toFixed(LOCAL_NUM_ONE)}%`;
+    return `${Number(value).toFixed(1)}%`;
   }
 
   /**
@@ -175,7 +172,7 @@ export class NodesView extends BaseView {
    * @return {string} Unique key (node_id)
    */
   getItemKey(node) {
-    return node.node_id || LOCAL_STR_EMPTY;
+    return node.node_id || '';
   }
 
   /**
@@ -259,7 +256,7 @@ export class NodesView extends BaseView {
         value: typeof v === 'object' ? JSON.stringify(v) : String(v),
       }));
 
-      if (configFields.length > LOCAL_NUM_ZERO) {
+      if (configFields.length > 0) {
         sections.push({
           title: LOCAL_STR_CONFIGURATION,
           fields: configFields,
@@ -315,9 +312,9 @@ export class NodesView extends BaseView {
     const minutes = Math.floor((seconds % 3600) / 60);
 
     const parts = [];
-    if (days > LOCAL_NUM_ZERO) parts.push(`${days}d`);
-    if (hours > LOCAL_NUM_ZERO) parts.push(`${hours}h`);
-    if (minutes > LOCAL_NUM_ZERO || parts.length === LOCAL_NUM_ZERO) parts.push(`${minutes}m`);
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
 
     return parts.join(LOCAL_STR_SPACE);
   }
@@ -331,7 +328,7 @@ export class NodesView extends BaseView {
     if (bytes === null || bytes === undefined) {
       return LOCAL_STR_N_A;
     }
-    if (bytes === LOCAL_NUM_ZERO) {
+    if (bytes === 0) {
       return LOCAL_STR_0_B;
     }
 
@@ -339,6 +336,6 @@ export class NodesView extends BaseView {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(LOCAL_NUM_ONE)} ${units[i]}`;
+    return `${value.toFixed(1)} ${units[i]}`;
   }
 }

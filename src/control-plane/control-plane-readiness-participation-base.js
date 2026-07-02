@@ -2,12 +2,12 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness-service-node-methods.js';
 import {resolveTimeSource} from '../time/time-source.js';
 
-const LOCAL_STR_ZHDQ9 = 'control-plane-readiness-evaluation';
+const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
-const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
-const LOCAL_STR_1506A = 'storageAccountingService';
-const LOCAL_STR_1UD6S = 'cdcGroupPropagationService';
-const LOCAL_STR_13YWM = 'membershipPublicationService';
+const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
+const LOCAL_STR_STORAGEACCOUNTINGSERVICE = 'storageAccountingService';
+const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
+const LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE = 'membershipPublicationService';
 
 const {
   AUTHORITATIVE_READINESS_REPAIR,
@@ -21,13 +21,11 @@ const {
   LoggingService,
   MEMBERSHIP_PUBLICATION_PLANNING,
   MEMBERSHIP_PUBLICATION_READ_OPTIONS,
-  NUM,
   OperationLane,
   READINESS_DIAGNOSTICS_LEDGER_LIMIT,
   READINESS_TRANSITION_HISTORY_LIMIT,
   RECOVERY_EPOCH_EVENT_LIMIT,
   RECOVERY_EPOCH_HISTORY_LIMIT,
-  TYPEOF,
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   compactEligibilitySnapshot,
@@ -59,45 +57,45 @@ class ControlPlaneReadinessParticipationBase {
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
     this.clusterMemberStaleHeartbeatMaxAgeMs =
       Number.isFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
-      options.clusterMemberStaleHeartbeatMaxAgeMs > NUM.ZERO ?
+      options.clusterMemberStaleHeartbeatMaxAgeMs > 0 ?
         Math.floor(options.clusterMemberStaleHeartbeatMaxAgeMs) :
         CONTROL_PLANE_READINESS_DEFAULT.CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS;
     this.authoritativeReadinessRepairCooldownMs =
       Number.isFinite(options.authoritativeReadinessRepairCooldownMs) &&
-      options.authoritativeReadinessRepairCooldownMs > NUM.ZERO ?
+      options.authoritativeReadinessRepairCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.COOLDOWN_MS;
     this.authoritativeReadinessRepairFailureCooldownMs =
       Number.isFinite(options.authoritativeReadinessRepairFailureCooldownMs) &&
-      options.authoritativeReadinessRepairFailureCooldownMs > NUM.ZERO ?
+      options.authoritativeReadinessRepairFailureCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairFailureCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.FAILURE_COOLDOWN_MS;
     this.authoritativeReadinessRepairNoChangeCooldownMs =
       Number.isFinite(options.authoritativeReadinessRepairNoChangeCooldownMs) &&
-      options.authoritativeReadinessRepairNoChangeCooldownMs > NUM.ZERO ?
+      options.authoritativeReadinessRepairNoChangeCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairNoChangeCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.NO_CHANGE_COOLDOWN_MS;
     this.authoritativeReadinessRepairQueryTimeoutMs =
       Number.isFinite(options.authoritativeReadinessRepairQueryTimeoutMs) &&
-      options.authoritativeReadinessRepairQueryTimeoutMs > NUM.ZERO ?
+      options.authoritativeReadinessRepairQueryTimeoutMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairQueryTimeoutMs) :
         AUTHORITATIVE_READINESS_REPAIR.QUERY_TIMEOUT_MS;
     this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs =
       Number.isFinite(
         options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
-      ) && options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs > NUM.ZERO ?
+      ) && options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs) :
         AUTHORITATIVE_READINESS_REPAIR.STALE_HEARTBEAT_MAX_AGE_MS;
     this.membershipPublicationDiagnosticsQueryTimeoutMs =
       Number.isFinite(options.membershipPublicationDiagnosticsQueryTimeoutMs) &&
-      options.membershipPublicationDiagnosticsQueryTimeoutMs > NUM.ZERO ?
+      options.membershipPublicationDiagnosticsQueryTimeoutMs > 0 ?
         Math.floor(options.membershipPublicationDiagnosticsQueryTimeoutMs) :
         CONTROL_PLANE_READINESS_DEFAULT.MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS;
     this.membershipPublicationPlanningSnapshotRefreshTimeoutMs =
       Number.isFinite(
         options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
       ) &&
-      options.membershipPublicationPlanningSnapshotRefreshTimeoutMs > NUM.ZERO ?
+      options.membershipPublicationPlanningSnapshotRefreshTimeoutMs > 0 ?
         Math.floor(
           options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
         ) :
@@ -105,7 +103,7 @@ class ControlPlaneReadinessParticipationBase {
     this.membershipPublicationPlanningActiveStaleGraceMs =
       Number.isFinite(
         options.membershipPublicationPlanningActiveStaleGraceMs,
-      ) && options.membershipPublicationPlanningActiveStaleGraceMs > NUM.ZERO ?
+      ) && options.membershipPublicationPlanningActiveStaleGraceMs > 0 ?
         Math.floor(options.membershipPublicationPlanningActiveStaleGraceMs) :
         MEMBERSHIP_PUBLICATION_PLANNING.ACTIVE_STALE_GRACE_MS;
     this.membershipPublicationReadOptions = Object.freeze({
@@ -119,18 +117,18 @@ class ControlPlaneReadinessParticipationBase {
     // so existing callers/tests are untouched.
     this.timeSource = resolveTimeSource(options);
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.setTimeoutFn === 'function' ?
         options.setTimeoutFn :
         (fn, ms, ...args) => this.timeSource.setTimeout(fn, ms, ...args);
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :
         (handle) => this.timeSource.clearTimeout(handle);
     this.loggedMissingStorageAccountingOwner = false;
     this.loggedMissingPublicationOwner = false;
     this.readinessTransitionHistoryLimit =
       Number.isInteger(options.readinessTransitionHistoryLimit) &&
-      options.readinessTransitionHistoryLimit > NUM.ZERO ?
+      options.readinessTransitionHistoryLimit > 0 ?
         Math.floor(options.readinessTransitionHistoryLimit) :
         READINESS_TRANSITION_HISTORY_LIMIT;
     this.readinessTransitionHistoryByNodeId = new Map();
@@ -139,7 +137,7 @@ class ControlPlaneReadinessParticipationBase {
     this.lastReadinessSnapshotByNodeId = new Map();
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
-    this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
+    this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
     this.membershipPublicationDiagnosticsMemo = null;
     this.lastActivePriorityRecoveryPlanningSnapshotByNodeId = new Map();
     this.lastActivePriorityRecoveryPlanningSnapshotAtMsByNodeId = new Map();
@@ -170,12 +168,12 @@ class ControlPlaneReadinessParticipationBase {
     this.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
     this.recoveryEpochHistoryLimit =
       Number.isInteger(options.recoveryEpochHistoryLimit) &&
-      options.recoveryEpochHistoryLimit > NUM.ZERO ?
+      options.recoveryEpochHistoryLimit > 0 ?
         Math.floor(options.recoveryEpochHistoryLimit) :
         RECOVERY_EPOCH_HISTORY_LIMIT;
     this.recoveryEpochEventLimit =
       Number.isInteger(options.recoveryEpochEventLimit) &&
-      options.recoveryEpochEventLimit > NUM.ZERO ?
+      options.recoveryEpochEventLimit > 0 ?
         Math.floor(options.recoveryEpochEventLimit) :
         RECOVERY_EPOCH_EVENT_LIMIT;
     this.currentRecoveryEpochByNodeId = new Map();
@@ -194,11 +192,11 @@ class ControlPlaneReadinessParticipationBase {
         }).controlPlaneSystemTableGateway :
         null);
     this.localClusterIncarnationFenceProvider =
-      typeof options.getLocalClusterIncarnationFence === TYPEOF.FUNCTION ?
+      typeof options.getLocalClusterIncarnationFence === 'function' ?
         options.getLocalClusterIncarnationFence :
         null;
     this.now =
-      typeof options.now === TYPEOF.FUNCTION ?
+      typeof options.now === 'function' ?
         options.now :
         () => this.timeSource.now();
     this.participationDecisionLedger =
@@ -227,7 +225,7 @@ class ControlPlaneReadinessParticipationBase {
     this.readinessEvaluationLane =
       options.readinessEvaluationLane ||
       new OperationLane({
-        name: LOCAL_STR_ZHDQ9,
+        name: LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION,
         workflowCoordinator: this.readinessOperationWorkflowCoordinator,
       });
     this.cacheChangeListener = null;
@@ -297,7 +295,7 @@ class ControlPlaneReadinessParticipationBase {
   logMissingOwner(message, owner) {
     const level = this.strictOwnerDependencies ? 'error' : 'warn';
     const logFn =
-      typeof this.logger?.[level] === TYPEOF.FUNCTION ?
+      typeof this.logger?.[level] === 'function' ?
         this.logger[level].bind(this.logger) :
         null;
     if (!logFn) {
@@ -334,17 +332,17 @@ class ControlPlaneReadinessParticipationBase {
     if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
+    if (Object.hasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1506A)) {
+    if (Object.hasOwn(options, LOCAL_STR_STORAGEACCOUNTINGSERVICE)) {
       this.storageAccountingService = options.storageAccountingService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1UD6S)) {
+    if (Object.hasOwn(options, LOCAL_STR_CDCGROUPPROPAGATIONSERVICE)) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_13YWM)) {
+    if (Object.hasOwn(options, LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE)) {
       if (
         this.membershipPublicationService !==
         (options.membershipPublicationService || null)
@@ -364,7 +362,7 @@ class ControlPlaneReadinessParticipationBase {
     if (
       this.authoritativeControlPlaneView &&
       typeof this.authoritativeControlPlaneView.syncOwnerDependencies ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       this.authoritativeControlPlaneView.syncOwnerDependencies({
         cdcIntegrationService: this.cdcIntegrationService,
@@ -378,7 +376,7 @@ class ControlPlaneReadinessParticipationBase {
     ) {
       if (
         this.cacheChangeListener &&
-        typeof previousSystemTableCache?.offCacheChange === TYPEOF.FUNCTION
+        typeof previousSystemTableCache?.offCacheChange === 'function'
       ) {
         previousSystemTableCache.offCacheChange(this.cacheChangeListener);
       }
@@ -389,7 +387,7 @@ class ControlPlaneReadinessParticipationBase {
       this.lastReadinessSnapshotByNodeId.clear();
       this.lastReadinessSnapshotAtMsByNodeId.clear();
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.clear();
-      this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
+      this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
       this.membershipPublicationDiagnosticsMemo = null;
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
@@ -463,7 +461,7 @@ class ControlPlaneReadinessParticipationBase {
    */
   buildControlPlaneParticipation(context) {
     const snapshot =
-      context?.readiness && typeof context.readiness === TYPEOF.OBJECT ?
+      context?.readiness && typeof context.readiness === 'object' ?
         context.readiness :
         null;
     const decisionDimension = resolveParticipationDecisionDimension(
@@ -471,7 +469,7 @@ class ControlPlaneReadinessParticipationBase {
       context?.decisionDimension,
     );
     const decision =
-      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
         evaluateEligibilityDecision(snapshot, decisionDimension) :
         Object.freeze({
           nodeId: context?.nodeId || null,
@@ -488,7 +486,7 @@ class ControlPlaneReadinessParticipationBase {
       Object.freeze({
         ...compactSummary,
         ...(snapshot?.projectionReadinessContract &&
-          typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+          typeof snapshot.projectionReadinessContract === 'object' ?
           {
             projectionReadinessContract:
               snapshot.projectionReadinessContract,
@@ -554,22 +552,22 @@ class ControlPlaneReadinessParticipationBase {
       localQueryTransport,
     });
     const reasonCode =
-      reasonCodes.length > NUM.ZERO ? reasonCodes[NUM.ZERO] : null;
+      reasonCodes.length > 0 ? reasonCodes[0] : null;
     const deferRetry =
       reasonCode ===
         CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY &&
       Number.isFinite(localQueryTransport?.retryAfterMs) &&
-      localQueryTransport.retryAfterMs > NUM.ZERO;
+      localQueryTransport.retryAfterMs > 0;
     const participation = {
       nodeId: context?.nodeId || null,
       tableName:
-        typeof context?.tableName === TYPEOF.STRING &&
-        context.tableName.length > NUM.ZERO ?
+        typeof context?.tableName === 'string' &&
+        context.tableName.length > 0 ?
           context.tableName :
           null,
       partitionId:
-        typeof context?.partitionId === TYPEOF.STRING &&
-        context.partitionId.length > NUM.ZERO ?
+        typeof context?.partitionId === 'string' &&
+        context.partitionId.length > 0 ?
           context.partitionId :
           null,
       participationKind: normalizeControlPlaneParticipationKind(
@@ -587,7 +585,7 @@ class ControlPlaneReadinessParticipationBase {
       reasonCodes,
       retryAfterMs:
         Number.isFinite(localQueryTransport?.retryAfterMs) &&
-        localQueryTransport.retryAfterMs > NUM.ZERO ?
+        localQueryTransport.retryAfterMs > 0 ?
           localQueryTransport.retryAfterMs :
           null,
       deferRetry,
@@ -597,8 +595,8 @@ class ControlPlaneReadinessParticipationBase {
       cacheWatermark,
       transportState,
       lifecyclePhase:
-        typeof snapshot?.lifecycleState === TYPEOF.STRING &&
-        snapshot.lifecycleState.length > NUM.ZERO ?
+        typeof snapshot?.lifecycleState === 'string' &&
+        snapshot.lifecycleState.length > 0 ?
           snapshot.lifecycleState :
           summary?.lifecycleState || null,
       authoritativeRepair,

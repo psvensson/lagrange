@@ -75,9 +75,9 @@ function normalizePendingAckEvidenceSource(source = {}) {
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
           .REQUIRED_ACK_NODE_LIST,
     hasRequiredAckNodeList: Array.isArray(source?.requiredAckNodeIds),
-    hasRequiredAckNodeListDebt: requiredAckNodeIds.length > NUM.ZERO,
+    hasRequiredAckNodeListDebt: requiredAckNodeIds.length > 0,
     hasPendingAckCountDebt:
-      Number.isFinite(pendingAckCount) && pendingAckCount > NUM.ZERO,
+      Number.isFinite(pendingAckCount) && pendingAckCount > 0,
   });
 }
 

@@ -14,10 +14,7 @@ import {
   writeJsonReport,
 } from './metric-check-helpers.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_1A2OZ = 'scripts/check-cognitive-complexity.js';
+const LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS = 'scripts/check-cognitive-complexity.js';
 
 const TARGET_THRESHOLD = 20;
 const BASELINE_COUNT = 144;
@@ -53,17 +50,17 @@ const ESLINT_OVERRIDE_CONFIG = {
     [SONAR_RULE_ID]: ['error', TARGET_THRESHOLD],
   },
 };
-const args = process.argv.slice(LOCAL_NUM_TWO);
+const args = process.argv.slice(2);
 const strict = args.includes(STRICT_FLAG);
 const scoped = args.includes(SCOPED_FLAG);
 const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
 
-if (scoped && scopedTargets.length === LOCAL_NUM_ZERO) {
+if (scoped && scopedTargets.length === 0) {
   console.error(
     'Usage: npm run test:complexity:cognitive:scoped -- ' +
     '<file-or-directory> [...]',
   );
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 }
 
 const lintTargets = scoped ? scopedTargets : SOURCE_DIRECTORIES;
@@ -102,7 +99,7 @@ writeJsonReport(reportRelativePath, {
 });
 
 function printViolations(entries) {
-  for (const violation of entries.slice(LOCAL_NUM_ZERO, PRINT_LIMIT)) {
+  for (const violation of entries.slice(0, PRINT_LIMIT)) {
     console.log(
       `${violation.filePath}:${violation.line}:${violation.column} ` +
       `${violation.message}`,
@@ -117,13 +114,13 @@ function printViolations(entries) {
 }
 
 if (strict) {
-  if (count > LOCAL_NUM_ZERO) {
+  if (count > 0) {
     console.log(
       `Cognitive complexity violations (threshold: ${TARGET_THRESHOLD}):\n`,
     );
     printViolations(violations);
     console.log(`\n${count} violation(s) found.`);
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
   console.log(
     `No cognitive complexity violations (threshold: ${TARGET_THRESHOLD}).`,
@@ -133,7 +130,7 @@ if (strict) {
     `Scoped cognitive complexity ratchet: ${count} violation(s) in ` +
     `${lintTargets.length} target(s) (threshold: ${TARGET_THRESHOLD}).`,
   );
-  if (count > LOCAL_NUM_ZERO) {
+  if (count > 0) {
     printViolations(violations);
   }
   console.log(`Saved cognitive complexity report to ${reportRelativePath}.`);
@@ -144,7 +141,7 @@ if (strict) {
       `baseline of ${BASELINE_COUNT}.\n`,
     );
     printViolations(violations);
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
   console.log(
     `Cognitive complexity ratchet OK: ${count}/${BASELINE_COUNT} violations ` +
@@ -152,9 +149,9 @@ if (strict) {
   );
   console.log(`Saved cognitive complexity report to ${reportRelativePath}.`);
   printRatchetTighteningHint(
-    LOCAL_STR_1A2OZ,
+    LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS,
     count,
     BASELINE_COUNT,
-    LOCAL_STR_1A2OZ,
+    LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS,
   );
 }

@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -148,12 +147,12 @@ function normalizePublicationOperationWorkflowHandoff(value = null) {
           ),
       } :
       {}),
-    ...(partitionIds.length > NUM.ZERO ?
+    ...(partitionIds.length > 0 ?
       {[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_IDS]: partitionIds} :
       {}),
     ...(normalizePublicationActiveGateHandoffNodeIdList(
       record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_IDS],
-    ).length > NUM.ZERO ?
+    ).length > 0 ?
       {
         [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_IDS]:
           normalizePublicationActiveGateHandoffNodeIdList(

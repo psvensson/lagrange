@@ -1,13 +1,11 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1CXMR = 'RebalanceCoordinator is shutting down';
+const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_GWX6H = 'Failed to prime coordinator-created operation progress';
+const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER = 'Failed to prime coordinator-created operation progress';
 
 const {
   ControlPlaneReadinessService,
-  NUM,
   OPERATION_METADATA_KEY,
   OperationType,
   REBALANCER_SKIP_REASON,
@@ -24,7 +22,7 @@ const {
 class RebalanceCoordinatorOperationCreation {
   assertMembershipPublicationEpoch(move) {
     const requestedEpoch = Number(move?.membershipPublicationEpoch);
-    if (!Number.isInteger(requestedEpoch) || requestedEpoch < LOCAL_NUM_ZERO) {
+    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
       return;
     }
 
@@ -63,7 +61,7 @@ class RebalanceCoordinatorOperationCreation {
    */
   async createOperation(move) {
     if (this.isShuttingDown || !this.initialized) {
-      throw new Error(LOCAL_STR_1CXMR);
+      throw new Error(LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN);
     }
 
     this.assertLocalControlPlaneMutationReady(move);
@@ -332,7 +330,7 @@ class RebalanceCoordinatorOperationCreation {
       entityType,
       entityId,
     });
-    if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
+    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
       if (entityType === SERVICE_TYPE.PARTITION) {
         // CL-013: a silently-unstamped operation forces the target replica
         // onto its local cache fallback — make the tolerated null loud.
@@ -363,7 +361,7 @@ class RebalanceCoordinatorOperationCreation {
     const peerAddresses = topology?.peerAddresses || [];
 
     if (
-      replicaIds.length <= NUM.ONE ||
+      replicaIds.length <= 1 ||
       peerAddresses.length < replicaIds.length
     ) {
       if (entityType === SERVICE_TYPE.PARTITION) {
@@ -467,21 +465,21 @@ class RebalanceCoordinatorOperationCreation {
       excludeReplicaIds:
         normalizedMoveType === OperationType.REPLACE &&
         typeof sourceReplicaId === 'string' &&
-        sourceReplicaId.length > NUM.ZERO ?
+        sourceReplicaId.length > 0 ?
           [sourceReplicaId] :
           [],
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
     });
-    if (bootstrapTopology && operation.stepsHistory.length > NUM.ZERO) {
+    if (bootstrapTopology && operation.stepsHistory.length > 0) {
       operation[ReplicaOperationField.REPLICA_IDS] =
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
         bootstrapTopology.peerAddresses;
-      operation.stepsHistory[NUM.ZERO][OPERATION_METADATA_KEY.REPLICA_IDS] =
+      operation.stepsHistory[0][OPERATION_METADATA_KEY.REPLICA_IDS] =
         bootstrapTopology.replicaIds;
-      operation.stepsHistory[NUM.ZERO][OPERATION_METADATA_KEY.PEER_ADDRESSES] =
+      operation.stepsHistory[0][OPERATION_METADATA_KEY.PEER_ADDRESSES] =
         bootstrapTopology.peerAddresses;
     }
 
@@ -498,8 +496,8 @@ class RebalanceCoordinatorOperationCreation {
         targetReadiness,
         readinessDecisionDimension,
       );
-    if (readinessSnapshot && operation.stepsHistory.length > NUM.ZERO) {
-      operation.stepsHistory[NUM.ZERO][
+    if (readinessSnapshot && operation.stepsHistory.length > 0) {
+      operation.stepsHistory[0][
         OPERATION_METADATA_KEY.READINESS_SNAPSHOT
       ] = readinessSnapshot;
     }
@@ -514,7 +512,7 @@ class RebalanceCoordinatorOperationCreation {
       bootstrapTopologyStamped: bootstrapTopology !== null,
       bootstrapReplicaIdCount: bootstrapTopology ?
         bootstrapTopology.replicaIds.length :
-        NUM.ZERO,
+        0,
     });
 
     // Persist via SQL engine (writes to partition leader)
@@ -577,7 +575,7 @@ class RebalanceCoordinatorOperationCreation {
       return await this.workflowOwner.armCoordinatorCreatedOperation(operation);
     } catch (error) {
       this.logger.warn(
-        LOCAL_STR_GWX6H,
+        LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER,
         {
           operationId: operation.operationId,
           partitionId: operation.partitionId || null,

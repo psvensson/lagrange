@@ -21,7 +21,6 @@ import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const TRACKER_SUBSYSTEM = 'cdc-confirmation';
 
@@ -108,7 +107,7 @@ class CDCConfirmationTracker {
    * @param {Object} data
    */
   onEventApplied(tableName, operation, data) {
-    if (this.pending.size === LOCAL_NUM_ZERO) {
+    if (this.pending.size === 0) {
       return;
     }
 

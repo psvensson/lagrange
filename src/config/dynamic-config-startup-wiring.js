@@ -5,7 +5,7 @@
  * can be applied without restart.
  */
 
-import {TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {ConfigurationManager} from './configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {
@@ -16,11 +16,10 @@ import {DynamicConfigService} from './dynamic-config-service.js';
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1H1DF = 'Timed out reading startup dynamic config key ';
+const LOCAL_STR_TIMED_OUT_READING_STARTUP_DYNAMIC_CONFIG = 'Timed out reading startup dynamic config key ';
 const LOCAL_STR_AFTER = ' after ';
 const LOCAL_STR_MS = 'ms';
-const LOCAL_STR_VM2WU = 'Timed out initializing adaptive timing controller after ';
+const LOCAL_STR_TIMED_OUT_INITIALIZING_ADAPTIVE_TIMING_C = 'Timed out initializing adaptive timing controller after ';
 
 const DYNAMIC_CONFIG_STARTUP_EVENT = Object.freeze({
   CDC_APPLIED: 'cdcApplied',
@@ -45,7 +44,7 @@ const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300;
  */
 function resolveInitialReadTimeoutMs(options = {}) {
   const timeoutMs = Number(options.initialReadTimeoutMs);
-  if (Number.isFinite(timeoutMs) && timeoutMs > LOCAL_NUM_ZERO) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     return Math.floor(timeoutMs);
   }
   return DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS;
@@ -58,7 +57,7 @@ function resolveInitialReadTimeoutMs(options = {}) {
  */
 function resolveControllerInitTimeoutMs(options = {}) {
   const timeoutMs = Number(options.controllerInitTimeoutMs);
-  if (Number.isFinite(timeoutMs) && timeoutMs > LOCAL_NUM_ZERO) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     return Math.floor(timeoutMs);
   }
   return DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS;
@@ -81,7 +80,7 @@ function withTimeout(promise, timeoutMs, errorMessage) {
       settled = true;
       reject(new Error(errorMessage));
     }, timeoutMs);
-    if (typeof timer.unref === TYPEOF.FUNCTION) {
+    if (typeof timer.unref === 'function') {
       timer.unref();
     }
     Promise.resolve(promise)
@@ -115,7 +114,7 @@ async function readStartupConfigValue(dynamicConfigService, key, timeoutMs) {
   return withTimeout(
     dynamicConfigService.get(key),
     timeoutMs,
-    LOCAL_STR_1H1DF + key +
+    LOCAL_STR_TIMED_OUT_READING_STARTUP_DYNAMIC_CONFIG + key +
       LOCAL_STR_AFTER + timeoutMs + LOCAL_STR_MS,
   );
 }
@@ -134,7 +133,7 @@ function normalizeServicesCollection(services) {
     return services;
   }
 
-  if (typeof services.values === TYPEOF.FUNCTION) {
+  if (typeof services.values === 'function') {
     return Array.from(services.values());
   }
 
@@ -200,7 +199,7 @@ function isValidRaftTimingConfig(raftTimingConfig) {
     Number.isFinite(electionTimeoutMinMs) &&
     Number.isFinite(electionTimeoutMaxMs) &&
     Number.isFinite(tickIntervalMs) &&
-    tickIntervalMs > LOCAL_NUM_ZERO &&
+    tickIntervalMs > 0 &&
     electionTimeoutMinMs <= electionTimeoutMaxMs;
 }
 
@@ -280,11 +279,11 @@ async function createDynamicConfigStartupWiring(options = {}) {
     }
 
     writeRaftTimingConfig(configManager, nextRaftTimingConfig);
-    let runtimeAppliedCount = LOCAL_NUM_ZERO;
-    let deferredCount = LOCAL_NUM_ZERO;
+    let runtimeAppliedCount = 0;
+    let deferredCount = 0;
     for (const service of raftServices) {
       if (!service ||
-        typeof service.applyRaftTimingConfig !== TYPEOF.FUNCTION) {
+        typeof service.applyRaftTimingConfig !== 'function') {
         deferredCount += 1;
         continue;
       }
@@ -316,7 +315,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
     {
       key: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
       apply: (value) => {
-        if (typeof value !== TYPEOF.BOOLEAN) {
+        if (typeof value !== 'boolean') {
           return;
         }
         loggingService.setPersistMetricsLogs(value);
@@ -343,7 +342,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
     {
       key: CONFIG_KEY.LOGGING_METRICS_DETAILED_WINDOW_ENABLED,
       apply: (value) => {
-        if (typeof value !== TYPEOF.BOOLEAN) {
+        if (typeof value !== 'boolean') {
           return;
         }
         loggingService.setMetricsDetailedWindowEnabled(value);
@@ -432,7 +431,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
     await withTimeout(
       adaptiveTimingController.initialize(),
       controllerInitTimeoutMs,
-      LOCAL_STR_VM2WU +
+      LOCAL_STR_TIMED_OUT_INITIALIZING_ADAPTIVE_TIMING_C +
         controllerInitTimeoutMs + LOCAL_STR_MS,
     );
   } catch (error) {
@@ -459,8 +458,8 @@ async function createDynamicConfigStartupWiring(options = {}) {
     options.messageGroupServices,
   )) {
     if (!messageGroupService ||
-      typeof messageGroupService.on !== TYPEOF.FUNCTION ||
-      typeof messageGroupService.removeListener !== TYPEOF.FUNCTION) {
+      typeof messageGroupService.on !== 'function' ||
+      typeof messageGroupService.removeListener !== 'function') {
       continue;
     }
 

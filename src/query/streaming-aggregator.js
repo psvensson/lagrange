@@ -6,7 +6,7 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   QUERY_AGGREGATE,
   QUERY_AST_NODE,
@@ -18,22 +18,21 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const RESULT_ESTIMATE = Object.freeze({
-  UTF16_BYTES_PER_CHAR: NUM.TWO,
+  UTF16_BYTES_PER_CHAR: 2,
   FALLBACK_ROW_BYTES: NUM.HUNDRED,
 });
 
 function resolveSortDirection(clause) {
   return clause.direction === QUERY_SORT_DIRECTION.DESC ?
-    NUM.NEGATIVE_ONE :
-    NUM.ONE;
+    -1 :
+    1;
 }
 
 function compareNullishValues(aVal, bVal, direction) {
   if (aVal === bVal) {
-    return NUM.ZERO;
+    return 0;
   }
   if (aVal === null || aVal === undefined) {
     return direction;
@@ -45,7 +44,7 @@ function compareNullishValues(aVal, bVal, direction) {
 }
 
 function compareDefinedValues(aVal, bVal, direction) {
-  if (typeof aVal === TYPEOF.STRING && typeof bVal === TYPEOF.STRING) {
+  if (typeof aVal === 'string' && typeof bVal === 'string') {
     return aVal.localeCompare(bVal) * direction;
   }
   if (aVal < bVal) {
@@ -54,11 +53,11 @@ function compareDefinedValues(aVal, bVal, direction) {
   if (aVal > bVal) {
     return direction;
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function resolveAccumulatorValue(acc, row) {
-  return acc.isStar ? NUM.ONE : row[acc.column];
+  return acc.isStar ? 1 : row[acc.column];
 }
 
 function updateCountAccumulator(acc, value) {
@@ -91,10 +90,10 @@ function updateAccumulator(acc, value) {
     updateCountAccumulator(acc, value);
     break;
   case QUERY_AGGREGATE.SUM:
-    acc.sum += Number(value) || NUM.ZERO;
+    acc.sum += Number(value) || 0;
     break;
   case QUERY_AGGREGATE.AVG:
-    acc.sum += Number(value) || NUM.ZERO;
+    acc.sum += Number(value) || 0;
     acc.count++;
     break;
   case QUERY_AGGREGATE.MIN:
@@ -132,8 +131,8 @@ class StreamingAggregator {
     // Streaming state
     this.chunks = [];
     this.currentChunk = [];
-    this.totalRows = NUM.ZERO;
-    this.estimatedBytes = NUM.ZERO;
+    this.totalRows = 0;
+    this.estimatedBytes = 0;
   }
 
   /**
@@ -159,7 +158,7 @@ class StreamingAggregator {
    * @return {boolean} True if rows were added successfully.
    */
   addRows(rows) {
-    if (!rows || rows.length === NUM.ZERO) return true;
+    if (!rows || rows.length === 0) return true;
 
     const rowBytes = this.estimateBytes(rows);
 
@@ -191,7 +190,7 @@ class StreamingAggregator {
    * @private
    */
   flushCurrentChunk() {
-    if (this.currentChunk.length > NUM.ZERO) {
+    if (this.currentChunk.length > 0) {
       this.chunks.push(this.currentChunk);
       this.currentChunk = [];
     }
@@ -240,9 +239,9 @@ class StreamingAggregator {
   applySortedMerge(orderBy) {
     this.flushCurrentChunk();
 
-    if (this.chunks.length === NUM.ZERO) return [];
-    if (this.chunks.length === NUM.ONE) {
-      return this.sortChunk(this.chunks[NUM.ZERO], orderBy);
+    if (this.chunks.length === 0) return [];
+    if (this.chunks.length === 1) {
+      return this.sortChunk(this.chunks[0], orderBy);
     }
 
     // Sort each chunk individually
@@ -282,9 +281,9 @@ class StreamingAggregator {
       const nullishComparison = compareNullishValues(aVal, bVal, dir);
       if (nullishComparison !== null) return nullishComparison;
       const valueComparison = compareDefinedValues(aVal, bVal, dir);
-      if (valueComparison !== NUM.ZERO) return valueComparison;
+      if (valueComparison !== 0) return valueComparison;
     }
-    return NUM.ZERO;
+    return 0;
   }
 
   /**
@@ -298,7 +297,7 @@ class StreamingAggregator {
     const result = [];
     const iterators = sortedChunks.map((chunk) => ({
       data: chunk,
-      index: NUM.ZERO,
+      index: 0,
     }));
 
     while (true) {
@@ -310,7 +309,7 @@ class StreamingAggregator {
         if (iter.index < iter.data.length) {
           const value = iter.data[iter.index];
           if (minValue === null ||
-            this.compareRows(value, minValue, orderBy) < NUM.ZERO) {
+            this.compareRows(value, minValue, orderBy) < 0) {
             minValue = value;
             minIterator = iter;
           }
@@ -336,15 +335,15 @@ class StreamingAggregator {
     this.flushCurrentChunk();
 
     const aggregates = this.extractAggregates(ast);
-    if (aggregates.length === LOCAL_NUM_ZERO) {
+    if (aggregates.length === 0) {
       return {rows: this.getAllRows()};
     }
 
     // Initialize aggregate accumulators
     const accumulators = aggregates.map((agg) => ({
       ...agg,
-      count: NUM.ZERO,
-      sum: NUM.ZERO,
+      count: 0,
+      sum: 0,
       min: null,
       max: null,
       values: [], // For AVG and DISTINCT
@@ -427,7 +426,7 @@ class StreamingAggregator {
     case QUERY_AGGREGATE.SUM:
       return acc.sum;
     case QUERY_AGGREGATE.AVG:
-      return acc.count > NUM.ZERO ? acc.sum / acc.count : null;
+      return acc.count > 0 ? acc.sum / acc.count : null;
     case QUERY_AGGREGATE.MIN:
       return acc.min;
     case QUERY_AGGREGATE.MAX:
@@ -449,7 +448,7 @@ class StreamingAggregator {
       g.column || g.expression?.column || g,
     );
 
-    if (groupByColumns.length === NUM.ZERO) {
+    if (groupByColumns.length === 0) {
       return this.computeStreamingAggregates(ast);
     }
 
@@ -467,8 +466,8 @@ class StreamingAggregator {
           // Initialize accumulators for new group
           const accumulators = aggregates.map((agg) => ({
             ...agg,
-            count: NUM.ZERO,
-            sum: NUM.ZERO,
+            count: 0,
+            sum: 0,
             min: null,
             max: null,
             values: [],
@@ -513,7 +512,7 @@ class StreamingAggregator {
       totalRows: this.totalRows,
       estimatedBytes: this.estimatedBytes,
       chunkCount: this.chunks.length +
-        (this.currentChunk.length > NUM.ZERO ? NUM.ONE : NUM.ZERO),
+        (this.currentChunk.length > 0 ? 1 : 0),
     };
   }
 
@@ -523,8 +522,8 @@ class StreamingAggregator {
   reset() {
     this.chunks = [];
     this.currentChunk = [];
-    this.totalRows = NUM.ZERO;
-    this.estimatedBytes = NUM.ZERO;
+    this.totalRows = 0;
+    this.estimatedBytes = 0;
   }
 }
 

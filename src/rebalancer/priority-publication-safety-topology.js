@@ -4,7 +4,6 @@ import {TIME_MS} from '../constants/time.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
@@ -17,7 +16,6 @@ const {
   SERVICE_TYPE,
   STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   VOTER_READY_REPLICA_TOPOLOGY_STATUSES,
   WORKFLOW_STEP,
   isSystemTablePartition,
@@ -34,7 +32,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     const timeoutMap = {};
     for (const workflowStep of PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS) {
       const stepTimeoutMs = this.getTimeoutForStep(workflowStep, operation);
-      if (!Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= NUM.ZERO) {
+      if (!Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= 0) {
         continue;
       }
       timeoutMap[workflowStep] = Math.floor(stepTimeoutMs);
@@ -86,7 +84,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
 
   resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
     const partitionId =
-      typeof operationOrPartitionId === TYPEOF.STRING ?
+      typeof operationOrPartitionId === 'string' ?
         operationOrPartitionId :
         normalizePriorityRecoveryOperationPartitionId(operationOrPartitionId);
     if (this.isCriticalSystemPartition(partitionId)) {
@@ -166,25 +164,25 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
 
   getReplicaRowIdentity(replicaRow) {
     const serviceId =
-      typeof replicaRow?.service_id === TYPEOF.STRING ?
+      typeof replicaRow?.service_id === 'string' ?
         replicaRow.service_id.trim() :
-        typeof replicaRow?.serviceId === TYPEOF.STRING ?
+        typeof replicaRow?.serviceId === 'string' ?
           replicaRow.serviceId.trim() :
           '';
-    if (serviceId.length > NUM.ZERO) {
+    if (serviceId.length > 0) {
       return serviceId;
     }
     const replicaId =
-      typeof replicaRow?.replica_id === TYPEOF.STRING ?
+      typeof replicaRow?.replica_id === 'string' ?
         replicaRow.replica_id.trim() :
-        typeof replicaRow?.replicaId === TYPEOF.STRING ?
+        typeof replicaRow?.replicaId === 'string' ?
           replicaRow.replicaId.trim() :
           '';
-    return replicaId.length > NUM.ZERO ? replicaId : null;
+    return replicaId.length > 0 ? replicaId : null;
   }
 
   normalizeReplicaRowRaftRole(replicaRow) {
-    return typeof replicaRow?.raft_role === TYPEOF.STRING ?
+    return typeof replicaRow?.raft_role === 'string' ?
       replicaRow.raft_role.trim().toLowerCase() :
       null;
   }
@@ -217,10 +215,10 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
 
   getCriticalPartitionLeaderNodeIdForSafety(partitionRow) {
     const leaderNodeId =
-      typeof partitionRow?.leader_node_id === TYPEOF.STRING ?
+      typeof partitionRow?.leader_node_id === 'string' ?
         partitionRow.leader_node_id.trim() :
         null;
-    return leaderNodeId && leaderNodeId.length > NUM.ZERO ? leaderNodeId : null;
+    return leaderNodeId && leaderNodeId.length > 0 ? leaderNodeId : null;
   }
 
   getPriorityPublicationLeaderHandoffEvidenceMap() {
@@ -237,7 +235,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
 
   getPriorityPublicationLeaderHandoffEvidence(operation, sourceReplicaId) {
     const operationId =
-      typeof operation?.operationId === TYPEOF.STRING ?
+      typeof operation?.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     if (!operationId) {
@@ -254,8 +252,8 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       Date.now() - evidence.observedAt >
         PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
     const evidenceMismatch =
-      typeof sourceReplicaId === TYPEOF.STRING &&
-      sourceReplicaId.length > NUM.ZERO &&
+      typeof sourceReplicaId === 'string' &&
+      sourceReplicaId.length > 0 &&
       evidence.sourceReplicaId !== sourceReplicaId;
     if (evidenceExpired || evidenceMismatch) {
       this.getPriorityPublicationLeaderHandoffEvidenceMap().delete(operationId);
@@ -282,7 +280,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     replacementReplicaId,
   ) {
     const operationId =
-      typeof operation?.operationId === TYPEOF.STRING ?
+      typeof operation?.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     if (!operationId) {
@@ -306,17 +304,17 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       evidence.completedReplicaIds :
       [];
     const evidenceReferencesReplacementReplica =
-      typeof replacementReplicaId === TYPEOF.STRING &&
-      replacementReplicaId.length > NUM.ZERO &&
+      typeof replacementReplicaId === 'string' &&
+      replacementReplicaId.length > 0 &&
       (
-        (typeof evidence.replacementReplicaId === TYPEOF.STRING &&
+        (typeof evidence.replacementReplicaId === 'string' &&
           evidence.replacementReplicaId === replacementReplicaId) ||
         notFoundReplicaIds.includes(replacementReplicaId) ||
         completedReplicaIds.includes(replacementReplicaId)
       );
     const evidenceMismatch =
-      typeof replacementReplicaId === TYPEOF.STRING &&
-      replacementReplicaId.length > NUM.ZERO &&
+      typeof replacementReplicaId === 'string' &&
+      replacementReplicaId.length > 0 &&
       !evidenceReferencesReplacementReplica;
     if (evidenceExpired) {
       this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
@@ -332,7 +330,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
 
   getFreshPriorityPublicationReplacementLeaderElectionEvidence(operation) {
     const operationId =
-      typeof operation?.operationId === TYPEOF.STRING ?
+      typeof operation?.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     if (!operationId) {
@@ -394,7 +392,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       return;
     }
     const operationId =
-      typeof operation.operationId === TYPEOF.STRING ?
+      typeof operation.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     if (!operationId) {
@@ -412,7 +410,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   // if none recorded / it has aged out. Used by the snapshot to decide R3 escalation.
   getPriorityPublicationSourceLeaderHandoffStallMs(operation) {
     const operationId =
-      typeof operation?.operationId === TYPEOF.STRING ?
+      typeof operation?.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     if (!operationId) {
@@ -428,7 +426,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     // stall anchor survives across the escalation window instead of racing it; past the TTL
     // the operation has long since hit recovery timeout, so drop the anchor.
     if (
-      stallMs < NUM.ZERO ||
+      stallMs < 0 ||
       stallMs > PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS
     ) {
       map.delete(operationId);
@@ -455,11 +453,11 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       return;
     }
     const operationId =
-      typeof operation.operationId === TYPEOF.STRING ?
+      typeof operation.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     const sourceReplicaId =
-      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+      typeof handoffRequest.requestReplicaId === 'string' ?
         handoffRequest.requestReplicaId.trim() :
         null;
     if (!operationId || !sourceReplicaId) {
@@ -492,11 +490,11 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       return;
     }
     const operationId =
-      typeof operation.operationId === TYPEOF.STRING ?
+      typeof operation.operationId === 'string' ?
         operation.operationId.trim() :
         null;
     const replacementReplicaId =
-      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+      typeof handoffRequest.requestReplicaId === 'string' ?
         handoffRequest.requestReplicaId.trim() :
         null;
     if (!operationId || !replacementReplicaId) {
@@ -559,11 +557,11 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     }
 
     const rawSourceNodeId =
-      typeof operation?.sourceNodeId === TYPEOF.STRING ?
+      typeof operation?.sourceNodeId === 'string' ?
         operation.sourceNodeId.trim() :
         null;
     const sourceNodeId =
-      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO ?
+      rawSourceNodeId && rawSourceNodeId.length > 0 ?
         rawSourceNodeId :
         null;
     const partitionLeaderNodeId =
@@ -580,7 +578,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     const systemTableCache = this.repository.systemTableCache;
     if (
       !systemTableCache ||
-      typeof systemTableCache.filter !== TYPEOF.FUNCTION
+      typeof systemTableCache.filter !== 'function'
     ) {
       return [];
     }

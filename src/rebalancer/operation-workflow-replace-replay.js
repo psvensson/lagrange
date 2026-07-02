@@ -1,7 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  NUM,
   OperationType,
   ReplicaStatus,
   WORKFLOW_STEP,
@@ -21,7 +20,7 @@ async function replayReplaceActiveSourceRemovalFromAuthoritative(context, operat
     operation.type !== OperationType.REPLACE ||
     typeof operation.operationId !==
       OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-    operation.operationId.length === NUM.ZERO
+    operation.operationId.length === 0
   ) {
     return false;
   }

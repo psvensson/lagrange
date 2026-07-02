@@ -147,7 +147,7 @@ const REPLICA_HANDLER_TYPEOF = Object.freeze({
 });
 
 const REPLICA_HANDLER_NUM = Object.freeze({
-  ZERO: NUM.ZERO,
+  ZERO: 0,
 });
 
 export {

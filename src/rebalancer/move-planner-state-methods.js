@@ -32,7 +32,7 @@ function createMovePlannerStateMethods(deps = {}) {
      */
     validateReplicaCount(count, policy) {
       const defaultMin =
-        this.entityType === EntityType.RUNTIME_SERVICE ? NUM.ONE : NUM.THREE;
+        this.entityType === EntityType.RUNTIME_SERVICE ? 1 : NUM.THREE;
       const defaultMax = this.entityType === EntityType.RUNTIME_SERVICE ?
         Math.max(defaultMin, count || defaultMin) :
         NUM.SEVEN;
@@ -58,7 +58,7 @@ function createMovePlannerStateMethods(deps = {}) {
      */
     getPolicyTargetReplicaCount(policy) {
       const defaultTarget =
-        this.entityType === EntityType.RUNTIME_SERVICE ? NUM.ONE : NUM.THREE;
+        this.entityType === EntityType.RUNTIME_SERVICE ? 1 : NUM.THREE;
       return policy.targetReplicaCount || policy.replicaCount || defaultTarget;
     }
 
@@ -72,7 +72,7 @@ function createMovePlannerStateMethods(deps = {}) {
       const desiredTarget = this.getPolicyTargetReplicaCount(policy);
       const availableCount = Array.isArray(availableNodes) ?
         availableNodes.length :
-        NUM.ZERO;
+        0;
       return Math.min(desiredTarget, availableCount);
     }
 
@@ -117,7 +117,7 @@ function createMovePlannerStateMethods(deps = {}) {
       const nodeIds = replicas
         .filter((replica) => replica && replica.node_id)
         .map((replica) => replica.node_id);
-      if (nodeIds.length === NUM.ZERO) {
+      if (nodeIds.length === 0) {
         return false;
       }
       return new Set(nodeIds).size < nodeIds.length;
@@ -141,7 +141,7 @@ function createMovePlannerStateMethods(deps = {}) {
           service?.service_type === EntityType.MESSAGE_GROUP &&
             service?.status === ReplicaStatus.ACTIVE &&
             typeof service?.node_id === MOVE_PLANNER_LITERAL.STRING &&
-            service.node_id.length > NUM.ZERO,
+            service.node_id.length > 0,
         );
       }
       const nodesWithReplicas = new Set(
@@ -188,7 +188,7 @@ function createMovePlannerStateMethods(deps = {}) {
         typeof partitionRow?.leader_node_id === 'string' ?
           partitionRow.leader_node_id.trim() :
           '';
-      return leaderNodeId.length > NUM.ZERO ? leaderNodeId : null;
+      return leaderNodeId.length > 0 ? leaderNodeId : null;
     }
 
     /**
@@ -442,7 +442,7 @@ function createMovePlannerStateMethods(deps = {}) {
         policy?.placementConstraints?.spreadAcrossNodes === true;
       const requiredDistinctNodeCount = requiresSpread ?
         Math.min(NUM.THREE, readyNodes.length) :
-        NUM.ZERO;
+        0;
       const hasUnusedReadyNodes = readyNodes.some(
         (node) => node && node.node_id && !distinctNodeIds.has(node.node_id),
       );
@@ -454,7 +454,7 @@ function createMovePlannerStateMethods(deps = {}) {
         hasUnusedReadyNodes,
         satisfied:
           requiresSpread !== true ||
-          requiredDistinctNodeCount <= NUM.ONE ||
+          requiredDistinctNodeCount <= 1 ||
           distinctNodeIds.size >= requiredDistinctNodeCount,
       };
     }
@@ -482,7 +482,7 @@ function createMovePlannerStateMethods(deps = {}) {
         this.entityType === EntityType.MESSAGE_GROUP &&
         policy.ensureLocalAccess
       ) {
-        return this.getNodesWithoutLocalReplica(replicas).length > NUM.ZERO;
+        return this.getNodesWithoutLocalReplica(replicas).length > 0;
       }
       if (this.hasSpreadableReplicaConcentration(replicas, policy, readyNodes)) {
         return true;
@@ -514,7 +514,7 @@ function createMovePlannerStateMethods(deps = {}) {
         policy.ensureLocalAccess
       ) {
         const nodesWithoutLocalReplica = this.getNodesWithoutLocalReplica(replicas);
-        if (nodesWithoutLocalReplica.length > NUM.ZERO) {
+        if (nodesWithoutLocalReplica.length > 0) {
           return MOVE_PLANNER_LITERAL.NODES_WITHOUT_LOCAL_REPLICA +
             nodesWithoutLocalReplica.join(MOVE_PLANNER_LITERAL.EMPTY);
         }
@@ -566,7 +566,7 @@ function createMovePlannerStateMethods(deps = {}) {
         const unusedNodes = readyNodes.filter(
           (node) => node && node.node_id && !usedNodeIds.has(node.node_id),
         );
-        if (unusedNodes.length > NUM.ZERO) {
+        if (unusedNodes.length > 0) {
           return true;
         }
       }
@@ -621,12 +621,12 @@ function createMovePlannerStateMethods(deps = {}) {
         [];
       decision = applyAdditionalRebalancingReason(
         decision,
-        unusedNodes.length > NUM.ZERO,
+        unusedNodes.length > 0,
         MOVE_PLANNER_REBALANCE_REASON.REPLICAS_NOT_SPREAD,
       );
       decision = applyAdditionalRebalancingReason(
         decision,
-        nodesWithoutReplica.length > NUM.ZERO,
+        nodesWithoutReplica.length > 0,
         MOVE_PLANNER_REBALANCE_REASON.NODES_WITHOUT_LOCAL_REPLICA,
       );
       return decision;

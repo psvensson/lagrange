@@ -6,7 +6,6 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM} from '../constants/index.js';
 import {
   ADMISSION_DECISION,
   STORAGE_CAPACITY_SUBSYSTEM,
@@ -26,8 +25,8 @@ class StorageCapacityMetrics {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(STORAGE_CAPACITY_SUBSYSTEM) : console;
 
-    this.admissionAllowCount = NUM.ZERO;
-    this.admissionDenyCount = NUM.ZERO;
+    this.admissionAllowCount = 0;
+    this.admissionDenyCount = 0;
   }
 
   /**

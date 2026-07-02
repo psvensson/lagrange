@@ -1,10 +1,9 @@
 import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
 import {join as joinPath} from 'node:path';
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const LOCAL_STR_UNDERSCORE = '_';
 const LOCAL_STR_ENOENT = 'ENOENT';
-const LOCAL_STR_13EMY = ': ';
+const LOCAL_STR_COLON_SPACE = ': ';
 
 const STARTUP_WORKFLOW_STATUS = Object.freeze({
   ACTIVE: 'active',
@@ -28,7 +27,7 @@ const STARTUP_WORKFLOW_TEMP_SUFFIX = '.tmp';
 const STARTUP_WORKFLOW_UTF8 = 'utf8';
 const STARTUP_WORKFLOW_JSON_INDENT = 2;
 const STARTUP_WORKFLOW_JSON_LINE_SUFFIX = '\n';
-const STARTUP_WORKFLOW_DEFAULT_RETRY_AFTER_MS = NUM.ZERO;
+const STARTUP_WORKFLOW_DEFAULT_RETRY_AFTER_MS = 0;
 const STARTUP_WORKFLOW_DEFAULT_FAILURE_MESSAGE = null;
 const STARTUP_WORKFLOW_DEFAULT_LAST_ERROR_CODE = null;
 const STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT = null;
@@ -36,11 +35,11 @@ const STARTUP_WORKFLOW_DEFAULT_PLAN_VERSION = 'v1';
 const STARTUP_WORKFLOW_DEFAULT_STORAGE = 'memory';
 
 function normalizeNonEmptyString(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ?
+  return normalized.length > 0 ?
     normalized :
     null;
 }
@@ -150,7 +149,7 @@ class StartupWorkflowStore {
     if (this.workflowKind === null) {
       throw new Error(STARTUP_WORKFLOW_ERROR.WORKFLOW_KIND_REQUIRED);
     }
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.initialCheckpoint = normalizeNonEmptyString(
@@ -175,8 +174,8 @@ class StartupWorkflowStore {
     if (options.storage instanceof Map) {
       this.storage = new MemoryStartupWorkflowStorage(options.storage);
     } else if (options.storage &&
-        typeof options.storage.loadRecord === TYPEOF.FUNCTION &&
-        typeof options.storage.saveRecord === TYPEOF.FUNCTION) {
+        typeof options.storage.loadRecord === 'function' &&
+        typeof options.storage.saveRecord === 'function') {
       this.storage = options.storage;
     } else if (normalizeNonEmptyString(options.dataDir) !== null) {
       this.storage = new FileStartupWorkflowStorage({
@@ -209,7 +208,7 @@ class StartupWorkflowStore {
         )) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.INVALID_CHECKPOINT +
-          LOCAL_STR_13EMY +
+          LOCAL_STR_COLON_SPACE +
           String(checkpoint),
       );
     }
@@ -279,7 +278,7 @@ class StartupWorkflowStore {
       const updated = {
         ...existing,
         planVersion,
-        attemptCount: existing.attemptCount + NUM.ONE,
+        attemptCount: existing.attemptCount + 1,
         updatedAt: now,
       };
       await this.storage.saveRecord(storageKey, updated);
@@ -293,7 +292,7 @@ class StartupWorkflowStore {
       planVersion,
       checkpoint: this.initialCheckpoint,
       phase: this.initialPhase,
-      attemptCount: NUM.ONE,
+      attemptCount: 1,
       lastErrorCode: STARTUP_WORKFLOW_DEFAULT_LAST_ERROR_CODE,
       failureMessage: STARTUP_WORKFLOW_DEFAULT_FAILURE_MESSAGE,
       retryAfterMs: STARTUP_WORKFLOW_DEFAULT_RETRY_AFTER_MS,
@@ -322,7 +321,7 @@ class StartupWorkflowStore {
     if (!existing || existing.sessionId !== sessionId) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND +
-          LOCAL_STR_13EMY +
+          LOCAL_STR_COLON_SPACE +
           `${nodeId}::${sessionId}`,
       );
     }
@@ -376,7 +375,7 @@ class StartupWorkflowStore {
     if (!existing || existing.sessionId !== sessionId) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND +
-          LOCAL_STR_13EMY +
+          LOCAL_STR_COLON_SPACE +
           `${nodeId}::${sessionId}`,
       );
     }
@@ -390,7 +389,7 @@ class StartupWorkflowStore {
       failureMessage: normalizeNonEmptyString(options.failureMessage) ||
         existing.failureMessage,
       retryAfterMs: Number.isFinite(options.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
+        Math.max(0, Math.floor(options.retryAfterMs)) :
         existing.retryAfterMs,
       retryable,
       status: retryable ?

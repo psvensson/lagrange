@@ -1,4 +1,4 @@
-import {CDC_OPERATION, NUM, TIME_MS} from '../constants/index.js';
+import {CDC_OPERATION, TIME_MS} from '../constants/index.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from './system-cache-key-descriptor.js';
@@ -51,7 +51,7 @@ const CACHE_ERROR_MSG = Object.freeze({
 });
 
 const CACHE_DEFAULT = Object.freeze({
-  INITIAL_EPOCH: NUM.ZERO,
+  INITIAL_EPOCH: 0,
   PRIMARY_KEY_FALLBACK: 'id',
   CACHE_ID_PREFIX: 'cache-',
   CACHE_ID_RADIX: 36,
@@ -134,7 +134,7 @@ const CACHE_HYDRATION_DEFAULT_OPTIONS = Object.freeze({});
 const CACHE_HYDRATION_NOW = () => Date.now();
 const CACHE_HYDRATION_METRICS = Object.freeze({
   MS_PER_SECOND: TIME_MS.SECOND,
-  ZERO_ROWS_PER_SECOND: NUM.ZERO,
+  ZERO_ROWS_PER_SECOND: 0,
 });
 
 const CACHE_HYDRATION_SQL = Object.freeze({

@@ -37,7 +37,6 @@ import {
   SERVICE_STATUS,
   TABLES,
   TIME_MS,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {
@@ -45,8 +44,7 @@ import {
 } from './create-message-group-replica-lifecycle.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_FS525 = 'CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication';
+const LOCAL_STR_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADAT = 'CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication';
 const MESSAGE_GROUP_REPLICA_ID_INFIX = '-r';
 
 const ENSURE_LOCAL_ACCESS = false;
@@ -81,19 +79,19 @@ const RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION = Object.freeze({
 });
 
 function hasMoveReplicaAssignmentId(assignmentId) {
-  return typeof assignmentId === TYPEOF.STRING &&
-    assignmentId.length > NUM.ZERO;
+  return typeof assignmentId === 'string' &&
+    assignmentId.length > 0;
 }
 
 function resolveRegisterServiceRequestTimeoutMs(options = {}) {
   const configuredHttpTimeoutMs =
     Number.isFinite(options.configuredHttpTimeoutMs) &&
-      options.configuredHttpTimeoutMs > NUM.ZERO ?
+      options.configuredHttpTimeoutMs > 0 ?
       Math.floor(options.configuredHttpTimeoutMs) :
       JOINING_DEFAULT.httpTimeoutMs;
   const remainingRetryBudgetMs =
     Number.isFinite(options.remainingRetryBudgetMs) &&
-      options.remainingRetryBudgetMs > NUM.ZERO ?
+      options.remainingRetryBudgetMs > 0 ?
       Math.floor(options.remainingRetryBudgetMs) :
       configuredHttpTimeoutMs;
   const assignmentRequestTimeoutMs =
@@ -104,7 +102,7 @@ function resolveRegisterServiceRequestTimeoutMs(options = {}) {
       ) :
       configuredHttpTimeoutMs;
   return Math.max(
-    NUM.ONE,
+    1,
     Math.min(assignmentRequestTimeoutMs, remainingRetryBudgetMs),
   );
 }
@@ -120,18 +118,18 @@ function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
     return RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL;
   }
   const elapsedMs = Number.isFinite(options.elapsedMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.elapsedMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.elapsedMs)) :
+    0;
   const retryTimeoutMs = Number.isFinite(options.retryTimeoutMs) ?
-    Math.max(NUM.ZERO, Math.floor(options.retryTimeoutMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(options.retryTimeoutMs)) :
+    0;
   if (elapsedMs >= retryTimeoutMs) {
     return RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL;
   }
   const retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted =
     isRetryableMoveReplicaAssignmentTokenUnknownFailure(options) &&
     Number.isFinite(options.retryableMoveReplicaAssignmentTokenUnknownBudget) &&
-    options.retryableMoveReplicaAssignmentTokenUnknownBudget <= NUM.ZERO;
+    options.retryableMoveReplicaAssignmentTokenUnknownBudget <= 0;
   return retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted === true ?
     RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.SURFACE :
     RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY;
@@ -144,14 +142,14 @@ function buildRetryableMessageGroupRegistrationError(error, classification) {
   retryableError.deferRetry = true;
   retryableError.retryable = true;
   if (Number.isFinite(classification?.retryAfterMs) &&
-      classification.retryAfterMs > NUM.ZERO) {
+      classification.retryAfterMs > 0) {
     retryableError.retryAfterMs = Math.floor(classification.retryAfterMs);
   }
   if (classification?.parsedError) {
     retryableError.bootstrapResponse = classification.parsedError;
   }
-  if (typeof classification?.code === TYPEOF.STRING &&
-      classification.code.length > NUM.ZERO) {
+  if (typeof classification?.code === 'string' &&
+      classification.code.length > 0) {
     retryableError.code = classification.code;
   }
   if (Number.isFinite(classification?.statusCode)) {
@@ -244,24 +242,24 @@ class CreateMessageGroupPhase {
     const replicaIds = [];
     const startupReplicaIds = Array.isArray(assignment.startupReplicaIds) ?
       assignment.startupReplicaIds.filter((replicaId) =>
-        typeof replicaId === 'string' && replicaId.length > NUM.ZERO,
+        typeof replicaId === 'string' && replicaId.length > 0,
       ) :
       [];
-    if (startupReplicaIds.length > NUM.ZERO) {
+    if (startupReplicaIds.length > 0) {
       replicaIds.push(...startupReplicaIds);
     } else {
-      for (let i = NUM.ZERO; i < replicaCount; i++) {
+      for (let i = 0; i < replicaCount; i++) {
         replicaIds.push(`${groupId}${MESSAGE_GROUP_REPLICA_ID_INFIX}${i}`);
       }
     }
 
     const allReplicaIds = Array.isArray(assignment.existingPeerIds) &&
-      assignment.existingPeerIds.length > NUM.ZERO ?
+      assignment.existingPeerIds.length > 0 ?
       assignment.existingPeerIds :
       replicaIds;
 
     const peerAddresses = Array.isArray(assignment.peerAddresses) &&
-      assignment.peerAddresses.length > NUM.ZERO ?
+      assignment.peerAddresses.length > 0 ?
       assignment.peerAddresses :
       allReplicaIds.map(
         (replicaId) =>
@@ -272,7 +270,7 @@ class CreateMessageGroupPhase {
 
     this.delegates.resetJoinMessageGroupReplicas();
     for (
-      let index = NUM.ZERO;
+      let index = 0;
       index < replicaIds.length;
       index++
     ) {
@@ -289,16 +287,16 @@ class CreateMessageGroupPhase {
           groupId,
           replicaId,
           replicaIds: allReplicaIds,
-          replicaIndex: replicaIndex >= NUM.ZERO ? replicaIndex : index,
+          replicaIndex: replicaIndex >= 0 ? replicaIndex : index,
           peerAddresses,
           deferElection: true,
           deferElectionUntilJoinConvergence:
-            (replicaIndex >= NUM.ZERO ? replicaIndex : index) > NUM.ZERO,
+            (replicaIndex >= 0 ? replicaIndex : index) > 0,
           publishRoleMetadata: false,
           publishLeaderNodeMetadata: false,
-          createDelayMs: index > NUM.ZERO ?
+          createDelayMs: index > 0 ?
             index * replicaStaggerDelayMs :
-            NUM.ZERO,
+            0,
           logEnvelope: false,
           logRegistration: false,
         },
@@ -390,7 +388,7 @@ class CreateMessageGroupPhase {
     const useLocalSeedRegistrationShortcut =
       !assignmentId &&
       typeof seedNodeId === 'string' &&
-      seedNodeId.length > NUM.ZERO &&
+      seedNodeId.length > 0 &&
       seedNodeId === this.nodeId &&
       typeof this.delegates.upsertJoinServiceRowWithRetry ===
         'function';
@@ -445,7 +443,7 @@ class CreateMessageGroupPhase {
           nodeId: this.nodeId,
           replicaId,
           groupId,
-          attempt: NUM.ONE,
+          attempt: 1,
           localSeedShortcut:
             useLocalSeedRegistrationShortcut === true,
         },
@@ -460,15 +458,15 @@ class CreateMessageGroupPhase {
     const maxDelayMs = retryPolicy.maxDelayMs;
     const backoffMultiplier = retryPolicy.backoffMultiplier;
     const startTime = nowFn();
-    let attempt = NUM.ZERO;
+    let attempt = 0;
     let lastError = null;
     let retryableMoveReplicaAssignmentTokenUnknownBudget =
       assignmentId ?
         MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES :
-        NUM.ZERO;
+        0;
 
     while (nowFn() - startTime < retryTimeoutMs) {
-      attempt += LOCAL_NUM_ONE;
+      attempt += 1;
       const elapsedAtAttemptStartMs = nowFn() - startTime;
       const requestTimeoutMs = resolveRegisterServiceRequestTimeoutMs({
         assignmentId,
@@ -558,8 +556,8 @@ class CreateMessageGroupPhase {
             })
           ) {
             retryableMoveReplicaAssignmentTokenUnknownBudget = Math.max(
-              NUM.ZERO,
-              retryableMoveReplicaAssignmentTokenUnknownBudget - LOCAL_NUM_ONE,
+              0,
+              retryableMoveReplicaAssignmentTokenUnknownBudget - 1,
             );
           }
           const nextDelayMs =
@@ -663,7 +661,7 @@ class CreateMessageGroupPhase {
       ([_replicaId, svc]) => svc?.groupId === groupId,
     );
 
-    if (replicas.length === NUM.ZERO) {
+    if (replicas.length === 0) {
       throw new Error(
         JOINING_ERROR_MSG
           .selfHostedNoLocalReplicas(groupId),
@@ -706,7 +704,7 @@ class CreateMessageGroupPhase {
       );
     }
 
-    logger.info(LOCAL_STR_FS525, {
+    logger.info(LOCAL_STR_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADAT, {
       nodeId: this.nodeId,
       groupId,
       replicaCount: replicas.length,

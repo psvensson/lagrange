@@ -1,10 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_TWO = 2;
 
 const {
   CONNECTION_STATE_CONNECTED,
@@ -31,7 +28,7 @@ class SQLQueryEngineProvisioningMethods {
       currentLeaderService?.node_id || currentLeaderService?.nodeId || null;
     if (
       typeof currentLeaderNodeId === LOCAL_STR_STRING &&
-      currentLeaderNodeId.length > LOCAL_NUM_ZERO
+      currentLeaderNodeId.length > 0
     ) {
       return currentLeaderNodeId;
     }
@@ -44,7 +41,7 @@ class SQLQueryEngineProvisioningMethods {
     });
     const currentR1NodeId =
       currentR1Service?.node_id || currentR1Service?.nodeId || null;
-    if (typeof currentR1NodeId === LOCAL_STR_STRING && currentR1NodeId.length > LOCAL_NUM_ZERO) {
+    if (typeof currentR1NodeId === LOCAL_STR_STRING && currentR1NodeId.length > 0) {
       return currentR1NodeId;
     }
 
@@ -55,7 +52,7 @@ class SQLQueryEngineProvisioningMethods {
       }) || null;
     const plannedR1NodeId =
       plannedR1Operation?.targetNodeId || plannedR1Operation?.nodeId || null;
-    if (typeof plannedR1NodeId === LOCAL_STR_STRING && plannedR1NodeId.length > LOCAL_NUM_ZERO) {
+    if (typeof plannedR1NodeId === LOCAL_STR_STRING && plannedR1NodeId.length > 0) {
       return plannedR1NodeId;
     }
 
@@ -71,7 +68,7 @@ class SQLQueryEngineProvisioningMethods {
       null;
     if (
       typeof firstCurrentNodeId === LOCAL_STR_STRING &&
-      firstCurrentNodeId.length > LOCAL_NUM_ZERO
+      firstCurrentNodeId.length > 0
     ) {
       return firstCurrentNodeId;
     }
@@ -87,7 +84,7 @@ class SQLQueryEngineProvisioningMethods {
       })?.nodeId ||
       null;
     return typeof firstPlannedNodeId === LOCAL_STR_STRING &&
-      firstPlannedNodeId.length > LOCAL_NUM_ZERO ?
+      firstPlannedNodeId.length > 0 ?
       firstPlannedNodeId :
       null;
   }
@@ -120,7 +117,7 @@ class SQLQueryEngineProvisioningMethods {
     const diagnostics =
       this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
     let selectedNodeIds = diagnostics.selectedNodeIds;
-    if (selectedNodeIds.length === LOCAL_NUM_ZERO) {
+    if (selectedNodeIds.length === 0) {
       selectedNodeIds = [this.nodeId];
     } else if (!selectedNodeIds.includes(this.nodeId)) {
       selectedNodeIds = [this.nodeId, ...selectedNodeIds];
@@ -152,7 +149,7 @@ class SQLQueryEngineProvisioningMethods {
     const uniqueNodeIds = [...new Set(nodeIds)];
     uniqueNodeIds.sort((left, right) => left.localeCompare(right));
     if (uniqueNodeIds.includes(this.nodeId)) {
-      uniqueNodeIds.splice(uniqueNodeIds.indexOf(this.nodeId), LOCAL_NUM_ONE);
+      uniqueNodeIds.splice(uniqueNodeIds.indexOf(this.nodeId), 1);
       uniqueNodeIds.unshift(this.nodeId);
     }
     return uniqueNodeIds;
@@ -172,8 +169,8 @@ class SQLQueryEngineProvisioningMethods {
     if (!this.systemCache) {
       return {
         requestedReplicaCount: desiredReplicaCount,
-        activeNodeRowCount: LOCAL_NUM_ZERO,
-        activeServiceRowCount: LOCAL_NUM_ZERO,
+        activeNodeRowCount: 0,
+        activeServiceRowCount: 0,
         strictNodeIds: [],
         degradedFallbackNodeIds: [],
         selectedNodeIds: [],
@@ -228,7 +225,7 @@ class SQLQueryEngineProvisioningMethods {
           if (
             status === STATUS_ACTIVE &&
             typeof nodeId === LOCAL_STR_STRING &&
-            nodeId.length > LOCAL_NUM_ZERO
+            nodeId.length > 0
           ) {
             serviceRows.push(serviceRow);
           }
@@ -241,7 +238,7 @@ class SQLQueryEngineProvisioningMethods {
     const activeNodeConnectionById = new Map();
     for (const row of activeNodeRows) {
       const nodeId = row?.node_id || row?.nodeId || row?.id || null;
-      if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === LOCAL_NUM_ZERO) {
+      if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === 0) {
         continue;
       }
       activeNodeSeenById.add(nodeId);
@@ -280,7 +277,7 @@ class SQLQueryEngineProvisioningMethods {
       const nodeId = row?.node_id || row?.nodeId || null;
       if (
         typeof nodeId !== LOCAL_STR_STRING ||
-        nodeId.length === LOCAL_NUM_ZERO ||
+        nodeId.length === 0 ||
         seenServiceNodeIds.has(nodeId)
       ) {
         continue;
@@ -311,7 +308,7 @@ class SQLQueryEngineProvisioningMethods {
     let usedDegradedFallback = false;
     if (
       selectedNodeIds.length < desiredReplicaCount &&
-      degradedFallbackNodeIds.length > LOCAL_NUM_ZERO
+      degradedFallbackNodeIds.length > 0
     ) {
       selectedNodeIds = this.orderProvisionTargetNodeIds([
         ...selectedNodeIds,
@@ -346,7 +343,7 @@ class SQLQueryEngineProvisioningMethods {
     provisionTargetDiagnostics = null,
   ) {
     const explicitTargets = this.normalizeTargetNodeIds(explicitTargetNodeIds);
-    if (explicitTargets.length === LOCAL_NUM_ZERO) {
+    if (explicitTargets.length === 0) {
       const diagnostics =
         provisionTargetDiagnostics &&
         typeof provisionTargetDiagnostics === 'object' ?
@@ -357,7 +354,7 @@ class SQLQueryEngineProvisioningMethods {
       const selectedNodeIds = Array.isArray(diagnostics?.selectedNodeIds) ?
         diagnostics.selectedNodeIds :
         [];
-      if (selectedNodeIds.length > LOCAL_NUM_ZERO) {
+      if (selectedNodeIds.length > 0) {
         return selectedNodeIds;
       }
       return this.resolveProvisionTargetNodeIds(requestedReplicaCount);
@@ -381,7 +378,7 @@ class SQLQueryEngineProvisioningMethods {
     const seenNodeIds = new Set();
     for (const nodeId of targetNodeIds) {
       const normalizedNodeId = String(nodeId || '');
-      if (normalizedNodeId.length === LOCAL_NUM_ZERO || seenNodeIds.has(normalizedNodeId)) {
+      if (normalizedNodeId.length === 0 || seenNodeIds.has(normalizedNodeId)) {
         continue;
       }
       seenNodeIds.add(normalizedNodeId);
@@ -464,7 +461,7 @@ class SQLQueryEngineProvisioningMethods {
       });
     }
 
-    return Math.max(LOCAL_NUM_ONE, Math.ceil(normalizedSizeBytes));
+    return Math.max(1, Math.ceil(normalizedSizeBytes));
   }
 
   /**
@@ -477,7 +474,7 @@ class SQLQueryEngineProvisioningMethods {
   calculateQuorumReplicaCount(replicaCount) {
     const normalizedReplicaCount =
       Number.isInteger(replicaCount) && replicaCount > 0 ? replicaCount : 1;
-    return Math.floor(normalizedReplicaCount / LOCAL_NUM_TWO) + LOCAL_NUM_ONE;
+    return Math.floor(normalizedReplicaCount / 2) + 1;
   }
 
   /**

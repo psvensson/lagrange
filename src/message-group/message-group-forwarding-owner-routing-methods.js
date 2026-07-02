@@ -1,4 +1,4 @@
-import {COLUMN, ENTITY_TYPE, NUM, STATE, TYPEOF} from
+import {COLUMN, ENTITY_TYPE, STATE} from
   '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -36,16 +36,16 @@ class MessageGroupForwardingOwnerRoutingMethods {
     let address =
       service.resolveLivePeerAddressFromRaftNodes(leaderServiceId) ||
       service.resolvePeerAddressFromCache(leaderServiceId);
-    if ((typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) &&
+    if ((typeof address !== 'string' || address.length === 0) &&
         service.shouldAllowJoinConvergenceStrictTargeting()) {
       address = service.resolvePeerAddressFromHints(leaderServiceId);
-      if (typeof address === TYPEOF.STRING &&
-          address.length > NUM.ZERO &&
-          typeof service.logBootstrapHintFallback === TYPEOF.FUNCTION) {
+      if (typeof address === 'string' &&
+          address.length > 0 &&
+          typeof service.logBootstrapHintFallback === 'function') {
         service.logBootstrapHintFallback(leaderServiceId, address);
       }
     }
-    if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+    if (typeof address !== 'string' || address.length === 0) {
       return null;
     }
 
@@ -57,7 +57,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
 
   normalizeLeaderReplicaId(candidate) {
     const service = this.service;
-    if (typeof candidate !== TYPEOF.STRING || candidate.length === NUM.ZERO) {
+    if (typeof candidate !== 'string' || candidate.length === 0) {
       return null;
     }
     if (!candidate.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.FORWARD_SLASH)) {
@@ -66,8 +66,8 @@ class MessageGroupForwardingOwnerRoutingMethods {
     try {
       const parsed = service.addressManager.parse(candidate);
       if (parsed?.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
-          typeof parsed?.serviceId === TYPEOF.STRING &&
-          parsed.serviceId.length > NUM.ZERO) {
+          typeof parsed?.serviceId === 'string' &&
+          parsed.serviceId.length > 0) {
         return parsed.serviceId;
       }
     } catch (_error) {
@@ -78,8 +78,8 @@ class MessageGroupForwardingOwnerRoutingMethods {
 
   resolveLivePeerAddressFromRaftNodes(peerId) {
     const service = this.service;
-    if (typeof peerId !== TYPEOF.STRING ||
-        peerId.length === NUM.ZERO ||
+    if (typeof peerId !== 'string' ||
+        peerId.length === 0 ||
         !service.raft ||
         !Array.isArray(service.raft.nodes)) {
       return null;
@@ -87,7 +87,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
 
     for (const node of service.raft.nodes) {
       const address = node?.address;
-      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+      if (typeof address !== 'string' || address.length === 0) {
         continue;
       }
       try {
@@ -114,9 +114,9 @@ class MessageGroupForwardingOwnerRoutingMethods {
       service.replicaId;
     const strictForwardRetryAfterMs = strictForwarding ?
       service.resolveStrictCdcForwardRetryAfterMs() :
-      NUM.ZERO;
+      0;
     const isConnectedNode = (nodeId) => {
-      if (typeof service.transport?.getConnectionState !== TYPEOF.FUNCTION) {
+      if (typeof service.transport?.getConnectionState !== 'function') {
         return true;
       }
       return service.transport.getConnectionState(nodeId) === STATE.CONNECTED;
@@ -180,7 +180,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
     const routableNodeIds = [...new Set(
       (Array.isArray(contract.routableNodeIds) ? contract.routableNodeIds : [])
         .filter((nodeId) =>
-          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO),
+          typeof nodeId === 'string' && nodeId.length > 0),
     )];
     const forwardCandidates = Array.isArray(contract.forwardCandidates) ?
       contract.forwardCandidates :
@@ -190,7 +190,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
     const remoteForwardCandidates = forwardCandidates.filter((candidate) => {
       return candidate?.[COLUMN.NODE_ID] !== this.service.nodeId;
     });
-    const state = remoteForwardCandidates.length > NUM.ZERO ?
+    const state = remoteForwardCandidates.length > 0 ?
       MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.REMOTE_TARGETS_AVAILABLE :
       localSystemTableWriteAvailable ?
         MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY :
@@ -198,19 +198,19 @@ class MessageGroupForwardingOwnerRoutingMethods {
     return Object.freeze({
       state,
       partitionId:
-        typeof contract.partitionId === TYPEOF.STRING &&
-          contract.partitionId.length > NUM.ZERO ?
+        typeof contract.partitionId === 'string' &&
+          contract.partitionId.length > 0 ?
           contract.partitionId :
           null,
       routingSnapshot:
-        contract.routingSnapshot && typeof contract.routingSnapshot === TYPEOF.OBJECT ?
+        contract.routingSnapshot && typeof contract.routingSnapshot === 'object' ?
           contract.routingSnapshot :
           null,
       routableNodeIds,
       localSystemTableWriteAvailable,
       forwardCandidates: remoteForwardCandidates,
       recoveryCandidateWidening:
-        remoteForwardCandidates.length > NUM.ZERO ||
+        remoteForwardCandidates.length > 0 ||
         localSystemTableWriteAvailable,
     });
   }
@@ -219,28 +219,28 @@ class MessageGroupForwardingOwnerRoutingMethods {
     const service = this.service;
     const cdcIntegrationService = service.cdcIntegrationService || null;
     if (typeof cdcIntegrationService?.resolveSystemTablePartitionIds ===
-        TYPEOF.FUNCTION) {
+        'function') {
       const partitionIds = cdcIntegrationService.resolveSystemTablePartitionIds(
         tableName,
       );
       const partitionId = Array.isArray(partitionIds) ?
-        partitionIds[NUM.ZERO] :
+        partitionIds[0] :
         null;
-      if (typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO) {
+      if (typeof partitionId === 'string' && partitionId.length > 0) {
         return partitionId;
       }
     }
 
     const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
-    return typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO ?
+    return typeof partitionId === 'string' && partitionId.length > 0 ?
       partitionId :
       null;
   }
 
   resolveStrictCdcRecoveryRoutingContract(logContext = {}) {
     const service = this.service;
-    const tableName = typeof logContext?.tableName === TYPEOF.STRING &&
-      logContext.tableName.length > NUM.ZERO ?
+    const tableName = typeof logContext?.tableName === 'string' &&
+      logContext.tableName.length > 0 ?
       logContext.tableName :
       null;
     if (!tableName || !STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName)) {
@@ -252,7 +252,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
     const queryExecutor = cdcIntegrationService?.sqlQueryEngine?.queryExecutor || null;
     let routingSnapshot = null;
     if (partitionId &&
-        typeof queryExecutor?.getPartitionRoutingSnapshot === TYPEOF.FUNCTION) {
+        typeof queryExecutor?.getPartitionRoutingSnapshot === 'function') {
       try {
         routingSnapshot = queryExecutor.getPartitionRoutingSnapshot(
           partitionId,
@@ -269,7 +269,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
         [])
         .map((candidate) => candidate?.[COLUMN.NODE_ID] || null)
         .filter((nodeId) =>
-          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO),
+          typeof nodeId === 'string' && nodeId.length > 0),
     );
     const forwardCandidates = resolveMessageGroupForwardServiceCandidatesFromCache(
       service.systemTableCache,
@@ -279,7 +279,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
         isConnectedNode: (nodeId) => this.isStrictForwardNodeConnected(nodeId),
       },
     ).filter((candidate) => {
-      if (routableNodeIdSet.size === NUM.ZERO) {
+      if (routableNodeIdSet.size === 0) {
         return false;
       }
       return routableNodeIdSet.has(candidate?.[COLUMN.NODE_ID] || null);
@@ -287,7 +287,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
 
     const localSystemTableWriteAvailable =
       typeof cdcIntegrationService?.canWriteSystemTableLocally ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       cdcIntegrationService.canWriteSystemTableLocally(tableName) === true;
 
     return this.buildStrictCdcRecoveryRoutingContract({
@@ -304,22 +304,22 @@ class MessageGroupForwardingOwnerRoutingMethods {
     const strictForwarding = options.strictForwarding === true;
     const strictRecoveryRoutingContract =
       options.strictRecoveryRoutingContract &&
-      typeof options.strictRecoveryRoutingContract === TYPEOF.OBJECT ?
+      typeof options.strictRecoveryRoutingContract === 'object' ?
         options.strictRecoveryRoutingContract :
         this.buildStrictCdcRecoveryRoutingContract();
     const targets = [];
-    let suppressedCount = NUM.ZERO;
+    let suppressedCount = 0;
     let recoveryCandidateWidened = false;
     const targetsByServiceId = new Map();
     const addTarget = (serviceId, address = null) => {
-      if (typeof serviceId !== TYPEOF.STRING ||
-        serviceId.length === NUM.ZERO ||
+      if (typeof serviceId !== 'string' ||
+        serviceId.length === 0 ||
         service.isLocalForwardTarget(serviceId, address)) {
         return;
       }
 
-      const normalizedAddress = typeof address === TYPEOF.STRING &&
-        address.length > NUM.ZERO ?
+      const normalizedAddress = typeof address === 'string' &&
+        address.length > 0 ?
         address :
         null;
       const existingTarget = targetsByServiceId.get(serviceId);
@@ -336,7 +336,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
       };
       targetsByServiceId.set(serviceId, target);
       if (service.isForwardTargetSuppressed(target)) {
-        suppressedCount += NUM.ONE;
+        suppressedCount += 1;
         return;
       }
       targets.push(target);
@@ -358,7 +358,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
           cacheLeaderService?.[COLUMN.ADDRESS],
         );
       }
-      if (targets.length === NUM.ZERO &&
+      if (targets.length === 0 &&
           service.shouldAllowJoinConvergenceStrictTargeting()) {
         const bootstrapTarget =
           service.resolveJoinConvergenceBootstrapForwardTarget();
@@ -366,7 +366,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
           addTarget(bootstrapTarget.serviceId, bootstrapTarget.address);
         }
       }
-      if (targets.length === NUM.ZERO &&
+      if (targets.length === 0 &&
           strictRecoveryRoutingContract.state ===
             MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.REMOTE_TARGETS_AVAILABLE) {
         for (const recoveryCandidate of
@@ -376,7 +376,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
             recoveryCandidate?.[COLUMN.ADDRESS] || null,
           );
         }
-        recoveryCandidateWidened = targets.length > NUM.ZERO;
+        recoveryCandidateWidened = targets.length > 0;
       }
       return {targets, suppressedCount, recoveryCandidateWidened};
     }
@@ -402,15 +402,15 @@ class MessageGroupForwardingOwnerRoutingMethods {
 
   shouldUseStrictCDCForwarding(logContext = {}) {
     const tableName = logContext?.tableName || null;
-    return typeof tableName === TYPEOF.STRING &&
+    return typeof tableName === 'string' &&
       STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName);
   }
 
   shouldAllowRelayedStrictConvergenceIngress(logContext = {}) {
     const relayDepth = Number.isInteger(logContext?.relayDepth) &&
-      logContext.relayDepth >= NUM.ZERO ?
+      logContext.relayDepth >= 0 ?
       logContext.relayDepth :
-      NUM.ZERO;
+      0;
     return relayDepth >= MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH;
   }
 
@@ -439,13 +439,13 @@ class MessageGroupForwardingOwnerRoutingMethods {
     if (selection?.strictRecoveryRoutingContract?.state ===
           MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY &&
         Array.isArray(selection?.targets) &&
-        selection.targets.length === NUM.ZERO) {
+        selection.targets.length === 0) {
       return true;
     }
 
     const allowMetadataPublicationConvergenceIngress =
       typeof service.isMetadataPublicationConvergenceWindowOpen ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       service.isMetadataPublicationConvergenceWindowOpen() === true;
     const allowRelayedStrictConvergenceIngress =
       this.shouldAllowRelayedStrictConvergenceIngress(logContext);
@@ -488,7 +488,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
     // Relayed strict CDC needs the same bounded local-ingress escape hatch once
     // another replica has already selected this addressed target.
     if (Array.isArray(selection?.targets) &&
-        selection.targets.length === NUM.ZERO) {
+        selection.targets.length === 0) {
       return true;
     }
 

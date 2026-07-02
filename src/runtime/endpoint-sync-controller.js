@@ -7,7 +7,6 @@
  * @module runtime/endpoint-sync-controller
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {BaseError} from '../utils/base-error.js';
 import {
   ENDPOINT_SYNC_ERROR,
@@ -26,15 +25,13 @@ import {
 } from './endpoint-sync-leader-election.js';
 import {EndpointSyncMetrics} from './endpoint-sync-metrics.js';
 
-const LOCAL_STR_1P5S0 = 'EndpointSyncController';
+const LOCAL_STR_ENDPOINTSYNCCONTROLLER = 'EndpointSyncController';
 const LOCAL_STR_RUNONCE = 'runOnce';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1T6E5 = 'EndpointSyncSourceClient';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_ENDPOINTSYNCSOURCECLIENT = 'EndpointSyncSourceClient';
 const LOCAL_STR_WARN = 'warn';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_INFO = 'info';
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_MANAGED_RESOURCE = 'managed-resource';
 
 const ENDPOINT_SYNC_CONTROLLER_ERROR = Object.freeze({
@@ -75,7 +72,7 @@ class EndpointSyncControllerError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: LOCAL_STR_1P5S0,
+        component: LOCAL_STR_ENDPOINTSYNCCONTROLLER,
         operation: LOCAL_STR_RUNONCE,
         metadata,
       },
@@ -92,7 +89,7 @@ class EndpointSyncControllerError extends BaseError {
  * @param {Object} payload - Structured fields.
  */
 function safeLog(logger, level, message, payload) {
-  if (!logger || typeof logger[level] !== TYPEOF.FUNCTION) {
+  if (!logger || typeof logger[level] !== 'function') {
     return;
   }
   try {
@@ -127,10 +124,10 @@ function cloneReconcileSummary() {
  */
 function createRunSummary() {
   return {
-    sourceRowCount: LOCAL_NUM_ZERO,
-    filteredRowCount: LOCAL_NUM_ZERO,
-    plannedExportCount: LOCAL_NUM_ZERO,
-    conflictCount: LOCAL_NUM_ZERO,
+    sourceRowCount: 0,
+    filteredRowCount: 0,
+    plannedExportCount: 0,
+    conflictCount: 0,
     conflicts: [],
     skippedAsFollower: false,
     leadership: null,
@@ -145,10 +142,10 @@ function createRunSummary() {
  * @return {boolean}
  */
 function isSourceQueryError(error) {
-  if (!error || typeof error !== TYPEOF.OBJECT) {
+  if (!error || typeof error !== 'object') {
     return false;
   }
-  if (error?.context?.component === LOCAL_STR_1T6E5) {
+  if (error?.context?.component === LOCAL_STR_ENDPOINTSYNCSOURCECLIENT) {
     return true;
   }
   return error.message === ENDPOINT_SYNC_ERROR.SOURCE_QUERY_FAILED ||
@@ -171,7 +168,7 @@ class EndpointSyncController {
    * @param {string} [options.leaderIdentity] - Optional lease holder identity.
    */
   constructor(options) {
-    if (!options || typeof options !== TYPEOF.OBJECT) {
+    if (!options || typeof options !== 'object') {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.CONFIG_REQUIRED,
       );
@@ -183,21 +180,21 @@ class EndpointSyncController {
         ENDPOINT_SYNC_CONTROLLER_ERROR.SOURCE_CLIENT_REQUIRED,
       );
     }
-    if (typeof this._sourceClient.fetchEndpointRows !== TYPEOF.FUNCTION) {
+    if (typeof this._sourceClient.fetchEndpointRows !== 'function') {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.SOURCE_FETCH_METHOD_REQUIRED,
       );
     }
 
     this._k8sClient = options.k8sClient;
-    if (!this._k8sClient || typeof this._k8sClient !== TYPEOF.OBJECT) {
+    if (!this._k8sClient || typeof this._k8sClient !== 'object') {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.K8S_CLIENT_REQUIRED,
       );
     }
 
     this._config = options.config;
-    if (!this._config || typeof this._config !== TYPEOF.OBJECT) {
+    if (!this._config || typeof this._config !== 'object') {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.CONFIG_REQUIRED,
       );
@@ -206,9 +203,9 @@ class EndpointSyncController {
     this._namespace = options.namespace ||
       this._config.targetNamespace ||
       this._config.leaseNamespace ||
-      LOCAL_STR_EMPTY;
-    if (typeof this._namespace !== TYPEOF.STRING ||
-      this._namespace.trim().length === LOCAL_NUM_ZERO) {
+      '';
+    if (typeof this._namespace !== 'string' ||
+      this._namespace.trim().length === 0) {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.NAMESPACE_REQUIRED,
       );
@@ -229,7 +226,7 @@ class EndpointSyncController {
           holderIdentity: options.leaderIdentity,
         });
 
-      if (typeof this._leaderElector.tryAcquireLeadership !== TYPEOF.FUNCTION) {
+      if (typeof this._leaderElector.tryAcquireLeadership !== 'function') {
         throw new EndpointSyncControllerError(
           ENDPOINT_SYNC_CONTROLLER_ERROR.LEADER_ELECTOR_METHOD_REQUIRED,
         );
@@ -244,7 +241,7 @@ class EndpointSyncController {
    */
   _validateMetricsReporter() {
     for (const methodName of REQUIRED_METRICS_METHOD) {
-      if (typeof this._metrics[methodName] !== TYPEOF.FUNCTION) {
+      if (typeof this._metrics[methodName] !== 'function') {
         throw new EndpointSyncControllerError(
           `${ENDPOINT_SYNC_CONTROLLER_ERROR.METRICS_METHOD_PREFIX}: ${methodName}`,
         );
@@ -259,7 +256,7 @@ class EndpointSyncController {
    * @private
    */
   async _emitKubernetesEvent(eventData) {
-    if (typeof this._k8sClient.recordEvent !== TYPEOF.FUNCTION) {
+    if (typeof this._k8sClient.recordEvent !== 'function') {
       return;
     }
     try {
@@ -298,7 +295,7 @@ class EndpointSyncController {
     this._metrics.setExportedServices(summary.reconcileSummary.upsertedServices);
     this._metrics.setExportedEndpoints(summary.reconcileSummary.exportedEndpoints);
     this._metrics.incrementPortConflicts(summary.conflictCount);
-    if (cycleFailed || summary.reconcileSummary.groupFailures.length > LOCAL_NUM_ZERO) {
+    if (cycleFailed || summary.reconcileSummary.groupFailures.length > 0) {
       this._metrics.incrementReconcileFailures();
     }
   }
@@ -333,8 +330,8 @@ class EndpointSyncController {
       safeLog(this._logger, LOCAL_STR_ERROR, ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
       return;
     }
-    if (summary.reconcileSummary.groupFailures.length > LOCAL_NUM_ZERO ||
-      summary.conflictCount > LOCAL_NUM_ZERO) {
+    if (summary.reconcileSummary.groupFailures.length > 0 ||
+      summary.conflictCount > 0) {
       safeLog(this._logger, LOCAL_STR_WARN, ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
       return;
     }
@@ -413,7 +410,7 @@ class EndpointSyncController {
           serviceName: conflict.logicalServiceName,
           protocol: conflict.protocol,
           message:
-            `Strict port conflict for ${conflict.serviceKey}: ${conflict.ports.join(LOCAL_STR_128KJ)}`,
+            `Strict port conflict for ${conflict.serviceKey}: ${conflict.ports.join(LOCAL_STR_COMMA_SPACE)}`,
         });
       }
 

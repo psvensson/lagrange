@@ -1,5 +1,5 @@
-const LOCAL_STR_1YSCS = 'Cannot register components after initialization';
-const LOCAL_STR_1LD1G = ' -> ';
+const LOCAL_STR_CANNOT_REGISTER_COMPONENTS_AFTER_INITIAL = 'Cannot register components after initialization';
+const LOCAL_STR_SPACE_DASH_GT = ' -> ';
 const LOCAL_STR_SINGLETON = 'singleton';
 const LOCAL_STR_FACTORY = 'factory';
 const LOCAL_STR_FUNCTION = 'function';
@@ -42,7 +42,7 @@ export class ComponentRegistry {
    */
   register(name, factory, options = {}) {
     if (this.initialized) {
-      throw new Error(LOCAL_STR_1YSCS);
+      throw new Error(LOCAL_STR_CANNOT_REGISTER_COMPONENTS_AFTER_INITIAL);
     }
 
     const definition = {
@@ -78,7 +78,7 @@ export class ComponentRegistry {
     // Check for circular dependencies first
     const circularDep = this.detectCircularDependency();
     if (circularDep) {
-      throw new Error(`Circular dependency detected: ${circularDep.join(LOCAL_STR_1LD1G)}`);
+      throw new Error(`Circular dependency detected: ${circularDep.join(LOCAL_STR_SPACE_DASH_GT)}`);
     }
 
     // Get initialization order via topological sort

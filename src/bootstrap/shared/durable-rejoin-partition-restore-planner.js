@@ -1,10 +1,8 @@
 import {assertCritical} from '../../utils/assert.js';
 import {
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {
@@ -22,7 +20,6 @@ import {
 } from '../system-table-schemas-constants.js';
 import {getPartitionDbPath} from '../../storage/data-directory-manager.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
@@ -30,7 +27,7 @@ const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
 ]);
 
 function normalizeJoinMetadataString(value) {
-  return typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeJoinMetadataInteger(value) {
@@ -45,11 +42,11 @@ function readJoinCacheRows(systemTableCache, tableName) {
   if (!systemTableCache) {
     return [];
   }
-  if (typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.getAll === 'function') {
     const rows = systemTableCache.getAll(tableName);
     return Array.isArray(rows) ? rows : [];
   }
-  if (typeof systemTableCache.filter === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.filter === 'function') {
     const rows = systemTableCache.filter(tableName, () => true);
     return Array.isArray(rows) ? rows : [];
   }
@@ -64,13 +61,13 @@ function getJoinCacheRow(
 ) {
   if (key !== null &&
       key !== undefined &&
-      typeof systemTableCache?.get === TYPEOF.FUNCTION) {
+      typeof systemTableCache?.get === 'function') {
     const row = systemTableCache.get(tableName, key);
     if (row) {
       return row;
     }
   }
-  if (typeof predicate !== TYPEOF.FUNCTION) {
+  if (typeof predicate !== 'function') {
     return null;
   }
   return readJoinCacheRows(systemTableCache, tableName)
@@ -99,7 +96,7 @@ function hasActiveReplicaOperationOwner(systemTableCache, partitionId) {
       const entityType = normalizeJoinMetadataString(
         row?.entity_type || row?.entityType,
       ).toLowerCase();
-      if (entityType.length > NUM.ZERO &&
+      if (entityType.length > 0 &&
           entityType !== SERVICE_TYPE.PARTITION) {
         return false;
       }
@@ -120,8 +117,8 @@ function hasActiveReplicaOperationOwner(systemTableCache, partitionId) {
       const workflowStep = normalizeJoinMetadataString(
         row?.workflow_step || row?.workflowStep,
       ).toUpperCase();
-      if (operationType.length > NUM.ZERO &&
-          workflowStep.length > NUM.ZERO &&
+      if (operationType.length > 0 &&
+          workflowStep.length > 0 &&
           isValidWorkflowStep(operationType, workflowStep)) {
         return !isTerminalStep(operationType, workflowStep);
       }
@@ -129,7 +126,7 @@ function hasActiveReplicaOperationOwner(systemTableCache, partitionId) {
       const status = normalizeJoinMetadataString(
         row?.status,
       ).toLowerCase();
-      return status.length === NUM.ZERO ||
+      return status.length === 0 ||
         !TERMINAL_STATUSES.includes(status);
     });
 }
@@ -144,7 +141,7 @@ function shouldRestoreDurableRejoinPartition({
     partitionRow?.replica_count,
   );
   if (!Number.isInteger(configuredReplicaCount) ||
-      configuredReplicaCount <= NUM.ZERO) {
+      configuredReplicaCount <= 0) {
     return true;
   }
   if (partitionServiceRows.length <= configuredReplicaCount) {
@@ -199,7 +196,7 @@ function buildDurableRejoinPartitionRestoreOptions({
   );
   let schema = null;
   if (tableRow?.schema_definition) {
-    schema = typeof tableRow.schema_definition === TYPEOF.STRING ?
+    schema = typeof tableRow.schema_definition === 'string' ?
       JSON.parse(tableRow.schema_definition) :
       tableRow.schema_definition;
   } else {
@@ -225,7 +222,7 @@ function buildDurableRejoinPartitionRestoreOptions({
   const leaderNodeId = normalizeJoinMetadataString(
     partitionRow?.leader_node_id,
   );
-  const leaderService = leaderNodeId.length > NUM.ZERO ?
+  const leaderService = leaderNodeId.length > 0 ?
     partitionServiceRows.find((row) =>
       normalizeJoinMetadataString(
         row?.node_id,
@@ -307,8 +304,8 @@ function buildDurableRejoinPartitionRestorePlans(options = {}) {
 
     if (serviceType !== SERVICE_TYPE.PARTITION ||
         serviceNodeId !== nodeId ||
-        replicaId.length === NUM.ZERO ||
-        partitionId.length === NUM.ZERO ||
+        replicaId.length === 0 ||
+        partitionId.length === 0 ||
         !RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES.has(status) ||
         seenReplicaIds.has(replicaId)) {
       continue;

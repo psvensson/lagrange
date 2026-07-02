@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {buildPriorityRecoveryObservationSnapshot} from
   './priority-recovery-observation-snapshot.js';
 import {
@@ -243,11 +242,11 @@ function isEmptyPriorityRecoveryCurrentSummary(currentSummary = null) {
     return true;
   }
   return normalizeDistinctStringArray(currentSummary.unresolvedClassIds)
-    .length === NUM.ZERO &&
+    .length === 0 &&
     normalizeDistinctStringArray(currentSummary.unresolvedSemanticStateIds)
-      .length === NUM.ZERO &&
+      .length === 0 &&
     normalizeDistinctStringArray(currentSummary.blockedPartitionIds)
-      .length === NUM.ZERO;
+      .length === 0;
 }
 
 function shouldRetainPriorityRecoveryClosureDiagnostics(
@@ -258,19 +257,19 @@ function shouldRetainPriorityRecoveryClosureDiagnostics(
   return priorityRecoveryObservation?.prioritySpreadPending === true ||
     normalizeDistinctStringArray(
       priorityRecoveryObservation?.priorityRecoveryReasonCodes,
-    ).length > NUM.ZERO ||
+    ).length > 0 ||
     normalizeDistinctStringArray(
       priorityRecoveryObservation?.priorityRecoveryBlockedPartitionIds,
-    ).length > NUM.ZERO ||
+    ).length > 0 ||
     normalizeDistinctStringArray(
       priorityRecoveryObservation?.priorityRecoveryUnresolvedPartitionIds,
-    ).length > NUM.ZERO ||
+    ).length > 0 ||
     normalizeNonNegativeInteger(
       priorityRecoveryObservation?.priorityRecoveryBlockedPartitionCount,
-    ) > NUM.ZERO ||
+    ) > 0 ||
     normalizeNonNegativeInteger(
       priorityRecoveryObservation?.priorityRecoveryUnresolvedPartitionCount,
-    ) > NUM.ZERO ||
+    ) > 0 ||
     !isEmptyPriorityRecoveryCurrentSummary(priorityRecoveryCurrentSummary);
 }
 

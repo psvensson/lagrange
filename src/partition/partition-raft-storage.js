@@ -50,10 +50,10 @@ class PartitionRaftStorage {
   constructor(db, partitionId) {
     this.db = db;
     this.partitionId = partitionId;
-    this.currentTerm = NUM.ZERO;
+    this.currentTerm = 0;
     this.votedFor = null;
-    this.commitIndex = NUM.ZERO;
-    this.lastApplied = NUM.ZERO;
+    this.commitIndex = 0;
+    this.lastApplied = 0;
 
     // In-memory log for Raft entries
     this.log = [];
@@ -108,8 +108,8 @@ class PartitionRaftStorage {
       JSON.parse(row.command),
     ));
 
-    if (this.log.length > NUM.ZERO) {
-      this.commitIndex = this.log[this.log.length - NUM.ONE].index;
+    if (this.log.length > 0) {
+      this.commitIndex = this.log[this.log.length - 1].index;
       this.lastApplied = this.commitIndex;
     }
   }
@@ -138,7 +138,7 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry} The appended entry.
    */
   appendEntry(data) {
-    const index = this.log.length + NUM.ONE;
+    const index = this.log.length + 1;
     const entry = new PartitionRaftLogEntry(this.currentTerm, index, data);
     this.log.push(entry);
 
@@ -156,10 +156,10 @@ class PartitionRaftStorage {
    * @return {Array<PartitionRaftLogEntry>} Log entries.
    */
   getEntriesFrom(startIndex) {
-    if (startIndex < NUM.ONE) {
+    if (startIndex < 1) {
       return [...this.log];
     }
-    return this.log.slice(startIndex - NUM.ONE);
+    return this.log.slice(startIndex - 1);
   }
 
   /**
@@ -167,7 +167,7 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry|null} Last entry or null.
    */
   getLastEntry() {
-    return this.log.length > NUM.ZERO ? this.log[this.log.length - NUM.ONE] : null;
+    return this.log.length > 0 ? this.log[this.log.length - 1] : null;
   }
 
   /**
@@ -176,10 +176,10 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry|null} Entry or null.
    */
   getEntry(index) {
-    if (index < NUM.ONE || index > this.log.length) {
+    if (index < 1 || index > this.log.length) {
       return null;
     }
-    return this.log[index - NUM.ONE];
+    return this.log[index - 1];
   }
 
   /**
@@ -188,8 +188,8 @@ class PartitionRaftStorage {
    * @param {number} fromIndex - Index to truncate from (1-based).
    */
   truncateFrom(fromIndex) {
-    if (fromIndex >= NUM.ONE && fromIndex <= this.log.length) {
-      this.log = this.log.slice(NUM.ZERO, fromIndex - NUM.ONE);
+    if (fromIndex >= 1 && fromIndex <= this.log.length) {
+      this.log = this.log.slice(0, fromIndex - 1);
 
       // Truncate in SQLite
       this.db.prepare(PARTITION_SERVICE_SQL.DELETE_RAFT_LOG_FROM).run(fromIndex);
@@ -210,7 +210,7 @@ class PartitionRaftStorage {
    */
   getLastIndex() {
     const lastEntry = this.getLastEntry();
-    return lastEntry ? lastEntry.index : NUM.ZERO;
+    return lastEntry ? lastEntry.index : 0;
   }
 
   /**
@@ -219,7 +219,7 @@ class PartitionRaftStorage {
    */
   getLastTerm() {
     const lastEntry = this.getLastEntry();
-    return lastEntry ? lastEntry.term : NUM.ZERO;
+    return lastEntry ? lastEntry.term : 0;
   }
 }
 

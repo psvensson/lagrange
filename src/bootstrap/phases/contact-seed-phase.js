@@ -23,7 +23,6 @@ import {
 import {
   HTTP_STATUS,
   NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES,
@@ -45,7 +44,7 @@ import {
 function extractSeedContactStartupAuthority(value) {
   const startupAuthority =
     value?.[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY] || null;
-  return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+  return startupAuthority && typeof startupAuthority === 'object' ?
     startupAuthority :
     null;
 }
@@ -95,7 +94,7 @@ class ContactSeedPhase {
     const backoffMultiplier = retryPolicy.backoffMultiplier;
     const now = this.delegates.getNow();
     const startTime = now();
-    let attempt = NUM.ZERO;
+    let attempt = 0;
     let lastBootstrapError =
       normalizeRetryableSeedContactEvidence(
         this.delegates.getLastRetryableSeedContactEvidence?.(),
@@ -107,8 +106,8 @@ class ContactSeedPhase {
     let lastRetryAfterMs =
       resolveSeedContactRetryAfterMs(null, lastBootstrapError);
     const evidenceWindow = {
-      budget: NUM.ZERO,
-      grants: NUM.ZERO,
+      budget: 0,
+      grants: 0,
     };
     const config = this.delegates.getConfig();
     let lastAttemptRequestTimeoutMs = resolveSeedContactRequestTimeoutMs({
@@ -118,25 +117,25 @@ class ContactSeedPhase {
       const retryableError = new Error(message);
       retryableError.deferRetry = true;
       if (Number.isFinite(options.retryAfterMs) &&
-          options.retryAfterMs > NUM.ZERO) {
+          options.retryAfterMs > 0) {
         retryableError.retryAfterMs = Math.floor(options.retryAfterMs);
       }
       if (options.parsedError) {
         retryableError.bootstrapResponse = options.parsedError;
       }
-      if (typeof options.code === TYPEOF.STRING &&
-           options.code.length > NUM.ZERO) {
+      if (typeof options.code === 'string' &&
+           options.code.length > 0) {
         retryableError.code = options.code;
       }
-      if (typeof options.failureKind === TYPEOF.STRING &&
-          options.failureKind.length > NUM.ZERO) {
+      if (typeof options.failureKind === 'string' &&
+          options.failureKind.length > 0) {
         retryableError.seedContactFailureKind = options.failureKind;
       }
       return retryableError;
     };
 
     while (now() - startTime < retryTimeoutMs) {
-      attempt += NUM.ONE;
+      attempt += 1;
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
         const attemptStartedAtMs = now();
@@ -153,14 +152,14 @@ class ContactSeedPhase {
           [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
             attemptStartedAtMs + requestTimeoutMs,
         };
-        if (typeof startupMode === TYPEOF.STRING &&
-            startupMode.length > NUM.ZERO) {
+        if (typeof startupMode === 'string' &&
+            startupMode.length > 0) {
           bootstrapRequest.startupMode = startupMode;
         }
         const membershipOwnerOutcome =
           this.delegates.getMembershipOwnerOutcome?.();
         if (membershipOwnerOutcome &&
-            typeof membershipOwnerOutcome === TYPEOF.OBJECT) {
+            typeof membershipOwnerOutcome === 'object') {
           bootstrapRequest.membershipOwnerOutcome = membershipOwnerOutcome;
         }
         const response = await httpPostImpl(
@@ -225,10 +224,10 @@ class ContactSeedPhase {
           this.delegates.setLastRetryableSeedContactEvidence?.(
             retryableSeedContactEvidence,
           );
-          if (evidenceWindow.grants < NUM.ONE) {
+          if (evidenceWindow.grants < 1) {
             evidenceWindow.budget =
               MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES;
-            evidenceWindow.grants += NUM.ONE;
+            evidenceWindow.grants += 1;
           }
         }
         const elapsedMs = now() - startTime;
@@ -279,8 +278,8 @@ class ContactSeedPhase {
           });
           const sleep = this.delegates.getSleep();
           await sleep(nextDelayMs);
-          if (lastBootstrapError !== null && evidenceWindow.budget > NUM.ZERO) {
-            evidenceWindow.budget -= NUM.ONE;
+          if (lastBootstrapError !== null && evidenceWindow.budget > 0) {
+            evidenceWindow.budget -= 1;
           }
           delayMs = Math.min(
             Math.floor(delayMs * backoffMultiplier),
@@ -457,9 +456,9 @@ class ContactSeedPhase {
         initialDelayMs;
     const backoffMultiplier =
       Number.isFinite(config.leadershipWaitBackoffMultiplier) &&
-      config.leadershipWaitBackoffMultiplier > NUM.ONE ?
+      config.leadershipWaitBackoffMultiplier > 1 ?
         config.leadershipWaitBackoffMultiplier :
-        NUM.TWO;
+        2;
     return {
       retryTimeoutMs,
       initialDelayMs,
@@ -482,7 +481,7 @@ class ContactSeedPhase {
       (Number.isFinite(parsedError?.statusCode) ?
         Math.floor(parsedError.statusCode) :
         null);
-    const code = typeof parsedError?.code === TYPEOF.STRING ?
+    const code = typeof parsedError?.code === 'string' ?
       parsedError.code :
       null;
     const retryableCode = isRetryableSeedContactCode(code);
@@ -529,15 +528,15 @@ class ContactSeedPhase {
    */
   computeSeedContactRetryDelayMs(options = {}) {
     const baseDelayMs = Math.max(
-      NUM.ONE,
-      Number(options.baseDelayMs) || NUM.ZERO,
+      1,
+      Number(options.baseDelayMs) || 0,
     );
     const maxDelayMs = Math.max(
       baseDelayMs,
       Number(options.maxDelayMs) || baseDelayMs,
     );
     const retryAfterMs = Number.isFinite(options.retryAfterMs) ?
-      Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
+      Math.max(0, Math.floor(options.retryAfterMs)) :
       null;
     const candidateDelayMs = retryAfterMs === null ?
       baseDelayMs :
@@ -565,19 +564,19 @@ class ContactSeedPhase {
       Number.isFinite(config.leadershipWaitJitterRatio) ?
         config.leadershipWaitJitterRatio :
         JOINING_DEFAULT.leadershipWaitJitterRatio;
-    if (jitterRatio <= NUM.ZERO) {
+    if (jitterRatio <= 0) {
       return Math.min(
         maxDelayMs,
-        Math.max(NUM.ONE, Math.floor(delayMs)),
+        Math.max(1, Math.floor(delayMs)),
       );
     }
 
     const jitterRangeMs = delayMs * jitterRatio;
-    const centeredRandom = (random() * NUM.TWO) - NUM.ONE;
+    const centeredRandom = (random() * 2) - 1;
     const jitterOffsetMs = Math.round(centeredRandom * jitterRangeMs);
     return Math.min(
       maxDelayMs,
-      Math.max(NUM.ONE, Math.floor(delayMs + jitterOffsetMs)),
+      Math.max(1, Math.floor(delayMs + jitterOffsetMs)),
     );
   }
 
@@ -610,8 +609,8 @@ class ContactSeedPhase {
     const failureKind =
       resolveBootstrapNotReadySeedContactFailureKind(options.parsedError);
     if (
-      typeof failureKind === TYPEOF.STRING &&
-      failureKind.length > NUM.ZERO
+      typeof failureKind === 'string' &&
+      failureKind.length > 0
     ) {
       retryableErrorOptions.failureKind = failureKind;
     }

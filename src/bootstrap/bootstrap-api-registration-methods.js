@@ -1,9 +1,7 @@
 import {
   COLUMN,
   HTTP_STATUS,
-  NUM,
   SERVICE_STATUS,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -290,11 +288,11 @@ const bootstrapApiRegistrationMethods = {
     error.errorCode = code;
     if (Number.isFinite(options.retryAfterMs)) {
       error.retryAfterMs = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(options.retryAfterMs),
       );
     }
-    if (options.details && typeof options.details === TYPEOF.OBJECT) {
+    if (options.details && typeof options.details === 'object') {
       error.details = options.details;
     }
     return error;

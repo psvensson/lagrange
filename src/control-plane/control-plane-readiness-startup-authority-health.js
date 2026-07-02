@@ -8,12 +8,10 @@ const {
   CONTROL_PLANE_READINESS_REASON,
   LOCAL_STR_PRESENT,
   MISSING_NODE_READINESS_STATE,
-  NUM,
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE,
   SERVICE_STATUS,
   STARTUP_AUTHORITY_STATE,
-  TYPEOF,
   buildCanonicalPublicationRecoveryEvidence,
   buildPublicationRecoveryGateSnapshot,
   buildStartupAuthorityFailureOwnerDescriptor,
@@ -35,8 +33,8 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     const service = this.membershipPublicationService;
     if (
       !service ||
-      typeof service !== TYPEOF.OBJECT ||
-      typeof service.getLatestPublishedClusterPublication !== TYPEOF.FUNCTION
+      typeof service !== 'object' ||
+      typeof service.getLatestPublishedClusterPublication !== 'function'
     ) {
       return null;
     }
@@ -53,7 +51,7 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     const details = {
       failureReason,
     };
-    if (context && typeof context === TYPEOF.OBJECT) {
+    if (context && typeof context === 'object') {
       Object.assign(details, context);
     }
     if (error) {
@@ -199,14 +197,14 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     observedAt = this.now(),
   ) {
     const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
       );
     }
     const hasPlanningProvider =
-      typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION ||
-      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION;
+      typeof service.getLatestClusterPublicationSync === 'function' ||
+      typeof service.getLatestPublicationForNodeSync === 'function';
     if (!hasPlanningProvider) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
@@ -243,16 +241,16 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     observedAt = this.now(),
   ) {
     const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
       );
     }
     const hasPlanningProvider =
-      typeof service.getLatestClusterPublication === TYPEOF.FUNCTION ||
-      typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION ||
-      typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION ||
-      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION;
+      typeof service.getLatestClusterPublication === 'function' ||
+      typeof service.getLatestPublicationForNode === 'function' ||
+      typeof service.getLatestClusterPublicationSync === 'function' ||
+      typeof service.getLatestPublicationForNodeSync === 'function';
     if (!hasPlanningProvider) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
@@ -286,7 +284,7 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     if (
       this.storageAccountingService &&
       typeof this.storageAccountingService.getCapacitySnapshotForNodeSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.storageAccountingService.getCapacitySnapshotForNodeSync(nodeId);
     }
@@ -300,17 +298,17 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
 
   buildPriorityControlPlaneRecoveryProjection(context = {}) {
     const dimensions =
-      context.dimensions && typeof context.dimensions === TYPEOF.OBJECT ?
+      context.dimensions && typeof context.dimensions === 'object' ?
         context.dimensions :
         {};
     const membershipPublication =
       context.membershipPublication &&
-      typeof context.membershipPublication === TYPEOF.OBJECT ?
+      typeof context.membershipPublication === 'object' ?
         context.membershipPublication :
         null;
     const providedPlanningSnapshot =
       context.membershipPublicationPlanningSnapshot &&
-      typeof context.membershipPublicationPlanningSnapshot === TYPEOF.OBJECT ?
+      typeof context.membershipPublicationPlanningSnapshot === 'object' ?
         context.membershipPublicationPlanningSnapshot :
         null;
     const planningSnapshot =
@@ -338,40 +336,40 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       buildPublicationRecoveryGateSnapshot(planningSnapshot || {});
     const planningPriorityRecoveryObservation =
       planningSnapshot?.priorityRecoveryObservation &&
-      typeof planningSnapshot.priorityRecoveryObservation === TYPEOF.OBJECT ?
+      typeof planningSnapshot.priorityRecoveryObservation === 'object' ?
         planningSnapshot.priorityRecoveryObservation :
         null;
     const planningPriorityRecoveryClosureWitness =
       planningSnapshot?.diagnosticPriorityRecoveryClosureWitness &&
       typeof planningSnapshot.diagnosticPriorityRecoveryClosureWitness ===
-        TYPEOF.OBJECT ?
+        'object' ?
         planningSnapshot.diagnosticPriorityRecoveryClosureWitness :
         planningSnapshot?.priorityRecoveryClosureWitness &&
           typeof planningSnapshot.priorityRecoveryClosureWitness ===
-            TYPEOF.OBJECT ?
+            'object' ?
           planningSnapshot.priorityRecoveryClosureWitness :
           providedPlanningSnapshot?.priorityRecoveryClosureWitness &&
             typeof providedPlanningSnapshot.priorityRecoveryClosureWitness ===
-              TYPEOF.OBJECT ?
+              'object' ?
             providedPlanningSnapshot.priorityRecoveryClosureWitness :
             providedPlanningSnapshot?.publicationRecoveryGate
               ?.priorityRecoveryClosureWitness &&
               typeof providedPlanningSnapshot.publicationRecoveryGate
-                .priorityRecoveryClosureWitness === TYPEOF.OBJECT ?
+                .priorityRecoveryClosureWitness === 'object' ?
               providedPlanningSnapshot.publicationRecoveryGate
                 .priorityRecoveryClosureWitness :
               null;
     const planningPriorityRecoveryObservationHasClosureState =
       typeof planningPriorityRecoveryObservation
-        ?.priorityRecoveryClosureState === TYPEOF.STRING &&
+        ?.priorityRecoveryClosureState === 'string' &&
       planningPriorityRecoveryObservation.priorityRecoveryClosureState.length >
-        NUM.ZERO;
+        0;
     const planningPriorityRecoveryObservationHasReasonCodes =
       Array.isArray(
         planningPriorityRecoveryObservation?.priorityRecoveryReasonCodes,
       ) &&
       planningPriorityRecoveryObservation.priorityRecoveryReasonCodes.length >
-        NUM.ZERO;
+        0;
     const planningDiagnosticPriorityRecoveryObservation =
       planningPriorityRecoveryObservationHasClosureState ||
       planningPriorityRecoveryObservationHasReasonCodes ?
@@ -388,20 +386,20 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
                   planningSnapshot.diagnosticPriorityRecoveryReasonCodes,
                 ) &&
                 planningSnapshot.diagnosticPriorityRecoveryReasonCodes.length >
-                  NUM.ZERO ?
+                  0 ?
                   [...planningSnapshot.diagnosticPriorityRecoveryReasonCodes] :
                   Array.isArray(
                     providedPlanningSnapshot?.priorityRecoveryReasonCodes,
                   ) &&
                   providedPlanningSnapshot.priorityRecoveryReasonCodes.length >
-                    NUM.ZERO ?
+                    0 ?
                     [...providedPlanningSnapshot.priorityRecoveryReasonCodes] :
                     Array.isArray(
                       providedPlanningSnapshot?.publicationRecoveryGate
                         ?.reasonCodes,
                     ) &&
                     providedPlanningSnapshot.publicationRecoveryGate.reasonCodes
-                      .length > NUM.ZERO ?
+                      .length > 0 ?
                       [
                         ...providedPlanningSnapshot.publicationRecoveryGate
                           .reasonCodes,
@@ -469,7 +467,7 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       publicationRecoveryGate.active === true ?
         PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE
           .PUBLICATION_GATE_PENDING :
-        runtimeBlockerReasonCodes.length > NUM.ZERO ?
+        runtimeBlockerReasonCodes.length > 0 ?
           PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE.RUNTIME_BLOCKED :
           PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE.READY;
 
@@ -479,7 +477,7 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       state,
       reasonCodes: dedupedReasonCodes,
       publicationGateReady: publicationRecoveryGate.ready === true,
-      runtimeBlocked: runtimeBlockerReasonCodes.length > NUM.ZERO,
+      runtimeBlocked: runtimeBlockerReasonCodes.length > 0,
       publicationGateReasonCodes: Object.freeze([...gateReasonCodes]),
       runtimeBlockerReasonCodes: Object.freeze([...runtimeBlockerReasonCodes]),
       publicationEpoch:
@@ -509,7 +507,7 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     const serviceRows = Array.isArray(context?.serviceRows) ?
       context.serviceRows :
       [];
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    if (!nodeRow || typeof nodeRow !== 'object') {
       const lifecycleState = this.getLifecycleState(nodeId, null);
       return this.resolveMissingNodeReadinessState({
         nodeId,
@@ -535,14 +533,14 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     if (
       options.allowAuthoritativeRefresh === true &&
       this.nodesOwner &&
-      typeof this.nodesOwner.getNode === TYPEOF.FUNCTION
+      typeof this.nodesOwner.getNode === 'function'
     ) {
       const result = await this.nodesOwner.getNode(nodeId, options);
       return unwrapRowReadResult(result);
     }
     if (
       this.nodesOwner &&
-      typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION
+      typeof this.nodesOwner.getNodeFromCache === 'function'
     ) {
       const result = await this.nodesOwner.getNodeFromCache(nodeId, options);
       return unwrapRowReadResult(result);

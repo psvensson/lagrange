@@ -2,10 +2,7 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_WARN = 'warn';
 const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
   'cluster_member_unhealthy',
@@ -138,7 +135,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   summarizeProvisioningTargetRejections(rejectedTargetNodePlans) {
     if (
       !Array.isArray(rejectedTargetNodePlans) ||
-      rejectedTargetNodePlans.length === LOCAL_NUM_ZERO
+      rejectedTargetNodePlans.length === 0
     ) {
       return PROVISIONING_REJECTION_SUMMARY_NONE;
     }
@@ -169,7 +166,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
         }
       }
       const reasonSummary =
-        reasonCodes.length > LOCAL_NUM_ZERO ?
+        reasonCodes.length > 0 ?
           reasonCodes.join(',') :
           PROVISIONING_REJECTION_REASON_UNKNOWN;
       summaryEntries.push(`${targetNodeId}:${reasonSummary}`);
@@ -178,8 +175,8 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       }
     }
 
-    return summaryEntries.length > LOCAL_NUM_ZERO ?
-      summaryEntries.join(LOCAL_STR_1AM9G) :
+    return summaryEntries.length > 0 ?
+      summaryEntries.join(LOCAL_STR_SEMI_SPACE) :
       PROVISIONING_REJECTION_SUMMARY_NONE;
   }
 
@@ -193,7 +190,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   hasOnlyTransientProvisioningShortfall(rejectedTargetNodePlans) {
     if (
       !Array.isArray(rejectedTargetNodePlans) ||
-      rejectedTargetNodePlans.length === LOCAL_NUM_ZERO
+      rejectedTargetNodePlans.length === 0
     ) {
       return false;
     }
@@ -201,14 +198,14 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     for (const rejection of rejectedTargetNodePlans) {
       const blockingReasons = (Array.isArray(rejection?.blockingReasons) ?
         rejection.blockingReasons :
-        []).map((reason) => String(reason || LOCAL_STR_EMPTY))
+        []).map((reason) => String(reason || ''))
         .filter(Boolean);
       const reasonCodes = (Array.isArray(rejection?.reasonCodes) ?
         rejection.reasonCodes :
-        []).map((reason) => String(reason || LOCAL_STR_EMPTY))
+        []).map((reason) => String(reason || ''))
         .filter(Boolean);
       const reasons = [...blockingReasons, ...reasonCodes];
-      if (reasons.length === LOCAL_NUM_ZERO) {
+      if (reasons.length === 0) {
         return false;
       }
       const hasTransientReason = reasons.some((reason) =>
@@ -247,19 +244,19 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   resolveProvisioningShortfallFallbackMinimum(options = {}) {
     const implicitMinimum =
       Number.isInteger(options.implicitFallbackMinimumReplicaCount) &&
-      options.implicitFallbackMinimumReplicaCount > LOCAL_NUM_ZERO ?
+      options.implicitFallbackMinimumReplicaCount > 0 ?
         options.implicitFallbackMinimumReplicaCount :
-        LOCAL_NUM_ONE;
+        1;
     if (
       options.hasExplicitMinimumRoutableReplicaCount === true ||
-      options.maximumProvisionableReplicaCount <= LOCAL_NUM_ZERO ||
+      options.maximumProvisionableReplicaCount <= 0 ||
       !this.hasOnlyTransientProvisioningShortfall(
         options.rejectedTargetNodePlans,
       )
     ) {
       return implicitMinimum;
     }
-    return LOCAL_NUM_ONE;
+    return 1;
   }
 
   /**
@@ -296,10 +293,10 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     );
     throw new Error(
       QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX +
-        String(details?.partitionId || LOCAL_STR_EMPTY) +
-        `: required=${details?.minimumRoutableReplicaCount || LOCAL_NUM_ZERO}, ` +
-        `provisionable=${details?.maximumProvisionableReplicaCount || LOCAL_NUM_ZERO}, ` +
-        `target=${details?.targetReplicaCount || LOCAL_NUM_ZERO}, ` +
+        String(details?.partitionId || '') +
+        `: required=${details?.minimumRoutableReplicaCount || 0}, ` +
+        `provisionable=${details?.maximumProvisionableReplicaCount || 0}, ` +
+        `target=${details?.targetReplicaCount || 0}, ` +
         `rejected=${rejectionSummary}`,
     );
   }
@@ -313,7 +310,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @private
    */
   async abortProvisioningPlanningOperations(partitionId, operations, reason) {
-    if (!Array.isArray(operations) || operations.length === LOCAL_NUM_ZERO) {
+    if (!Array.isArray(operations) || operations.length === 0) {
       return;
     }
     if (

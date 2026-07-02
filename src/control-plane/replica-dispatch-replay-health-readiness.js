@@ -8,13 +8,11 @@ const {
   DISPATCH_DEFAULT,
   DISPATCH_LOG_MSG,
   MEMBERSHIP_PUBLICATION_STATUS,
-  NUM,
   OperationType,
   READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   STATE,
-  TYPEOF,
   WORKFLOW_STEP,
   compareNodeHeartbeatWatermarks,
   getControlPlaneErrorMessage,
@@ -57,7 +55,7 @@ function normalizeReadyNodePublicationReconcileNodeIds(values = []) {
         .map((value) =>
           String(value || REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING).trim(),
         )
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort((left, right) => left.localeCompare(right));
 }
@@ -215,13 +213,13 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
    * @private
    */
   getNodeStateUpdateWatermark(payload) {
-    if (!payload || typeof payload !== TYPEOF.OBJECT) {
+    if (!payload || typeof payload !== 'object') {
       return null;
     }
 
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
     const watermarkRow =
-      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT ?
+      payloadNodeRow && typeof payloadNodeRow === 'object' ?
         {...payloadNodeRow} :
         {};
     const heartbeatAt = Number(payload[ControlPlaneField.HEARTBEAT_AT]);
@@ -234,7 +232,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     if (Number.isFinite(readyLeaseExpiresAt)) {
       watermarkRow[COLUMN.READY_LEASE_EXPIRES_AT] = readyLeaseExpiresAt;
     }
-    if (typeof payload[ControlPlaneField.STATE] === TYPEOF.STRING) {
+    if (typeof payload[ControlPlaneField.STATE] === 'string') {
       watermarkRow[COLUMN.CONNECTION_STATE] = payload[ControlPlaneField.STATE];
     }
     const watermark = getNodeHeartbeatWatermark(watermarkRow);
@@ -300,8 +298,8 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
    */
   normalizeDispatchReadinessRefreshTimeoutMs(value) {
     const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > NUM.ZERO) {
-      return Math.max(NUM.ONE, Math.floor(numeric));
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return Math.max(1, Math.floor(numeric));
     }
     return Math.max(
       this.operationDispatchRetryAfterMs,
@@ -343,17 +341,17 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
   async getBoundedDispatchReadiness(nodeId, decisionDimension) {
     if (
       typeof this.controlPlaneReadinessService.getNodeReadiness !==
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return null;
     }
 
     const timeoutMs = this.dispatchReadinessRefreshTimeoutMs;
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
         allowAuthoritativeRefresh: true,
         decisionDimension,
-        maxCachedAgeMs: NUM.ZERO,
+        maxCachedAgeMs: 0,
       });
     }
 
@@ -363,7 +361,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
           allowAuthoritativeRefresh: true,
           decisionDimension,
-          maxCachedAgeMs: NUM.ZERO,
+          maxCachedAgeMs: 0,
         }),
         new Promise((_resolve, reject) => {
           timeoutHandle = this.setTimeoutFn(() => {
@@ -401,7 +399,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
   }
 
   buildDeferredNodeStateUpdatePayload(payload) {
-    if (!payload || typeof payload !== TYPEOF.OBJECT) {
+    if (!payload || typeof payload !== 'object') {
       return payload;
     }
     const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
@@ -457,23 +455,23 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
 
   resolveMembershipPublicationService() {
     const readinessService = this.controlPlaneReadinessService;
-    if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+    if (!readinessService || typeof readinessService !== 'object') {
       return null;
     }
     const membershipPublicationService =
       readinessService.membershipPublicationService;
     return membershipPublicationService &&
-      typeof membershipPublicationService === TYPEOF.OBJECT ?
+      typeof membershipPublicationService === 'object' ?
       membershipPublicationService :
       null;
   }
 
   normalizeMembershipPublicationStatus(status) {
-    return typeof status === TYPEOF.STRING ? status.toUpperCase() : null;
+    return typeof status === 'string' ? status.toUpperCase() : null;
   }
 
   buildReadyNodePublicationAdvancementOptions(publicationRow) {
-    if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+    if (!publicationRow || typeof publicationRow !== 'object') {
       return READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS;
     }
     return Object.freeze({
@@ -491,9 +489,9 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     if (
       !membershipPublicationService ||
       typeof membershipPublicationService.getLatestPublicationRowSync !==
-        TYPEOF.FUNCTION ||
+        'function' ||
       typeof membershipPublicationService.getLatestPublicationForNodeSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return Object.freeze({
         latestPublicationStatus: null,
@@ -578,7 +576,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       ),
       nodeId,
     ]);
-    if (publishedActiveNodeIds.length === NUM.ZERO) {
+    if (publishedActiveNodeIds.length === 0) {
       return context;
     }
     return {
@@ -667,8 +665,8 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
 
   resolveMembershipPublicationAckRetryAfterMs(error) {
     const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
-      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+      return Math.max(1, Math.floor(retryAfterMs));
     }
     return this.nodeStateUpdateRetryAfterMs;
   }
@@ -743,7 +741,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     if (
       !membershipPublicationService ||
       typeof membershipPublicationService.enqueueClusterMembershipReconcile !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -763,7 +761,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     if (
       !membershipPublicationService ||
       typeof membershipPublicationService.acknowledgeMembershipPublicationForNode !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }

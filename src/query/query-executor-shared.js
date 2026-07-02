@@ -162,7 +162,7 @@ function buildPartitionServiceWitnessFingerprint(service) {
       '',
   );
   const address = String(service.address || '');
-  if (serviceId.length === NUM.ZERO && address.length === NUM.ZERO) {
+  if (serviceId.length === 0 && address.length === 0) {
     return null;
   }
   const updatedAt =
@@ -190,12 +190,12 @@ function buildPartitionServiceWitnessFingerprint(service) {
 }
 function normalizeParticipantFailureString(value) {
   return typeof value === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-    value.length > NUM.ZERO ?
+    value.length > 0 ?
     value :
     null;
 }
 function normalizeParticipantRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ? Math.floor(value) : null;
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 }
 function resolveParticipantBackpressureState(result = {}) {
   if (typeof result?.backpressured === QUERY_EXECUTOR_LITERAL.STRING_BOOLEAN) {
@@ -205,7 +205,7 @@ function resolveParticipantBackpressureState(result = {}) {
     return true;
   }
   return (
-    Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > NUM.ZERO
+    Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0
   );
 }
 function buildParticipantFailureEntry(result) {
@@ -220,7 +220,7 @@ function buildParticipantFailureEntry(result) {
     errorCode: normalizeParticipantFailureString(result.errorCode),
     error: result.error || ERRORS.QUERY_FAILED,
     durationMs: Number.isFinite(result?.durationMs) ?
-      Math.max(NUM.ZERO, Math.floor(result.durationMs)) :
+      Math.max(0, Math.floor(result.durationMs)) :
       null,
     retryAfterMs: normalizeParticipantRetryAfterMs(result?.retryAfterMs),
     deferRetry: result?.deferRetry === true,
@@ -237,8 +237,8 @@ function buildDistributedFailureSummary(failedResults) {
     partitionErrors: participantFailures,
     participantFailures,
     firstFailedParticipant:
-      participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      participantFailures.length > 0 ?
+        participantFailures[0] :
         null,
   };
 }

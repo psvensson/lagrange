@@ -1,5 +1,5 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STRING, TIME_MS, TYPEOF} from '../constants/index.js';
+import {NUM, STRING, TIME_MS} from '../constants/index.js';
 
 const LIVE_QUERY_SUBSYSTEM = Object.freeze({
   QUERY_GROUP: 'query-group',
@@ -157,5 +157,4 @@ export {
   LIVE_QUERY_REGEX_REPLACE,
   LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
-  TYPEOF,
 };

@@ -1,32 +1,32 @@
-import {NUM, TIME_MS, TYPEOF} from '../../constants/index.js';
+import {NUM, TIME_MS} from '../../constants/index.js';
 import {ROUTER_ERROR_MSG} from '../../constants/transport.js';
 
 const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_READY = 'ready';
 const LOCAL_STR_DEFERRED = 'deferred';
-const LOCAL_STR_151IA = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+const LOCAL_STR_ROUTER_QUERY_TRANSPORT_NOT_READY = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
 
 const LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT = Object.freeze({
   MAX_ATTEMPTS: NUM.SIX,
   INITIAL_DELAY_MS: TIME_MS.SECOND,
   MAX_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
-  BACKOFF_MULTIPLIER: NUM.TWO,
+  BACKOFF_MULTIPLIER: 2,
 });
 
 function normalizePositiveInteger(value, fallback) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
 
 function normalizeBackoffMultiplier(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     value :
     LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT.BACKOFF_MULTIPLIER;
 }
 
 function normalizeLocalQueryTransportReadiness(rawReadiness) {
-  if (!rawReadiness || typeof rawReadiness !== TYPEOF.OBJECT) {
+  if (!rawReadiness || typeof rawReadiness !== 'object') {
     return Object.freeze({
       ready: null,
       state: LOCAL_STR_UNKNOWN,
@@ -43,8 +43,8 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
   return Object.freeze({
     ready,
     state:
-      typeof rawReadiness.state === TYPEOF.STRING &&
-        rawReadiness.state.length > NUM.ZERO ?
+      typeof rawReadiness.state === 'string' &&
+        rawReadiness.state.length > 0 ?
         rawReadiness.state :
         (
           ready === true ?
@@ -54,18 +54,18 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
               LOCAL_STR_UNKNOWN
         ),
     reason:
-      typeof rawReadiness.reason === TYPEOF.STRING &&
-        rawReadiness.reason.length > NUM.ZERO ?
+      typeof rawReadiness.reason === 'string' &&
+        rawReadiness.reason.length > 0 ?
         rawReadiness.reason :
         null,
     reasonCode:
-      typeof rawReadiness.reasonCode === TYPEOF.STRING &&
-        rawReadiness.reasonCode.length > NUM.ZERO ?
+      typeof rawReadiness.reasonCode === 'string' &&
+        rawReadiness.reasonCode.length > 0 ?
         rawReadiness.reasonCode :
         null,
     errorCode:
-      typeof rawReadiness.errorCode === TYPEOF.STRING &&
-        rawReadiness.errorCode.length > NUM.ZERO ?
+      typeof rawReadiness.errorCode === 'string' &&
+        rawReadiness.errorCode.length > 0 ?
         rawReadiness.errorCode :
         null,
     retryAfterMs:
@@ -76,7 +76,7 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
 function getLocalQueryTransportReadiness(messageRouter) {
   if (!messageRouter ||
       typeof messageRouter.getQueryDataPlaneTransportReadiness !==
-        TYPEOF.FUNCTION) {
+        'function') {
     return normalizeLocalQueryTransportReadiness(null);
   }
   return normalizeLocalQueryTransportReadiness(
@@ -92,9 +92,9 @@ function buildLocalQueryTransportNotReadyError(readiness) {
   const error = new Error(
     readiness?.reason || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
   );
-  error.code = readiness?.errorCode || LOCAL_STR_151IA;
+  error.code = readiness?.errorCode || LOCAL_STR_ROUTER_QUERY_TRANSPORT_NOT_READY;
   error.retryAfterMs =
-    normalizePositiveInteger(readiness?.retryAfterMs, NUM.ZERO);
+    normalizePositiveInteger(readiness?.retryAfterMs, 0);
   error.localQueryTransport = readiness || null;
 
   const progressContract = {
@@ -140,12 +140,12 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
   const backoffMultiplier = normalizeBackoffMultiplier(
     options.backoffMultiplier,
   );
-  const sleep = typeof options.sleep === TYPEOF.FUNCTION ?
+  const sleep = typeof options.sleep === 'function' ?
     options.sleep :
     (waitMs) => new Promise((resolve) => setTimeout(resolve, waitMs));
 
   let lastReadiness = readiness;
-  for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     lastReadiness = getLocalQueryTransportReadiness(
       options.messageRouter || null,
     );
@@ -167,7 +167,7 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
       });
     }
 
-    if (typeof options.onRetry === TYPEOF.FUNCTION) {
+    if (typeof options.onRetry === 'function') {
       options.onRetry({
         attempt,
         maxAttempts,
@@ -178,7 +178,7 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
 
     await sleep(effectiveDelayMs);
     delayMs = Math.min(
-      Math.max(NUM.ONE, Math.floor(delayMs * backoffMultiplier)),
+      Math.max(1, Math.floor(delayMs * backoffMultiplier)),
       maxDelayMs,
     );
   }

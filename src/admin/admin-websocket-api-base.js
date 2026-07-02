@@ -3,7 +3,7 @@ import {
   ADMIN_WEBSOCKET_TEST_RUN_ROUTE_METHODS,
 } from './admin-websocket-test-run-route-methods.js';
 
-const LOCAL_STR_1BT5T = 'System table cache not initialized';
+const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
 const {
   ADMIN_CACHE_DUMP,
@@ -39,10 +39,8 @@ const {
   LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
   LoggingService,
   MessageType,
-  NUM,
   PressureGovernor,
   TRANSPORT_EVENT,
-  TYPEOF,
   TraceCollector,
   buildControlPlaneWorkloadProfile,
   createAdminOperationError,
@@ -115,7 +113,7 @@ class AdminWebSocketAPIBase {
     this.serviceDiagnosticsProvider =
       options.serviceDiagnosticsProvider || null;
     this.partitionServicesProvider =
-      typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+      typeof options.partitionServicesProvider === 'function' ?
         options.partitionServicesProvider :
         null;
     this.partitionServices =
@@ -131,12 +129,12 @@ class AdminWebSocketAPIBase {
     this.heartbeatService = options.heartbeatService || null;
     this[ADMIN_FIELD.READINESS_LIMIT_MS] =
       Number.isFinite(options[ADMIN_FIELD.READINESS_LIMIT_MS]) &&
-      options[ADMIN_FIELD.READINESS_LIMIT_MS] > NUM.ZERO ?
+      options[ADMIN_FIELD.READINESS_LIMIT_MS] > 0 ?
         Math.floor(options[ADMIN_FIELD.READINESS_LIMIT_MS]) :
         ADMIN_LOAD_LANE_READINESS_LIMIT_MS;
     this[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS] =
       Number.isFinite(options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS]) &&
-      options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS] > NUM.ZERO ?
+      options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS] > 0 ?
         Math.floor(options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS]) :
         Math.min(
           this[ADMIN_FIELD.READINESS_LIMIT_MS],
@@ -144,7 +142,7 @@ class AdminWebSocketAPIBase {
         );
     this.loadLaneQueryTimeoutCapMs =
       Number.isFinite(options.loadLaneQueryTimeoutCapMs) &&
-      options.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+      options.loadLaneQueryTimeoutCapMs > 0 ?
         Math.floor(options.loadLaneQueryTimeoutCapMs) :
         LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
     this[ADMIN_FIELD.TABLE_ADMISSION_VIEW] = new Map();
@@ -236,7 +234,7 @@ class AdminWebSocketAPIBase {
   subscribeToCacheNotifications() {
     if (
       this.systemTableCache &&
-      typeof this.systemTableCache.onCacheChange === TYPEOF.FUNCTION
+      typeof this.systemTableCache.onCacheChange === 'function'
     ) {
       this.systemTableCache.onCacheChange((tableName, operation, record) => {
         this.broadcastCDCEvent(tableName, operation, record);
@@ -446,11 +444,11 @@ class AdminWebSocketAPIBase {
     }
   }
   resolveAdminClientLane(lane) {
-    if (typeof lane !== TYPEOF.STRING) {
+    if (typeof lane !== 'string') {
       return ADMIN_STREAM_LANE_DEFAULT;
     }
     const normalized = lane.trim().toLowerCase();
-    if (normalized.length === NUM.ZERO) {
+    if (normalized.length === 0) {
       return ADMIN_STREAM_LANE_DEFAULT;
     }
     return normalized;
@@ -467,7 +465,7 @@ class AdminWebSocketAPIBase {
     this.logger.info(ADMIN_LOG_MSG.CLIENT_CONNECTED, {
       clientId,
       lane,
-      totalClients: this.clients.size + NUM.ONE,
+      totalClients: this.clients.size + 1,
     });
     const clientInfo = {
       id: clientId,
@@ -524,7 +522,7 @@ class AdminWebSocketAPIBase {
   buildValidatedCacheDump(tables) {
     const cacheDump = this.buildCacheDump(tables);
     const isEmpty = Object.values(cacheDump).every(
-      (rows) => Array.isArray(rows) && rows.length === NUM.ZERO,
+      (rows) => Array.isArray(rows) && rows.length === 0,
     );
     if (isEmpty) {
       throw createAdminOperationError(
@@ -553,9 +551,9 @@ class AdminWebSocketAPIBase {
 
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
-      throw new Error(LOCAL_STR_1BT5T);
+      throw new Error(LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED);
     }
 
     for (const tableName of targetTables) {

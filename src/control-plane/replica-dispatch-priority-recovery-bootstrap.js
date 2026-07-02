@@ -4,7 +4,6 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
 import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_REASONS = Object.freeze([
   CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
@@ -68,7 +67,7 @@ function collectPriorityRecoveryDispatchBootstrapReasonCodes(readiness) {
   const reasonCodes = new Set();
   const addReasonCode = (reasonCode) => {
     const normalizedReasonCode = String(reasonCode || '').trim();
-    if (normalizedReasonCode.length > NUM.ZERO) {
+    if (normalizedReasonCode.length > 0) {
       reasonCodes.add(normalizedReasonCode);
     }
   };
@@ -103,7 +102,7 @@ function collectPriorityRecoveryDispatchBootstrapReasonCodes(readiness) {
 
 function hasPriorityRecoveryDispatchBootstrapDimensions(readiness, requiredDimensions) {
   const dimensions = readiness?.dimensions;
-  if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+  if (!dimensions || typeof dimensions !== 'object') {
     return false;
   }
   return requiredDimensions.every(
@@ -116,14 +115,14 @@ function hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(
   allowedFailedDimensions,
 ) {
   const dimensions = readiness?.dimensions;
-  if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+  if (!dimensions || typeof dimensions !== 'object') {
     return false;
   }
   const failedDimensions = Object.keys(dimensions).filter((dimension) =>
     dimensions[dimension] !== true,
   );
   return (
-    failedDimensions.length > NUM.ZERO &&
+    failedDimensions.length > 0 &&
     failedDimensions.includes(
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ) &&
@@ -137,7 +136,7 @@ function hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(
   reasonCodes,
   allowedReasons,
 ) {
-  if (!(reasonCodes instanceof Set) || reasonCodes.size === NUM.ZERO) {
+  if (!(reasonCodes instanceof Set) || reasonCodes.size === 0) {
     return false;
   }
   for (const requiredReason of
@@ -191,8 +190,8 @@ function shouldAllowPriorityRecoveryDispatchBootstrap({
   }
   const targetNodeId = operation?.targetNodeId || operation?.target_node_id || null;
   const isSelfDispatch =
-    typeof selfNodeId === TYPEOF.STRING &&
-    selfNodeId.length > NUM.ZERO &&
+    typeof selfNodeId === 'string' &&
+    selfNodeId.length > 0 &&
     targetNodeId === selfNodeId;
   const policy = resolvePriorityRecoveryDispatchBootstrapPolicy(isSelfDispatch);
   if (

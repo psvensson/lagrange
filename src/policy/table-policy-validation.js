@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
 } from '../rebalancer/storage-capacity-constants.js';
@@ -54,15 +54,15 @@ function validatePlacementConstraints(placementConstraints) {
   const minFree = placementConstraints[
     STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE
   ];
-  if (typeof minFree === TYPEOF.NUMBER && minFree < NUM.ZERO) {
+  if (typeof minFree === 'number' && minFree < 0) {
     errors.push(POLICY_ERROR_MSG.PLACEMENT_MIN_FREE_NONNEGATIVE);
   }
 
   const maxUtil = placementConstraints[
     STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT
   ];
-  if (typeof maxUtil === TYPEOF.NUMBER &&
-      (maxUtil < NUM.ZERO || maxUtil > NUM.HUNDRED)) {
+  if (typeof maxUtil === 'number' &&
+      (maxUtil < 0 || maxUtil > NUM.HUNDRED)) {
     errors.push(POLICY_ERROR_MSG.PLACEMENT_MAX_UTIL_RANGE);
   }
 
@@ -95,28 +95,28 @@ function validateTablePolicy(
   }
 
   if (policy.replicaCount !== undefined) {
-    if (policy.replicaCount < NUM.ONE) {
+    if (policy.replicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
     }
-    if (policy.replicaCount % NUM.TWO === NUM.ZERO) {
+    if (policy.replicaCount % 2 === 0) {
       errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
     }
   }
 
   if (policy.minReplicaCount !== undefined) {
-    if (policy.minReplicaCount < NUM.ONE) {
+    if (policy.minReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_MIN);
     }
-    if (policy.minReplicaCount % NUM.TWO === NUM.ZERO) {
+    if (policy.minReplicaCount % 2 === 0) {
       errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_ODD);
     }
   }
 
   if (policy.maxReplicaCount !== undefined) {
-    if (policy.maxReplicaCount < NUM.ONE) {
+    if (policy.maxReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
     }
-    if (policy.maxReplicaCount % NUM.TWO === NUM.ZERO) {
+    if (policy.maxReplicaCount % 2 === 0) {
       errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_ODD);
     }
   }
@@ -133,30 +133,30 @@ function validateTablePolicy(
   }
 
   if (policy.splitStorageThreshold !== undefined &&
-      policy.splitStorageThreshold < NUM.ZERO) {
+      policy.splitStorageThreshold < 0) {
     errors.push(POLICY_ERROR_MSG.SPLIT_STORAGE_NONNEGATIVE);
   }
   if (policy.splitTrafficThreshold !== undefined &&
-      policy.splitTrafficThreshold < NUM.ZERO) {
+      policy.splitTrafficThreshold < 0) {
     errors.push(POLICY_ERROR_MSG.SPLIT_TRAFFIC_NONNEGATIVE);
   }
   if (policy.mergeStorageThreshold !== undefined &&
-      policy.mergeStorageThreshold < NUM.ZERO) {
+      policy.mergeStorageThreshold < 0) {
     errors.push(POLICY_ERROR_MSG.MERGE_STORAGE_NONNEGATIVE);
   }
   if (policy.mergeTrafficThreshold !== undefined &&
-      policy.mergeTrafficThreshold < NUM.ZERO) {
+      policy.mergeTrafficThreshold < 0) {
     errors.push(POLICY_ERROR_MSG.MERGE_TRAFFIC_NONNEGATIVE);
   }
 
   if (policy.placementConstraints !== undefined &&
       policy.placementConstraints &&
-      typeof policy.placementConstraints === TYPEOF.OBJECT) {
+      typeof policy.placementConstraints === 'object') {
     errors.push(...validatePlacement(policy.placementConstraints));
   }
 
   return {
-    valid: errors.length === NUM.ZERO,
+    valid: errors.length === 0,
     errors,
   };
 }
@@ -187,19 +187,19 @@ function validateMessageGroupPolicy(
   }
 
   if (policy.targetReplicaCount !== undefined) {
-    if (policy.targetReplicaCount < NUM.ONE) {
+    if (policy.targetReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
     }
-    if (policy.targetReplicaCount % NUM.TWO === NUM.ZERO) {
+    if (policy.targetReplicaCount % 2 === 0) {
       errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
     }
   }
 
   if (policy.maxReplicaCount !== undefined) {
-    if (policy.maxReplicaCount < NUM.ONE) {
+    if (policy.maxReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
     }
-    if (policy.maxReplicaCount % NUM.TWO === NUM.ZERO) {
+    if (policy.maxReplicaCount % 2 === 0) {
       errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_ODD);
     }
   }
@@ -214,7 +214,7 @@ function validateMessageGroupPolicy(
 
   if (policy.placementConstraints !== undefined &&
       policy.placementConstraints &&
-      typeof policy.placementConstraints === TYPEOF.OBJECT) {
+      typeof policy.placementConstraints === 'object') {
     errors.push(
       ...validatePlacement(
         policy.placementConstraints,
@@ -223,7 +223,7 @@ function validateMessageGroupPolicy(
   }
 
   return {
-    valid: errors.length === NUM.ZERO,
+    valid: errors.length === 0,
     errors,
   };
 }

@@ -356,7 +356,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
         });
         const available = noReadiness.getAvailableNodes();
         t.ok(
-          available.length > NUM.ZERO,
+          available.length > 0,
           'default readiness service should use cache',
         );
       });
@@ -827,14 +827,14 @@ test('Split admission consumes canonical readiness via admission service',
     const mockAccounting = {
       getNodeCapacity: () => ({
         totalBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
         availableBytes: NUM.THOUSAND * NUM.THOUSAND,
       }),
       getCapacitySnapshotForNode: () => ({
         budgetBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
       }),
       estimateReplicaBytes: () => NUM.THOUSAND,
     };
@@ -948,14 +948,14 @@ test('shared readiness contract: single service controls all workflows',
     const mockAccounting = {
       getNodeCapacity: () => ({
         totalBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
         availableBytes: NUM.THOUSAND * NUM.THOUSAND,
       }),
       getCapacitySnapshotForNode: () => ({
         budgetBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
       }),
       estimateReplicaBytes: () => NUM.THOUSAND,
     };
@@ -977,7 +977,7 @@ test('shared readiness contract: single service controls all workflows',
         const admissionResult = await admission.checkSplit({
           targetNodeIds: [FIXTURE_NODE_ID],
           estimatedBytes: NUM.THOUSAND,
-          requiredReplicaCount: NUM.ONE,
+          requiredReplicaCount: 1,
         });
 
         t.equal(dispatchReady, true,
@@ -986,7 +986,7 @@ test('shared readiness contract: single service controls all workflows',
           'rebalancer must be ready via shared service');
         t.equal(admissionResult.allowed, true,
           'split admission must be allowed via shared service');
-        t.ok(consultedBy.size > NUM.ZERO,
+        t.ok(consultedBy.size > 0,
           'shared service must have been consulted');
       });
 
@@ -1005,7 +1005,7 @@ test('shared readiness contract: single service controls all workflows',
         const admissionResult = await admission.checkSplit({
           targetNodeIds: [FIXTURE_NODE_ID],
           estimatedBytes: NUM.THOUSAND,
-          requiredReplicaCount: NUM.ONE,
+          requiredReplicaCount: 1,
         });
 
         t.equal(dispatchReady, false,
@@ -1014,7 +1014,7 @@ test('shared readiness contract: single service controls all workflows',
           'rebalancer must be blocked via shared service');
         t.equal(admissionResult.allowed, false,
           'split admission must be blocked via shared service');
-        t.ok(consultedBy.size > NUM.ZERO,
+        t.ok(consultedBy.size > 0,
           'shared service must have been consulted');
       });
   });
@@ -1031,7 +1031,7 @@ test('regression: dispatch cannot bypass canonical readiness',
       '../../src/control-plane/replica-dispatch-service.js'
     );
 
-    let callCount = NUM.ZERO;
+    let callCount = 0;
     const blockingService = {
       getNodeReadinessSync: (nodeId) => {
         callCount++;
@@ -1054,12 +1054,12 @@ test('regression: dispatch cannot bypass canonical readiness',
       controlPlaneReadinessService: blockingService,
     });
 
-    callCount = NUM.ZERO;
+    callCount = 0;
     const ready = dispatch.isNodeReady(FIXTURE_NODE_ID);
 
     t.equal(ready, false,
       'dispatch must respect canonical not-ready');
-    t.ok(callCount > NUM.ZERO,
+    t.ok(callCount > 0,
       'dispatch must call canonical readiness service');
 
     // Verify the service property is the injected instance.
@@ -1078,7 +1078,7 @@ test('regression: rebalancer cannot bypass canonical readiness',
       '../../src/rebalancer/unified-rebalancer.js'
     );
 
-    let callCount = NUM.ZERO;
+    let callCount = 0;
     const blockingService = {
       getNodeReadinessSync: (nodeId) => {
         callCount++;
@@ -1126,22 +1126,22 @@ test('regression: rebalancer cannot bypass canonical readiness',
 
     await t.test('isNodeReady blocked by canonical service',
       async (t) => {
-        callCount = NUM.ZERO;
+        callCount = 0;
         const ready =
           await rebalancer.isNodeReady(FIXTURE_NODE_ID);
         t.equal(ready, false,
           'rebalancer isNodeReady must respect canonical not-ready');
-        t.ok(callCount > NUM.ZERO,
+        t.ok(callCount > 0,
           'rebalancer must call canonical readiness service');
       });
 
     await t.test('getAvailableNodes filtered by canonical service',
       async (t) => {
-        callCount = NUM.ZERO;
+        callCount = 0;
         const available = rebalancer.getAvailableNodes();
-        t.equal(available.length, NUM.ZERO,
+        t.equal(available.length, 0,
           'no nodes available when canonical says not-ready');
-        t.ok(callCount > NUM.ZERO,
+        t.ok(callCount > 0,
           'getAvailableNodes must call canonical readiness service');
       });
 
@@ -1161,7 +1161,7 @@ test('regression: split admission cannot bypass canonical readiness',
       '../../src/rebalancer/storage-admission-service.js'
     );
 
-    let callCount = NUM.ZERO;
+    let callCount = 0;
     const blockingService = {
       getNodeReadinessSync: (nodeId) => {
         callCount++;
@@ -1177,14 +1177,14 @@ test('regression: split admission cannot bypass canonical readiness',
     const mockAccounting = {
       getNodeCapacity: () => ({
         totalBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
         availableBytes: NUM.THOUSAND * NUM.THOUSAND,
       }),
       getCapacitySnapshotForNode: () => ({
         budgetBytes: NUM.THOUSAND * NUM.THOUSAND,
-        usedBytes: NUM.ZERO,
-        reservedBytes: NUM.ZERO,
+        usedBytes: 0,
+        reservedBytes: 0,
       }),
       estimateReplicaBytes: () => NUM.THOUSAND,
     };
@@ -1195,16 +1195,16 @@ test('regression: split admission cannot bypass canonical readiness',
       controlPlaneReadinessService: blockingService,
     });
 
-    callCount = NUM.ZERO;
+    callCount = 0;
     const result = await admission.checkSplit({
       targetNodeIds: [FIXTURE_NODE_ID],
       estimatedBytes: NUM.THOUSAND,
-      requiredReplicaCount: NUM.ONE,
+      requiredReplicaCount: 1,
     });
 
     t.equal(result.allowed, false,
       'split admission must be blocked by canonical not-ready');
-    t.ok(callCount > NUM.ZERO,
+    t.ok(callCount > 0,
       'split admission must call canonical readiness service');
 
     // Verify the service property is the injected instance.
@@ -1228,7 +1228,7 @@ test('regression: RebalanceCoordinator cannot bypass canonical readiness',
       '../../src/workflow/durable-workflow-coordinator.js'
     );
 
-    let callCount = NUM.ZERO;
+    let callCount = 0;
     const blockingService = {
       getNodeReadinessSync: (nodeId) => {
         callCount++;
@@ -1268,13 +1268,13 @@ test('regression: RebalanceCoordinator cannot bypass canonical readiness',
         new DurableWorkflowCoordinator(),
     });
 
-    callCount = NUM.ZERO;
+    callCount = 0;
     const ready =
       coordinator.isNodeReadyForRouting(FIXTURE_NODE_ID);
 
     t.equal(ready, false,
       'coordinator must respect canonical not-ready');
-    t.ok(callCount > NUM.ZERO,
+    t.ok(callCount > 0,
       'coordinator must call canonical readiness service');
 
     t.equal(

@@ -1,13 +1,11 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const {
   ERRORS,
   LifeRaft,
   METRICS_LOG_TAG,
-  NUM,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
@@ -41,7 +39,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
       sql: sql.substring(
-        NUM.ZERO,
+        0,
         PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
       ),
     });
@@ -100,7 +98,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
         sql: sql.substring(
-          NUM.ZERO,
+          0,
           PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
         ),
         error: error.message,
@@ -122,7 +120,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
       sql: sql.substring(
-        NUM.ZERO,
+        0,
         PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
       ),
       bootstrap: true,
@@ -151,7 +149,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
         sql: sql.substring(
-          NUM.ZERO,
+          0,
           PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
         ),
         error: error.message,
@@ -366,11 +364,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
    * @private
    */
   normalizeMetricIdentifier(value) {
-    if (value === null || value === void LOCAL_NUM_ZERO) {
+    if (value === null || value === void 0) {
       return null;
     }
     const normalized = String(value).trim();
-    return normalized.length > NUM.ZERO ? normalized : null;
+    return normalized.length > 0 ? normalized : null;
   }
   /**
    * Record a write phase timing duration.
@@ -383,7 +381,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     if (!phaseTimings || !Number.isFinite(startedAtMs)) {
       return;
     }
-    const durationMs = Math.max(NUM.ZERO, Date.now() - startedAtMs);
+    const durationMs = Math.max(0, Date.now() - startedAtMs);
     phaseTimings[field] = durationMs;
   }
   /**
@@ -398,16 +396,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     return {
       [WRITE_PHASE_FIELD_ENTRY_BUILD_MS]: entryBuildMs,
       [WRITE_PHASE_FIELD_FORWARD_DELIVER_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_FORWARD_DELIVER_MS] || NUM.ZERO,
+        phaseTimings?.[WRITE_PHASE_FIELD_FORWARD_DELIVER_MS] || 0,
       [WRITE_PHASE_FIELD_LOG_APPEND_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_LOG_APPEND_MS] || NUM.ZERO,
+        phaseTimings?.[WRITE_PHASE_FIELD_LOG_APPEND_MS] || 0,
       [WRITE_PHASE_FIELD_SQLITE_RUN_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_SQLITE_RUN_MS] || NUM.ZERO,
+        phaseTimings?.[WRITE_PHASE_FIELD_SQLITE_RUN_MS] || 0,
       [WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS] || NUM.ZERO,
+        phaseTimings?.[WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS] || 0,
       [WRITE_PHASE_FIELD_APPLY_WRITE_MS]:
-        phaseTimings?.[WRITE_PHASE_FIELD_APPLY_WRITE_MS] || NUM.ZERO,
-      [WRITE_PHASE_FIELD_TOTAL_MS]: Math.max(NUM.ZERO, totalDurationMs),
+        phaseTimings?.[WRITE_PHASE_FIELD_APPLY_WRITE_MS] || 0,
+      [WRITE_PHASE_FIELD_TOTAL_MS]: Math.max(0, totalDurationMs),
     };
   }
   /**
@@ -425,7 +423,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     });
-    const entryBuildMs = Math.max(NUM.ZERO, Date.now() - entryBuildStartMs);
+    const entryBuildMs = Math.max(0, Date.now() - entryBuildStartMs);
     const correlation = this.resolveWriteMetricCorrelation(entry);
     const isLeader = this.role === RaftRole.LEADER;
     if (isLeader) {
@@ -550,7 +548,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     const whereClause = operation.whereClause || {};
     const data = operation.data || {};
     const pkValue = whereClause[pkField] ?? data[pkField];
-    if (pkValue !== void LOCAL_NUM_ZERO && pkValue !== null) {
+    if (pkValue !== void 0 && pkValue !== null) {
       result.cdcConfirmation = this.cdcConfirmationTracker.awaitConfirmation(
         tableName,
         pkValue,

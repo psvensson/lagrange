@@ -1,7 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const {
-  NUM,
   OperationType,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
@@ -220,8 +219,8 @@ class RebalanceCoordinatorConcurrentBudgetGate {
   createTopologyGuardAdmissionError(move, admissionResult) {
     const blockingReason =
       Array.isArray(admissionResult?.blockingReasons) &&
-      admissionResult.blockingReasons.length > NUM.ZERO ?
-        String(admissionResult.blockingReasons[NUM.ZERO] || '') :
+      admissionResult.blockingReasons.length > 0 ?
+        String(admissionResult.blockingReasons[0] || '') :
         String(admissionResult?.reason || '');
     const error = new Error(
       TOPOLOGY_GUARD_ERROR_MSG.BLOCKED_PREFIX +

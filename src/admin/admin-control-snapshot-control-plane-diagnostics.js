@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {
   ADMIN_CACHE_DUMP,
 } from './admin-constants.js';
@@ -64,18 +64,18 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
  */
 function toNonNegativeInteger(value) {
   const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue) || parsedValue < NUM.ZERO) {
-    return NUM.ZERO;
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    return 0;
   }
   return Math.floor(parsedValue);
 }
 function buildLogsTableRetentionDiagnostics() {
   const stats =
     LogsTableService.instance &&
-    typeof LogsTableService.instance.getStats === TYPEOF.FUNCTION ?
+    typeof LogsTableService.instance.getStats === 'function' ?
       LogsTableService.instance.getStats() :
       null;
-  if (!stats || typeof stats !== TYPEOF.OBJECT) {
+  if (!stats || typeof stats !== 'object') {
     return null;
   }
   return {
@@ -107,13 +107,13 @@ function buildMembershipPublicationOwnerQueueDiagnostics(readinessService) {
   if (
     !membershipPublicationService ||
     typeof membershipPublicationService.getControlPlaneOwnerQueueDepth !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return null;
   }
   const ownerQueueDepth =
     membershipPublicationService.getControlPlaneOwnerQueueDepth();
-  return ownerQueueDepth && typeof ownerQueueDepth === TYPEOF.OBJECT ?
+  return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
     ownerQueueDepth :
     null;
 }
@@ -121,7 +121,7 @@ function mergeLogsTableOwnerQueueDiagnostics(logsTable, ownerQueueDepth) {
   if (!ownerQueueDepth) {
     return logsTable;
   }
-  const base = logsTable && typeof logsTable === TYPEOF.OBJECT ?
+  const base = logsTable && typeof logsTable === 'object' ?
     logsTable :
     {};
   return {
@@ -153,7 +153,7 @@ function mergeLogsTableOwnerQueueDiagnostics(logsTable, ownerQueueDepth) {
 function buildCdcReplayRetentionDiagnostics(partitionServices) {
   if (
     !(partitionServices instanceof Map) ||
-    partitionServices.size === NUM.ZERO
+    partitionServices.size === 0
   ) {
     return null;
   }
@@ -161,13 +161,13 @@ function buildCdcReplayRetentionDiagnostics(partitionServices) {
   for (const partitionService of partitionServices.values()) {
     if (
       !partitionService ||
-      typeof partitionService.getStats !== TYPEOF.FUNCTION
+      typeof partitionService.getStats !== 'function'
     ) {
       continue;
     }
     const stats = partitionService.getStats();
     const replay =
-      stats?.cdcReplay && typeof stats.cdcReplay === TYPEOF.OBJECT ?
+      stats?.cdcReplay && typeof stats.cdcReplay === 'object' ?
         stats.cdcReplay :
         null;
     if (!replay) {
@@ -185,7 +185,7 @@ function buildCdcReplayRetentionDiagnostics(partitionServices) {
       replayInFlight: replay.replayInFlight === true,
     });
   }
-  if (entries.length === NUM.ZERO) {
+  if (entries.length === 0) {
     return null;
   }
   entries.sort((left, right) => {
@@ -203,16 +203,16 @@ function buildCdcReplayRetentionDiagnostics(partitionServices) {
     return left.partitionId.localeCompare(right.partitionId);
   });
   const byPartitionId = {};
-  let bufferedEvents = NUM.ZERO;
-  let replayBufferGrowthCount = NUM.ZERO;
-  let replayRetryDepth = NUM.ZERO;
+  let bufferedEvents = 0;
+  let replayBufferGrowthCount = 0;
+  let replayRetryDepth = 0;
   for (const entry of entries) {
     bufferedEvents += entry.bufferedEvents;
     replayBufferGrowthCount += entry.replayBufferGrowthCount;
     replayRetryDepth = Math.max(replayRetryDepth, entry.replayRetryDepth);
   }
   for (const entry of entries.slice(
-    NUM.ZERO,
+    0,
     CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT,
   )) {
     byPartitionId[entry.partitionId] = entry;
@@ -233,7 +233,7 @@ function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
     runtimeReader &&
     typeof runtimeReader[
       CONTROL_SNAPSHOT_RUNTIME_READER_EXECUTE_REQUEST_METHOD
-    ] === TYPEOF.FUNCTION,
+    ] === 'function',
   );
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
@@ -258,7 +258,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
     const observedAtMs = Number.isFinite(capturedAtMs) ?
       capturedAtMs :
       this.nowFn();
-    let maxStalenessMs = NUM.ZERO;
+    let maxStalenessMs = 0;
     for (const nodeRow of Array.isArray(nodeRows) ? nodeRows : []) {
       const status = String(
         firstStringField(nodeRow, COLUMN.STATUS, 'status') || '',
@@ -291,7 +291,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
       }
       maxStalenessMs = Math.max(
         maxStalenessMs,
-        Math.max(NUM.ZERO, observedAtMs - lastHeartbeatMs),
+        Math.max(0, observedAtMs - lastHeartbeatMs),
       );
     }
     return maxStalenessMs;
@@ -335,7 +335,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
       allowAuthoritativePublishedMembershipRecovery === true &&
       options.preferAuthoritativePublicationRead !== true &&
       observedMembershipPublication &&
-      typeof observedMembershipPublication === TYPEOF.OBJECT &&
+      typeof observedMembershipPublication === 'object' &&
       String(
         observedMembershipPublication.status ||
           ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
@@ -400,7 +400,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
       this.resolveControlPlaneOperationDiagnostics();
     const startupRecovery =
       this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION ?
+      typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
         this.startupRecoveryCoordinator.evaluate() :
         null;
     const heartbeatPublication = this.resolveHeartbeatPublicationDiagnostics();
@@ -469,7 +469,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
     const partitionServices =
       this.resolveLocalPartitionServices &&
-      typeof this.resolveLocalPartitionServices === TYPEOF.FUNCTION ?
+      typeof this.resolveLocalPartitionServices === 'function' ?
         this.resolveLocalPartitionServices() :
         null;
     const cdcReplay = buildCdcReplayRetentionDiagnostics(partitionServices);
@@ -532,7 +532,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
     return (
       workflowOwner &&
       typeof workflowOwner.schedulePriorityRecoveryDispatchPendingReentry ===
-        TYPEOF.FUNCTION
+        'function'
     ) ?
       workflowOwner :
       null;
@@ -544,14 +544,14 @@ class AdminControlSnapshotControlPlaneDiagnostics
     const workflowOwner =
       this.resolvePriorityRecoveryDispatchPendingWorkflowOwner();
     if (!workflowOwner) {
-      return NUM.ZERO;
+      return 0;
     }
     const snapshots = Array.isArray(
       priorityRecoveryDecisionSnapshots?.snapshots,
     ) ?
       priorityRecoveryDecisionSnapshots.snapshots :
       ADMIN_CACHE_DUMP.EMPTY;
-    let scheduledCount = NUM.ZERO;
+    let scheduledCount = 0;
     for (const decisionSnapshot of snapshots) {
       const operation = decisionSnapshot?.coordinator?.operation || null;
       const operations = operation ? [operation] : ADMIN_CACHE_DUMP.EMPTY;
@@ -562,7 +562,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
           PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS,
         ) === true
       ) {
-        scheduledCount += NUM.ONE;
+        scheduledCount += 1;
       }
     }
     return scheduledCount;

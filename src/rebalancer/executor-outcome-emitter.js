@@ -16,7 +16,6 @@
  */
 
 import {EventEmitter} from 'events';
-import {NUM} from '../constants/index.js';
 import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_LOG_MSG,
@@ -67,7 +66,7 @@ function buildExecutorOutcome(
   }
   if (
     Number.isFinite(options.retryAfterMs) &&
-    options.retryAfterMs > NUM.ZERO
+    options.retryAfterMs > 0
   ) {
     outcome[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS] =
       Math.floor(options.retryAfterMs);

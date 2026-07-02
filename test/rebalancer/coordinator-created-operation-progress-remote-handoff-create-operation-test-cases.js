@@ -1,5 +1,5 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {NUM, SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -224,7 +224,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
 
   test('workflowOwner remote coordinator-created handoff uses the operation ' +
     'snapshot when the source owner read is unavailable', async (t) => {
-    let authoritativeOperationReadCount = NUM.ZERO;
+    let authoritativeOperationReadCount = 0;
     const deferredTimers = [];
     const deliveries = [];
 
@@ -234,7 +234,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         String(sql).includes('operation_id') &&
         params.includes(REMOTE_HANDOFF_SNAPSHOT_OPERATION_ID);
       if (isOperationIdRead) {
-        authoritativeOperationReadCount += NUM.ONE;
+        authoritativeOperationReadCount += 1;
         const error = new Error(REMOTE_HANDOFF_SNAPSHOT_READ_ERROR);
         error.code = REMOTE_HANDOFF_SNAPSHOT_PARTICIPANT_FAILURE;
         error.errorCode = REMOTE_HANDOFF_SNAPSHOT_PARTICIPANT_FAILURE;
@@ -242,7 +242,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         error.retryAfterMs = REMOTE_HANDOFF_SNAPSHOT_RETRY_AFTER_MS;
         throw error;
       }
-      return {success: true, rows: [], affectedRows: NUM.ZERO};
+      return {success: true, rows: [], affectedRows: 0};
     };
 
     const coordinator = new RebalanceCoordinator({
@@ -276,17 +276,17 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return authoritativeRead(tableName, sql, params);
         },
         async executeQuery() {
-          return {success: true, rows: [], affectedRows: NUM.ZERO};
+          return {success: true, rows: [], affectedRows: 0};
         },
       },
       sqlQueryEngine: {
         async executeQuery() {
-          return {success: true, rows: [], affectedRows: NUM.ZERO};
+          return {success: true, rows: [], affectedRows: 0};
         },
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: NUM.ONE};
+          return {minReplicaCount: 1};
         },
       },
       storageAccountingService: {
@@ -340,22 +340,22 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       );
       t.equal(
         authoritativeOperationReadCount,
-        NUM.ZERO,
+        0,
         'remote handoff should not block on the source owner operation read',
       );
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         'remote target wake-up should be delivered on the first attempt',
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         REMOTE_HANDOFF_SNAPSHOT_DISPATCH_TARGET,
         'handoff should target the canonical remote replica-dispatch ingress',
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         'successful remote wake-up should still arm verification follow-up',
       );
     } finally {

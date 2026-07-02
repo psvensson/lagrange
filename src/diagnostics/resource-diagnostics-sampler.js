@@ -12,7 +12,6 @@ import {NUM, SUBSYSTEM} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
 
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 
@@ -62,7 +61,7 @@ const UNKNOWN_NODE_ID = 'unknown-node';
 
 function normalizePositiveInteger(value, fallback) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= NUM.ZERO) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return fallback;
   }
   return Math.floor(parsed);
@@ -70,7 +69,7 @@ function normalizePositiveInteger(value, fallback) {
 
 function roundToTwo(value) {
   if (!Number.isFinite(value)) {
-    return NUM.ZERO;
+    return 0;
   }
   return Math.round(value * RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR) /
     RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR;
@@ -157,7 +156,7 @@ class ResourceDiagnosticsSampler {
       writeRateBytesPerSec: trend?.writeRateBytesPerSec ?? null,
       topGrowingSignals: Array.isArray(trend?.topGrowingSignals) ?
         trend.topGrowingSignals.slice(
-          NUM.ZERO,
+          0,
           RESOURCE_DIAGNOSTICS_DEFAULT.COMPACT_TOP_SIGNAL_LIMIT,
         ) :
         [],
@@ -188,7 +187,7 @@ class ResourceDiagnosticsSampler {
     );
     const writeBytesDelta = Number.isFinite(writeBytesTotal) &&
       Number.isFinite(this.lastWriteBytes) ?
-      Math.max(NUM.ZERO, writeBytesTotal - this.lastWriteBytes) :
+      Math.max(0, writeBytesTotal - this.lastWriteBytes) :
       null;
     const writeBytesPerSec = Number.isFinite(writeBytesDelta) ?
       writeBytesDelta /
@@ -281,7 +280,7 @@ class ResourceDiagnosticsSampler {
    * @private
    */
   buildTrendReport() {
-    if (this.samples.length < LOCAL_NUM_TWO) {
+    if (this.samples.length < 2) {
       return null;
     }
 
@@ -308,7 +307,7 @@ class ResourceDiagnosticsSampler {
       null;
 
     return {
-      windowSamples: windowSize + NUM.ONE,
+      windowSamples: windowSize + 1,
       elapsedSec: roundToTwo(elapsedSec),
       rssDeltaBytes,
       heapUsedDeltaBytes: heapDeltaBytes,
@@ -339,9 +338,9 @@ class ResourceDiagnosticsSampler {
     for (const [signal, endValue] of Object.entries(endSignals)) {
       const startValue = Number.isFinite(startSignals[signal]) ?
         startSignals[signal] :
-        NUM.ZERO;
+        0;
       const delta = endValue - startValue;
-      if (!Number.isFinite(delta) || delta <= NUM.ZERO) {
+      if (!Number.isFinite(delta) || delta <= 0) {
         continue;
       }
       results.push({
@@ -353,7 +352,7 @@ class ResourceDiagnosticsSampler {
 
     return results
       .sort((left, right) => right.delta - left.delta)
-      .slice(NUM.ZERO, this.topSignalLimit);
+      .slice(0, this.topSignalLimit);
   }
 
   /**
@@ -443,12 +442,12 @@ class ResourceDiagnosticsSampler {
       }
 
       for (const [childKey, childValue] of Object.entries(value)) {
-        walk(childValue, getNestedPath(path, childKey), depth + NUM.ONE);
+        walk(childValue, getNestedPath(path, childKey), depth + 1);
       }
     };
 
     for (const [componentName, value] of Object.entries(componentStats)) {
-      walk(value, componentName, NUM.ZERO);
+      walk(value, componentName, 0);
     }
 
     if (truncated && !this.signalLimitWarningLogged && this.logger?.warn) {
@@ -470,7 +469,7 @@ class ResourceDiagnosticsSampler {
    * @private
    */
   calculateCpuPercent(cpuDeltaUs, elapsedMs) {
-    const cpuCount = Math.max(NUM.ONE, os.cpus().length);
+    const cpuCount = Math.max(1, os.cpus().length);
     const elapsedUs =
       elapsedMs * RESOURCE_DIAGNOSTICS_DEFAULT.MICROS_PER_MILLISECOND;
     const normalized = cpuDeltaUs / (elapsedUs * cpuCount);

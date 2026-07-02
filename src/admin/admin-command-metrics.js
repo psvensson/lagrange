@@ -4,7 +4,6 @@
  * Requirements: 8.5, 13.4
  */
 
-import {NUM} from '../constants/index.js';
 
 const METRIC_TYPE = Object.freeze({
   COMMAND_COUNT: 'commandCount',
@@ -35,15 +34,15 @@ class CommandMetrics {
    * @param {boolean} success - Whether the command succeeded.
    */
   recordCommand(action, latencyMs, success) {
-    const prevCount = this._counts.get(action) ?? NUM.ZERO;
-    this._counts.set(action, prevCount + NUM.ONE);
+    const prevCount = this._counts.get(action) ?? 0;
+    this._counts.set(action, prevCount + 1);
 
-    const prevLatency = this._latencies.get(action) ?? NUM.ZERO;
+    const prevLatency = this._latencies.get(action) ?? 0;
     this._latencies.set(action, prevLatency + latencyMs);
 
     if (!success) {
-      const prevErrors = this._errors.get(action) ?? NUM.ZERO;
-      this._errors.set(action, prevErrors + NUM.ONE);
+      const prevErrors = this._errors.get(action) ?? 0;
+      this._errors.set(action, prevErrors + 1);
     }
   }
 
@@ -61,7 +60,7 @@ class CommandMetrics {
    * @returns {number}
    */
   getCommandCount(action) {
-    return this._counts.get(action) ?? NUM.ZERO;
+    return this._counts.get(action) ?? 0;
   }
 
   /**
@@ -69,12 +68,12 @@ class CommandMetrics {
    * @returns {number}
    */
   getErrorCount(action) {
-    return this._errors.get(action) ?? NUM.ZERO;
+    return this._errors.get(action) ?? 0;
   }
 
   /** @returns {number} */
   getTotalCommandCount() {
-    let total = NUM.ZERO;
+    let total = 0;
     for (const count of this._counts.values()) {
       total += count;
     }
@@ -83,7 +82,7 @@ class CommandMetrics {
 
   /** @returns {number} */
   getTotalErrorCount() {
-    let total = NUM.ZERO;
+    let total = 0;
     for (const count of this._errors.values()) {
       total += count;
     }
@@ -99,8 +98,8 @@ class CommandMetrics {
     for (const [action, count] of this._counts) {
       commands[action] = Object.freeze({
         count,
-        errors: this._errors.get(action) ?? NUM.ZERO,
-        totalLatencyMs: this._latencies.get(action) ?? NUM.ZERO,
+        errors: this._errors.get(action) ?? 0,
+        totalLatencyMs: this._latencies.get(action) ?? 0,
       });
     }
 

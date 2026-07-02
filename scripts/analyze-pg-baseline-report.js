@@ -3,26 +3,23 @@
 import {readdir, readFile, stat} from 'node:fs/promises';
 import {resolve, join} from 'node:path';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_N_A = 'n/a';
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_PERCENT = '%';
 const LOCAL_STR_NEWLINE = '\n';
 const LOCAL_STR_DIAGNOSIS = 'Diagnosis';
-const LOCAL_STR_1E0TM = 'Run failed before benchmark load. Primary issue was seed bootstrap ';
-const LOCAL_STR_341CN = 'readiness timeout, not load-stage request handling.';
-const LOCAL_STR_1AMGS = 'No load metrics were recorded for this scenario.';
-const LOCAL_STR_MM91M = 'Most load-side failures were likely fast circuit-breaker rejections ';
+const LOCAL_STR_RUN_FAILED_BEFORE_BENCHMARK_LOAD_PRIMARY = 'Run failed before benchmark load. Primary issue was seed bootstrap ';
+const LOCAL_STR_READINESS_TIMEOUT_NOT_LOAD_STAGE_REQUEST = 'readiness timeout, not load-stage request handling.';
+const LOCAL_STR_NO_LOAD_METRICS_WERE_RECORDED_FOR_THIS_S = 'No load metrics were recorded for this scenario.';
+const LOCAL_STR_MOST_LOAD_SIDE_FAILURES_WERE_LIKELY_FAST = 'Most load-side failures were likely fast circuit-breaker rejections ';
 const LOCAL_STR_ESTIMATED = '(estimated ';
 const LOCAL_STR_AFTER_A_SMALLER = ') after a smaller ';
-const LOCAL_STR_I51O0 = 'set of actual load-channel exceptions (';
-const LOCAL_STR_IE9I6 = ').';
-const LOCAL_STR_QS0EQ = 'Participant-failure envelopes were observed. These are distributed ';
-const LOCAL_STR_YZ1SY = 'query-level failures and should be correlated with partition-level diagnostics.';
-const LOCAL_STR_139VE = 'Timeouts appear without circuit-open dominance; investigate slow query ';
-const LOCAL_STR_1N0CZ = 'path or load timeout budget.';
-const LOCAL_STR_17VIJ = 'No load errors were reported.';
+const LOCAL_STR_SET_OF_ACTUAL_LOAD_CHANNEL_EXCEPTIONS = 'set of actual load-channel exceptions (';
+const LOCAL_STR_RPAREN_DOT = ').';
+const LOCAL_STR_PARTICIPANT_FAILURE_ENVELOPES_WERE_OBSER = 'Participant-failure envelopes were observed. These are distributed ';
+const LOCAL_STR_QUERY_LEVEL_FAILURES_AND_SHOULD_BE_CORRE = 'query-level failures and should be correlated with partition-level diagnostics.';
+const LOCAL_STR_TIMEOUTS_APPEAR_WITHOUT_CIRCUIT_OPEN_DOM = 'Timeouts appear without circuit-open dominance; investigate slow query ';
+const LOCAL_STR_PATH_OR_LOAD_TIMEOUT_BUDGET = 'path or load timeout budget.';
+const LOCAL_STR_NO_LOAD_ERRORS_WERE_REPORTED = 'No load errors were reported.';
 const LOCAL_STR_REPORT = 'Report';
 const LOCAL_STR_PATH = 'path: ';
 const LOCAL_STR_TIMESTAMP = 'timestamp: ';
@@ -44,28 +41,28 @@ const LOCAL_STR_OPSPERSEC = 'opsPerSec: ';
 const LOCAL_STR_LATENCYMS_P50 = 'latencyMs: p50=';
 const LOCAL_STR_P95 = ', p95=';
 const LOCAL_STR_P99 = ', p99=';
-const LOCAL_STR_TGPWE = 'loadChannel: requests=';
+const LOCAL_STR_LOADCHANNEL_REQUESTS = 'loadChannel: requests=';
 const LOCAL_STR_SUCCESSES = ', successes=';
 const LOCAL_STR_TIMEOUTS = ', timeouts=';
 const LOCAL_STR_BREAKEROPENS = ', breakerOpens=';
 const LOCAL_STR_LOADCHANNEL_NONE = 'loadChannel: none';
 const LOCAL_STR_DISTINCTERRORS = 'distinctErrors (';
-const LOCAL_STR_626BD = '):';
-const LOCAL_STR_9XLXH = '- ';
-const LOCAL_STR_5523F = 'distinctErrors: none';
+const LOCAL_STR_RPAREN_COLON = '):';
+const LOCAL_STR_DASH_SPACE = '- ';
+const LOCAL_STR_DISTINCTERRORS_NONE = 'distinctErrors: none';
 const LOCAL_STR_DERIVED = 'Derived';
 const LOCAL_STR_ATTEMPTERRORS_2 = 'attemptErrors=';
-const LOCAL_STR_19FSR = ', loadChannelExceptions=';
+const LOCAL_STR_LOADCHANNELEXCEPTIONS = ', loadChannelExceptions=';
 const LOCAL_STR_LOADTIMEOUTS = ', loadTimeouts=';
-const LOCAL_STR_WH87L = ', estimatedFastRejects=';
+const LOCAL_STR_ESTIMATEDFASTREJECTS = ', estimatedFastRejects=';
 const LOCAL_STR_OPERATIONFAILURES = ', operationFailures=';
-const LOCAL_STR_6UN6Q = ' (load channel diagnostics unavailable in this report)';
-const LOCAL_STR_YMWJ8 = 'No load error shape available.';
-const LOCAL_STR_187EA = 'distinctErrorCategories=';
+const LOCAL_STR_LOAD_CHANNEL_DIAGNOSTICS_UNAVAILABLE_IN = ' (load channel diagnostics unavailable in this report)';
+const LOCAL_STR_NO_LOAD_ERROR_SHAPE_AVAILABLE = 'No load error shape available.';
+const LOCAL_STR_DISTINCTERRORCATEGORIES = 'distinctErrorCategories=';
 const LOCAL_STR_PRELOADGATEREASONS = 'preLoadGateReasons:';
-const LOCAL_STR_1KC7I = 'No report found. Pass --report <path> or place reports under ';
+const LOCAL_STR_NO_REPORT_FOUND_PASS_REPORT_PATH_OR_PLAC = 'No report found. Pass --report <path> or place reports under ';
 const LOCAL_STR_SCENARIO_2 = 'Scenario "';
-const LOCAL_STR_138OI = '" not found in report: ';
+const LOCAL_STR_NOT_FOUND_IN_REPORT = '" not found in report: ';
 
 const ZERO = 0;
 const ONE_HUNDRED = 100;
@@ -97,17 +94,17 @@ const TABLE_NOT_FOUND_PATTERN = /table not found/i;
 function parseArgs(argv) {
   let reportPath = null;
   let scenarioName = TARGET_SCENARIO;
-  for (let index = ZERO; index < argv.length; index += LOCAL_NUM_ONE) {
+  for (let index = ZERO; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === ARG_REPORT && index + LOCAL_NUM_ONE < argv.length) {
-      reportPath = String(argv[index + LOCAL_NUM_ONE]);
-      index += LOCAL_NUM_ONE;
+    if (arg === ARG_REPORT && index + 1 < argv.length) {
+      reportPath = String(argv[index + 1]);
+      index += 1;
       continue;
     }
-    if (arg === ARG_SCENARIO && index + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG_SCENARIO && index + 1 < argv.length) {
       scenarioName =
-        String(argv[index + LOCAL_NUM_ONE] || LOCAL_STR_EMPTY).trim() || TARGET_SCENARIO;
-      index += LOCAL_NUM_ONE;
+        String(argv[index + 1] || '').trim() || TARGET_SCENARIO;
+      index += 1;
     }
   }
   return {
@@ -143,7 +140,7 @@ function formatPercent(numerator, denominator) {
     return LOCAL_STR_N_A;
   }
   const ratio = (numerator / denominator) * ONE_HUNDRED;
-  return ratio.toFixed(LOCAL_NUM_TWO) + LOCAL_STR_PERCENT;
+  return ratio.toFixed(2) + LOCAL_STR_PERCENT;
 }
 
 function classifyErrorMessage(message) {
@@ -173,7 +170,7 @@ function aggregateDistinctErrors(distinctErrors) {
   };
   for (const message of distinctErrors) {
     const category = classifyErrorMessage(message);
-    counts[category] += LOCAL_NUM_ONE;
+    counts[category] += 1;
   }
   return counts;
 }
@@ -199,7 +196,7 @@ function resolvePhaseDecisions(scenario) {
   return scenario?.details?.details?.phaseDecisions || [];
 }
 
-function printLine(message = LOCAL_STR_EMPTY) {
+function printLine(message = '') {
   process.stdout.write(message + LOCAL_STR_NEWLINE);
 }
 
@@ -257,14 +254,14 @@ function printHeuristics({
   const scenarioError = String(scenario?.error || '');
   if (scenarioError && STARTUP_GATE_PATTERN.test(scenarioError)) {
     printSub(
-      LOCAL_STR_1E0TM +
-      LOCAL_STR_341CN,
+      LOCAL_STR_RUN_FAILED_BEFORE_BENCHMARK_LOAD_PRIMARY +
+      LOCAL_STR_READINESS_TIMEOUT_NOT_LOAD_STAGE_REQUEST,
     );
     return;
   }
 
   if (!loadMetrics) {
-    printSub(LOCAL_STR_1AMGS);
+    printSub(LOCAL_STR_NO_LOAD_METRICS_WERE_RECORDED_FOR_THIS_S);
     return;
   }
 
@@ -274,30 +271,31 @@ function printHeuristics({
       Number.isFinite(failureShape.loadChannelErrors) &&
       failureShape.loadChannelErrors > ZERO) {
     printSub(
-      LOCAL_STR_MM91M +
+      LOCAL_STR_MOST_LOAD_SIDE_FAILURES_WERE_LIKELY_FAST +
       LOCAL_STR_ESTIMATED + failureShape.fastRejectEstimate + LOCAL_STR_AFTER_A_SMALLER +
-      LOCAL_STR_I51O0 + failureShape.loadChannelErrors + LOCAL_STR_IE9I6,
+      LOCAL_STR_SET_OF_ACTUAL_LOAD_CHANNEL_EXCEPTIONS +
+        failureShape.loadChannelErrors + LOCAL_STR_RPAREN_DOT,
     );
   }
 
   if (distinctErrorCounts[ERROR_CATEGORY.PARTICIPANT_FAILURE] > ZERO) {
     printSub(
-      LOCAL_STR_QS0EQ +
-      LOCAL_STR_YZ1SY,
+      LOCAL_STR_PARTICIPANT_FAILURE_ENVELOPES_WERE_OBSER +
+      LOCAL_STR_QUERY_LEVEL_FAILURES_AND_SHOULD_BE_CORRE,
     );
   }
 
   if (distinctErrorCounts[ERROR_CATEGORY.TIMEOUT] > ZERO &&
       distinctErrorCounts[ERROR_CATEGORY.CIRCUIT_OPEN] === ZERO) {
     printSub(
-      LOCAL_STR_139VE +
-      LOCAL_STR_1N0CZ,
+      LOCAL_STR_TIMEOUTS_APPEAR_WITHOUT_CIRCUIT_OPEN_DOM +
+      LOCAL_STR_PATH_OR_LOAD_TIMEOUT_BUDGET,
     );
   }
 
   if (asFiniteNumber(loadMetrics.failed) === ZERO &&
       asFiniteNumber(loadMetrics.errors) === ZERO) {
-    printSub(LOCAL_STR_17VIJ);
+    printSub(LOCAL_STR_NO_LOAD_ERRORS_WERE_REPORTED);
   }
 }
 
@@ -407,7 +405,7 @@ function printLoadSummary(loadMetrics, channelMetrics, distinctErrors) {
   if (channelMetrics?.load) {
     const loadChannel = channelMetrics.load;
     printSub(
-      LOCAL_STR_TGPWE + String(asFiniteNumber(loadChannel.requests)) +
+      LOCAL_STR_LOADCHANNEL_REQUESTS + String(asFiniteNumber(loadChannel.requests)) +
       LOCAL_STR_SUCCESSES + String(asFiniteNumber(loadChannel.successes)) +
       LOCAL_STR_ERRORS + String(asFiniteNumber(loadChannel.errors)) +
       LOCAL_STR_TIMEOUTS + String(asFiniteNumber(loadChannel.timeouts)) +
@@ -418,12 +416,12 @@ function printLoadSummary(loadMetrics, channelMetrics, distinctErrors) {
   }
 
   if (distinctErrors.length > ZERO) {
-    printSub(LOCAL_STR_DISTINCTERRORS + distinctErrors.length + LOCAL_STR_626BD);
+    printSub(LOCAL_STR_DISTINCTERRORS + distinctErrors.length + LOCAL_STR_RPAREN_COLON);
     for (const error of distinctErrors) {
-      printSub(LINE_PREFIX + LOCAL_STR_9XLXH + String(error));
+      printSub(LINE_PREFIX + LOCAL_STR_DASH_SPACE + String(error));
     }
   } else {
-    printSub(LOCAL_STR_5523F);
+    printSub(LOCAL_STR_DISTINCTERRORS_NONE);
   }
 }
 
@@ -433,30 +431,30 @@ function printDerivedSummary(failureShape, distinctErrorCounts, preLoadReasons) 
     if (Number.isFinite(failureShape.loadChannelErrors)) {
       printSub(
         LOCAL_STR_ATTEMPTERRORS_2 + failureShape.attemptErrors +
-        LOCAL_STR_19FSR + failureShape.loadChannelErrors +
+        LOCAL_STR_LOADCHANNELEXCEPTIONS + failureShape.loadChannelErrors +
         LOCAL_STR_LOADTIMEOUTS + failureShape.loadTimeouts +
-        LOCAL_STR_WH87L + failureShape.fastRejectEstimate,
+        LOCAL_STR_ESTIMATEDFASTREJECTS + failureShape.fastRejectEstimate,
       );
     } else {
       printSub(
         LOCAL_STR_ATTEMPTERRORS_2 + failureShape.attemptErrors +
         LOCAL_STR_OPERATIONFAILURES + failureShape.operationFailures +
-        LOCAL_STR_6UN6Q,
+        LOCAL_STR_LOAD_CHANNEL_DIAGNOSTICS_UNAVAILABLE_IN,
       );
     }
   } else {
-    printSub(LOCAL_STR_YMWJ8);
+    printSub(LOCAL_STR_NO_LOAD_ERROR_SHAPE_AVAILABLE);
   }
 
   printSub(
-    LOCAL_STR_187EA +
+    LOCAL_STR_DISTINCTERRORCATEGORIES +
     JSON.stringify(distinctErrorCounts),
   );
 
   if (preLoadReasons.length > ZERO) {
     printSub(LOCAL_STR_PRELOADGATEREASONS);
     for (const reason of preLoadReasons) {
-      printSub(LINE_PREFIX + LOCAL_STR_9XLXH + String(reason));
+      printSub(LINE_PREFIX + LOCAL_STR_DASH_SPACE + String(reason));
     }
   }
 }
@@ -466,7 +464,7 @@ async function main() {
   const reportPath = await resolveReportPath(args);
   if (!reportPath) {
     throw new Error(
-      LOCAL_STR_1KC7I +
+      LOCAL_STR_NO_REPORT_FOUND_PASS_REPORT_PATH_OR_PLAC +
       DEFAULT_REPORT_DIR,
     );
   }
@@ -476,7 +474,7 @@ async function main() {
   const scenario = scenarios.find((entry) => entry?.scenario === args.scenarioName);
   if (!scenario) {
     throw new Error(
-      LOCAL_STR_SCENARIO_2 + args.scenarioName + LOCAL_STR_138OI + reportPath,
+      LOCAL_STR_SCENARIO_2 + args.scenarioName + LOCAL_STR_NOT_FOUND_IN_REPORT + reportPath,
     );
   }
 
@@ -504,5 +502,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(String(error?.message || error) + LOCAL_STR_NEWLINE);
-  process.exitCode = LOCAL_NUM_ONE;
+  process.exitCode = 1;
 });

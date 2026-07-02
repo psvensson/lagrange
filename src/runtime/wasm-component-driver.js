@@ -20,7 +20,6 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {
   RuntimeDriver,
   PREPARE_STATUS,
@@ -195,7 +194,7 @@ class WasmComponentDriver extends RuntimeDriver {
   validateDescriptor(definition) {
     const errors = [];
 
-    if (!definition || typeof definition !== TYPEOF.OBJECT) {
+    if (!definition || typeof definition !== 'object') {
       errors.push(WASM_COMPONENT_ERROR.DEFINITION_REQUIRED);
       return {valid: false, errors};
     }
@@ -205,7 +204,7 @@ class WasmComponentDriver extends RuntimeDriver {
 
     if (ref === undefined || ref === null) {
       errors.push(WASM_COMPONENT_ERROR.REF_REQUIRED);
-    } else if (typeof ref !== TYPEOF.STRING) {
+    } else if (typeof ref !== 'string') {
       errors.push(WASM_COMPONENT_ERROR.REF_MUST_BE_STRING);
     } else if (ref.trim().length === DRIVER_LENGTH.EMPTY) {
       errors.push(WASM_COMPONENT_ERROR.REF_EMPTY);
@@ -255,7 +254,7 @@ class WasmComponentDriver extends RuntimeDriver {
 
     const wasmLifecycle = context?.wasmLifecycle;
     if (wasmLifecycle) {
-      if (typeof wasmLifecycle !== TYPEOF.OBJECT) {
+      if (typeof wasmLifecycle !== 'object') {
         throw new DriverLifecycleError(
           this.kind, DRIVER_ACTION.PREPARE,
           WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
@@ -295,7 +294,7 @@ class WasmComponentDriver extends RuntimeDriver {
    */
   async start(replicaContext) {
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind, DRIVER_ACTION.START,
         WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
@@ -399,7 +398,7 @@ class WasmComponentDriver extends RuntimeDriver {
    */
   async stop(replicaContext) {
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind, DRIVER_ACTION.STOP,
         WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
@@ -447,7 +446,7 @@ class WasmComponentDriver extends RuntimeDriver {
   async health(replicaContext) {
     let result;
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       result = {
         status: HEALTH_STATUS.UNKNOWN,
         detail: WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,

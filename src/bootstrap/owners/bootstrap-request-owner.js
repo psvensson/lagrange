@@ -4,10 +4,8 @@ import {
   COLUMN,
   ENDPOINT_STATUS,
   HTTP_STATUS,
-  NUM,
   TABLES,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {NODE_STATE} from '../../constants/node-state.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
@@ -45,7 +43,7 @@ const BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME =
 const BOOTSTRAP_REQUEST_TIMEOUT_BUDGET_FIELD = 'timeoutBudget';
 const BOOTSTRAP_ADMISSION_PEER_ENDPOINT_ID_SUFFIX =
   'bootstrap-admission-ws';
-const BOOTSTRAP_ADMISSION_PEER_ENDPOINT_PRIORITY = NUM.ZERO;
+const BOOTSTRAP_ADMISSION_PEER_ENDPOINT_PRIORITY = 0;
 const BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY = Object.freeze([]);
 const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
@@ -60,10 +58,10 @@ function normalizeBootstrapAdmissionPeerHints(hints) {
     return BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY;
   }
   return hints.filter((hint) =>
-    typeof hint?.nodeId === TYPEOF.STRING &&
-    hint.nodeId.length > NUM.ZERO &&
-    typeof hint?.nodeAddress === TYPEOF.STRING &&
-    hint.nodeAddress.length > NUM.ZERO,
+    typeof hint?.nodeId === 'string' &&
+    hint.nodeId.length > 0 &&
+    typeof hint?.nodeAddress === 'string' &&
+    hint.nodeAddress.length > 0,
   );
 }
 
@@ -100,13 +98,13 @@ function buildBootstrapAdmissionPeerEndpointRows(peerHints) {
 function appendRowsMissingKey(existingRows, supplementalRows, keyField) {
   const rows = Array.isArray(existingRows) ? [...existingRows] : [];
   const observedKeys = new Set(rows.map((row) => row?.[keyField]).filter(
-    (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    (value) => typeof value === 'string' && value.length > 0,
   ));
   for (const row of supplementalRows) {
     const key = row?.[keyField];
     if (
-      typeof key !== TYPEOF.STRING ||
-      key.length === NUM.ZERO ||
+      typeof key !== 'string' ||
+      key.length === 0 ||
       observedKeys.has(key)
     ) {
       continue;
@@ -149,7 +147,7 @@ class BootstrapRequestOwner {
   async getBootstrapJoinAdmissionSnapshot() {
     const snapshot =
       await this.delegates.getBootstrapJoinAdmissionSnapshot?.();
-    return snapshot && typeof snapshot === TYPEOF.OBJECT ?
+    return snapshot && typeof snapshot === 'object' ?
       snapshot :
       null;
   }
@@ -159,7 +157,7 @@ class BootstrapRequestOwner {
       return true;
     }
     if (
-      typeof bootstrapService.isBootstrapStartupComplete === TYPEOF.FUNCTION
+      typeof bootstrapService.isBootstrapStartupComplete === 'function'
     ) {
       return bootstrapService.isBootstrapStartupComplete() === true;
     }
@@ -167,19 +165,19 @@ class BootstrapRequestOwner {
   }
 
   getMaxConcurrentBootstrapRequests() {
-    return this.delegates.getMaxConcurrentBootstrapRequests?.() || NUM.ZERO;
+    return this.delegates.getMaxConcurrentBootstrapRequests?.() || 0;
   }
 
   getBootstrapAdmissionRetryAfterMs() {
-    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || NUM.ZERO;
+    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || 0;
   }
 
   getBootstrapRequestExecutionBudgetMs() {
-    return this.delegates.getBootstrapRequestExecutionBudgetMs?.() || NUM.ZERO;
+    return this.delegates.getBootstrapRequestExecutionBudgetMs?.() || 0;
   }
 
   getBootstrapAdmissionLeaseMs() {
-    return this.delegates.getBootstrapAdmissionLeaseMs?.() || NUM.ZERO;
+    return this.delegates.getBootstrapAdmissionLeaseMs?.() || 0;
   }
 
   expireStaleBootstrapAdmissions(now) {
@@ -189,11 +187,11 @@ class BootstrapRequestOwner {
 
   acquireBootstrapAdmission(snapshot) {
     const admission = this.delegates.acquireBootstrapAdmission?.(snapshot);
-    if (admission && typeof admission === TYPEOF.OBJECT) {
+    if (admission && typeof admission === 'object') {
       return admission;
     }
     this.setInFlightBootstrapRequestCount(
-      this.getInFlightBootstrapRequestCount() + NUM.ONE,
+      this.getInFlightBootstrapRequestCount() + 1,
     );
     return {
       admissionId: BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED,
@@ -204,21 +202,21 @@ class BootstrapRequestOwner {
     if (
       admission?.admissionId &&
       admission.admissionId !== BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED &&
-      typeof this.delegates.releaseBootstrapAdmission === TYPEOF.FUNCTION
+      typeof this.delegates.releaseBootstrapAdmission === 'function'
     ) {
       this.delegates.releaseBootstrapAdmission(admission);
       return;
     }
     this.setInFlightBootstrapRequestCount(
       Math.max(
-        NUM.ZERO,
-        this.getInFlightBootstrapRequestCount() - NUM.ONE,
+        0,
+        this.getInFlightBootstrapRequestCount() - 1,
       ),
     );
   }
 
   getInFlightBootstrapRequestCount() {
-    return this.delegates.getInFlightBootstrapRequestCount?.() || NUM.ZERO;
+    return this.delegates.getInFlightBootstrapRequestCount?.() || 0;
   }
 
   setInFlightBootstrapRequestCount(count) {
@@ -248,7 +246,7 @@ class BootstrapRequestOwner {
     return this.delegates.resolveMoveReplicaBootstrapAdmissionRetryAfterMs?.(
       reservation,
       now,
-    ) || NUM.ZERO;
+    ) || 0;
   }
 
   buildBootstrapNotReadyResponse(options) {
@@ -303,13 +301,13 @@ class BootstrapRequestOwner {
 
   attachBootstrapAdmissionPeerHints(topologySnapshotEnvelope, options = {}) {
     const excludedNodeId =
-      typeof options.excludeNodeId === TYPEOF.STRING ?
+      typeof options.excludeNodeId === 'string' ?
         options.excludeNodeId :
         null;
     const peerHints = this.getBootstrapAdmissionPeerHints().filter((hint) =>
       hint.nodeId !== excludedNodeId,
     );
-    if (peerHints.length === NUM.ZERO) {
+    if (peerHints.length === 0) {
       return topologySnapshotEnvelope;
     }
     const systemTableSnapshots = {
@@ -356,7 +354,7 @@ class BootstrapRequestOwner {
       this.delegates.getStartupAuthoritySnapshotForBootstrapResponse?.(
         observedAt,
       );
-    return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+    return startupAuthority && typeof startupAuthority === 'object' ?
       startupAuthority :
       null;
   }
@@ -376,7 +374,7 @@ class BootstrapRequestOwner {
         Math.floor(error.statusCode) === HTTP_STATUS.SERVICE_UNAVAILABLE) {
       return true;
     }
-    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
       return true;
     }
     return isRetryableControlPlaneError(error) ||
@@ -385,10 +383,10 @@ class BootstrapRequestOwner {
 
   resolveBootstrapRequestRetryAfterMs(error) {
     const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (retryAfterMs > NUM.ZERO) {
+    if (retryAfterMs > 0) {
       return retryAfterMs;
     }
-    return Math.max(NUM.ZERO, this.getBootstrapAdmissionRetryAfterMs());
+    return Math.max(0, this.getBootstrapAdmissionRetryAfterMs());
   }
 
   createBootstrapRequestExecutionBudget(
@@ -397,11 +395,11 @@ class BootstrapRequestOwner {
     BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE,
   ) {
     const configuredBudgetMs = this.getBootstrapRequestExecutionBudgetMs();
-    if (!Number.isFinite(configuredBudgetMs) || configuredBudgetMs <= NUM.ZERO) {
+    if (!Number.isFinite(configuredBudgetMs) || configuredBudgetMs <= 0) {
       return null;
     }
     const clientAttemptRemainingBudgetMs = Math.max(
-      NUM.ZERO,
+      0,
       clientAttemptDeadline.deadlineMs - startedAtMs,
     );
     const effectiveBudgetMs =
@@ -420,23 +418,23 @@ class BootstrapRequestOwner {
     timeoutBudget,
     now = Date.now(),
   ) {
-    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+    if (!timeoutBudget || typeof timeoutBudget !== 'object') {
       return true;
     }
     return getRemainingBudgetMs(timeoutBudget, {
       now: () => now,
-    }) > NUM.ZERO;
+    }) > 0;
   }
 
   logBootstrapRequestDeferred(options = {}) {
     const clientAttemptDeadline =
       options.clientAttemptDeadline &&
-      typeof options.clientAttemptDeadline === TYPEOF.OBJECT ?
+      typeof options.clientAttemptDeadline === 'object' ?
         options.clientAttemptDeadline :
         null;
     const timeoutBudget =
       options.timeoutBudget &&
-      typeof options.timeoutBudget === TYPEOF.OBJECT ?
+      typeof options.timeoutBudget === 'object' ?
         options.timeoutBudget :
         null;
     const observedAtMs = Number.isFinite(options.observedAtMs) ?
@@ -527,7 +525,7 @@ class BootstrapRequestOwner {
   }
 
   attachBootstrapRequestExecutionBudget(options = {}, timeoutBudget) {
-    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+    if (!timeoutBudget || typeof timeoutBudget !== 'object') {
       return options;
     }
     const nextOptions = {
@@ -570,7 +568,7 @@ class BootstrapRequestOwner {
       admissionDecision.decision =
         BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_STARTUP_INCOMPLETE;
       admissionDecision.phase =
-        typeof bootstrapService?.phase === TYPEOF.STRING ?
+        typeof bootstrapService?.phase === 'string' ?
           bootstrapService.phase :
           null;
       admissionDecision.reasonCode =
@@ -582,7 +580,7 @@ class BootstrapRequestOwner {
       admissionDecision.decision =
         BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_BOOTSTRAP_JOIN_BLOCKED;
       admissionDecision.phase =
-        typeof bootstrapJoinAdmissionSnapshot?.phase === TYPEOF.STRING ?
+        typeof bootstrapJoinAdmissionSnapshot?.phase === 'string' ?
           bootstrapJoinAdmissionSnapshot.phase :
           null;
     }

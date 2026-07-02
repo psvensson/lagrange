@@ -28,8 +28,6 @@ import {
 } from './partition-replication-handler-constants.js';
 import {ProposalQueue} from './proposal-queue.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Manages write forwarding and replication for partitions.
@@ -141,12 +139,12 @@ class PartitionReplicationHandler {
   isMultiReplica() {
     if (
       Array.isArray(this.replicaIds) &&
-      this.replicaIds.length > LOCAL_NUM_ONE
+      this.replicaIds.length > 1
     ) {
       return true;
     }
     const raftNodes = this.raft?.nodes;
-    return Array.isArray(raftNodes) && raftNodes.length > LOCAL_NUM_ZERO;
+    return Array.isArray(raftNodes) && raftNodes.length > 0;
   }
 
   /**

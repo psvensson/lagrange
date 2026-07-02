@@ -1,6 +1,5 @@
 import {LogsTableService} from '../logging/logs-table-service.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_UNDEFINED = 'undefined';
@@ -21,7 +20,7 @@ class OwnerQueue {
         return stats.pendingWrites;
       }
     }
-    return LOCAL_NUM_ZERO;
+    return 0;
   }
 
   /**
@@ -43,15 +42,15 @@ class OwnerQueue {
   static async drain() {
     const service = LogsTableService.instance;
     if (!service) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
 
     // Reset defer state to allow immediate flush under load
     if (typeof service.writeDeferredUntilMs !== LOCAL_STR_UNDEFINED) {
-      service.writeDeferredUntilMs = LOCAL_NUM_ZERO;
+      service.writeDeferredUntilMs = 0;
     }
     if (typeof service.consecutiveDeferredWriteFailures !== LOCAL_STR_UNDEFINED) {
-      service.consecutiveDeferredWriteFailures = LOCAL_NUM_ZERO;
+      service.consecutiveDeferredWriteFailures = 0;
     }
 
     if (typeof service.flush === LOCAL_STR_FUNCTION) {
@@ -62,7 +61,7 @@ class OwnerQueue {
       });
     }
 
-    return LOCAL_NUM_ZERO;
+    return 0;
   }
 }
 

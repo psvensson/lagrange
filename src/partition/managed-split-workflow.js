@@ -25,30 +25,27 @@ import {
 } from './managed-split-workflow-execution-gate-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1CWET = 'getCDCIntegrationService';
+const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
 const LOCAL_STR_GETPARTITIONINFO = 'getPartitionInfo';
 const LOCAL_STR_GETTABLEINFO = 'getTableInfo';
 const LOCAL_STR_LISTTABLEINFOS = 'listTableInfos';
-const LOCAL_STR_13EV6 = 'parsePartitionTransition';
-const LOCAL_STR_1OE64 = 'isLocalManagedSplitLeader';
-const LOCAL_STR_1OAEZ = 'resolveActivePartitionVersion';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_FBFR4 = 'buildManagedSplitPlan';
-const LOCAL_STR_HRKK1 = 'resolveProvisionTargetNodeIds';
-const LOCAL_STR_1IQXE = 'getRoutablePartitionServiceNodeIds';
-const LOCAL_STR_18K48 = 'isCriticalSystemPartition';
-const LOCAL_STR_1GLE7 = 'captureTopologySnapshot';
-const LOCAL_STR_VWH5M = 'calculateQuorumReplicaCount';
-const LOCAL_STR_2DB32 = 'createExecutionTimeoutBudget';
-const LOCAL_STR_3FLMF = 'estimateSplitAdmissionBytes';
-const LOCAL_STR_Z50CU = 'waitForTablePartitionMetadata';
-const LOCAL_STR_13QHT = 'probeInitialTablePartitionProvisioning';
-const LOCAL_STR_W8LVO = 'provisionInitialTablePartition';
-const LOCAL_STR_5AZGL = 'startSplitReplicationOnSourcePartition';
-const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_PARSEPARTITIONTRANSITION = 'parsePartitionTransition';
+const LOCAL_STR_ISLOCALMANAGEDSPLITLEADER = 'isLocalManagedSplitLeader';
+const LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION = 'resolveActivePartitionVersion';
+const LOCAL_STR_BUILDMANAGEDSPLITPLAN = 'buildManagedSplitPlan';
+const LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS = 'resolveProvisionTargetNodeIds';
+const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS = 'getRoutablePartitionServiceNodeIds';
+const LOCAL_STR_ISCRITICALSYSTEMPARTITION = 'isCriticalSystemPartition';
+const LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT = 'captureTopologySnapshot';
+const LOCAL_STR_CALCULATEQUORUMREPLICACOUNT = 'calculateQuorumReplicaCount';
+const LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET = 'createExecutionTimeoutBudget';
+const LOCAL_STR_ESTIMATESPLITADMISSIONBYTES = 'estimateSplitAdmissionBytes';
+const LOCAL_STR_WAITFORTABLEPARTITIONMETADATA = 'waitForTablePartitionMetadata';
+const LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING = 'probeInitialTablePartitionProvisioning';
+const LOCAL_STR_PROVISIONINITIALTABLEPARTITION = 'provisionInitialTablePartition';
+const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION = 'startSplitReplicationOnSourcePartition';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
-const LOCAL_STR_X9S84 = 'managed-split-workflow';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_MANAGED_SPLIT_WORKFLOW = 'managed-split-workflow';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -77,7 +74,7 @@ class ManagedSplitWorkflow {
     this.nodeId = options.nodeId || null;
     this.topologyAdapter = options.topologyAdapter || null;
     this.getCDCIntegrationService =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_1CWET) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_GETCDCINTEGRATIONSERVICE) ||
       options.getCDCIntegrationService ||
       (() => options.cdcIntegrationService || null);
     this.getPartitionInfo =
@@ -90,86 +87,86 @@ class ManagedSplitWorkflow {
       bindTopologyMethod(this.topologyAdapter, LOCAL_STR_LISTTABLEINFOS) ||
       options.listTableInfos || (() => []);
     this.parsePartitionTransition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_13EV6) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_PARSEPARTITIONTRANSITION) ||
       options.parsePartitionTransition ||
       (() => null);
     this.isLocalManagedSplitLeader =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_1OE64) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ISLOCALMANAGEDSPLITLEADER) ||
       options.isLocalManagedSplitLeader ||
       (() => false);
     this.resolveActivePartitionVersion =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_1OAEZ) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION) ||
       options.resolveActivePartitionVersion ||
-      (() => LOCAL_NUM_ONE);
+      (() => 1);
     this.buildManagedSplitPlan =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_FBFR4) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_BUILDMANAGEDSPLITPLAN) ||
       options.buildManagedSplitPlan ||
       (async () => {
         throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
       });
     this.resolveProvisionTargetNodeIds =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_HRKK1) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS) ||
       options.resolveProvisionTargetNodeIds ||
       (() => []);
     this.getRoutablePartitionServiceNodeIds =
       bindTopologyMethod(
         this.topologyAdapter,
-        LOCAL_STR_1IQXE,
+        LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS,
       ) ||
       options.getRoutablePartitionServiceNodeIds ||
       (() => []);
     this.isCriticalSystemPartition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_18K48) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ISCRITICALSYSTEMPARTITION) ||
       options.isCriticalSystemPartition ||
       (() => false);
     this.captureTopologySnapshot =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_1GLE7) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT) ||
       options.captureTopologySnapshot || null;
     this.calculateQuorumReplicaCount =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_VWH5M) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CALCULATEQUORUMREPLICACOUNT) ||
       options.calculateQuorumReplicaCount ||
       (() => DEFAULT_QUORUM_REPLICA_COUNT);
     this.storageAdmissionService =
       options.storageAdmissionService ||
       this.topologyAdapter?.storageAdmissionService || null;
     this.createExecutionTimeoutBudget =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_2DB32) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET) ||
       options.createExecutionTimeoutBudget || null;
     this.messageRouter =
       options.messageRouter || this.topologyAdapter?.messageRouter || null;
     this.pressureGovernor = options.pressureGovernor || null;
     this.estimateSplitAdmissionBytes =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_3FLMF) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ESTIMATESPLITADMISSIONBYTES) ||
       options.estimateSplitAdmissionBytes ||
       ((partitionInfo) => this.defaultEstimateSplitAdmissionBytes(partitionInfo));
     this.waitForTablePartitionMetadata =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_Z50CU) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_WAITFORTABLEPARTITIONMETADATA) ||
       options.waitForTablePartitionMetadata || (async () => {});
     this.probeInitialTablePartitionProvisioning =
       bindTopologyMethod(
         this.topologyAdapter,
-        LOCAL_STR_13QHT,
+        LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING,
       ) ||
       options.probeInitialTablePartitionProvisioning || null;
     this.provisionInitialTablePartition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_W8LVO) ||
+      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_PROVISIONINITIALTABLEPARTITION) ||
       options.provisionInitialTablePartition || (async () => {});
     this.startSplitReplicationOnSourcePartition =
       bindTopologyMethod(
         this.topologyAdapter,
-        LOCAL_STR_5AZGL,
+        LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION,
       ) ||
       options.startSplitReplicationOnSourcePartition || (async () => {});
     this.logger = options.logger || this.topologyAdapter?.logger || console;
     this.now = options.now || (() => Date.now());
     this.retryBaseDelayMs =
       Number.isFinite(options.retryBaseDelayMs) &&
-      options.retryBaseDelayMs > LOCAL_NUM_ZERO ?
+      options.retryBaseDelayMs > 0 ?
         Math.floor(options.retryBaseDelayMs) :
         DEFAULT_RETRY_BASE_DELAY_MS;
     this.retryMaxDelayMs =
       Number.isFinite(options.retryMaxDelayMs) &&
-      options.retryMaxDelayMs > LOCAL_NUM_ZERO ?
+      options.retryMaxDelayMs > 0 ?
         Math.floor(options.retryMaxDelayMs) :
         DEFAULT_RETRY_MAX_DELAY_MS;
     this.transactionCoordinator =
@@ -192,10 +189,10 @@ class ManagedSplitWorkflow {
       });
     this.splitOperationLane = options.splitOperationLane ||
       new OperationLane({
-        name: LOCAL_STR_X9S84,
+        name: LOCAL_STR_MANAGED_SPLIT_WORKFLOW,
         workflowCoordinator: this.workflowCoordinator,
         ownerKeyFactory: ({partitionId, ownerKey}) =>
-          String(ownerKey || partitionId || LOCAL_STR_EMPTY),
+          String(ownerKey || partitionId || ''),
       });
     this.workflowStepRunner = options.workflowStepRunner ||
       new WorkflowStepRunner({

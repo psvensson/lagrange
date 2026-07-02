@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {ControlPlaneMessageType} from '../control-plane/control-plane-constants.js';
 import {
   CRITICAL_TRANSPORT_TARGET_REASON,
@@ -97,7 +97,7 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   NO_CHANGE_COOLDOWN_MS: 2000,
   QUERY_TIMEOUT_MS: 1500,
 });
-const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
+const CDC_FORWARD_MAX_RELAY_DEPTH = 2;
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
 const CDC_BATCH_COMMAND_TYPE = 'CDC_BATCH';
@@ -113,19 +113,19 @@ const MESSAGE_GROUP_DELIVERY_SOURCE_UNWRAP_LIMIT = NUM.FOUR;
 const MESSAGE_GROUP_DELIVERY_SOURCE_PREFIX = 'message-group';
 
 function normalizeDeliverySourceSegment(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function resolveRouterSemanticPayload(payload) {
   let semanticPayload = payload;
-  let unwrapCount = NUM.ZERO;
+  let unwrapCount = 0;
   while (
     semanticPayload &&
-    typeof semanticPayload === TYPEOF.OBJECT &&
+    typeof semanticPayload === 'object' &&
     unwrapCount < MESSAGE_GROUP_DELIVERY_SOURCE_UNWRAP_LIMIT
   ) {
     if (normalizeDeliverySourceSegment(semanticPayload.type)) {
@@ -134,20 +134,20 @@ function resolveRouterSemanticPayload(payload) {
     const nestedPayload = semanticPayload.payload;
     if (
       !nestedPayload ||
-      typeof nestedPayload !== TYPEOF.OBJECT ||
+      typeof nestedPayload !== 'object' ||
       nestedPayload === semanticPayload
     ) {
       return semanticPayload;
     }
     semanticPayload = nestedPayload;
-    unwrapCount += NUM.ONE;
+    unwrapCount += 1;
   }
   return semanticPayload;
 }
 
 function hasRouterVisibleDeliverySource(payload) {
   const semanticPayload = resolveRouterSemanticPayload(payload);
-  if (!semanticPayload || typeof semanticPayload !== TYPEOF.OBJECT) {
+  if (!semanticPayload || typeof semanticPayload !== 'object') {
     return false;
   }
   if (normalizeDeliverySourceSegment(semanticPayload.type)) {
@@ -165,7 +165,7 @@ function hasRouterVisibleDeliverySource(payload) {
   const events = Array.isArray(semanticPayload.events) ?
     semanticPayload.events :
     [];
-  return events.length > NUM.ZERO;
+  return events.length > 0;
 }
 
 function buildMessageGroupDeliverySource(targetSnapshot, sourceContext = {}) {
@@ -206,18 +206,18 @@ function shouldSynthesizeMessageGroupDeliverySource(
 function shouldDeferImmediateDeliveryRetry(result) {
   return Boolean(
     result &&
-    typeof result === TYPEOF.OBJECT &&
+    typeof result === 'object' &&
     result.deferRetry === true &&
     Number.isFinite(result.retryAfterMs) &&
-    result.retryAfterMs > NUM.ZERO,
+    result.retryAfterMs > 0,
   );
 }
 
 function buildDeferredDeliveryError(deliveryResult) {
   const error = new Error(deliveryResult?.error || 'Message delivery deferred');
   if (
-    typeof deliveryResult?.errorCode === TYPEOF.STRING &&
-    deliveryResult.errorCode.length > NUM.ZERO
+    typeof deliveryResult?.errorCode === 'string' &&
+    deliveryResult.errorCode.length > 0
   ) {
     error.code = deliveryResult.errorCode;
   }
@@ -226,18 +226,18 @@ function buildDeferredDeliveryError(deliveryResult) {
   }
   if (Number.isFinite(deliveryResult?.retryAfterMs)) {
     error.retryAfterMs = Math.max(
-      NUM.ZERO,
+      0,
       Math.floor(deliveryResult.retryAfterMs),
     );
   }
   return error;
 }
 
-function buildDeferredCdcForwardError(message, retryAfterMs = NUM.ZERO) {
+function buildDeferredCdcForwardError(message, retryAfterMs = 0) {
   const error = new Error(message);
   error.retryable = false;
   error.deferRetry = true;
-  error.retryAfterMs = Math.max(NUM.ONE, Math.floor(retryAfterMs || NUM.ZERO));
+  error.retryAfterMs = Math.max(1, Math.floor(retryAfterMs || 0));
   return error;
 }
 
@@ -252,10 +252,10 @@ function isWebSocketBasedMessageRouterTransport(transport) {
   if (!transport) {
     return false;
   }
-  const hasDeliver = typeof transport.deliver === TYPEOF.FUNCTION;
-  const hasInitialize = typeof transport.initialize === TYPEOF.FUNCTION;
+  const hasDeliver = typeof transport.deliver === 'function';
+  const hasInitialize = typeof transport.initialize === 'function';
   const isMessageRouter =
-    typeof transport.setServiceNodeResolver === TYPEOF.FUNCTION;
+    typeof transport.setServiceNodeResolver === 'function';
   return hasDeliver && hasInitialize && isMessageRouter;
 }
 
@@ -264,13 +264,13 @@ function wrapCdcProposeError(message, error) {
   if (error?.deferRetry === true) {
     wrappedError.deferRetry = true;
   }
-  if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+  if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
     wrappedError.retryAfterMs = Math.max(
-      NUM.ONE,
+      1,
       Math.floor(error.retryAfterMs),
     );
   }
-  if (typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO) {
+  if (typeof error?.code === 'string' && error.code.length > 0) {
     wrappedError.code = error.code;
   }
   if (error?.retryable === false) {
@@ -287,13 +287,13 @@ function wrapCdcProposeError(message, error) {
  */
 function boundCdcForwardErrorDetail(detail) {
   if (
-    typeof detail !== TYPEOF.STRING ||
+    typeof detail !== 'string' ||
     detail.length <= CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH
   ) {
     return detail || MESSAGE_GROUP_SERVICE_LITERAL.VALUE;
   }
   return (
-    detail.substring(NUM.ZERO, CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH) +
+    detail.substring(0, CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH) +
     CDC_FORWARD_ERROR_TRUNCATION_SUFFIX
   );
 }
@@ -309,18 +309,18 @@ function resolveTransportDeliveryOptions(
   const baseOptions = targetSnapshot.criticalTransport === true ?
     {deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL} :
     {};
-  if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > NUM.ZERO) {
+  if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > 0) {
     baseOptions.timeoutMs = Math.floor(overrides.timeoutMs);
   }
   if (
-    typeof overrides?.deliveryPriority === TYPEOF.STRING &&
-    overrides.deliveryPriority.length > NUM.ZERO
+    typeof overrides?.deliveryPriority === 'string' &&
+    overrides.deliveryPriority.length > 0
   ) {
     baseOptions.deliveryPriority = overrides.deliveryPriority;
   }
   if (
-    typeof overrides?.deliverySource === TYPEOF.STRING &&
-    overrides.deliverySource.length > NUM.ZERO
+    typeof overrides?.deliverySource === 'string' &&
+    overrides.deliverySource.length > 0
   ) {
     baseOptions.deliverySource = overrides.deliverySource;
   } else if (
@@ -338,7 +338,7 @@ function resolveTransportDeliveryOptions(
       baseOptions.deliverySource = deliverySource;
     }
   }
-  return Object.keys(baseOptions).length > NUM.ZERO ? baseOptions : undefined;
+  return Object.keys(baseOptions).length > 0 ? baseOptions : undefined;
 }
 
 function normalizeMessageDeliveryMode(deliveryMode) {
@@ -368,10 +368,10 @@ function buildLatencyCdcPropagationResult({
     status,
     acknowledged,
   };
-  if (typeof success === TYPEOF.BOOLEAN) {
+  if (typeof success === 'boolean') {
     result.success = success;
   }
-  if (typeof error === TYPEOF.STRING && error.length > NUM.ZERO) {
+  if (typeof error === 'string' && error.length > 0) {
     result.error = error;
   }
   if (deferRetry === true) {
@@ -380,13 +380,13 @@ function buildLatencyCdcPropagationResult({
   if (Number.isFinite(retryAfterMs)) {
     result.retryAfterMs = retryAfterMs;
   }
-  if (typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO) {
+  if (typeof tableName === 'string' && tableName.length > 0) {
     result.tableName = tableName;
   }
-  if (typeof operation === TYPEOF.STRING && operation.length > NUM.ZERO) {
+  if (typeof operation === 'string' && operation.length > 0) {
     result.operation = operation;
   }
-  if (Number.isInteger(eventCount) && eventCount >= NUM.ZERO) {
+  if (Number.isInteger(eventCount) && eventCount >= 0) {
     result.eventCount = eventCount;
   }
   return result;

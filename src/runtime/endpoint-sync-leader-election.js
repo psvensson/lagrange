@@ -7,16 +7,15 @@
  * @module runtime/endpoint-sync-leader-election
  */
 
-import {TIME_MS, TYPEOF} from '../constants/index.js';
+import {TIME_MS} from '../constants/index.js';
 import {BaseError} from '../utils/base-error.js';
 import {
   ENDPOINT_SYNC_LEASE,
   ENDPOINT_SYNC_NUM,
 } from './endpoint-sync-constants.js';
 
-const LOCAL_STR_1QI4R = 'EndpointSyncLeaseLeaderElector';
-const LOCAL_STR_BPD4X = 'tryAcquireLeadership';
-const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_ENDPOINTSYNCLEASELEADERELECTOR = 'EndpointSyncLeaseLeaderElector';
+const LOCAL_STR_TRYACQUIRELEADERSHIP = 'tryAcquireLeadership';
 
 const LEADER_ELECTOR_ERROR = Object.freeze({
   CLIENT_REQUIRED: 'k8sClient is required',
@@ -46,8 +45,8 @@ class EndpointSyncLeaderElectorError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: LOCAL_STR_1QI4R,
-        operation: LOCAL_STR_BPD4X,
+        component: LOCAL_STR_ENDPOINTSYNCLEASELEADERELECTOR,
+        operation: LOCAL_STR_TRYACQUIRELEADERSHIP,
         metadata,
       },
     });
@@ -61,7 +60,7 @@ class EndpointSyncLeaderElectorError extends BaseError {
  * @return {string}
  */
 function normalizeHolderIdentity(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return ENDPOINT_SYNC_LEASE.HOLDER_IDENTITY_FALLBACK;
   }
   const trimmed = value.trim();
@@ -108,7 +107,7 @@ function resolveLeaseTransitions(lease) {
  */
 function resolveLeaseRenewTimeMs(lease) {
   const renewTime = lease?.spec?.renewTime || lease?.spec?.acquireTime || null;
-  if (typeof renewTime !== TYPEOF.STRING || renewTime.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof renewTime !== 'string' || renewTime.trim().length === 0) {
     return Number.NaN;
   }
   return Date.parse(renewTime);
@@ -183,28 +182,28 @@ function buildLeaseManifest(options) {
  * @param {Object} options - Constructor options.
  */
 function validateLeaderElectorOptions(options) {
-  if (!options || typeof options !== TYPEOF.OBJECT) {
+  if (!options || typeof options !== 'object') {
     throw new EndpointSyncLeaderElectorError(LEADER_ELECTOR_ERROR.CLIENT_REQUIRED);
   }
 
   const k8sClient = options.k8sClient;
-  if (!k8sClient || typeof k8sClient !== TYPEOF.OBJECT) {
+  if (!k8sClient || typeof k8sClient !== 'object') {
     throw new EndpointSyncLeaderElectorError(LEADER_ELECTOR_ERROR.CLIENT_REQUIRED);
   }
   for (const methodName of LEADER_ELECTOR_REQUIRED_METHODS) {
-    if (typeof k8sClient[methodName] !== TYPEOF.FUNCTION) {
+    if (typeof k8sClient[methodName] !== 'function') {
       throw new EndpointSyncLeaderElectorError(
         `${LEADER_ELECTOR_ERROR.CLIENT_METHOD_PREFIX}: ${methodName}`,
       );
     }
   }
 
-  if (!options.namespace || typeof options.namespace !== TYPEOF.STRING) {
+  if (!options.namespace || typeof options.namespace !== 'string') {
     throw new EndpointSyncLeaderElectorError(
       LEADER_ELECTOR_ERROR.NAMESPACE_REQUIRED,
     );
   }
-  if (!options.leaseName || typeof options.leaseName !== TYPEOF.STRING) {
+  if (!options.leaseName || typeof options.leaseName !== 'string') {
     throw new EndpointSyncLeaderElectorError(
       LEADER_ELECTOR_ERROR.LEASE_NAME_REQUIRED,
     );
@@ -239,7 +238,7 @@ class EndpointSyncLeaseLeaderElector {
         leaseDuration :
         ENDPOINT_SYNC_LEASE.DEFAULT_DURATION_SECONDS;
     this._nowProvider =
-      typeof options.nowProvider === TYPEOF.FUNCTION ?
+      typeof options.nowProvider === 'function' ?
         options.nowProvider :
         () => Date.now();
   }
@@ -279,7 +278,7 @@ class EndpointSyncLeaseLeaderElector {
 
     const observedHolderRaw = existingLease?.spec?.holderIdentity;
     const observedHolderIdentity =
-      typeof observedHolderRaw === TYPEOF.STRING ?
+      typeof observedHolderRaw === 'string' ?
         observedHolderRaw.trim() :
         '';
     const hasObservedHolder = observedHolderIdentity.length > ENDPOINT_SYNC_NUM.ZERO;

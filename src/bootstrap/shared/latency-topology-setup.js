@@ -3,7 +3,6 @@
  */
 
 import {assertCritical} from '../../utils/assert.js';
-import {TYPEOF} from '../../constants/index.js';
 import {GroupSelectionService} from '../../topology/group-selection-service.js';
 import {LatencyMeasurementService} from '../../topology/latency-measurement-service.js';
 import {LatencyGroupManager} from '../../topology/latency-group-manager.js';
@@ -144,7 +143,7 @@ class LatencyTopologySetup {
    */
   static async stop(topologyOwners) {
     const owners = topologyOwners;
-    if (!owners || typeof owners !== TYPEOF.OBJECT) {
+    if (!owners || typeof owners !== 'object') {
       return;
     }
     if (owners.latencyGroupManager?.stop) {

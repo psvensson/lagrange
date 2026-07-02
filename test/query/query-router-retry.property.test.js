@@ -81,11 +81,11 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate retry attempts (1-5)
-        fc.integer({min: NUM.ONE, max: NUM.FIVE}),
+        fc.integer({min: 1, max: NUM.FIVE}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (retryAttempts, partitionId) => {
-          let deliverCallCount = NUM.ZERO;
+          let deliverCallCount = 0;
 
           const services = [
             createServiceEntry(partitionId, 'service-1', 'host:8080'),
@@ -105,7 +105,7 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts,
-            retryDelayMs: NUM.ONE, // Minimal delay for testing
+            retryDelayMs: 1, // Minimal delay for testing
             timeoutMs: NUM.THOUSAND * NUM.TEN, // High timeout to avoid timeout errors
           });
 
@@ -149,7 +149,7 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
         // Generate base delay (10-100ms)
         fc.integer({min: NUM.TEN, max: NUM.HUNDRED}),
         // Generate retry attempts (2-4 to see backoff pattern)
-        fc.integer({min: NUM.TWO, max: NUM.FOUR}),
+        fc.integer({min: 2, max: NUM.FOUR}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (baseDelay, retryAttempts, partitionId) => {
@@ -189,13 +189,13 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
           }
 
           // Should have retryAttempts - 1 delays (no delay after last attempt)
-          if (recordedDelays.length !== retryAttempts - NUM.ONE) {
+          if (recordedDelays.length !== retryAttempts - 1) {
             return false;
           }
 
           // Verify exponential backoff: delay[i] = baseDelay * 2^i
-          for (let i = NUM.ZERO; i < recordedDelays.length; i++) {
-            const expectedDelay = baseDelay * Math.pow(NUM.TWO, i);
+          for (let i = 0; i < recordedDelays.length; i++) {
+            const expectedDelay = baseDelay * Math.pow(2, i);
             if (recordedDelays[i] !== expectedDelay) {
               return false;
             }
@@ -222,12 +222,12 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate number of failures before success (0-3)
-        fc.integer({min: NUM.ZERO, max: NUM.THREE}),
+        fc.integer({min: 0, max: NUM.THREE}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (failuresBeforeSuccess, partitionId) => {
-          let callCount = NUM.ZERO;
-          const retryAttempts = failuresBeforeSuccess + NUM.TWO; // Ensure enough retries
+          let callCount = 0;
+          const retryAttempts = failuresBeforeSuccess + 2; // Ensure enough retries
 
           const services = [
             createServiceEntry(partitionId, 'service-1', 'host:8080'),
@@ -250,7 +250,7 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 
@@ -285,9 +285,9 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate base delay (1-1000ms)
-        fc.integer({min: NUM.ONE, max: NUM.THOUSAND}),
+        fc.integer({min: 1, max: NUM.THOUSAND}),
         // Generate attempt number (0-10)
-        fc.integer({min: NUM.ZERO, max: NUM.TEN}),
+        fc.integer({min: 0, max: NUM.TEN}),
         async (baseDelay, attempt) => {
           const systemCache = createMockSystemCache([]);
           const messageRouter = {
@@ -301,7 +301,7 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
           });
 
           const calculatedDelay = router.calculateBackoffDelay(attempt);
-          const expectedDelay = baseDelay * Math.pow(NUM.TWO, attempt);
+          const expectedDelay = baseDelay * Math.pow(2, attempt);
 
           return calculatedDelay === expectedDelay;
         },
@@ -324,11 +324,11 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate retry attempts (1-5)
-        fc.integer({min: NUM.ONE, max: NUM.FIVE}),
+        fc.integer({min: 1, max: NUM.FIVE}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (retryAttempts, partitionId) => {
-          let deliverCallCount = NUM.ZERO;
+          let deliverCallCount = 0;
           const recordedDelays = [];
 
           const services = [
@@ -367,12 +367,12 @@ test('Property 4: QueryRouter Retry Behavior', async (t) => {
           }
 
           // Should only call deliver once
-          if (deliverCallCount !== NUM.ONE) {
+          if (deliverCallCount !== 1) {
             return false;
           }
 
           // Should have no delays (no retries needed)
-          return recordedDelays.length === NUM.ZERO;
+          return recordedDelays.length === 0;
         },
       ),
       {numRuns: NUM.TEN},

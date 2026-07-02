@@ -8,20 +8,19 @@ import {
   isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
 } from '../../node/node-readiness-policy.js';
-import {NUM} from '../../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1AJDK = 'bootstrap_convergence_critical';
-const LOCAL_STR_1C0XS = 'all_leader_partitions';
+const LOCAL_STR_BOOTSTRAP_CONVERGENCE_CRITICAL = 'bootstrap_convergence_critical';
+const LOCAL_STR_ALL_LEADER_PARTITIONS = 'all_leader_partitions';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_1YDMW = 'Skipping node-ready rebalance trigger: missing node_id';
-const LOCAL_STR_ETH3S = 'Skipping node-ready rebalance trigger: bootstrap node_ready lane is inactive';
-const LOCAL_STR_ZM6V3 = 'Skipping node-ready rebalance trigger: local node readiness is runtime-owned';
-const LOCAL_STR_1N6SV = 'Skipping node-ready rebalance trigger: stale node liveness regression';
-const LOCAL_STR_13461 = 'Skipping node-ready rebalance trigger: node not ready';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_MI = 'Skipping node-ready rebalance trigger: missing node_id';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_BO = 'Skipping node-ready rebalance trigger: bootstrap node_ready lane is inactive';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_LO = 'Skipping node-ready rebalance trigger: local node readiness is runtime-owned';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_ST = 'Skipping node-ready rebalance trigger: stale node liveness regression';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_NO = 'Skipping node-ready rebalance trigger: node not ready';
 const LOCAL_STR_1VMEF = 'Skipping node-ready rebalance trigger: no not-ready to ready transition';
-const LOCAL_STR_1K49D = 'Skipping node-ready rebalance trigger: already scheduled';
-const LOCAL_STR_I9WLP = 'Scheduling node-ready rebalance trigger';
+const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_AL = 'Skipping node-ready rebalance trigger: already scheduled';
+const LOCAL_STR_SCHEDULING_NODE_READY_REBALANCE_TRIGGER = 'Scheduling node-ready rebalance trigger';
 
 const NODE_READY_REBALANCE_TABLE_SET =
   new Set(BOOTSTRAP_NODE_READY_REBALANCE_TABLES);
@@ -39,7 +38,7 @@ class BootstrapNodeReadyRebalanceOwner {
   }
 
   getNodeReadyRebalanceDelayMs() {
-    return this.delegates.getNodeReadyRebalanceDelayMs?.() || NUM.ZERO;
+    return this.delegates.getNodeReadyRebalanceDelayMs?.() || 0;
   }
 
   getPartitionServices() {
@@ -66,8 +65,8 @@ class BootstrapNodeReadyRebalanceOwner {
     const logger = this.getLogger();
     const partitionServices = this.getPartitionServices();
     const nodeReadyScoped = reason === BOOTSTRAP_REBALANCE_REASON.NODE_READY;
-    let leaderPartitionCount = NUM.ZERO;
-    let triggeredPartitionCount = NUM.ZERO;
+    let leaderPartitionCount = 0;
+    let triggeredPartitionCount = 0;
 
     for (const partition of partitionServices.values()) {
       if (!partition?.isLeader) {
@@ -88,8 +87,8 @@ class BootstrapNodeReadyRebalanceOwner {
       leaderPartitionCount,
       triggeredPartitionCount,
       scope: nodeReadyScoped ?
-        LOCAL_STR_1AJDK :
-        LOCAL_STR_1C0XS,
+        LOCAL_STR_BOOTSTRAP_CONVERGENCE_CRITICAL :
+        LOCAL_STR_ALL_LEADER_PARTITIONS,
     });
   }
 
@@ -110,7 +109,7 @@ class BootstrapNodeReadyRebalanceOwner {
       partition?.serviceId ||
       partition?.service_id ||
       null;
-    if (typeof partitionId !== LOCAL_STR_STRING || partitionId.length === NUM.ZERO) {
+    if (typeof partitionId !== LOCAL_STR_STRING || partitionId.length === 0) {
       return false;
     }
     for (const nodeReadyTableName of BOOTSTRAP_NODE_READY_REBALANCE_TABLES) {
@@ -167,7 +166,7 @@ class BootstrapNodeReadyRebalanceOwner {
     const nodeId = nodeRow?.node_id;
     const localNodeId = this.getLocalNodeId();
     if (!nodeId) {
-      logger.info(LOCAL_STR_1YDMW, {
+      logger.info(LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_MI, {
         operation: cdcEvent?.operation || null,
       });
       return false;
@@ -175,7 +174,7 @@ class BootstrapNodeReadyRebalanceOwner {
 
     if (this.isBootstrapNodeReadyRebalanceActive() !== true) {
       logger.debug(
-        LOCAL_STR_ETH3S,
+        LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_BO,
         {
           readyNodeId: nodeId,
           localNodeId,
@@ -187,7 +186,7 @@ class BootstrapNodeReadyRebalanceOwner {
 
     if (nodeId === localNodeId) {
       logger.debug(
-        LOCAL_STR_ZM6V3,
+        LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_LO,
         {
           readyNodeId: nodeId,
           localNodeId,
@@ -214,7 +213,7 @@ class BootstrapNodeReadyRebalanceOwner {
       compareNodeHeartbeatWatermarks(
         effectivePreviousRow,
         nodeRow,
-      ) < NUM.ZERO;
+      ) < 0;
     const shouldSuppressObservedRegression =
       incomingLooksOlderThanObserved &&
       (
@@ -225,7 +224,7 @@ class BootstrapNodeReadyRebalanceOwner {
 
     if (shouldSuppressObservedRegression) {
       logger.debug(
-        LOCAL_STR_1N6SV,
+        LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_ST,
         {
           readyNodeId: nodeId,
           localNodeId,
@@ -259,7 +258,7 @@ class BootstrapNodeReadyRebalanceOwner {
 
     if (isNodeHeartbeatWatermarkRegression(previousRow, incomingRow)) {
       logger.debug(
-        LOCAL_STR_1N6SV,
+        LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_ST,
         {
           readyNodeId: nodeId,
           localNodeId,
@@ -288,7 +287,7 @@ class BootstrapNodeReadyRebalanceOwner {
     const wasReady = isNodeRecordReady(effectivePreviousRow, {now});
 
     if (!isReady) {
-      logger.info(LOCAL_STR_13461, {
+      logger.info(LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_NO, {
         readyNodeId: nodeId,
         localNodeId,
         status: nextObservedRow.status || null,
@@ -319,7 +318,7 @@ class BootstrapNodeReadyRebalanceOwner {
     }
 
     if (this.rebalanceTriggeredNodeIds.has(nodeId)) {
-      logger.info(LOCAL_STR_1K49D, {
+      logger.info(LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_AL, {
         readyNodeId: nodeId,
         localNodeId,
       });
@@ -331,7 +330,7 @@ class BootstrapNodeReadyRebalanceOwner {
       return false;
     }
 
-    logger.info(LOCAL_STR_I9WLP, {
+    logger.info(LOCAL_STR_SCHEDULING_NODE_READY_REBALANCE_TRIGGER, {
       readyNodeId: nodeId,
       localNodeId,
       reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
@@ -377,10 +376,10 @@ class BootstrapNodeReadyRebalanceOwner {
       primaryRow,
       fallbackRow,
     );
-    if (comparison > NUM.ZERO) {
+    if (comparison > 0) {
       return fallbackRow;
     }
-    if (comparison < NUM.ZERO) {
+    if (comparison < 0) {
       return primaryRow;
     }
 

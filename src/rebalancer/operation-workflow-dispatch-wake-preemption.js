@@ -7,10 +7,8 @@ import {
 } from './operation-workflow-dispatch-wake-progress-decision.js';
 
 const {
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   ReplicaStatus,
-  TYPEOF,
   WORKFLOW_STEP,
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -42,7 +40,7 @@ function isOperationRowDispatchWakeInput(operationInput) {
     typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
     typeof operationInput.operation_id ===
       OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-    operationInput.operation_id.length > NUM.ZERO
+    operationInput.operation_id.length > 0
   );
 }
 
@@ -65,13 +63,13 @@ function isExplicitDispatchWakeProgressInput(options) {
 function getDispatchWakeObservedTargetStatus(context, operation) {
   if (
     typeof context.getObservedOperationRowTargetProgressStatus !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
   }
   const observedTargetStatus =
     context.getObservedOperationRowTargetProgressStatus(operation);
-  return typeof observedTargetStatus === TYPEOF.STRING ?
+  return typeof observedTargetStatus === 'string' ?
     observedTargetStatus :
     OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
 }
@@ -105,7 +103,7 @@ function buildDispatchWakeProgressPreemptEvidence(
       ),
     dispatchWakeInput,
     progressReconcilerAvailable:
-      typeof context.reconcileOperationProgress === TYPEOF.FUNCTION,
+      typeof context.reconcileOperationProgress === 'function',
     observedPreemptStatus:
       DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES.has(observedTargetStatus),
     boundedPendingWakeReconcile:
@@ -170,12 +168,12 @@ async function reconcileDispatchWakeOperationProgress(context, operation) {
   ) {
     return true;
   }
-  if (typeof context.reconcileOperationLifecycle === TYPEOF.FUNCTION) {
+  if (typeof context.reconcileOperationLifecycle === 'function') {
     return context.reconcileOperationLifecycle(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
     });
   }
-  if (typeof context.reconcileOperationProgress !== TYPEOF.FUNCTION) {
+  if (typeof context.reconcileOperationProgress !== 'function') {
     return false;
   }
   return context.reconcileOperationProgress(operation, {
@@ -199,7 +197,7 @@ async function reconcileDispatchWakePendingTargetProgress(
   operation,
 ) {
   const statusReconcilerAvailable =
-    typeof context.getReconciledReplicaStatus === TYPEOF.FUNCTION;
+    typeof context.getReconciledReplicaStatus === 'function';
   const actualTargetStatus = statusReconcilerAvailable === true ?
     await context.getReconciledReplicaStatus(
       operation?.replicaId,
@@ -208,7 +206,7 @@ async function reconcileDispatchWakePendingTargetProgress(
     ) :
     OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
   const reconciledTargetStatus =
-    typeof context.resolveReconciledReplicaStatus === TYPEOF.FUNCTION ?
+    typeof context.resolveReconciledReplicaStatus === 'function' ?
       context.resolveReconciledReplicaStatus(operation, actualTargetStatus) :
       actualTargetStatus;
   const state = resolveDispatchWakePendingTargetProgressState(

@@ -7,7 +7,6 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
   MoveType,
-  NUM,
   OperationType,
   PRESSURE_WORK_CLASS,
   PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
@@ -22,7 +21,6 @@ const {
   ReplicaStatus,
   SQL_BUDGET,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   buildControlPlaneWorkloadProfile,
 } = SHARED;
@@ -150,7 +148,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   }
 
   hasPriorityBudgetBypassCandidateMove(moves = []) {
-    if (!Array.isArray(moves) || moves.length === NUM.ZERO) {
+    if (!Array.isArray(moves) || moves.length === 0) {
       return false;
     }
     return moves.some(
@@ -205,10 +203,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
         this.isPriorityRecoveryFollowUpSerialGateMove(candidateMove),
       hasSerialWaitEvidence,
       hasSerialWaitOperationIds:
-        serialWaitOperationIds.length > NUM.ZERO,
+        serialWaitOperationIds.length > 0,
       hasExplicitEmptySerialWaitOperationIds:
         hasSerialWaitEvidence === true &&
-        serialWaitOperationIds.length === NUM.ZERO,
+        serialWaitOperationIds.length === 0,
     });
   }
 
@@ -240,7 +238,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     if (
       !this.rebalanceCoordinator ||
       typeof this.rebalanceCoordinator.canStartPriorityAddOperation !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -294,7 +292,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       !this.hasPriorityBudgetBypassCandidateMove(moves) ||
       !this.rebalanceCoordinator ||
       typeof this.rebalanceCoordinator.getConcurrentAddCountByPriorityClass !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
@@ -311,12 +309,12 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       counts?.ordinaryPriorityCount,
     ) ?
       counts.ordinaryPriorityCount :
-      NUM.ZERO;
+      0;
     return Object.freeze({
       applicable: true,
-      serialLimit: NUM.ONE,
+      serialLimit: 1,
       ordinaryPriorityInFlightCount,
-      blocked: ordinaryPriorityInFlightCount >= NUM.ONE,
+      blocked: ordinaryPriorityInFlightCount >= 1,
     });
   }
 

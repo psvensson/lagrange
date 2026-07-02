@@ -5,7 +5,6 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {NUM} from '../constants/index.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 
@@ -20,7 +19,7 @@ function validatePrimaryKey(ast) {
   const {tableName, columns, primaryKey} = ast;
 
   // Check for table-level PRIMARY KEY constraint
-  if (primaryKey && primaryKey.length > NUM.ZERO) {
+  if (primaryKey && primaryKey.length > 0) {
     return {
       valid: true,
       primaryKey,
@@ -30,7 +29,7 @@ function validatePrimaryKey(ast) {
 
   // Check for column-level PRIMARY KEY
   const pkColumns = columns.filter((col) => col.primaryKey);
-  if (pkColumns.length > NUM.ZERO) {
+  if (pkColumns.length > 0) {
     return {
       valid: true,
       primaryKey: pkColumns.map((col) => col.name),

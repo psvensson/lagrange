@@ -1,9 +1,7 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  NUM,
   TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
   WORKFLOW_STEP,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -37,13 +35,13 @@ class OperationWorkflowTransitionRetryGrace {
    * @param {number} [delayMs=0]
    * @return {void}
    */
-  record(operationId, context = {}, delayMs = NUM.ZERO) {
+  record(operationId, context = {}, delayMs = 0) {
     if (!operationId) {
       return;
     }
     const workflowStep =
-      typeof context.workflowStep === TYPEOF.STRING &&
-      context.workflowStep.length > NUM.ZERO ?
+      typeof context.workflowStep === 'string' &&
+      context.workflowStep.length > 0 ?
         context.workflowStep :
         WORKFLOW_STEP.PENDING;
     const partitionId = context.partitionId || null;
@@ -52,7 +50,7 @@ class OperationWorkflowTransitionRetryGrace {
       partitionId ? {partitionId} : null,
     );
     const retryDelayMs =
-      Number.isFinite(delayMs) && delayMs > NUM.ZERO ? delayMs : NUM.ZERO;
+      Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0;
     const requestedGraceDeadlineMs = Date.now() + retryDelayMs;
     const durableProgressAtMs = Number.isFinite(context.updatedAt) ?
       context.updatedAt :
@@ -136,14 +134,14 @@ class OperationWorkflowTransitionRetryGrace {
    */
   usesOperationBudget(context, workflowStep) {
     const partitionId =
-      typeof context?.partitionId === TYPEOF.STRING &&
-      context.partitionId.length > NUM.ZERO ?
+      typeof context?.partitionId === 'string' &&
+      context.partitionId.length > 0 ?
         context.partitionId :
         null;
     const usesProtectedPriorityBudget =
       this.isCriticalSystemPartition(partitionId) ||
       (
-        typeof this.isPriorityControlPlanePartition === TYPEOF.FUNCTION &&
+        typeof this.isPriorityControlPlanePartition === 'function' &&
         this.isPriorityControlPlanePartition(partitionId)
       );
     if (!usesProtectedPriorityBudget) {

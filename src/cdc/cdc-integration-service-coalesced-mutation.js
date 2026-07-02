@@ -2,8 +2,6 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 
 const {
   CDC_EVENT,
-  NUM,
-  TYPEOF,
   stableSerializeMutationKey,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
@@ -13,7 +11,7 @@ const {
  * @param {Object} payload - CDC error payload.
  */
 export function emitErrorEvent(context, payload) {
-  if (context.listenerCount(CDC_EVENT.ERROR) > NUM.ZERO) {
+  if (context.listenerCount(CDC_EVENT.ERROR) > 0) {
     context.emit(CDC_EVENT.ERROR, payload);
   }
 }
@@ -39,8 +37,8 @@ export function buildMutationSingleFlightKey(
     return null;
   }
   if (
-    typeof options?.coalescingKey === TYPEOF.STRING &&
-    options.coalescingKey.length > NUM.ZERO
+    typeof options?.coalescingKey === 'string' &&
+    options.coalescingKey.length > 0
   ) {
     return `${operation}:${tableName}:${options.coalescingKey}`;
   }

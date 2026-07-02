@@ -11,8 +11,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, ENDPOINT_STATUS, TABLES} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1LP6R = 'provider not available';
+const LOCAL_STR_PROVIDER_NOT_AVAILABLE = 'provider not available';
 
 /**
  * Subsystem name for logging.
@@ -160,7 +159,7 @@ class TransportRegistry {
     this.logger.debug(REGISTRY_LOG_MSG.SELECTING_ENDPOINT, {nodeId});
 
     const candidates = this.getDeliveryCandidates(nodeId);
-    if (candidates.length === LOCAL_NUM_ZERO) {
+    if (candidates.length === 0) {
       this.logger.debug(REGISTRY_LOG_MSG.NO_AVAILABLE_ENDPOINTS, {nodeId});
       return null;
     }
@@ -224,7 +223,7 @@ class TransportRegistry {
     }
 
     const endpoints = this.getEndpointsForNode(nodeId);
-    if (endpoints.length === LOCAL_NUM_ZERO) {
+    if (endpoints.length === 0) {
       this.logger.debug(REGISTRY_LOG_MSG.NO_ENDPOINTS_FOUND, {nodeId});
       return [];
     }
@@ -246,7 +245,7 @@ class TransportRegistry {
           nodeId,
           transportType,
           endpointId: endpoint[COLUMN.ENDPOINT_ID],
-          reason: LOCAL_STR_1LP6R,
+          reason: LOCAL_STR_PROVIDER_NOT_AVAILABLE,
         });
         continue;
       }

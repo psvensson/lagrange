@@ -1,6 +1,5 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const {
   INLINE_ACK_PASSTHROUGH_KEYS,
@@ -435,7 +434,7 @@ class MessageRouterPendingResponseLedger {
           acknowledged: true,
           ...rest,
         };
-        if (error !== void LOCAL_NUM_ZERO) {
+        if (error !== void 0) {
           resolved.error = error;
         }
         pending.resolve(resolved);

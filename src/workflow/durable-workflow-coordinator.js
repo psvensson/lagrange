@@ -11,7 +11,6 @@ const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_METADATA = 'metadata';
-const LOCAL_STR_EMPTY = '';
 
 /**
  * Generic durable workflow runtime with optional participant persistence.
@@ -616,7 +615,7 @@ class DurableWorkflowCoordinator {
       record.partitionId ||
       record.participantId ||
       '';
-    return String(participantKey || LOCAL_STR_EMPTY);
+    return String(participantKey || '');
   }
 
   /**

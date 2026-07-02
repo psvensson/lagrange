@@ -1,5 +1,5 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {NUM, SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -191,7 +191,7 @@ export function buildRemotePrioritySerialWaitSourcePlanningSnapshot() {
       REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID,
     ]),
     pendingAckNodeIds: Object.freeze([]),
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     priorityRecoveryDecisionSnapshots: {
       capturedAt: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
       publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_EPOCH,
@@ -492,7 +492,7 @@ export function createRemotePriorityVisibilityCoordinator() {
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
-        return {success: true, rows: [], affectedRows: NUM.ZERO};
+        return {success: true, rows: [], affectedRows: 0};
       },
     },
     messageRouter: {
@@ -502,12 +502,12 @@ export function createRemotePriorityVisibilityCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: NUM.ONE};
+        return {minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
       async executeQuery() {
-        return {success: true, rows: [], affectedRows: NUM.ZERO};
+        return {success: true, rows: [], affectedRows: 0};
       },
     },
     controlPlaneReadinessService,
@@ -583,7 +583,7 @@ export function createRecentIntentPolicyCoordinator() {
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
-        return {success: true, rows: [], affectedRows: NUM.ZERO};
+        return {success: true, rows: [], affectedRows: 0};
       },
     },
     messageRouter: {
@@ -593,12 +593,12 @@ export function createRecentIntentPolicyCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: NUM.ONE};
+        return {minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
       async executeQuery() {
-        return {success: true, rows: [], affectedRows: NUM.ZERO};
+        return {success: true, rows: [], affectedRows: 0};
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),

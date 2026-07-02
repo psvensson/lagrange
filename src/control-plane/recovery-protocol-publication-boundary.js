@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from './control-plane-publication-merge.js';
@@ -45,7 +44,7 @@ const PUBLICATION_PROJECTION_BOUNDARY_ROW_RULES = Object.freeze([
     matches: (evidence) =>
       evidence.publicationObservationState ===
         PUBLICATION_OBSERVATION_STATE.UNPUBLISHED ||
-      evidence.publicationStatusNormalized.length === NUM.ZERO,
+      evidence.publicationStatusNormalized.length === 0,
   }),
   Object.freeze({
     state: PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.TERMINAL,
@@ -75,7 +74,7 @@ const PUBLICATION_PROJECTION_BOUNDARY_ROW_RULES = Object.freeze([
 const PUBLICATION_PROJECTION_BOUNDARY_ACK_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.PENDING,
-    matches: (evidence) => evidence.pendingAckCount > NUM.ZERO,
+    matches: (evidence) => evidence.pendingAckCount > 0,
   }),
   Object.freeze({
     state: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.NOT_REQUIRED,
@@ -83,7 +82,7 @@ const PUBLICATION_PROJECTION_BOUNDARY_ACK_RULES = Object.freeze([
       evidence.pendingAckEvidenceState ===
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
           .REQUIRED_ACK_NODE_LIST &&
-      evidence.requiredAckCount === NUM.ZERO,
+      evidence.requiredAckCount === 0,
   }),
   Object.freeze({
     state: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.SATISFIED,
@@ -116,7 +115,7 @@ const PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.STALE,
     matches: (evidence) =>
-      evidence.missingPublishedCount > NUM.ZERO ||
+      evidence.missingPublishedCount > 0 ||
       evidence.recoveryGateReady !== true,
   }),
   Object.freeze({
@@ -126,15 +125,15 @@ const PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_RULES = Object.freeze([
 ]);
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function resolvePublicationProjectionBoundaryDecision(rules, evidence) {

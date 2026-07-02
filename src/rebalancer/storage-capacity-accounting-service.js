@@ -14,7 +14,6 @@ import {
   NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
@@ -121,7 +120,7 @@ class StorageCapacityAccountingService {
    */
   getNumericConfig(key, fallback) {
     const value = this.config.get(key);
-    if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
     }
     return fallback;
@@ -134,10 +133,10 @@ class StorageCapacityAccountingService {
   ensureDataSource() {
     const hasReadableGateway =
       typeof this.controlPlaneSystemTableGateway?.supportsReadRows ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.controlPlaneSystemTableGateway.supportsReadRows() :
         typeof this.controlPlaneSystemTableGateway?.readRows ===
-          TYPEOF.FUNCTION;
+          'function';
     assertCritical(
       this.systemTableCache || hasReadableGateway,
       STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED,
@@ -154,7 +153,7 @@ class StorageCapacityAccountingService {
     this.ensureDataSource();
 
     if (this.systemTableCache &&
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.getAll === 'function') {
       return this.systemTableCache.getAll(tableName) || [];
     }
 
@@ -179,7 +178,7 @@ class StorageCapacityAccountingService {
     this.ensureDataSource();
 
     if (this.systemTableCache &&
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+        typeof this.systemTableCache.getAll === 'function') {
       return this.systemTableCache.getAll(tableName) || [];
     }
 
@@ -197,14 +196,14 @@ class StorageCapacityAccountingService {
   estimateReplicaBytes(options = {}) {
     const entityType = options.entityType || SERVICE_TYPE.PARTITION;
     const sizeBytes = Number(options.sizeBytes);
-    const baseBytes = Number.isFinite(sizeBytes) && sizeBytes > NUM.ZERO ?
-      sizeBytes : NUM.ZERO;
+    const baseBytes = Number.isFinite(sizeBytes) && sizeBytes > 0 ?
+      sizeBytes : 0;
     const payloadBytes = Math.max(baseBytes, this.minimumReplicaBytes);
     const overheadBytes = this.getOverheadBytes(entityType);
     const rawEstimate = payloadBytes + overheadBytes;
     const amplificationFactor = Number(options.amplificationFactor);
     const multiplier = Number.isFinite(amplificationFactor) &&
-      amplificationFactor > NUM.ZERO ? amplificationFactor : NUM.ONE;
+      amplificationFactor > 0 ? amplificationFactor : 1;
     return Math.ceil(rawEstimate * multiplier);
   }
 
@@ -228,8 +227,8 @@ class StorageCapacityAccountingService {
 
     return nodes.map((node) => {
       const nodeId = node?.[COLUMN.NODE_ID];
-      const usedBytes = usedBytesByNode.get(nodeId) || NUM.ZERO;
-      const reservedBytes = reservedBytesByNode.get(nodeId) || NUM.ZERO;
+      const usedBytes = usedBytesByNode.get(nodeId) || 0;
+      const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
       return this.buildSnapshot(node, usedBytes, reservedBytes);
     });
   }
@@ -257,8 +256,8 @@ class StorageCapacityAccountingService {
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
     const reservedBytesByNode = this.calculateReservedBytes(reservations);
-    const usedBytes = usedBytesByNode.get(nodeId) || NUM.ZERO;
-    const reservedBytes = reservedBytesByNode.get(nodeId) || NUM.ZERO;
+    const usedBytes = usedBytesByNode.get(nodeId) || 0;
+    const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
 
     return this.buildSnapshot(node, usedBytes, reservedBytes);
   }
@@ -281,8 +280,8 @@ class StorageCapacityAccountingService {
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
     const reservedBytesByNode = this.calculateReservedBytes(reservations);
-    const usedBytes = usedBytesByNode.get(nodeId) || NUM.ZERO;
-    const reservedBytes = reservedBytesByNode.get(nodeId) || NUM.ZERO;
+    const usedBytes = usedBytesByNode.get(nodeId) || 0;
+    const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
 
     return this.buildSnapshot(node, usedBytes, reservedBytes);
   }
@@ -302,8 +301,8 @@ class StorageCapacityAccountingService {
         continue;
       }
       const sizeBytes = Number(partition?.[COLUMN.SIZE_BYTES]);
-      const normalized = Number.isFinite(sizeBytes) && sizeBytes > NUM.ZERO ?
-        Math.floor(sizeBytes) : NUM.ZERO;
+      const normalized = Number.isFinite(sizeBytes) && sizeBytes > 0 ?
+        Math.floor(sizeBytes) : 0;
       sizes.set(partitionId, normalized);
     }
 
@@ -335,7 +334,7 @@ class StorageCapacityAccountingService {
         entityType,
         sizeBytes,
       });
-      const current = usedBytesByNode.get(nodeId) || NUM.ZERO;
+      const current = usedBytesByNode.get(nodeId) || 0;
       usedBytesByNode.set(nodeId, current + estimated);
     }
 
@@ -369,16 +368,16 @@ class StorageCapacityAccountingService {
       }
 
       const estimatedBytes = Number(reservation?.[COLUMN.ESTIMATED_BYTES]);
-      if (!Number.isFinite(estimatedBytes) || estimatedBytes <= NUM.ZERO) {
+      if (!Number.isFinite(estimatedBytes) || estimatedBytes <= 0) {
         continue;
       }
 
       const amplification = Number(reservation?.[COLUMN.AMPLIFICATION_FACTOR]);
       const multiplier = Number.isFinite(amplification) &&
-        amplification > NUM.ZERO ? amplification : NUM.ONE;
+        amplification > 0 ? amplification : 1;
       const reservedBytes = Math.ceil(estimatedBytes * multiplier);
 
-      const current = reservedByNode.get(nodeId) || NUM.ZERO;
+      const current = reservedByNode.get(nodeId) || 0;
       reservedByNode.set(nodeId, current + reservedBytes);
     }
 
@@ -406,15 +405,15 @@ class StorageCapacityAccountingService {
   getServicePayloadBytes(service, partitionSizes) {
     const entityType = service?.[COLUMN.SERVICE_TYPE];
     if (entityType !== SERVICE_TYPE.PARTITION) {
-      return NUM.ZERO;
+      return 0;
     }
 
     const partitionId = service?.[COLUMN.PARTITION_ID];
     if (!partitionId) {
-      return NUM.ZERO;
+      return 0;
     }
 
-    return partitionSizes.get(partitionId) || NUM.ZERO;
+    return partitionSizes.get(partitionId) || 0;
   }
 
   /**
@@ -445,20 +444,20 @@ class StorageCapacityAccountingService {
   buildSnapshot(nodeRow, usedBytes, reservedBytes) {
     const nodeId = nodeRow?.[COLUMN.NODE_ID];
     const budgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
-    const hasBudget = Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO;
+    const hasBudget = Number.isFinite(budgetBytes) && budgetBytes > 0;
     const normalizedBudget = hasBudget ? Math.floor(budgetBytes) : null;
-    const normalizedUsed = Number.isFinite(usedBytes) ? usedBytes : NUM.ZERO;
-    const normalizedReserved = Number.isFinite(reservedBytes) ? reservedBytes : NUM.ZERO;
+    const normalizedUsed = Number.isFinite(usedBytes) ? usedBytes : 0;
+    const normalizedReserved = Number.isFinite(reservedBytes) ? reservedBytes : 0;
     const totalAllocated = normalizedUsed + normalizedReserved;
     const availableBytes = hasBudget ?
-      Math.max(NUM.ZERO, normalizedBudget - totalAllocated) :
-      NUM.ZERO;
+      Math.max(0, normalizedBudget - totalAllocated) :
+      0;
 
     const pressureState = this.getPressureState(
       totalAllocated,
       normalizedBudget,
     );
-    const utilizationPercent = hasBudget && normalizedBudget > NUM.ZERO ?
+    const utilizationPercent = hasBudget && normalizedBudget > 0 ?
       (totalAllocated / normalizedBudget) * NUM.HUNDRED : NUM.HUNDRED;
 
     return {
@@ -480,7 +479,7 @@ class StorageCapacityAccountingService {
    * @private
    */
   getPressureState(allocatedBytes, budgetBytes) {
-    if (!Number.isFinite(budgetBytes) || budgetBytes <= NUM.ZERO) {
+    if (!Number.isFinite(budgetBytes) || budgetBytes <= 0) {
       return PRESSURE_STATE.EXHAUSTED;
     }
 

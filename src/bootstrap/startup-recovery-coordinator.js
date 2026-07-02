@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   isPriorityControlPlanePartition as isPriorityControlPlanePartitionId,
 } from './system-partition-classification.js';
@@ -29,17 +29,17 @@ const STARTUP_AUTHORITY_PUBLICATION_OBSERVATION_UNAVAILABLE =
 const STARTUP_RECOVERY_READINESS_STATE_OPTION = 'readinessState';
 
 function normalizePartitionId(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
 
 function normalizeReasonCode(reason) {
-  if (typeof reason !== TYPEOF.STRING) {
+  if (typeof reason !== 'string') {
     return null;
   }
   const normalized = reason.trim();
-  return normalized.length > NUM.ZERO ?
+  return normalized.length > 0 ?
     normalized :
     null;
 }
@@ -54,7 +54,7 @@ function normalizeReasonCodeArray(reasonCodes) {
 }
 
 function normalizeLifecyclePhase(phase) {
-  if (typeof phase !== TYPEOF.STRING) {
+  if (typeof phase !== 'string') {
     return null;
   }
   const normalizedPhase = phase.trim().toUpperCase();
@@ -70,7 +70,7 @@ function normalizeReasonCodes(snapshot) {
 }
 
 function normalizePriorityRecoveryTargetParticipation(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   const nodeId = normalizePartitionId(value.nodeId);
@@ -134,9 +134,9 @@ const STARTUP_AUTHORITY_STATE = Object.freeze({
 });
 
 const STARTUP_RECOVERY_STAGE_RANK = Object.freeze({
-  [STARTUP_RECOVERY_STAGE.UNMANAGED]: NUM.ZERO,
-  [STARTUP_RECOVERY_STAGE.BLOCKED]: NUM.ONE,
-  [STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY]: NUM.TWO,
+  [STARTUP_RECOVERY_STAGE.UNMANAGED]: 0,
+  [STARTUP_RECOVERY_STAGE.BLOCKED]: 1,
+  [STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY]: 2,
   [STARTUP_RECOVERY_STAGE.BACKGROUND_WORK_READY]: NUM.THREE,
   [STARTUP_RECOVERY_STAGE.TRAFFIC_READY]: NUM.FOUR,
 });
@@ -167,7 +167,7 @@ function canBypassBootstrapInitPriorityReasons(reasonCodes, snapshot) {
     return false;
   }
   const normalizedReasonCodes = normalizeReasonCodeArray(reasonCodes);
-  if (normalizedReasonCodes.length === NUM.ZERO) {
+  if (normalizedReasonCodes.length === 0) {
     return false;
   }
   if (!normalizedReasonCodes.some((reason) =>
@@ -197,7 +197,7 @@ function resolveStartupRecoveryStage(options = {}) {
 }
 
 function buildOptionalPhaseDetail(phase) {
-  if (typeof phase !== TYPEOF.STRING || phase.length === NUM.ZERO) {
+  if (typeof phase !== 'string' || phase.length === 0) {
     return Object.freeze({
       state: STARTUP_RECOVERY_OPTIONAL_STATE.NONE,
     });
@@ -245,8 +245,8 @@ function buildOptionalStableElapsedDetail(stableElapsedMs) {
 }
 
 function buildRecoveryProtocolDetail(recoveryProtocolState) {
-  if (typeof recoveryProtocolState !== TYPEOF.STRING ||
-      recoveryProtocolState.length === NUM.ZERO) {
+  if (typeof recoveryProtocolState !== 'string' ||
+      recoveryProtocolState.length === 0) {
     return Object.freeze({
       state: STARTUP_RECOVERY_OPTIONAL_STATE.NONE,
     });
@@ -258,7 +258,7 @@ function buildRecoveryProtocolDetail(recoveryProtocolState) {
 }
 
 function buildTargetParticipationDetail(targetParticipation) {
-  if (!targetParticipation || typeof targetParticipation !== TYPEOF.OBJECT) {
+  if (!targetParticipation || typeof targetParticipation !== 'object') {
     return Object.freeze({
       state: STARTUP_RECOVERY_OPTIONAL_STATE.NONE,
     });
@@ -270,7 +270,7 @@ function buildTargetParticipationDetail(targetParticipation) {
 }
 
 function buildReadinessSnapshotDetail(snapshot) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return Object.freeze({
       state: STARTUP_RECOVERY_SNAPSHOT_STATE.UNMANAGED,
     });
@@ -282,8 +282,8 @@ function buildReadinessSnapshotDetail(snapshot) {
 }
 
 function buildStartupAuthorityFailureDetail(failureReason) {
-  if (typeof failureReason !== TYPEOF.STRING ||
-      failureReason.length === NUM.ZERO) {
+  if (typeof failureReason !== 'string' ||
+      failureReason.length === 0) {
     return Object.freeze({
       state: STARTUP_AUTHORITY_FAILURE_STATE.NONE,
     });
@@ -303,7 +303,7 @@ function buildStartupAuthorityPublicationDetail(publicationObservationState) {
 }
 
 function normalizeStartupAuthoritySnapshot(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return Object.freeze({
       state: STARTUP_AUTHORITY_STATE.OBSERVATION_UNAVAILABLE,
       authorityAvailable: false,
@@ -351,7 +351,7 @@ class StartupRecoveryCoordinator {
    */
   constructor(options = {}) {
     this.readinessState = options.readinessState || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
   }
@@ -394,31 +394,31 @@ class StartupRecoveryCoordinator {
       options.priorityRecoveryHealth?.details?.startupAuthority ||
       null,
     );
-    const managed = Boolean(snapshot && typeof snapshot === TYPEOF.OBJECT);
+    const managed = Boolean(snapshot && typeof snapshot === 'object');
     const readinessSnapshot = buildReadinessSnapshotDetail(
       managed ? snapshot : null,
     );
     const phaseDetail = buildOptionalPhaseDetail(
-      typeof snapshot?.phase === TYPEOF.STRING &&
-        snapshot.phase.length > NUM.ZERO ?
+      typeof snapshot?.phase === 'string' &&
+        snapshot.phase.length > 0 ?
         snapshot.phase :
         null,
     );
     const retryAfter = buildOptionalRetryAfterDetail(
       Number.isFinite(snapshot?.retryAfterMs) &&
-        snapshot.retryAfterMs > NUM.ZERO ?
+        snapshot.retryAfterMs > 0 ?
         Math.floor(snapshot.retryAfterMs) :
         null,
     );
     const stableWindow = buildOptionalStableWindowDetail(
       Number.isFinite(snapshot?.stableWindowMs) &&
-        snapshot.stableWindowMs >= NUM.ZERO ?
+        snapshot.stableWindowMs >= 0 ?
         Math.floor(snapshot.stableWindowMs) :
         null,
     );
     const stableElapsed = buildOptionalStableElapsedDetail(
       Number.isFinite(snapshot?.stableElapsedMs) &&
-        snapshot.stableElapsedMs >= NUM.ZERO ?
+        snapshot.stableElapsedMs >= 0 ?
         Math.floor(snapshot.stableElapsedMs) :
         null,
     );
@@ -479,10 +479,10 @@ class StartupRecoveryCoordinator {
       controlPlaneRecoveryReady,
     });
     const recoveryStageRank =
-      STARTUP_RECOVERY_STAGE_RANK[recoveryStage] || NUM.ZERO;
+      STARTUP_RECOVERY_STAGE_RANK[recoveryStage] || 0;
 
     return Object.freeze({
-      schemaVersion: NUM.ONE,
+      schemaVersion: 1,
       capturedAt,
       capturedAtMs,
       managed,

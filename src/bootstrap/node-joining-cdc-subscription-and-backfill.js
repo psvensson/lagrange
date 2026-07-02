@@ -12,14 +12,12 @@ const {
   JOINING_LOG_MSG,
   JOIN_READINESS_REPAIR,
   NODE_JOINING_SERVICE_LITERAL,
-  NUM,
   NodeService,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
   STRING,
   TABLES,
-  TYPEOF,
   _deriveWsAddressFromNodeAddress,
   assertCritical,
   buildControlPlaneWorkloadProfile,
@@ -252,7 +250,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
           nodeId: leaderService.nodeId || null,
           groupId: leaderService.groupId || null,
           isLeader:
-              typeof leaderService.isLeaderReplica === TYPEOF.FUNCTION ?
+              typeof leaderService.isLeaderReplica === 'function' ?
                 leaderService.isLeaderReplica() :
                 null,
         } :
@@ -266,10 +264,10 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     }, diagnosticIntervalMs); // Bounded retry loop for CDC subscription establishment
     let subscribed = false;
     try {
-      for (let attempt = NUM.ZERO; attempt <= maxRetries; attempt++) {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const elapsedMs = this.now() - startMs;
         const remainingBudgetMs = timeoutMs - elapsedMs; // Respect overall timeout budget (§1.9)
-        if (remainingBudgetMs <= NUM.ZERO) {
+        if (remainingBudgetMs <= 0) {
           this.logger.warn(JOINING_LOG_MSG.CDC_REESTABLISHMENT_TIMEOUT, {
             nodeId: this.nodeId,
             tables: systemTables,
@@ -288,7 +286,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
             const listenerCount =
               this.cdcIntegrationService.listenerCount(eventType);
             subscriptionStatus[eventType] = listenerCount;
-            if (listenerCount === NUM.ZERO) {
+            if (listenerCount === 0) {
               throw new Error(
                 JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
                   systemTables.join(NODE_JOINING_SERVICE_LITERAL.VALUE),
@@ -320,11 +318,11 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
             nodeId: this.nodeId,
             tables: systemTables,
             error: error.message,
-            attempt: attempt + NUM.ONE,
+            attempt: attempt + 1,
             maxRetries,
             remainingBudgetMs: currentRemainingMs,
           });
-          if (attempt < maxRetries && currentRemainingMs > NUM.ZERO) {
+          if (attempt < maxRetries && currentRemainingMs > 0) {
             const waitMs = Math.min(retryDelayMs, currentRemainingMs);
             await this.sleep(waitMs);
           }
@@ -428,11 +426,11 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     for (const eventType of eventTypes) {
       eventListenerCounts[eventType] = this.cdcIntegrationService ?
         this.cdcIntegrationService.listenerCount(eventType) :
-        NUM.ZERO;
+        0;
     } // Derive overall subscription health: at least one
     // listener on every event type means subscribed.
     const hasAllListeners = eventTypes.every(
-      (et) => eventListenerCounts[et] > NUM.ZERO,
+      (et) => eventListenerCounts[et] > 0,
     ); // Build per-table status. All tables share the same
     // event-level listeners so the status is uniform, but
     // the per-table shape is required by the diagnostic
@@ -485,7 +483,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
       JOINING_ERROR_MSG.STATE_QUERY_CACHE_REQUIRED,
     );
     const backfillPromise = (async () => {
-      let totalRowsApplied = NUM.ZERO;
+      let totalRowsApplied = 0;
       const tableRowCounts = {};
       for (const tableName of propagatedTables) {
         const rows = await this.resolveAuthoritativeBackfillRows(
@@ -504,7 +502,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
             continue;
           }
           systemTableCache.applySystemTableChange(tableName, operation, row);
-          totalRowsApplied += NUM.ONE;
+          totalRowsApplied += 1;
         }
       }
       this.logger.info(
@@ -536,7 +534,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
    * @private
    */
   normalizeAuthoritativeBackfillTableNames(tableNames) {
-    return Array.isArray(tableNames) && tableNames.length > NUM.ZERO ?
+    return Array.isArray(tableNames) && tableNames.length > 0 ?
       [...new Set(tableNames)] :
       [...CACHE_HYDRATION_TABLES];
   }
@@ -559,7 +557,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
   evaluateAuthoritativeBackfillPressure(tableNames, options = {}) {
     const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
     const blocking =
-      typeof options.blocking === TYPEOF.BOOLEAN ?
+      typeof options.blocking === 'boolean' ?
         options.blocking :
         tableNames.some((tableName) => blockingTableSet.has(tableName));
     const workloadProfile = buildControlPlaneWorkloadProfile(
@@ -595,7 +593,7 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
   resolveAuthoritativeBackfillOptions(tableNames, options = {}) {
     const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
     const blocking =
-      typeof options.blocking === TYPEOF.BOOLEAN ?
+      typeof options.blocking === 'boolean' ?
         options.blocking :
         tableNames.some((tableName) => blockingTableSet.has(tableName));
     const pressureDecision = this.evaluateAuthoritativeBackfillPressure(
@@ -608,19 +606,19 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     return {
       blocking,
       deliveryPriority:
-        typeof options.deliveryPriority === TYPEOF.STRING &&
-        options.deliveryPriority.length > NUM.ZERO ?
+        typeof options.deliveryPriority === 'string' &&
+        options.deliveryPriority.length > 0 ?
           options.deliveryPriority :
           blocking ?
             NODE_JOINING_SERVICE_LITERAL.CRITICAL :
             NODE_JOINING_SERVICE_LITERAL.BACKGROUND,
       queryTimeoutMs: this.resolveAuthoritativeBackfillQueryTimeoutMs(options),
       preferBootstrapSnapshot:
-        typeof options.preferBootstrapSnapshot === TYPEOF.BOOLEAN ?
+        typeof options.preferBootstrapSnapshot === 'boolean' ?
           options.preferBootstrapSnapshot :
           blocking,
       allowReplicaFanout:
-        typeof options.allowReplicaFanout === TYPEOF.BOOLEAN ?
+        typeof options.allowReplicaFanout === 'boolean' ?
           options.allowReplicaFanout :
           !pressureDegraded,
       pressureDegraded,
@@ -641,19 +639,19 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
   resolveAuthoritativeBackfillQueryTimeoutMs(options = {}) {
     if (
       Number.isFinite(options.queryTimeoutMs) &&
-      options.queryTimeoutMs > NUM.ZERO
+      options.queryTimeoutMs > 0
     ) {
       return Math.floor(options.queryTimeoutMs);
     }
     if (
       Number.isFinite(this.config?.leadershipWaitTimeoutMs) &&
-      this.config.leadershipWaitTimeoutMs > NUM.ZERO
+      this.config.leadershipWaitTimeoutMs > 0
     ) {
       return Math.floor(this.config.leadershipWaitTimeoutMs);
     }
     if (
       Number.isFinite(this.config?.httpTimeoutMs) &&
-      this.config.httpTimeoutMs > NUM.ZERO
+      this.config.httpTimeoutMs > 0
     ) {
       return Math.floor(this.config.httpTimeoutMs);
     }

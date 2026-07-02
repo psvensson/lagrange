@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -72,31 +71,31 @@ export {
   buildStartupAuthorityTargetParticipationDescriptor,
 } from './startup-authority-snapshot-contract.js';
 
-const LOCAL_STR_1P74U = 'control_plane_recovery_service_unavailable';
-const LOCAL_STR_RZRDP = 'control_plane_recovery_planning_provider_unavailable';
-const LOCAL_STR_K5O5W = 'control_plane_recovery_planning_read_failed';
-const LOCAL_STR_K9A2Z = 'control_plane_recovery_planning_unavailable';
-const LOCAL_STR_1WVYP = 'control_plane_recovery_planning_incomplete';
+const LOCAL_STR_CONTROL_PLANE_RECOVERY_SERVICE_UNAVAILAB = 'control_plane_recovery_service_unavailable';
+const LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_PROVIDER = 'control_plane_recovery_planning_provider_unavailable';
+const LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_READ_FAI = 'control_plane_recovery_planning_read_failed';
+const LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_UNAVAILA = 'control_plane_recovery_planning_unavailable';
+const LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_INCOMPLE = 'control_plane_recovery_planning_incomplete';
 const LOCAL_STR_READY = 'ready';
 const LOCAL_STR_RECOVERY_PENDING = 'recovery_pending';
-const LOCAL_STR_1YO6Q = 'seed_locally_ready_unpublished';
-const LOCAL_STR_Q43AB = 'authority_unavailable';
+const LOCAL_STR_SEED_LOCALLY_READY_UNPUBLISHED = 'seed_locally_ready_unpublished';
+const LOCAL_STR_AUTHORITY_UNAVAILABLE = 'authority_unavailable';
 const LOCAL_STR_BLOCKED = 'blocked';
 
 export const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
-  SERVICE_UNAVAILABLE: LOCAL_STR_1P74U,
+  SERVICE_UNAVAILABLE: LOCAL_STR_CONTROL_PLANE_RECOVERY_SERVICE_UNAVAILAB,
   PLANNING_PROVIDER_UNAVAILABLE:
-    LOCAL_STR_RZRDP,
-  PLANNING_READ_FAILED: LOCAL_STR_K5O5W,
-  PLANNING_UNAVAILABLE: LOCAL_STR_K9A2Z,
-  PLANNING_INCOMPLETE: LOCAL_STR_1WVYP,
+    LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_PROVIDER,
+  PLANNING_READ_FAILED: LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_READ_FAI,
+  PLANNING_UNAVAILABLE: LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_UNAVAILA,
+  PLANNING_INCOMPLETE: LOCAL_STR_CONTROL_PLANE_RECOVERY_PLANNING_INCOMPLE,
 });
 
 export const STARTUP_AUTHORITY_STATE = Object.freeze({
   READY: LOCAL_STR_READY,
   RECOVERY_PENDING: LOCAL_STR_RECOVERY_PENDING,
-  SEED_LOCALLY_READY_UNPUBLISHED: LOCAL_STR_1YO6Q,
-  AUTHORITY_UNAVAILABLE: LOCAL_STR_Q43AB,
+  SEED_LOCALLY_READY_UNPUBLISHED: LOCAL_STR_SEED_LOCALLY_READY_UNPUBLISHED,
+  AUTHORITY_UNAVAILABLE: LOCAL_STR_AUTHORITY_UNAVAILABLE,
   BLOCKED: LOCAL_STR_BLOCKED,
 });
 
@@ -114,11 +113,11 @@ const STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES = new Set(
 );
 
 function hasKnownStartupAuthorityString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+  return typeof value === 'string' && value.length > 0;
 }
 
 function hasStartupAuthorityTargetParticipationEvidence(targetParticipation) {
-  return targetParticipation && typeof targetParticipation === TYPEOF.OBJECT;
+  return targetParticipation && typeof targetParticipation === 'object';
 }
 
 function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
@@ -128,7 +127,7 @@ function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
     [...new Set(
       (Array.isArray(targetParticipation?.reasons) ? targetParticipation.reasons : [])
         .filter((reasonCode) =>
-          typeof reasonCode === TYPEOF.STRING &&
+          typeof reasonCode === 'string' &&
           STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES.has(reasonCode),
         ),
     )],
@@ -137,19 +136,19 @@ function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
 
 function hasStartupAuthorityPriorityPartitionEvidence(priorityPartitionSummary) {
   return priorityPartitionSummary &&
-    typeof priorityPartitionSummary === TYPEOF.OBJECT;
+    typeof priorityPartitionSummary === 'object';
 }
 
 export function hasTransitionalStartupAuthorityEvidence(options = {}) {
   const publicationRecoveryGate =
     options.publicationRecoveryGate &&
-      typeof options.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof options.publicationRecoveryGate === 'object' ?
       options.publicationRecoveryGate :
       null;
   const canonicalStartupNodeIds = Array.isArray(options.canonicalStartupNodeIds) ?
     options.canonicalStartupNodeIds :
     [];
-  if (!publicationRecoveryGate || canonicalStartupNodeIds.length === NUM.ZERO) {
+  if (!publicationRecoveryGate || canonicalStartupNodeIds.length === 0) {
     return false;
   }
   const activeGate =
@@ -167,7 +166,7 @@ export function hasTransitionalStartupAuthorityEvidence(options = {}) {
     hasKnownStartupAuthorityString(options.recoveryProtocolState) ||
     hasStartupAuthorityTargetParticipationEvidence(options.targetParticipation) ||
     (Array.isArray(publicationRecoveryGate.reasonCodes) &&
-      publicationRecoveryGate.reasonCodes.length > NUM.ZERO);
+      publicationRecoveryGate.reasonCodes.length > 0);
 }
 
 export function buildStartupAuthorityUnavailableSnapshot(
@@ -178,7 +177,7 @@ export function buildStartupAuthorityUnavailableSnapshot(
   const details = {
     failureReason,
   };
-  if (context && typeof context === TYPEOF.OBJECT) {
+  if (context && typeof context === 'object') {
     Object.assign(details, context);
   }
   if (error) {
@@ -193,33 +192,33 @@ export function buildStartupAuthorityUnavailableSnapshot(
         details.publicationEpoch :
         undefined,
     publicationStatus:
-      typeof details.publicationStatus === TYPEOF.STRING &&
-      details.publicationStatus.length > NUM.ZERO ?
+      typeof details.publicationStatus === 'string' &&
+      details.publicationStatus.length > 0 ?
         details.publicationStatus :
         undefined,
     publicationObservationState:
-      typeof details.publicationObservationState === TYPEOF.STRING &&
-      details.publicationObservationState.length > NUM.ZERO ?
+      typeof details.publicationObservationState === 'string' &&
+      details.publicationObservationState.length > 0 ?
         details.publicationObservationState :
         AUTHORITY_PUBLICATION_OBSERVATION_STATE.OBSERVATION_UNAVAILABLE,
     priorityPartitionSummary:
       details.priorityPartitionSummary &&
-      typeof details.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof details.priorityPartitionSummary === 'object' ?
         details.priorityPartitionSummary :
         undefined,
     recoveryProtocolState:
-      typeof details.recoveryProtocolState === TYPEOF.STRING &&
-      details.recoveryProtocolState.length > NUM.ZERO ?
+      typeof details.recoveryProtocolState === 'string' &&
+      details.recoveryProtocolState.length > 0 ?
         details.recoveryProtocolState :
         undefined,
     targetParticipation:
       details.targetParticipation &&
-      typeof details.targetParticipation === TYPEOF.OBJECT ?
+      typeof details.targetParticipation === 'object' ?
         details.targetParticipation :
         undefined,
     projectionReadinessContract:
       details.projectionReadinessContract &&
-      typeof details.projectionReadinessContract === TYPEOF.OBJECT ?
+      typeof details.projectionReadinessContract === 'object' ?
         details.projectionReadinessContract :
         undefined,
     priorityRecoveryReasonCodes: [],
@@ -231,7 +230,7 @@ export function buildStartupAuthorityUnavailableSnapshot(
 export function buildStartupAuthoritySnapshotFromPlanningAnswer(
   planningSnapshot,
 ) {
-  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+  if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return buildStartupAuthorityUnavailableSnapshot(
       PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
     );
@@ -257,11 +256,11 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     publicationRecoveryGate.publicationObservationState;
   const targetParticipation =
     planningSnapshot.targetParticipation &&
-    typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+    typeof planningSnapshot.targetParticipation === 'object' ?
       planningSnapshot.targetParticipation :
       null;
   const admissionState =
-    typeof planningSnapshot.admissionState === TYPEOF.STRING ?
+    typeof planningSnapshot.admissionState === 'string' ?
       planningSnapshot.admissionState :
       undefined;
   const admissionReasonCodes = Array.isArray(
@@ -271,7 +270,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     [];
   const clusterIncarnationFence =
     planningSnapshot.clusterIncarnationFence &&
-      typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+      typeof planningSnapshot.clusterIncarnationFence === 'object' ?
       planningSnapshot.clusterIncarnationFence :
       null;
   const targetParticipationReasons =
@@ -295,14 +294,14 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
           planningSnapshot.publicationEpoch :
           undefined,
       publicationStatus:
-        typeof publicationStatus === TYPEOF.STRING &&
-          publicationStatus.length > NUM.ZERO ?
+        typeof publicationStatus === 'string' &&
+          publicationStatus.length > 0 ?
           publicationStatus :
           undefined,
       publicationObservationState,
       priorityPartitionSummary: priorityPartitionSummary || undefined,
       recoveryProtocolState:
-        typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+        typeof planningSnapshot.recoveryProtocolState === 'string' ?
           planningSnapshot.recoveryProtocolState :
           undefined,
       targetParticipation: targetParticipation || undefined,
@@ -334,12 +333,12 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       publicationObservationState,
       priorityPartitionSummary: priorityPartitionSummary || undefined,
       recoveryProtocolState:
-        typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+        typeof planningSnapshot.recoveryProtocolState === 'string' ?
           planningSnapshot.recoveryProtocolState :
           undefined,
       targetParticipation:
         planningSnapshot.targetParticipation &&
-        typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+        typeof planningSnapshot.targetParticipation === 'object' ?
           planningSnapshot.targetParticipation :
           undefined,
       admissionState,
@@ -363,8 +362,8 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     });
 
   if (
-    typeof publicationStatus !== TYPEOF.STRING ||
-    publicationStatus.length === NUM.ZERO
+    typeof publicationStatus !== 'string' ||
+    publicationStatus.length === 0
   ) {
     if (transitionalRecoveryPending) {
       return buildStartupAuthoritySnapshotContract({
@@ -380,7 +379,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
           STARTUP_AUTHORITY_PUBLICATION_STATE.ESTABLISHING,
         priorityPartitionSummary: priorityPartitionSummary || undefined,
         recoveryProtocolState:
-          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+          typeof planningSnapshot.recoveryProtocolState === 'string' ?
             planningSnapshot.recoveryProtocolState :
             undefined,
         targetParticipation: targetParticipation || undefined,
@@ -415,7 +414,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
 
   if (
     !priorityPartitionSummary ||
-    typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN
+    typeof priorityPartitionSummary.satisfied !== 'boolean'
   ) {
     if (transitionalRecoveryPending) {
       return buildStartupAuthoritySnapshotContract({
@@ -432,7 +431,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
           STARTUP_AUTHORITY_PUBLICATION_STATE.ESTABLISHING,
         priorityPartitionSummary: priorityPartitionSummary || undefined,
         recoveryProtocolState:
-          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+          typeof planningSnapshot.recoveryProtocolState === 'string' ?
             planningSnapshot.recoveryProtocolState :
             undefined,
         targetParticipation: targetParticipation || undefined,
@@ -456,12 +455,12 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         publicationStatus,
         priorityPartitionSummary,
         recoveryProtocolState:
-          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+          typeof planningSnapshot.recoveryProtocolState === 'string' ?
             planningSnapshot.recoveryProtocolState :
             undefined,
         targetParticipation:
           planningSnapshot.targetParticipation &&
-          typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+          typeof planningSnapshot.targetParticipation === 'object' ?
             planningSnapshot.targetParticipation :
             undefined,
         admissionState,
@@ -476,8 +475,8 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
 
   const blocked =
     (
-      targetParticipationReasons.length > NUM.ZERO &&
-      canonicalStartupNodeIds.length === NUM.ZERO
+      targetParticipationReasons.length > 0 &&
+      canonicalStartupNodeIds.length === 0
     ) ||
     isStartupProjectionActiveGateBlocked(projectionReadinessActiveGate);
   // A node whose voter-ready (durable) priority spread is satisfied is
@@ -502,7 +501,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     !activeGateRecoveryServeEligible;
   const state = blocked ?
     STARTUP_AUTHORITY_STATE.BLOCKED :
-    (priorityRecoveryReasonCodes.length > NUM.ZERO ||
+    (priorityRecoveryReasonCodes.length > 0 ||
       activeGateRecoveryBlocksReadiness ?
       STARTUP_AUTHORITY_STATE.RECOVERY_PENDING :
       STARTUP_AUTHORITY_STATE.READY);
@@ -523,7 +522,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         STARTUP_AUTHORITY_PUBLICATION_STATE.ESTABLISHING),
     priorityPartitionSummary,
     recoveryProtocolState:
-      typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+      typeof planningSnapshot.recoveryProtocolState === 'string' ?
         planningSnapshot.recoveryProtocolState :
         undefined,
     targetParticipation: targetParticipation || undefined,

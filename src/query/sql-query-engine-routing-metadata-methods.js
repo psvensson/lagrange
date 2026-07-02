@@ -1,7 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_AVAILABLE = 'available';
 const LOCAL_STR_OBJECT = 'object';
@@ -9,7 +8,6 @@ const LOCAL_STR_OBJECT = 'object';
 const {
   COLUMN,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
@@ -73,7 +71,7 @@ class SQLQueryEngineRoutingMetadataMethods {
         TABLES.SERVICES,
         (row) => row.service_id === replicaId || row.replica_id === replicaId,
       );
-      if (Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO) {
+      if (Array.isArray(matches) && matches.length > 0) {
         return true;
       }
     }
@@ -119,7 +117,7 @@ class SQLQueryEngineRoutingMetadataMethods {
         TABLES.SERVICES,
         (row) => matchesReplicaId(row) && isRoutableService(row),
       );
-      return Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO;
+      return Array.isArray(matches) && matches.length > 0;
     }
 
     if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
@@ -142,7 +140,7 @@ class SQLQueryEngineRoutingMetadataMethods {
    * @private
    */
   hasRoutablePartitionService(partitionId) {
-    return this.getRoutablePartitionServiceNodeIds(partitionId).length > LOCAL_NUM_ZERO;
+    return this.getRoutablePartitionServiceNodeIds(partitionId).length > 0;
   }
 
   /**
@@ -168,7 +166,7 @@ class SQLQueryEngineRoutingMetadataMethods {
     const nodeIds = new Set();
     for (const service of services) {
       const nodeId = service?.node_id || service?.nodeId || null;
-      if (typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO) {
+      if (typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0) {
         nodeIds.add(nodeId);
       }
     }
@@ -309,7 +307,7 @@ class SQLQueryEngineRoutingMetadataMethods {
   getLocalRuntimeRoutingOverlayServices(partitionId) {
     if (
       typeof partitionId !== LOCAL_STR_STRING ||
-      partitionId.length === LOCAL_NUM_ZERO ||
+      partitionId.length === 0 ||
       typeof this.partitionServicesProvider !== LOCAL_STR_FUNCTION
     ) {
       return [];
@@ -339,20 +337,20 @@ class SQLQueryEngineRoutingMetadataMethods {
       }
       const replicaId =
         typeof service.replicaId === LOCAL_STR_STRING &&
-        service.replicaId.length > LOCAL_NUM_ZERO ?
+        service.replicaId.length > 0 ?
           service.replicaId :
           null;
       const nodeId =
         typeof service.nodeId === LOCAL_STR_STRING &&
-        service.nodeId.length > LOCAL_NUM_ZERO ?
+        service.nodeId.length > 0 ?
           service.nodeId :
           this.nodeId;
       const address =
         typeof service.unifiedAddress === LOCAL_STR_STRING &&
-        service.unifiedAddress.length > LOCAL_NUM_ZERO ?
+        service.unifiedAddress.length > 0 ?
           service.unifiedAddress :
           typeof service.address === LOCAL_STR_STRING &&
-          service.address.length > LOCAL_NUM_ZERO ?
+          service.address.length > 0 ?
             service.address :
             null;
       if (!replicaId || !nodeId || !address) {
@@ -371,7 +369,7 @@ class SQLQueryEngineRoutingMetadataMethods {
         [COLUMN.REPLICA_ID]: replicaId,
         [COLUMN.RAFT_ROLE]:
           typeof raftRole === LOCAL_STR_STRING &&
-          raftRole.length > LOCAL_NUM_ZERO ?
+          raftRole.length > 0 ?
             raftRole :
             null,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
@@ -467,7 +465,7 @@ class SQLQueryEngineRoutingMetadataMethods {
   ) {
     const observedServiceCount = Array.isArray(serviceRows) ?
       serviceRows.length :
-      NUM.ZERO;
+      0;
     const partitionReplicaCount =
       partitionRow?.[
         AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD.REPLICA_COUNT
@@ -480,11 +478,11 @@ class SQLQueryEngineRoutingMetadataMethods {
     );
     if (
       !Number.isFinite(expectedReplicaCount) ||
-      expectedReplicaCount <= NUM.ZERO
+      expectedReplicaCount <= 0
     ) {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.UNKNOWN,
-        expectedReplicaCount: NUM.ZERO,
+        expectedReplicaCount: 0,
         observedServiceCount,
       });
     }
@@ -538,7 +536,7 @@ class SQLQueryEngineRoutingMetadataMethods {
    * @private
    */
   async refreshAuthoritativeRoutingOverlay(partitionId, options = {}) {
-    if (typeof partitionId !== LOCAL_STR_STRING || partitionId.length === LOCAL_NUM_ZERO) {
+    if (typeof partitionId !== LOCAL_STR_STRING || partitionId.length === 0) {
       return false;
     }
 

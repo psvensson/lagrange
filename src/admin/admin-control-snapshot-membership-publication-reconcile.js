@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
 import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
 import {
@@ -116,7 +116,7 @@ function buildMembershipPublicationReadOptions(options = {}) {
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }
 function resolveMembershipPublicationHandoffLatestPublicationRow(value = null) {
-  if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW;
   }
   return resolveLatestMembershipPublicationRow([
@@ -239,14 +239,14 @@ function buildDeferredMembershipPublicationReconcileOptions(options = {}) {
 }
 function isMembershipPublicationOwnerRecoveryWaitTarget(target = null) {
   return target &&
-    typeof target === TYPEOF.OBJECT &&
+    typeof target === 'object' &&
     !Array.isArray(target) &&
     target.handoffContract?.nextAction ===
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
     (
-      Number(target.pendingRecoveryCount) > NUM.ZERO ||
+      Number(target.pendingRecoveryCount) > 0 ||
       Array.isArray(target.pendingRecoveryNodeIds) &&
-        target.pendingRecoveryNodeIds.length > NUM.ZERO
+        target.pendingRecoveryNodeIds.length > 0
     );
 }
 function buildOwnerRecoveryWaitReconcileOptions(options = {}) {
@@ -289,7 +289,7 @@ function enqueueMembershipPublicationReconcileFallback(
   if (
     !membershipPublicationService ||
     typeof membershipPublicationService.enqueueClusterMembershipReconcile !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return buildMembershipPublicationHandoffEnqueueOutcome();
   }
@@ -317,14 +317,14 @@ function enqueueMembershipPublicationReconcileFallback(
 function resolveMembershipPublicationHandoffRetryAfterMs(...values) {
   for (const value of values) {
     const retryAfterMs = Number(value);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
       return Math.floor(retryAfterMs);
     }
   }
   return undefined;
 }
 function isMembershipPublicationService(value) {
-  return value && typeof value === TYPEOF.OBJECT;
+  return value && typeof value === 'object';
 }
 function shouldDeferInlineMembershipPublicationOwnerCommand(options = {}) {
   return options[
@@ -461,7 +461,7 @@ async function maybeReconcileAuthoritativeMembershipPublication(
   }
   if (
     typeof membershipPublicationService.reconcileActiveGateMembershipPublication ===
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return await membershipPublicationService.reconcileActiveGateMembershipPublication(
       publicationActiveGateHandoff,
@@ -524,7 +524,7 @@ function resolvePublicationOrderingValue(row, keys = []) {
       return value;
     }
   }
-  return NUM.ZERO;
+  return 0;
 }
 function isMembershipPublicationRow(row) {
   const normalizedRow = normalizeControlPlanePublicationRow(row);
@@ -532,7 +532,7 @@ function isMembershipPublicationRow(row) {
     normalizedRow.publicationKind || '',
   ).toLowerCase();
   return (
-    publicationKind.length === NUM.ZERO ||
+    publicationKind.length === 0 ||
     publicationKind === MEMBERSHIP_PUBLICATION_KIND
   );
 }
@@ -541,11 +541,11 @@ function resolveLatestMembershipPublicationRow(
   options = {},
 ) {
   const expectedStatus =
-    typeof options.status === TYPEOF.STRING ?
+    typeof options.status === 'string' ?
       options.status.toUpperCase() :
       null;
   const normalizedRows = (Array.isArray(publicationRows) ? publicationRows : [])
-    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .filter((row) => row && typeof row === 'object')
     .filter((row) => isMembershipPublicationRow(row))
     .map((row) => normalizeControlPlanePublicationRow(row))
     .filter((row) => {
@@ -557,10 +557,10 @@ function resolveLatestMembershipPublicationRow(
         row.publicationEpoch ||
         row.status ||
         (Array.isArray(row.publishedActiveNodeIds) &&
-          row.publishedActiveNodeIds.length > NUM.ZERO),
+          row.publishedActiveNodeIds.length > 0),
       );
     });
-  if (normalizedRows.length === NUM.ZERO) {
+  if (normalizedRows.length === 0) {
     return MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW;
   }
   normalizedRows.sort((left, right) => {
@@ -573,13 +573,13 @@ function resolveLatestMembershipPublicationRow(
         'publicationEpoch',
         'publication_epoch',
       ]);
-    if (publicationEpochDelta !== NUM.ZERO) {
+    if (publicationEpochDelta !== 0) {
       return publicationEpochDelta;
     }
     const publishedAtDelta =
       resolvePublicationOrderingValue(right, ['publishedAt', 'published_at']) -
       resolvePublicationOrderingValue(left, ['publishedAt', 'published_at']);
-    if (publishedAtDelta !== NUM.ZERO) {
+    if (publishedAtDelta !== 0) {
       return publishedAtDelta;
     }
     return (
@@ -593,7 +593,7 @@ function resolveLatestMembershipPublicationRow(
       ])
     );
   });
-  return normalizedRows[NUM.ZERO] || MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW;
+  return normalizedRows[0] || MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -663,7 +663,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
     if (
       !preferAuthoritativeRead &&
       typeof readinessService?.getLatestMembershipPublicationRowSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const publicationRow =
         readinessService.getLatestMembershipPublicationRowSync(null, {
@@ -676,7 +676,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
     if (
       !boundedObservationProbe &&
       typeof readinessService?.getLatestMembershipPublicationRow ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       const publicationRow =
         await readinessService.getLatestMembershipPublicationRow(null, {
@@ -690,7 +690,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
       hasMembershipPublicationService &&
       !preferAuthoritativeRead &&
       typeof membershipPublicationService.getLatestClusterPublicationSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const publicationRow =
         membershipPublicationService.getLatestClusterPublicationSync();
@@ -702,7 +702,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
       hasMembershipPublicationService &&
       !boundedObservationProbe &&
       typeof membershipPublicationService.getLatestClusterPublication ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       try {
         const publicationRow =
@@ -742,7 +742,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
   ) {
     if (
       fallbackPublication &&
-      typeof fallbackPublication === TYPEOF.OBJECT &&
+      typeof fallbackPublication === 'object' &&
       String(
         fallbackPublication.status || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
       ).toUpperCase() === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
@@ -758,26 +758,26 @@ class AdminControlSnapshotMembershipPublicationReconcile
     if (
       options.preferAuthoritativeRead !== true &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRowSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const publicationRow =
         readinessService.getLatestPublishedMembershipPublicationRowSync({
           lane: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
         });
-      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+      if (publicationRow && typeof publicationRow === 'object') {
         return publicationRow;
       }
     }
     if (
       !boundedObservationProbe &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRow ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       const publicationRow =
         await readinessService.getLatestPublishedMembershipPublicationRow({
           lane: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
         });
-      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+      if (publicationRow && typeof publicationRow === 'object') {
         return publicationRow;
       }
     }
@@ -785,11 +785,11 @@ class AdminControlSnapshotMembershipPublicationReconcile
       hasMembershipPublicationService &&
       options.preferAuthoritativeRead !== true &&
       typeof membershipPublicationService.getLatestPublishedClusterPublicationSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const publicationRow =
         membershipPublicationService.getLatestPublishedClusterPublicationSync();
-      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+      if (publicationRow && typeof publicationRow === 'object') {
         return publicationRow;
       }
     }
@@ -797,7 +797,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
       hasMembershipPublicationService &&
       !boundedObservationProbe &&
       typeof membershipPublicationService.getLatestPublishedClusterPublication ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       try {
         const publicationRow =
@@ -806,7 +806,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
               preferAuthoritativeRead: options.preferAuthoritativeRead === true,
             }),
           );
-        if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+        if (publicationRow && typeof publicationRow === 'object') {
           return publicationRow;
         }
       } catch (error) {

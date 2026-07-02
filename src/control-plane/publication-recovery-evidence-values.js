@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 
 const PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE = Object.freeze({
@@ -57,11 +56,11 @@ const PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE = Object.freeze({
   }),
 });
 const PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_RANK = Object.freeze({
-  [PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.UNAVAILABLE]: NUM.ZERO,
+  [PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.UNAVAILABLE]: 0,
   [PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.EXPLICIT_NODE_LIST]:
-    NUM.ONE,
+    1,
   [PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.FULL_SELECTED_COVERAGE]:
-    NUM.ONE + NUM.ONE,
+    1 + 1,
 });
 const PUBLICATION_RECOVERY_DECISION_SNAPSHOT_FIELD = Object.freeze({
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
@@ -172,7 +171,7 @@ function normalizeDistinctStringArray(values = []) {
       (Array.isArray(values) ? values : [])
         .map((value) =>
           String(value || PUBLICATION_RECOVERY_EVIDENCE_TEXT.EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     )],
   );
 }
@@ -183,21 +182,21 @@ function normalizePublicationEpoch(value) {
 
 function normalizeNonNegativeInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue >= 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeMaximumNonNegativeInteger(values = []) {
   return Math.max(
-    NUM.ZERO,
+    0,
     ...values.map((value) => normalizeNonNegativeInteger(value)),
   );
 }
 
 function normalizeOptionalString(value) {
   return typeof value === PUBLICATION_RECOVERY_EVIDENCE_TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO ?
+    value.trim().length > 0 ?
     value.trim() :
     null;
 }
@@ -365,7 +364,7 @@ function resolvePublicationRecoveryPublishedActiveNodeIds({
       publicationConvergence?.publishedActiveNodeIds,
     ),
   ]);
-  if (ownerPublishedActiveNodeIds.length > NUM.ZERO) {
+  if (ownerPublishedActiveNodeIds.length > 0) {
     return ownerPublishedActiveNodeIds;
   }
   return normalizeActiveGateProgressNodeIds(
@@ -386,7 +385,7 @@ function resolveRelevantPublicationMembershipNodeIds(
   const authoritativeNodeIdSet = new Set(
     normalizeDistinctStringArray(authoritativePublicationMembershipNodeIds),
   );
-  return authoritativeNodeIdSet.size > NUM.ZERO ?
+  return authoritativeNodeIdSet.size > 0 ?
     normalizeDistinctStringArray(
       normalizedNodeIds.filter((nodeId) => authoritativeNodeIdSet.has(nodeId)),
     ) :

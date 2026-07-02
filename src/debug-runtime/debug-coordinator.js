@@ -3,7 +3,7 @@
  */
 
 import {EventEmitter} from 'node:events';
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {
   DEBUG_METADATA_TABLE as DT,
@@ -16,7 +16,6 @@ import {
 } from './debug-coordinator-constants.js';
 
 const LOCAL_STR_MANUAL = 'manual';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_INITIAL = 'initial';
 const LOCAL_STR_ADVANCE_STAGE = 'advance_stage';
 const LOCAL_STR_REFRESH_STAGE = 'refresh_stage';
@@ -59,7 +58,7 @@ class DebugCoordinator {
    * @return {Function} Unsubscribe callback.
    */
   subscribe(listener) {
-    if (typeof listener !== TYPEOF.FUNCTION) {
+    if (typeof listener !== 'function') {
       throw new Error(ERR.LISTENER_REQUIRED);
     }
     this.emitter.on(EVENT.HANDOFF, listener);
@@ -77,7 +76,7 @@ class DebugCoordinator {
    */
   subscribeLineage(lineageId, listener) {
     assertLineageId(lineageId);
-    if (typeof listener !== TYPEOF.FUNCTION) {
+    if (typeof listener !== 'function') {
       throw new Error(ERR.LISTENER_REQUIRED);
     }
 
@@ -162,26 +161,26 @@ class DebugCoordinator {
    */
   hydrateFromSystemMetadata() {
     if (!this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return NUM.ZERO;
+      typeof this.systemTableCache.getAll !== 'function') {
+      return 0;
     }
 
     let rows;
     try {
       rows = this.systemTableCache.getAll(DT.SESSIONS);
     } catch (_err) {
-      return NUM.ZERO;
+      return 0;
     }
-    if (!Array.isArray(rows) || rows.length === NUM.ZERO) {
-      return NUM.ZERO;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return 0;
     }
 
     const appliedRows = normalizeRowsForHydration(rows);
-    let appliedCount = NUM.ZERO;
+    let appliedCount = 0;
     for (const row of appliedRows) {
       const result = this.upsertStageEndpoint(row, 'cache_hydration');
       if (result.applied) {
-        appliedCount += LOCAL_NUM_ONE;
+        appliedCount += 1;
       }
     }
     return appliedCount;
@@ -195,8 +194,8 @@ class DebugCoordinator {
    */
   bindCdcIntegrationService(cdcIntegrationService) {
     if (!cdcIntegrationService ||
-      typeof cdcIntegrationService.on !== TYPEOF.FUNCTION ||
-      typeof cdcIntegrationService.off !== TYPEOF.FUNCTION) {
+      typeof cdcIntegrationService.on !== 'function' ||
+      typeof cdcIntegrationService.off !== 'function') {
       return false;
     }
 
@@ -219,7 +218,7 @@ class DebugCoordinator {
    */
   unbindCdcIntegrationService() {
     if (this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.off === TYPEOF.FUNCTION) {
+      typeof this.cdcIntegrationService.off === 'function') {
       for (const [eventName, handler] of this.boundCdcHandlers) {
         this.cdcIntegrationService.off(eventName, handler);
       }
@@ -236,7 +235,7 @@ class DebugCoordinator {
    * @return {boolean} True when applied.
    */
   handleCdcEvent(event) {
-    if (!event || typeof event !== TYPEOF.OBJECT) {
+    if (!event || typeof event !== 'object') {
       return false;
     }
     if (event.tableName !== DT.SESSIONS &&
@@ -248,7 +247,7 @@ class DebugCoordinator {
     }
 
     const row = event.data || event.whereClause || null;
-    if (!row || typeof row !== TYPEOF.OBJECT) {
+    if (!row || typeof row !== 'object') {
       return false;
     }
 
@@ -357,7 +356,7 @@ function normalizeRowsForHydration(rows) {
       sessionId: row[DSF.SESSION_ID] || null,
       updatedAt: toTimestampOrNow(
         row[DSF.UPDATED_AT],
-        NUM.ZERO,
+        0,
       ),
     });
   }
@@ -378,7 +377,7 @@ function normalizeRowsForHydration(rows) {
  * @param {Object} request
  */
 function assertRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
 }
@@ -419,8 +418,8 @@ function toStageId(value) {
   if (isNonNegativeInteger(value)) {
     return value;
   }
-  if (typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO) {
+  if (typeof value === 'string' &&
+    value.trim().length > 0) {
     const parsed = Number.parseInt(value, 10);
     if (isNonNegativeInteger(parsed)) {
       return parsed;
@@ -443,7 +442,7 @@ function toTimestampOrNow(value, fallback) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 /**
@@ -451,8 +450,8 @@ function isNonNegativeInteger(value) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

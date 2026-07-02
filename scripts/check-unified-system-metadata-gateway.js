@@ -5,20 +5,18 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 import {SYSTEM_TABLE_NAME} from '../src/bootstrap/system-table-schemas-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_ROOT = '--root';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_NODE_MODULES = 'node_modules';
 const LOCAL_STR_GIT = '.git';
 const LOCAL_STR_TEST_OUTPUT = 'test-output';
 const LOCAL_STR_COVERAGE = 'coverage';
 const LOCAL_STR_SRC = 'src';
 const LOCAL_STR_JS = '.js';
-const LOCAL_STR_1D7VE = '\\$&';
+const LOCAL_STR_BACKSLASH_DOLLAR_AMP = '\\$&';
 const LOCAL_STR_SYSTEM_TABLE_NAME = 'SYSTEM_TABLE_NAME\\.';
 const LOCAL_STR_PIPE = '|';
 const LOCAL_STR_I = 'i';
-const LOCAL_STR_G0BX8 = '[unified-system-metadata-gateway] ok';
+const LOCAL_STR_UNIFIED_SYSTEM_METADATA_GATEWAY_OK = '[unified-system-metadata-gateway] ok';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,9 +138,9 @@ const VIOLATION_RULES = Object.freeze([
 ]);
 
 function parseRootFromArgs(argv) {
-  for (let index = LOCAL_NUM_ZERO; index < argv.length; index++) {
-    if (argv[index] === LOCAL_STR_ROOT && argv[index + LOCAL_NUM_ONE]) {
-      return path.resolve(argv[index + LOCAL_NUM_ONE]);
+  for (let index = 0; index < argv.length; index++) {
+    if (argv[index] === LOCAL_STR_ROOT && argv[index + 1]) {
+      return path.resolve(argv[index + 1]);
     }
   }
   return DEFAULT_ROOT;
@@ -185,7 +183,7 @@ function matchesAllowlist(relativePath, allowlist) {
 }
 
 function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
+  return value.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_BACKSLASH_DOLLAR_AMP);
 }
 
 function buildSystemTableReferencePattern() {
@@ -238,12 +236,12 @@ function printViolations(violations) {
 function main() {
   const rootDir = parseRootFromArgs(process.argv.slice(2));
   const violations = collectViolations(rootDir);
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     printViolations(violations);
-    process.exitCode = LOCAL_NUM_ONE;
+    process.exitCode = 1;
     return;
   }
-  console.log(LOCAL_STR_G0BX8);
+  console.log(LOCAL_STR_UNIFIED_SYSTEM_METADATA_GATEWAY_OK);
 }
 
 main();

@@ -8,8 +8,6 @@ const {
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
   CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
-  TYPEOF,
   normalizeDeliveryPriority,
   normalizeSystemWriteRecoveryCandidateSelectionKeyValue,
   resolveSystemTableMutationDeliveryPriority,
@@ -19,7 +17,7 @@ const {
 const CDC_VOLATILE_SELECTION_PARAM_VALUE = '<volatile-row-version>';
 
 function normalizeRoutedSystemWriteSelectionParams(sql, params = []) {
-  if (!Array.isArray(params) || params.length === NUM.ZERO) {
+  if (!Array.isArray(params) || params.length === 0) {
     return [];
   }
   const columnNames = resolveInsertMutationColumnNames(sql);
@@ -41,8 +39,8 @@ function resolveRoutedSystemTableMutationCoalescingKey(
   options,
 ) {
   if (
-    typeof options?.coalescingKey === TYPEOF.STRING &&
-    options.coalescingKey.length > NUM.ZERO
+    typeof options?.coalescingKey === 'string' &&
+    options.coalescingKey.length > 0
   ) {
     return options.coalescingKey;
   }

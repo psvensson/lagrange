@@ -1,10 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
-const LOCAL_STR_1VEZJ = 'service-definitions-owner';
+const LOCAL_STR_SERVICE_DEFINITIONS_OWNER = 'service-definitions-owner';
 
 class ServiceDefinitionsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = LOCAL_STR_1VEZJ;
+  static OWNER_NAME = LOCAL_STR_SERVICE_DEFINITIONS_OWNER;
   static TABLE_NAME = TABLES.SERVICE_DEFINITIONS;
 
   async getServiceDefinition(serviceDefinitionId, options = {}) {

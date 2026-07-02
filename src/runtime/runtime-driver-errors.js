@@ -12,12 +12,12 @@
 import {BaseError} from '../utils/base-error.js';
 
 const LOCAL_STR_RUNTIMEDRIVER = 'RuntimeDriver';
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
-const LOCAL_STR_LLYQW = 'RuntimeDriverRegistry';
+const LOCAL_STR_RUNTIMEDRIVERREGISTRY = 'RuntimeDriverRegistry';
 const LOCAL_STR_GETDRIVER = 'getDriver';
 const LOCAL_STR_REGISTER = 'register';
-const LOCAL_STR_163VV = 'ServiceRuntimeLifecycle';
+const LOCAL_STR_SERVICERUNTIMELIFECYCLE = 'ServiceRuntimeLifecycle';
 const LOCAL_STR_REGISTERENDPOINT = 'registerEndpoint';
 const LOCAL_STR_OPERATIONJOURNAL = 'operationJournal';
 const LOCAL_STR_IDEMPOTENCYCHECK = 'idempotencyCheck';
@@ -60,7 +60,7 @@ class DriverValidationError extends BaseError {
    */
   constructor(driverKind, errors) {
     super(
-      `Descriptor validation failed for '${driverKind}': ${errors.join(LOCAL_STR_1AM9G)}`,
+      `Descriptor validation failed for '${driverKind}': ${errors.join(LOCAL_STR_SEMI_SPACE)}`,
       {
         context: {
           component: LOCAL_STR_RUNTIMEDRIVER,
@@ -124,7 +124,7 @@ class UnknownRuntimeKindError extends BaseError {
       ` (available: ${available})`,
       {
         context: {
-          component: LOCAL_STR_LLYQW,
+          component: LOCAL_STR_RUNTIMEDRIVERREGISTRY,
           operation: LOCAL_STR_GETDRIVER,
           metadata: {kind, availableKinds},
         },
@@ -149,7 +149,7 @@ class DuplicateDriverError extends BaseError {
       `Driver already registered for runtime kind '${kind}'`,
       {
         context: {
-          component: LOCAL_STR_LLYQW,
+          component: LOCAL_STR_RUNTIMEDRIVERREGISTRY,
           operation: LOCAL_STR_REGISTER,
           metadata: {kind},
         },
@@ -173,7 +173,7 @@ class RegistryFrozenError extends BaseError {
       `Registry is frozen; cannot perform '${operation}'`,
       {
         context: {
-          component: LOCAL_STR_LLYQW,
+          component: LOCAL_STR_RUNTIMEDRIVERREGISTRY,
           operation,
         },
       },
@@ -203,7 +203,7 @@ class LifecycleOrchestrationError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: LOCAL_STR_163VV,
+          component: LOCAL_STR_SERVICERUNTIMELIFECYCLE,
           operation,
           metadata: {runtimeKind, serviceId},
         },
@@ -236,7 +236,7 @@ class EndpointIntentError extends BaseError {
       ` for service '${serviceId}': ${reason}`,
       {
         context: {
-          component: LOCAL_STR_163VV,
+          component: LOCAL_STR_SERVICERUNTIMELIFECYCLE,
           operation: LOCAL_STR_REGISTERENDPOINT,
           metadata: {runtimeKind, serviceId},
         },
@@ -273,7 +273,7 @@ class OperationJournalError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: LOCAL_STR_163VV,
+          component: LOCAL_STR_SERVICERUNTIMELIFECYCLE,
           operation: LOCAL_STR_OPERATIONJOURNAL,
           metadata: {runtimeKind, serviceId, lifecycleOp: operation},
         },
@@ -309,7 +309,7 @@ class IdempotencyCheckError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: LOCAL_STR_163VV,
+          component: LOCAL_STR_SERVICERUNTIMELIFECYCLE,
           operation: LOCAL_STR_IDEMPOTENCYCHECK,
           metadata: {runtimeKind, serviceId},
         },

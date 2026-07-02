@@ -1,11 +1,10 @@
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
 const DEFAULT_LEADER_ACTIVATION_HOLDOFF_MS = 250;
 
 function normalizeHoldoffMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
     DEFAULT_LEADER_ACTIVATION_HOLDOFF_MS;
 }
@@ -64,7 +63,7 @@ class LeaderActivationGate {
       activateNow();
     };
 
-    const immediate = options.immediate === true || this.holdoffMs === NUM.ZERO;
+    const immediate = options.immediate === true || this.holdoffMs === 0;
     if (immediate) {
       runActivation();
       return true;

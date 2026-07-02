@@ -9,13 +9,11 @@
  */
 
 import {ALLOWED_RUNTIME_KINDS, RUNTIME_KIND} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {
   isPgwireRuntimeRef,
   validatePgwireRuntimeConfig,
 } from '../runtime/pgwire-descriptor.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 // --- Validation error message constants ---
 
@@ -64,7 +62,7 @@ function validateRuntimeKind(kind) {
   if (kind === null || kind === undefined) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.KIND_REQUIRED]};
   }
-  if (typeof kind !== TYPEOF.STRING) {
+  if (typeof kind !== 'string') {
     return {valid: false, errors: [DESCRIPTOR_ERROR.KIND_NOT_STRING]};
   }
   if (!ALLOWED_RUNTIME_KINDS.has(kind)) {
@@ -84,7 +82,7 @@ function validateRuntimeConfig(config) {
   if (config === null || config === undefined) {
     return {valid: true};
   }
-  if (typeof config !== TYPEOF.STRING) {
+  if (typeof config !== 'string') {
     return {valid: false, errors: [DESCRIPTOR_ERROR.CONFIG_NOT_STRING]};
   }
   try {
@@ -106,7 +104,7 @@ function validateNativeJsRef(ref) {
   if (ref === null || ref === undefined) {
     return {valid: true};
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
   return {valid: true};
@@ -123,10 +121,10 @@ function validateWasmComponentRef(ref) {
   if (ref === null || ref === undefined) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_REQUIRED]};
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
-  if (ref.length === LOCAL_NUM_ZERO) {
+  if (ref.length === 0) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_EMPTY]};
   }
   return {valid: true};
@@ -143,10 +141,10 @@ function validateOciContainerRef(ref) {
   if (ref === null || ref === undefined) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_REQUIRED]};
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
-  if (ref.length === LOCAL_NUM_ZERO) {
+  if (ref.length === 0) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_EMPTY]};
   }
   if (!ref.includes(OCI_DIGEST_MARKER)) {
@@ -211,7 +209,7 @@ function validateRuntimeDescriptor(descriptor) {
     }
   }
 
-  if (errors.length > LOCAL_NUM_ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
   return {valid: true};

@@ -1,7 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const {
-  NUM,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -75,7 +74,7 @@ class PartitionServiceLifecycleMethods {
         replayInFlight: this.cdcBufferReplayInFlight,
         subscriberCount: this.cdcSubscribers.size,
       },
-      pendingRequestCount: pendingRequestTrackerStats?.pendingCount || NUM.ZERO,
+      pendingRequestCount: pendingRequestTrackerStats?.pendingCount || 0,
       pendingRequestTracker: pendingRequestTrackerStats,
     };
   }
@@ -134,7 +133,7 @@ class PartitionServiceLifecycleMethods {
       PARTITION_SERVICE_LITERAL.PARTITION_SERVICE_SHUTDOWN,
     );
     await this.quiesceRebalancing();
-    if (this.pendingCDCEventDeliveries.size > NUM.ZERO) {
+    if (this.pendingCDCEventDeliveries.size > 0) {
       await Promise.allSettled([...this.pendingCDCEventDeliveries]);
       this.pendingCDCEventDeliveries.clear();
     }
@@ -149,12 +148,12 @@ class PartitionServiceLifecycleMethods {
     this.cdcSubscribers.clear();
     this.cdcSubscriberWrappers.clear();
     this.cdcSubscriberStates.clear();
-    this.cdcSubscriptionEpoch = NUM.ZERO;
-    this.cdcEventSequenceNumber = NUM.ZERO;
+    this.cdcSubscriptionEpoch = 0;
+    this.cdcEventSequenceNumber = 0;
     this.cdcBufferReplayDelayMs =
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    this.cdcReplayBufferGrowthCount = NUM.ZERO;
-    this.cdcReplayRetryDepth = NUM.ZERO;
+    this.cdcReplayBufferGrowthCount = 0;
+    this.cdcReplayRetryDepth = 0;
     this.recentlyAppliedEntryKeys.clear();
     this.recentlyAppliedEntryOrder = [];
     this.pendingCDCEventDeliveries.clear();

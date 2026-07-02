@@ -1,7 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   QUERY_ROUTING_REPAIR_REASON,
@@ -55,7 +54,7 @@ function createPartitionCandidateDeliveryState({
     shouldSkipCandidateDelivery(serviceInfo, address) {
       if (
         typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        address.length === NUM.ZERO ||
+        address.length === 0 ||
         attemptedAddresses.has(address)
       ) {
         return true;
@@ -87,7 +86,7 @@ function createPartitionCandidateDeliveryState({
         preferSameLatencyGroup,
         getRecoveryCandidateSelectionOptions(),
       );
-      if (recoveryCandidates.length === NUM.ZERO) {
+      if (recoveryCandidates.length === 0) {
         return;
       }
       leaderRecoveryQueued = true;
@@ -102,14 +101,14 @@ function createPartitionCandidateDeliveryState({
         recoveryRoutingContract.preferDifferentNodeAfterRuntimeWitness ===
           true &&
         typeof participantNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        participantNodeId.length > NUM.ZERO &&
+        participantNodeId.length > 0 &&
         Number.isInteger(currentCandidateIndex) &&
-        currentCandidateIndex >= NUM.ZERO;
+        currentCandidateIndex >= 0;
       if (!shouldDeprioritizeSameNodeCandidates) {
         candidateQueue.push(...recoveryCandidates);
         return;
       }
-      const nextCandidateIndex = currentCandidateIndex + NUM.ONE;
+      const nextCandidateIndex = currentCandidateIndex + 1;
       const retainedTailCandidates = candidateQueue
         .slice(nextCandidateIndex)
         .filter((candidate) => candidate?.nodeId !== participantNodeId);
@@ -176,7 +175,7 @@ function createPartitionCandidateDeliveryState({
           preferSameLatencyGroup,
           getRecoveryCandidateSelectionOptions(),
         );
-        if (refreshedRecoveryCandidates.length > NUM.ZERO) {
+        if (refreshedRecoveryCandidates.length > 0) {
           candidateQueue.push(...refreshedRecoveryCandidates);
         }
       }

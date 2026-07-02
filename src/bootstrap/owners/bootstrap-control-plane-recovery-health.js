@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
   LIFECYCLE_REASON,
@@ -20,14 +19,14 @@ const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
 const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
   getPriorityControlPlaneRecoveryHealth() {
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
       );
     }
     if (
       typeof service.getPriorityControlPlaneRecoveryHealthSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       try {
         return service.getPriorityControlPlaneRecoveryHealthSync(
@@ -44,14 +43,14 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
     const publicationStory = this.getControlPlanePublicationStory(Date.now());
     if (
       publicationStory?.membershipPublication &&
-      typeof publicationStory.membershipPublication === TYPEOF.OBJECT
+      typeof publicationStory.membershipPublication === 'object'
     ) {
       return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
         publicationStory.membershipPublication,
       );
     }
     if (
-      typeof service.getMembershipPublicationDiagnosticsSync !== TYPEOF.FUNCTION
+      typeof service.getMembershipPublicationDiagnosticsSync !== 'function'
     ) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_PROVIDER_UNAVAILABLE,
@@ -76,13 +75,13 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
   async getPriorityControlPlaneRecoveryHealthAsync() {
     const service = this.getControlPlaneReadinessService();
     const observedAt = Date.now();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
       );
     }
     if (
-      typeof service.getPriorityControlPlaneRecoveryHealth === TYPEOF.FUNCTION
+      typeof service.getPriorityControlPlaneRecoveryHealth === 'function'
     ) {
       try {
         return await service.getPriorityControlPlaneRecoveryHealth(
@@ -96,7 +95,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
         );
       }
     }
-    if (typeof service.getControlPlanePublicationStory === TYPEOF.FUNCTION) {
+    if (typeof service.getControlPlanePublicationStory === 'function') {
       try {
         const publicationStory = await service.getControlPlanePublicationStory(
           this.getSeedNodeId(),
@@ -104,7 +103,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
         );
         if (
           publicationStory?.membershipPublication &&
-          typeof publicationStory.membershipPublication === TYPEOF.OBJECT
+          typeof publicationStory.membershipPublication === 'object'
         ) {
           return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
             publicationStory.membershipPublication,
@@ -118,14 +117,14 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
       }
     }
     const membershipPublicationReader =
-      typeof service.getMembershipPublicationDiagnostics === TYPEOF.FUNCTION ?
+      typeof service.getMembershipPublicationDiagnostics === 'function' ?
         () =>
           service.getMembershipPublicationDiagnostics(
             this.getSeedNodeId(),
             observedAt,
           ) :
         typeof service.getMembershipPublicationDiagnosticsSync ===
-            TYPEOF.FUNCTION ?
+            'function' ?
           () =>
             Promise.resolve(
               service.getMembershipPublicationDiagnosticsSync(
@@ -156,7 +155,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
   ) {
     if (
       !membershipPublication ||
-      typeof membershipPublication !== TYPEOF.OBJECT
+      typeof membershipPublication !== 'object'
     ) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_UNAVAILABLE,
@@ -170,8 +169,8 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
       membershipPublication?.status ??
       null;
     if (
-      typeof publicationStatus !== TYPEOF.STRING ||
-      publicationStatus.length === NUM.ZERO
+      typeof publicationStatus !== 'string' ||
+      publicationStatus.length === 0
     ) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_INCOMPLETE,
@@ -185,12 +184,12 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
     const priorityPartitionSummary =
       planningSnapshot?.priorityPartitionSummary ??
       (membershipPublication?.priorityPartitionSummary &&
-      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof membershipPublication.priorityPartitionSummary === 'object' ?
         membershipPublication.priorityPartitionSummary :
         null);
     if (
       !priorityPartitionSummary ||
-      typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN
+      typeof priorityPartitionSummary.satisfied !== 'boolean'
     ) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_INCOMPLETE,
@@ -208,10 +207,10 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
       [...planningSnapshot.priorityRecoveryReasonCodes] :
       [];
     return {
-      healthy: reasonCodes.length === NUM.ZERO,
+      healthy: reasonCodes.length === 0,
       reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
       details:
-        reasonCodes.length > NUM.ZERO ?
+        reasonCodes.length > 0 ?
           {
             publicationEpoch:
                 planningSnapshot?.publicationEpoch ??
@@ -236,7 +235,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
     const details = {
       failureReason,
     };
-    if (context && typeof context === TYPEOF.OBJECT) {
+    if (context && typeof context === 'object') {
       Object.assign(details, context);
     }
     if (error) {
@@ -262,7 +261,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
   },
   getControlPlaneWriteHealth() {
     const provider = this.getControlPlaneWriteHealthProvider();
-    if (typeof provider !== TYPEOF.FUNCTION) {
+    if (typeof provider !== 'function') {
       return {
         healthy: true,
         classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
@@ -277,7 +276,7 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
       const health = provider() || {};
       const healthy = health.healthy !== false;
       const state =
-        typeof health.state === TYPEOF.STRING && health.state.length > NUM.ZERO ?
+        typeof health.state === 'string' && health.state.length > 0 ?
           health.state :
           healthy ?
             CONTROL_PLANE_WRITE_HEALTH_STATE.HEALTHY :
@@ -289,13 +288,13 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
             LIFECYCLE_DEPENDENCY_CLASS.SOFT :
             LIFECYCLE_DEPENDENCY_CLASS.HARD,
         reasonCode:
-          typeof health.reasonCode === TYPEOF.STRING &&
-          health.reasonCode.length > NUM.ZERO ?
+          typeof health.reasonCode === 'string' &&
+          health.reasonCode.length > 0 ?
             health.reasonCode :
             LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
         state,
         details:
-          health.details && typeof health.details === TYPEOF.OBJECT ?
+          health.details && typeof health.details === 'object' ?
             health.details :
             {
               state,

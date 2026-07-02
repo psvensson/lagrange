@@ -204,7 +204,7 @@ const PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_STATE_TABLE =
     }),
   ]);
 const PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY = Object.freeze({
-  SPREAD_GAP_UNAVAILABLE: NUM.NEGATIVE_ONE,
+  SPREAD_GAP_UNAVAILABLE: -1,
 });
 const PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY_FIELD =
   Object.freeze({
@@ -278,13 +278,13 @@ const REBALANCER_PRE_EXECUTION_HANDOFF_STATE_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.NO_LIMITED_MOVES,
-    matches: (evidence) => evidence.limitedMoveCount === NUM.ZERO,
+    matches: (evidence) => evidence.limitedMoveCount === 0,
   }),
   Object.freeze({
     state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.PRE_EXECUTION_SKIPS_ONLY,
     matches: (evidence) =>
-      evidence.executableMoveCount === NUM.ZERO &&
-      evidence.preExecuteSkippedMoveCount > NUM.ZERO,
+      evidence.executableMoveCount === 0 &&
+      evidence.preExecuteSkippedMoveCount > 0,
   }),
   Object.freeze({
     state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.READY_TO_EXECUTE,

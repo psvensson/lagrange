@@ -6,9 +6,6 @@
 
 import {readCString} from './pgwire-buffer-codec.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
 const LOCAL_NUM_FOUR = 4;
 const LOCAL_STR_UTF8 = 'utf8';
 
@@ -22,9 +19,9 @@ const LOCAL_STR_UTF8 = 'utf8';
  */
 function parseStartupParams(buf) {
   const params = {};
-  let off = LOCAL_NUM_ZERO;
+  let off = 0;
   while (off < buf.length) {
-    if (buf[off] === LOCAL_NUM_ZERO) break;
+    if (buf[off] === 0) break;
     const key = readCString(buf, off);
     off = key.nextOffset;
     if (off >= buf.length) break;
@@ -41,7 +38,7 @@ function parseStartupParams(buf) {
  * @return {{query: string}}
  */
 function parseQueryMessage(payload) {
-  const {value} = readCString(payload, LOCAL_NUM_ZERO);
+  const {value} = readCString(payload, 0);
   return {query: value};
 }
 
@@ -51,15 +48,15 @@ function parseQueryMessage(payload) {
  * @return {{name: string, query: string, paramTypes: number[]}}
  */
 function parseParseMessage(payload) {
-  let off = LOCAL_NUM_ZERO;
+  let off = 0;
   const name = readCString(payload, off);
   off = name.nextOffset;
   const query = readCString(payload, off);
   off = query.nextOffset;
   const numParams = payload.readInt16BE(off);
-  off += LOCAL_NUM_TWO;
+  off += 2;
   const paramTypes = [];
-  for (let i = LOCAL_NUM_ZERO; i < numParams; i++) {
+  for (let i = 0; i < numParams; i++) {
     paramTypes.push(payload.readInt32BE(off));
     off += LOCAL_NUM_FOUR;
   }
@@ -76,23 +73,23 @@ function parseParseMessage(payload) {
  * @return {{portal: string, statement: string, params: string[]}}
  */
 function parseBindMessage(payload) {
-  let off = LOCAL_NUM_ZERO;
+  let off = 0;
   const portal = readCString(payload, off);
   off = portal.nextOffset;
   const statement = readCString(payload, off);
   off = statement.nextOffset;
 
   const numFormats = payload.readInt16BE(off);
-  off += LOCAL_NUM_TWO;
-  off += numFormats * LOCAL_NUM_TWO;
+  off += 2;
+  off += numFormats * 2;
 
   const numParams = payload.readInt16BE(off);
-  off += LOCAL_NUM_TWO;
+  off += 2;
   const params = [];
-  for (let i = LOCAL_NUM_ZERO; i < numParams; i++) {
+  for (let i = 0; i < numParams; i++) {
     const len = payload.readInt32BE(off);
     off += LOCAL_NUM_FOUR;
-    if (len === -LOCAL_NUM_ONE) {
+    if (len === -1) {
       params.push(null);
     } else {
       params.push(payload.toString(LOCAL_STR_UTF8, off, off + len));
@@ -113,8 +110,8 @@ function parseBindMessage(payload) {
  */
 function parseDescribeMessage(payload) {
   return {
-    type: payload[LOCAL_NUM_ZERO],
-    name: readCString(payload, LOCAL_NUM_ONE).value,
+    type: payload[0],
+    name: readCString(payload, 1).value,
   };
 }
 
@@ -124,7 +121,7 @@ function parseDescribeMessage(payload) {
  * @return {{portal: string, maxRows: number}}
  */
 function parseExecuteMessage(payload) {
-  const portal = readCString(payload, LOCAL_NUM_ZERO);
+  const portal = readCString(payload, 0);
   const maxRows = payload.readInt32BE(portal.nextOffset);
   return {portal: portal.value, maxRows};
 }
@@ -136,8 +133,8 @@ function parseExecuteMessage(payload) {
  */
 function parseCloseMessage(payload) {
   return {
-    type: payload[LOCAL_NUM_ZERO],
-    name: readCString(payload, LOCAL_NUM_ONE).value,
+    type: payload[0],
+    name: readCString(payload, 1).value,
   };
 }
 

@@ -8,7 +8,6 @@
  * Requirements: 1.1, 4.1, 4.2
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {createSqlRequest} from './sql-request.js';
 import {
@@ -81,7 +80,7 @@ class WasmCallAdapter {
    * @return {Promise<Object>} Query result from SqlCore.
    */
   async call(selectSql, callbackRef, options = {}) {
-    if (!selectSql || typeof selectSql !== TYPEOF.STRING) {
+    if (!selectSql || typeof selectSql !== 'string') {
       throw new Error(ADAPTER_ERROR_MSG.SELECT_STATEMENT_REQUIRED);
     }
     if (!callbackRef ||
@@ -124,7 +123,7 @@ class WasmCallAdapter {
    * @return {Readonly<Object>} Frozen SqlRequest.
    */
   buildRequest(selectSql, callbackRef, options = {}) {
-    if (!selectSql || typeof selectSql !== TYPEOF.STRING) {
+    if (!selectSql || typeof selectSql !== 'string') {
       throw new Error(ADAPTER_ERROR_MSG.SELECT_STATEMENT_REQUIRED);
     }
     if (!callbackRef ||

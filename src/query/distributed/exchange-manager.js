@@ -13,7 +13,6 @@
  * @module query/exchange-manager
  */
 
-import {TYPEOF} from '../../constants/index.js';
 import {
   EXCHANGE_MODE,
   EXCHANGE_ERROR_MSG,
@@ -21,7 +20,6 @@ import {
   DEFAULT_EXCHANGE_PARTITION_COUNT,
 } from '../runtime-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Compute a simple consistent hash of a string key,
@@ -37,11 +35,11 @@ const FNV_PRIME = 0x01000193;
 
 function hashKey(key) {
   let hash = FNV_OFFSET;
-  for (let i = LOCAL_NUM_ZERO; i < key.length; i++) {
+  for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, FNV_PRIME);
   }
-  return hash >>> LOCAL_NUM_ZERO;
+  return hash >>> 0;
 }
 
 /**
@@ -99,7 +97,7 @@ class ExchangeManager {
     if (this._closed) {
       throw new Error(EXCHANGE_ERROR_MSG.EXCHANGE_CLOSED);
     }
-    if (typeof key !== TYPEOF.STRING) {
+    if (typeof key !== 'string') {
       throw new Error(EXCHANGE_ERROR_MSG.EMIT_KEY_REQUIRED);
     }
 

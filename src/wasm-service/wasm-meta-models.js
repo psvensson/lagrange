@@ -11,7 +11,7 @@
  */
 
 import {
-  NUM, STRING, WASM_OPERATION_STATE,
+  STRING, WASM_OPERATION_STATE,
 } from '../constants/index.js';
 import {
   REGISTRY_MAPPING_COL as RM_COL,
@@ -51,7 +51,7 @@ function validateRegistryMapping(mapping) {
   if (!mapping[RM.REGISTRY_URL]) {
     errors.push(RM_ERR.REGISTRY_URL_REQUIRED);
   }
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -84,8 +84,8 @@ function deserializeRegistryMapping(row) {
     [RM.POLICY_METADATA]: JSON.parse(
       row[RM_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT,
     ),
-    createdAt: row[RM_COL.CREATED_AT] ?? NUM.ZERO,
-    updatedAt: row[RM_COL.UPDATED_AT] ?? NUM.ZERO,
+    createdAt: row[RM_COL.CREATED_AT] ?? 0,
+    updatedAt: row[RM_COL.UPDATED_AT] ?? 0,
   };
 }
 
@@ -111,7 +111,7 @@ function validateRegistryOverride(override) {
   if (!override[RO.REGISTRY_URL]) {
     errors.push(RO_ERR.REGISTRY_URL_REQUIRED);
   }
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -146,8 +146,8 @@ function deserializeRegistryOverride(row) {
     [RO.POLICY_METADATA]: JSON.parse(
       row[RO_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT,
     ),
-    createdAt: row[RO_COL.CREATED_AT] ?? NUM.ZERO,
-    updatedAt: row[RO_COL.UPDATED_AT] ?? NUM.ZERO,
+    createdAt: row[RO_COL.CREATED_AT] ?? 0,
+    updatedAt: row[RO_COL.UPDATED_AT] ?? 0,
   };
 }
 
@@ -176,7 +176,7 @@ function validateDependencyLock(lock) {
   if (deps !== undefined && deps !== null && !Array.isArray(deps)) {
     errors.push(DL_ERR.RESOLVED_DEPS_NOT_ARRAY);
   }
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -223,7 +223,7 @@ function deserializeDependencyLock(row) {
       row[DL_COL.RESOLVED_DEPENDENCIES] ||
         STRING.EMPTY_JSON_ARRAY,
     ),
-    createdAt: row[DL_COL.CREATED_AT] ?? NUM.ZERO,
+    createdAt: row[DL_COL.CREATED_AT] ?? 0,
   };
 }
 
@@ -249,7 +249,7 @@ function validateWasmOperation(operation) {
   if (state && !VALID_OP_STATES.has(state)) {
     errors.push(WO_ERR.STATE_INVALID);
   }
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -298,8 +298,8 @@ function deserializeWasmOperation(row) {
     [WO.ERROR]: JSON.parse(
       row[WO_COL.ERROR] || STRING.EMPTY_JSON_OBJECT,
     ),
-    createdAt: row[WO_COL.CREATED_AT] ?? NUM.ZERO,
-    updatedAt: row[WO_COL.UPDATED_AT] ?? NUM.ZERO,
+    createdAt: row[WO_COL.CREATED_AT] ?? 0,
+    updatedAt: row[WO_COL.UPDATED_AT] ?? 0,
   };
 }
 

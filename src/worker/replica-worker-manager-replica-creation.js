@@ -13,7 +13,6 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
     MANAGER_DEFAULT,
     MANAGER_ERROR_MSG,
     MANAGER_LOG_MSG,
-    NUM,
     REPLICA_CREATE_PROGRESS,
     WORKER_ENTITY_TYPE,
     WORKER_EVENT,
@@ -101,10 +100,10 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
     async maybeStartReplicaGroupElection(replicaIds) {
       const expectedReplicaIds = Array.isArray(replicaIds) ?
         [...new Set(replicaIds.filter((replicaId) =>
-          typeof replicaId === LOCAL_STR_STRING && replicaId.length > NUM.ZERO,
+          typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0,
         ))] :
         [];
-      if (expectedReplicaIds.length <= NUM.ONE) {
+      if (expectedReplicaIds.length <= 1) {
         return;
       }
 
@@ -162,11 +161,11 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
       const timeoutMs = options.timeoutMs ||
         MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
       const shouldDeferElection = Array.isArray(options.replicaIds) &&
-        options.replicaIds.length > NUM.ONE;
+        options.replicaIds.length > 1;
 
       const handle = {
         replicaId: options.replicaId,
-        workerId: NUM.ZERO,
+        workerId: 0,
         entityType: WORKER_ENTITY_TYPE.PARTITION,
         unifiedAddress,
         status: WORKER_STATUS.STARTING,
@@ -214,7 +213,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
           timeoutMs,
         );
 
-        handle.workerId = result.workerId || NUM.ZERO;
+        handle.workerId = result.workerId || 0;
         handle.status = WORKER_STATUS.RUNNING;
         handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
         this.updateReplicaCreationProgress(
@@ -317,11 +316,11 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
       const timeoutMs = options.timeoutMs ||
         MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
       const shouldDeferElection = Array.isArray(options.replicaIds) &&
-        options.replicaIds.length > NUM.ONE;
+        options.replicaIds.length > 1;
 
       const handle = {
         replicaId: options.replicaId,
-        workerId: NUM.ZERO,
+        workerId: 0,
         entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
         unifiedAddress,
         status: WORKER_STATUS.STARTING,
@@ -363,7 +362,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
           timeoutMs,
         );
 
-        handle.workerId = result.workerId || NUM.ZERO;
+        handle.workerId = result.workerId || 0;
         handle.status = WORKER_STATUS.RUNNING;
         handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
         this.updateReplicaCreationProgress(

@@ -3,10 +3,8 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
@@ -26,7 +24,7 @@ import {
   isMembershipOwnerRestartReentryOutcome,
 } from '../../control-plane/membership-lifecycle-controller.js';
 
-const LOCAL_STR_WZ28M = 'All service leaders ready';
+const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
 
 const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODES,
@@ -57,12 +55,12 @@ function isLiveServiceLeader(service) {
     return false;
   }
 
-  const role = typeof service.getRole === TYPEOF.FUNCTION ?
+  const role = typeof service.getRole === 'function' ?
     service.getRole() :
     service.role;
   return service.isLeader === true ||
     role === RAFT_ROLE.LEADER ||
-    (typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
+    (typeof service.isLeaderReplica === 'function' &&
       service.isLeaderReplica());
 }
 
@@ -104,7 +102,7 @@ class ServiceLeaderReadinessOwner {
     const blockingMissing = this.getBlockingLeaderStatusForReadiness(missing);
 
     return this.buildLeaderStatusResult(
-      this.countMissingLeaderInfo(blockingMissing) === NUM.ZERO,
+      this.countMissingLeaderInfo(blockingMissing) === 0,
       blockingMissing,
       missing,
     );
@@ -112,13 +110,13 @@ class ServiceLeaderReadinessOwner {
 
   async waitForPartitionLeaders() {
     const bootstrapService = this.getBootstrapService();
-    if (typeof bootstrapService?.waitForPartitionLeadership === TYPEOF.FUNCTION) {
+    if (typeof bootstrapService?.waitForPartitionLeadership === 'function') {
       await bootstrapService.waitForPartitionLeadership();
       return;
     }
 
     const services = this.getPartitionServices();
-    if (!services || services.size === NUM.ZERO) {
+    if (!services || services.size === 0) {
       return;
     }
 
@@ -128,13 +126,13 @@ class ServiceLeaderReadinessOwner {
         partitionIds.add(service.partitionId);
       }
     }
-    if (partitionIds.size === NUM.ZERO) {
+    if (partitionIds.size === 0) {
       return;
     }
 
     const configuredTimeoutMs = bootstrapService?.config?.leadershipWaitTimeoutMs;
     const timeoutMs = Number.isFinite(configuredTimeoutMs) &&
-      configuredTimeoutMs > NUM.ZERO ?
+      configuredTimeoutMs > 0 ?
       Math.floor(configuredTimeoutMs) :
       BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
     let delay = bootstrapService?.config?.leadershipWaitInitialDelayMs ||
@@ -147,7 +145,7 @@ class ServiceLeaderReadinessOwner {
 
     while (Date.now() - start < timeoutMs) {
       const leaders = this.getSystemPartitionLeaders();
-      if (Object.keys(leaders).length > NUM.ZERO) {
+      if (Object.keys(leaders).length > 0) {
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -208,7 +206,7 @@ class ServiceLeaderReadinessOwner {
     partitionIds = [],
     requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
   ) {
-    if (!Array.isArray(partitionIds) || partitionIds.length === NUM.ZERO) {
+    if (!Array.isArray(partitionIds) || partitionIds.length === 0) {
       return [];
     }
 
@@ -217,7 +215,7 @@ class ServiceLeaderReadinessOwner {
       requiredPartitionIds,
     } = this.getLeaderReadinessPartitionSetsForTables(requiredTablesList);
 
-    if (knownPartitionIds.size === NUM.ZERO || requiredPartitionIds.size === NUM.ZERO) {
+    if (knownPartitionIds.size === 0 || requiredPartitionIds.size === 0) {
       return partitionIds;
     }
 
@@ -341,14 +339,14 @@ class ServiceLeaderReadinessOwner {
     );
     const blockingMissing = this.getBlockingLeaderStatusForReadiness(missing);
     const missingCount = this.countMissingLeaderInfo(blockingMissing);
-    const ready = missingCount === NUM.ZERO;
+    const ready = missingCount === 0;
 
     if (ready) {
       this.getLogger().info(
-        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_WZ28M,
+        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_ALL_SERVICE_LEADERS_READY,
         {
           seedNodeId: this.getSeedNodeId(),
-          elapsedMs: NUM.ZERO,
+          elapsedMs: 0,
         },
       );
     } else {
@@ -376,7 +374,7 @@ class ServiceLeaderReadinessOwner {
     const leaders = {};
     const partitionServices = this.getPartitionServices();
 
-    if (partitionServices && partitionServices.size > NUM.ZERO) {
+    if (partitionServices && partitionServices.size > 0) {
       for (const service of partitionServices.values()) {
         const tableName = service.tableId || service.tableName;
         if (!tableName || leaders[tableName] || !this.isLiveServiceLeader(service)) {
@@ -397,7 +395,7 @@ class ServiceLeaderReadinessOwner {
         };
       }
 
-      if (Object.keys(leaders).length > NUM.ZERO) {
+      if (Object.keys(leaders).length > 0) {
         return leaders;
       }
     }

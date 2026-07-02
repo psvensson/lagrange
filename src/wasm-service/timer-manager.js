@@ -21,7 +21,6 @@ import {
   TE_FIELD,
 } from './wasm-service-models.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Manages persistent timers for a single WASM service replica.
@@ -112,7 +111,7 @@ class TimerManager {
     const entries = this.replica.kvStore.getAll(
       RESERVED_KV_PREFIX.TIMERS,
     );
-    let reconstructedCount = LOCAL_NUM_ZERO;
+    let reconstructedCount = 0;
     for (const [_key, value] of entries) {
       const entry = deserializeTimerEntry(value.toString());
       const status = entry[TE_FIELD.STATUS];

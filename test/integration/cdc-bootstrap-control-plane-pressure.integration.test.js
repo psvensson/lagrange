@@ -11,7 +11,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
-import {NUM, TABLES} from '../../src/constants/index.js';
+import {TABLES} from '../../src/constants/index.js';
 
 function initializeIntegrationEnvironment(nodeId) {
   ConfigurationManager.resetInstance();
@@ -319,11 +319,11 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       });
 
       partition.bufferCDCEventForRetry(
-        buildBufferedNodeEvent('node-pressure-1', NUM.ONE),
+        buildBufferedNodeEvent('node-pressure-1', 1),
         'integration-buffer-growth',
       );
       partition.bufferCDCEventForRetry(
-        buildBufferedNodeEvent('node-pressure-2', NUM.TWO),
+        buildBufferedNodeEvent('node-pressure-2', 2),
         'integration-buffer-growth',
       );
 
@@ -374,18 +374,18 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       initializeIntegrationEnvironment('integration-pressure-node');
 
       const messageRouter = createSaturatedControlPlaneRouter();
-      let readQueryCalls = NUM.ZERO;
-      let mutationQueryCalls = NUM.ZERO;
+      let readQueryCalls = 0;
+      let mutationQueryCalls = 0;
       const sqlQueryEngine = {
         async executeQuery(sql) {
           if (String(sql || '').toUpperCase().startsWith('SELECT')) {
-            readQueryCalls += NUM.ONE;
+            readQueryCalls += 1;
             return {
               success: true,
               rows: [{service_id: 'svc-pressure'}],
             };
           }
-          mutationQueryCalls += NUM.ONE;
+          mutationQueryCalls += 1;
           return {
             success: true,
             affectedRows: 1,

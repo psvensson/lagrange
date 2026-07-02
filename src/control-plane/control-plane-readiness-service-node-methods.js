@@ -3,9 +3,7 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 const {
   COLUMN,
   MISSING_NODE_READINESS_STATE,
-  NUM,
   TABLES,
-  TYPEOF,
   normalizeIsoTimestamp,
   normalizePositiveInteger,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
@@ -21,11 +19,11 @@ const controlPlaneReadinessNodeMethods = {
     const bulkNodeRowsAreAuthoritative =
       options.allowAuthoritativeRefresh === true &&
       this.nodesOwner &&
-      typeof this.nodesOwner.listNodes === TYPEOF.FUNCTION;
+      typeof this.nodesOwner.listNodes === 'function';
     const bulkServiceRowsAreAuthoritative =
       options.allowAuthoritativeRefresh === true &&
       this.servicesOwner &&
-      typeof this.servicesOwner.listServices === TYPEOF.FUNCTION;
+      typeof this.servicesOwner.listServices === 'function';
     const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
@@ -34,8 +32,8 @@ const controlPlaneReadinessNodeMethods = {
       }
     }
     if (
-      serviceRows.length > NUM.ZERO ||
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
+      serviceRows.length > 0 ||
+      typeof this.systemTableCache?.getAll === 'function'
     ) {
       const nodeEndpointRows =
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
@@ -74,15 +72,15 @@ const controlPlaneReadinessNodeMethods = {
 
   getAllNodeReadinessSync(options = {}) {
     const nodeRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODES) || [] :
         [];
     const serviceRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.SERVICES) || [] :
         [];
     const nodeEndpointRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [] :
         [];
     const nodeIds = new Set();

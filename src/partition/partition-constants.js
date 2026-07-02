@@ -1,4 +1,4 @@
-import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
 const PARTITION_SUBSYSTEM = Object.freeze({
@@ -401,7 +401,7 @@ const PENDING_REQUEST_ERROR_MSG = Object.freeze({
 });
 
 const PENDING_REQUEST_VALUE = Object.freeze({
-  ZERO: NUM.ZERO,
+  ZERO: 0,
 });
 
 export {

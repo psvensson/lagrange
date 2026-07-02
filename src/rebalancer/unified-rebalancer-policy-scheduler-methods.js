@@ -2,7 +2,6 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 
 const {
   EntityType,
-  NUM,
   REBALANCER_DEFAULT,
   REBALANCER_DEFAULT_POLICY,
   REBALANCER_LOG_MSG,
@@ -67,7 +66,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     const desiredReplicaCount = Number(
       definition?.[SERVICE_DEFINITION_REPLICA_COUNT_COLUMN],
     );
-    if (Number.isFinite(desiredReplicaCount) && desiredReplicaCount >= NUM.ZERO) {
+    if (Number.isFinite(desiredReplicaCount) && desiredReplicaCount >= 0) {
       policy.targetReplicaCount = desiredReplicaCount;
     }
     return policy;
@@ -113,7 +112,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
   getPriorityRetryDelayMs() {
     const configuredDelayMs =
       Number.isFinite(this.criticalCheckDelayMs) &&
-      this.criticalCheckDelayMs > NUM.ZERO ?
+      this.criticalCheckDelayMs > 0 ?
         Math.floor(this.criticalCheckDelayMs) :
         REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS;
     return Math.max(UNIFIED_REBALANCER_LITERAL.THOUSAND, configuredDelayMs);

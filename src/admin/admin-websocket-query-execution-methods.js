@@ -13,9 +13,7 @@ const {
   EXECUTION_MODE,
   ErrorCode,
   MUTATION_GUARD_MODE,
-  NUM,
   TIMEOUT_BUDGET_CLASSIFICATION,
-  TYPEOF,
   createAdminOperationError,
   createRetryableAdminOperationError,
   createSqlRequest,
@@ -45,7 +43,7 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
         ADMIN_ERROR_HINT.MISSING_QUERY_ID,
       );
     }
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       throw createAdminOperationError(
         ErrorCode.SYNTAX_ERROR,
         ADMIN_ERROR_MESSAGE.MISSING_SQL,
@@ -169,28 +167,28 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
         ADMIN_ERROR_HINT.MISSING_QUERY_ID,
       );
     }
-    if (!statement || typeof statement !== TYPEOF.STRING) {
+    if (!statement || typeof statement !== 'string') {
       throw createAdminOperationError(
         ErrorCode.SYNTAX_ERROR,
         ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
         ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT,
       );
     }
-    if (!callbackModuleRef || typeof callbackModuleRef !== TYPEOF.STRING) {
+    if (!callbackModuleRef || typeof callbackModuleRef !== 'string') {
       throw createAdminOperationError(
         ErrorCode.MALFORMED_JSON,
         ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
         ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF,
       );
     }
-    if (!callbackExport || typeof callbackExport !== TYPEOF.STRING) {
+    if (!callbackExport || typeof callbackExport !== 'string') {
       throw createAdminOperationError(
         ErrorCode.MALFORMED_JSON,
         ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
         ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT,
       );
     }
-    if (!runtimeKind || typeof runtimeKind !== TYPEOF.STRING) {
+    if (!runtimeKind || typeof runtimeKind !== 'string') {
       throw createAdminOperationError(
         ErrorCode.MALFORMED_JSON,
         ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
@@ -242,8 +240,8 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
       clientId: clientInfo.id,
       queryId,
       sql:
-        typeof payload.sql === TYPEOF.STRING ?
-          payload.sql.substring(NUM.ZERO, ADMIN_LIMIT.SQL_PREVIEW_LENGTH) :
+        typeof payload.sql === 'string' ?
+          payload.sql.substring(0, ADMIN_LIMIT.SQL_PREVIEW_LENGTH) :
           null,
     });
 
@@ -279,9 +277,9 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
       clientId: clientInfo.id,
       queryId,
       sql:
-        typeof payload.statement === TYPEOF.STRING ?
+        typeof payload.statement === 'string' ?
           payload.statement.substring(
-            NUM.ZERO,
+            0,
             ADMIN_LIMIT.SQL_PREVIEW_LENGTH,
           ) :
           null,
@@ -326,7 +324,7 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
   ) {
     if (
       !this.sqlQueryEngine ||
-      typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION
+      typeof this.sqlQueryEngine.executeRequest !== 'function'
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
     }
@@ -359,13 +357,13 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
           });
           const canonicalFailure =
             typeof this.sqlQueryEngine.buildTimedOutSqlRequestFailure ===
-              TYPEOF.FUNCTION ?
+              'function' ?
               this.sqlQueryEngine.buildTimedOutSqlRequestFailure(
                 requestWithControl,
                 timeoutError,
               ) :
               null;
-          if (canonicalFailure && typeof canonicalFailure === TYPEOF.OBJECT) {
+          if (canonicalFailure && typeof canonicalFailure === 'object') {
             resolve(canonicalFailure);
             return;
           }

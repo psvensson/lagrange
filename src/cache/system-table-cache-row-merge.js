@@ -1,4 +1,4 @@
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {isNodeHeartbeatWatermarkRegression} from '../node/node-readiness-policy.js';
 import {
@@ -12,11 +12,11 @@ function deepClone(value) {
 
 function getRecordTimestamp(record) {
   const updatedAt = Number(record?.[COLUMN.UPDATED_AT]);
-  if (Number.isFinite(updatedAt) && updatedAt > NUM.ZERO) {
+  if (Number.isFinite(updatedAt) && updatedAt > 0) {
     return updatedAt;
   }
   const createdAt = Number(record?.[COLUMN.CREATED_AT]);
-  if (Number.isFinite(createdAt) && createdAt > NUM.ZERO) {
+  if (Number.isFinite(createdAt) && createdAt > 0) {
     return createdAt;
   }
   return null;
@@ -37,10 +37,10 @@ function isStaleForExistingRecord(tableName, existing, incoming) {
   const incomingHlc = getRecordHlc(incoming);
   if (existingHlc && incomingHlc) {
     const order = incomingHlc.compare(existingHlc);
-    if (order < NUM.ZERO) {
+    if (order < 0) {
       return true;
     }
-    if (order > NUM.ZERO) {
+    if (order > 0) {
       return false;
     }
     return tableName === TABLES.NODES &&
@@ -73,7 +73,7 @@ function shouldUsePublicationMerge(existing, incoming) {
 }
 
 function cloneFieldValue(value) {
-  if (value === null || typeof value !== TYPEOF.OBJECT) {
+  if (value === null || typeof value !== 'object') {
     return value;
   }
   return deepClone(value);
@@ -81,9 +81,9 @@ function cloneFieldValue(value) {
 
 function shouldBackfillMissingField(existingValue, incomingValue) {
   const existingMissing = existingValue === null ||
-    typeof existingValue === TYPEOF.UNDEFINED;
+    typeof existingValue === 'undefined';
   const incomingPresent = incomingValue !== null &&
-    typeof incomingValue !== TYPEOF.UNDEFINED;
+    typeof incomingValue !== 'undefined';
   return existingMissing && incomingPresent;
 }
 
@@ -115,7 +115,7 @@ function applyStaleRowBackfill(table, key, existing, incoming) {
     }
   }
 
-  if (backfilledFields.length === NUM.ZERO) {
+  if (backfilledFields.length === 0) {
     return {
       applied: false,
       record: existing,
@@ -139,7 +139,7 @@ function mergeRecords(tableName, existing, incoming) {
 }
 
 function tryParseHLCTimestamp(value) {
-  if (typeof value === TYPEOF.UNDEFINED || value === null) {
+  if (typeof value === 'undefined' || value === null) {
     return null;
   }
 
@@ -152,7 +152,7 @@ function tryParseHLCTimestamp(value) {
 
 function compareSchemaVersions(incomingVersion, currentVersion) {
   if (incomingVersion === currentVersion) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const incomingHlc = tryParseHLCTimestamp(incomingVersion);

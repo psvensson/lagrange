@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../../src/constants/index.js';
 import {
   summarizeReplicaOperationLiveness,
 } from '../../../src/rebalancer/replica-operation-liveness.js';
@@ -384,8 +383,8 @@ const RECOVERY_ADMISSION_DECISION_TABLE = Object.freeze([
       evidence.available === true &&
       (
         evidence.prioritySpreadPending === true ||
-        evidence.blockedPartitionCount > NUM.ZERO ||
-        evidence.unresolvedPartitionCount > NUM.ZERO
+        evidence.blockedPartitionCount > 0 ||
+        evidence.unresolvedPartitionCount > 0
       ),
   }),
   Object.freeze({
@@ -395,8 +394,8 @@ const RECOVERY_ADMISSION_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.available === true &&
       evidence.prioritySpreadPending !== true &&
-      evidence.blockedPartitionCount === NUM.ZERO &&
-      evidence.unresolvedPartitionCount === NUM.ZERO,
+      evidence.blockedPartitionCount === 0 &&
+      evidence.unresolvedPartitionCount === 0,
   }),
 ]);
 
@@ -458,7 +457,7 @@ const DEFAULT_PRESSURE_PARTITIONS = Object.freeze([
 ]);
 
 function normalizeObject(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value) ?
+  return value && typeof value === 'object' && !Array.isArray(value) ?
     value :
     EMPTY_RECORD;
 }
@@ -477,9 +476,9 @@ function normalizeUpperString(value) {
 
 function normalizeNonNegativeInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue >= 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeStringList(values) {
@@ -490,7 +489,7 @@ function normalizeStringList(values) {
     ...new Set(
       candidateValues
         .map((value) => normalizeString(value))
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
@@ -715,10 +714,10 @@ function evaluatePublicationPoint(diagnostics, snapshotId) {
     evidence,
     snapshotId,
   );
-  const openIssueId = invariantIssues.length === NUM.ZERO ?
+  const openIssueId = invariantIssues.length === 0 ?
     resolvePublicationOpenIssueId(machineDecision) :
     EMPTY_TEXT;
-  const openIssues = openIssueId.length > NUM.ZERO ?
+  const openIssues = openIssueId.length > 0 ?
     [buildIssue({
       issueId: openIssueId,
       severity: STATE_MACHINE_PRESSURE_ISSUE_SEVERITY.WARNING,
@@ -778,7 +777,7 @@ function buildClosureDimensionIssues({
   }
   return reasonCodes
     .map((reasonCode) => reasonIssueMap[reasonCode] || EMPTY_TEXT)
-    .filter((issueId) => issueId.length > NUM.ZERO)
+    .filter((issueId) => issueId.length > 0)
     .map((issueId) => buildIssue({
       issueId,
       severity: STATE_MACHINE_PRESSURE_ISSUE_SEVERITY.WARNING,
@@ -878,7 +877,7 @@ function evaluateOperationDrainPoint(diagnostics, snapshotId) {
     ...completedActiveIssues,
   ];
   const state = closurePoint.state === STATE_MACHINE_PRESSURE_POINT_STATE.CLOSED &&
-    completedActiveIssues.length > NUM.ZERO ?
+    completedActiveIssues.length > 0 ?
     STATE_MACHINE_PRESSURE_POINT_STATE.WARNING :
     closurePoint.state;
   return {
@@ -907,7 +906,7 @@ function extractStepsHistory(row) {
   if (Array.isArray(rawStepsHistory)) {
     return rawStepsHistory;
   }
-  if (typeof rawStepsHistory !== TYPEOF.STRING) {
+  if (typeof rawStepsHistory !== 'string') {
     return EMPTY_LIST;
   }
   try {
@@ -946,18 +945,18 @@ function countReplacementLeaderStallEvidence(diagnostics) {
     return containsReplacementLeaderStallFragment(JSON.stringify(controlPlane));
   }).length;
   const errorCount = containsReplacementLeaderStallFragment(rootError) ?
-    NUM.ONE :
-    NUM.ZERO;
+    1 :
+    0;
   return rowEvidenceCount + operationHistoryCount + rootSnapshotCount + errorCount;
 }
 
 function evaluateReplacementLeaderOwnershipPoint(diagnostics, snapshotId) {
   const stalledEvidenceCount = countReplacementLeaderStallEvidence(diagnostics);
-  const state = stalledEvidenceCount > NUM.ZERO ?
+  const state = stalledEvidenceCount > 0 ?
     STATE_MACHINE_PRESSURE_POINT_STATE.OPEN :
     STATE_MACHINE_PRESSURE_POINT_STATE.UNAVAILABLE;
   const evidence = {stalledEvidenceCount};
-  const issues = stalledEvidenceCount > NUM.ZERO ?
+  const issues = stalledEvidenceCount > 0 ?
     [buildIssue({
       issueId: PRESSURE_PREFLIGHT_ISSUE_ID.REPLACEMENT_LEADER_HANDOFF_STALLED,
       severity: STATE_MACHINE_PRESSURE_ISSUE_SEVERITY.WARNING,
@@ -1078,7 +1077,7 @@ function evaluateStaticPressurePointGrammar(
   for (const point of grammar) {
     const pressurePointId = normalizeString(point.id);
     for (const field of STATE_MACHINE_PRESSURE_STATIC_FIELDS) {
-      if (normalizeString(point[field]).length === NUM.ZERO) {
+      if (normalizeString(point[field]).length === 0) {
         issues.push(buildStaticObligationIssue(pressurePointId, field));
       }
     }
@@ -1086,7 +1085,7 @@ function evaluateStaticPressurePointGrammar(
   return {
     [CHECKED_POINT_COUNT_FIELD]: grammar.length,
     [ISSUES_FIELD]: issues,
-    [READY_FIELD]: issues.length === NUM.ZERO,
+    [READY_FIELD]: issues.length === 0,
   };
 }
 
@@ -1095,10 +1094,10 @@ function countIssuesBySeverity(issues, severity) {
 }
 
 function resolvePreflightState(hardIssueCount, warningIssueCount) {
-  if (hardIssueCount > NUM.ZERO) {
+  if (hardIssueCount > 0) {
     return STATE_MACHINE_PRESSURE_PREFLIGHT_STATE.FAILED;
   }
-  if (warningIssueCount > NUM.ZERO) {
+  if (warningIssueCount > 0) {
     return STATE_MACHINE_PRESSURE_PREFLIGHT_STATE.WARNING;
   }
   return STATE_MACHINE_PRESSURE_PREFLIGHT_STATE.PASS;
@@ -1110,8 +1109,8 @@ function runStateMachinePressurePreflight(options = EMPTY_RECORD) {
   );
   const reportSource = normalizeObject(options.report);
   const diagnosticsSource = normalizeObject(options.diagnostics);
-  const hasReportSource = Object.keys(reportSource).length > NUM.ZERO;
-  const hasDiagnosticsSource = Object.keys(diagnosticsSource).length > NUM.ZERO;
+  const hasReportSource = Object.keys(reportSource).length > 0;
+  const hasDiagnosticsSource = Object.keys(diagnosticsSource).length > 0;
   const diagnosticsSnapshots = Array.isArray(options.diagnosticsSnapshots) ?
     options.diagnosticsSnapshots :
     hasReportSource ?
@@ -1122,7 +1121,7 @@ function runStateMachinePressurePreflight(options = EMPTY_RECORD) {
   const snapshots = diagnosticsSnapshots.map((diagnostics, index) =>
     evaluateStateMachinePressureSnapshot(
       diagnostics,
-      DEFAULT_SNAPSHOT_SCOPE_ID + '-' + String(index + NUM.ONE),
+      DEFAULT_SNAPSHOT_SCOPE_ID + '-' + String(index + 1),
     ),
   );
   const issues = [
@@ -1140,7 +1139,7 @@ function runStateMachinePressurePreflight(options = EMPTY_RECORD) {
   const resultState = resolvePreflightState(hardIssueCount, warningIssueCount);
   return {
     [RESULT_STATE_FIELD]: resultState,
-    [READY_FIELD]: hardIssueCount === NUM.ZERO,
+    [READY_FIELD]: hardIssueCount === 0,
     [STATIC_GRAMMAR_FIELD]: staticGrammar,
     [SNAPSHOTS_FIELD]: snapshots,
     [ISSUES_FIELD]: issues,

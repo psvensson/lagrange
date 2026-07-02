@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -133,22 +129,22 @@ const TOPOLOGY_OPERATOR_WITNESS_STEP_STATE_TABLE = Object.freeze([
 ]);
 
 function normalizeTopologyOperatorWitnessText(value, fallback) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallback;
 }
 
 function normalizeTopologyOperatorWitnessTimestamp(value, fallback) {
-  return Number.isFinite(value) && value >= NUM.ZERO ? value : fallback;
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function resolveTopologyOperatorWitnessOperation(snapshot, options) {
-  if (options.operation && typeof options.operation === TYPEOF.OBJECT) {
+  if (options.operation && typeof options.operation === 'object') {
     return options.operation;
   }
   if (
     snapshot?.coordinator?.operation &&
-    typeof snapshot.coordinator.operation === TYPEOF.OBJECT
+    typeof snapshot.coordinator.operation === 'object'
   ) {
     return snapshot.coordinator.operation;
   }
@@ -180,7 +176,7 @@ function resolveTopologyOperatorWitnessCurrentStepState(
     options.currentStepState,
     TOPOLOGY_OPERATOR_WITNESS_LITERAL.EMPTY,
   );
-  if (explicitStepState.length > NUM.ZERO) {
+  if (explicitStepState.length > 0) {
     return explicitStepState;
   }
   const evidence = Object.freeze({
@@ -253,7 +249,7 @@ function buildTopologyOperatorWitnessFromWorkflowProgress(
     options.deadlineMs,
     normalizeTopologyOperatorWitnessTimestamp(
       Number(operation.updatedAtMs || operation.updatedAt) +
-        Number(snapshot?.progress?.stepTimeoutMs || NUM.ZERO),
+        Number(snapshot?.progress?.stepTimeoutMs || 0),
       TOPOLOGY_OPERATOR_WITNESS_LITERAL.DEADLINE_UNAVAILABLE,
     ),
   );

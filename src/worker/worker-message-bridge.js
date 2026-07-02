@@ -25,7 +25,6 @@ import {
 } from './worker-constants.js';
 
 const LOCAL_STR_MESSAGE = 'message';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * IPC message types for communication between worker and main process.
@@ -271,7 +270,7 @@ class WorkerMessageBridge extends EventEmitter {
     return {
       initialized: this.initialized,
       unifiedAddress: this.unifiedAddress,
-      pendingRequestCount: LOCAL_NUM_ZERO,
+      pendingRequestCount: 0,
     };
   }
 }

@@ -25,7 +25,6 @@ import {
   POLICY_LOG_MSG,
   POLICY_SUBSYSTEM,
   POLICY_VALUE,
-  TYPEOF,
 } from './policy-constants.js';
 import {
   extractStorageConstraints,
@@ -34,10 +33,9 @@ import {
   validateTablePolicy,
 } from './table-policy-validation.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1S1UB = 'placementConstraints';
+const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_CRITICAL = 'critical';
 
 /**
@@ -109,15 +107,15 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       const rows = this.systemTableCache.filter(
         TABLES.TABLES,
         (table) => table?.table_id === tableId || table?.tableId === tableId,
       );
-      return rows[LOCAL_NUM_ZERO] || null;
+      return rows[0] || null;
     }
 
-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(TABLES.TABLES) || [];
       return rows.find((table) =>
         table?.table_id === tableId || table?.tableId === tableId,
@@ -138,17 +136,17 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       const rows = this.systemTableCache.filter(
         TABLES.PARTITIONS,
         (partition) =>
           partition?.partition_id === partitionId ||
           partition?.partitionId === partitionId,
       );
-      return rows[LOCAL_NUM_ZERO] || null;
+      return rows[0] || null;
     }
 
-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(TABLES.PARTITIONS) || [];
       return rows.find((partition) =>
         partition?.partition_id === partitionId ||
@@ -187,7 +185,7 @@ class TablePolicyService extends EventEmitter {
     let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
     if (table.table_policies) {
       try {
-        storedPolicy = typeof table.table_policies === TYPEOF.STRING ?
+        storedPolicy = typeof table.table_policies === 'string' ?
           JSON.parse(table.table_policies) : table.table_policies;
       } catch (error) {
         this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
@@ -237,7 +235,7 @@ class TablePolicyService extends EventEmitter {
     const merged = {...DEFAULT_TABLE_POLICY};
 
     for (const [key, value] of Object.entries(storedPolicy)) {
-      if (key === LOCAL_STR_1S1UB && typeof value === LOCAL_STR_OBJECT) {
+      if (key === LOCAL_STR_PLACEMENTCONSTRAINTS && typeof value === LOCAL_STR_OBJECT) {
         merged.placementConstraints = {
           ...DEFAULT_TABLE_POLICY.placementConstraints,
           ...value,
@@ -292,7 +290,7 @@ class TablePolicyService extends EventEmitter {
     // Validate the policy updates
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_128KJ)}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
     // Get current policy
@@ -308,7 +306,7 @@ class TablePolicyService extends EventEmitter {
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
       throw new Error(
-        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_128KJ)}`,
+        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
 
@@ -372,7 +370,7 @@ class TablePolicyService extends EventEmitter {
     // Validate
     const validation = this.validatePolicy(completePolicy);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_128KJ)}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
     return this.updateTablePolicy(tableId, completePolicy);
@@ -473,7 +471,7 @@ class TablePolicyService extends EventEmitter {
     let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
     if (group.policy) {
       try {
-        storedPolicy = typeof group.policy === TYPEOF.STRING ?
+        storedPolicy = typeof group.policy === 'string' ?
           JSON.parse(group.policy) : group.policy;
       } catch (error) {
         this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
@@ -508,15 +506,15 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       const rows = this.systemTableCache.filter(
         TABLES.MESSAGE_GROUPS,
         (group) => group?.group_id === groupId || group?.groupId === groupId,
       );
-      return rows[LOCAL_NUM_ZERO] || null;
+      return rows[0] || null;
     }
 
-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(TABLES.MESSAGE_GROUPS) || [];
       return rows.find((group) =>
         group?.group_id === groupId || group?.groupId === groupId,
@@ -535,7 +533,7 @@ class TablePolicyService extends EventEmitter {
     const merged = this.getDefaultMessageGroupPolicy();
 
     for (const [key, value] of Object.entries(storedPolicy)) {
-      if (key === LOCAL_STR_1S1UB && typeof value === LOCAL_STR_OBJECT) {
+      if (key === LOCAL_STR_PLACEMENTCONSTRAINTS && typeof value === LOCAL_STR_OBJECT) {
         merged.placementConstraints = {
           ...DEFAULT_MESSAGE_GROUP_POLICY.placementConstraints,
           ...value,
@@ -654,14 +652,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[LOCAL_NUM_ZERO] || null;
+      return result.rows?.[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.TABLES,
       'SELECT * FROM tables WHERE table_id = ?',
       [tableId],
     );
-    return result.rows?.[LOCAL_NUM_ZERO] || null;
+    return result.rows?.[0] || null;
   }
 
   async readPartitionRow(partitionId) {
@@ -674,14 +672,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[LOCAL_NUM_ZERO] || null;
+      return result.rows?.[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.PARTITIONS,
       'SELECT * FROM partitions WHERE partition_id = ?',
       [partitionId],
     );
-    return result.rows?.[LOCAL_NUM_ZERO] || null;
+    return result.rows?.[0] || null;
   }
 
   async readMessageGroupRow(groupId) {
@@ -694,14 +692,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[LOCAL_NUM_ZERO] || null;
+      return result.rows?.[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.MESSAGE_GROUPS,
       'SELECT * FROM message_groups WHERE group_id = ?',
       [groupId],
     );
-    return result.rows?.[LOCAL_NUM_ZERO] || null;
+    return result.rows?.[0] || null;
   }
 
   getControlPlaneSystemTableGateway() {

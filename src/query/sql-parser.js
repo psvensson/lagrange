@@ -8,13 +8,11 @@
 import nodeSqlParser from 'node-sql-parser';
 
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_VALUE = 'value';
 const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
 const LOCAL_STR_UNIQUE = 'UNIQUE';
 
 const {Parser} = nodeSqlParser;
-import {NUM, TYPEOF} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
@@ -119,7 +117,7 @@ class SQLParser {
     this.parser = new Parser();
     this.logger = this.initLogger();
     this.positionalParams = [];
-    this.parameterCounter = NUM.ZERO;
+    this.parameterCounter = 0;
   }
 
   initLogger() {
@@ -137,7 +135,7 @@ class SQLParser {
 
   parse() {
     this.positionalParams = [];
-    this.parameterCounter = NUM.ZERO;
+    this.parameterCounter = 0;
     const trimmedSql = this.sql.trim().toUpperCase();
     if (trimmedSql === SQL_KEYWORD.BEGIN ||
         trimmedSql.startsWith(SQL_KEYWORD.BEGIN_PREFIX)) {
@@ -158,7 +156,7 @@ class SQLParser {
       const ast = this.convertAst(externalAst);
       ast.rawSql = this.sql;
       if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
-          this.positionalParams.length > NUM.ZERO) {
+          this.positionalParams.length > 0) {
         ast._paramMapping = this.positionalParams;
       }
       return ast;
@@ -178,17 +176,17 @@ class SQLParser {
    */
   createParameterNode() {
     const index = this.parameterCounter;
-    this.parameterCounter += NUM.ONE;
+    this.parameterCounter += 1;
     return {type: EXPR_TYPE.PARAMETER, index};
   }
 
   convertAst(ast) {
     // Handle array result (e.g., when SQL ends with semicolon)
     if (Array.isArray(ast)) {
-      if (ast.length === NUM.ZERO) {
+      if (ast.length === 0) {
         throw new Error(PARSER_ERROR_MSG.EMPTY_SQL_STATEMENT);
       }
-      return this.convertAst(ast[NUM.ZERO]);
+      return this.convertAst(ast[0]);
     }
 
     switch (ast.type) {
@@ -250,7 +248,7 @@ class SQLParser {
    * @returns {Array|null} Converted CTE definitions or null.
    */
   convertCtes(withClause) {
-    if (!withClause || withClause.length === LOCAL_NUM_ZERO) {
+    if (!withClause || withClause.length === 0) {
       return null;
     }
     return withClause.map((cte) => {
@@ -324,8 +322,8 @@ class SQLParser {
    * @private
    */
   getInsertMode(ast) {
-    if (Array.isArray(ast.or) && ast.or.length >= NUM.TWO) {
-      const mode = String(ast.or[NUM.ONE]?.value || '').toLowerCase();
+    if (Array.isArray(ast.or) && ast.or.length >= 2) {
+      const mode = String(ast.or[1]?.value || '').toLowerCase();
       if (mode === INSERT_MODE.REPLACE || mode === INSERT_MODE.IGNORE) {
         return mode;
       }
@@ -374,14 +372,14 @@ class SQLParser {
    * @private
    */
   convertReturning(returning) {
-    if (!returning || !returning.columns || returning.columns.length === LOCAL_NUM_ZERO) {
+    if (!returning || !returning.columns || returning.columns.length === 0) {
       return null;
     }
     const columns = returning.columns;
     // Check for RETURNING * — column is the string '*' in both modes
-    if (columns.length === NUM.ONE && columns[NUM.ZERO].expr &&
-        columns[NUM.ZERO].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
-        columns[NUM.ZERO].expr.column === STAR_VALUE) {
+    if (columns.length === 1 && columns[0].expr &&
+        columns[0].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
+        columns[0].expr.column === STAR_VALUE) {
       return STAR_VALUE;
     }
     // Extract column names — handle both PG and SQLite AST shapes
@@ -390,7 +388,7 @@ class SQLParser {
       const expr = col.expr;
       if (expr && expr.type === EXT_EXPR_TYPE.COLUMN_REF) {
         const colRef = expr.column;
-        if (typeof colRef === TYPEOF.STRING) {
+        if (typeof colRef === 'string') {
           // SQLite mode: column is a plain string
           names.push(colRef);
         } else if (colRef && colRef.expr && colRef.expr.value) {
@@ -399,7 +397,7 @@ class SQLParser {
         }
       }
     }
-    return names.length > NUM.ZERO ? names : null;
+    return names.length > 0 ? names : null;
   }
 
   convertAlter(ast) {
@@ -434,7 +432,7 @@ class SQLParser {
     if (!columnRef) {
       return null;
     }
-    if (typeof columnRef.column === TYPEOF.STRING) {
+    if (typeof columnRef.column === 'string') {
       return columnRef.column;
     }
     if (columnRef.column?.expr?.value) {
@@ -534,14 +532,14 @@ class SQLParser {
     if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
       return {
         type: AST_TYPE.DROP_TABLE,
-        tableName: ast.name[LOCAL_NUM_ZERO].table,
+        tableName: ast.name[0].table,
         ifExists: !!ast.if_exists,
       };
     }
     if (ast.keyword === SQL_SCHEMA_KEYWORD.INDEX) {
       return {
         type: AST_TYPE.DROP_INDEX,
-        indexName: ast.name[LOCAL_NUM_ZERO].table,
+        indexName: ast.name[0].table,
         tableName: null,
         ifExists: !!ast.if_exists,
       };
@@ -566,10 +564,10 @@ class SQLParser {
   }
 
   convertFrom(from) {
-    if (!from || from.length === NUM.ZERO) {
+    if (!from || from.length === 0) {
       return null;
     }
-    const firstTable = from[NUM.ZERO];
+    const firstTable = from[0];
 
     // Derived table: FROM (SELECT ...) AS alias
     if (firstTable.expr?.ast) {
@@ -589,11 +587,11 @@ class SQLParser {
   }
 
   convertJoins(from) {
-    if (!from || from.length <= NUM.ONE) {
+    if (!from || from.length <= 1) {
       return [];
     }
     const joins = [];
-    for (let i = NUM.ONE; i < from.length; i++) {
+    for (let i = 1; i < from.length; i++) {
       const joinDef = from[i];
       if (joinDef.join) {
         // Derived table in JOIN: joinDef.expr.ast exists
@@ -652,8 +650,8 @@ class SQLParser {
       return null;
     }
     const values = limit.value;
-    const count = values[NUM.ZERO]?.value;
-    const offset = values.length > NUM.ONE ? values[NUM.ONE]?.value : null;
+    const count = values[0]?.value;
+    const offset = values.length > 1 ? values[1]?.value : null;
     return {count, offset};
   }
 }

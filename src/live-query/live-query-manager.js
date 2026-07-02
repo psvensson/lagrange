@@ -20,15 +20,12 @@ import {
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
-  TYPEOF,
 } from './live-query-constants.js';
 import {QueryGroup} from './live-query-group.js';
 import {canonicalizePredicate} from './live-query-service.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_0_POINT_7 = 0.7;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_SPACE = ' ';
 
 /**
@@ -199,7 +196,7 @@ class LiveQueryManager extends EventEmitter {
     this.clientSubscriptions.get(clientId).add(group.queryId);
 
     // Update client query count
-    this.clientQueryCounts.set(clientId, currentCount + LOCAL_NUM_ONE);
+    this.clientQueryCounts.set(clientId, currentCount + 1);
 
     // Log creation event
     this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_CREATED, {
@@ -219,7 +216,7 @@ class LiveQueryManager extends EventEmitter {
     return {
       queryId: group.queryId,
       expiresAt: Date.now() + group.ttlMs,
-      renewBefore: Date.now() + Math.floor(group.ttlMs * LOCAL_NUM_0_POINT_7),
+      renewBefore: Date.now() + Math.floor(group.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
       partitions: Array.from(group.subscribedPartitions),
     };
   }
@@ -251,7 +248,7 @@ class LiveQueryManager extends EventEmitter {
         count: result.count || 0,
       };
 
-      if (client && typeof client.send === TYPEOF.FUNCTION) {
+      if (client && typeof client.send === 'function') {
         client.send(JSON.stringify(snapshot));
       }
 
@@ -267,7 +264,7 @@ class LiveQueryManager extends EventEmitter {
       });
 
       // Send error to client
-      if (client && typeof client.send === TYPEOF.FUNCTION) {
+      if (client && typeof client.send === 'function') {
         client.send(JSON.stringify({
           type: LIVE_QUERY_EVENT.ERROR,
           queryId: group.queryId,
@@ -298,7 +295,7 @@ class LiveQueryManager extends EventEmitter {
         }
         return LIVE_QUERY_SQL.STAR;
       });
-      parts.push(cols.join(LOCAL_STR_128KJ));
+      parts.push(cols.join(LOCAL_STR_COMMA_SPACE));
     } else {
       parts.push(LIVE_QUERY_SQL.STAR);
     }
@@ -377,7 +374,7 @@ class LiveQueryManager extends EventEmitter {
 
     // Update query count
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
-    this.clientQueryCounts.set(clientId, currentCount + LOCAL_NUM_ONE);
+    this.clientQueryCounts.set(clientId, currentCount + 1);
 
     this.logger.info(LIVE_QUERY_LOG_MSG.QUERY_RESUMED, {
       queryId,
@@ -400,12 +397,12 @@ class LiveQueryManager extends EventEmitter {
    * @private
    */
   parseCursorTime(cursor) {
-    if (!cursor) return LOCAL_NUM_ZERO;
+    if (!cursor) return 0;
 
     // HLC format: "physical:logical:nodeId" or just timestamp
     const parts = cursor.split(LIVE_QUERY_CURSOR.SEPARATOR);
     const physical = parseInt(parts[0], 10);
-    return isNaN(physical) ? LOCAL_NUM_ZERO : physical;
+    return isNaN(physical) ? 0 : physical;
   }
 
   /**
@@ -423,15 +420,15 @@ class LiveQueryManager extends EventEmitter {
     const subscriptions = this.clientSubscriptions.get(clientId);
     if (subscriptions) {
       subscriptions.delete(queryId);
-      if (subscriptions.size === LOCAL_NUM_ZERO) {
+      if (subscriptions.size === 0) {
         this.clientSubscriptions.delete(clientId);
       }
     }
 
     // Update query count
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
-    if (currentCount > LOCAL_NUM_ZERO) {
-      this.clientQueryCounts.set(clientId, currentCount - LOCAL_NUM_ONE);
+    if (currentCount > 0) {
+      this.clientQueryCounts.set(clientId, currentCount - 1);
     }
 
     // Remove empty group
@@ -572,14 +569,14 @@ class LiveQueryManager extends EventEmitter {
         const subscriptions = this.clientSubscriptions.get(clientId);
         if (subscriptions) {
           subscriptions.delete(group.queryId);
-          if (subscriptions.size === LOCAL_NUM_ZERO) {
+          if (subscriptions.size === 0) {
             this.clientSubscriptions.delete(clientId);
           }
         }
 
         const currentCount = this.clientQueryCounts.get(clientId) || 0;
-        if (currentCount > LOCAL_NUM_ZERO) {
-          this.clientQueryCounts.set(clientId, currentCount - LOCAL_NUM_ONE);
+        if (currentCount > 0) {
+          this.clientQueryCounts.set(clientId, currentCount - 1);
         }
 
         this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_EXPIRED, {
@@ -594,7 +591,7 @@ class LiveQueryManager extends EventEmitter {
       }
 
       // Remove empty groups
-      if (group.clients.size === LOCAL_NUM_ZERO) {
+      if (group.clients.size === 0) {
         this.removeGroup(group);
         this.queryGroups.delete(groupKey);
       }
@@ -618,7 +615,7 @@ class LiveQueryManager extends EventEmitter {
    * @return {Object} Manager statistics.
    */
   getStats() {
-    let totalClients = LOCAL_NUM_ZERO;
+    let totalClients = 0;
     for (const group of this.queryGroups.values()) {
       totalClients += group.clients.size;
     }

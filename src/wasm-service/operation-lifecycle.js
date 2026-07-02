@@ -7,7 +7,7 @@
  */
 
 import {v4 as uuidv4} from 'uuid';
-import {NUM, SQL, TABLES, WASM_OPERATION_STATE} from '../constants/index.js';
+import {SQL, TABLES, WASM_OPERATION_STATE} from '../constants/index.js';
 import {validateWasmOperation} from './wasm-meta-models.js';
 import {
   WASM_OPERATION_COL as WO_COL,
@@ -69,7 +69,7 @@ function createOperation(tenantId, command, idempotencyKey) {
   if (!command) {
     errors.push(OPERATION_LIFECYCLE_ERROR_MSG.COMMAND_REQUIRED);
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 
@@ -92,7 +92,7 @@ function createOperation(tenantId, command, idempotencyKey) {
   }
 
   const placeholders = INSERT_COLUMNS
-    .map((_col, i) => `$${i + NUM.ONE}`)
+    .map((_col, i) => `$${i + 1}`)
     .join(', ');
   const sql = `${SQL.INSERT_INTO} ${TABLES.WASM_OPERATIONS}` +
     ` (${INSERT_COLUMNS.join(', ')})` +
@@ -150,19 +150,19 @@ function transitionOperation(
 
   if (toState === WASM_OPERATION_STATE.COMPLETED) {
     setClauses.push(
-      `${WO_COL.RESULT} = $${params.length + NUM.ONE}`,
+      `${WO_COL.RESULT} = $${params.length + 1}`,
     );
     params.push(JSON.stringify(resultOrError || {}));
   } else if (TERMINAL_STATES.has(toState) &&
     toState !== WASM_OPERATION_STATE.COMPLETED) {
     setClauses.push(
-      `${WO_COL.ERROR} = $${params.length + NUM.ONE}`,
+      `${WO_COL.ERROR} = $${params.length + 1}`,
     );
     params.push(JSON.stringify(resultOrError || {}));
   }
 
   params.push(operationId, fromState);
-  const idIdx = params.length - NUM.ONE;
+  const idIdx = params.length - 1;
   const stateIdx = params.length;
 
   const sql = `${SQL.UPDATE} ${TABLES.WASM_OPERATIONS}` +
@@ -209,7 +209,7 @@ function buildListOperationsSQL(tenantId, state) {
     );
   }
 
-  if (conditions.length > NUM.ZERO) {
+  if (conditions.length > 0) {
     sql += ` ${SQL.WHERE} ${conditions.join(` ${SQL.AND} `)}`;
   }
 
@@ -235,7 +235,7 @@ function buildIdempotencyCheckSQL(tenantId, idempotencyKey) {
       OPERATION_LIFECYCLE_ERROR_MSG.IDEMPOTENCY_KEY_REQUIRED,
     );
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 

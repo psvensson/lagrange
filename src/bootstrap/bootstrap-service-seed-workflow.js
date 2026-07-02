@@ -92,9 +92,9 @@ function createBootstrapServiceSeedWorkflowMethods() {
         messageRouterReady,
         infrastructureReady: messageRouterReady,
         messageGroupsReady:
-          this.messageGroupServices.size > NUM.ZERO,
+          this.messageGroupServices.size > 0,
         partitionsReady:
-          this.partitionServices.size > NUM.ZERO,
+          this.partitionServices.size > 0,
         registrationReady: this.cdcIntegrationService !== null,
         cacheHydrated: systemTableCache !== null,
         replicaHandlerReady: Boolean(this.replicaHandler),
@@ -179,7 +179,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
       }
       this.deferredLatencyTopologyStartKind = DEFERRED_START_TIMEOUT;
       this.deferredLatencyTopologyStartHandle =
-        setTimeout(startTopologyAsync, NUM.ZERO);
+        setTimeout(startTopologyAsync, 0);
     },
     completeSuccessfulBootstrap() {
       const duration = Date.now() - this.startTime;
@@ -245,7 +245,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
           ),
           run: async () => {
             await startupPipelineRunner.run({
-              phases: phases.slice(NUM.ZERO, NUM.ONE),
+              phases: phases.slice(0, 1),
             });
           },
         },
@@ -258,7 +258,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
           ),
           run: async () => {
             await startupPipelineRunner.run({
-              phases: phases.slice(NUM.ONE, NUM.TWO),
+              phases: phases.slice(1, 2),
             });
           },
         },
@@ -271,7 +271,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
           ),
           run: async () => {
             await startupPipelineRunner.run({
-              phases: phases.slice(NUM.TWO, NUM.THREE),
+              phases: phases.slice(2, NUM.THREE),
             });
           },
         },

@@ -2,7 +2,6 @@
  * LRU cache for DWARF indexes keyed by module identity.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DWARF_INDEX_DEFAULT as DEF,
   DWARF_INDEX_VALUE as VALUE,
@@ -71,7 +70,7 @@ class DwarfIndexCache {
    */
   set(cacheKey, index) {
     assertCacheKey(cacheKey);
-    if (!index || typeof index !== TYPEOF.OBJECT) {
+    if (!index || typeof index !== 'object') {
       throw new Error(ERR.INDEX_REQUIRED);
     }
 
@@ -112,7 +111,7 @@ class DwarfIndexCache {
    */
   async getOrCreate(cacheKey, createFn) {
     assertCacheKey(cacheKey);
-    if (typeof createFn !== TYPEOF.FUNCTION) {
+    if (typeof createFn !== 'function') {
       throw new Error(ERR.CREATE_FN_REQUIRED);
     }
 
@@ -161,8 +160,8 @@ class DwarfIndexCache {
  * @param {*} cacheKey - Candidate key.
  */
 function assertCacheKey(cacheKey) {
-  if (typeof cacheKey !== TYPEOF.STRING ||
-    cacheKey.trim().length === NUM.ZERO) {
+  if (typeof cacheKey !== 'string' ||
+    cacheKey.trim().length === 0) {
     throw new Error(ERR.CACHE_KEY_REQUIRED);
   }
 }
@@ -172,7 +171,7 @@ function assertCacheKey(cacheKey) {
  * @return {boolean}
  */
 function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > NUM.ZERO;
+  return Number.isInteger(value) && value > 0;
 }
 
 export {

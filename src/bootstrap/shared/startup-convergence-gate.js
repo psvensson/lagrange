@@ -3,10 +3,9 @@ import {
   createTimeoutBudget,
   createTimeoutBudgetError,
 } from '../../control-plane/timeout-budget.js';
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {TRANSPORT_EVENT} from '../../constants/transport.js';
 
-const LOCAL_STR_7NZXU = 'waitForStartupConvergence requires evaluate';
+const LOCAL_STR_WAITFORSTARTUPCONVERGENCE_REQUIRES_EVALU = 'waitForStartupConvergence requires evaluate';
 const LOCAL_STR_INTERNAL_WAKE = 'internal_wake';
 
 const STARTUP_CONVERGENCE_TIMEOUT_KIND = Object.freeze({
@@ -29,7 +28,7 @@ function subscribeToSystemTableCacheChanges(
   options = {},
 ) {
   if (!systemTableCache ||
-      typeof systemTableCache.onCacheChange !== TYPEOF.FUNCTION) {
+      typeof systemTableCache.onCacheChange !== 'function') {
     return () => {};
   }
 
@@ -50,7 +49,7 @@ function subscribeToSystemTableCacheChanges(
   };
   systemTableCache.onCacheChange(listener);
   return () => {
-    if (typeof systemTableCache.offCacheChange === TYPEOF.FUNCTION) {
+    if (typeof systemTableCache.offCacheChange === 'function') {
       systemTableCache.offCacheChange(listener);
     }
   };
@@ -62,12 +61,12 @@ function subscribeToMessageRouterEvents(
   options = {},
 ) {
   if (!messageRouter ||
-      typeof messageRouter.on !== TYPEOF.FUNCTION) {
+      typeof messageRouter.on !== 'function') {
     return () => {};
   }
 
   const eventNames = Array.isArray(options.eventNames) &&
-    options.eventNames.length > NUM.ZERO ?
+    options.eventNames.length > 0 ?
     options.eventNames :
     DEFAULT_ROUTER_EVENTS;
   const unbinders = [];
@@ -82,11 +81,11 @@ function subscribeToMessageRouterEvents(
     };
     messageRouter.on(eventName, listener);
     unbinders.push(() => {
-      if (typeof messageRouter.off === TYPEOF.FUNCTION) {
+      if (typeof messageRouter.off === 'function') {
         messageRouter.off(eventName, listener);
         return;
       }
-      if (typeof messageRouter.removeListener === TYPEOF.FUNCTION) {
+      if (typeof messageRouter.removeListener === 'function') {
         messageRouter.removeListener(eventName, listener);
       }
     });
@@ -100,32 +99,32 @@ function subscribeToMessageRouterEvents(
 }
 
 async function waitForStartupConvergence(options = {}) {
-  if (typeof options.evaluate !== TYPEOF.FUNCTION) {
-    throw new Error(LOCAL_STR_7NZXU);
+  if (typeof options.evaluate !== 'function') {
+    throw new Error(LOCAL_STR_WAITFORSTARTUPCONVERGENCE_REQUIRES_EVALU);
   }
 
-  const now = typeof options.now === TYPEOF.FUNCTION ?
+  const now = typeof options.now === 'function' ?
     options.now :
     () => Date.now();
-  const setTimeoutFn = typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+  const setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
     options.setTimeoutFn :
     setTimeout;
-  const clearTimeoutFn = typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+  const clearTimeoutFn = typeof options.clearTimeoutFn === 'function' ?
     options.clearTimeoutFn :
     clearTimeout;
   const timeoutMs = Number.isFinite(options.timeoutMs) &&
-    options.timeoutMs > NUM.ZERO ?
+    options.timeoutMs > 0 ?
     Math.floor(options.timeoutMs) :
-    NUM.ZERO;
+    0;
   const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
-    options.pollIntervalMs > NUM.ZERO ?
+    options.pollIntervalMs > 0 ?
     Math.floor(options.pollIntervalMs) :
     null;
   const subscriptions = Array.isArray(options.subscriptions) ?
     options.subscriptions :
     [];
   const buildProgressSignature =
-    typeof options.buildProgressSignature === TYPEOF.FUNCTION ?
+    typeof options.buildProgressSignature === 'function' ?
       options.buildProgressSignature :
       (result) => JSON.stringify({ready: result?.ready === true});
   const timeoutClassification =
@@ -154,17 +153,17 @@ async function waitForStartupConvergence(options = {}) {
   };
 
   for (const subscribe of subscriptions) {
-    if (typeof subscribe !== TYPEOF.FUNCTION) {
+    if (typeof subscribe !== 'function') {
       continue;
     }
     const unbind = subscribe(notify);
-    if (typeof unbind === TYPEOF.FUNCTION) {
+    if (typeof unbind === 'function') {
       unsubscribeFns.push(unbind);
     }
   }
 
   const startMs = now();
-  let attempt = NUM.ZERO;
+  let attempt = 0;
   let lastResult = null;
   let lastProgressSignature = null;
   let lastProgressAtMs = startMs;
@@ -201,8 +200,8 @@ async function waitForStartupConvergence(options = {}) {
 
   try {
     while (true) {
-      attempt += NUM.ONE;
-      const elapsedMs = Math.max(NUM.ZERO, now() - startMs);
+      attempt += 1;
+      const elapsedMs = Math.max(0, now() - startMs);
       lastResult = await options.evaluate({
         attempt,
         elapsedMs,
@@ -221,7 +220,7 @@ async function waitForStartupConvergence(options = {}) {
       }
 
       let blockedOutcome = null;
-      if (typeof options.onBlocked === TYPEOF.FUNCTION) {
+      if (typeof options.onBlocked === 'function') {
         blockedOutcome = await options.onBlocked(lastResult, {
           attempt,
           elapsedMs,
@@ -240,8 +239,8 @@ async function waitForStartupConvergence(options = {}) {
         continue;
       }
 
-      const remainingMs = timeoutMs - Math.max(NUM.ZERO, now() - startMs);
-      if (remainingMs <= NUM.ZERO) {
+      const remainingMs = timeoutMs - Math.max(0, now() - startMs);
+      if (remainingMs <= 0) {
         break;
       }
 
@@ -267,10 +266,10 @@ async function waitForStartupConvergence(options = {}) {
     attempt,
     timeoutMs,
     timeoutKind,
-    lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startMs),
-    elapsedMs: Math.max(NUM.ZERO, now() - startMs),
+    lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
+    elapsedMs: Math.max(0, now() - startMs),
   };
-  if (typeof options.createTimeoutError === TYPEOF.FUNCTION) {
+  if (typeof options.createTimeoutError === 'function') {
     throw options.createTimeoutError(lastResult, timeoutContext);
   }
 

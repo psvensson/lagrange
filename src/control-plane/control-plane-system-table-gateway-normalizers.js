@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -11,7 +10,7 @@ import {
 } from './control-plane-system-table-gateway-constants.js';
 
 function normalizeCoalescingToken(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
@@ -20,7 +19,7 @@ function sortObjectKeys(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => sortObjectKeys(entry));
   }
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return value;
   }
   return Object.keys(value)
@@ -39,8 +38,8 @@ function areCanonicalSystemTableRowsEqual(tableName, left, right) {
   if (
     !left ||
     !right ||
-    typeof left !== TYPEOF.OBJECT ||
-    typeof right !== TYPEOF.OBJECT
+    typeof left !== 'object' ||
+    typeof right !== 'object'
   ) {
     return false;
   }
@@ -50,7 +49,7 @@ function areCanonicalSystemTableRowsEqual(tableName, left, right) {
 }
 
 function normalizeSystemTableName(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim().toLowerCase();
@@ -68,7 +67,7 @@ function normalizePhaseScope(value) {
 }
 
 function extractSystemTableNameFromSql(sql) {
-  if (typeof sql !== TYPEOF.STRING || sql.trim().length === NUM.ZERO) {
+  if (typeof sql !== 'string' || sql.trim().length === 0) {
     return null;
   }
   const normalizedSql = sql.trim();
@@ -138,15 +137,15 @@ function createDeferredPromise() {
 }
 
 function normalizePositiveInteger(value, fallbackValue) {
-  return Number.isInteger(value) && value > NUM.ZERO ? value : fallbackValue;
+  return Number.isInteger(value) && value > 0 ? value : fallbackValue;
 }
 
 function hasUsablePrimaryKeyValue(value) {
-  if (typeof value === TYPEOF.UNDEFINED || value === null) {
+  if (typeof value === 'undefined' || value === null) {
     return false;
   }
-  if (typeof value === TYPEOF.STRING) {
-    return value.trim().length > NUM.ZERO;
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
   }
   return true;
 }
@@ -155,14 +154,14 @@ function normalizeDistinctStringArray(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : []).filter(
-        (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        (value) => typeof value === 'string' && value.length > 0,
       ),
     ),
   ];
 }
 
 function extractSqlOperationKind(sql) {
-  if (typeof sql !== TYPEOF.STRING) {
+  if (typeof sql !== 'string') {
     return CONTROL_PLANE_SQL_OPERATION.UNKNOWN;
   }
   const normalizedSql = sql.trim().toLowerCase();
@@ -186,7 +185,7 @@ function extractSqlOperationKind(sql) {
 }
 
 function copyOption(target, source, key) {
-  if (typeof source?.[key] === TYPEOF.UNDEFINED) {
+  if (typeof source?.[key] === 'undefined') {
     return target;
   }
   return {
@@ -202,7 +201,7 @@ function resolveControlPlaneSystemTableDeliverySource({
   operationKind = null,
   coalescingKey = null,
 } = {}) {
-  if (typeof deliverySource === TYPEOF.STRING && deliverySource.length > NUM.ZERO) {
+  if (typeof deliverySource === 'string' && deliverySource.length > 0) {
     return deliverySource;
   }
   const normalizedTableName =

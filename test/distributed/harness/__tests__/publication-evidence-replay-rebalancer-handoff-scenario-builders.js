@@ -9,7 +9,6 @@ export function buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders(
     CONTROL_PLANE_PUBLICATION_STATUS,
     CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
     CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
-    NUM,
     OWNER_CONTRACT_NEXT_ACTION,
     OWNER_CONTRACT_STATE,
     REBALANCE_COORDINATOR_LOG_MSG,
@@ -225,7 +224,7 @@ export function buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders(
         nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
         entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
         entityType: SERVICE_TYPE.PARTITION,
-        moveCount: NUM.ONE,
+        moveCount: 1,
         msg: REBALANCER_LOG_MSG.START_REBALANCE,
       },
       {

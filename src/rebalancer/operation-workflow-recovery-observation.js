@@ -3,7 +3,6 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './opera
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
-  NUM,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_TYPES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,
@@ -24,7 +23,6 @@ const {
   ReplicaStatus,
   STOPPING_REPLICA_OBSERVATION_STATE,
   TRANSITION_RETRY_DELAY_MS,
-  TYPEOF,
   WORKFLOW_STEP,
 } = SHARED;
 
@@ -143,7 +141,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       !operation ||
       !this.repository ||
       typeof this.repository.getObservedReplicaStatusFromCache !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -165,7 +163,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       !operation ||
       !this.repository ||
       typeof this.repository.getObservedReplicaStatusFromCache !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return RECONCILED_REPLICA_STATUS_OBSERVED_TARGET_UNAVAILABLE;
     }
@@ -187,7 +185,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       typeof operationRow !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
       cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE ||
       !this.repository ||
-      typeof this.repository.rowToOperation !== TYPEOF.FUNCTION
+      typeof this.repository.rowToOperation !== 'function'
     ) {
       return [];
     }
@@ -204,7 +202,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       operation.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
     if (
       typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === NUM.ZERO
+      operationId.length === 0
     ) {
       return [];
     }
@@ -260,8 +258,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       serviceRow.partition_id || serviceRow.partitionId || '',
     );
     if (
-      targetNodeId.length === NUM.ZERO ||
-      (replicaId.length === NUM.ZERO && partitionId.length === NUM.ZERO)
+      targetNodeId.length === 0 ||
+      (replicaId.length === 0 && partitionId.length === 0)
     ) {
       return [];
     }
@@ -285,11 +283,11 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         if (operation.targetNodeId !== targetNodeId) {
           return false;
         }
-        if (replicaId.length > NUM.ZERO && operation.replicaId === replicaId) {
+        if (replicaId.length > 0 && operation.replicaId === replicaId) {
           return true;
         }
         return (
-          partitionId.length > NUM.ZERO && operation.partitionId === partitionId
+          partitionId.length > 0 && operation.partitionId === partitionId
         );
       }) || [];
 
@@ -300,7 +298,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
           .filter(
             (opId) =>
               typeof opId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-              opId.length > NUM.ZERO,
+              opId.length > 0,
           ),
       ),
     ];
@@ -324,11 +322,11 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
 
     const sourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
-    if (replicaId.length > NUM.ZERO) {
+    if (replicaId.length > 0) {
       return sourceReplicaId === replicaId;
     }
     return (
-      partitionId.length > NUM.ZERO && operation.partitionId === partitionId
+      partitionId.length > 0 && operation.partitionId === partitionId
     );
   }
 
@@ -341,8 +339,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       locallyOwned:
         this.repository.isOperationLocallyOwned(operation),
       remoteOwnerAvailable:
-        typeof ownerNodeId === TYPEOF.STRING &&
-        ownerNodeId.length > NUM.ZERO &&
+        typeof ownerNodeId === 'string' &&
+        ownerNodeId.length > 0 &&
         ownerNodeId !== this.nodeId,
       ownerNodeId,
     });
@@ -363,7 +361,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   async reconcileObservedProgressOperation(operationId) {
     if (
       typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === NUM.ZERO
+      operationId.length === 0
     ) {
       return false;
     }
@@ -410,7 +408,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       !record ||
       typeof record !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
       !this.repository ||
-      typeof this.repository.rowToOperation !== TYPEOF.FUNCTION
+      typeof this.repository.rowToOperation !== 'function'
     ) {
       return null;
     }
@@ -430,7 +428,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
         typeof operation.operationId ===
           OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        operation.operationId.length > NUM.ZERO,
+        operation.operationId.length > 0,
       terminalOperation: this.repository.isOperationTerminal(operation),
       observedTargetProgressVisible:
         this.hasObservedOperationRowTargetProgress(operation),
@@ -536,7 +534,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   async observeStoppingReplicaProgress(replicaId, partitionId, targetNodeId) {
     if (
       this.repository &&
-      typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
+      typeof this.repository.getActualReplicaObservation === 'function'
     ) {
       const observation = await this.repository.getActualReplicaObservation(
         replicaId,

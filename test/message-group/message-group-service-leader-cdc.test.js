@@ -25,7 +25,6 @@ import {RAFT_EVENT} from '../../src/raft/constants.js';
 import {
   CACHE_HYDRATION_TABLES,
 } from '../../src/cache/cache-constants.js';
-import {NUM} from '../../src/constants/index.js';
 
 // Test-local fixture constants.
 const TEST_PORT_BASE = 25300;
@@ -90,8 +89,8 @@ test(
         replicaId,
         nodeId,
         transport: router,
-        leaderActivationStabilizationMs: NUM.ZERO,
-        leaderActivationNodeSpacingMs: NUM.ZERO,
+        leaderActivationStabilizationMs: 0,
+        leaderActivationNodeSpacingMs: 0,
         leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
       });
 
@@ -164,8 +163,8 @@ test(
         replicaId,
         nodeId,
         transport: router,
-        leaderActivationStabilizationMs: NUM.ZERO,
-        leaderActivationNodeSpacingMs: NUM.ZERO,
+        leaderActivationStabilizationMs: 0,
+        leaderActivationNodeSpacingMs: 0,
         leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
       });
 
@@ -177,7 +176,7 @@ test(
       }
 
       // Count re-subscription calls on leadership gain.
-      let resubscribeCount = NUM.ZERO;
+      let resubscribeCount = 0;
       const originalSubscribeToCDC =
         service.subscribeToCDC.bind(service);
       service.subscribeToCDC = async (tableName) => {

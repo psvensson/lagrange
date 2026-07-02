@@ -4,9 +4,6 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
-  NUM,
-} from '../constants/index.js';
-import {
   subscribeToMessageRouterEvents,
   subscribeToSystemTableCacheChanges,
   waitForStartupConvergence,
@@ -21,9 +18,9 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
 
-const LOCAL_STR_1C87J = 'Join canonical readiness converged';
-const LOCAL_STR_ELZSM = 'JOIN_READINESS_TIMEOUT';
-const LOCAL_STR_98J4B = 'Join canonical readiness timed out';
+const LOCAL_STR_JOIN_CANONICAL_READINESS_CONVERGED = 'Join canonical readiness converged';
+const LOCAL_STR_JOIN_READINESS_TIMEOUT = 'JOIN_READINESS_TIMEOUT';
+const LOCAL_STR_JOIN_CANONICAL_READINESS_TIMED_OUT = 'Join canonical readiness timed out';
 
 const JOIN_READINESS_BLOCKED_ACTION = Object.freeze({
   NONE: 'none',
@@ -48,7 +45,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     }
 
     const timeoutMs = this.resolveJoinReadinessTimeoutMs();
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return;
     }
 
@@ -99,11 +96,11 @@ class JoinReadinessEvaluatorConvergenceMethods {
 
     const finalEvaluation = result?.evaluation || null;
     this.delegates.getLogger().info(
-      LOCAL_STR_1C87J,
+      LOCAL_STR_JOIN_CANONICAL_READINESS_CONVERGED,
       {
         nodeId: this.nodeId,
-        attempts: result?.attempts || NUM.ONE,
-        elapsedMs: result?.elapsedMs || NUM.ZERO,
+        attempts: result?.attempts || 1,
+        elapsedMs: result?.elapsedMs || 0,
         requiredSchemaVersion:
           finalEvaluation?.requiredSchemaVersion || null,
         appliedSchemaVersion:
@@ -149,11 +146,11 @@ class JoinReadinessEvaluatorConvergenceMethods {
         evaluation?.appliedSchemaVersion || null,
       missingLeaders: evaluation?.missingLeaders || {},
       inFlightReplicaOperations:
-        evaluation?.inFlightReplicaOperations || NUM.ZERO,
+        evaluation?.inFlightReplicaOperations || 0,
       excludedRemotePriorityControlPlaneCount:
-        evaluation?.excludedRemotePriorityControlPlaneCount || NUM.ZERO,
+        evaluation?.excludedRemotePriorityControlPlaneCount || 0,
       excludedSelfSourcePriorityControlPlaneCount:
-        evaluation?.excludedSelfSourcePriorityControlPlaneCount || NUM.ZERO,
+        evaluation?.excludedSelfSourcePriorityControlPlaneCount || 0,
       missingNodeEndpointNodeIds:
         evaluation?.missingNodeEndpointNodeIds || [],
       missingPostgresWireNodeIds:
@@ -198,7 +195,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
       });
     }
     const normalizedPollIntervalMs = Number.isFinite(pollIntervalMs) ?
-      Math.max(NUM.ZERO, Math.floor(pollIntervalMs)) :
+      Math.max(0, Math.floor(pollIntervalMs)) :
       null;
     return Object.freeze({
       actionId:
@@ -274,7 +271,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const terminalEvaluation =
       attemptResult?.evaluation || fallbackEvaluation;
     const attempts =
-      attemptResult?.attempts || context.attempt || NUM.ONE;
+      attemptResult?.attempts || context.attempt || 1;
     const snapshotErrorMessage =
       attemptResult?.snapshotError?.message || null;
     const error = new Error(
@@ -282,7 +279,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
       `${terminalEvaluation.reasons.join(', ')} ` +
       `after ${timeoutMs}ms`,
     );
-    error.code = LOCAL_STR_ELZSM;
+    error.code = LOCAL_STR_JOIN_READINESS_TIMEOUT;
     // Readiness not converging YET is transient: the node's join
     // infrastructure is fully up by this segment, so the retryable resume
     // (CL-006) should preserve it and re-enter the readiness wait rather
@@ -355,7 +352,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     };
 
     this.delegates.getLogger().error(
-      LOCAL_STR_98J4B,
+      LOCAL_STR_JOIN_CANONICAL_READINESS_TIMED_OUT,
       {
         nodeId: this.nodeId,
         timeoutMs,
@@ -430,7 +427,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const config = this.delegates.getConfig();
     if (Number.isFinite(config.joinReadinessTimeoutMs)) {
       return Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(config.joinReadinessTimeoutMs),
       );
     }
@@ -445,12 +442,12 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const config = this.delegates.getConfig();
     if (Number.isFinite(config.joinReadinessPollIntervalMs)) {
       return Math.max(
-        NUM.ONE,
+        1,
         Math.floor(config.joinReadinessPollIntervalMs),
       );
     }
     return Math.max(
-      NUM.ONE,
+      1,
       Math.floor(config.leadershipWaitInitialDelayMs),
     );
   }
@@ -488,10 +485,10 @@ class JoinReadinessEvaluatorConvergenceMethods {
       JOIN_READINESS_REPAIR.MIN_INTERVAL_MS,
       Number.isFinite(pollIntervalMs) ?
         Math.floor(pollIntervalMs) :
-        NUM.ZERO,
+        0,
     );
     const now = this.now();
-    if (this.lastCanonicalJoinRepairAtMs > NUM.ZERO &&
+    if (this.lastCanonicalJoinRepairAtMs > 0 &&
         now - this.lastCanonicalJoinRepairAtMs < minIntervalMs) {
       return false;
     }
@@ -535,9 +532,9 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const normalizedMissingNodeIds = Array.from(new Set(
       (Array.isArray(missingNodeIds) ? missingNodeIds : [])
         .map((nodeId) => String(nodeId || '').trim())
-        .filter((nodeId) => nodeId.length > NUM.ZERO && nodeId !== this.nodeId),
+        .filter((nodeId) => nodeId.length > 0 && nodeId !== this.nodeId),
     ));
-    if (normalizedMissingNodeIds.length === NUM.ZERO) {
+    if (normalizedMissingNodeIds.length === 0) {
       return false;
     }
 
@@ -556,7 +553,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     }
 
     const now = this.now();
-    if (this.lastMeshConnectivityRepairAtMs > NUM.ZERO &&
+    if (this.lastMeshConnectivityRepairAtMs > 0 &&
         now - this.lastMeshConnectivityRepairAtMs <
           JOIN_MESH_CONNECTIVITY_REPAIR.MIN_INTERVAL_MS) {
       return false;

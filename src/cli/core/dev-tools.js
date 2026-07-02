@@ -2,14 +2,13 @@ import {formatDevToolsTextContent} from './dev-tools-text-renderer.js';
 
 const LOCAL_STR_PRODUCTION = 'production';
 const LOCAL_STR_STATE = 'state';
-const LOCAL_NUM_100 = 100;
-const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_CACHE_UPDATE = 'cache:update';
 const LOCAL_STR_VIEW_RENDERED = 'view:rendered';
 const LOCAL_STR_ASTERISK = '*';
 const LOCAL_STR_DEVTOOLS_SHOW = 'devtools:show';
 const LOCAL_STR_DEVTOOLS_HIDE = 'devtools:hide';
-const LOCAL_STR_1YTYF = 'devtools:tabChanged';
+const LOCAL_STR_DEVTOOLS_TABCHANGED = 'devtools:tabChanged';
 const LOCAL_STR_1_STATE = '1: State';
 const LOCAL_STR_EVENTS = 'events';
 const LOCAL_STR_2_EVENTS = '2: Events';
@@ -21,31 +20,29 @@ const LOCAL_STR_PERFORMANCE = 'performance';
 const LOCAL_STR_5_PERFORMANCE = '5: Performance';
 const LOCAL_STR_EMPTY_2 = 'empty';
 const LOCAL_STR_UNKNOWN_TAB = 'Unknown tab';
-const LOCAL_STR_1C7M6 = 'StateManager not available';
-const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_STATEMANAGER_NOT_AVAILABLE = 'StateManager not available';
 const LOCAL_STR_NULL = 'null';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_W7K42 = '[]';
+const LOCAL_STR_LBRACKET_RBRACKET = '[]';
 const LOCAL_NUM_THREE = 3;
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_UNDEFINED = 'undefined';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_50 = 50;
-const LOCAL_NUM_47 = 47;
+const LOCAL_NUM_FIFTY = 50;
+const LOCAL_NUM_FORTY_SEVEN = 47;
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_BOOLEAN = 'boolean';
-const LOCAL_STR_1IZU7 = 'EventBus not available';
-const LOCAL_NUM_11 = 11;
-const LOCAL_NUM_23 = 23;
-const LOCAL_NUM_80 = 80;
-const LOCAL_NUM_77 = 77;
-const LOCAL_STR_2ZI04 = '...';
-const LOCAL_STR_1TJRQ = 'ComponentRegistry not available';
-const LOCAL_NUM_10 = 10;
-const LOCAL_NUM_10000 = 10000;
-const LOCAL_STR_OYQ6J = 'devtools:snapshotCreated';
-const LOCAL_STR_12PTN = 'devtools:snapshotRestored';
+const LOCAL_STR_EVENTBUS_NOT_AVAILABLE = 'EventBus not available';
+const LOCAL_NUM_ELEVEN = 11;
+const LOCAL_NUM_TWENTY_THREE = 23;
+const LOCAL_NUM_EIGHTY = 80;
+const LOCAL_NUM_SEVENTY_SEVEN = 77;
+const LOCAL_STR_DOT_DOT_DOT = '...';
+const LOCAL_STR_COMPONENTREGISTRY_NOT_AVAILABLE = 'ComponentRegistry not available';
+const LOCAL_NUM_TEN = 10;
+const LOCAL_NUM_ONE_HUNDRED00 = 10000;
+const LOCAL_STR_DEVTOOLS_SNAPSHOTCREATED = 'devtools:snapshotCreated';
+const LOCAL_STR_DEVTOOLS_SNAPSHOTRESTORED = 'devtools:snapshotRestored';
 const LOCAL_STR_1 = '1';
 const LOCAL_STR_2 = '2';
 const LOCAL_STR_3 = '3';
@@ -126,15 +123,15 @@ export class DevTools {
     this.metrics = {
       renderTimes: [],
       eventLatencies: [],
-      maxSamples: LOCAL_NUM_100,
+      maxSamples: LOCAL_NUM_ONE_HUNDRED,
     };
 
     /** @type {CDCEventEntry[]} */
     this.cdcEvents = [];
-    this.maxCDCEvents = LOCAL_NUM_100;
+    this.maxCDCEvents = LOCAL_NUM_ONE_HUNDRED;
 
     /** @type {string} */
-    this.cdcFilter = LOCAL_STR_EMPTY;
+    this.cdcFilter = '';
 
     // Event log from event bus
     this.eventLogSubscription = null;
@@ -257,7 +254,7 @@ export class DevTools {
       this.currentTab = tab;
 
       if (this.eventBus) {
-        this.eventBus.emit(LOCAL_STR_1YTYF, {tab});
+        this.eventBus.emit(LOCAL_STR_DEVTOOLS_TABCHANGED, {tab});
       }
     }
   }
@@ -308,7 +305,7 @@ export class DevTools {
         type: LOCAL_STR_STATE,
         state: null,
         snapshots: [],
-        error: LOCAL_STR_1C7M6,
+        error: LOCAL_STR_STATEMANAGER_NOT_AVAILABLE,
       };
     }
 
@@ -330,7 +327,7 @@ export class DevTools {
    * @param {number} [indent=0] - Current indentation level
    * @returns {string} Formatted tree string
    */
-  formatStateTree(obj, indent = LOCAL_NUM_ZERO) {
+  formatStateTree(obj, indent = 0) {
     if (obj === null || obj === undefined) {
       return LOCAL_STR_NULL;
     }
@@ -343,13 +340,13 @@ export class DevTools {
     }
 
     if (Array.isArray(obj)) {
-      if (obj.length === LOCAL_NUM_ZERO) {
-        return LOCAL_STR_W7K42;
+      if (obj.length === 0) {
+        return LOCAL_STR_LBRACKET_RBRACKET;
       }
       lines.push(`Array(${obj.length})`);
       // Show first few items
       const preview = obj.slice(0, 3);
-      for (let i = LOCAL_NUM_ZERO; i < preview.length; i++) {
+      for (let i = 0; i < preview.length; i++) {
         const value = this.formatValue(preview[i]);
         lines.push(`${spaces}  [${i}]: ${value}`);
       }
@@ -363,7 +360,7 @@ export class DevTools {
     for (const [key, value] of entries) {
       if (value && typeof value === LOCAL_STR_OBJECT && !Array.isArray(value)) {
         lines.push(`${spaces}${key}:`);
-        lines.push(this.formatStateTree(value, indent + LOCAL_NUM_ONE));
+        lines.push(this.formatStateTree(value, indent + 1));
       } else {
         const formattedValue = this.formatValue(value);
         lines.push(`${spaces}${key}: ${formattedValue}`);
@@ -382,7 +379,7 @@ export class DevTools {
     if (value === null) return LOCAL_STR_NULL;
     if (value === undefined) return LOCAL_STR_UNDEFINED;
     if (typeof value === LOCAL_STR_STRING) {
-      return value.length > LOCAL_NUM_50 ? `"${value.substring(LOCAL_NUM_ZERO, LOCAL_NUM_47)}..."` : `"${value}"`;
+      return value.length > LOCAL_NUM_FIFTY ? `"${value.substring(0, LOCAL_NUM_FORTY_SEVEN)}..."` : `"${value}"`;
     }
     if (typeof value === LOCAL_STR_NUMBER || typeof value === LOCAL_STR_BOOLEAN) {
       return String(value);
@@ -406,7 +403,7 @@ export class DevTools {
       return {
         type: LOCAL_STR_EVENTS,
         events: [],
-        error: LOCAL_STR_1IZU7,
+        error: LOCAL_STR_EVENTBUS_NOT_AVAILABLE,
       };
     }
 
@@ -434,7 +431,7 @@ export class DevTools {
    */
   formatTimestamp(timestamp) {
     const date = new Date(timestamp);
-    return date.toISOString().substring(LOCAL_NUM_11, LOCAL_NUM_23); // HH:mm:ss.SSS
+    return date.toISOString().substring(LOCAL_NUM_ELEVEN, LOCAL_NUM_TWENTY_THREE); // HH:mm:ss.SSS
   }
 
   /**
@@ -444,11 +441,11 @@ export class DevTools {
    */
   formatDataPreview(data) {
     if (data === undefined || data === null) {
-      return LOCAL_STR_EMPTY;
+      return '';
     }
     const str = JSON.stringify(data);
-    return str.length > LOCAL_NUM_80 ?
-      str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04 :
+    return str.length > LOCAL_NUM_EIGHTY ?
+      str.substring(0, LOCAL_NUM_SEVENTY_SEVEN) + LOCAL_STR_DOT_DOT_DOT :
       str;
   }
 
@@ -464,7 +461,7 @@ export class DevTools {
         components: [],
         dependencyGraph: {},
         initOrder: [],
-        error: LOCAL_STR_1TJRQ,
+        error: LOCAL_STR_COMPONENTREGISTRY_NOT_AVAILABLE,
       };
     }
 
@@ -501,7 +498,7 @@ export class DevTools {
 
     return {
       type: LOCAL_STR_CDC,
-      events: filteredEvents.slice(-LOCAL_NUM_50).reverse(),
+      events: filteredEvents.slice(-LOCAL_NUM_FIFTY).reverse(),
       totalCount: this.cdcEvents.length,
       filteredCount: filteredEvents.length,
       filter: this.cdcFilter,
@@ -546,14 +543,14 @@ export class DevTools {
         avg: renderStats.avg,
         min: renderStats.min,
         max: renderStats.max,
-        recent: this.metrics.renderTimes.slice(-LOCAL_NUM_10),
+        recent: this.metrics.renderTimes.slice(-LOCAL_NUM_TEN),
       },
       eventLatency: {
         samples: this.metrics.eventLatencies.length,
         avg: latencyStats.avg,
         min: latencyStats.min,
         max: latencyStats.max,
-        recent: this.metrics.eventLatencies.slice(-LOCAL_NUM_10),
+        recent: this.metrics.eventLatencies.slice(-LOCAL_NUM_TEN),
       },
     };
   }
@@ -564,13 +561,13 @@ export class DevTools {
    * @returns {Object} Statistics
    */
   calculateStats(values) {
-    if (values.length === LOCAL_NUM_ZERO) {
-      return {avg: LOCAL_NUM_ZERO, min: LOCAL_NUM_ZERO, max: LOCAL_NUM_ZERO};
+    if (values.length === 0) {
+      return {avg: 0, min: 0, max: 0};
     }
 
     const sum = values.reduce((a, b) => a + b, 0);
     return {
-      avg: Math.round((sum / values.length) * LOCAL_NUM_100) / LOCAL_NUM_100,
+      avg: Math.round((sum / values.length) * LOCAL_NUM_ONE_HUNDRED) / LOCAL_NUM_ONE_HUNDRED,
       min: Math.min(...values),
       max: Math.max(...values),
     };
@@ -596,7 +593,7 @@ export class DevTools {
    */
   trackEventLatency(latency) {
     // Only track reasonable latencies (filter out initial/invalid values)
-    if (latency >= LOCAL_NUM_ZERO && latency < LOCAL_NUM_10000) {
+    if (latency >= 0 && latency < LOCAL_NUM_ONE_HUNDRED00) {
       this.metrics.eventLatencies.push(latency);
 
       if (this.metrics.eventLatencies.length > this.metrics.maxSamples) {
@@ -617,7 +614,7 @@ export class DevTools {
     const index = this.stateManager.createSnapshot(name);
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_OYQ6J, {
+      this.eventBus.emit(LOCAL_STR_DEVTOOLS_SNAPSHOTCREATED, {
         index,
         name: name || `snapshot_${index}`,
       });
@@ -639,7 +636,7 @@ export class DevTools {
       this.stateManager.restoreSnapshot(index);
 
       if (this.eventBus) {
-        this.eventBus.emit(LOCAL_STR_12PTN, {index});
+        this.eventBus.emit(LOCAL_STR_DEVTOOLS_SNAPSHOTRESTORED, {index});
       }
 
       return true;

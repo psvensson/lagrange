@@ -16,7 +16,6 @@ const {
   PROTOCOL,
   STATE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   buildCDCNodeJoinedResult,
   resolveNodeWebSocketAddress,
 } = CDC_INTEGRATION_SERVICE_SHARED;
@@ -27,23 +26,23 @@ const {
  * @return {string|null} WebSocket address or null if cannot derive.
  */
 export function deriveWsAddressFromNodeAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+  if (!nodeAddress || typeof nodeAddress !== 'string') {
     return null;
   }
 
   // Parse hostname:port format
   const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+  if (colonIndex === -1 || colonIndex === 0) {
     // No colon found or colon at start (empty hostname)
     return null;
   }
-  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-  if (!hostname || hostname.length === NUM.ZERO) {
+  const hostname = nodeAddress.substring(0, colonIndex);
+  if (!hostname || hostname.length === 0) {
     return null;
   }
-  const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+  const portStr = nodeAddress.substring(colonIndex + 1);
   const restPort = parseInt(portStr, NUM.TEN);
-  if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+  if (!Number.isFinite(restPort) || restPort <= 0) {
     return null;
   }
 
@@ -60,7 +59,7 @@ export function deriveWsAddressFromNodeAddress(nodeAddress) {
  */
 export async function handleNodeJoinedCDC(context, cdcEvent) {
   // Validate cdcEvent
-  if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
+  if (!cdcEvent || typeof cdcEvent !== 'object') {
     return {
       processed: false,
       error: CDC_ERROR_MSG.INVALID_EVENT,
@@ -118,7 +117,7 @@ export async function handleNodeJoinedCDC(context, cdcEvent) {
     };
   }
   const connectionState =
-    typeof context.messageRouter.getConnectionState === TYPEOF.FUNCTION ?
+    typeof context.messageRouter.getConnectionState === 'function' ?
       context.messageRouter.getConnectionState(targetNodeId) :
       context.messageRouter.nodeConnections?.get(targetNodeId)?.state || null;
   if (connectionState === STATE.CONNECTED) {

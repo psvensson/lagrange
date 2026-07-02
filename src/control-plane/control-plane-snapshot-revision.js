@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 
 const LOCAL_NUM_THREE = 3;
 
@@ -31,7 +27,7 @@ function normalizeNonNegativeInteger(value) {
     return null;
   }
   const normalized = Number(value);
-  if (!Number.isFinite(normalized) || normalized < NUM.ZERO) {
+  if (!Number.isFinite(normalized) || normalized < 0) {
     return null;
   }
   return Math.floor(normalized);
@@ -42,12 +38,12 @@ function normalizeObservedAtMs(value) {
   if (numericValue !== null) {
     return numericValue;
   }
-  if (typeof value !== TYPEOF.STRING || value.length === NUM.ZERO) {
+  if (typeof value !== 'string' || value.length === 0) {
     return null;
   }
   const parsedValue = Date.parse(value);
   return Number.isFinite(parsedValue) ?
-    Math.max(NUM.ZERO, Math.floor(parsedValue)) :
+    Math.max(0, Math.floor(parsedValue)) :
     null;
 }
 
@@ -55,7 +51,7 @@ function normalizeObservedAt(observedAtMs, fallbackValue = null) {
   if (Number.isFinite(observedAtMs)) {
     return new Date(observedAtMs).toISOString();
   }
-  if (typeof fallbackValue === TYPEOF.STRING && fallbackValue.length > NUM.ZERO) {
+  if (typeof fallbackValue === 'string' && fallbackValue.length > 0) {
     return fallbackValue;
   }
   return null;
@@ -67,7 +63,7 @@ function buildControlPlaneSnapshotResumeToken(revision, source) {
     return null;
   }
   const normalizedSource =
-    typeof source === TYPEOF.STRING && source.length > NUM.ZERO ?
+    typeof source === 'string' && source.length > 0 ?
       source :
       CONTROL_PLANE_SNAPSHOT_REVISION_SOURCE.NONE;
   return [
@@ -78,17 +74,17 @@ function buildControlPlaneSnapshotResumeToken(revision, source) {
 }
 
 function readResumeTokenRevision(resumeToken) {
-  if (typeof resumeToken !== TYPEOF.STRING || resumeToken.length === NUM.ZERO) {
+  if (typeof resumeToken !== 'string' || resumeToken.length === 0) {
     return null;
   }
   const segments = resumeToken.split(
     CONTROL_PLANE_SNAPSHOT_RESUME_TOKEN_LITERAL.SEPARATOR,
   );
   if (segments.length < LOCAL_NUM_THREE ||
-      segments[NUM.ZERO] !== CONTROL_PLANE_SNAPSHOT_RESUME_TOKEN_LITERAL.PREFIX) {
+      segments[0] !== CONTROL_PLANE_SNAPSHOT_RESUME_TOKEN_LITERAL.PREFIX) {
     return null;
   }
-  return normalizeNonNegativeInteger(segments[segments.length - NUM.ONE]);
+  return normalizeNonNegativeInteger(segments[segments.length - 1]);
 }
 
 function resolveSnapshotRevisionCandidate(snapshot = null) {
@@ -188,7 +184,7 @@ function resolveControlPlaneSnapshotRevisionMetadata(snapshot = null, options = 
     expectedMinimumRevision !== null &&
     expectedMinimumRevision > revisionCandidate.revision ?
       expectedMinimumRevision - revisionCandidate.revision :
-      NUM.ZERO;
+      0;
   return Object.freeze({
     revision: revisionCandidate.revision,
     revisionSource: revisionCandidate.source,

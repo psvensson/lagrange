@@ -16,12 +16,10 @@ import {
   FUNCTION_LOG_MSG,
   FUNCTION_SUBSYSTEM,
   FUNCTION_DEFAULT_VALUE,
-  TYPEOF,
 } from './function-constants.js';
 
 const LOCAL_STR_FUNCTIONREGISTRY = 'FunctionRegistry';
 const LOCAL_STR_READ = 'read';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * FunctionRegistry provides a plugin architecture for registering
@@ -96,11 +94,11 @@ class FunctionRegistry {
    * @throws {Error} If executor is invalid.
    */
   registerExecutor(executorType, executor) {
-    if (!executorType || typeof executorType !== TYPEOF.STRING) {
+    if (!executorType || typeof executorType !== 'string') {
       throw new Error(FUNCTION_ERROR_MSG.EXECUTOR_TYPE_REQUIRED);
     }
 
-    if (!executor || typeof executor.execute !== TYPEOF.FUNCTION) {
+    if (!executor || typeof executor.execute !== 'function') {
       throw new Error(FUNCTION_ERROR_MSG.EXECUTOR_METHOD_REQUIRED);
     }
 
@@ -218,7 +216,7 @@ class FunctionRegistry {
         coalescingKey: `function:${functionId}`,
       },
     );
-    return result.rows?.[LOCAL_NUM_ZERO] || null;
+    return result.rows?.[0] || null;
   }
 
   /**
@@ -243,7 +241,7 @@ class FunctionRegistry {
         coalescingKey: `function-name:${functionName}`,
       },
     );
-    return result.rows?.[LOCAL_NUM_ZERO] || null;
+    return result.rows?.[0] || null;
   }
 
   /**

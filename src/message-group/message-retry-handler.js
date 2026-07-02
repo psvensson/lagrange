@@ -11,26 +11,24 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {resolveRandomSource} from '../random/random-source.js';
 import {LoggingService} from '../logging/logging-service.js';
 
-const LOCAL_STR_1BUA7 = 'message-retry-handler';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_T3QGE = 'Starting retry execution';
-const LOCAL_STR_18X6P = 'Retrying after delay';
+const LOCAL_STR_MESSAGE_RETRY_HANDLER = 'message-retry-handler';
+const LOCAL_STR_STARTING_RETRY_EXECUTION = 'Starting retry execution';
+const LOCAL_STR_RETRYING_AFTER_DELAY = 'Retrying after delay';
 const LOCAL_STR_SUCCESS = 'success';
 const LOCAL_STR_DELIVERY_SUCCEEDED = 'Delivery succeeded';
 const LOCAL_STR_DELIVERYSUCCESS = 'deliverySuccess';
-const LOCAL_STR_1B5LQ = 'Delivery not acknowledged';
+const LOCAL_STR_DELIVERY_NOT_ACKNOWLEDGED = 'Delivery not acknowledged';
 const LOCAL_STR_NOT_ACKNOWLEDGED = 'not_acknowledged';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_STR_LXQUA = 'Delivery attempt failed';
-const LOCAL_STR_KFWKK = 'Switching to alternative replica';
-const LOCAL_STR_1QSPJ = 'Max retries exceeded';
+const LOCAL_STR_DELIVERY_ATTEMPT_FAILED = 'Delivery attempt failed';
+const LOCAL_STR_SWITCHING_TO_ALTERNATIVE_REPLICA = 'Switching to alternative replica';
+const LOCAL_STR_MAX_RETRIES_EXCEEDED = 'Max retries exceeded';
 const LOCAL_STR_MAXRETRIESEXCEEDED = 'maxRetriesExceeded';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_PU65M = 'Failed to get alternative replicas';
+const LOCAL_STR_FAILED_TO_GET_ALTERNATIVE_REPLICAS = 'Failed to get alternative replicas';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_6CFAP = 'Alternative replica provider must be a function';
-const LOCAL_STR_1FE1P = 'Retry configuration updated';
-const LOCAL_STR_114SL = 'MaxRetriesExceededError';
+const LOCAL_STR_ALTERNATIVE_REPLICA_PROVIDER_MUST_BE_A_F = 'Alternative replica provider must be a function';
+const LOCAL_STR_RETRY_CONFIGURATION_UPDATED = 'Retry configuration updated';
+const LOCAL_STR_MAXRETRIESEXCEEDEDERROR = 'MaxRetriesExceededError';
 
 /**
  * Retry result status enumeration.
@@ -100,15 +98,15 @@ class MessageRetryHandler extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(LOCAL_STR_1BUA7) : console;
+      loggingService.forSubsystem(LOCAL_STR_MESSAGE_RETRY_HANDLER) : console;
 
     // Statistics
     this.stats = {
-      totalAttempts: LOCAL_NUM_ZERO,
-      successfulDeliveries: LOCAL_NUM_ZERO,
-      failedDeliveries: LOCAL_NUM_ZERO,
-      retriesPerformed: LOCAL_NUM_ZERO,
-      alternativeReplicasUsed: LOCAL_NUM_ZERO,
+      totalAttempts: 0,
+      successfulDeliveries: 0,
+      failedDeliveries: 0,
+      retriesPerformed: 0,
+      alternativeReplicasUsed: 0,
     };
   }
 
@@ -118,8 +116,8 @@ class MessageRetryHandler extends EventEmitter {
    * @return {number} Delay in milliseconds.
    */
   calculateDelay(attempt) {
-    if (attempt <= LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
+    if (attempt <= 0) {
+      return 0;
     }
 
     // Calculate base delay with exponential backoff
@@ -133,7 +131,7 @@ class MessageRetryHandler extends EventEmitter {
     const jitterRange = baseDelay * this.jitterFactor;
     const jitter = (this.randomSource.random() * 2 - 1) * jitterRange;
 
-    return Math.max(LOCAL_NUM_ZERO, Math.round(baseDelay + jitter));
+    return Math.max(0, Math.round(baseDelay + jitter));
   }
 
   /**
@@ -154,22 +152,22 @@ class MessageRetryHandler extends EventEmitter {
     const attemptHistory = [];
     const triedTargets = new Set([targetAddress]);
 
-    this.logger.debug(LOCAL_STR_T3QGE, {
+    this.logger.debug(LOCAL_STR_STARTING_RETRY_EXECUTION, {
       retryId,
       messageId,
       targetAddress,
       maxRetries: this.maxRetries,
     });
 
-    for (let attempt = LOCAL_NUM_ZERO; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       this.stats.totalAttempts++;
 
       // Calculate and apply delay (skip for first attempt)
-      if (attempt > LOCAL_NUM_ZERO) {
+      if (attempt > 0) {
         const delay = this.calculateDelay(attempt);
         this.stats.retriesPerformed++;
 
-        this.logger.debug(LOCAL_STR_18X6P, {
+        this.logger.debug(LOCAL_STR_RETRYING_AFTER_DELAY, {
           retryId,
           messageId,
           attempt,
@@ -223,7 +221,7 @@ class MessageRetryHandler extends EventEmitter {
         }
 
         // Delivery returned but not acknowledged
-        lastError = new Error(result?.error || LOCAL_STR_1B5LQ);
+        lastError = new Error(result?.error || LOCAL_STR_DELIVERY_NOT_ACKNOWLEDGED);
         attemptRecord.status = LOCAL_STR_NOT_ACKNOWLEDGED;
         attemptRecord.error = lastError.message;
       } catch (error) {
@@ -231,7 +229,7 @@ class MessageRetryHandler extends EventEmitter {
         attemptRecord.status = LOCAL_STR_ERROR;
         attemptRecord.error = error.message;
 
-        this.logger.debug(LOCAL_STR_LXQUA, {
+        this.logger.debug(LOCAL_STR_DELIVERY_ATTEMPT_FAILED, {
           retryId,
           messageId,
           attempt,
@@ -254,7 +252,7 @@ class MessageRetryHandler extends EventEmitter {
           triedTargets.add(alternative);
           this.stats.alternativeReplicasUsed++;
 
-          this.logger.debug(LOCAL_STR_KFWKK, {
+          this.logger.debug(LOCAL_STR_SWITCHING_TO_ALTERNATIVE_REPLICA, {
             retryId,
             messageId,
             attempt,
@@ -278,7 +276,7 @@ class MessageRetryHandler extends EventEmitter {
       attemptHistory,
     };
 
-    this.logger.warn(LOCAL_STR_1QSPJ, diagnostics);
+    this.logger.warn(LOCAL_STR_MAX_RETRIES_EXCEEDED, diagnostics);
 
     this.emit(LOCAL_STR_MAXRETRIESEXCEEDED, diagnostics);
 
@@ -286,7 +284,7 @@ class MessageRetryHandler extends EventEmitter {
       status: RetryStatus.MAX_RETRIES_EXCEEDED,
       messageId,
       targetAddress,
-      error: `Failed after ${this.maxRetries + LOCAL_NUM_ONE} attempts: ${lastError?.message}`,
+      error: `Failed after ${this.maxRetries + 1} attempts: ${lastError?.message}`,
       diagnostics,
     };
   }
@@ -319,7 +317,7 @@ class MessageRetryHandler extends EventEmitter {
 
       return null;
     } catch (error) {
-      this.logger.debug(LOCAL_STR_PU65M, {
+      this.logger.debug(LOCAL_STR_FAILED_TO_GET_ALTERNATIVE_REPLICAS, {
         originalTarget,
         error: error.message,
       });
@@ -333,7 +331,7 @@ class MessageRetryHandler extends EventEmitter {
    */
   setAlternativeReplicaProvider(fn) {
     if (typeof fn !== LOCAL_STR_FUNCTION) {
-      throw new Error(LOCAL_STR_6CFAP);
+      throw new Error(LOCAL_STR_ALTERNATIVE_REPLICA_PROVIDER_MUST_BE_A_F);
     }
     this.getAlternativeReplicas = fn;
   }
@@ -373,7 +371,7 @@ class MessageRetryHandler extends EventEmitter {
       this.jitterFactor = config.jitterFactor;
     }
 
-    this.logger.debug(LOCAL_STR_1FE1P, this.getConfig());
+    this.logger.debug(LOCAL_STR_RETRY_CONFIGURATION_UPDATED, this.getConfig());
   }
 
   /**
@@ -383,8 +381,8 @@ class MessageRetryHandler extends EventEmitter {
   getStats() {
     return {
       ...this.stats,
-      successRate: this.stats.totalAttempts > LOCAL_NUM_ZERO ?
-        this.stats.successfulDeliveries / this.stats.totalAttempts : LOCAL_NUM_ZERO,
+      successRate: this.stats.totalAttempts > 0 ?
+        this.stats.successfulDeliveries / this.stats.totalAttempts : 0,
     };
   }
 
@@ -393,11 +391,11 @@ class MessageRetryHandler extends EventEmitter {
    */
   resetStats() {
     this.stats = {
-      totalAttempts: LOCAL_NUM_ZERO,
-      successfulDeliveries: LOCAL_NUM_ZERO,
-      failedDeliveries: LOCAL_NUM_ZERO,
-      retriesPerformed: LOCAL_NUM_ZERO,
-      alternativeReplicasUsed: LOCAL_NUM_ZERO,
+      totalAttempts: 0,
+      successfulDeliveries: 0,
+      failedDeliveries: 0,
+      retriesPerformed: 0,
+      alternativeReplicasUsed: 0,
     };
   }
 
@@ -423,7 +421,7 @@ class MaxRetriesExceededError extends Error {
    */
   constructor(message, diagnostics = {}) {
     super(message);
-    this.name = LOCAL_STR_114SL;
+    this.name = LOCAL_STR_MAXRETRIESEXCEEDEDERROR;
     this.diagnostics = diagnostics;
   }
 }

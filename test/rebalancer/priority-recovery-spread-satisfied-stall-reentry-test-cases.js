@@ -56,7 +56,7 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
   ) {
     const deliveries = [];
     const deferredTimers = [];
-    let updateCount = NUM.ZERO;
+    let updateCount = 0;
     const originalDateNow = Date.now;
     Date.now = () => TEST_CAPTURED_AT_MS;
 
@@ -117,27 +117,27 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
       async executeQuery(sql, params = []) {
         const normalizedSql = String(sql);
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += NUM.ONE;
-          operationRow.status = params[NUM.ZERO];
-          operationRow.workflow_step = params[NUM.ONE];
+          updateCount += 1;
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
           operationRow.steps_history = params[NUM.FIVE];
-          return {success: true, affectedRows: NUM.ONE};
+          return {success: true, affectedRows: 1};
         }
         if (
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
           normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
         ) {
-          const operationId = params[NUM.ZERO];
+          const operationId = params[0];
           const matches =
             operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID;
           return {
             success: true,
             rows: matches ? [{...operationRow}] : [],
-            affectedRows: matches ? NUM.ONE : NUM.ZERO,
+            affectedRows: matches ? 1 : 0,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
-          return {success: true, rows: [{...operationRow}], affectedRows: NUM.ONE};
+          return {success: true, rows: [{...operationRow}], affectedRows: 1};
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
           return {
@@ -146,7 +146,7 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
             affectedRows: serviceRows.length,
           };
         }
-        return {success: true, rows: [], affectedRows: NUM.ZERO};
+        return {success: true, rows: [], affectedRows: 0};
       },
     };
 
@@ -217,7 +217,7 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
       coordinator.initialize();
 
       const cachedOperation =
-        coordinator.repository.queryCachedIncompleteOperations()[NUM.ZERO];
+        coordinator.repository.queryCachedIncompleteOperations()[0];
       t.equal(
         coordinator.repository.isOperationLocallyOwned(cachedOperation),
         true,

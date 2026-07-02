@@ -1,6 +1,5 @@
 import {TABLES} from '../constants/tables.js';
 import {COLUMN} from '../constants/columns.js';
-import {TYPEOF} from '../constants/types.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -57,7 +56,7 @@ function resolveLiveControlPlanePublicationsLeadership(cdcIntegrationService) {
   try {
     if (
       typeof cdcIntegrationService?.canWriteSystemTableLocally !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return LEADERSHIP_RESOLUTION_UNAVAILABLE;
     }

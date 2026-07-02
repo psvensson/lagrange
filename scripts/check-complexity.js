@@ -15,9 +15,6 @@ import {
   writeJsonReport,
 } from './metric-check-helpers.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
 
 const TARGET_THRESHOLD = 12;
 const BASELINE_COUNT = 308;
@@ -43,16 +40,16 @@ const ESLINT_OVERRIDE_CONFIG = {
     [LOCAL_STR_COMPLEXITY]: [LOCAL_STR_ERROR, TARGET_THRESHOLD],
   },
 };
-const args = process.argv.slice(LOCAL_NUM_TWO);
+const args = process.argv.slice(2);
 const strict = args.includes(STRICT_FLAG);
 const scoped = args.includes(SCOPED_FLAG);
 const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
 
-if (scoped && scopedTargets.length === LOCAL_NUM_ZERO) {
+if (scoped && scopedTargets.length === 0) {
   console.error(
     'Usage: npm run test:complexity:scoped -- <file-or-directory> [...]',
   );
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 }
 
 const lintTargets = scoped ? scopedTargets : DEFAULT_LINT_TARGETS;
@@ -88,7 +85,7 @@ writeJsonReport(reportRelativePath, {
 });
 
 function printViolations(entries) {
-  for (const violation of entries.slice(LOCAL_NUM_ZERO, PRINT_LIMIT)) {
+  for (const violation of entries.slice(0, PRINT_LIMIT)) {
     console.log(
       `${violation.filePath}:${violation.line}:${violation.column} ` +
       `${violation.message}`,
@@ -103,13 +100,13 @@ function printViolations(entries) {
 }
 
 if (strict) {
-  if (count > LOCAL_NUM_ZERO) {
+  if (count > 0) {
     console.log(
       `Complexity violations (threshold: ${TARGET_THRESHOLD}):\n`,
     );
     printViolations(violations);
     console.log(`\n${count} violation(s) found.`);
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
   console.log(
     `No complexity violations (threshold: ${TARGET_THRESHOLD}).`,
@@ -119,7 +116,7 @@ if (strict) {
     `Scoped complexity ratchet: ${count} violation(s) in ` +
     `${lintTargets.length} target(s) (threshold: ${TARGET_THRESHOLD}).`,
   );
-  if (count > LOCAL_NUM_ZERO) {
+  if (count > 0) {
     printViolations(violations);
   }
   console.log(`Saved complexity report to ${reportRelativePath}.`);
@@ -130,7 +127,7 @@ if (strict) {
       `exceeds baseline of ${BASELINE_COUNT}.\n`,
     );
     printViolations(violations);
-    process.exit(LOCAL_NUM_ONE);
+    process.exit(1);
   }
   console.log(
     `Complexity ratchet OK: ${count}/${BASELINE_COUNT} ` +

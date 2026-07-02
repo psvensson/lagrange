@@ -7,7 +7,6 @@ import {
 
 const {
   ERRORS,
-  NUM,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_ERROR_MSG,
@@ -267,7 +266,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return {
         acknowledged: true,
         success: result.success,
-        changes: result.changes || NUM.ZERO,
+        changes: result.changes || 0,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.SYSTEM_TABLE_WRITE_FAILED, {
@@ -333,7 +332,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
       sql: sql.substring(
-        NUM.ZERO,
+        0,
         PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
       ),
       partitionId: this.partitionId,
@@ -365,7 +364,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.REMOTE_QUERY_FAILED, {
         sql: sql.substring(
-          NUM.ZERO,
+          0,
           PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
         ),
         error: error.message,
@@ -524,7 +523,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     return {
       columnName,
       hasDefault: defaultMatch !== null,
-      defaultLiteral: defaultMatch ? defaultMatch[NUM.ONE] : null,
+      defaultLiteral: defaultMatch ? defaultMatch[1] : null,
     };
   }
   /**
@@ -653,7 +652,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
             );
             this.resolveCommittedWrite(command.entryId, {
               success: true,
-              changes: NUM.ZERO,
+              changes: 0,
               partitionId: this.partitionId,
             });
             this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
@@ -670,7 +669,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
               error: error.message,
               sql: command.sql ?
                 command.sql.substring(
-                  NUM.ZERO,
+                  0,
                   PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT,
                 ) :
                 null,
@@ -685,7 +684,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     ) {
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
         partitionId: this.partitionId,
-        operationCount: command.operations?.length || NUM.ZERO,
+        operationCount: command.operations?.length || 0,
       });
       this.resolveCommittedWrite(command.entryId, {
         success: true,

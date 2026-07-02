@@ -5,7 +5,6 @@ import {
 import {
   NUM,
   TIME_MS,
-  TYPEOF,
 } from '../../constants/index.js';
 
 const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
@@ -30,8 +29,8 @@ async function delayRetryableControlPlaneWrite(
   options = {},
 ) {
   const now = options.now;
-  const remainingMs = Math.max(NUM.ZERO, deadlineMs - now());
-  if (remainingMs <= NUM.ZERO) {
+  const remainingMs = Math.max(0, deadlineMs - now());
+  if (remainingMs <= 0) {
     return nextDelayMs;
   }
 
@@ -44,17 +43,17 @@ async function delayRetryableControlPlaneWrite(
       maxDelayMs,
       Math.max(
         baseDelayMs,
-        retryAfterMs > NUM.ZERO ? retryAfterMs : nextDelayMs,
+        retryAfterMs > 0 ? retryAfterMs : nextDelayMs,
       ),
     ),
   );
 
-  if (typeof options.onRetry === TYPEOF.FUNCTION) {
+  if (typeof options.onRetry === 'function') {
     options.onRetry({
       attempt: options.attempt,
       delayMs: boundedDelayMs,
       remainingMs,
-      retryAfterMs: retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+      retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
       resultOrError,
     });
   }
@@ -65,33 +64,33 @@ async function delayRetryableControlPlaneWrite(
     maxDelayMs,
     Math.max(
       baseDelayMs,
-      nextDelayMs * NUM.TWO,
+      nextDelayMs * 2,
     ),
   );
 }
 
 async function runRetryableControlPlaneWrite(executor, options = {}) {
-  const now = typeof options.now === TYPEOF.FUNCTION ? options.now : Date.now;
+  const now = typeof options.now === 'function' ? options.now : Date.now;
   const sleep =
-    typeof options.sleep === TYPEOF.FUNCTION ? options.sleep : defaultSleep;
+    typeof options.sleep === 'function' ? options.sleep : defaultSleep;
   const timeoutMs = Number.isFinite(options.timeoutMs) &&
-    options.timeoutMs >= NUM.ZERO ?
+    options.timeoutMs >= 0 ?
     Math.floor(options.timeoutMs) :
     DEFAULT_RETRY_TIMEOUT_MS;
   const baseDelayMs = Number.isFinite(options.baseDelayMs) &&
-    options.baseDelayMs > NUM.ZERO ?
+    options.baseDelayMs > 0 ?
     Math.floor(options.baseDelayMs) :
     DEFAULT_RETRY_BASE_DELAY_MS;
   const maxDelayMs = Number.isFinite(options.maxDelayMs) &&
-    options.maxDelayMs > NUM.ZERO ?
+    options.maxDelayMs > 0 ?
     Math.floor(options.maxDelayMs) :
     DEFAULT_RETRY_MAX_DELAY_MS;
   const deadlineMs = now() + timeoutMs;
   let nextDelayMs = baseDelayMs;
-  let attempt = NUM.ZERO;
+  let attempt = 0;
 
   while (true) {
-    attempt += NUM.ONE;
+    attempt += 1;
     try {
       const result = await executor();
       if (result?.success !== false) {

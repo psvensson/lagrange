@@ -11,10 +11,8 @@ import {MessageGroupServiceRowOwner} from
   '../message-group/message-group-service-row-owner.js';
 import {
   ENTITY_TYPE,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
@@ -39,7 +37,7 @@ import {
 } from './message-group-replica-options.js';
 
 function isFunction(value) {
-  return typeof value === TYPEOF.FUNCTION;
+  return typeof value === 'function';
 }
 
 function buildReplicaOperationResponse(status, fields = {}) {
@@ -351,17 +349,17 @@ class MessageGroupServiceHandler extends EventEmitter {
 
       const failedOutcomeOptions = {replicaId, errorMessage: error.message};
       const errorCode =
-        typeof error?.errorCode === TYPEOF.STRING ?
+        typeof error?.errorCode === 'string' ?
           error.errorCode :
-          typeof error?.code === TYPEOF.STRING ?
+          typeof error?.code === 'string' ?
             error.code :
             '';
-      if (errorCode.length > NUM.ZERO) {
+      if (errorCode.length > 0) {
         failedOutcomeOptions.errorCode = errorCode;
       }
       if (
         Number.isFinite(error?.retryAfterMs) &&
-        error.retryAfterMs > NUM.ZERO
+        error.retryAfterMs > 0
       ) {
         failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
       }

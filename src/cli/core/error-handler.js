@@ -18,12 +18,11 @@ import {
   CLI_TERMINAL_SIZE,
 } from '../cli-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_ERROR_LOGGED = 'error:logged';
 const LOCAL_STR_UTF8 = 'utf8';
-const LOCAL_STR_1C6W0 = 'Failed to write to log file:';
+const LOCAL_STR_FAILED_TO_WRITE_TO_LOG_FILE = 'Failed to write to log file:';
 const LOCAL_STR_NOTIFICATION_SHOW = 'notification:show';
-const LOCAL_STR_Q03NW = 'notification:dismiss';
+const LOCAL_STR_NOTIFICATION_DISMISS = 'notification:dismiss';
 const LOCAL_STR_API_CALL = 'API call';
 const LOCAL_STR_TERMINAL_RESIZED = 'Terminal resized';
 const LOCAL_STR_TERMINAL_RESIZE = 'terminal:resize';
@@ -102,7 +101,7 @@ export class ErrorHandler {
     this.notifications = [];
 
     /** @type {number} */
-    this.notificationCounter = LOCAL_NUM_ZERO;
+    this.notificationCounter = 0;
 
     /** @type {Map<string, NodeJS.Timeout>} */
     this.dismissTimers = new Map();
@@ -192,7 +191,7 @@ export class ErrorHandler {
     } catch (err) {
       // Silently fail - can't log the logging error
       if (this.logToConsole) {
-        console.error(LOCAL_STR_1C6W0, err.message);
+        console.error(LOCAL_STR_FAILED_TO_WRITE_TO_LOG_FILE, err.message);
       }
     }
   }
@@ -294,7 +293,7 @@ export class ErrorHandler {
     }
 
     // Set auto-dismiss timer if duration > 0
-    if (duration > LOCAL_NUM_ZERO) {
+    if (duration > 0) {
       const timer = setTimeout(() => {
         this.dismissNotification(id);
       }, duration);
@@ -375,7 +374,7 @@ export class ErrorHandler {
 
       // Emit event
       if (this.eventBus) {
-        this.eventBus.emit(LOCAL_STR_Q03NW, notification);
+        this.eventBus.emit(LOCAL_STR_NOTIFICATION_DISMISS, notification);
       }
     }
   }
@@ -560,7 +559,7 @@ export class ErrorHandler {
     }
 
     return {
-      isPartial: missingFields.length > LOCAL_NUM_ZERO,
+      isPartial: missingFields.length > 0,
       missingFields,
     };
   }

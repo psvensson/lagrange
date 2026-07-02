@@ -14,8 +14,6 @@ const {
   CONTROL_PLANE_READINESS_REASON,
   MISSING_NODE_READINESS_REASON,
   MISSING_NODE_READINESS_STATE,
-  NUM,
-  TYPEOF,
   buildProjectionReadinessContract,
   buildReadinessTransitionOwnerState,
   buildReason,
@@ -82,7 +80,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   shouldAllowTransportBackedRecoveryGrace(context = {}) {
     const nodeId = context.nodeId;
     const nodeEvidence =
-      context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT ?
+      context.nodeEvidence && typeof context.nodeEvidence === 'object' ?
         context.nodeEvidence :
         null;
     const serviceRows = Array.isArray(context.serviceRows) ?
@@ -377,7 +375,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   resolveMissingNodeReadinessState(context = {}) {
     const nodeId = context?.nodeId || null;
     const lifecycleState =
-      typeof context?.lifecycleState === TYPEOF.STRING ?
+      typeof context?.lifecycleState === 'string' ?
         context.lifecycleState :
         null;
     const serviceRows = Array.isArray(context?.serviceRows) ?
@@ -446,7 +444,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
    * @private
    */
   buildNodeEvidence(nodeId, nodeRow) {
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    if (!nodeRow || typeof nodeRow !== 'object') {
       return null;
     }
     return this.buildClusterMemberHealthDetails(nodeId, nodeRow);
@@ -501,7 +499,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
     if (previousState.repairEligible !== currentState.repairEligible) {
       flippedDimensions.push(CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE);
     }
-    if (flippedDimensions.length === NUM.ZERO) {
+    if (flippedDimensions.length === 0) {
       return this.getReadinessTransitionHistory(context.nodeId);
     }
 
@@ -558,7 +556,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
       return memoizedView;
     }
     const history = this.readinessTransitionHistoryByNodeId.get(nodeId);
-    if (!Array.isArray(history) || history.length === NUM.ZERO) {
+    if (!Array.isArray(history) || history.length === 0) {
       return Object.freeze([]);
     }
     const view = Object.freeze(
@@ -576,16 +574,16 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
             Object.freeze([]),
           previousProjectionReadinessContract:
             entry.previousProjectionReadinessContract &&
-            typeof entry.previousProjectionReadinessContract === TYPEOF.OBJECT ?
+            typeof entry.previousProjectionReadinessContract === 'object' ?
               Object.freeze({...entry.previousProjectionReadinessContract}) :
               null,
           projectionReadinessContract:
             entry.projectionReadinessContract &&
-            typeof entry.projectionReadinessContract === TYPEOF.OBJECT ?
+            typeof entry.projectionReadinessContract === 'object' ?
               Object.freeze({...entry.projectionReadinessContract}) :
               null,
           rawInputs:
-            entry.rawInputs && typeof entry.rawInputs === TYPEOF.OBJECT ?
+            entry.rawInputs && typeof entry.rawInputs === 'object' ?
               Object.freeze({...entry.rawInputs}) :
               Object.freeze({}),
         }),

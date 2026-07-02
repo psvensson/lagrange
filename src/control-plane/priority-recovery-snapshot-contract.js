@@ -1,5 +1,4 @@
 import {
-  NUM,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
@@ -171,7 +170,7 @@ const PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
 ]);
 
-const PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS = NUM.ZERO;
+const PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS = 0;
 
 const PRIORITY_RECOVERY_WORKFLOW_STATE = Object.freeze({
   NONE: 'none',
@@ -198,7 +197,7 @@ const PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE = Object.freeze({
 const PRIORITY_RECOVERY_OPERATION_TRANSITION_RULES = Object.freeze([
   Object.freeze({
     state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.TRANSITION_OBSERVED,
-    matches: (evidence) => evidence.timelineStepCount > NUM.ONE,
+    matches: (evidence) => evidence.timelineStepCount > 1,
   }),
   Object.freeze({
     state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.WAITING_FOR_OWNER,

@@ -1,7 +1,7 @@
 /**
  * Membership publication handoff outcome builders for admin control snapshots.
  */
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
@@ -9,7 +9,7 @@ import {
 
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION = 1;
 const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_SCHEMA_VERSION = 1;
-const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_QUEUE_BOUND = 1;
 const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_RETRY_AFTER_MS =
   NUM.THOUSAND;
 const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OWNER_KEY =
@@ -50,7 +50,7 @@ function buildMembershipPublicationHandoffControlPlaneConvergence(
   options = {},
 ) {
   const retryAfterMs = Number.isFinite(options.retryAfterMs) &&
-    options.retryAfterMs > NUM.ZERO ?
+    options.retryAfterMs > 0 ?
     Math.floor(options.retryAfterMs) :
     MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_RETRY_AFTER_MS;
   return Object.freeze({
@@ -63,8 +63,8 @@ function buildMembershipPublicationHandoffControlPlaneConvergence(
     operation: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OPERATION,
     queueBound: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_QUEUE_BOUND,
     retryAfterMs,
-    ...(typeof options.reasonCode === TYPEOF.STRING &&
-      options.reasonCode.length > NUM.ZERO ?
+    ...(typeof options.reasonCode === 'string' &&
+      options.reasonCode.length > 0 ?
       {reasonCode: options.reasonCode} :
       {}),
   });
@@ -73,7 +73,7 @@ function buildMembershipPublicationHandoffControlPlaneConvergence(
 function buildMembershipPublicationHandoffOutcome(state, options = {}) {
   const controlPlaneConvergence =
     options.controlPlaneConvergence &&
-      typeof options.controlPlaneConvergence === TYPEOF.OBJECT ?
+      typeof options.controlPlaneConvergence === 'object' ?
       Object.freeze({...options.controlPlaneConvergence}) :
       null;
   return Object.freeze({
@@ -83,11 +83,11 @@ function buildMembershipPublicationHandoffOutcome(state, options = {}) {
     publicationRow: null,
     enqueued: options.enqueued === true,
     ...(Number.isFinite(options.retryAfterMs) &&
-      options.retryAfterMs > NUM.ZERO ?
+      options.retryAfterMs > 0 ?
       {retryAfterMs: Math.floor(options.retryAfterMs)} :
       {}),
-    ...(typeof options.reasonCode === TYPEOF.STRING &&
-      options.reasonCode.length > NUM.ZERO ?
+    ...(typeof options.reasonCode === 'string' &&
+      options.reasonCode.length > 0 ?
       {reasonCode: options.reasonCode} :
       {}),
     ...(controlPlaneConvergence ?
@@ -112,7 +112,7 @@ function resolveOwnerRecoveryWaitHandoffReasonCode(enqueueOutcome) {
 }
 
 function isMembershipPublicationHandoffControlPlaneConvergence(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value) &&
+  return value && typeof value === 'object' && !Array.isArray(value) &&
     value.convergenceClass === CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL &&
     Object.values(CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME).includes(
       value.pressureOutcome,

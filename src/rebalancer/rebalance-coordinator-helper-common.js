@@ -1,9 +1,3 @@
-import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-
-const {
-  NUM,
-} = REBALANCE_COORDINATOR_SHARED;
-
 const REBALANCE_COORDINATOR_OPERATION_FIELD = Object.freeze({
   CREATED_AT: 'createdAt',
   CREATED_AT_SNAKE: 'created_at',
@@ -117,7 +111,6 @@ function resolvePriorityDeferredObservationPressureState(evidence) {
 }
 
 export {
-  NUM,
   REBALANCE_COORDINATOR_OPERATION_FIELD,
   PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD,
   REBALANCE_COORDINATOR_TYPE,

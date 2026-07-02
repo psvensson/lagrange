@@ -1,7 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const {
-  NUM,
   OperationType,
   ReplicaStatus,
   REPLICA_ID_SEPARATOR,
@@ -17,8 +16,6 @@ const {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
 const CANONICAL_REPLICA_ID_DECIMAL_RADIX = 10;
 const TOPOLOGY_GUARD_ENTITY_TYPES = new Set([
   SERVICE_TYPE.PARTITION,
@@ -58,19 +55,19 @@ const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
 });
 
 function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
-  if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === NUM.ZERO) {
+  if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === 0) {
     return null;
   }
   if (
     typeof canonicalPrefix !== LOCAL_STR_STRING ||
-    canonicalPrefix.length === NUM.ZERO ||
+    canonicalPrefix.length === 0 ||
     !replicaId.startsWith(canonicalPrefix)
   ) {
     return null;
   }
 
   const rawIndex = replicaId.slice(canonicalPrefix.length);
-  if (rawIndex.length === NUM.ZERO) {
+  if (rawIndex.length === 0) {
     return null;
   }
 
@@ -130,7 +127,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
     );
     if (
       Number.isFinite(rawTargetReplicaCount) &&
-      rawTargetReplicaCount > NUM.ZERO
+      rawTargetReplicaCount > 0
     ) {
       return Math.floor(rawTargetReplicaCount);
     }
@@ -155,7 +152,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       !this.isTopologyGuardEntityType(entityType) ||
       !this.isTopologyIncreasingCreateOperationType(normalizedMoveType) ||
       context?.move?.enforceConcurrentOperationBudget !== true ||
-      targetNodeId.length === NUM.ZERO
+      targetNodeId.length === 0
     ) {
       return Object.freeze({
         state: TOPOLOGY_GUARD_STATE.ALLOWED,
@@ -185,7 +182,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       ...new Set(
         topologyBlockingServiceRows
           .map((row) => String(row?.node_id || row?.nodeId || '').trim())
-          .filter((nodeId) => nodeId.length > NUM.ZERO),
+          .filter((nodeId) => nodeId.length > 0),
       ),
     ];
     const targetReplicaCount =
@@ -432,7 +429,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
     const operationReplicaId = operation.replicaId;
     if (
       typeof operationReplicaId === LOCAL_STR_STRING &&
-      operationReplicaId.length > LOCAL_NUM_ZERO
+      operationReplicaId.length > 0
     ) {
       replicaIds.add(operationReplicaId);
     }
@@ -442,7 +439,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
         operation.sourceReplicaId;
     if (
       typeof sourceReplicaId === LOCAL_STR_STRING &&
-      sourceReplicaId.length > LOCAL_NUM_ZERO
+      sourceReplicaId.length > 0
     ) {
       replicaIds.add(sourceReplicaId);
     }
@@ -507,7 +504,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
         operation.sourceReplicaId;
     if (
       typeof sourceReplicaId === LOCAL_STR_STRING &&
-      sourceReplicaId.length > LOCAL_NUM_ZERO
+      sourceReplicaId.length > 0
     ) {
       retiredSourceReplicaIds.add(sourceReplicaId);
     }
@@ -548,12 +545,12 @@ class RebalanceCoordinatorTopologyGuardMethods {
       sourceReplicaId:
         typeof move?.replicaId === LOCAL_STR_STRING ?
           move.replicaId.trim() :
-          LOCAL_STR_EMPTY,
+          '',
       entityType:
         context.entityType || move?.entityType || SERVICE_TYPE.PARTITION,
       entityId:
         context.entityId || move?.entityId || move?.partitionId ||
-        LOCAL_STR_EMPTY,
+        '',
     };
   }
 
@@ -570,12 +567,12 @@ class RebalanceCoordinatorTopologyGuardMethods {
     if (evidence.moveType !== OperationType.REPLACE) {
       return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.NOT_REPLACE;
     }
-    if (evidence.sourceReplicaId.length === LOCAL_NUM_ZERO) {
+    if (evidence.sourceReplicaId.length === 0) {
       return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_UNAVAILABLE;
     }
     if (
       typeof evidence.entityId !== LOCAL_STR_STRING ||
-      evidence.entityId.length === LOCAL_NUM_ZERO
+      evidence.entityId.length === 0
     ) {
       return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.ENTITY_UNAVAILABLE;
     }
@@ -597,9 +594,9 @@ class RebalanceCoordinatorTopologyGuardMethods {
     const evidence = this.buildReplaceSourceRetirementEvidence(move, context);
     const shouldReadRetirementEvidence =
       evidence.moveType === OperationType.REPLACE &&
-      evidence.sourceReplicaId.length > LOCAL_NUM_ZERO &&
+      evidence.sourceReplicaId.length > 0 &&
       typeof evidence.entityId === LOCAL_STR_STRING &&
-      evidence.entityId.length > LOCAL_NUM_ZERO;
+      evidence.entityId.length > 0;
     const retiredSourceReplicaIds = shouldReadRetirementEvidence ?
       await this.getEntityRetiredReplaceSourceReplicaIds({
         entityType: evidence.entityType,
@@ -657,14 +654,14 @@ class RebalanceCoordinatorTopologyGuardMethods {
 
     for (const row of serviceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
 
     for (const row of authoritativeServiceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
@@ -678,13 +675,13 @@ class RebalanceCoordinatorTopologyGuardMethods {
     }
 
     for (const replicaId of excludeReplicaIds) {
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
 
     const canonicalPrefix = `${entityId}${REPLICA_ID_SEPARATOR}`;
-    let highestObservedReplicaIndex = REPLICA_ID_START_INDEX - NUM.ONE;
+    let highestObservedReplicaIndex = REPLICA_ID_START_INDEX - 1;
     for (const replicaId of usedReplicaIds) {
       const replicaIndex = extractCanonicalReplicaIndex(
         replicaId,
@@ -698,7 +695,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       }
     }
 
-    const candidateIndex = highestObservedReplicaIndex + NUM.ONE;
+    const candidateIndex = highestObservedReplicaIndex + 1;
     return `${canonicalPrefix}${candidateIndex}`;
   }
 }

@@ -1,11 +1,9 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
@@ -13,40 +11,40 @@ function filterRows(cache, tableName, predicate) {
   if (!cache) {
     return [];
   }
-  if (typeof cache.filter === TYPEOF.FUNCTION) {
+  if (typeof cache.filter === 'function') {
     return cache.filter(tableName, predicate) || [];
   }
-  if (typeof cache.getAll === TYPEOF.FUNCTION) {
+  if (typeof cache.getAll === 'function') {
     return (cache.getAll(tableName) || []).filter(predicate);
   }
   return [];
 }
 
 function findRow(cache, tableName, predicate) {
-  return filterRows(cache, tableName, predicate)[NUM.ZERO] || null;
+  return filterRows(cache, tableName, predicate)[0] || null;
 }
 
 function hasNodeReadinessRows(cache) {
   if (!cache) {
     return false;
   }
-  if (typeof cache.getAll === TYPEOF.FUNCTION) {
-    return (cache.getAll(TABLES.NODES) || []).length > NUM.ZERO;
+  if (typeof cache.getAll === 'function') {
+    return (cache.getAll(TABLES.NODES) || []).length > 0;
   }
-  if (typeof cache.filter === TYPEOF.FUNCTION) {
-    return (cache.filter(TABLES.NODES, () => true) || []).length > NUM.ZERO;
+  if (typeof cache.filter === 'function') {
+    return (cache.filter(TABLES.NODES, () => true) || []).length > 0;
   }
   return false;
 }
 
 function isReadyNode(cache, nodeId) {
-  if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+  if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return false;
   }
   if (!hasNodeReadinessRows(cache)) {
     return true;
   }
-  if (typeof cache?.getReadyNodes === TYPEOF.FUNCTION) {
+  if (typeof cache?.getReadyNodes === 'function') {
     const readyNodes = cache.getReadyNodes();
     if (Array.isArray(readyNodes)) {
       return readyNodes.includes(nodeId);
@@ -77,8 +75,8 @@ function getMessageGroupServiceCandidates(cache, groupId, options = {}) {
       row?.[COLUMN.GROUP_ID] === groupId &&
       hasEligibleStatus &&
       (!requireReadyNode || isReadyNode(cache, row?.[COLUMN.NODE_ID])) &&
-      typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-      row[COLUMN.ADDRESS].length > NUM.ZERO;
+      typeof row?.[COLUMN.ADDRESS] === 'string' &&
+      row[COLUMN.ADDRESS].length > 0;
   });
 }
 
@@ -86,7 +84,7 @@ function preferConnectedCandidates(candidates, options = {}) {
   if (options.preferConnectedCandidates === false) {
     return candidates;
   }
-  const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
+  const isConnectedNode = typeof options.isConnectedNode === 'function' ?
     options.isConnectedNode :
     null;
   if (!isConnectedNode) {
@@ -96,7 +94,7 @@ function preferConnectedCandidates(candidates, options = {}) {
   const connectedCandidates = candidates.filter((row) => {
     return isConnectedNode(row?.[COLUMN.NODE_ID]) === true;
   });
-  return connectedCandidates.length > NUM.ZERO ?
+  return connectedCandidates.length > 0 ?
     connectedCandidates :
     candidates;
 }
@@ -122,8 +120,8 @@ function getCanonicalLeaderNodeId(cache, groupId) {
     return row?.[COLUMN.GROUP_ID] === groupId;
   });
   const leaderNodeId = groupRow?.[COLUMN.LEADER_NODE_ID];
-  return typeof leaderNodeId === TYPEOF.STRING &&
-    leaderNodeId.length > NUM.ZERO ?
+  return typeof leaderNodeId === 'string' &&
+    leaderNodeId.length > 0 ?
     leaderNodeId :
     null;
 }
@@ -145,7 +143,7 @@ function resolveCanonicalLeaderServiceCandidate(
       !isExcludedCandidate(row, options);
   });
 
-  if (matchingCandidates.length === NUM.ZERO) {
+  if (matchingCandidates.length === 0) {
     return null;
   }
 
@@ -163,8 +161,8 @@ function resolveCanonicalLeaderServiceCandidate(
     return null;
   }
 
-  if (matchingCandidates.length === NUM.ONE) {
-    return matchingCandidates[NUM.ZERO];
+  if (matchingCandidates.length === 1) {
+    return matchingCandidates[0];
   }
 
   return null;
@@ -205,10 +203,10 @@ function sortMessageGroupForwardServiceCandidates(candidates = []) {
     const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     if (leftLeader && !rightLeader) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (!leftLeader && rightLeader) {
-      return NUM.ONE;
+      return 1;
     }
 
     const leftUpdatedAt = Number(left?.[COLUMN.UPDATED_AT]);
@@ -219,10 +217,10 @@ function sortMessageGroupForwardServiceCandidates(candidates = []) {
       return rightUpdatedAt - leftUpdatedAt;
     }
     if (leftHasUpdatedAt && !rightHasUpdatedAt) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (!leftHasUpdatedAt && rightHasUpdatedAt) {
-      return NUM.ONE;
+      return 1;
     }
 
     const leftServiceId = left?.[COLUMN.SERVICE_ID] || '';
@@ -243,7 +241,7 @@ function resolveMessageGroupForwardServiceCandidatesFromCache(
     return !isExcludedCandidate(row, options);
   });
 
-  if (candidates.length === NUM.ZERO) {
+  if (candidates.length === 0) {
     return [];
   }
 
@@ -269,12 +267,12 @@ function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}
     cache,
     groupId,
     options,
-  )[NUM.ZERO] || null;
+  )[0] || null;
 }
 
 function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {}) {
   const seedNodeId = options.seedNodeId || null;
-  const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
+  const isConnectedNode = typeof options.isConnectedNode === 'function' ?
     options.isConnectedNode :
     () => true;
   const candidates = getMessageGroupServiceCandidates(
@@ -283,7 +281,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
     options,
   );
 
-  if (candidates.length === NUM.ZERO) {
+  if (candidates.length === 0) {
     return null;
   }
 

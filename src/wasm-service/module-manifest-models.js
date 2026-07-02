@@ -9,7 +9,7 @@
  * Requirements: 3.2, 5.2, 10.4
  */
 
-import {NUM, STRING, TYPEOF, PACKAGE_ID_PATTERN} from '../constants/index.js';
+import {STRING, PACKAGE_ID_PATTERN} from '../constants/index.js';
 import {
   MODULE_MANIFEST_FIELD as MF,
   MODULE_DEPENDENCY_FIELD as DF,
@@ -28,7 +28,7 @@ import {
  * @return {boolean} True if valid format.
  */
 function isValidDigest(digest) {
-  if (typeof digest !== TYPEOF.STRING) return false;
+  if (typeof digest !== 'string') return false;
   if (!digest.startsWith(DIGEST_PREFIX)) return false;
   const hex = digest.slice(DIGEST_PREFIX.length);
   if (hex.length !== DIGEST_HEX_LENGTH) return false;
@@ -80,9 +80,9 @@ function validateModuleManifest(manifest) {
 
   const exports_ = manifest[MF.EXPORTS];
   if (!exports_ || !Array.isArray(exports_) ||
-      exports_.length === NUM.ZERO) {
+      exports_.length === 0) {
     errors.push(ERR.EXPORTS_REQUIRED);
-  } else if (!exports_.every((e) => typeof e === TYPEOF.STRING)) {
+  } else if (!exports_.every((e) => typeof e === 'string')) {
     errors.push(ERR.EXPORTS_NOT_ARRAY);
   }
 
@@ -97,7 +97,7 @@ function validateModuleManifest(manifest) {
   validateCapabilities(manifest[MF.CAPABILITIES], errors);
   validateDebugArtifact(manifest, errors);
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -134,7 +134,7 @@ function validateCapabilities(caps, errors) {
     errors.push(ERR.CAPABILITIES_NOT_ARRAY);
     return;
   }
-  if (!caps.every((c) => typeof c === TYPEOF.STRING)) {
+  if (!caps.every((c) => typeof c === 'string')) {
     errors.push(ERR.CAPABILITIES_NOT_ARRAY);
   }
 }
@@ -157,7 +157,7 @@ function validateDebugArtifact(manifest, errors) {
     return;
   }
 
-  if (typeof debugArtifact !== TYPEOF.OBJECT ||
+  if (typeof debugArtifact !== 'object' ||
       Array.isArray(debugArtifact)) {
     errors.push(ERR.DEBUG_ARTIFACT_INVALID);
     return;
@@ -173,16 +173,16 @@ function validateDebugArtifact(manifest, errors) {
     const sidecarUri = debugArtifact[DAF.SIDECAR_URI] ||
       manifest[MF.ARTIFACT_POINTER] ||
       null;
-    if (typeof sidecarUri !== TYPEOF.STRING ||
-        sidecarUri.trim().length === NUM.ZERO) {
+    if (typeof sidecarUri !== 'string' ||
+        sidecarUri.trim().length === 0) {
       errors.push(ERR.DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED);
     }
   }
 
   const embeddedSection = debugArtifact[DAF.EMBEDDED_SECTION];
   if (embeddedSection !== undefined &&
-      (typeof embeddedSection !== TYPEOF.STRING ||
-      embeddedSection.trim().length === NUM.ZERO)) {
+      (typeof embeddedSection !== 'string' ||
+      embeddedSection.trim().length === 0)) {
     errors.push(ERR.DEBUG_ARTIFACT_EMBEDDED_SECTION_INVALID);
   }
 }
@@ -243,7 +243,7 @@ function deserializeModuleManifest(row) {
     ),
     [MF.SOURCE_REFERENCE]: row[COL.SOURCE_REFERENCE] ?? null,
     [MF.ARTIFACT_POINTER]: row[COL.ARTIFACT_POINTER] ?? null,
-    createdAt: row[COL.CREATED_AT] ?? NUM.ZERO,
+    createdAt: row[COL.CREATED_AT] ?? 0,
   };
 }
 

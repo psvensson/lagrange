@@ -4,7 +4,6 @@ const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   isPriorityControlPlanePartition,
@@ -51,7 +50,7 @@ function collectPriorityRecoveryBootstrapReasonCodes(readiness, decision) {
   const reasonCodes = new Set();
   const addReasonCode = (reasonCode) => {
     const normalizedReasonCode = String(reasonCode || '').trim();
-    if (normalizedReasonCode.length > NUM.ZERO) {
+    if (normalizedReasonCode.length > 0) {
       reasonCodes.add(normalizedReasonCode);
     }
   };
@@ -122,7 +121,7 @@ function hasOnlyPriorityRecoveryBootstrapFailedDimensions(readiness, decision) {
       dimensions[dimension] !== true,
     );
   return (
-    failedDimensions.length > NUM.ZERO &&
+    failedDimensions.length > 0 &&
     failedDimensions.includes(
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ) &&
@@ -133,7 +132,7 @@ function hasOnlyPriorityRecoveryBootstrapFailedDimensions(readiness, decision) {
 }
 
 function hasOnlyPriorityRecoveryBootstrapReasonCodes(reasonCodes) {
-  if (!(reasonCodes instanceof Set) || reasonCodes.size === NUM.ZERO) {
+  if (!(reasonCodes instanceof Set) || reasonCodes.size === 0) {
     return false;
   }
   for (const requiredReason of PRIORITY_RECOVERY_BOOTSTRAP_REQUIRED_REASONS) {

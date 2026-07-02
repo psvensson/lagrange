@@ -6,7 +6,6 @@ const LOCAL_STR_OBJECT = 'object';
 
 const {
   CONCURRENT_CREATE_BUDGET_SCOPE,
-  NUM,
   OperationType,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   isPriorityRecoveryEmergencyPartition,
@@ -78,7 +77,7 @@ function shouldBypassConcurrentBudgetEmptyBackoff(
     return false;
   }
   const partitionId = String(options.partitionId || '').trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return false;
   }
   return coordinator.isCriticalSystemPartition(partitionId);
@@ -103,7 +102,7 @@ function resolveConcurrentBudgetReadMode(
     return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
   }
   const partitionId = String(options.partitionId || '').trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
   }
   return coordinator.isPriorityControlPlanePartition(partitionId) ?
@@ -123,7 +122,7 @@ function shouldUsePriorityConcurrentAddLane(
     return false;
   }
   const partitionId = String(options.partitionId || '').trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return false;
   }
   return coordinator.isPriorityControlPlanePartition(partitionId);
@@ -195,7 +194,7 @@ function getReservedPriorityRecoveryAddSlots(coordinator, options = {}) {
 
 function getConcurrentAddBudgetLimit(coordinator, options = {}) {
   return Math.max(
-    NUM.ZERO,
+    0,
     coordinator.config.maxConcurrentAdds -
       getReservedPriorityRecoveryAddSlots(coordinator, options),
   );

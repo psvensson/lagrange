@@ -8,21 +8,18 @@ const LOCAL_STR_BOOLEAN = 'boolean';
 const LOCAL_STR_JSON = 'json';
 const LOCAL_STR_NULL = 'null';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_40 = 40;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_37 = 37;
+const LOCAL_NUM_FORTY = 40;
+const LOCAL_NUM_THIRTY_SEVEN = 37;
 const LOCAL_STR_ELLIPSIS = '...';
 const LOCAL_STR_TRUE = 'true';
 const LOCAL_STR_FALSE = 'false';
 const LOCAL_STR_DEFAULT_VALUE = 'default_value';
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_NUMBER_EMPTY_ERROR = 'Number value cannot be empty';
 const LOCAL_STR_ONE = '1';
 const LOCAL_STR_YES = 'yes';
 const LOCAL_STR_ZERO = '0';
 const LOCAL_STR_NO = 'no';
 const LOCAL_STR_JSON_EMPTY_ERROR = 'JSON value cannot be empty';
-const LOCAL_STR_EMPTY = '';
 
 /**
  * Format config value for display.
@@ -37,8 +34,8 @@ export function formatConfigValue(value, type) {
 
   if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
     const str = JSON.stringify(value);
-    return str.length > LOCAL_NUM_40 ?
-      str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_ELLIPSIS :
+    return str.length > LOCAL_NUM_FORTY ?
+      str.substring(0, LOCAL_NUM_THIRTY_SEVEN) + LOCAL_STR_ELLIPSIS :
       str;
   }
 
@@ -47,8 +44,8 @@ export function formatConfigValue(value, type) {
   }
 
   const str = String(value);
-  return str.length > LOCAL_NUM_40 ?
-    str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_ELLIPSIS :
+  return str.length > LOCAL_NUM_FORTY ?
+    str.substring(0, LOCAL_NUM_THIRTY_SEVEN) + LOCAL_STR_ELLIPSIS :
     str;
 }
 
@@ -91,7 +88,7 @@ export function formatFullConfigValue(value, type) {
   }
 
   if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
-    return JSON.stringify(value, null, LOCAL_NUM_TWO);
+    return JSON.stringify(value, null, 2);
   }
 
   if (type === LOCAL_STR_BOOLEAN) {
@@ -133,7 +130,7 @@ export function validateConfigValue(inputValue, type) {
 }
 
 function validateNumberValue(trimmedInput) {
-  if (trimmedInput === LOCAL_STR_EMPTY) {
+  if (trimmedInput === '') {
     return {valid: false, error: LOCAL_STR_NUMBER_EMPTY_ERROR};
   }
   const num = Number(trimmedInput);
@@ -158,7 +155,7 @@ function validateBooleanValue(trimmedInput) {
 }
 
 function validateJsonValue(trimmedInput) {
-  if (trimmedInput === LOCAL_STR_EMPTY) {
+  if (trimmedInput === '') {
     return {valid: false, error: LOCAL_STR_JSON_EMPTY_ERROR};
   }
   try {

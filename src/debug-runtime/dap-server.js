@@ -2,7 +2,6 @@
  * DAP server with protocol framing and debug-runtime integration.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DAP_MESSAGE_TYPE as MT,
   DAP_COMMAND as CMD,
@@ -11,7 +10,6 @@ import {
   DAP_ERROR_MSG as ERR,
 } from './dap-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_UTF8 = 'utf8';
 const LOCAL_STR_UNDEFINED = 'undefined';
 const LOCAL_STR_NULL = 'null';
@@ -34,7 +32,7 @@ function encodeDapProtocolMessage(message) {
  */
 class DapMessageFramer {
   constructor() {
-    this._buffer = LOCAL_STR_EMPTY;
+    this._buffer = '';
   }
 
   /**
@@ -52,14 +50,14 @@ class DapMessageFramer {
       const headerEndIndex = this._buffer.indexOf(
         DEF.HEADER_SEPARATOR,
       );
-      if (headerEndIndex < NUM.ZERO) {
+      if (headerEndIndex < 0) {
         break;
       }
 
-      const headerText = this._buffer.slice(NUM.ZERO, headerEndIndex);
+      const headerText = this._buffer.slice(0, headerEndIndex);
       const contentLength = parseContentLength(headerText);
       if (!Number.isInteger(contentLength) ||
-        contentLength < NUM.ZERO) {
+        contentLength < 0) {
         throw new Error(ERR.CONTENT_LENGTH_INVALID);
       }
 
@@ -99,14 +97,14 @@ class DapServer {
    */
   constructor(options = {}) {
     if (!options.breakpointManager ||
-      typeof options.breakpointManager !== TYPEOF.OBJECT) {
+      typeof options.breakpointManager !== 'object') {
       throw new Error(ERR.BREAKPOINT_MANAGER_REQUIRED);
     }
     if (!options.runtimeIntrospector ||
-      typeof options.runtimeIntrospector !== TYPEOF.OBJECT) {
+      typeof options.runtimeIntrospector !== 'object') {
       throw new Error(ERR.RUNTIME_INTROSPECTOR_REQUIRED);
     }
-    if (typeof options.sendMessage !== TYPEOF.FUNCTION) {
+    if (typeof options.sendMessage !== 'function') {
       throw new Error(ERR.SEND_MESSAGE_REQUIRED);
     }
 
@@ -118,8 +116,8 @@ class DapServer {
     this._initialized = false;
     this._launched = false;
     this._attached = false;
-    this._nextSeq = NUM.ONE;
-    this._nextVariableReference = NUM.ONE;
+    this._nextSeq = 1;
+    this._nextVariableReference = 1;
     this._variablesByReference = new Map();
 
     this._context = {
@@ -156,7 +154,7 @@ class DapServer {
    * @return {Promise<Object|null>} Response payload.
    */
   async handleProtocolMessage(message) {
-    if (!message || typeof message !== TYPEOF.OBJECT) {
+    if (!message || typeof message !== 'object') {
       throw new Error(ERR.MESSAGE_REQUIRED);
     }
     if (message.type !== MT.REQUEST) {
@@ -172,7 +170,7 @@ class DapServer {
    * @return {Promise<Object>} DAP response payload.
    */
   async handleRequest(request) {
-    if (!request || typeof request !== TYPEOF.OBJECT) {
+    if (!request || typeof request !== 'object') {
       throw new Error(ERR.REQUEST_REQUIRED);
     }
 
@@ -381,20 +379,20 @@ class DapServer {
     });
 
     const startFrame = Number.isInteger(args.startFrame) ?
-      Math.max(args.startFrame, NUM.ZERO) :
-      NUM.ZERO;
+      Math.max(args.startFrame, 0) :
+      0;
     const levels = Number.isInteger(args.levels) ?
-      Math.max(args.levels, NUM.ZERO) :
+      Math.max(args.levels, 0) :
       stack.frames.length;
 
     const slicedFrames = stack.frames.slice(startFrame, startFrame + levels);
     const stackFrames = slicedFrames.map((frame) => ({
       id: frame.frameId,
-      name: frame.symbols.length > NUM.ZERO ?
-        frame.symbols[NUM.ZERO] :
+      name: frame.symbols.length > 0 ?
+        frame.symbols[0] :
         `${DEF.FRAME_NAME_PREFIX}${frame.frameId}`,
-      line: frame.source ? frame.source.lineNumber : NUM.ZERO,
-      column: frame.source ? frame.source.columnNumber : NUM.ZERO,
+      line: frame.source ? frame.source.lineNumber : 0,
+      column: frame.source ? frame.source.columnNumber : 0,
       source: frame.source ? {
         path: frame.source.sourceFileUrl,
       } : undefined,
@@ -412,7 +410,7 @@ class DapServer {
    * @private
    */
   _handleScopes(args) {
-    if (!Number.isInteger(args.frameId) || args.frameId < NUM.ZERO) {
+    if (!Number.isInteger(args.frameId) || args.frameId < 0) {
       throw new Error(ERR.FRAME_REQUIRED);
     }
     const variablesReference = this._nextVariableReference++;
@@ -433,7 +431,7 @@ class DapServer {
    */
   async _handleVariables(args) {
     if (!Number.isInteger(args.variablesReference) ||
-      args.variablesReference <= NUM.ZERO) {
+      args.variablesReference <= 0) {
       throw new Error(ERR.VARIABLES_REFERENCE_REQUIRED);
     }
     const frameId = this._variablesByReference.get(args.variablesReference);
@@ -452,7 +450,7 @@ class DapServer {
         name: variable.name,
         value: formatVariableValue(variable.value),
         type: variable.type,
-        variablesReference: NUM.ZERO,
+        variablesReference: 0,
       })),
     };
   }
@@ -474,9 +472,9 @@ class DapServer {
     const hasContext = isNonEmptyString(this._context.sessionId) &&
       isNonEmptyString(this._context.moduleRef) &&
       this._context.instanceHandle &&
-      typeof this._context.instanceHandle === TYPEOF.OBJECT &&
+      typeof this._context.instanceHandle === 'object' &&
       this._context.index &&
-      typeof this._context.index === TYPEOF.OBJECT;
+      typeof this._context.index === 'object';
     if (!hasContext || (!this._launched && !this._attached)) {
       throw new Error(ERR.SESSION_NOT_READY);
     }
@@ -490,9 +488,9 @@ class DapServer {
     if (!isNonEmptyString(args.sessionId) ||
       !isNonEmptyString(args.moduleRef) ||
       !args.instanceHandle ||
-      typeof args.instanceHandle !== TYPEOF.OBJECT ||
+      typeof args.instanceHandle !== 'object' ||
       !args.index ||
-      typeof args.index !== TYPEOF.OBJECT) {
+      typeof args.index !== 'object') {
       throw new Error(ERR.SESSION_CONTEXT_REQUIRED);
     }
 
@@ -559,21 +557,21 @@ function parseContentLength(headerText) {
   const headerLines = headerText.split(DEF.LINE_SEPARATOR);
   for (const headerLine of headerLines) {
     const separatorIndex = headerLine.indexOf(':');
-    if (separatorIndex < NUM.ZERO) {
+    if (separatorIndex < 0) {
       continue;
     }
 
-    const headerName = headerLine.slice(NUM.ZERO, separatorIndex).trim();
+    const headerName = headerLine.slice(0, separatorIndex).trim();
     if (headerName !== DEF.CONTENT_LENGTH_HEADER) {
       continue;
     }
 
-    const headerValue = headerLine.slice(separatorIndex + NUM.ONE).trim();
+    const headerValue = headerLine.slice(separatorIndex + 1).trim();
     const parsedLength = Number.parseInt(headerValue, 10);
-    return Number.isFinite(parsedLength) ? parsedLength : NUM.NEGATIVE_ONE;
+    return Number.isFinite(parsedLength) ? parsedLength : -1;
   }
 
-  return NUM.NEGATIVE_ONE;
+  return -1;
 }
 
 /**
@@ -581,7 +579,7 @@ function parseContentLength(headerText) {
  * @return {string}
  */
 function normalizeChunkToString(chunk) {
-  if (typeof chunk === TYPEOF.STRING) {
+  if (typeof chunk === 'string') {
     return chunk;
   }
   if (Buffer.isBuffer(chunk)) {
@@ -598,7 +596,7 @@ function normalizeChunkToString(chunk) {
  * @return {string}
  */
 function formatVariableValue(value) {
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     return value;
   }
   if (value === undefined) {
@@ -607,7 +605,7 @@ function formatVariableValue(value) {
   if (value === null) {
     return LOCAL_STR_NULL;
   }
-  if (typeof value === TYPEOF.OBJECT) {
+  if (typeof value === 'object') {
     try {
       return JSON.stringify(value);
     } catch (_err) {
@@ -622,8 +620,8 @@ function formatVariableValue(value) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

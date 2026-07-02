@@ -4,23 +4,20 @@ import process from 'node:process';
 import {pathToFileURL} from 'node:url';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_5I8PB = 'Expected a non-empty shell command after ';
-const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_EXPECTED_A_NON_EMPTY_SHELL_COMMAND_AFTER = 'Expected a non-empty shell command after ';
 const LOCAL_STR_UNKNOWN_ARGUMENT = 'Unknown argument: ';
-const LOCAL_STR_1PLYW = '[';
+const LOCAL_STR_LBRACKET = '[';
 const LOCAL_STR_SPACE = ' ';
 const LOCAL_STR_SLASH = '/';
-const LOCAL_STR_10CT0 = '] ';
-const LOCAL_STR_JQB2A = 'Validation ladder stopped at ';
+const LOCAL_STR_RBRACKET_SPACE = '] ';
+const LOCAL_STR_VALIDATION_LADDER_STOPPED_AT = 'Validation ladder stopped at ';
 const LOCAL_STR_STAGE = ' stage.';
 const LOCAL_STR_COMMAND = 'Command: ';
 const LOCAL_STR_FAILURE = 'Failure: ';
-const LOCAL_STR_1FCL4 = 'Stop here and fix the owner-path boundary before the middle distributed layer.';
-const LOCAL_STR_VFPMM = 'Stop here and fix the boundary-transition scenario before another full 7-node rerun.';
-const LOCAL_STR_1WXU5 = 'The ladder requires at least one --owner, one --boundary, and one --checkpoint command.';
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_R6C2Y = 'Validation ladder completed successfully.';
+const LOCAL_STR_STOP_HERE_AND_FIX_THE_OWNER_PATH_BOUNDAR = 'Stop here and fix the owner-path boundary before the middle distributed layer.';
+const LOCAL_STR_STOP_HERE_AND_FIX_THE_BOUNDARY_TRANSITIO = 'Stop here and fix the boundary-transition scenario before another full 7-node rerun.';
+const LOCAL_STR_THE_LADDER_REQUIRES_AT_LEAST_ONE_OWNER_O = 'The ladder requires at least one --owner, one --boundary, and one --checkpoint command.';
+const LOCAL_STR_VALIDATION_LADDER_COMPLETED_SUCCESSFULLY = 'Validation ladder completed successfully.';
 
 const OPTION = Object.freeze({
   OWNER: '--owner',
@@ -58,8 +55,8 @@ const USAGE_LINES = Object.freeze([
 ]);
 
 function requireCommand(option, value) {
-  if (typeof value !== LOCAL_STR_STRING || value.trim().length === LOCAL_NUM_ZERO) {
-    throw new Error(LOCAL_STR_5I8PB + option);
+  if (typeof value !== LOCAL_STR_STRING || value.trim().length === 0) {
+    throw new Error(LOCAL_STR_EXPECTED_A_NON_EMPTY_SHELL_COMMAND_AFTER + option);
   }
   return value.trim();
 }
@@ -68,7 +65,7 @@ function parseArgs(argv) {
   const owners = [];
   const boundaries = [];
   const checkpoints = [];
-  for (let index = LOCAL_NUM_ZERO; index < argv.length; index += LOCAL_NUM_ONE) {
+  for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === OPTION.HELP) {
       return {owners, boundaries, checkpoints, help: true};
@@ -82,7 +79,7 @@ function parseArgs(argv) {
       } else {
         checkpoints.push(command);
       }
-      index += LOCAL_NUM_ONE;
+      index += 1;
       continue;
     }
     throw new Error(LOCAL_STR_UNKNOWN_ARGUMENT + arg);
@@ -97,8 +94,8 @@ function printLines(lines) {
 function printStageHeader(stageKind, index, total, command) {
   printLines([
     EMPTY,
-    LOCAL_STR_1PLYW + stageKind + LOCAL_STR_SPACE + index + LOCAL_STR_SLASH +
-      total + LOCAL_STR_10CT0 + command,
+    LOCAL_STR_LBRACKET + stageKind + LOCAL_STR_SPACE + index + LOCAL_STR_SLASH +
+      total + LOCAL_STR_RBRACKET_SPACE + command,
   ]);
 }
 
@@ -126,9 +123,9 @@ function runCommand(command) {
 }
 
 function runStage(stageKind, commands) {
-  for (let index = LOCAL_NUM_ZERO; index < commands.length; index += LOCAL_NUM_ONE) {
+  for (let index = 0; index < commands.length; index += 1) {
     const command = commands[index];
-    printStageHeader(stageKind, index + LOCAL_NUM_ONE, commands.length, command);
+    printStageHeader(stageKind, index + 1, commands.length, command);
     const result = runCommand(command);
     if (!result.ok) {
       return {
@@ -152,17 +149,17 @@ function printFailure(failure) {
       'exit code ' + failure.exitCode);
   printLines([
     EMPTY,
-    LOCAL_STR_JQB2A + failure.stageKind + LOCAL_STR_STAGE,
+    LOCAL_STR_VALIDATION_LADDER_STOPPED_AT + failure.stageKind + LOCAL_STR_STAGE,
     LOCAL_STR_COMMAND + failure.command,
     LOCAL_STR_FAILURE + detail,
   ]);
   if (failure.stageKind === STAGE_KIND.OWNER) {
     printLines([
-      LOCAL_STR_1FCL4,
+      LOCAL_STR_STOP_HERE_AND_FIX_THE_OWNER_PATH_BOUNDAR,
     ]);
   } else if (failure.stageKind === STAGE_KIND.BOUNDARY) {
     printLines([
-      LOCAL_STR_VFPMM,
+      LOCAL_STR_STOP_HERE_AND_FIX_THE_BOUNDARY_TRANSITIO,
     ]);
   } else {
     printLines(TRIAGE_HINT_LINES);
@@ -170,11 +167,11 @@ function printFailure(failure) {
 }
 
 function validateStages(parsed) {
-  if (parsed.owners.length === LOCAL_NUM_ZERO ||
-      parsed.boundaries.length === LOCAL_NUM_ZERO ||
-      parsed.checkpoints.length === LOCAL_NUM_ZERO) {
+  if (parsed.owners.length === 0 ||
+      parsed.boundaries.length === 0 ||
+      parsed.checkpoints.length === 0) {
     throw new Error(
-      LOCAL_STR_1WXU5,
+      LOCAL_STR_THE_LADDER_REQUIRES_AT_LEAST_ONE_OWNER_O,
     );
   }
 }
@@ -182,7 +179,7 @@ function validateStages(parsed) {
 function main() {
   let parsed;
   try {
-    parsed = parseArgs(process.argv.slice(LOCAL_NUM_TWO));
+    parsed = parseArgs(process.argv.slice(2));
     if (parsed.help) {
       printLines(USAGE_LINES);
       process.exit(EXIT_CODE.SUCCESS);
@@ -208,7 +205,7 @@ function main() {
 
   printLines([
     EMPTY,
-    LOCAL_STR_R6C2Y,
+    LOCAL_STR_VALIDATION_LADDER_COMPLETED_SUCCESSFULLY,
   ]);
 }
 

@@ -6,14 +6,12 @@ const {
   ControlPlaneMessageType,
   DEFAULT_NODE_CAPABILITIES,
   NODE_JOINING_SERVICE_LITERAL,
-  NUM,
   NodeService,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
   activateMessageGroupServiceRows,
   activatePartitionServiceRows,
@@ -49,7 +47,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
         {replicaOptions: options},
       );
     }
-    if (options.createDelayMs > NUM.ZERO) {
+    if (options.createDelayMs > 0) {
       await this.sleep(options.createDelayMs);
     }
     await this.createJoinLocalPartitionService(options);
@@ -78,7 +76,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     );
     if (
       !options.deferElection &&
-      typeof partition.startElection === TYPEOF.FUNCTION
+      typeof partition.startElection === 'function'
     ) {
       partition.startElection();
     }
@@ -107,11 +105,11 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     if (!partition) {
       return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
     }
-    if (typeof partition.shutdown === TYPEOF.FUNCTION) {
+    if (typeof partition.shutdown === 'function') {
       await partition.shutdown();
     }
     const unifiedAddress =
-      typeof partition.getUnifiedAddress === TYPEOF.FUNCTION ?
+      typeof partition.getUnifiedAddress === 'function' ?
         partition.getUnifiedAddress() :
         formatReplicatedServiceAddress(
           SERVICE_TYPE.PARTITION,
@@ -312,7 +310,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || []).filter(
         (row) => row?.[COLUMN.NODE_ID] === this.nodeId,
       );
-    return localEndpointRows.length > NUM.ZERO;
+    return localEndpointRows.length > 0;
   }
   getRegisteredJoinNodeId() {
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
@@ -439,7 +437,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
    */
   resolveControlPlaneTargetAddress(options = {}) {
     return (
-      this.resolveControlPlaneTargetAddressCandidates(options)[NUM.ZERO] || null
+      this.resolveControlPlaneTargetAddressCandidates(options)[0] || null
     );
   }
   /**

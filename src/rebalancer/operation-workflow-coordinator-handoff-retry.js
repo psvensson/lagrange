@@ -1,7 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -168,9 +167,9 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
   const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
   const delayMs = context.resolveCreatedOperationHandoffRetryDelayMs(
     operationId,
-    Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+    Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
       retryAfterMs :
-      NUM.ZERO,
+      0,
   );
   const errorMessage = context.normalizeErrorMessage(
     errorLike,

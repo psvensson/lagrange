@@ -21,7 +21,6 @@ import {
 import {
   ADDRESS,
   ENTITY_TYPE,
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   UNIFIED_SERVICE_TYPE,
@@ -74,7 +73,7 @@ class SeedMessageGroupsPhase {
       `${nodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
     );
-    for (let index = NUM.ZERO; index < replicaIds.length; index++) {
+    for (let index = 0; index < replicaIds.length; index++) {
       const replicaId = replicaIds[index];
       d.queueBootstrapServiceReplica(
         d.createBootstrapServiceDescriptor(
@@ -89,9 +88,9 @@ class SeedMessageGroupsPhase {
           replicaIndex: index,
           peerAddresses,
           deferElection: true,
-          createDelayMs: index > NUM.ZERO ?
+          createDelayMs: index > 0 ?
             index * replicaStaggerDelayMs :
-            NUM.ZERO,
+            0,
         },
       );
     }
@@ -130,7 +129,7 @@ class SeedMessageGroupsPhase {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
-    if (options.createDelayMs > NUM.ZERO) {
+    if (options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
     }
 
@@ -290,7 +289,7 @@ class SeedMessageGroupsPhase {
           BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_LEADER_IMMEDIATE, {
             groupId,
             leaderId: replicaId,
-            elapsedMs: NUM.ZERO,
+            elapsedMs: 0,
           });
         return;
       }

@@ -1,11 +1,9 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   STATE,
   STRING,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   isNodeReadyLeaseExplicitlyCleared,
@@ -24,11 +22,11 @@ import {
 const MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY = 'id';
 
 function normalizeMoveReplicaAssignmentObservedRowKey(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function readMoveReplicaAssignmentObservedRowKey(tableName, row) {
@@ -61,7 +59,7 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
 
     const authoritativeRows = this.getBootstrapAuthoritativeTableRows(tableName);
     const hasAuthoritativeRows =
-      Array.isArray(authoritativeRows) && authoritativeRows.length > NUM.ZERO;
+      Array.isArray(authoritativeRows) && authoritativeRows.length > 0;
     const authoritativeRow =
       hasAuthoritativeRows ?
         authoritativeRows.find((row) => {
@@ -100,7 +98,7 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
     }
 
     const connectionState = typeof sourceNodeRow[COLUMN.CONNECTION_STATE] ===
-      TYPEOF.STRING ?
+      'string' ?
       sourceNodeRow[COLUMN.CONNECTION_STATE].toLowerCase() :
       null;
     const explicitlyDisconnected = connectionState === STATE.DISCONNECTED;
@@ -136,7 +134,7 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
     }
 
     const connectionState = typeof targetNodeRow[COLUMN.CONNECTION_STATE] ===
-      TYPEOF.STRING ?
+      'string' ?
       targetNodeRow[COLUMN.CONNECTION_STATE].toLowerCase() :
       null;
     const activeStatus = targetNodeRow[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
@@ -208,7 +206,7 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
         targetNodeVisibility.recoverableAdoption,
       sourceReplicaPresentLocally,
       hasActiveServiceOwner:
-        existingStatus === SERVICE_STATUS.ACTIVE && typeof existingNodeId === TYPEOF.STRING,
+        existingStatus === SERVICE_STATUS.ACTIVE && typeof existingNodeId === 'string',
       continuingTargetAdoption:
         targetOwnsActiveReplica &&
         sourceReplicaPresentLocally,
@@ -262,8 +260,8 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
   },
 
   isRemoteSourceMoveReplicaAssignmentReservation(reservation) {
-    return typeof reservation?.sourceNodeId === TYPEOF.STRING &&
-      reservation.sourceNodeId.length > NUM.ZERO &&
+    return typeof reservation?.sourceNodeId === 'string' &&
+      reservation.sourceNodeId.length > 0 &&
       reservation.sourceNodeId !== this.getSeedNodeId();
   },
 
@@ -340,8 +338,8 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
     now = Date.now(),
   ) {
     if (!reservation ||
-        typeof reservation.assignmentId !== TYPEOF.STRING ||
-        reservation.assignmentId.length === NUM.ZERO) {
+        typeof reservation.assignmentId !== 'string' ||
+        reservation.assignmentId.length === 0) {
       return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.INVALID_RESERVATION;
     }
     if (!reservation.replicaId || !reservation.targetNodeId) {

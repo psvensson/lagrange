@@ -5,7 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_DEFAULT_VALUE,
@@ -21,8 +21,6 @@ import {
   resolvePredicateShape,
 } from './partition-resolver-key-conditions.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 
 const UNARY_OPERATOR = Object.freeze({
   PLUS: '+',
@@ -78,7 +76,7 @@ class PartitionResolver {
    * @return {Array} Array of partition IDs to query.
    */
   resolvePartitions(tableName, whereClause, partitions, options = {}) {
-    if (!partitions || partitions.length === NUM.ZERO) {
+    if (!partitions || partitions.length === 0) {
       this.logger.warn(QUERY_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableName});
       return [];
     }
@@ -87,7 +85,7 @@ class PartitionResolver {
     const tableInfo = this.getTableInfo(tableName);
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo, options);
 
-    if (primaryKeyColumns.length > LOCAL_NUM_ONE) {
+    if (primaryKeyColumns.length > 1) {
       const compositeResolution = this.resolveCompositeKeyPartitions(
         whereClause,
         primaryKeyColumns,
@@ -104,7 +102,7 @@ class PartitionResolver {
     }
 
     const primaryKey =
-      primaryKeyColumns[NUM.ZERO] || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
+      primaryKeyColumns[0] || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
 
     // Extract key conditions from WHERE clause
     const keyConditions = this.extractKeyConditions(
@@ -164,16 +162,16 @@ class PartitionResolver {
    */
   resolvePrimaryKeyColumns(tableInfo, options) {
     if (Array.isArray(options.keyColumns) &&
-      options.keyColumns.length > NUM.ZERO) {
+      options.keyColumns.length > 0) {
       return options.keyColumns;
     }
 
     const primaryKey = tableInfo?.primaryKey || tableInfo?.primary_key;
-    if (Array.isArray(primaryKey) && primaryKey.length > NUM.ZERO) {
+    if (Array.isArray(primaryKey) && primaryKey.length > 0) {
       return primaryKey;
     }
-    if (typeof primaryKey === TYPEOF.STRING &&
-      primaryKey.length > NUM.ZERO) {
+    if (typeof primaryKey === 'string' &&
+      primaryKey.length > 0) {
       return [primaryKey];
     }
     return [QUERY_DEFAULT_VALUE.PRIMARY_KEY];
@@ -193,7 +191,7 @@ class PartitionResolver {
     return {
       params,
       tableAliases,
-      parameterState: {nextIndex: NUM.ZERO},
+      parameterState: {nextIndex: 0},
     };
   }
 
@@ -221,7 +219,7 @@ class PartitionResolver {
       );
       if (!keyConditions ||
         keyConditions.type !== KEY_CONDITION_TYPE.EQUALS ||
-        keyConditions.values.length !== LOCAL_NUM_ONE) {
+        keyConditions.values.length !== 1) {
         return {
           partitionIds: partitions.map((partition) =>
             partition.partition_id || partition.partitionId,
@@ -229,7 +227,7 @@ class PartitionResolver {
           predicateShape: PREDICATE_SHAPE.SCATTER,
         };
       }
-      values.push(keyConditions.values[NUM.ZERO]);
+      values.push(keyConditions.values[0]);
     }
 
     const serializedCompositeKey = JSON.stringify(values);
@@ -262,13 +260,13 @@ class PartitionResolver {
     }
 
     try {
-      if (typeof this.systemCache.get === TYPEOF.FUNCTION) {
+      if (typeof this.systemCache.get === 'function') {
         const byPrimaryKey = this.systemCache.get(TABLES.TABLES, tableName);
         if (byPrimaryKey) {
           return byPrimaryKey;
         }
       }
-      if (typeof this.systemCache.find === TYPEOF.FUNCTION) {
+      if (typeof this.systemCache.find === 'function') {
         const found = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
@@ -276,7 +274,7 @@ class PartitionResolver {
           return found;
         }
       }
-      if (typeof this.systemCache.getAll === TYPEOF.FUNCTION) {
+      if (typeof this.systemCache.getAll === 'function') {
         const tables = this.systemCache.getAll(TABLES.TABLES) || [];
         return tables.find((table) =>
           table.table_name === tableName ||
@@ -484,7 +482,7 @@ class PartitionResolver {
       )
       .filter((v) => v !== undefined);
 
-    return conditions.values.length > NUM.ZERO;
+    return conditions.values.length > 0;
   }
 
   /**
@@ -555,14 +553,14 @@ class PartitionResolver {
     }
 
     if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      if (typeof expr.index === TYPEOF.NUMBER &&
-        expr.index >= NUM.ZERO &&
+      if (typeof expr.index === 'number' &&
+        expr.index >= 0 &&
         expr.index < resolutionContext.params.length) {
         return resolutionContext.params[expr.index];
       }
 
       const fallbackIndex = resolutionContext.parameterState.nextIndex;
-      resolutionContext.parameterState.nextIndex += NUM.ONE;
+      resolutionContext.parameterState.nextIndex += 1;
       return resolutionContext.params[fallbackIndex];
     }
 
@@ -660,15 +658,15 @@ class PartitionResolver {
     }
 
     if (start === null || start === undefined) {
-      return this.compareValues(value, end) < LOCAL_NUM_ZERO;
+      return this.compareValues(value, end) < 0;
     }
 
     if (end === null || end === undefined) {
-      return this.compareValues(value, start) >= LOCAL_NUM_ZERO;
+      return this.compareValues(value, start) >= 0;
     }
 
-    return this.compareValues(value, start) >= LOCAL_NUM_ZERO &&
-           this.compareValues(value, end) < LOCAL_NUM_ZERO;
+    return this.compareValues(value, start) >= 0 &&
+           this.compareValues(value, end) < 0;
   }
 
   /**
@@ -693,7 +691,7 @@ class PartitionResolver {
     // If partition ends before query starts, no overlap
     if (pEnd !== null && pEnd !== undefined && low !== null) {
       const cmp = this.compareValues(pEnd, low);
-      if (cmp < LOCAL_NUM_ZERO || (cmp === LOCAL_NUM_ZERO && !lowInclusive)) {
+      if (cmp < 0 || (cmp === 0 && !lowInclusive)) {
         return false;
       }
     }
@@ -701,7 +699,7 @@ class PartitionResolver {
     // If partition starts after query ends, no overlap
     if (pStart !== null && pStart !== undefined && high !== null) {
       const cmp = this.compareValues(pStart, high);
-      if (cmp > LOCAL_NUM_ZERO || (cmp === LOCAL_NUM_ZERO && !highInclusive)) {
+      if (cmp > 0 || (cmp === 0 && !highInclusive)) {
         return false;
       }
     }
@@ -717,15 +715,15 @@ class PartitionResolver {
    * @private
    */
   compareValues(a, b) {
-    if (a === b) return NUM.ZERO;
-    if (a === null) return NUM.NEGATIVE_ONE;
-    if (b === null) return NUM.ONE;
+    if (a === b) return 0;
+    if (a === null) return -1;
+    if (b === null) return 1;
 
-    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
+    if (typeof a === 'string' && typeof b === 'string') {
       return a.localeCompare(b);
     }
 
-    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
+    if (typeof a === 'number' && typeof b === 'number') {
       return a - b;
     }
 
@@ -741,7 +739,7 @@ class PartitionResolver {
    * @return {string|null} Partition ID or null.
    */
   resolvePartitionForKey(tableName, keyValue, partitions) {
-    if (!partitions || partitions.length === NUM.ZERO) {
+    if (!partitions || partitions.length === 0) {
       return null;
     }
 
@@ -762,7 +760,7 @@ class PartitionResolver {
    * @return {Array} All partition IDs.
    */
   getAllPartitions(tableName, partitions) {
-    if (!partitions || partitions.length === NUM.ZERO) {
+    if (!partitions || partitions.length === 0) {
       return [];
     }
     return partitions.map((p) => p.partition_id || p.partitionId);

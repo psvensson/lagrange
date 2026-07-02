@@ -5,7 +5,6 @@ import {readAllSharedRows} from '../cache/shared-row-read.js';
 
 const {
   EntityType,
-  NUM,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY_FIELD,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_STATE,
@@ -18,7 +17,6 @@ const {
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   ReplicaStatus,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryPartitionAssessment,
   normalizeServiceRow,
@@ -36,8 +34,8 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
-      typeof this.systemTableCache?.getAll !== TYPEOF.FUNCTION
+      normalizedPartitionId.length === 0 ||
+      typeof this.systemTableCache?.getAll !== 'function'
     ) {
       return Object.freeze([]);
     }
@@ -74,7 +72,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     planningSnapshot = null,
     options = {},
   ) {
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
     const partitionId = String(
@@ -82,7 +80,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         this.entityId ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return null;
     }
     const snapshots = Array.isArray(
@@ -138,7 +136,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     for (const snapshot of decisionSnapshots) {
       const partitionId =
         this.resolvePriorityRecoveryFollowUpPartitionId(snapshot);
-      if (partitionId.length === NUM.ZERO) {
+      if (partitionId.length === 0) {
         continue;
       }
       const spreadGap =
@@ -169,7 +167,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
       if (
-        partitionId.length === NUM.ZERO ||
+        partitionId.length === 0 ||
         spreadGapByPartitionId.has(partitionId)
       ) {
         continue;
@@ -294,7 +292,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
       if (
-        normalizedPartitionId.length === NUM.ZERO ||
+        normalizedPartitionId.length === 0 ||
         seenPartitionIds.has(normalizedPartitionId)
       ) {
         continue;
@@ -314,8 +312,8 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       candidatePartitionIds: Object.freeze(normalizedCandidatePartitionIds),
       currentNeedsOperation: options.currentNeedsOperation === true,
       currentPartitionId,
-      hasCurrentCandidate: selectedCurrentPartitionId.length > NUM.ZERO,
-      hasNonLocalCandidate: nonLocalPartitionId.length > NUM.ZERO,
+      hasCurrentCandidate: selectedCurrentPartitionId.length > 0,
+      hasNonLocalCandidate: nonLocalPartitionId.length > 0,
       nonLocalPartitionId,
     });
   }
@@ -384,7 +382,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
               UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
           ).trim(),
         )
-        .filter((partitionId) => partitionId.length > NUM.ZERO),
+        .filter((partitionId) => partitionId.length > 0),
     );
   }
 
@@ -432,7 +430,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     planningSnapshot = null,
     options = {},
   ) {
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
     const partitionId = String(
@@ -440,7 +438,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         this.entityId ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return null;
     }
     const priorityPartitionSummary =
@@ -454,7 +452,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       this.buildPriorityRecoveryClosureWitnessFollowUpEvidence(planningSnapshot);
     const closureWitnessPreferred =
       closureWitnessEvidence.followUpRequired === true &&
-      closureWitnessEvidence.candidatePartitionIds.length > NUM.ZERO;
+      closureWitnessEvidence.candidatePartitionIds.length > 0;
     if (
       closureWitnessPreferred &&
       !closureWitnessEvidence.candidatePartitionIds.includes(partitionId)
@@ -500,11 +498,11 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         concreteEligibleNodeIds: Object.freeze([...activeNodeIds]),
         publishedActiveNodeIds: Object.freeze([...activeNodeIds]),
       }),
-      ...(eligibleButNoOperation && operationContexts.length === NUM.ZERO ?
+      ...(eligibleButNoOperation && operationContexts.length === 0 ?
         {
           [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.COORDINATOR]:
             Object.freeze({
-              serialWaitOperationCount: NUM.ZERO,
+              serialWaitOperationCount: 0,
               [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS]:
                 Object.freeze([]),
               [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS]:
@@ -572,7 +570,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         ) &&
         decisionSnapshot[
           PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ELIGIBLE_NODE_IDS
-        ].length > NUM.ZERO,
+        ].length > 0,
     });
     const followUpDecisionEvidence = Object.freeze({
       createRecoveryOperation:
@@ -630,7 +628,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
           nodeId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
         ).trim();
         if (
-          normalizedNodeId.length === NUM.ZERO ||
+          normalizedNodeId.length === 0 ||
           seenNodeIds.has(normalizedNodeId)
         ) {
           continue;
@@ -674,9 +672,9 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
+      normalizedPartitionId.length === 0 ||
       !this.systemTableCache ||
-      typeof this.systemTableCache.filter !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.filter !== 'function'
     ) {
       return [];
     }
@@ -724,7 +722,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PLANNER
       ][
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.REQUIRED_DISTINCT_NODE_COUNT
-      ] > NUM.ZERO ?
+      ] > 0 ?
         decision.decisionSnapshot[
           PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PLANNER
         ][
@@ -735,7 +733,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       return plannerTargetReplicaCount;
     }
     return Number.isInteger(targetState?.targetReplicaCount) &&
-      targetState.targetReplicaCount > NUM.ZERO ?
+      targetState.targetReplicaCount > 0 ?
       targetState.targetReplicaCount :
       this.getPriorityControlPlaneTargetReplicaCount();
   }

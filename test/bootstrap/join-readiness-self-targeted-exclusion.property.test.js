@@ -18,7 +18,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import assert from 'node:assert/strict';
 import {
-  NUM,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -142,7 +141,7 @@ async (t) => {
         const evaluator = createEvaluator(JOINING_NODE_ID);
 
         const selfTargetedRows = [];
-        for (let i = NUM.ZERO; i < operationCount; i++) {
+        for (let i = 0; i < operationCount; i++) {
           selfTargetedRows.push(
             buildInFlightReplicaOperationRow(
               `op-self-${i}`,
@@ -170,7 +169,7 @@ async (t) => {
         // joining node itself.
         assert.equal(
           result.inFlightOperations.length,
-          NUM.ZERO,
+          0,
           'collectCanonicalInFlightReplicaOperationDetails should ' +
           `exclude ${operationCount} self-targeted operation(s) ` +
           `where targetNodeId === '${JOINING_NODE_ID}', but ` +
@@ -196,7 +195,7 @@ async (t) => {
         const evaluator = createEvaluator(JOINING_NODE_ID);
 
         const selfTargetedRows = [];
-        for (let i = NUM.ZERO; i < operationCount; i++) {
+        for (let i = 0; i < operationCount; i++) {
           selfTargetedRows.push(
             buildInFlightReplicaOperationRow(
               `op-topo-${i}`,
@@ -222,7 +221,7 @@ async (t) => {
         // and ready is false — creating a deadlock.
         assert.equal(
           result.inFlightReplicaOperations,
-          NUM.ZERO,
+          0,
           'inFlightReplicaOperations should be 0 when all ' +
           `${operationCount} operation(s) target the joining ` +
           `node '${JOINING_NODE_ID}', but got ` +

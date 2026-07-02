@@ -10,7 +10,6 @@ const {
   RECONCILE_REASON,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -73,9 +72,9 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
   options = {},
 ) {
   const normalizedEvent =
-    event && typeof event === TYPEOF.OBJECT ? event : {};
+    event && typeof event === 'object' ? event : {};
   const visibilityRow =
-    normalizedEvent?.data && typeof normalizedEvent.data === TYPEOF.OBJECT ?
+    normalizedEvent?.data && typeof normalizedEvent.data === 'object' ?
       normalizedEvent.data :
       {};
   const servicePartitionId = toVisibilityString(
@@ -130,12 +129,12 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
     normalizedEvent.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
   const operationPartitionMatches = operationPartitionId === context.entityId;
   const coordinatorOwnedOperation =
-    typeof context.isCoordinatorOwnedOperationType === TYPEOF.FUNCTION &&
+    typeof context.isCoordinatorOwnedOperationType === 'function' &&
     context.isCoordinatorOwnedOperationType(operationType);
   const terminalReplicaOperation =
     coordinatorOwnedOperation &&
     operationPartitionMatches &&
-    typeof context.isTerminalReplicaOperationRecord === TYPEOF.FUNCTION &&
+    typeof context.isTerminalReplicaOperationRecord === 'function' &&
     context.isTerminalReplicaOperationRecord({
       type: operationType,
       workflowStep: operationWorkflowStep,

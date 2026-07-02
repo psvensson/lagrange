@@ -1,8 +1,6 @@
 import {assertCritical} from '../utils/assert.js';
 import {
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {ControlPlaneDiagnosticsLedger} from
   './control-plane-diagnostics-ledger.js';
@@ -11,8 +9,7 @@ import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from './control-plane-cache-reconcile-constants.js';
 
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_G1DFB = 'Maximum call stack size exceeded';
+const LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED = 'Maximum call stack size exceeded';
 
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
 const EMPTY_STRING = '';
@@ -72,8 +69,8 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY =
 const UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX =
   'Unknown authoritative node repair state: ';
 
-function normalizePositiveInteger(value, fallback = NUM.ZERO) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+function normalizePositiveInteger(value, fallback = 0) {
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
@@ -86,13 +83,13 @@ function buildRepairOutcome(options = {}) {
       options.repairIntent || AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
     nodeRowCount: Number.isFinite(options.nodeRowCount) ?
       options.nodeRowCount :
-      NUM.ZERO,
+      0,
     serviceRowCount: Number.isFinite(options.serviceRowCount) ?
       options.serviceRowCount :
-      NUM.ZERO,
+      0,
     partitionRowCount: Number.isFinite(options.partitionRowCount) ?
       options.partitionRowCount :
-      NUM.ZERO,
+      0,
     nodeEvidenceState: options.nodeEvidenceState || null,
     serviceEvidenceState: options.serviceEvidenceState || null,
     partitionEvidenceState: options.partitionEvidenceState || null,
@@ -115,10 +112,10 @@ function resolveAuthoritativeTableEvidence(readResult = null) {
     return Object.freeze({
       state: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
       rows: EMPTY_REPAIR_ROWS,
-      rowCount: NUM.ZERO,
+      rowCount: 0,
     });
   }
-  if (rowCount > NUM.ZERO) {
+  if (rowCount > 0) {
     return Object.freeze({
       state: AUTHORITATIVE_TABLE_EVIDENCE_STATE.OBSERVED_ROWS,
       rows,
@@ -142,7 +139,7 @@ function shouldApplyAuthoritativeTableEvidence(tableEvidence = null) {
 class AuthoritativeNodeEvidenceReconciler {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.logger = options.logger || console;
@@ -152,51 +149,51 @@ class AuthoritativeNodeEvidenceReconciler {
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
     this.getAuthoritativeControlPlaneView =
-      typeof options.getAuthoritativeControlPlaneView === TYPEOF.FUNCTION ?
+      typeof options.getAuthoritativeControlPlaneView === 'function' ?
         options.getAuthoritativeControlPlaneView :
         () => null;
     this.readNodeRow =
-      typeof options.readNodeRow === TYPEOF.FUNCTION ?
+      typeof options.readNodeRow === 'function' ?
         options.readNodeRow :
         async () => null;
     this.readNodeServiceRows =
-      typeof options.readNodeServiceRows === TYPEOF.FUNCTION ?
+      typeof options.readNodeServiceRows === 'function' ?
         options.readNodeServiceRows :
         async () => [];
     this.readNodePartitionRows =
-      typeof options.readNodePartitionRows === TYPEOF.FUNCTION ?
+      typeof options.readNodePartitionRows === 'function' ?
         options.readNodePartitionRows :
         async () => [];
     this.resolveDecisionDimension =
-      typeof options.resolveDecisionDimension === TYPEOF.FUNCTION ?
+      typeof options.resolveDecisionDimension === 'function' ?
         options.resolveDecisionDimension :
         () => null;
     this.getNodeTransportState =
-      typeof options.getNodeTransportState === TYPEOF.FUNCTION ?
+      typeof options.getNodeTransportState === 'function' ?
         options.getNodeTransportState :
         () => ({connected: false});
     this.shouldPreferLocalSelfNodeEvidence =
-      typeof options.shouldPreferLocalSelfNodeEvidence === TYPEOF.FUNCTION ?
+      typeof options.shouldPreferLocalSelfNodeEvidence === 'function' ?
         options.shouldPreferLocalSelfNodeEvidence :
         () => false;
     this.hasFreshLocalReporterSuccess =
-      typeof options.hasFreshLocalReporterSuccess === TYPEOF.FUNCTION ?
+      typeof options.hasFreshLocalReporterSuccess === 'function' ?
         options.hasFreshLocalReporterSuccess :
         () => false;
     this.buildNodeEvidence =
-      typeof options.buildNodeEvidence === TYPEOF.FUNCTION ?
+      typeof options.buildNodeEvidence === 'function' ?
         options.buildNodeEvidence :
         () => null;
     this.isClusterMemberHealthy =
-      typeof options.isClusterMemberHealthy === TYPEOF.FUNCTION ?
+      typeof options.isClusterMemberHealthy === 'function' ?
         options.isClusterMemberHealthy :
         () => false;
     this.hasRoutableService =
-      typeof options.hasRoutableService === TYPEOF.FUNCTION ?
+      typeof options.hasRoutableService === 'function' ?
         options.hasRoutableService :
         () => false;
     this.hasWritableControlPlaneService =
-      typeof options.hasWritableControlPlaneService === TYPEOF.FUNCTION ?
+      typeof options.hasWritableControlPlaneService === 'function' ?
         options.hasWritableControlPlaneService :
         () => false;
     this.authoritativeReadinessRepairCooldownMs =
@@ -253,10 +250,10 @@ class AuthoritativeNodeEvidenceReconciler {
     return Boolean(
       this.cdcIntegrationService &&
       typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       this.cacheMutationTarget &&
       typeof this.cacheMutationTarget.applySystemTableChange ===
-        TYPEOF.FUNCTION,
+        'function',
     );
   }
 
@@ -270,8 +267,8 @@ class AuthoritativeNodeEvidenceReconciler {
     }
     const recordedEntry = this.repairLedger.append(entry);
     const nodeId =
-      typeof recordedEntry?.nodeId === TYPEOF.STRING &&
-        recordedEntry.nodeId.length > NUM.ZERO ?
+      typeof recordedEntry?.nodeId === 'string' &&
+        recordedEntry.nodeId.length > 0 ?
         recordedEntry.nodeId :
         null;
     if (nodeId) {
@@ -404,7 +401,7 @@ class AuthoritativeNodeEvidenceReconciler {
       async () => {
         const now = this.now();
         const lastRepairAt =
-          this.lastRepairAtMsByKey.get(repairKey) || NUM.ZERO;
+          this.lastRepairAtMsByKey.get(repairKey) || 0;
         const cooldownMs =
           this.lastRepairCooldownMsByKey.get(repairKey) ||
           this.authoritativeReadinessRepairCooldownMs;
@@ -476,8 +473,8 @@ class AuthoritativeNodeEvidenceReconciler {
               nodeId,
               error: error?.message || String(error),
               stack:
-                String(error?.message || error || LOCAL_STR_EMPTY).includes(
-                  LOCAL_STR_G1DFB,
+                String(error?.message || error || '').includes(
+                  LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED,
                 ) ?
                   (error?.stack || null) :
                   null,
@@ -504,10 +501,10 @@ class AuthoritativeNodeEvidenceReconciler {
       return {
         state: AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE,
         repairIntent,
-        repairedRowCount: NUM.ZERO,
-        nodeRowCount: NUM.ZERO,
-        serviceRowCount: NUM.ZERO,
-        partitionRowCount: NUM.ZERO,
+        repairedRowCount: 0,
+        nodeRowCount: 0,
+        serviceRowCount: 0,
+        partitionRowCount: 0,
         nodeEvidenceState: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
         serviceEvidenceState: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
         partitionEvidenceState:
@@ -540,7 +537,7 @@ class AuthoritativeNodeEvidenceReconciler {
         AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE &&
       partitionTableEvidence.state ===
         AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE;
-    let repairedRowCount = NUM.ZERO;
+    let repairedRowCount = 0;
 
     if (!snapshotUnavailable) {
       const cachedNodeRow = await this.readNodeRow(nodeId);
@@ -577,7 +574,7 @@ class AuthoritativeNodeEvidenceReconciler {
 
     const repairState = snapshotUnavailable ?
       AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE :
-      repairedRowCount > NUM.ZERO ?
+      repairedRowCount > 0 ?
         AUTHORITATIVE_REPAIR_STATE.REPAIRED :
         AUTHORITATIVE_REPAIR_STATE.UNCHANGED;
 
@@ -651,7 +648,7 @@ class AuthoritativeNodeEvidenceReconciler {
   }
 
   normalizeRepairResult(repairResult) {
-    if (repairResult && typeof repairResult === TYPEOF.OBJECT) {
+    if (repairResult && typeof repairResult === 'object') {
       return buildRepairOutcome({
         repaired: repairResult.repaired === true,
         outcome: String(repairResult.outcome || REPAIR_OUTCOME_UNCHANGED),
@@ -660,13 +657,13 @@ class AuthoritativeNodeEvidenceReconciler {
           AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
         nodeRowCount: Number.isFinite(repairResult.nodeRowCount) ?
           repairResult.nodeRowCount :
-          NUM.ZERO,
+          0,
         serviceRowCount: Number.isFinite(repairResult.serviceRowCount) ?
           repairResult.serviceRowCount :
-          NUM.ZERO,
+          0,
         partitionRowCount: Number.isFinite(repairResult.partitionRowCount) ?
           repairResult.partitionRowCount :
-          NUM.ZERO,
+          0,
         nodeEvidenceState: repairResult.nodeEvidenceState || null,
         serviceEvidenceState: repairResult.serviceEvidenceState || null,
         partitionEvidenceState: repairResult.partitionEvidenceState || null,
@@ -711,7 +708,7 @@ class AuthoritativeNodeEvidenceReconciler {
         systemTableCache: this.systemTableCache,
       },
     );
-    return result?.mutationCount || NUM.ZERO;
+    return result?.mutationCount || 0;
   }
 
   getControlPlaneSystemTableGateway() {

@@ -1,7 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
-  NUM,
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -164,10 +163,10 @@ const queryExecutorSelectAggregationMethods = {
     const result = {};
 
     // Copy group by columns from first row
-    if (ast.groupBy && rows.length > NUM.ZERO) {
+    if (ast.groupBy && rows.length > 0) {
       for (const g of ast.groupBy) {
         const col = g.column || g.expression?.column || g;
-        result[col] = rows[NUM.ZERO][col];
+        result[col] = rows[0][col];
       }
     }
 
@@ -179,8 +178,8 @@ const queryExecutorSelectAggregationMethods = {
         result[alias] = this.computeAggregate(rows, expr);
       } else if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF) {
         const colName = expr.column;
-        if (rows.length > NUM.ZERO) {
-          result[colName] = rows[NUM.ZERO][colName];
+        if (rows.length > 0) {
+          result[colName] = rows[0][colName];
         }
       }
     }
@@ -254,38 +253,38 @@ const queryExecutorSelectAggregationMethods = {
     case QUERY_EXECUTOR_LITERAL.STRING_SUM:
       // SUM aggregates numeric values across all partitions
       return values.reduce(
-        (sum, value) => sum + (Number(value) || NUM.ZERO),
-        NUM.ZERO,
+        (sum, value) => sum + (Number(value) || 0),
+        0,
       );
     case QUERY_EXECUTOR_LITERAL.STRING_AVG:
     {
       // AVG must be computed on combined data, not averaged averages
-      if (values.length === NUM.ZERO) {
+      if (values.length === 0) {
         return null;
       }
       const avgSum = values.reduce(
-        (sum, value) => sum + (Number(value) || NUM.ZERO),
-        NUM.ZERO,
+        (sum, value) => sum + (Number(value) || 0),
+        0,
       );
       return avgSum / values.length;
     }
     case QUERY_EXECUTOR_LITERAL.STRING_MIN:
       // MIN finds the minimum across all partitions
-      if (values.length === NUM.ZERO) {
+      if (values.length === 0) {
         return null;
       }
       return values.reduce(
         (min, value) => (value < min ? value : min),
-        values[NUM.ZERO],
+        values[0],
       );
     case QUERY_EXECUTOR_LITERAL.STRING_MAX:
       // MAX finds the maximum across all partitions
-      if (values.length === NUM.ZERO) {
+      if (values.length === 0) {
         return null;
       }
       return values.reduce(
         (max, value) => (value > max ? value : max),
-        values[NUM.ZERO],
+        values[0],
       );
     default:
       return null;
@@ -472,7 +471,7 @@ const queryExecutorSelectAggregationMethods = {
     return [...rows].sort((a, b) => {
       for (const clause of orderBy) {
         const col = clause.expression?.column || clause.column;
-        const dir = clause.direction === 'DESC' ? -1 : NUM.ONE;
+        const dir = clause.direction === 'DESC' ? -1 : 1;
         const aVal = a[col];
         const bVal = b[col];
         if (aVal === bVal) {
@@ -489,7 +488,7 @@ const queryExecutorSelectAggregationMethods = {
           typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
         ) {
           const cmp = aVal.localeCompare(bVal);
-          if (cmp !== NUM.ZERO) {
+          if (cmp !== 0) {
             return cmp * dir;
           }
         } else {
@@ -501,7 +500,7 @@ const queryExecutorSelectAggregationMethods = {
           }
         }
       }
-      return NUM.ZERO;
+      return 0;
     });
   },
 
@@ -514,12 +513,12 @@ const queryExecutorSelectAggregationMethods = {
    */
   applyLimit(rows, limit) {
     const offset = Number.isInteger(limit.offset) ?
-      Math.max(limit.offset, NUM.ZERO) :
-      NUM.ZERO;
+      Math.max(limit.offset, 0) :
+      0;
     if (!Number.isInteger(limit.count)) {
       return rows.slice(offset);
     }
-    const count = Math.max(limit.count, NUM.ZERO);
+    const count = Math.max(limit.count, 0);
     return rows.slice(offset, offset + count);
   },
 };

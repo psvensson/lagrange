@@ -2,10 +2,8 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 
 const {
   COLUMN,
-  NUM,
   OPERATION_WORKFLOW_OWNER_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  TYPEOF,
   getControlPlaneErrorMessage,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -16,21 +14,21 @@ const RETRYABLE_DISPATCH_SKIPPED_REASONS = Object.freeze(
 );
 
 function resolveNodeStateUpdateBudgetFields(nodeRow) {
-  if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+  if (!nodeRow || typeof nodeRow !== 'object') {
     return {};
   }
 
   const budgetFields = {};
   const storageBudgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
-  if (Number.isFinite(storageBudgetBytes) && storageBudgetBytes > NUM.ZERO) {
+  if (Number.isFinite(storageBudgetBytes) && storageBudgetBytes > 0) {
     budgetFields[COLUMN.STORAGE_BUDGET_BYTES] =
       Math.floor(storageBudgetBytes);
   }
 
   const storageBudgetSource = nodeRow?.[COLUMN.STORAGE_BUDGET_SOURCE];
   if (
-    typeof storageBudgetSource === TYPEOF.STRING &&
-    storageBudgetSource.length > NUM.ZERO
+    typeof storageBudgetSource === 'string' &&
+    storageBudgetSource.length > 0
   ) {
     budgetFields[COLUMN.STORAGE_BUDGET_SOURCE] = storageBudgetSource;
   }
@@ -40,7 +38,7 @@ function resolveNodeStateUpdateBudgetFields(nodeRow) {
   );
   if (
     Number.isFinite(storageBudgetUpdatedAt) &&
-    storageBudgetUpdatedAt > NUM.ZERO
+    storageBudgetUpdatedAt > 0
   ) {
     budgetFields[COLUMN.STORAGE_BUDGET_UPDATED_AT] = Math.floor(
       storageBudgetUpdatedAt,
@@ -130,14 +128,14 @@ function buildReplicaOperationVisibilityLagError(
     deferredOutcome.retryAfterMs :
     operationDispatchRetryAfterMs;
   if (
-    typeof deferredOutcome?.reasonCode === TYPEOF.STRING &&
-    deferredOutcome.reasonCode.length > NUM.ZERO
+    typeof deferredOutcome?.reasonCode === 'string' &&
+    deferredOutcome.reasonCode.length > 0
   ) {
     error.reasonCode = deferredOutcome.reasonCode;
   }
   if (
-    typeof deferredOutcome?.completionState === TYPEOF.STRING &&
-    deferredOutcome.completionState.length > NUM.ZERO
+    typeof deferredOutcome?.completionState === 'string' &&
+    deferredOutcome.completionState.length > 0
   ) {
     error.completionState = deferredOutcome.completionState;
   }
@@ -157,7 +155,7 @@ function buildDispatchReadinessGateError(
   error.targetNodeId = targetNodeId || null;
   error.deferRetry = true;
   error.retryAfterMs =
-    Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+    Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
       retryAfterMs :
       operationDispatchRetryAfterMs;
   if (cause) {

@@ -6,7 +6,6 @@ const {
   ControlPlaneReadinessService,
   DISPATCH_RETRY_DELAY_MS,
   INITIAL_PARTITION_IDS,
-  NUM,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_ERROR_MSG,
@@ -20,7 +19,6 @@ const {
   TRANSITION_RECOVERY_READ_OPTIONS,
   TRANSITION_RECOVERY_SQL,
   TRANSITION_STEP_OPTIONS,
-  TYPEOF,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
   buildSelectRowsByTransactionIdsSql,
@@ -48,8 +46,8 @@ function normalizeOperationWorkflowTransitionStepsHistory(operation) {
     return rawStepsHistory;
   }
   if (
-    typeof rawStepsHistory === TYPEOF.STRING &&
-    rawStepsHistory.length > NUM.ZERO
+    typeof rawStepsHistory === 'string' &&
+    rawStepsHistory.length > 0
   ) {
     try {
       const parsedStepsHistory = JSON.parse(rawStepsHistory);
@@ -68,8 +66,8 @@ class OperationWorkflowTransitionOrchestration
     const gateway = this.repository?.controlPlaneSystemTableGateway;
     if (
       !gateway ||
-      typeof txCoordinator?.recoverFromSystemTables !== TYPEOF.FUNCTION ||
-      typeof txCoordinator.getTransaction !== TYPEOF.FUNCTION
+      typeof txCoordinator?.recoverFromSystemTables !== 'function' ||
+      typeof txCoordinator.getTransaction !== 'function'
     ) {
       return null;
     }
@@ -96,7 +94,7 @@ class OperationWorkflowTransitionOrchestration
     const transactionRows = (transactionResult?.rows || []).filter((row) =>
       AUTHORITATIVE_TRANSITION_RECOVERY_STATUS.has(row?.status),
     );
-    if (transactionRows.length === NUM.ZERO) {
+    if (transactionRows.length === 0) {
       return null;
     }
 
@@ -106,12 +104,12 @@ class OperationWorkflowTransitionOrchestration
           .map((row) => row?.transaction_id || row?.transactionId)
           .filter(
             (value) =>
-              typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+              typeof value === 'string' && value.length > 0,
           ),
       ),
     );
     let participantRows = [];
-    if (transactionIds.length > NUM.ZERO) {
+    if (transactionIds.length > 0) {
       const participantResult = await readAuthoritativeControlPlaneRows(
         gateway,
         SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -157,7 +155,7 @@ class OperationWorkflowTransitionOrchestration
     const txCoordinator = this.transactionCoordinator;
     if (
       !txCoordinator ||
-      typeof txCoordinator.getTransaction !== TYPEOF.FUNCTION
+      typeof txCoordinator.getTransaction !== 'function'
     ) {
       return false;
     }
@@ -174,14 +172,14 @@ class OperationWorkflowTransitionOrchestration
     }
     let result = null;
     if (RECOVERABLE_TRANSITION_COMMIT_STATUS.has(existingTransaction.status)) {
-      if (typeof txCoordinator.commit !== TYPEOF.FUNCTION) {
+      if (typeof txCoordinator.commit !== 'function') {
         return false;
       }
       result = await txCoordinator.commit(sessionId);
     } else if (
       RECOVERABLE_TRANSITION_ROLLBACK_STATUS.has(existingTransaction.status)
     ) {
-      if (typeof txCoordinator.rollback !== TYPEOF.FUNCTION) {
+      if (typeof txCoordinator.rollback !== 'function') {
         return false;
       }
       result = await txCoordinator.rollback(sessionId);
@@ -228,14 +226,14 @@ class OperationWorkflowTransitionOrchestration
             step,
           )
         ) {
-          if (typeof options.onIdempotentTransition === TYPEOF.FUNCTION) {
+          if (typeof options.onIdempotentTransition === 'function') {
             options.onIdempotentTransition();
           }
           return false;
         }
 
         const afterCommit =
-          typeof options.afterCommit === TYPEOF.FUNCTION ?
+          typeof options.afterCommit === 'function' ?
             options.afterCommit :
             null;
         if (options?.bypassExecutionTransaction === true) {
@@ -336,7 +334,7 @@ class OperationWorkflowTransitionOrchestration
             this.isTransitionPartitionContention(error);
           if (!committed) {
             const activeTransaction =
-              typeof txCoordinator.getTransaction === TYPEOF.FUNCTION ?
+              typeof txCoordinator.getTransaction === 'function' ?
                 txCoordinator.getTransaction(sessionId) :
                 null;
             if (!activeTransaction) {
@@ -591,7 +589,7 @@ class OperationWorkflowTransitionOrchestration
   shouldUsePriorityDispatchClaimNarrowPath(operation) {
     const partitionId = String(operation?.partitionId || '').trim();
     return (
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       operation?.workflowStep === WORKFLOW_STEP.PENDING &&
       isPriorityControlPlanePartition({partitionId})
     );
@@ -609,7 +607,7 @@ class OperationWorkflowTransitionOrchestration
   shouldUsePriorityDispatchTransitionMutationBudget(operation, step) {
     const partitionId = String(operation?.partitionId || '').trim();
     return (
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       isPriorityControlPlanePartition({partitionId}) &&
       PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS.has(step)
     );
@@ -635,8 +633,8 @@ class OperationWorkflowTransitionOrchestration
       step === WORKFLOW_STEP.CREATING &&
       this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step) &&
       typeof operation?.[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] ===
-        TYPEOF.STRING &&
-      operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD].length > NUM.ZERO
+        'string' &&
+      operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD].length > 0
     ) {
       return operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
     }

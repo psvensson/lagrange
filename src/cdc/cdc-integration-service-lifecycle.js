@@ -4,7 +4,6 @@ const {
   CDCEventHandler,
   CDC_LOG_MSG,
   CDC_ERROR_MSG,
-  TYPEOF,
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
   resolveNodeWebSocketAddress,
@@ -27,7 +26,7 @@ class CDCIntegrationServiceLifecycleMethods {
     this.systemTableCache = cache;
     if (
       !this.cacheMutationTarget &&
-      typeof cache?.applySystemTableChange === TYPEOF.FUNCTION
+      typeof cache?.applySystemTableChange === 'function'
     ) {
       this.cacheMutationTarget = cache;
     }
@@ -52,7 +51,7 @@ class CDCIntegrationServiceLifecycleMethods {
       return;
     }
     this.partitionServicesProvider =
-      typeof provider === TYPEOF.FUNCTION ? provider : null;
+      typeof provider === 'function' ? provider : null;
   }
 
   /**

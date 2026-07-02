@@ -14,7 +14,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     CONTROL_PLANE_MUTATION_OPERATION,
     CONTROL_PLANE_QUERY_OPTIONS,
     ERRORS,
-    NUM,
     OPERATION_PERSIST_RETRY_DELAY_MS,
     OPERATION_PERSIST_RETRY_TIMEOUT_MS,
     OPERATION_MUTATION_SESSION_RETRY_DECISION,
@@ -32,7 +31,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     ROUTER_ERROR_MSG,
     SYSTEM_TABLE_NAME,
     TRANSPORT_ERROR_MSG,
-    TYPEOF,
     cloneControlPlaneFailureParticipants,
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
@@ -46,7 +44,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
   class ReplicaOperationRepositoryMutationGatewayMethods {
     async executeOperationMutationWithRetry(sql, params, options = {}) {
       const startedAt = Date.now();
-      let retryAttempt = NUM.ZERO;
+      let retryAttempt = 0;
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(
           options,
@@ -70,15 +68,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           elapsedMs,
           options.timeoutBudget,
         );
-        if (remainingMs <= NUM.ZERO) {
+        if (remainingMs <= 0) {
           return result;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
-          retryAttempt += NUM.ONE;
+          retryAttempt += 1;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting
         // down (otherwise this retry timer keeps the event loop alive).
-        if (typeof this.isShuttingDownRequested === TYPEOF.FUNCTION &&
+        if (typeof this.isShuttingDownRequested === 'function' &&
             this.isShuttingDownRequested()) {
           return result;
         }
@@ -96,7 +94,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       fallback = {},
     ) {
       const startedAt = Date.now();
-      let retryAttempt = NUM.ZERO;
+      let retryAttempt = 0;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
@@ -118,7 +116,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           return result;
         }
         const recoveredAfterRetryableFailure =
-          typeof options?.onRetryableFailure === TYPEOF.FUNCTION ?
+          typeof options?.onRetryableFailure === 'function' ?
             (await options.onRetryableFailure(result)) === true :
             false;
         if (recoveredAfterRetryableFailure) {
@@ -135,15 +133,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           elapsedMs,
           options.timeoutBudget,
         );
-        if (remainingMs <= NUM.ZERO) {
+        if (remainingMs <= 0) {
           return result;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
-          retryAttempt += NUM.ONE;
+          retryAttempt += 1;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting
         // down (otherwise this retry timer keeps the event loop alive).
-        if (typeof this.isShuttingDownRequested === TYPEOF.FUNCTION &&
+        if (typeof this.isShuttingDownRequested === 'function' &&
             this.isShuttingDownRequested()) {
           return result;
         }
@@ -164,12 +162,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       const canUseCanonicalMutationIngress =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
       if (canUseCanonicalMutationIngress) {
-        if (typeof gateway?.submitMutation === TYPEOF.FUNCTION) {
+        if (typeof gateway?.submitMutation === 'function') {
           return gateway.submitMutation(mutation, queryOptions);
         }
         if (
           mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT &&
-          typeof gateway?.insertSystemTableRow === TYPEOF.FUNCTION
+          typeof gateway?.insertSystemTableRow === 'function'
         ) {
           return gateway.insertSystemTableRow(
             mutation.tableName,
@@ -179,7 +177,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         }
         if (
           mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE &&
-          typeof gateway?.updateSystemTableRow === TYPEOF.FUNCTION
+          typeof gateway?.updateSystemTableRow === 'function'
         ) {
           return gateway.updateSystemTableRow(
             mutation.tableName,
@@ -190,8 +188,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         }
       }
       if (
-        typeof gateway?.executeQuery === TYPEOF.FUNCTION &&
-        typeof fallback?.sql === TYPEOF.STRING
+        typeof gateway?.executeQuery === 'function' &&
+        typeof fallback?.sql === 'string'
       ) {
         return gateway.executeQuery(
           fallback.sql,
@@ -207,17 +205,17 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     canUseReplicaOperationMutationIngress(operationType) {
       const gateway = this.controlPlaneSystemTableGateway;
       const cdcIntegrationService =
-        typeof gateway?.resolveCdcIntegrationService === TYPEOF.FUNCTION ?
+        typeof gateway?.resolveCdcIntegrationService === 'function' ?
           gateway.resolveCdcIntegrationService() :
           gateway?.cdcIntegrationService || null;
       if (operationType === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
         return (
-          typeof cdcIntegrationService?.insertSystemTableRow === TYPEOF.FUNCTION
+          typeof cdcIntegrationService?.insertSystemTableRow === 'function'
         );
       }
       if (operationType === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
         return (
-          typeof cdcIntegrationService?.updateSystemTableRow === TYPEOF.FUNCTION
+          typeof cdcIntegrationService?.updateSystemTableRow === 'function'
         );
       }
       return false;
@@ -240,7 +238,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       return (
-        typeof errorMessage === TYPEOF.STRING &&
+        typeof errorMessage === 'string' &&
         (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
           errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
@@ -255,11 +253,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     getOperationPersistErrorMessage(errorResult) {
-      return typeof errorResult === TYPEOF.STRING ?
+      return typeof errorResult === 'string' ?
         errorResult :
-        typeof errorResult?.error === TYPEOF.STRING ?
+        typeof errorResult?.error === 'string' ?
           errorResult.error :
-          typeof errorResult?.message === TYPEOF.STRING ?
+          typeof errorResult?.message === 'string' ?
             errorResult.message :
             REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE;
     }
@@ -272,14 +270,14 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         this.isRetryableOperationPersistError(errorResult);
       const derivedRetryAfterMs = retryablePersistError ?
         this.resolveOperationMutationRetryDelayMs(errorResult) :
-        NUM.ZERO;
+        0;
       const retryAfterMs = getControlPlaneRetryAfterMs(errorResult);
       const nextRetryAfterMs =
-        retryAfterMs > NUM.ZERO ?
+        retryAfterMs > 0 ?
           retryAfterMs :
-          derivedRetryAfterMs > NUM.ZERO ?
+          derivedRetryAfterMs > 0 ?
             derivedRetryAfterMs :
-            NUM.ZERO;
+            0;
       const deferRetry =
         errorResult?.deferRetry === true ||
         errorResult?.firstFailedParticipant?.deferRetry === true ||
@@ -292,57 +290,57 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         this.getOperationPersistErrorMessage(errorResult) || fallbackMessage,
       );
       const errorCode = getControlPlaneErrorCode(errorResult);
-      if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+      if (typeof errorCode === 'string' && errorCode.length > 0) {
         error.code = errorCode;
         error.errorCode = errorCode;
       }
-      if (nextRetryAfterMs > NUM.ZERO) {
+      if (nextRetryAfterMs > 0) {
         error.retryAfterMs = nextRetryAfterMs;
       }
       if (deferRetry) {
         error.deferRetry = true;
       }
       if (
-        typeof errorResult?.reasonCode === TYPEOF.STRING &&
-        errorResult.reasonCode.length > NUM.ZERO
+        typeof errorResult?.reasonCode === 'string' &&
+        errorResult.reasonCode.length > 0
       ) {
         error.reasonCode = errorResult.reasonCode;
       }
       if (
-        typeof errorResult?.participationKind === TYPEOF.STRING &&
-        errorResult.participationKind.length > NUM.ZERO
+        typeof errorResult?.participationKind === 'string' &&
+        errorResult.participationKind.length > 0
       ) {
         error.participationKind = errorResult.participationKind;
       }
       if (
-        typeof errorResult?.tableName === TYPEOF.STRING &&
-        errorResult.tableName.length > NUM.ZERO
+        typeof errorResult?.tableName === 'string' &&
+        errorResult.tableName.length > 0
       ) {
         error.tableName = errorResult.tableName;
       }
       const {participantFailures, firstFailedParticipant} =
         cloneControlPlaneFailureParticipants(errorResult);
-      if (participantFailures.length > NUM.ZERO) {
+      if (participantFailures.length > 0) {
         error.participantFailures = participantFailures;
       }
       if (firstFailedParticipant) {
         error.firstFailedParticipant = firstFailedParticipant;
       }
       if (
-        typeof errorResult?.pressureAction === TYPEOF.STRING &&
-        errorResult.pressureAction.length > NUM.ZERO
+        typeof errorResult?.pressureAction === 'string' &&
+        errorResult.pressureAction.length > 0
       ) {
         error.pressureAction = errorResult.pressureAction;
       }
       if (
-        typeof errorResult?.pressureReason === TYPEOF.STRING &&
-        errorResult.pressureReason.length > NUM.ZERO
+        typeof errorResult?.pressureReason === 'string' &&
+        errorResult.pressureReason.length > 0
       ) {
         error.pressureReason = errorResult.pressureReason;
       }
       if (
-        typeof errorResult?.outcome === TYPEOF.STRING &&
-        errorResult.outcome.length > NUM.ZERO
+        typeof errorResult?.outcome === 'string' &&
+        errorResult.outcome.length > 0
       ) {
         error.outcome = errorResult.outcome;
       }
@@ -362,7 +360,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage) {
       return (
         (Array.isArray(errorResult?.participantFailures) &&
-          errorResult.participantFailures.length > NUM.ZERO) ||
+          errorResult.participantFailures.length > 0) ||
         (errorResult?.firstFailedParticipant &&
           typeof errorResult.firstFailedParticipant ===
             REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) ||
@@ -376,8 +374,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       if (
-        typeof errorMessage !== TYPEOF.STRING ||
-        errorMessage.length <= NUM.ZERO
+        typeof errorMessage !== 'string' ||
+        errorMessage.length <= 0
       ) {
         return hasControlPlaneMutationRoutingGapFailureSignature(errorResult);
       }
@@ -400,8 +398,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     resolveOperationMutationSessionRetryDecision(errorResult, options = {}) {
       if (
-        typeof options?.sessionId === TYPEOF.STRING &&
-        options.sessionId.length > NUM.ZERO
+        typeof options?.sessionId === 'string' &&
+        options.sessionId.length > 0
       ) {
         return {
           state:
@@ -434,19 +432,19 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     resolveOperationMutationRetryDelayMs(errorResult) {
       const retryAfterMs = getControlPlaneRetryAfterMs(errorResult);
       const baseDelayMs =
-        Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
           Math.floor(retryAfterMs) :
           OPERATION_PERSIST_RETRY_DELAY_MS;
       if (!this.isOperationMutationPartitionContention(errorResult)) {
         return baseDelayMs;
       }
       const jitterCeilingMs = Math.max(
-        NUM.ONE,
-        Math.floor(baseDelayMs / NUM.TWO),
+        1,
+        Math.floor(baseDelayMs / 2),
       );
       const boundedRandom = Math.max(
-        NUM.ZERO,
-        Math.min(NUM.ONE, this.random()),
+        0,
+        Math.min(1, this.random()),
       );
       const jitterMs = Math.floor(boundedRandom * jitterCeilingMs);
       return baseDelayMs + jitterMs;
@@ -476,11 +474,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
       }
       const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
-      if (budgetRemainingMs <= NUM.ZERO) {
-        return NUM.ONE;
+      if (budgetRemainingMs <= 0) {
+        return 1;
       }
       return Math.max(
-        NUM.ONE,
+        1,
         Math.min(
           REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
           budgetRemainingMs,
@@ -488,7 +486,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       );
     }
 
-    buildOperationMutationQueryOptions(options = {}, retryAttempt = NUM.ZERO) {
+    buildOperationMutationQueryOptions(options = {}, retryAttempt = 0) {
       const timeoutBudget =
         options.timeoutBudget &&
         typeof options.timeoutBudget ===
@@ -496,8 +494,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget :
           undefined;
       const ownerId =
-        typeof options.ownerId === TYPEOF.STRING &&
-        options.ownerId.length > NUM.ZERO ?
+        typeof options.ownerId === 'string' &&
+        options.ownerId.length > 0 ?
           options.ownerId :
           null;
       const coalescingKey =
@@ -518,7 +516,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ),
         skipCacheWait: true,
         timeoutBudget,
-        ...(typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ?
+        ...(typeof sessionId === 'string' && sessionId.length > 0 ?
           {sessionId} :
           {}),
         disableSystemWriteSession: options.disableSystemWriteSession === true,
@@ -546,7 +544,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     buildReplicaOperationMutationCoalescingKey(ownerId) {
-      if (typeof ownerId !== TYPEOF.STRING || ownerId.length === NUM.ZERO) {
+      if (typeof ownerId !== 'string' || ownerId.length === 0) {
         return null;
       }
       return `${REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX}` +
@@ -571,8 +569,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       ownerId = null,
     ) {
       if (
-        typeof options.deliverySource === TYPEOF.STRING &&
-        options.deliverySource.length > NUM.ZERO
+        typeof options.deliverySource === 'string' &&
+        options.deliverySource.length > 0
       ) {
         return options.deliverySource;
       }
@@ -587,25 +585,25 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       ];
       const ownerId = candidateOwnerIds.find(
         (candidate) =>
-          typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
+          typeof candidate === 'string' && candidate.length > 0,
       );
-      return typeof ownerId === TYPEOF.STRING ? ownerId : null;
+      return typeof ownerId === 'string' ? ownerId : null;
     }
 
-    resolveOperationMutationSessionId(options = {}, retryAttempt = NUM.ZERO) {
+    resolveOperationMutationSessionId(options = {}, retryAttempt = 0) {
       if (
-        typeof options.sessionId === TYPEOF.STRING &&
-        options.sessionId.length > NUM.ZERO
+        typeof options.sessionId === 'string' &&
+        options.sessionId.length > 0
       ) {
         return options.sessionId;
       }
       const ownerId =
-        typeof options.ownerId === TYPEOF.STRING &&
-        options.ownerId.length > NUM.ZERO ?
+        typeof options.ownerId === 'string' &&
+        options.ownerId.length > 0 ?
           options.ownerId :
           uuidv4();
       const baseSessionId = `${REBALANCER_SUBSYSTEM.COORDINATOR}:${ownerId}`;
-      if (retryAttempt <= NUM.ZERO) {
+      if (retryAttempt <= 0) {
         return baseSessionId;
       }
       return `${baseSessionId}:retry${retryAttempt}`;

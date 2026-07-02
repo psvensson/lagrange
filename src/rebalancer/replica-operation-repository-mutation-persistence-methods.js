@@ -9,7 +9,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     CONTROL_PLANE_MUTATION_MERGE_POLICY,
     CONTROL_PLANE_MUTATION_OPERATION,
     COORDINATOR_OWNER_COMPONENT,
-    NUM,
     READ_MODEL_DIVERGENCE_TYPE,
     REBALANCE_COORDINATOR_EVENT,
     REBALANCE_COORDINATOR_LOG_MSG,
@@ -19,7 +18,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     SQL,
     SQL_RECONCILIATION_REASON,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     buildControlPlaneFailurePayload,
     buildDivergenceEvent,
   } = options;
@@ -116,13 +114,13 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
       this.syncIncompleteOperationObservation(operation);
       const changeCount = this.extractMutationChangeCount(result);
-      return changeCount === null ? true : changeCount > NUM.ZERO;
+      return changeCount === null ? true : changeCount > 0;
     }
 
     async persistOperationUpdate(operation, options = {}) {
       const expectedWorkflowStep =
-        typeof options.expectedWorkflowStep === TYPEOF.STRING &&
-        options.expectedWorkflowStep.length > NUM.ZERO ?
+        typeof options.expectedWorkflowStep === 'string' &&
+        options.expectedWorkflowStep.length > 0 ?
           options.expectedWorkflowStep :
           null;
       if (
@@ -188,7 +186,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         return true;
       }
       const changeCount = this.extractMutationChangeCount(result);
-      if (changeCount !== null && changeCount <= NUM.ZERO) {
+      if (changeCount !== null && changeCount <= 0) {
         if (expectedWorkflowStep) {
           const authoritativeOperation =
             await this.queryAuthoritativeOperationById(operation.operationId, {
@@ -272,8 +270,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       expectedWorkflowStep,
     ) {
       if (
-        typeof expectedWorkflowStep !== TYPEOF.STRING ||
-        expectedWorkflowStep.length <= NUM.ZERO
+        typeof expectedWorkflowStep !== 'string' ||
+        expectedWorkflowStep.length <= 0
       ) {
         return false;
       }
@@ -505,7 +503,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           }
         }
       }
-      if (divergentFields.length === NUM.ZERO) {
+      if (divergentFields.length === 0) {
         return;
       }
       const divergenceType = !cachedRow ?

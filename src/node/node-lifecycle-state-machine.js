@@ -6,7 +6,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {STRING, TYPEOF} from '../constants/index.js';
+import {STRING} from '../constants/index.js';
 import {
   NODE_LIFECYCLE_DIAGNOSTIC_CODE,
   NODE_LIFECYCLE_SUBSYSTEM,
@@ -80,7 +80,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
     super();
 
     this.nodeId = options.nodeId || STRING.UNKNOWN;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       NODE_LIFECYCLE_NOW;
 

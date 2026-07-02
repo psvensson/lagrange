@@ -21,7 +21,6 @@ import {RUN_PROGRESS_PHASE} from './admin-test-run-progress.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 const EMPTY_STRING = '';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
@@ -74,7 +73,7 @@ function extractExamplesPayload(
   scenarios, outputDir, workspaceRoot,
 ) {
   const fallback = {summary: null, artifactPath: null};
-  if (!Array.isArray(scenarios) || scenarios.length === LOCAL_NUM_ZERO) {
+  if (!Array.isArray(scenarios) || scenarios.length === 0) {
     return fallback;
   }
 

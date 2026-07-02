@@ -5,7 +5,6 @@
  * artifact payload used by the examples pipeline and runtime loader.
  */
 
-import {TYPEOF} from '../../constants/index.js';
 
 const ARTIFACT_FORMAT = Object.freeze({
   JS_WASM_COMPONENT_V1: 'js_wasm_component_v1',
@@ -40,10 +39,10 @@ const CALLBACK_ARTIFACT_ERROR_MSG = Object.freeze({
  * @return {string} Serialized artifact JSON.
  */
 function buildJsWasmComponentArtifact(source, runExport) {
-  if (!source || typeof source !== TYPEOF.STRING) {
+  if (!source || typeof source !== 'string') {
     throw new Error(CALLBACK_ARTIFACT_ERROR_MSG.SOURCE_REQUIRED);
   }
-  if (!runExport || typeof runExport !== TYPEOF.STRING) {
+  if (!runExport || typeof runExport !== 'string') {
     throw new Error(CALLBACK_ARTIFACT_ERROR_MSG.RUN_EXPORT_REQUIRED);
   }
 
@@ -74,7 +73,7 @@ function buildJsWasmComponentArtifact(source, runExport) {
  * }}
  */
 function parseCallbackModuleArtifact(codeBlob) {
-  if (!codeBlob || typeof codeBlob !== TYPEOF.STRING) {
+  if (!codeBlob || typeof codeBlob !== 'string') {
     throw new Error(CALLBACK_ARTIFACT_ERROR_MSG.CODE_BLOB_REQUIRED);
   }
 
@@ -87,19 +86,19 @@ function parseCallbackModuleArtifact(codeBlob) {
   }
 
   if (parsed &&
-    typeof parsed === TYPEOF.OBJECT &&
+    typeof parsed === 'object' &&
     parsed[ARTIFACT_FIELD.FORMAT] === ARTIFACT_FORMAT.JS_WASM_COMPONENT_V1 &&
-    typeof parsed[ARTIFACT_FIELD.SOURCE] === TYPEOF.STRING) {
+    typeof parsed[ARTIFACT_FIELD.SOURCE] === 'string') {
     const source = parsed[ARTIFACT_FIELD.SOURCE];
     const wasmBytesBase64 = parsed[ARTIFACT_FIELD.WASM_BYTES_BASE64];
-    const wasmBytes = typeof wasmBytesBase64 === TYPEOF.STRING ?
+    const wasmBytes = typeof wasmBytesBase64 === 'string' ?
       Buffer.from(wasmBytesBase64, ARTIFACT_ENCODING.BASE64) :
       Buffer.from(source, ARTIFACT_ENCODING.UTF8);
-    const runExport = typeof parsed[ARTIFACT_FIELD.RUN_EXPORT] === TYPEOF.STRING ?
+    const runExport = typeof parsed[ARTIFACT_FIELD.RUN_EXPORT] === 'string' ?
       parsed[ARTIFACT_FIELD.RUN_EXPORT] :
       null;
     const exports = Array.isArray(parsed[ARTIFACT_FIELD.EXPORTS]) ?
-      parsed[ARTIFACT_FIELD.EXPORTS].filter((entry) => typeof entry === TYPEOF.STRING) :
+      parsed[ARTIFACT_FIELD.EXPORTS].filter((entry) => typeof entry === 'string') :
       [];
     return {
       format: ARTIFACT_FORMAT.JS_WASM_COMPONENT_V1,

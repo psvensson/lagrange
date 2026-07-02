@@ -84,12 +84,12 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
         // Generate timeout (10-100ms for fast tests)
         fc.integer({min: NUM.TEN, max: NUM.HUNDRED}),
         // Generate retry attempts (2-5)
-        fc.integer({min: NUM.TWO, max: NUM.FIVE}),
+        fc.integer({min: 2, max: NUM.FIVE}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (timeoutMs, retryAttempts, partitionId) => {
-          let _deliverCallCount = NUM.ZERO;
-          let simulatedTime = NUM.ZERO;
+          let _deliverCallCount = 0;
+          let simulatedTime = 0;
 
           const services = [
             createServiceEntry(partitionId, 'service-1', 'host:8080'),
@@ -122,7 +122,7 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
               return startTime;
             }
             // After first call, simulate time exceeding timeout
-            simulatedTime = timeoutMs + NUM.ONE;
+            simulatedTime = timeoutMs + 1;
             return startTime + simulatedTime;
           };
 
@@ -172,17 +172,17 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         // Generate timeout (50-200ms)
-        fc.integer({min: NUM.TEN * NUM.FIVE, max: NUM.HUNDRED * NUM.TWO}),
+        fc.integer({min: NUM.TEN * NUM.FIVE, max: NUM.HUNDRED * 2}),
         // Generate retry attempts (3-5)
         fc.integer({min: NUM.THREE, max: NUM.FIVE}),
         // Generate attempt at which timeout occurs (1 to retryAttempts-1)
-        fc.integer({min: NUM.ONE, max: NUM.FOUR}),
+        fc.integer({min: 1, max: NUM.FOUR}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (timeoutMs, retryAttempts, timeoutAtAttempt, partitionId) => {
           // Ensure timeoutAtAttempt is valid for the retry count
-          const actualTimeoutAtAttempt = Math.min(timeoutAtAttempt, retryAttempts - NUM.ONE);
-          let deliverCallCount = NUM.ZERO;
+          const actualTimeoutAtAttempt = Math.min(timeoutAtAttempt, retryAttempts - 1);
+          let deliverCallCount = 0;
 
           const services = [
             createServiceEntry(partitionId, 'service-1', 'host:8080'),
@@ -202,14 +202,14 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs,
           });
 
           // Override Date.now to simulate timeout at specific attempt
           const originalDateNow = Date.now;
           let startTime = null;
-          let currentAttempt = NUM.ZERO;
+          let currentAttempt = 0;
 
           Date.now = () => {
             if (startTime === null) {
@@ -218,7 +218,7 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
             }
             // Simulate time passing - exceed timeout at specific attempt
             if (currentAttempt >= actualTimeoutAtAttempt) {
-              return startTime + timeoutMs + NUM.ONE;
+              return startTime + timeoutMs + 1;
             }
             // Before timeout attempt, return time within timeout
             return startTime + (currentAttempt * NUM.TEN);
@@ -296,7 +296,7 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
           // Override Date.now to simulate time within timeout
           const originalDateNow = Date.now;
           const startTime = originalDateNow();
-          Date.now = () => startTime + NUM.ONE; // Always 1ms elapsed
+          Date.now = () => startTime + 1; // Always 1ms elapsed
 
           // Override delay to be instant
           router.delay = () => Promise.resolve();
@@ -340,7 +340,7 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
         fc.stringMatching(/^[a-z][a-z0-9]{0,19}$/),
         async (timeoutMs, partitionId) => {
           // Skip empty partition IDs
-          if (!partitionId || partitionId.trim().length === NUM.ZERO) {
+          if (!partitionId || partitionId.trim().length === 0) {
             return true;
           }
 
@@ -361,19 +361,19 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts: NUM.THREE,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs,
           });
 
           // Override Date.now to immediately exceed timeout
           const originalDateNow = Date.now;
-          let callCount = NUM.ZERO;
+          let callCount = 0;
           Date.now = () => {
             callCount++;
-            if (callCount === NUM.ONE) {
-              return NUM.ZERO;
+            if (callCount === 1) {
+              return 0;
             }
-            return timeoutMs + NUM.ONE;
+            return timeoutMs + 1;
           };
 
           // Override delay to be instant
@@ -418,7 +418,7 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
         // Generate timeout (10-50ms)
         fc.integer({min: NUM.TEN, max: NUM.TEN * NUM.FIVE}),
         // Generate retry attempts (2-4)
-        fc.integer({min: NUM.TWO, max: NUM.FOUR}),
+        fc.integer({min: 2, max: NUM.FOUR}),
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (timeoutMs, retryAttempts, partitionId) => {
@@ -439,20 +439,20 @@ test('Property 6: QueryRouter Timeout Enforcement', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs,
           });
 
           // Override Date.now to exceed timeout immediately after first attempt
           const originalDateNow = Date.now;
-          let callCount = NUM.ZERO;
+          let callCount = 0;
           Date.now = () => {
             callCount++;
-            if (callCount === NUM.ONE) {
-              return NUM.ZERO;
+            if (callCount === 1) {
+              return 0;
             }
             // Exceed timeout on second check
-            return timeoutMs + NUM.ONE;
+            return timeoutMs + 1;
           };
 
           // Override delay to be instant

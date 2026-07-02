@@ -9,21 +9,19 @@ const {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   MISSING_NODE_READINESS_STATE,
-  NUM,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   RUNTIME_AUTHORITY_PUBLICATION_STATE,
   RUNTIME_AUTHORITY_REPAIR_STATE,
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
-  TYPEOF,
   buildReason,
   createEligibilitySnapshot,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 function buildRuntimeAuthorityFailureDescriptor(failureReason) {
-  return typeof failureReason === TYPEOF.STRING &&
-    failureReason.length > NUM.ZERO ?
+  return typeof failureReason === 'string' &&
+    failureReason.length > 0 ?
     Object.freeze({
       state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
       reason: failureReason,
@@ -35,18 +33,18 @@ function buildRuntimeAuthorityFailureDescriptor(failureReason) {
 
 function buildRuntimeAuthorityPublicationDescriptor(publication = null) {
   const mode =
-    typeof publication?.currentMode === TYPEOF.STRING &&
-    publication.currentMode.length > NUM.ZERO ?
+    typeof publication?.currentMode === 'string' &&
+    publication.currentMode.length > 0 ?
       publication.currentMode :
       null;
   const reasonCode =
-    typeof publication?.reasonCode === TYPEOF.STRING &&
-    publication.reasonCode.length > NUM.ZERO ?
+    typeof publication?.reasonCode === 'string' &&
+    publication.reasonCode.length > 0 ?
       publication.reasonCode :
       null;
   const enteredAt =
-    typeof publication?.enteredAt === TYPEOF.STRING &&
-    publication.enteredAt.length > NUM.ZERO ?
+    typeof publication?.enteredAt === 'string' &&
+    publication.enteredAt.length > 0 ?
       publication.enteredAt :
       null;
   const healthy =
@@ -66,13 +64,13 @@ function buildRuntimeAuthorityPublicationDescriptor(publication = null) {
 
 function buildRuntimeAuthorityVisibilityDescriptor(details = {}) {
   const observationState =
-    typeof details.publicationObservationState === TYPEOF.STRING &&
-    details.publicationObservationState.length > NUM.ZERO ?
+    typeof details.publicationObservationState === 'string' &&
+    details.publicationObservationState.length > 0 ?
       details.publicationObservationState :
       AUTHORITY_PUBLICATION_OBSERVATION_STATE.OBSERVATION_UNAVAILABLE;
   const publicationStatus =
-    typeof details.publicationStatus === TYPEOF.STRING &&
-    details.publicationStatus.length > NUM.ZERO ?
+    typeof details.publicationStatus === 'string' &&
+    details.publicationStatus.length > 0 ?
       details.publicationStatus :
       null;
   const state =
@@ -93,22 +91,22 @@ function buildRuntimeAuthorityVisibilityDescriptor(details = {}) {
     observationState,
     publicationStatus,
     enteredAt:
-      typeof details.enteredAt === TYPEOF.STRING &&
-      details.enteredAt.length > NUM.ZERO ?
+      typeof details.enteredAt === 'string' &&
+      details.enteredAt.length > 0 ?
         details.enteredAt :
         null,
   });
 }
 
 function buildRuntimeAuthorityRepairDescriptor(latestRepair = null) {
-  if (!latestRepair || typeof latestRepair !== TYPEOF.OBJECT) {
+  if (!latestRepair || typeof latestRepair !== 'object') {
     return Object.freeze({
       state: RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED,
     });
   }
   const outcome =
-    typeof latestRepair.outcome === TYPEOF.STRING &&
-    latestRepair.outcome.length > NUM.ZERO ?
+    typeof latestRepair.outcome === 'string' &&
+    latestRepair.outcome.length > 0 ?
       latestRepair.outcome :
       null;
   const state =
@@ -124,23 +122,23 @@ function buildRuntimeAuthorityRepairDescriptor(latestRepair = null) {
     outcome,
     repaired: latestRepair.repaired === true,
     repairIntent:
-      typeof latestRepair.repairIntent === TYPEOF.STRING &&
-      latestRepair.repairIntent.length > NUM.ZERO ?
+      typeof latestRepair.repairIntent === 'string' &&
+      latestRepair.repairIntent.length > 0 ?
         latestRepair.repairIntent :
         null,
     nodeEvidenceState:
-      typeof latestRepair.nodeEvidenceState === TYPEOF.STRING &&
-      latestRepair.nodeEvidenceState.length > NUM.ZERO ?
+      typeof latestRepair.nodeEvidenceState === 'string' &&
+      latestRepair.nodeEvidenceState.length > 0 ?
         latestRepair.nodeEvidenceState :
         null,
     serviceEvidenceState:
-      typeof latestRepair.serviceEvidenceState === TYPEOF.STRING &&
-      latestRepair.serviceEvidenceState.length > NUM.ZERO ?
+      typeof latestRepair.serviceEvidenceState === 'string' &&
+      latestRepair.serviceEvidenceState.length > 0 ?
         latestRepair.serviceEvidenceState :
         null,
     partitionEvidenceState:
-      typeof latestRepair.partitionEvidenceState === TYPEOF.STRING &&
-      latestRepair.partitionEvidenceState.length > NUM.ZERO ?
+      typeof latestRepair.partitionEvidenceState === 'string' &&
+      latestRepair.partitionEvidenceState.length > 0 ?
         latestRepair.partitionEvidenceState :
         null,
     nodeRowCount: Number.isFinite(latestRepair.nodeRowCount) ?
@@ -153,13 +151,13 @@ function buildRuntimeAuthorityRepairDescriptor(latestRepair = null) {
       latestRepair.partitionRowCount :
       null,
     error:
-      typeof latestRepair.error === TYPEOF.STRING &&
-      latestRepair.error.length > NUM.ZERO ?
+      typeof latestRepair.error === 'string' &&
+      latestRepair.error.length > 0 ?
         latestRepair.error :
         null,
     recordedAt:
-      typeof latestRepair.recordedAt === TYPEOF.STRING &&
-      latestRepair.recordedAt.length > NUM.ZERO ?
+      typeof latestRepair.recordedAt === 'string' &&
+      latestRepair.recordedAt.length > 0 ?
         latestRepair.recordedAt :
         null,
   });

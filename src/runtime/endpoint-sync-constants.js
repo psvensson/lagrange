@@ -7,7 +7,6 @@
  * @module runtime/endpoint-sync-constants
  */
 
-import {NUM} from '../constants/index.js';
 import {
   WASM_SERVICE_PROTOCOL,
   WASM_SERVICE_HEALTH_STATUS,
@@ -185,8 +184,8 @@ const ENDPOINT_SYNC_HEALTH = Object.freeze({
 });
 
 const ENDPOINT_SYNC_NUM = Object.freeze({
-  ZERO: NUM.ZERO,
-  ONE: NUM.ONE,
+  ZERO: 0,
+  ONE: 1,
 });
 
 export {

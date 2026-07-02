@@ -2,9 +2,7 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const {
   DEFAULT_TRANSACTION_SESSION_ID,
-  NUM,
   PARTITION_SERVICE_ERROR_MSG,
-  TYPEOF,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceTransactionSessionMethods {
@@ -15,7 +13,7 @@ class PartitionServiceTransactionSessionMethods {
    * @private
    */
   normalizeTransactionSessionId(sessionId) {
-    return typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ?
+    return typeof sessionId === 'string' && sessionId.length > 0 ?
       sessionId :
       DEFAULT_TRANSACTION_SESSION_ID;
   }
@@ -26,13 +24,13 @@ class PartitionServiceTransactionSessionMethods {
    * @private
    */
   resolveActiveTransactionSessionId(sessionId) {
-    if (typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO) {
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
       return sessionId;
     }
     if (this.activeTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
       return DEFAULT_TRANSACTION_SESSION_ID;
     }
-    if (this.activeTransactions.size === NUM.ONE) {
+    if (this.activeTransactions.size === 1) {
       return this.activeTransactions.keys().next().value || null;
     }
     return null;
@@ -46,14 +44,14 @@ class PartitionServiceTransactionSessionMethods {
       DEFAULT_TRANSACTION_SESSION_ID,
     );
     const fallbackState =
-      this.activeTransactions.size === NUM.ONE ?
+      this.activeTransactions.size === 1 ?
         this.activeTransactions.values().next().value :
         null;
     const defaultPreparedState = this.preparedTransactions.get(
       DEFAULT_TRANSACTION_SESSION_ID,
     );
     const fallbackPreparedState =
-      this.preparedTransactions.size === NUM.ONE ?
+      this.preparedTransactions.size === 1 ?
         this.preparedTransactions.values().next().value :
         null;
     const activeState =
@@ -89,13 +87,13 @@ class PartitionServiceTransactionSessionMethods {
    * @private
    */
   resolvePreparedTransactionSessionId(sessionId) {
-    if (typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO) {
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
       return sessionId;
     }
     if (this.preparedTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
       return DEFAULT_TRANSACTION_SESSION_ID;
     }
-    if (this.preparedTransactions.size === NUM.ONE) {
+    if (this.preparedTransactions.size === 1) {
       return this.preparedTransactions.keys().next().value || null;
     }
     return null;

@@ -10,7 +10,7 @@ import {
   BOOTSTRAP_API_SQL,
 } from '../bootstrap-api-constants.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../bootstrap-constants.js';
-import {COLUMN, HTTP_STATUS, NUM, TABLES, TYPEOF} from '../../constants/index.js';
+import {COLUMN, HTTP_STATUS, TABLES} from '../../constants/index.js';
 const SERVICE_REGISTRATION_VISIBILITY_OWNER_LITERAL = Object.freeze({
   BOOTSTRAP_API_SERVICE_REGISTRATION: 'bootstrap_api_service_registration',
   AUTHORITATIVE_SERVICES_CACHE_REPAIR_FAILED_DURING_REGISTER_SERVICE_VISIBILITY_WAIT:
@@ -51,7 +51,7 @@ class ServiceRegistrationVisibilityOwner {
     return evaluation.visible;
   }
   buildRegisteredServiceVisibilitySnapshot(serviceRow) {
-    if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
       return null;
     }
     return {
@@ -92,7 +92,7 @@ class ServiceRegistrationVisibilityOwner {
       cachedService,
       expectedService,
     );
-    if (cacheMismatchFields.length === NUM.ZERO) {
+    if (cacheMismatchFields.length === 0) {
       return this.buildRegisteredServiceCacheObservationResult({
         cachedService,
         cacheMismatchFields,
@@ -115,7 +115,7 @@ class ServiceRegistrationVisibilityOwner {
     });
   }
   buildRegisteredServiceVisibilityExpectation(serviceRow) {
-    if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
       return null;
     }
     const expectation = {};
@@ -148,7 +148,7 @@ class ServiceRegistrationVisibilityOwner {
   }
   async readRegisteredServiceFromStorage(serviceId) {
     const executeQuery = this.delegates.executeBootstrapControlPlaneQuery;
-    if (typeof executeQuery !== TYPEOF.FUNCTION) {
+    if (typeof executeQuery !== 'function') {
       return {row: null, error: null};
     }
     try {
@@ -163,7 +163,7 @@ class ServiceRegistrationVisibilityOwner {
         };
       }
       const rows = Array.isArray(result.rows) ? result.rows : [];
-      return {row: rows[NUM.ZERO] || null, error: null};
+      return {row: rows[0] || null, error: null};
     } catch (error) {
       return {row: null, error: error.message};
     }
@@ -224,13 +224,13 @@ class ServiceRegistrationVisibilityOwner {
     );
     const authoritativeDiagnostics = {
       reason:
-        storageMismatchFields.length === NUM.ZERO ?
+        storageMismatchFields.length === 0 ?
           BOOTSTRAP_API_CACHE_VISIBILITY.REASON_VISIBLE :
           BOOTSTRAP_API_CACHE_VISIBILITY.REASON_FIELD_MISMATCH,
       observed: this.buildRegisteredServiceVisibilitySnapshot(storageLookup.row),
       mismatchFields: storageMismatchFields,
     };
-    if (storageMismatchFields.length === NUM.ZERO) {
+    if (storageMismatchFields.length === 0) {
       return {
         visible: false,
         diagnostics: {
@@ -263,7 +263,7 @@ class ServiceRegistrationVisibilityOwner {
     const cdcIntegrationService = this.getCdcIntegrationService();
     if (
       !cdcIntegrationService ||
-      typeof cdcIntegrationService.repairCacheVisibilityHole !== TYPEOF.FUNCTION
+      typeof cdcIntegrationService.repairCacheVisibilityHole !== 'function'
     ) {
       return false;
     }
@@ -380,7 +380,7 @@ class ServiceRegistrationVisibilityOwner {
   }
 
   async readCurrentRegisteredServiceRow(serviceId) {
-    if (typeof serviceId !== TYPEOF.STRING || serviceId.length === NUM.ZERO) {
+    if (typeof serviceId !== 'string' || serviceId.length === 0) {
       return null;
     }
     const cachedRow = this.getSystemTableCache()?.get?.(TABLES.SERVICES, serviceId) || null;

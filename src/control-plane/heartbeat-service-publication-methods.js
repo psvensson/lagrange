@@ -7,7 +7,6 @@ import {
   STATE,
   STRING,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -87,18 +86,18 @@ class HeartbeatServicePublicationMethods {
       node_address: this.nodeAddress || existing?.node_address || STRING.UNKNOWN,
       cpu_cores: Number.isFinite(stats?.cpu?.count) ?
         stats.cpu.count :
-        existing?.cpu_cores || NUM.ZERO,
-      memory_mb: Number.isFinite(memoryMb) ? memoryMb : existing?.memory_mb || NUM.ZERO,
-      disk_gb: Number.isFinite(stats?.diskGb) ? stats.diskGb : existing?.disk_gb || NUM.ZERO,
+        existing?.cpu_cores || 0,
+      memory_mb: Number.isFinite(memoryMb) ? memoryMb : existing?.memory_mb || 0,
+      disk_gb: Number.isFinite(stats?.diskGb) ? stats.diskGb : existing?.disk_gb || 0,
       cpu_usage_percent: Number.isFinite(stats?.cpu?.usagePercent) ?
         stats.cpu.usagePercent :
-        existing?.cpu_usage_percent || NUM.ZERO,
+        existing?.cpu_usage_percent || 0,
       memory_usage_percent: Number.isFinite(stats?.memory?.usagePercent) ?
         stats.memory.usagePercent :
-        existing?.memory_usage_percent || NUM.ZERO,
+        existing?.memory_usage_percent || 0,
       disk_usage_percent: Number.isFinite(stats?.diskUsagePercent) ?
         stats.diskUsagePercent :
-        existing?.disk_usage_percent || NUM.ZERO,
+        existing?.disk_usage_percent || 0,
       status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.READY,
       capabilities: capabilities ?
@@ -249,7 +248,7 @@ class HeartbeatServicePublicationMethods {
         Math.floor(queryTimeoutMs) :
         this.resolveHeartbeatWriteQueryTimeoutMs();
     const reporterTimeoutMs = this.resolveNodeStateReporterTimeoutMs(heartbeatWriteQueryTimeoutMs);
-    if (typeof this.nodeStateReporter === TYPEOF.FUNCTION) {
+    if (typeof this.nodeStateReporter === 'function') {
       try {
         const reporterResult = await this.callNodeStateReporterWithTimeout(
           {
@@ -327,7 +326,7 @@ class HeartbeatServicePublicationMethods {
       this.buildNodeHeartbeatWriteOptions(heartbeatWriteQueryTimeoutMs, publicationMode),
     );
     const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
-    if (affectedRows === NUM.ZERO) {
+    if (affectedRows === 0) {
       throw this.buildMissingNodeRowError(HEARTBEAT_SERVICE_LITERAL.HEARTBEAT);
     }
     recordHeartbeatPublicationSuccess({
@@ -386,7 +385,7 @@ class HeartbeatServicePublicationMethods {
       [COLUMN.NODE_ID]: this.nodeId,
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
       [COLUMN.ADDRESS]: this.advertisedNodeWsAddress || this.nodeAddress,
-      [COLUMN.PRIORITY]: NUM.ZERO,
+      [COLUMN.PRIORITY]: 0,
       [COLUMN.METADATA]: existingEp?.[COLUMN.METADATA] || JSON.stringify({}),
       [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
       [COLUMN.CREATED_AT]: existingEp?.[COLUMN.CREATED_AT] || now,

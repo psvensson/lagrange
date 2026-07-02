@@ -405,7 +405,7 @@ function buildDispatchPendingReentryPlanningSnapshot() {
       TEST_TARGET_NODE_ID,
     ]),
     pendingAckNodeIds: TEST_EMPTY_LIST,
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     priorityPartitionSummary: Object.freeze({
       blockedPartitions: Object.freeze([
         Object.freeze({
@@ -508,7 +508,7 @@ function buildSerialWaitReentryPlanningSnapshot() {
   return Object.freeze({
     ...planningSnapshot,
     priorityRecoveryDecisionSnapshots: Object.freeze({
-      schemaVersion: NUM.ONE,
+      schemaVersion: 1,
       capturedAt: TEST_CAPTURED_AT_MS,
       publicationEpoch: TEST_PUBLICATION_EPOCH,
       priorityPartitionSummary: planningSnapshot.priorityPartitionSummary,
@@ -1035,17 +1035,17 @@ registerCase(
       });
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES,
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         TEST_REPLICA_DISPATCH_TARGET,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET,
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER,
       );
     } finally {
@@ -1130,21 +1130,21 @@ registerCase(
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS,
       );
 
       coordinator.initialized = false;
-      await deferredTimers[NUM.ZERO].fn();
+      await deferredTimers[0].fn();
 
       t.equal(
         deferredTimers.length,
-        NUM.TWO,
+        2,
         TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_REARMS,
       );
       t.equal(
         coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
-        NUM.ONE,
+        1,
         TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_TIMER,
       );
     } finally {

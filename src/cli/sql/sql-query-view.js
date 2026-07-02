@@ -30,28 +30,28 @@ const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_PAUSED = 'paused';
 const LOCAL_STR_EXPIRED = 'expired';
 const LOCAL_STR_CANCELLED = 'cancelled';
-const LOCAL_NUM_100 = 100;
-const LOCAL_STR_1RDRD = 'livequery:initialized';
+const LOCAL_NUM_ONE_HUNDRED = 100;
+const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
 const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
 const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
-const LOCAL_STR_1A2TT = 'Read-only mode: Only SELECT queries are allowed';
-const LOCAL_STR_9ISQT = 'READ_ONLY_VIOLATION';
+const LOCAL_STR_READ_ONLY_MODE_ONLY_SELECT_QUERIES_ARE_A = 'Read-only mode: Only SELECT queries are allowed';
+const LOCAL_STR_READ_ONLY_VIOLATION = 'READ_ONLY_VIOLATION';
 const LOCAL_STR_QUERY_REJECTED = 'query:rejected';
 const LOCAL_STR_READ_ONLY = 'read_only';
 const LOCAL_STR_QUERY_CANCELLED = 'query:cancelled';
 const LOCAL_STR_DANGEROUS = 'dangerous';
-const LOCAL_STR_1YLK2 = 'No connection to database';
+const LOCAL_STR_NO_CONNECTION_TO_DATABASE = 'No connection to database';
 const LOCAL_STR_QUERY_EXECUTED = 'query:executed';
-const LOCAL_STR_ESDKR = 'Live query support is not available';
-const LOCAL_STR_1CWUX = 'LIVE_QUERY_UNAVAILABLE';
+const LOCAL_STR_LIVE_QUERY_SUPPORT_IS_NOT_AVAILABLE = 'Live query support is not available';
+const LOCAL_STR_LIVE_QUERY_UNAVAILABLE = 'LIVE_QUERY_UNAVAILABLE';
 const LOCAL_STR_LIVEQUERY_STARTED = 'livequery:started';
 const LOCAL_STR_LIVE_QUERY_ERROR = 'LIVE_QUERY_ERROR';
 const LOCAL_STR_QUERY_ERROR = 'query:error';
 const LOCAL_STR_QUERY_SUCCESS = 'query:success';
-const LOCAL_STR_1TIY2 = 'confirmation:request';
-const LOCAL_STR_K8XZB = 'readonlymode:changed';
+const LOCAL_STR_CONFIRMATION_REQUEST = 'confirmation:request';
+const LOCAL_STR_READONLYMODE_CHANGED = 'readonlymode:changed';
 const LOCAL_STR_C_ENTER = 'C-enter';
 const LOCAL_STR_ENTER = 'enter';
 const LOCAL_STR_C_P = 'C-p';
@@ -60,8 +60,6 @@ const LOCAL_STR_C_C = 'C-c';
 const LOCAL_STR_C = 'c';
 const LOCAL_STR_VIEW_SHOWN = 'view:shown';
 const LOCAL_STR_VIEW_HIDDEN = 'view:hidden';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_LIVE_QUERY = 'Live Query';
 const LOCAL_STR_SUBSCRIPTION_ID = 'Subscription ID';
 const LOCAL_STR_STATUS = 'Status';
@@ -70,7 +68,6 @@ const LOCAL_STR_EVENT_RATE = 'Event Rate';
 const LOCAL_STR_PENDING_QUERIES = 'Pending Queries';
 const LOCAL_STR_COUNT = 'Count';
 const LOCAL_STR_SQL_QUERY_VIEW = 'SQL Query View';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_ASC = 'asc';
 
 /**
@@ -150,7 +147,7 @@ export class SQLQueryView {
 
     // Create query history
     this.queryHistory = new QueryHistory({
-      maxEntries: LOCAL_NUM_100,
+      maxEntries: LOCAL_NUM_ONE_HUNDRED,
       autoLoad: true,
     });
 
@@ -190,7 +187,7 @@ export class SQLQueryView {
 
     // Wire up live query manager events
     if (this.liveQueryManager && this.eventBus) {
-      this.eventBus.on(LOCAL_STR_1RDRD, (data) =>
+      this.eventBus.on(LOCAL_STR_LIVEQUERY_INITIALIZED, (data) =>
         this.handleLiveQueryInitialized(data));
       this.eventBus.on(LOCAL_STR_LIVEQUERY_EVENT, (data) =>
         this.handleLiveQueryStreamEvent(data));
@@ -225,8 +222,8 @@ export class SQLQueryView {
     // Requirements: 10.3, 10.4
     if (this.readOnlyMode && !this.isSelectQuery(sql)) {
       this.resultsPanel.displayError({
-        message: LOCAL_STR_1A2TT,
-        code: LOCAL_STR_9ISQT,
+        message: LOCAL_STR_READ_ONLY_MODE_ONLY_SELECT_QUERIES_ARE_A,
+        code: LOCAL_STR_READ_ONLY_VIOLATION,
       });
       this.emitEvent(LOCAL_STR_QUERY_REJECTED, {sql, reason: LOCAL_STR_READ_ONLY});
       return false;
@@ -261,7 +258,7 @@ export class SQLQueryView {
       // No connection - simulate error
       this.handleQueryResult({
         queryId,
-        error: LOCAL_STR_1YLK2,
+        error: LOCAL_STR_NO_CONNECTION_TO_DATABASE,
       });
     }
 
@@ -278,8 +275,8 @@ export class SQLQueryView {
   async executeLiveQuery(sql) {
     if (!this.liveQueryManager) {
       this.resultsPanel.displayError({
-        message: LOCAL_STR_ESDKR,
-        code: LOCAL_STR_1CWUX,
+        message: LOCAL_STR_LIVE_QUERY_SUPPORT_IS_NOT_AVAILABLE,
+        code: LOCAL_STR_LIVE_QUERY_UNAVAILABLE,
       });
       return false;
     }
@@ -426,7 +423,7 @@ export class SQLQueryView {
   async requestConfirmation(message) {
     return new Promise((resolve) => {
       this.confirmationCallback = resolve;
-      this.emitEvent(LOCAL_STR_1TIY2, {message});
+      this.emitEvent(LOCAL_STR_CONFIRMATION_REQUEST, {message});
 
       // If no event bus or UI, auto-reject for safety
       if (!this.eventBus) {
@@ -495,7 +492,7 @@ export class SQLQueryView {
    */
   setReadOnly(enabled) {
     this.readOnlyMode = enabled;
-    this.emitEvent(LOCAL_STR_K8XZB, {enabled});
+    this.emitEvent(LOCAL_STR_READONLYMODE_CHANGED, {enabled});
   }
 
   /**
@@ -504,7 +501,7 @@ export class SQLQueryView {
    */
   toggleReadOnly() {
     this.readOnlyMode = !this.readOnlyMode;
-    this.emitEvent(LOCAL_STR_K8XZB, {enabled: this.readOnlyMode});
+    this.emitEvent(LOCAL_STR_READONLYMODE_CHANGED, {enabled: this.readOnlyMode});
     return this.readOnlyMode;
   }
 
@@ -607,7 +604,7 @@ export class SQLQueryView {
    * @return {boolean} True if queries pending
    */
   hasPendingQueries() {
-    return this.pendingQueries.size > LOCAL_NUM_ZERO;
+    return this.pendingQueries.size > 0;
   }
 
   /**
@@ -654,7 +651,7 @@ export class SQLQueryView {
   getSelectedDetails() {
     // SQL view doesn't have row selection in the same way
     // Return info about current query state instead
-    if (!this.activeLiveQueryId && this.pendingQueries.size === LOCAL_NUM_ZERO) {
+    if (!this.activeLiveQueryId && this.pendingQueries.size === 0) {
       return null;
     }
 
@@ -671,7 +668,7 @@ export class SQLQueryView {
       });
     }
 
-    if (this.pendingQueries.size > LOCAL_NUM_ZERO) {
+    if (this.pendingQueries.size > 0) {
       sections.push({
         title: LOCAL_STR_PENDING_QUERIES,
         fields: [
@@ -711,12 +708,12 @@ export class SQLQueryView {
       headers: [LOCAL_STR_SQL_QUERY_VIEW],
       rows: [],
       columns: [],
-      filter: LOCAL_STR_EMPTY,
+      filter: '',
       sortColumn: null,
       sortDirection: LOCAL_STR_ASC,
-      selectedIndex: -LOCAL_NUM_ONE,
-      totalCount: LOCAL_NUM_ZERO,
-      filteredCount: LOCAL_NUM_ZERO,
+      selectedIndex: -1,
+      totalCount: 0,
+      filteredCount: 0,
     };
   }
 

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   buildActiveMembershipSnapshot,
   resolveActiveNodeViews,
@@ -55,7 +54,7 @@ const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_change
 
 function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
   const publicationRow = options.publicationRow;
-  if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+  if (!publicationRow || typeof publicationRow !== 'object') {
     return publicationRow;
   }
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
@@ -69,10 +68,10 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
   );
   const membershipLifecycleSummary =
     options.membershipLifecycleSummary &&
-    typeof options.membershipLifecycleSummary === TYPEOF.OBJECT ?
+    typeof options.membershipLifecycleSummary === 'object' ?
       buildMembershipLifecycleSummary(options.membershipLifecycleSummary) :
       normalizedPublication.membershipLifecycleSummary &&
-          typeof normalizedPublication.membershipLifecycleSummary === TYPEOF.OBJECT ?
+          typeof normalizedPublication.membershipLifecycleSummary === 'object' ?
         buildMembershipLifecycleSummary(normalizedPublication.membershipLifecycleSummary) :
         null;
   return {
@@ -120,7 +119,7 @@ function shouldAllowRecoveryEligibleProjection(options = {}, helperFns = {}) {
     return true;
   }
   const publishedBaselineNodeIds = helperFns.normalizeNodeIdList(options.publishedBaselineNodeIds);
-  if (publishedBaselineNodeIds.length === NUM.ZERO) {
+  if (publishedBaselineNodeIds.length === 0) {
     return false;
   }
   const defaultObservedNodeIds = helperFns.normalizeNodeIdList(
@@ -162,7 +161,7 @@ function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) 
     helperFns.normalizeLatestPublicationRow(options.latestPublishedPublicationRow),
   ];
   return publicationRows.some((row) => {
-    if (!row || typeof row !== TYPEOF.OBJECT) {
+    if (!row || typeof row !== 'object') {
       return false;
     }
     const publicationStatus = String(row.status || '').toUpperCase();
@@ -180,9 +179,9 @@ function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) 
     }
     return (
       row.publishedActiveNodeIdsPresent === true ||
-      (Array.isArray(row.publishedActiveNodeIds) && row.publishedActiveNodeIds.length > NUM.ZERO) ||
-      (Array.isArray(row.requiredAckNodeIds) && row.requiredAckNodeIds.length > NUM.ZERO) ||
-      (Array.isArray(row.acknowledgedNodeIds) && row.acknowledgedNodeIds.length > NUM.ZERO)
+      (Array.isArray(row.publishedActiveNodeIds) && row.publishedActiveNodeIds.length > 0) ||
+      (Array.isArray(row.requiredAckNodeIds) && row.requiredAckNodeIds.length > 0) ||
+      (Array.isArray(row.acknowledgedNodeIds) && row.acknowledgedNodeIds.length > 0)
     );
   });
 }
@@ -207,7 +206,7 @@ function resolveCandidatePublicationLifecycleState(publicationStatus) {
 
 function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const planningSnapshot =
-    options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
+    options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
       options.planningSnapshot :
       helperFns.buildMembershipPublicationEvidenceSnapshot(options);
   const latestPublicationRow = helperFns.normalizeLatestPublicationRow(
@@ -222,7 +221,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     latestPublicationStatus !== MEMBERSHIP_PUBLICATION_STATUS.ABANDONED &&
     latestPublicationStatus !== MEMBERSHIP_PUBLICATION_STATUS.SUPERSEDED &&
     Array.isArray(latestPublicationRow.publishedActiveNodeIds) &&
-    latestPublicationRow.publishedActiveNodeIds.length > NUM.ZERO;
+    latestPublicationRow.publishedActiveNodeIds.length > 0;
   const publishedBaselineNodeIds = helperFns.normalizeNodeIdList(
     carryForwardLatestPublicationBaseline ?
       latestPublicationRow.publishedActiveNodeIds :
@@ -279,7 +278,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
             publication_epoch:
                 latestPublishedPublicationRow?.publicationEpoch ||
                 latestPublicationRow?.publicationEpoch ||
-                NUM.ONE,
+                1,
             status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
             published_active_node_ids: publishedBaselineNodeIds,
           },
@@ -291,7 +290,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
           publication_epoch:
               latestPublishedPublicationRow?.publicationEpoch ||
               latestPublicationRow?.publicationEpoch ||
-              NUM.ONE,
+              1,
           status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
           published_active_node_ids: publishedBaselineNodeIds,
         } :
@@ -304,7 +303,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     membershipSwimConsumeEnabled: options.membershipSwimConsumeEnabled === true,
     swimVerdictByNodeId:
       options.swimVerdictByNodeId &&
-      typeof options.swimVerdictByNodeId === TYPEOF.OBJECT ?
+      typeof options.swimVerdictByNodeId === 'object' ?
         options.swimVerdictByNodeId :
         null,
   });
@@ -368,7 +367,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const publicationProjectionNodeRowIds = new Set(
     planningSnapshot.nodeRows
       .map((nodeRow) => normalizeNodeRow(nodeRow).nodeId)
-      .filter((nodeId) => nodeId.length > NUM.ZERO),
+      .filter((nodeId) => nodeId.length > 0),
   );
   const publicationWideningHasNodeRowEvidence =
     publicationProjectedServingNodeIds.some(
@@ -468,7 +467,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   const baselineEpoch = helperFns.normalizePositiveInteger(
     latestPublicationRow?.publicationEpoch,
-    NUM.ZERO,
+    0,
   );
   const changed =
     !latestPublicationRow ||
@@ -502,11 +501,11 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   const candidatePublicationEpoch =
     changed ?
-      baselineEpoch + NUM.ONE :
-      Math.max(baselineEpoch, NUM.ONE);
+      baselineEpoch + 1 :
+      Math.max(baselineEpoch, 1);
   const membershipEpochSnapshot =
     planningSnapshot.membershipEpochSnapshot &&
-    typeof planningSnapshot.membershipEpochSnapshot === TYPEOF.OBJECT ?
+    typeof planningSnapshot.membershipEpochSnapshot === 'object' ?
       planningSnapshot.membershipEpochSnapshot :
       buildMembershipEpochSnapshot({
         latestPublicationRow,
@@ -559,7 +558,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     helperFns,
   );
   const reasonCode =
-    typeof planningSnapshot.reasonCode === TYPEOF.STRING && planningSnapshot.reasonCode.length > 0 ?
+    typeof planningSnapshot.reasonCode === 'string' && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :
       AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON;
   const derivedMembershipLifecycleSummaryBase = buildMembershipLifecycleSummary({
@@ -697,7 +696,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       [],
     clusterIncarnationFence:
       planningSnapshot.clusterIncarnationFence &&
-        typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+        typeof planningSnapshot.clusterIncarnationFence === 'object' ?
         planningSnapshot.clusterIncarnationFence :
         null,
     priorityRecoveryClosureWitness,

@@ -1,4 +1,4 @@
-import {HTTP_STATUS, TYPEOF} from '../../constants/index.js';
+import {HTTP_STATUS} from '../../constants/index.js';
 import {
   BOOTSTRAP_API_LIVENESS,
   BOOTSTRAP_API_PROBE_SCOPE,
@@ -74,7 +74,7 @@ class BootstrapReadinessOwner {
     const response = {
       started,
       phase:
-        typeof snapshot.phase === TYPEOF.STRING ?
+        typeof snapshot.phase === 'string' ?
           snapshot.phase :
           LIFECYCLE_PHASE.INIT,
       state: snapshot.state,

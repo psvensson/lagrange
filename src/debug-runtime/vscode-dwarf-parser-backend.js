@@ -6,7 +6,6 @@
  */
 
 import {spawn as spawnDwarfDebugWorker} from '@vscode/dwarf-debugging';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DWARF_INDEX_DEFAULT as DEF,
   DWARF_INDEX_VALUE as VALUE,
@@ -28,7 +27,7 @@ const EMPTY_SYMBOL_MAPPINGS = Object.freeze([]);
 
 const FALLBACK_WASM_VALUE = Object.freeze({
   type: VALUE.WASM_VALUE_I32,
-  value: NUM.ZERO,
+  value: 0,
 });
 
 /**
@@ -38,7 +37,7 @@ const FALLBACK_WASM_VALUE = Object.freeze({
  * @throws {Error} On invalid request shape.
  */
 function validateDwarfModuleRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
   if (!isNonEmptyString(request.moduleRef)) {
@@ -116,7 +115,7 @@ class VscodeDwarfParserBackend {
       );
 
       const sourceFiles = normalizeSourceFiles(addRawResult);
-      if (sourceFiles.length === NUM.ZERO) {
+      if (sourceFiles.length === 0) {
         return {
           moduleRef,
           moduleDigest,
@@ -265,18 +264,18 @@ async function resolvePrimarySymbolName(rpc, rawModuleId, codeOffset) {
   );
 
   if (functionInfo &&
-    typeof functionInfo === TYPEOF.OBJECT &&
+    typeof functionInfo === 'object' &&
     Array.isArray(functionInfo[FIELD.MISSING_SYMBOL_FILES])) {
     const detail = functionInfo[FIELD.MISSING_SYMBOL_FILES].join(', ');
     throw new Error(`${ERR.PARSER_MISSING_SYMBOLS}: ${detail}`);
   }
 
   const frames = functionInfo?.[FIELD.FRAMES];
-  if (!Array.isArray(frames) || frames.length === NUM.ZERO) {
+  if (!Array.isArray(frames) || frames.length === 0) {
     return null;
   }
 
-  const firstName = frames[NUM.ZERO]?.[FIELD.NAME];
+  const firstName = frames[0]?.[FIELD.NAME];
   return isNonEmptyString(firstName) ? firstName : null;
 }
 
@@ -299,7 +298,7 @@ function normalizeSourceFiles(addRawResult) {
   }
 
   if (addRawResult &&
-    typeof addRawResult === TYPEOF.OBJECT &&
+    typeof addRawResult === 'object' &&
     Array.isArray(addRawResult[FIELD.MISSING_SYMBOL_FILES])) {
     const detail = addRawResult[FIELD.MISSING_SYMBOL_FILES].join(', ');
     throw new Error(`${ERR.PARSER_MISSING_SYMBOLS}: ${detail}`);
@@ -366,7 +365,7 @@ function createNoopHostInterface() {
   return {
     async getWasmLinearMemory(_offset, length, _stopId) {
       if (!isNonNegativeInteger(length)) {
-        return new ArrayBuffer(NUM.ZERO);
+        return new ArrayBuffer(0);
       }
       return new ArrayBuffer(length);
     },
@@ -389,7 +388,7 @@ function createNoopHostInterface() {
  * @return {boolean} True when offsets are valid.
  */
 function isValidOffsetRange(rawRange) {
-  if (!rawRange || typeof rawRange !== TYPEOF.OBJECT) {
+  if (!rawRange || typeof rawRange !== 'object') {
     return false;
   }
   if (!isNonNegativeInteger(rawRange.startOffset)) {
@@ -418,7 +417,7 @@ function isSupportedWasmBytes(wasmBytes) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 /**
@@ -426,8 +425,8 @@ function isNonNegativeInteger(value) {
  * @return {boolean}
  */
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING &&
-    value.trim().length > NUM.ZERO;
+  return typeof value === 'string' &&
+    value.trim().length > 0;
 }
 
 export {

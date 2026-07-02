@@ -23,9 +23,9 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
 
-const LOCAL_STR_13BSK = 'CDCIntegrationSetup';
+const LOCAL_STR_CDCINTEGRATIONSETUP = 'CDCIntegrationSetup';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 
 /**
  * Subsystem identifier for logging.
@@ -85,7 +85,7 @@ class CDCIntegrationSetup {
   static createForBootstrap({nodeId, messageRouter}) {
     // Validate required dependencies
     if (!nodeId) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.NODE_ID_REQUIRED);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.NODE_ID_REQUIRED);
     }
 
     const loggingService = LoggingService.getInstance();
@@ -147,16 +147,19 @@ class CDCIntegrationSetup {
   }) {
     // Validate required dependencies
     if (!nodeId) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.NODE_ID_REQUIRED);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.NODE_ID_REQUIRED);
     }
     if (!sqlQueryEngine) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.SQL_QUERY_ENGINE_REQUIRED);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.SQL_QUERY_ENGINE_REQUIRED);
     }
     if (!systemTableCache) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED);
+      throw new DependencyError(
+        LOCAL_STR_CDCINTEGRATIONSETUP,
+        ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
     }
     if (!messageRouter) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
 
     const loggingService = LoggingService.getInstance();
@@ -224,13 +227,16 @@ class CDCIntegrationSetup {
     partitionServicesProvider = null,
   }) {
     if (!cdcIntegrationService) {
-      throw new DependencyError(LOCAL_STR_13BSK, LOCAL_STR_O1VD7);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, LOCAL_STR_CDCINTEGRATIONSERVICE);
     }
     if (!sqlQueryEngine) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.SQL_QUERY_ENGINE_REQUIRED);
+      throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.SQL_QUERY_ENGINE_REQUIRED);
     }
     if (!systemTableCache) {
-      throw new DependencyError(LOCAL_STR_13BSK, ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED);
+      throw new DependencyError(
+        LOCAL_STR_CDCINTEGRATIONSETUP,
+        ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
     }
 
     const loggingService = LoggingService.getInstance();

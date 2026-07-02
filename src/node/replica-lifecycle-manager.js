@@ -17,7 +17,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {TYPEOF} from '../constants/index.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -44,7 +43,7 @@ import {
   runReplicaLifecycleRecovery,
 } from './replica-lifecycle-recovery.js';
 
-const LOCAL_STR_A2VUY = 'Failed to shut down delegated replica handler';
+const LOCAL_STR_FAILED_TO_SHUT_DOWN_DELEGATED_REPLICA_HA = 'Failed to shut down delegated replica handler';
 
 /**
  * Replica status values for lifecycle management.
@@ -155,7 +154,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       usingReplicaHandler: !!this.replicaHandler,
     });
 
-    if (this.replicaHandler && typeof this.replicaHandler.initialize === TYPEOF.FUNCTION) {
+    if (this.replicaHandler && typeof this.replicaHandler.initialize === 'function') {
       this.replicaHandler.initialize();
     }
 
@@ -187,7 +186,7 @@ class ReplicaLifecycleManager extends EventEmitter {
       nodeId: this.nodeId,
       hasHandler: true,
     });
-    if (typeof handler.initialize === TYPEOF.FUNCTION) {
+    if (typeof handler.initialize === 'function') {
       handler.initialize();
     }
   }
@@ -469,7 +468,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     // The actual sync is handled by the Raft implementation
     // This is a placeholder for the sync coordination
-    if (typeof replica.service.syncFromLeader === TYPEOF.FUNCTION) {
+    if (typeof replica.service.syncFromLeader === 'function') {
       await replica.service.syncFromLeader(leaderAddress);
     }
 
@@ -677,13 +676,13 @@ class ReplicaLifecycleManager extends EventEmitter {
    */
   getStats() {
     let handlerStats = null;
-    if (this.replicaHandler && typeof this.replicaHandler.getStats === TYPEOF.FUNCTION) {
+    if (this.replicaHandler && typeof this.replicaHandler.getStats === 'function') {
       handlerStats = this.replicaHandler.getStats();
     }
     const localReplicaCount = handlerStats ?
       handlerStats.localReplicaCount :
       (this.replicaHandler &&
-        typeof this.replicaHandler.getAllLocalReplicas === TYPEOF.FUNCTION ?
+        typeof this.replicaHandler.getAllLocalReplicas === 'function' ?
         this.replicaHandler.getAllLocalReplicas().length :
         0);
 
@@ -721,11 +720,11 @@ class ReplicaLifecycleManager extends EventEmitter {
       this.pendingOperations.clear();
       this.initialized = false;
 
-      if (this.replicaHandler && typeof this.replicaHandler.shutdown === TYPEOF.FUNCTION) {
+      if (this.replicaHandler && typeof this.replicaHandler.shutdown === 'function') {
         try {
           await this.replicaHandler.shutdown();
         } catch (error) {
-          this.logger.warn(LOCAL_STR_A2VUY, {
+          this.logger.warn(LOCAL_STR_FAILED_TO_SHUT_DOWN_DELEGATED_REPLICA_HA, {
             nodeId: this.nodeId,
             error: error.message,
           });

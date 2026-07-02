@@ -35,7 +35,7 @@ import {
 } from './message-group-worker-service-message-methods.js';
 
 const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
-const LOCAL_STR_FA5IJ = 'MessageGroupWorkerService stopped before CDC commit';
+const LOCAL_STR_MESSAGEGROUPWORKERSERVICE_STOPPED_BEFORE = 'MessageGroupWorkerService stopped before CDC commit';
 
 /**
  * Default configuration values for MessageGroupWorkerService.
@@ -54,7 +54,7 @@ const MESSAGE_GROUP_WORKER_DEFAULT = Object.freeze({
   /** In-memory database path */
   MEMORY_DB_PATH: ':memory:',
   /** Maximum CDC relay hops when forwarding from stale follower targets */
-  CDC_RELAY_MAX_HOPS: NUM.TWO,
+  CDC_RELAY_MAX_HOPS: 2,
   /** Max time to wait for one CDC entry to commit locally */
   RAFT_COMMIT_TIMEOUT_MS: 2000,
 });
@@ -239,7 +239,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     this.pendingCDCCommits = new Map();
 
     /** @type {number} Monotonic counter for CDC commit correlation IDs */
-    this.nextCDCCommitId = NUM.ZERO;
+    this.nextCDCCommitId = 0;
 
     /**
      * Whether the service is in bootstrap phase.
@@ -331,7 +331,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     // Initialize and join peers
     this.raftGroup.initialize();
     this.raftGroup.joinPeers();
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.raftGroup.startElection();
     }
 
@@ -520,7 +520,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     }
 
     this.clearPendingCDCCommits(
-      LOCAL_STR_FA5IJ,
+      LOCAL_STR_MESSAGEGROUPWORKERSERVICE_STOPPED_BEFORE,
     );
 
     // Shutdown RaftGroup

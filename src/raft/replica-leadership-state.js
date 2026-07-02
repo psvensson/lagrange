@@ -1,21 +1,20 @@
 import {TYPEOF} from '../constants/index.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 function normalizeReplicaLeaderId(nextLeaderId, options = {}) {
-  if (typeof nextLeaderId !== TYPEOF.STRING || nextLeaderId.length === LOCAL_NUM_ZERO) {
+  if (typeof nextLeaderId !== 'string' || nextLeaderId.length === 0) {
     return null;
   }
   const normalizeLeaderId =
-    typeof options.normalizeLeaderId === TYPEOF.FUNCTION ?
+    typeof options.normalizeLeaderId === 'function' ?
       options.normalizeLeaderId :
       null;
   if (!normalizeLeaderId) {
     return nextLeaderId;
   }
   const normalizedLeaderId = normalizeLeaderId(nextLeaderId);
-  return typeof normalizedLeaderId === TYPEOF.STRING &&
-    normalizedLeaderId.length > LOCAL_NUM_ZERO ?
+  return typeof normalizedLeaderId === 'string' &&
+    normalizedLeaderId.length > 0 ?
     normalizedLeaderId :
     nextLeaderId;
 }
@@ -24,10 +23,10 @@ function applyReplicaLeadership(replica, role) {
   replica.role = role;
   replica.isLeader = true;
   replica.leaderId = replica.replicaId;
-  if (typeof replica.queueRoleUpdate === TYPEOF.FUNCTION) {
+  if (typeof replica.queueRoleUpdate === 'function') {
     replica.queueRoleUpdate(role);
   }
-  if (typeof replica.queueLeaderNodeUpdate === TYPEOF.FUNCTION) {
+  if (typeof replica.queueLeaderNodeUpdate === 'function') {
     replica.queueLeaderNodeUpdate(replica.nodeId);
   }
 }
@@ -45,7 +44,7 @@ function applyReplicaDemotion(replica, role) {
   replica.role = role;
   replica.isLeader = false;
   replica.leaderId = null;
-  if (typeof replica.queueRoleUpdate === TYPEOF.FUNCTION) {
+  if (typeof replica.queueRoleUpdate === 'function') {
     replica.queueRoleUpdate(role);
   }
   clearReplicaLeaderUpdateState(replica);
@@ -76,43 +75,43 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
   const events = options.events || {};
   const roles = options.roles || {};
   const shouldIgnoreLeaderEvent =
-    typeof options.shouldIgnoreLeaderEvent === TYPEOF.FUNCTION ?
+    typeof options.shouldIgnoreLeaderEvent === 'function' ?
       options.shouldIgnoreLeaderEvent :
       () => false;
   const shouldIgnoreDemotionEvent =
-    typeof options.shouldIgnoreDemotionEvent === TYPEOF.FUNCTION ?
+    typeof options.shouldIgnoreDemotionEvent === 'function' ?
       options.shouldIgnoreDemotionEvent :
       () => false;
   const getCurrentTerm =
-    typeof options.getCurrentTerm === TYPEOF.FUNCTION ?
+    typeof options.getCurrentTerm === 'function' ?
       options.getCurrentTerm :
       (() => null);
   const onLeader =
-    typeof options.onLeader === TYPEOF.FUNCTION ?
+    typeof options.onLeader === 'function' ?
       options.onLeader :
       (() => {});
   const onFollower =
-    typeof options.onFollower === TYPEOF.FUNCTION ?
+    typeof options.onFollower === 'function' ?
       options.onFollower :
       (() => {});
   const onCandidate =
-    typeof options.onCandidate === TYPEOF.FUNCTION ?
+    typeof options.onCandidate === 'function' ?
       options.onCandidate :
       (() => {});
   const onCommit =
-    typeof options.onCommit === TYPEOF.FUNCTION ?
+    typeof options.onCommit === 'function' ?
       options.onCommit :
       (() => {});
   const onLeaderChange =
-    typeof options.onLeaderChange === TYPEOF.FUNCTION ?
+    typeof options.onLeaderChange === 'function' ?
       options.onLeaderChange :
       (() => {});
   const onTermChange =
-    typeof options.onTermChange === TYPEOF.FUNCTION ?
+    typeof options.onTermChange === 'function' ?
       options.onTermChange :
       (() => {});
   const normalizeLeaderId =
-    typeof options.normalizeLeaderId === TYPEOF.FUNCTION ?
+    typeof options.normalizeLeaderId === 'function' ?
       options.normalizeLeaderId :
       null;
 

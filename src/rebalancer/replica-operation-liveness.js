@@ -20,13 +20,11 @@ import {
 } from './steps-history-parse-memo.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_SYNCING = 'syncing';
 const LOCAL_STR_CREATING = 'creating';
 const LOCAL_STR_OPERATION_ID = 'operation_id';
 const LOCAL_STR_OPERATIONID = 'operationId';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_ENTITY_TYPE = 'entity_type';
 const LOCAL_STR_ENTITYTYPE = 'entityType';
 const LOCAL_STR_ENTITY_ID = 'entity_id';
@@ -56,7 +54,7 @@ const OPERATION_TIMELINE_EVENT_STEP = 'step';
 const OPERATION_TIMELINE_EVENT_STATE = 'state';
 const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
-const MINUTES_PER_HOUR = NUM.THIRTY * NUM.TWO;
+const MINUTES_PER_HOUR = NUM.THIRTY * 2;
 const SERVICE_TYPE_PARTITION = 'partition';
 const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
 const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
@@ -86,7 +84,7 @@ const DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP = Object.freeze({
 function firstStringField(record, ...keys) {
   for (const key of keys) {
     const value = record?.[key];
-    if (typeof value === LOCAL_STR_STRING && value.length > NUM.ZERO) {
+    if (typeof value === LOCAL_STR_STRING && value.length > 0) {
       return value;
     }
   }
@@ -115,28 +113,28 @@ function parseStepsHistory(stepsHistoryRaw) {
 
 function inferPartitionIdFromReplicaId(replicaId) {
   const normalizedReplicaId = String(replicaId || '').trim();
-  if (normalizedReplicaId.length === NUM.ZERO) {
+  if (normalizedReplicaId.length === 0) {
     return null;
   }
   const match = normalizedReplicaId.match(/^(.*)-r\d+$/);
-  if (!match || typeof match[LOCAL_NUM_ONE] !== LOCAL_STR_STRING) {
+  if (!match || typeof match[1] !== LOCAL_STR_STRING) {
     return null;
   }
   const partitionId = match[1].trim();
-  return partitionId.length > NUM.ZERO ? partitionId : null;
+  return partitionId.length > 0 ? partitionId : null;
 }
 
 function inferNodeIdFromPeerAddress(address) {
   const normalizedAddress = String(address || '').trim();
-  if (normalizedAddress.length === NUM.ZERO) {
+  if (normalizedAddress.length === 0) {
     return null;
   }
   const slashIndex = normalizedAddress.indexOf('/');
-  if (slashIndex === NUM.ZERO) {
+  if (slashIndex === 0) {
     return null;
   }
-  if (slashIndex > NUM.ZERO) {
-    return normalizedAddress.slice(NUM.ZERO, slashIndex);
+  if (slashIndex > 0) {
+    return normalizedAddress.slice(0, slashIndex);
   }
   return normalizedAddress;
 }
@@ -146,9 +144,9 @@ function inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId) {
   const normalizedStepsHistory = Array.isArray(stepsHistory) ?
     stepsHistory :
     [];
-  for (let index = normalizedStepsHistory.length - NUM.ONE;
-    index >= NUM.ZERO;
-    index -= NUM.ONE) {
+  for (let index = normalizedStepsHistory.length - 1;
+    index >= 0;
+    index -= 1) {
     const entry = normalizedStepsHistory[index];
     if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       continue;
@@ -159,13 +157,13 @@ function inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId) {
     const peerAddresses = Array.isArray(entry.peerAddresses) ?
       entry.peerAddresses :
       [];
-    if (normalizedReplicaId.length > NUM.ZERO &&
-        replicaIds.length > NUM.ZERO &&
+    if (normalizedReplicaId.length > 0 &&
+        replicaIds.length > 0 &&
         replicaIds.length === peerAddresses.length) {
       const replicaIndex = replicaIds.findIndex((candidateReplicaId) =>
         String(candidateReplicaId || '').trim() === normalizedReplicaId,
       );
-      if (replicaIndex >= NUM.ZERO) {
+      if (replicaIndex >= 0) {
         const peerNodeId = inferNodeIdFromPeerAddress(
           peerAddresses[replicaIndex],
         );
@@ -201,7 +199,7 @@ function inferOperationTypeFromStepsHistory(
   const timelineSteps = new Set(
     normalizedStepsHistory.map((entry) =>
       String(entry?.step || '').toUpperCase(),
-    ).filter((step) => step.length > NUM.ZERO),
+    ).filter((step) => step.length > 0),
   );
   let sourceReplicaId = null;
   for (const entry of normalizedStepsHistory) {
@@ -223,7 +221,7 @@ function inferOperationTypeFromStepsHistory(
     return OperationType.REMOVE;
   }
   if (sourceReplicaId &&
-      normalizedReplicaId.length > NUM.ZERO &&
+      normalizedReplicaId.length > 0 &&
       sourceReplicaId !== normalizedReplicaId) {
     return OperationType.REPLACE;
   }
@@ -275,7 +273,7 @@ function resolveAgeMs(record, nowMs) {
   if (!Number.isFinite(referenceAtMs) || !Number.isFinite(nowMs)) {
     return null;
   }
-  return Math.max(NUM.ZERO, Math.floor(nowMs - referenceAtMs));
+  return Math.max(0, Math.floor(nowMs - referenceAtMs));
 }
 
 function normalizeReplicaOperationRecord(row, options = {}) {
@@ -354,8 +352,8 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       row,
       LOCAL_STR_OPERATION_ID,
       LOCAL_STR_OPERATIONID,
-    ) || LOCAL_STR_EMPTY),
-    type: type || inferredType || LOCAL_STR_EMPTY,
+    ) || ''),
+    type: type || inferredType || '',
     status,
     workflowStep,
     partitionGroupId,
@@ -378,18 +376,18 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       row,
       LOCAL_STR_SOURCE_NODE_ID,
       LOCAL_STR_SOURCENODEID,
-    ) || LOCAL_STR_EMPTY),
+    ) || ''),
     sourceReplicaId: String(firstStringField(
       row,
       LOCAL_STR_SOURCE_REPLICA_ID,
       LOCAL_STR_SOURCEREPLICAID,
-    ) || inferredSourceReplicaId || LOCAL_STR_EMPTY),
+    ) || inferredSourceReplicaId || ''),
     replicaId,
     targetNodeId: String(firstStringField(
       row,
       LOCAL_STR_TARGET_NODE_ID,
       LOCAL_STR_TARGETNODEID,
-    ) || inferredTargetNodeId || LOCAL_STR_EMPTY),
+    ) || inferredTargetNodeId || ''),
     createdAt,
     updatedAt,
     completedAt,
@@ -466,7 +464,7 @@ function resolveRecordOwnerNodeId(record) {
     );
 
   const isUnsettledReplace = type === OperationType.REPLACE &&
-    targetNodeId.length > NUM.ZERO &&
+    targetNodeId.length > 0 &&
     semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED &&
     semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
 
@@ -481,10 +479,10 @@ function resolveRecordOwnerNodeId(record) {
   if (isUnsettledReplace && isPriorityOrSystem) {
     return targetNodeId;
   }
-  if (sourceNodeId.length > NUM.ZERO) {
+  if (sourceNodeId.length > 0) {
     return sourceNodeId;
   }
-  if (targetNodeId.length > NUM.ZERO) {
+  if (targetNodeId.length > 0) {
     return targetNodeId;
   }
   return null;
@@ -515,7 +513,7 @@ function getOwnerNodeStartMs(ownerNodeId, options = {}) {
   // Fall back to local process start time
   const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
     process.uptime() :
-    NUM.ZERO;
+    0;
   return nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
 }
 
@@ -549,7 +547,7 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
     options.stepTimeoutMsByWorkflowStep :
     DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP;
   const timeoutMs = Number(timeoutByStep[workflowStep]);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return null;
   }
   const normalizedTimeoutMs = Math.floor(timeoutMs);
@@ -593,7 +591,7 @@ function isReplicaOperationStale(record, options = {}) {
   }
   const staleTimeoutLookbackMs = Number.isFinite(
     options.staleTimeoutLookbackMs,
-  ) && options.staleTimeoutLookbackMs > NUM.ZERO ?
+  ) && options.staleTimeoutLookbackMs > 0 ?
     Math.floor(options.staleTimeoutLookbackMs) :
     STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS;
   if (Number.isFinite(updatedAtMs) &&
@@ -638,9 +636,9 @@ function normalizeTimelineEventEntry(event, operationId, nowMs) {
     step,
     timestampMs,
     ageMs: Number.isFinite(nowMs) ?
-      Math.max(NUM.ZERO, Math.floor(nowMs - timestampMs)) :
+      Math.max(0, Math.floor(nowMs - timestampMs)) :
       null,
-    ...(Object.keys(metadata).length > NUM.ZERO ?
+    ...(Object.keys(metadata).length > 0 ?
       {metadata} :
       {}),
   };
@@ -652,7 +650,7 @@ function buildReplicaOperationTimeline(record, options = {}) {
   }
   const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
   const maxEntries = Number.isInteger(options.maxEntriesPerOperation) &&
-    options.maxEntriesPerOperation > NUM.ZERO ?
+    options.maxEntriesPerOperation > 0 ?
     options.maxEntriesPerOperation :
     DEFAULT_TIMELINE_ENTRIES_PER_OPERATION;
   const timeline = [];
@@ -688,8 +686,8 @@ function buildReplicaOperationTimeline(record, options = {}) {
   }
 
   timeline.sort((left, right) => {
-    const leftTs = Number(left?.timestampMs || NUM.ZERO);
-    const rightTs = Number(right?.timestampMs || NUM.ZERO);
+    const leftTs = Number(left?.timestampMs || 0);
+    const rightTs = Number(right?.timestampMs || 0);
     return leftTs - rightTs;
   });
   if (timeline.length <= maxEntries) {
@@ -700,7 +698,7 @@ function buildReplicaOperationTimeline(record, options = {}) {
 
 function summarizeReplicaOperationLiveness(rows = [], options = {}) {
   const scopedPartitionIds = options.partitionIds instanceof Set &&
-    options.partitionIds.size > NUM.ZERO ?
+    options.partitionIds.size > 0 ?
     options.partitionIds :
     null;
   const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
@@ -712,8 +710,8 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
   const operationTimelineById = {};
   const inFlightOperationIds = [];
   const visibleRows = [];
-  let inFlightCount = NUM.ZERO;
-  let staleInFlightCount = NUM.ZERO;
+  let inFlightCount = 0;
+  let staleInFlightCount = 0;
   let oldestInFlightAgeMs = null;
 
   for (const row of rows) {
@@ -724,11 +722,11 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
     }
     visibleRows.push(record);
     const statusKey = record.status || UNKNOWN_STATUS;
-    statusHistogram[statusKey] = (statusHistogram[statusKey] || NUM.ZERO) + NUM.ONE;
+    statusHistogram[statusKey] = (statusHistogram[statusKey] || 0) + 1;
     const semanticPhaseKey =
       record.semanticPhase || REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN;
     semanticPhaseHistogram[semanticPhaseKey] =
-      (semanticPhaseHistogram[semanticPhaseKey] || NUM.ZERO) + NUM.ONE;
+      (semanticPhaseHistogram[semanticPhaseKey] || 0) + 1;
 
     if (includeTimeline && record.operationId) {
       operationTimelineById[record.operationId] =
@@ -743,12 +741,12 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
       continue;
     }
 
-    inFlightCount += NUM.ONE;
+    inFlightCount += 1;
     inFlightOperationIds.push(record.operationId);
     partitionGroupInFlight[record.partitionGroupId] =
-      (partitionGroupInFlight[record.partitionGroupId] || NUM.ZERO) + NUM.ONE;
+      (partitionGroupInFlight[record.partitionGroupId] || 0) + 1;
     const stepKey = record.workflowStep || UNKNOWN_WORKFLOW_STEP;
-    stepHistogram[stepKey] = (stepHistogram[stepKey] || NUM.ZERO) + NUM.ONE;
+    stepHistogram[stepKey] = (stepHistogram[stepKey] || 0) + 1;
 
     if (Number.isFinite(record.ageMs)) {
       oldestInFlightAgeMs = oldestInFlightAgeMs === null ?
@@ -757,7 +755,7 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
     }
 
     if (isReplicaOperationStale(record, options)) {
-      staleInFlightCount += NUM.ONE;
+      staleInFlightCount += 1;
     }
   }
 

@@ -1,5 +1,3 @@
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Table Metadata Computer - Computes display metadata from cached partition data
@@ -85,7 +83,7 @@ export class TableMetadataComputer {
       return partitions.length;
     } catch (_err) {
       // Graceful degradation - return 0 on error
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
   }
 
@@ -98,7 +96,7 @@ export class TableMetadataComputer {
   computeReplicaFactor(tableId) {
     try {
       const partitions = this.cache.getPartitions({tableId});
-      if (partitions.length === LOCAL_NUM_ZERO) {
+      if (partitions.length === 0) {
         return null;
       }
 
@@ -107,17 +105,17 @@ export class TableMetadataComputer {
       for (const partition of partitions) {
         const count = partition.replica_count;
         if (count !== undefined && count !== null) {
-          counts[count] = (counts[count] || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE;
+          counts[count] = (counts[count] || 0) + 1;
         }
       }
 
       // Handle case where no partitions have replica_count
-      if (Object.keys(counts).length === LOCAL_NUM_ZERO) {
+      if (Object.keys(counts).length === 0) {
         return null;
       }
 
       // Return most common value
-      let maxCount = LOCAL_NUM_ZERO;
+      let maxCount = 0;
       let mostCommon = null;
       for (const [value, count] of Object.entries(counts)) {
         if (count > maxCount) {
@@ -141,11 +139,11 @@ export class TableMetadataComputer {
   computeTotalSize(tableId) {
     try {
       const partitions = this.cache.getPartitions({tableId});
-      if (partitions.length === LOCAL_NUM_ZERO) {
-        return LOCAL_NUM_ZERO;
+      if (partitions.length === 0) {
+        return 0;
       }
 
-      let totalSize = LOCAL_NUM_ZERO;
+      let totalSize = 0;
       let hasValidSize = false;
 
       for (const partition of partitions) {

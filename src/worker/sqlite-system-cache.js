@@ -23,8 +23,7 @@ const LOCAL_STR_MEMORY = ':memory:';
 const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
 const LOCAL_STR_SELECT = 'SELECT';
 const LOCAL_STR_TABLE = 'table';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_OBJECT = 'object';
 
 /**
@@ -192,7 +191,7 @@ class SQLiteSystemCache {
    */
   createDynamicTable(tableName, columns) {
     this.ensureInitialized();
-    if (!Array.isArray(columns) || columns.length === LOCAL_NUM_ZERO) {
+    if (!Array.isArray(columns) || columns.length === 0) {
       throw new Error(CACHE_ERROR_MSG.INVALID_DYNAMIC_TABLE_COLUMNS);
     }
 
@@ -206,7 +205,7 @@ class SQLiteSystemCache {
     }
 
     this.db.exec(
-      `CREATE TABLE IF NOT EXISTS "${tableName}" (${quotedColumns.join(LOCAL_STR_128KJ)})`,
+      `CREATE TABLE IF NOT EXISTS "${tableName}" (${quotedColumns.join(LOCAL_STR_COMMA_SPACE)})`,
     );
   }
 
@@ -305,7 +304,7 @@ class SQLiteSystemCache {
     }
 
     const columns = Object.keys(data).filter((col) => col !== pkColumn);
-    if (columns.length === LOCAL_NUM_ZERO) {
+    if (columns.length === 0) {
       return; // Nothing to update
     }
 
@@ -438,12 +437,12 @@ class SQLiteSystemCache {
     if (!this.initialized) {
       return {
         initialized: false,
-        tableCount: LOCAL_NUM_ZERO,
-        totalRecords: LOCAL_NUM_ZERO,
+        tableCount: 0,
+        totalRecords: 0,
       };
     }
 
-    let totalRecords = LOCAL_NUM_ZERO;
+    let totalRecords = 0;
     const tableCounts = {};
 
     for (const schema of SYSTEM_TABLE_SCHEMAS) {

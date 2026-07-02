@@ -51,8 +51,8 @@ function initializeConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageSoftPressurePercent:
         STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
       storageHardPressurePercent:
@@ -272,7 +272,7 @@ test('checkAdd - blocks when capacity accounting has no readable data source',
       STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
       STORAGE_ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
     ]);
-    t.same(result.ineligibleNodes[NUM.ZERO].reasonCodes, [
+    t.same(result.ineligibleNodes[0].reasonCodes, [
       ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
     ]);
     t.equal(
@@ -289,7 +289,7 @@ test('checkAdd - denies when budget would be exceeded', async (t) => {
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: NUM.HUNDRED + NUM.ONE,
+    estimatedBytes: NUM.HUNDRED + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
@@ -304,7 +304,7 @@ test('checkAdd - denies at hard pressure threshold', async (t) => {
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT + NUM.ONE,
+    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
@@ -319,7 +319,7 @@ test('checkAdd - allows below hard pressure threshold', async (t) => {
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT - NUM.ONE,
+    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT - 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.ALLOW);
@@ -343,7 +343,7 @@ test('checkAdd - throws when estimatedBytes is invalid', async (t) => {
   const {admission} = setupWithNode('node-1', NUM.THOUSAND);
 
   await t.rejects(
-    admission.checkAdd({targetNodeId: 'node-1', estimatedBytes: NUM.ZERO}),
+    admission.checkAdd({targetNodeId: 'node-1', estimatedBytes: 0}),
     {message: ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED},
   );
   t.end();
@@ -372,7 +372,7 @@ test('checkReplace - denies non-critical at hard pressure', async (t) => {
 
   const result = await admission.checkReplace({
     targetNodeId: 'node-1',
-    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT + NUM.ONE,
+    estimatedBytes: STORAGE_CAPACITY_DEFAULT.HARD_PRESSURE_PERCENT + 1,
     isCritical: false,
   });
 
@@ -438,7 +438,7 @@ test('checkSplit - denies when budget exceeded', async (t) => {
 
   const result = await admission.checkSplit({
     targetNodeId: 'node-1',
-    estimatedBytes: NUM.HUNDRED + NUM.ONE,
+    estimatedBytes: NUM.HUNDRED + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
@@ -1016,7 +1016,7 @@ test('checkAdd - accounts for active reservations', async (t) => {
     [COLUMN.RESERVATION_ID]: 'res-1',
     [COLUMN.TARGET_NODE_ID]: 'node-1',
     [COLUMN.ESTIMATED_BYTES]: NUM.FOUR * NUM.TEN,
-    [COLUMN.AMPLIFICATION_FACTOR]: NUM.ONE,
+    [COLUMN.AMPLIFICATION_FACTOR]: 1,
     [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
     [COLUMN.EXPIRES_AT]: now + NUM.THOUSAND * NUM.TEN,
   });
@@ -1081,7 +1081,7 @@ test('checkReplace - respects custom emergency headroom config',
     // Request 91 bytes -> 91% > 90% emergency max -> denied
     const result = await admission.checkReplace({
       targetNodeId: 'node-1',
-      estimatedBytes: NUM.NINE * NUM.TEN + NUM.ONE,
+      estimatedBytes: NUM.NINE * NUM.TEN + 1,
       isCritical: true,
     });
 
@@ -1102,8 +1102,8 @@ test('checkAdd - returns complete projected utilization', async (t) => {
 
   const proj = result.projectedUtilization;
   t.equal(proj.budgetBytes, NUM.THOUSAND);
-  t.equal(proj.currentUsedBytes, NUM.ZERO);
-  t.equal(proj.currentReservedBytes, NUM.ZERO);
+  t.equal(proj.currentUsedBytes, 0);
+  t.equal(proj.currentReservedBytes, 0);
   t.equal(proj.estimatedBytes, NUM.HUNDRED);
   t.equal(proj.projectedAllocatedBytes, NUM.HUNDRED);
   t.equal(proj.projectedAvailableBytes, NUM.THOUSAND - NUM.HUNDRED);

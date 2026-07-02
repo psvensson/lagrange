@@ -10,7 +10,6 @@ async function handleLatencyCdcPropagationMessage(
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    NUM,
     buildLatencyCdcPropagationResult,
     normalizeCauseId,
   } = runtimeDeps;
@@ -19,15 +18,15 @@ async function handleLatencyCdcPropagationMessage(
   const data = payload.data;
   const eventTimestamp =
     typeof payload.timestamp === 'string' &&
-    payload.timestamp.length > NUM.ZERO ?
+    payload.timestamp.length > 0 ?
       payload.timestamp :
       null;
   const causeId = normalizeCauseId(payload.causeId);
   const replayOnly = payload?.replayOnly === true;
   const relayDepth =
-    Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
+    Number.isInteger(payload.relayDepth) && payload.relayDepth >= 0 ?
       payload.relayDepth :
-      NUM.ZERO;
+      0;
   if (!tableName || !operation || !data) {
     throw new Error(
       MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_PAYLOAD,
@@ -101,7 +100,7 @@ async function handleLatencyCdcPropagationMessage(
     }
     await service.forwardCDCEventToLeader(tableName, operation, data, {
       timestamp: eventTimestamp || undefined,
-      relayDepth: relayDepth + NUM.ONE,
+      relayDepth: relayDepth + 1,
       causeId,
       replayOnly,
     });
@@ -142,17 +141,16 @@ async function handleLatencyCdcPropagationBatchMessage(
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    NUM,
     buildLatencyCdcPropagationResult,
   } = runtimeDeps;
   const events = Array.isArray(payload.events) ? payload.events : [];
   const replayOnly = payload?.replayOnly === true;
   const relayDepth =
-    Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
+    Number.isInteger(payload.relayDepth) && payload.relayDepth >= 0 ?
       payload.relayDepth :
-      NUM.ZERO;
+      0;
   if (
-    events.length === NUM.ZERO ||
+    events.length === 0 ||
     events.some(
       (event) => !event?.tableName || !event?.operation || !event?.data,
     )
@@ -217,7 +215,7 @@ async function handleLatencyCdcPropagationBatchMessage(
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
     await service.forwardCDCBatchToLeader(events, {
-      relayDepth: relayDepth + NUM.ONE,
+      relayDepth: relayDepth + 1,
       replayOnly,
     });
     return buildLatencyCdcPropagationResult({
@@ -251,16 +249,16 @@ async function applyCDCEvent(service, tableName, operation, data, options = {}) 
 }
 
 function normalizeCDCBatchEvents(service, runtimeDeps, events, options = {}) {
-  const {NUM, normalizeCauseId} = runtimeDeps;
+  const {normalizeCauseId} = runtimeDeps;
   return (Array.isArray(events) ? events : [])
     .filter((event) => event?.tableName && event?.operation && event?.data)
     .map((event) => {
       const timestamp =
         typeof event.timestamp === 'string' &&
-        event.timestamp.length > NUM.ZERO ?
+        event.timestamp.length > 0 ?
           event.timestamp :
           typeof options.timestamp === 'string' &&
-              options.timestamp.length > NUM.ZERO ?
+              options.timestamp.length > 0 ?
             options.timestamp :
             service.hlcClock.now().toString();
       const causeId = normalizeCauseId(event.causeId ?? options.causeId);

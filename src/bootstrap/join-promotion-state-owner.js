@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 import {NodeState} from '../node/node-lifecycle-state-machine.js';
 import {STARTUP_JOIN_MODE} from './rejoin-hints-constants.js';
 import {
@@ -9,7 +5,6 @@ import {
   normalizeJoinSchemaVersion,
 } from './join-schema-version-resolver.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const JOIN_PROMOTION_STATE = Object.freeze({
   OBSERVED: 'observed',
@@ -42,8 +37,8 @@ const JOIN_PROMOTION_REASON = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY)
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => typeof value === 'string' ? value.trim() : '')
+      .filter((value) => value.length > 0),
   )];
 }
 
@@ -61,7 +56,7 @@ function normalizeJoinPromotionRestoreState(value) {
 }
 
 function normalizeLifecycleState(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
@@ -85,8 +80,8 @@ function evaluateJoinPromotionState(context = {}) {
   );
   const inFlightReplicaOperations =
     Number.isFinite(context.inFlightReplicaOperations) ?
-      Math.max(NUM.ZERO, Math.floor(context.inFlightReplicaOperations)) :
-      NUM.ZERO;
+      Math.max(0, Math.floor(context.inFlightReplicaOperations)) :
+      0;
   const lifecycleState = normalizeLifecycleState(context.lifecycleState);
 
   if (!systemCacheHydrated) {
@@ -129,18 +124,18 @@ function evaluateJoinPromotionState(context = {}) {
   } else if (compareJoinSchemaVersions(
     appliedSchemaVersion,
     requiredSchemaVersion,
-  ) < NUM.ZERO) {
+  ) < 0) {
     reasons.push(JOIN_PROMOTION_REASON.SCHEMA_VERSION_LAG);
   }
 
   if (!topologyReady) {
     reasons.push(JOIN_PROMOTION_REASON.TOPOLOGY_NOT_READY);
   }
-  if (inFlightReplicaOperations > NUM.ZERO) {
+  if (inFlightReplicaOperations > 0) {
     reasons.push(JOIN_PROMOTION_REASON.IN_FLIGHT_REPLICA_OPERATIONS);
   }
 
-  if (reasons.length > NUM.ZERO) {
+  if (reasons.length > 0) {
     const state = routingReady === true && topologyReady === true ?
       JOIN_PROMOTION_STATE.CATCHING_UP :
       JOIN_PROMOTION_STATE.HYDRATED;

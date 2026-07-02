@@ -1,4 +1,4 @@
-import {NUM, SQL} from '../constants/index.js';
+import {SQL} from '../constants/index.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
   PARTITION_SPLIT_MIRROR_ORIGIN,
@@ -20,7 +20,6 @@ import {
   extractUpdateDataFromSQL,
 } from './partition-sql-parser.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const SPLIT_ROUTING_LITERAL = Object.freeze({
   OBJECT: 'object',
@@ -63,7 +62,7 @@ function extractRoutingKeyFromSql(entry, primaryKeyColumn, tableName) {
   if (entry?.sql) {
     const params = Array.isArray(entry.params) ? entry.params : [];
     if (
-      params.length > NUM.ZERO &&
+      params.length > 0 &&
       entry.sql.includes(PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
     ) {
       extracted = extractDataFromParameterizedSQL(
@@ -171,7 +170,7 @@ export function resolveSplitTargetPartitionId(value, metadata = {}) {
   ) ?
     metadata.targetPartitionIds :
     [];
-  if (value === null || value === void LOCAL_NUM_ZERO) {
+  if (value === null || value === void 0) {
     return rightPartitionId;
   }
   return value < metadata.splitKey ? leftPartitionId : rightPartitionId;
@@ -194,7 +193,7 @@ export function extractSplitRoutingKey(
     primaryKeyColumn,
     options.tableName,
   );
-  if (routingKey === null || routingKey === void LOCAL_NUM_ZERO) {
+  if (routingKey === null || routingKey === void 0) {
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
   }
   return routingKey;

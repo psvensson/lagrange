@@ -17,11 +17,9 @@ import {
   shutdownAdminRuntimeComposition,
 } from './entrypoint-runtime-admin-composition.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_VPBYI = 'Failed to publish node shutdown status';
-const LOCAL_STR_14077 = 'Shutdown already in progress, forcing process exit';
+const LOCAL_STR_FAILED_TO_PUBLISH_NODE_SHUTDOWN_STATUS = 'Failed to publish node shutdown status';
+const LOCAL_STR_SHUTDOWN_ALREADY_IN_PROGRESS_FORCING_PRO = 'Shutdown already in progress, forcing process exit';
 const LOCAL_STR_SHUTDOWN_STEP = 'Shutdown step timing';
 const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
   'Shutdown best-effort step exceeded time-box, continuing to exit';
@@ -36,7 +34,7 @@ const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';
 const LOCAL_STR_BEFOREEXIT = 'beforeExit';
 const LOCAL_STR_EXIT = 'exit';
-const LOCAL_STR_DA12T = 'uncaughtExceptionMonitor';
+const LOCAL_STR_UNCAUGHTEXCEPTIONMONITOR = 'uncaughtExceptionMonitor';
 const LOCAL_STR_UNHANDLEDREJECTION = 'unhandledRejection';
 
 /**
@@ -149,7 +147,7 @@ async function publishNodeShutdownStatus(heartbeatService, logger, nodeId) {
   try {
     await heartbeatService.reportNodeShutdown();
   } catch (error) {
-    logger.warn(LOCAL_STR_VPBYI, {
+    logger.warn(LOCAL_STR_FAILED_TO_PUBLISH_NODE_SHUTDOWN_STATUS, {
       nodeId,
       error: error.message,
     });
@@ -282,14 +280,14 @@ async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, ru
  * @return {(signal: string) => Promise<void>}
  */
 function createShutdownSignalHandler(options) {
-  let shutdownSignalCount = LOCAL_NUM_ZERO;
+  let shutdownSignalCount = 0;
   return async (signal) => {
     shutdownSignalCount++;
-    if (shutdownSignalCount > LOCAL_NUM_ONE) {
-      options.logger.warn(LOCAL_STR_14077, {
+    if (shutdownSignalCount > 1) {
+      options.logger.warn(LOCAL_STR_SHUTDOWN_ALREADY_IN_PROGRESS_FORCING_PRO, {
         signal,
       });
-      process.exit(LOCAL_NUM_ONE);
+      process.exit(1);
       return;
     }
 
@@ -368,13 +366,13 @@ function createShutdownSignalHandler(options) {
         step: 'total_clean_drain',
         elapsedMs: Date.now() - shutdownStartedAt,
       });
-      process.exit(LOCAL_NUM_ZERO);
+      process.exit(0);
     } catch (error) {
       options.logger.error(options.failureMessage, {
         signal,
         error: error.message,
       });
-      process.exit(LOCAL_NUM_ONE);
+      process.exit(1);
     }
   };
 }
@@ -427,7 +425,7 @@ function registerProcessLifecycleDiagnostics(logger, contextProvider) {
       ...resolveContext(),
     });
   });
-  process.on(LOCAL_STR_DA12T, (error, origin) => {
+  process.on(LOCAL_STR_UNCAUGHTEXCEPTIONMONITOR, (error, origin) => {
     logger.error(ENTRYPOINT_LOG_MSG.PROCESS_UNCAUGHT_EXCEPTION, {
       origin,
       error: error?.message || String(error),
@@ -453,7 +451,7 @@ function scheduleStartupLivenessPulse(options) {
   if (!logger || typeof logger.info !== LOCAL_STR_FUNCTION) {
     return;
   }
-  let pulseCount = LOCAL_NUM_ZERO;
+  let pulseCount = 0;
   const timer = setInterval(() => {
     pulseCount += 1;
     logger.info(ENTRYPOINT_LOG_MSG.STARTUP_LIVENESS_PULSE, {

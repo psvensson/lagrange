@@ -4,7 +4,6 @@ const {
   COLUMN,
   LEADER_GAP_REASON_OWNER_MISSING,
   LEADER_GAP_REASON_SERVICE_MISSING,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   TABLES,
@@ -25,16 +24,16 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       [];
     const replicaId =
       typeof serviceInfo?.replicaId === 'string' &&
-      serviceInfo.replicaId.length > NUM.ZERO ?
+      serviceInfo.replicaId.length > 0 ?
         serviceInfo.replicaId :
         null;
     const nodeId =
       typeof serviceInfo?.nodeId === 'string' &&
-      serviceInfo.nodeId.length > NUM.ZERO ?
+      serviceInfo.nodeId.length > 0 ?
         serviceInfo.nodeId :
         null;
     const normalizedAddress =
-      typeof address === 'string' && address.length > NUM.ZERO ? address : null;
+      typeof address === 'string' && address.length > 0 ? address : null;
     for (const service of serviceRows) {
       if (
         replicaId &&
@@ -118,7 +117,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       resolvedRoutingOptions,
     );
     const services = routingSnapshot.routableServices;
-    if (services.length === NUM.ZERO) {
+    if (services.length === 0) {
       this.logPartitionRoutingDenial(routingSnapshot);
       return {
         candidates: [],
@@ -176,7 +175,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       [];
     if (!forRead) {
       if (!canonicalLeaderNodeId) {
-        if (bootstrapLeaderServices.length > NUM.ZERO) {
+        if (bootstrapLeaderServices.length > 0) {
           bootstrapLeaderServices.forEach(addService);
           return {
             candidates,
@@ -188,7 +187,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
             orderedServices,
             resolvedRoutingOptions,
           ).forEach(addService);
-          if (candidates.length > NUM.ZERO) {
+          if (candidates.length > 0) {
             return {
               candidates,
               routingSnapshot,
@@ -205,13 +204,13 @@ const queryExecutorPartitionRoutingCandidateMethods = {
           routingSnapshot,
         };
       }
-      if (canonicalLeaderServices.length === NUM.ZERO) {
+      if (canonicalLeaderServices.length === 0) {
         if (recoveryRoutingContract.recoveryCandidateWidening === true) {
           this.orderRecoveryCandidateServices(
             orderedServices,
             resolvedRoutingOptions,
           ).forEach(addService);
-          if (candidates.length > NUM.ZERO) {
+          if (candidates.length > 0) {
             return {
               candidates,
               routingSnapshot,
@@ -230,7 +229,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         };
       }
       canonicalLeaderServices.forEach(addService);
-      if (candidates.length === NUM.ZERO) {
+      if (candidates.length === 0) {
         // Canonical leader rows are present but were quarantined after runtime
         // no-handler witnesses. Try other live replicas to follow redirects.
         orderedServices.forEach(addService);
@@ -294,29 +293,29 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       const leftPreferred = leftGroupId === localGroupId;
       const rightPreferred = rightGroupId === localGroupId;
       if (leftPreferred && !rightPreferred) {
-        return NUM.NEGATIVE_ONE;
+        return -1;
       }
       if (!leftPreferred && rightPreferred) {
-        return NUM.ONE;
+        return 1;
       }
-      return NUM.ZERO;
+      return 0;
     });
   },
 
   resolveRecoveryCandidateSelectionOffset(services = [], selectionKey = null) {
-    const serviceCount = Array.isArray(services) ? services.length : NUM.ZERO;
+    const serviceCount = Array.isArray(services) ? services.length : 0;
     if (
-      serviceCount <= NUM.ONE ||
+      serviceCount <= 1 ||
       typeof selectionKey !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      selectionKey.length === NUM.ZERO
+      selectionKey.length === 0
     ) {
-      return NUM.ZERO;
+      return 0;
     }
-    let hash = NUM.ZERO;
+    let hash = 0;
     for (
-      let index = Math.min(NUM.ONE, selectionKey.length);
+      let index = Math.min(1, selectionKey.length);
       index < selectionKey.length;
-      index += NUM.ONE
+      index += 1
     ) {
       hash += selectionKey.charCodeAt(index);
     }
@@ -328,12 +327,12 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       services,
       routingOptions?.recoveryCandidateSelectionKey || null,
     );
-    if (offset === NUM.ZERO) {
+    if (offset === 0) {
       return services;
     }
     return [
       ...services.slice(offset),
-      ...services.slice(NUM.ZERO, offset),
+      ...services.slice(0, offset),
     ];
   },
 };

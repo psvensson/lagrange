@@ -6,9 +6,6 @@
  * - proxy cache reads (SystemCacheProxy-compatible)
  */
 
-import {TYPEOF} from '../constants/index.js';
-
-const LOCAL_NUM_ZERO = 0;
 
 const SYSTEM_CACHE_CLIENT_MODE = Object.freeze({
   DIRECT: 'direct',
@@ -39,13 +36,13 @@ function createDirectSystemCacheClient(readOnlyCache) {
     count: (tableName) => readOnlyCache.count(tableName),
     getTableNames: () => readOnlyCache.getTableNames(),
     onCacheChange: (listener) => {
-      if (typeof listener !== TYPEOF.FUNCTION) {
+      if (typeof listener !== 'function') {
         throw new Error(SYSTEM_CACHE_CLIENT_ERROR_MSG.INVALID_LISTENER);
       }
       return readOnlyCache.onCacheChange(listener);
     },
     offCacheChange: (listener) => {
-      if (typeof listener !== TYPEOF.FUNCTION) {
+      if (typeof listener !== 'function') {
         throw new Error(SYSTEM_CACHE_CLIENT_ERROR_MSG.INVALID_LISTENER);
       }
       return readOnlyCache.offCacheChange(listener);
@@ -63,14 +60,14 @@ function createProxySystemCacheClient(systemCacheProxy) {
     getAll: async (tableName) => systemCacheProxy.getAll(tableName),
     has: async (tableName, key) => systemCacheProxy.has(tableName, key),
     count: async (tableName) => {
-      if (typeof systemCacheProxy.count === TYPEOF.FUNCTION) {
+      if (typeof systemCacheProxy.count === 'function') {
         return systemCacheProxy.count(tableName);
       }
       const records = await systemCacheProxy.getAll(tableName);
-      return Array.isArray(records) ? records.length : LOCAL_NUM_ZERO;
+      return Array.isArray(records) ? records.length : 0;
     },
     getTableNames: async () => {
-      if (typeof systemCacheProxy.getTableNames === TYPEOF.FUNCTION) {
+      if (typeof systemCacheProxy.getTableNames === 'function') {
         return systemCacheProxy.getTableNames();
       }
       return [];

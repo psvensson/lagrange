@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import {readdir, readFile, rename, stat, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
 import {
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
@@ -90,18 +90,18 @@ const SQL_TABLE_EXISTS =
 const SQL_SELECT_NODES =
   `SELECT ${COLUMN.NODE_ID} AS node_id, ` +
   `${COLUMN.NODE_ADDRESS} AS node_address FROM ${TABLES.NODES}`;
-let rejoinHintsTempSequence = NUM.ZERO;
+let rejoinHintsTempSequence = 0;
 
 function normalizeAddress(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmed = value.trim();
-  return trimmed.length > NUM.ZERO ? trimmed : null;
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeNodeCount(nodeRows) {
-  return Array.isArray(nodeRows) ? nodeRows.length : NUM.ZERO;
+  return Array.isArray(nodeRows) ? nodeRows.length : 0;
 }
 
 function normalizeNodeRole(value) {
@@ -118,8 +118,8 @@ function normalizeNodeRole(value) {
 
 function parseClusterNodeCount(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < NUM.ZERO) {
-    return NUM.ZERO;
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
   }
   return Math.floor(parsed);
 }
@@ -155,7 +155,7 @@ function deriveRequiresPeerRejoin(options = {}) {
   return normalizeNodeRole(options.nodeRole) === REJOIN_ROLE_JOINER ||
     parseClusterNodeCount(options.clusterNodeCount) >
       MULTI_NODE_CLUSTER_THRESHOLD ||
-    normalizePeerAddresses(options.peerAddresses).length > NUM.ZERO;
+    normalizePeerAddresses(options.peerAddresses).length > 0;
 }
 
 function extractPeerAddresses(nodeRows, nodeId, nodeAddress) {
@@ -164,7 +164,7 @@ function extractPeerAddresses(nodeRows, nodeId, nodeAddress) {
 
 function buildRejoinHintsSnapshot(options = {}) {
   const systemTableCache = options.systemTableCache || null;
-  const nodeRows = typeof systemTableCache?.getAll === TYPEOF.FUNCTION ?
+  const nodeRows = typeof systemTableCache?.getAll === 'function' ?
     systemTableCache.getAll(TABLES.NODES) || [] :
     [];
   const localNodeId = normalizeAddress(options.nodeId);
@@ -188,7 +188,7 @@ function buildRejoinHintsSnapshot(options = {}) {
       clusterNodeCount,
       peerAddresses,
     }),
-    updatedAt: typeof options.now === TYPEOF.FUNCTION ?
+    updatedAt: typeof options.now === 'function' ?
       options.now() :
       Date.now(),
   };
@@ -205,9 +205,9 @@ function buildBootstrapRejoinHintsSnapshot(options = {}) {
   );
   const clusterNodeCount = Math.max(
     parseClusterNodeCount(options.clusterNodeCount),
-    peerAddresses.length > NUM.ZERO ?
+    peerAddresses.length > 0 ?
       RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER :
-      NUM.ZERO,
+      0,
   );
 
   return {
@@ -221,7 +221,7 @@ function buildBootstrapRejoinHintsSnapshot(options = {}) {
       clusterNodeCount,
       peerAddresses,
     }),
-    updatedAt: typeof options.now === TYPEOF.FUNCTION ?
+    updatedAt: typeof options.now === 'function' ?
       options.now() :
       Date.now(),
   };
@@ -266,14 +266,14 @@ async function readRejoinHints(dataDir) {
   try {
     const raw = await readFile(hintsPath, UTF8_ENCODING);
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === TYPEOF.OBJECT ? parsed : null;
+    return parsed && typeof parsed === 'object' ? parsed : null;
   } catch (_error) {
     return null;
   }
 }
 
 function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
-  if (!hints || typeof hints !== TYPEOF.OBJECT) {
+  if (!hints || typeof hints !== 'object') {
     return false;
   }
 
@@ -328,7 +328,7 @@ async function listNodesReplicaDbPaths(dataDir) {
         const metadata = await stat(dbPath);
         dbPaths.push({
           dbPath,
-          modifiedAt: Number(metadata?.mtimeMs) || NUM.ZERO,
+          modifiedAt: Number(metadata?.mtimeMs) || 0,
         });
       } catch (_error) {
         continue;
@@ -363,13 +363,13 @@ async function readDurableNodesTableSnapshot(options = {}) {
   const normalizedNodeAddress = normalizeAddress(options.nodeAddress);
   const dbPaths = await listNodesReplicaDbPaths(options.dataDir);
   const peerAddresses = new Set();
-  let clusterNodeCount = NUM.ZERO;
+  let clusterNodeCount = 0;
   let hasAnyDurableNodesTable = false;
   let matchedLocalIdentity = false;
 
   for (const dbPath of dbPaths) {
     const rows = readNodesRowsFromReplicaDb(dbPath);
-    if (!Array.isArray(rows) || rows.length === NUM.ZERO) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       continue;
     }
     hasAnyDurableNodesTable = true;
@@ -427,11 +427,11 @@ function choosePreferredPeerAddress(peerAddresses, preferredPeerAddresses) {
       return peerAddress;
     }
   }
-  return peerAddresses[NUM.ZERO] || null;
+  return peerAddresses[0] || null;
 }
 
 async function probeRecoverablePeerAddress(peerAddresses, probePeerAddress) {
-  if (typeof probePeerAddress !== TYPEOF.FUNCTION) {
+  if (typeof probePeerAddress !== 'function') {
     return null;
   }
   for (const peerAddress of peerAddresses) {
@@ -484,7 +484,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
   const clusterNodeCount = Math.max(
     hintsIdentityMatched ?
       parseClusterNodeCount(hints?.clusterNodeCount) :
-      NUM.ZERO,
+      0,
     durableSnapshot.clusterNodeCount,
   );
   const localNodeRole = hintsIdentityMatched ?
@@ -500,7 +500,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
   );
   const durableStateDetected = hintsIdentityMatched ||
     durableSnapshot.hasDurableNodesTable ||
-    clusterNodeCount > NUM.ZERO;
+    clusterNodeCount > 0;
   const clusterIncarnationFence = buildClusterIncarnationFence({
     durableStateDetected,
     localIdentityMatched:
@@ -543,7 +543,7 @@ function resolveAutoRejoinDecisionState(context = {}) {
   if (context.selectedPeerAddress) {
     return AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER;
   }
-  if (context.peerAddresses.length > NUM.ZERO) {
+  if (context.peerAddresses.length > 0) {
     return AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER;
   }
   if (context.requiresPeerRejoin) {
@@ -630,7 +630,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_JOIN,
       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
       peerAddress: context.preferredPeerAddress,
-      source: context.hintPeerAddresses.length > NUM.ZERO ?
+      source: context.hintPeerAddresses.length > 0 ?
         REJOIN_SOURCE.REJOIN_HINTS :
         REJOIN_SOURCE.DURABLE_NODES_TABLE,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -698,20 +698,20 @@ class RejoinHintsPersistenceService {
     this.nodeAddress = options.nodeAddress || null;
     this.nodeRole = options.nodeRole || null;
     this.getSystemTableCache =
-      typeof options.getSystemTableCache === TYPEOF.FUNCTION ?
+      typeof options.getSystemTableCache === 'function' ?
         options.getSystemTableCache :
         () => null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.logger = options.logger || console;
     this.writeIntervalMs = Number.isFinite(options.writeIntervalMs) &&
-      options.writeIntervalMs > NUM.ZERO ?
+      options.writeIntervalMs > 0 ?
       Math.floor(options.writeIntervalMs) :
       REJOIN_HINTS_WRITE_INTERVAL_MS;
     this.timer = null;
     this.persistChain = Promise.resolve();
-    this.persistSequence = NUM.ZERO;
+    this.persistSequence = 0;
   }
 
   start() {
@@ -721,7 +721,7 @@ class RejoinHintsPersistenceService {
     this.timer = setInterval(() => {
       void this.persistNow();
     }, this.writeIntervalMs);
-    if (typeof this.timer.unref === TYPEOF.FUNCTION) {
+    if (typeof this.timer.unref === 'function') {
       this.timer.unref();
     }
     void this.persistNow();

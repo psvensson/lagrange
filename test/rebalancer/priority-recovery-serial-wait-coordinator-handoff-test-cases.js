@@ -3,7 +3,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
   dependencies,
 }) {
   const {
-    NUM,
     PRIORITY_RECOVERY_ACTUATION_STATE,
     PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -95,32 +94,32 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
         ) {
-          const operationId = params[NUM.ZERO];
+          const operationId = params[0];
           return {
             success: true,
             rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
             affectedRows:
-            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+            operationId === TEST_OPERATION_ID ? 1 : 0,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         }
         return {
           success: true,
           rows: [],
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     };
@@ -185,7 +184,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
         .getOperationsByEntityAuthoritativeObservation = async () => {
           return Object.freeze({
             state: 'present',
-            operationCount: NUM.ONE,
+            operationCount: 1,
             operations: Object.freeze([operation]),
             deferredOutcome: null,
             retryAfterMs: null,
@@ -234,17 +233,17 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       );
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         'serial-wait PENDING rows should wake the remote owner and keep bounded verification',
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         TEST_REPLICA_DISPATCH_TARGET,
         'serial-wait re-entry should use the canonical remote dispatch ingress',
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         'serial-wait re-entry should arm one verification retry',
       );
     } finally {
@@ -355,12 +354,12 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       t.equal(
         coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
           .size,
-        NUM.ZERO,
+        0,
         TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER,
       );
       t.equal(
         deferredTimers.length,
-        NUM.ZERO,
+        0,
         TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER,
       );
       t.equal(
@@ -531,7 +530,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
           TEST_TARGET_NODE_ID,
         ],
         pendingAckNodeIds: TEST_EMPTY_LIST,
-        pendingAckCount: NUM.ZERO,
+        pendingAckCount: 0,
       },
       priorityPartitionSummary: {
         blockedPartitions: [{

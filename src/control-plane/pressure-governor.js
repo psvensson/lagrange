@@ -1,4 +1,4 @@
-import {METRICS_LOG_TAG, NUM, TYPEOF} from '../constants/index.js';
+import {METRICS_LOG_TAG} from '../constants/index.js';
 const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   DEFAULT: 'default',
   NONE: 'none',
@@ -77,16 +77,16 @@ function normalizeWorkClass(workClass) {
   return PRESSURE_WORK_CLASS.INTERACTIVE;
 }
 function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     PRESSURE_GOVERNOR_DEFAULT.RETRY_AFTER_MS;
 }
 function normalizeNodeId(nodeId) {
-  if (typeof nodeId !== TYPEOF.STRING) {
+  if (typeof nodeId !== 'string') {
     return PRESSURE_GOVERNOR_LITERAL.DEFAULT;
   }
   const normalized = nodeId.trim();
-  return normalized.length > NUM.ZERO ? normalized : PRESSURE_GOVERNOR_LITERAL.DEFAULT;
+  return normalized.length > 0 ? normalized : PRESSURE_GOVERNOR_LITERAL.DEFAULT;
 }
 function normalizeResourceKeys(resourceKeys) {
   if (!Array.isArray(resourceKeys)) {
@@ -95,7 +95,7 @@ function normalizeResourceKeys(resourceKeys) {
   return [
     ...new Set(
       resourceKeys.filter((resourceKey) => {
-        return typeof resourceKey === TYPEOF.STRING && resourceKey.length > NUM.ZERO;
+        return typeof resourceKey === 'string' && resourceKey.length > 0;
       }),
     ),
   ];
@@ -105,14 +105,14 @@ function buildNoPressureSummary(sensor = PRESSURE_GOVERNOR_LITERAL.NONE) {
     sensor,
     capacityPartition: PRESSURE_CAPACITY_PARTITION.SHARED,
     backpressured: false,
-    saturatedNodeCount: NUM.ZERO,
-    totalPending: NUM.ZERO,
-    totalPendingCritical: NUM.ZERO,
-    totalPendingCriticalReserveEligible: NUM.ZERO,
-    totalPendingBackground: NUM.ZERO,
+    saturatedNodeCount: 0,
+    totalPending: 0,
+    totalPendingCritical: 0,
+    totalPendingCriticalReserveEligible: 0,
+    totalPendingBackground: 0,
     criticalReserveExhausted: false,
     readinessReserveExhausted: false,
-    maxPendingUtilization: NUM.ZERO,
+    maxPendingUtilization: 0,
   });
 }
 function buildTransportPressureSummary(
@@ -125,25 +125,25 @@ function buildTransportPressureSummary(
     backpressured: summary?.backpressured === true,
     saturatedNodeCount: Number.isFinite(summary?.saturatedNodeCount) ?
       summary.saturatedNodeCount :
-      NUM.ZERO,
-    totalPending: Number.isFinite(summary?.totalPending) ? summary.totalPending : NUM.ZERO,
+      0,
+    totalPending: Number.isFinite(summary?.totalPending) ? summary.totalPending : 0,
     totalPendingCritical: Number.isFinite(summary?.totalPendingCritical) ?
       summary.totalPendingCritical :
-      NUM.ZERO,
+      0,
     totalPendingCriticalReserveEligible:
       Number.isFinite(summary?.totalPendingCriticalReserveEligible) ?
         summary.totalPendingCriticalReserveEligible :
         Number.isFinite(summary?.totalPendingCritical) ?
           summary.totalPendingCritical :
-          NUM.ZERO,
+          0,
     totalPendingBackground: Number.isFinite(summary?.totalPendingBackground) ?
       summary.totalPendingBackground :
-      NUM.ZERO,
+      0,
     criticalReserveExhausted: summary?.criticalReserveExhausted === true,
     readinessReserveExhausted: summary?.readinessReserveExhausted === true,
     maxPendingUtilization: Number.isFinite(summary?.maxPendingUtilization) ?
       summary.maxPendingUtilization :
-      NUM.ZERO,
+      0,
   });
 }
 function resolveCapacityPartition(
@@ -156,7 +156,7 @@ function resolveCapacityPartition(
   const hasQueryPlaneResource =
     resourceKeys.some((resourceKey) => {
       return (
-        typeof resourceKey === TYPEOF.STRING &&
+        typeof resourceKey === 'string' &&
         (resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY_PLANE) ||
           resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY))
       );
@@ -164,7 +164,7 @@ function resolveCapacityPartition(
   const hasControlPlaneResource =
     resourceKeys.some((resourceKey) => {
       return (
-        typeof resourceKey === TYPEOF.STRING &&
+        typeof resourceKey === 'string' &&
         resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE)
       );
     });
@@ -196,7 +196,7 @@ function resolveCapacityPartition(
   return PRESSURE_CAPACITY_PARTITION.SHARED;
 }
 function normalizeQueueStat(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ? value : NUM.ZERO;
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 function hasBootstrapControlPlaneResource(resourceKeys = []) {
   return normalizeResourceKeys(resourceKeys).some((resourceKey) => {
@@ -213,7 +213,7 @@ function isCriticalReserveExhausted(queue = {}, capacityPartition) {
     normalizeQueueStat(queue.pendingCriticalReserveEligible) :
     normalizeQueueStat(queue.pendingCritical);
   const criticalReserve = normalizeQueueStat(queue.criticalReserve);
-  return criticalReserve > NUM.ZERO && pendingCritical >= criticalReserve;
+  return criticalReserve > 0 && pendingCritical >= criticalReserve;
 }
 function isReadinessReserveExhausted(queue = {}, capacityPartition) {
   if (capacityPartition !== PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
@@ -221,27 +221,27 @@ function isReadinessReserveExhausted(queue = {}, capacityPartition) {
   }
   const pendingReadiness = normalizeQueueStat(queue.pendingReadiness);
   const readinessReserve = normalizeQueueStat(queue.readinessReserve);
-  return readinessReserve > NUM.ZERO && pendingReadiness >= readinessReserve;
+  return readinessReserve > 0 && pendingReadiness >= readinessReserve;
 }
 function isPartitionBackpressured(queue = {}, capacityPartition) {
   const pending = normalizeQueueStat(queue.pending);
   const maxPending = normalizeQueueStat(queue.maxPending);
   const pendingBackground = normalizeQueueStat(queue.pendingBackground);
   const backgroundPendingLimit = normalizeQueueStat(queue.backgroundPendingLimit);
-  if (maxPending > NUM.ZERO && pending >= maxPending) {
+  if (maxPending > 0 && pending >= maxPending) {
     return true;
   }
   if (capacityPartition === PRESSURE_CAPACITY_PARTITION.QUERY_PLANE) {
     return (
-      pending > NUM.ZERO &&
-      backgroundPendingLimit > NUM.ZERO &&
+      pending > 0 &&
+      backgroundPendingLimit > 0 &&
       pendingBackground >= backgroundPendingLimit
     );
   }
   if (capacityPartition === PRESSURE_CAPACITY_PARTITION.BACKGROUND) {
     return (
-      pending > NUM.ZERO &&
-      backgroundPendingLimit > NUM.ZERO &&
+      pending > 0 &&
+      backgroundPendingLimit > 0 &&
       pendingBackground >= backgroundPendingLimit
     );
   }
@@ -252,14 +252,14 @@ function isPartitionBackpressured(queue = {}, capacityPartition) {
 }
 function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPartition) {
   const outboundQueues = routerStats?.outboundQueues || {};
-  let saturatedNodeCount = NUM.ZERO;
-  let totalPending = NUM.ZERO;
-  let totalPendingCritical = NUM.ZERO;
-  let totalPendingCriticalReserveEligible = NUM.ZERO;
-  let totalPendingBackground = NUM.ZERO;
+  let saturatedNodeCount = 0;
+  let totalPending = 0;
+  let totalPendingCritical = 0;
+  let totalPendingCriticalReserveEligible = 0;
+  let totalPendingBackground = 0;
   let criticalReserveExhausted = false;
   let readinessReserveExhausted = false;
-  let maxPendingUtilization = NUM.ZERO;
+  let maxPendingUtilization = 0;
   for (const queue of Object.values(outboundQueues)) {
     const pending = normalizeQueueStat(queue.pending);
     const pendingCritical = normalizeQueueStat(queue.pendingCritical);
@@ -274,7 +274,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
       capacityPartition,
     );
     if (isPartitionBackpressured(queue, capacityPartition)) {
-      saturatedNodeCount += NUM.ONE;
+      saturatedNodeCount += 1;
     }
     if (queueCriticalReserveExhausted) {
       criticalReserveExhausted = true;
@@ -286,13 +286,13 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
     totalPendingCritical += pendingCritical;
     totalPendingCriticalReserveEligible += pendingCriticalReserveEligible;
     totalPendingBackground += pendingBackground;
-    if (maxPending > NUM.ZERO) {
+    if (maxPending > 0) {
       maxPendingUtilization = Math.max(maxPendingUtilization, pending / maxPending);
     }
   }
   return buildTransportPressureSummary(
     {
-      backpressured: saturatedNodeCount > NUM.ZERO,
+      backpressured: saturatedNodeCount > 0,
       saturatedNodeCount,
       totalPending,
       totalPendingCritical,
@@ -306,7 +306,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
   );
 }
 function shouldUseTransportSensor(resourceKeys) {
-  if (!Array.isArray(resourceKeys) || resourceKeys.length === NUM.ZERO) {
+  if (!Array.isArray(resourceKeys) || resourceKeys.length === 0) {
     return true;
   }
   return resourceKeys.some((resourceKey) => {
@@ -315,7 +315,7 @@ function shouldUseTransportSensor(resourceKeys) {
     });
   });
 }
-function buildDecision(action, reason, summary, retryAfterMs = NUM.ZERO) {
+function buildDecision(action, reason, summary, retryAfterMs = 0) {
   return Object.freeze({
     action,
     reason,
@@ -410,21 +410,21 @@ function buildPressureAdmissionFailure(decision, overrides = {}) {
     errorCode: overrides.errorCode || PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED,
     pressureAction: decision?.action || PRESSURE_GOVERNOR_ACTION.REJECT,
     pressureReason: decision?.reason || PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-    retryAfterMs: Number.isFinite(decision?.retryAfterMs) ? decision.retryAfterMs : NUM.ZERO,
+    retryAfterMs: Number.isFinite(decision?.retryAfterMs) ? decision.retryAfterMs : 0,
     pressureSummary: summary,
     rows: Array.isArray(overrides.rows) ? overrides.rows : [],
     tableName: overrides.tableName || null,
   };
 }
 const GLOBAL_LAST_EMIT_TIMES = new Map();
-let globalLastEmitTime = NUM.ZERO;
+let globalLastEmitTime = 0;
 const EMIT_PRESSURE_METRIC_LIMIT_MS = 1000;
 const EMIT_PRESSURE_GLOBAL_LIMIT_MS = 500;
 
 class PressureGovernor {
   constructor(options = {}) {
     this.nodeId = normalizeNodeId(options.nodeId);
-    this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.messageRouter = options.messageRouter || null;
     this.logger = options.logger || null;
     this.lastEmitTimes = new Map();
@@ -442,13 +442,13 @@ class PressureGovernor {
   static clearSharedForTests() {
     SHARED_GOVERNORS.clear();
     GLOBAL_LAST_EMIT_TIMES.clear();
-    globalLastEmitTime = NUM.ZERO;
+    globalLastEmitTime = 0;
   }
   configure(options = {}) {
     if (Object.prototype.hasOwnProperty.call(options, PRESSURE_GOVERNOR_LITERAL.MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (typeof options.now === TYPEOF.FUNCTION) {
+    if (typeof options.now === 'function') {
       this.now = options.now;
     }
     if (Object.prototype.hasOwnProperty.call(options, PRESSURE_GOVERNOR_LITERAL.LOGGER)) {
@@ -457,7 +457,7 @@ class PressureGovernor {
   }
 
   emitPressureMetric(request = {}, decision = null) {
-    if (typeof this.logger?.info !== TYPEOF.FUNCTION || !decision) {
+    if (typeof this.logger?.info !== 'function' || !decision) {
       return;
     }
     const summary = decision.summary || buildNoPressureSummary();
@@ -466,15 +466,15 @@ class PressureGovernor {
     }
     const key = `${this.nodeId}:${decision.action}:${decision.reason}`;
     const now = this.now();
-    let lastEmit = GLOBAL_LAST_EMIT_TIMES.get(key) || NUM.ZERO;
-    let lastGlobalEmit = globalLastEmitTime || NUM.ZERO;
+    let lastEmit = GLOBAL_LAST_EMIT_TIMES.get(key) || 0;
+    let lastGlobalEmit = globalLastEmitTime || 0;
     if (now < lastEmit) {
       GLOBAL_LAST_EMIT_TIMES.delete(key);
-      lastEmit = NUM.ZERO;
+      lastEmit = 0;
     }
     if (now < lastGlobalEmit) {
-      globalLastEmitTime = NUM.ZERO;
-      lastGlobalEmit = NUM.ZERO;
+      globalLastEmitTime = 0;
+      lastGlobalEmit = 0;
     }
     if (
       now - lastEmit < EMIT_PRESSURE_METRIC_LIMIT_MS ||
@@ -509,7 +509,7 @@ class PressureGovernor {
         criticalReserveExhausted: summary.criticalReserveExhausted === true,
         maxPendingUtilization: Number.isFinite(summary.maxPendingUtilization) ?
           summary.maxPendingUtilization :
-          NUM.ZERO,
+          0,
       });
     } catch (_error) {
       // Metrics logging must not change admission behavior.
@@ -528,13 +528,13 @@ class PressureGovernor {
     if (!shouldUseTransportSensor(normalizedKeys)) {
       return buildNoPressureSummary();
     }
-    if (typeof this.messageRouter?.getStats === TYPEOF.FUNCTION) {
+    if (typeof this.messageRouter?.getStats === 'function') {
       return buildPartitionedTransportPressureSummary(
         this.messageRouter.getStats(),
         capacityPartition,
       );
     }
-    if (typeof this.messageRouter?.getOutboundPressureSummary !== TYPEOF.FUNCTION) {
+    if (typeof this.messageRouter?.getOutboundPressureSummary !== 'function') {
       return buildTransportPressureSummary(
         buildNoPressureSummary(PRESSURE_GOVERNOR_LITERAL.TRANSPORT_OUTBOUND),
         capacityPartition,
@@ -574,7 +574,7 @@ class PressureGovernor {
         outcome.reason,
         summary,
         outcome.action === PRESSURE_GOVERNOR_ACTION.ALLOW ?
-          NUM.ZERO :
+          0 :
           request.retryAfterMs,
       ),
     );

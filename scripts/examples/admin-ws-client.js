@@ -9,7 +9,7 @@ import {
 
 const LOCAL_STR_OPEN = 'open';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_STR_3FM1D = 'Admin examples socket closed';
+const LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED = 'Admin examples socket closed';
 const LOCAL_STR_MESSAGE = 'message';
 const LOCAL_STR_CLOSE = 'close';
 
@@ -70,7 +70,7 @@ class AdminWsClient {
    * @return {Promise<void>}
    */
   async close() {
-    this._rejectPending(LOCAL_STR_3FM1D);
+    this._rejectPending(LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED);
     if (this.socket) {
       try {
         this.socket.close();
@@ -165,7 +165,7 @@ class AdminWsClient {
     });
 
     socket.on(LOCAL_STR_CLOSE, () => {
-      this._rejectPending(LOCAL_STR_3FM1D);
+      this._rejectPending(LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED);
       this._resetSocket();
     });
   }

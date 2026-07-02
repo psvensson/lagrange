@@ -1,7 +1,5 @@
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 const INVARIANT_SEVERITY = Object.freeze({
   CRITICAL: 'critical',
@@ -72,7 +70,7 @@ function freezeDefinition(definition) {
   return Object.freeze({
     ...definition,
     expected: Object.freeze({
-      condition: String(definition.expected?.condition || LOCAL_STR_EMPTY),
+      condition: String(definition.expected?.condition || ''),
     }),
   });
 }
@@ -355,7 +353,7 @@ function clonePayload(payload) {
 }
 
 function getInvariantDefinition(invariantId) {
-  if (typeof invariantId !== LOCAL_STR_STRING || invariantId.length === LOCAL_NUM_ZERO) {
+  if (typeof invariantId !== LOCAL_STR_STRING || invariantId.length === 0) {
     return null;
   }
   return INVARIANT_CATALOG[invariantId] || null;
@@ -364,26 +362,26 @@ function getInvariantDefinition(invariantId) {
 function createInvariantRecord(options = {}) {
   const definition = getInvariantDefinition(options.invariantId);
   if (!definition) {
-    throw new Error(`Unknown invariant ID: ${String(options.invariantId || LOCAL_STR_EMPTY)}`);
+    throw new Error(`Unknown invariant ID: ${String(options.invariantId || '')}`);
   }
 
   return Object.freeze({
     invariantId: definition.id,
     severity: definition.severity,
-    scope: typeof options.scope === LOCAL_STR_STRING && options.scope.length > LOCAL_NUM_ZERO ?
+    scope: typeof options.scope === LOCAL_STR_STRING && options.scope.length > 0 ?
       options.scope :
       definition.scope,
     entityId:
-      typeof options.entityId === LOCAL_STR_STRING && options.entityId.length > LOCAL_NUM_ZERO ?
+      typeof options.entityId === LOCAL_STR_STRING && options.entityId.length > 0 ?
         options.entityId :
         null,
     owningSubsystem:
       typeof options.owningSubsystem === LOCAL_STR_STRING &&
-        options.owningSubsystem.length > LOCAL_NUM_ZERO ?
+        options.owningSubsystem.length > 0 ?
         options.owningSubsystem :
         definition.owningSubsystem,
     reasonCode:
-      typeof options.reasonCode === LOCAL_STR_STRING && options.reasonCode.length > LOCAL_NUM_ZERO ?
+      typeof options.reasonCode === LOCAL_STR_STRING && options.reasonCode.length > 0 ?
         options.reasonCode :
         definition.defaultReasonCode,
     passed: options.passed !== false,

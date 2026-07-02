@@ -1,7 +1,5 @@
 import {
-  NUM,
   STATE,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -53,8 +51,8 @@ function normalizeRequiredTables(requiredTables) {
   return [...new Set(
     (Array.isArray(requiredTables) ? requiredTables : [])
       .filter((tableName) => {
-        return typeof tableName === TYPEOF.STRING &&
-          tableName.length > NUM.ZERO;
+        return typeof tableName === 'string' &&
+          tableName.length > 0;
       }),
   )];
 }
@@ -112,7 +110,7 @@ function buildLocalTargetDecision(state, eligible, routingDecision) {
 }
 
 function pushUniqueAddress(targets, address) {
-  if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+  if (typeof address !== 'string' || address.length === 0) {
     return;
   }
   if (targets.includes(address)) {
@@ -122,7 +120,7 @@ function pushUniqueAddress(targets, address) {
 }
 
 function parseMessageGroupAddress(address) {
-  if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+  if (typeof address !== 'string' || address.length === 0) {
     return null;
   }
   const match = address.match(/^([^/]+)\/message-group\/(.+)$/);
@@ -130,8 +128,8 @@ function parseMessageGroupAddress(address) {
     return null;
   }
   return {
-    nodeId: match[NUM.ONE],
-    replicaId: match[NUM.TWO],
+    nodeId: match[1],
+    replicaId: match[2],
   };
 }
 
@@ -139,45 +137,45 @@ class ControlPlaneKernelIngress {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.getBootstrapResponse =
-      typeof options.getBootstrapResponse === TYPEOF.FUNCTION ?
+      typeof options.getBootstrapResponse === 'function' ?
         options.getBootstrapResponse :
         () => null;
     this.getSeedNodeId =
-      typeof options.getSeedNodeId === TYPEOF.FUNCTION ?
+      typeof options.getSeedNodeId === 'function' ?
         options.getSeedNodeId :
         () => null;
     this.getMessageRouter =
-      typeof options.getMessageRouter === TYPEOF.FUNCTION ?
+      typeof options.getMessageRouter === 'function' ?
         options.getMessageRouter :
         () => null;
     this.getMessageGroupServices =
-      typeof options.getMessageGroupServices === TYPEOF.FUNCTION ?
+      typeof options.getMessageGroupServices === 'function' ?
         options.getMessageGroupServices :
         () => new Map();
     this.getSqlQueryEngine =
-      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
+      typeof options.getSqlQueryEngine === 'function' ?
         options.getSqlQueryEngine :
         () => null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.ingressLeaseMs =
       Number.isFinite(options.ingressLeaseMs) &&
-      options.ingressLeaseMs > NUM.ZERO ?
+      options.ingressLeaseMs > 0 ?
         Math.floor(options.ingressLeaseMs) :
         CONTROL_PLANE_KERNEL_INGRESS_DEFAULT.LEASE_MS;
     this.targetSuppressionMs =
       Number.isFinite(options.targetSuppressionMs) &&
-      options.targetSuppressionMs > NUM.ZERO ?
+      options.targetSuppressionMs > 0 ?
         Math.floor(options.targetSuppressionMs) :
         CONTROL_PLANE_KERNEL_INGRESS_DEFAULT.SUPPRESSION_MS;
     this.confirmedIngressLease = null;
-    this.ingressEpoch = NUM.ZERO;
+    this.ingressEpoch = 0;
     this.suppressedTargetAddresses = new Map();
   }
 
   resolveTargetAddress(options = {}) {
-    return this.resolveTargetCandidates(options)[NUM.ZERO] || null;
+    return this.resolveTargetCandidates(options)[0] || null;
   }
 
   resolveNodeStateUpdateTargetCandidates(options = {}) {
@@ -203,7 +201,7 @@ class ControlPlaneKernelIngress {
       allowSelfTarget: false,
     });
     const optimisticRemoteCandidates =
-      remoteCandidates.length > NUM.ZERO ?
+      remoteCandidates.length > 0 ?
         [] :
         this.resolveTargetCandidates({
           ...sharedOptions,
@@ -248,7 +246,7 @@ class ControlPlaneKernelIngress {
       }) :
       null;
     const pushOrderedTarget = (address) => {
-      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+      if (typeof address !== 'string' || address.length === 0) {
         return;
       }
       if (!this.isTargetReachable(address, {allowDisconnectedTargets})) {
@@ -289,15 +287,15 @@ class ControlPlaneKernelIngress {
   }
 
   noteSuccessfulTarget(targetAddress) {
-    if (typeof targetAddress !== TYPEOF.STRING ||
-        targetAddress.length === NUM.ZERO) {
+    if (typeof targetAddress !== 'string' ||
+        targetAddress.length === 0) {
       return null;
     }
 
     const existingLease = this.getConfirmedIngressLease();
     const epoch = existingLease?.targetAddress === targetAddress ?
       existingLease.epoch :
-      this.ingressEpoch + NUM.ONE;
+      this.ingressEpoch + 1;
     this.ingressEpoch = epoch;
     this.confirmedIngressLease = Object.freeze({
       targetAddress,
@@ -309,15 +307,15 @@ class ControlPlaneKernelIngress {
   }
 
   invalidateTarget(targetAddress) {
-    if (typeof targetAddress !== TYPEOF.STRING ||
-        targetAddress.length === NUM.ZERO) {
+    if (typeof targetAddress !== 'string' ||
+        targetAddress.length === 0) {
       return;
     }
 
     if (this.confirmedIngressLease?.targetAddress === targetAddress) {
       this.confirmedIngressLease = null;
     }
-    if (this.targetSuppressionMs > NUM.ZERO) {
+    if (this.targetSuppressionMs > 0) {
       this.suppressedTargetAddresses.set(
         targetAddress,
         this.now() + this.targetSuppressionMs,
@@ -327,7 +325,7 @@ class ControlPlaneKernelIngress {
 
   resolveLocalTargetAddress(assignment = null, options = {}) {
     const services = this.getMessageGroupServices();
-    if (!(services instanceof Map) || services.size === NUM.ZERO) {
+    if (!(services instanceof Map) || services.size === 0) {
       return null;
     }
     const requiredTables = normalizeRequiredTables(options.requiredTables);
@@ -350,7 +348,7 @@ class ControlPlaneKernelIngress {
         continue;
       }
 
-      const isLeader = typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
+      const isLeader = typeof service.isLeaderReplica === 'function' &&
         service.isLeaderReplica() === true;
       const localTargetDecision = this.resolveLocalTargetEligibilityDecision(
         service,
@@ -384,7 +382,7 @@ class ControlPlaneKernelIngress {
       options.localRoutingDecision ||
       this.resolveLocalRequiredTableRoutingDecision(requiredTables);
     const ingressReady =
-      typeof service?.isMetadataIngressReady === TYPEOF.FUNCTION &&
+      typeof service?.isMetadataIngressReady === 'function' &&
       service.isMetadataIngressReady({requiredTables}) === true;
 
     if (!ingressReady) {
@@ -424,7 +422,7 @@ class ControlPlaneKernelIngress {
     const routingReadinessDimension = normalizeRoutingReadinessDimension(
       options.routingReadinessDimension,
     );
-    if (normalizedRequiredTables.length === NUM.ZERO) {
+    if (normalizedRequiredTables.length === 0) {
       return buildLocalRoutingDecision(
         CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.NO_REQUIRED_TABLES,
         true,
@@ -434,8 +432,8 @@ class ControlPlaneKernelIngress {
 
     const sqlQueryEngine = this.getSqlQueryEngine();
     const queryExecutor = sqlQueryEngine?.queryExecutor || null;
-    if (typeof sqlQueryEngine?.getTablePartitions !== TYPEOF.FUNCTION ||
-        typeof queryExecutor?.getPartitionRoutingSnapshot !== TYPEOF.FUNCTION) {
+    if (typeof sqlQueryEngine?.getTablePartitions !== 'function' ||
+        typeof queryExecutor?.getPartitionRoutingSnapshot !== 'function') {
       return buildLocalRoutingDecision(
         CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.OWNER_UNAVAILABLE,
         true,
@@ -485,10 +483,10 @@ class ControlPlaneKernelIngress {
     routingReadinessDimension,
   ) {
     const partitions =
-      typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION ?
+      typeof sqlQueryEngine?.getTablePartitions === 'function' ?
         sqlQueryEngine.getTablePartitions(tableName) :
         [];
-    if (!Array.isArray(partitions) || partitions.length === NUM.ZERO) {
+    if (!Array.isArray(partitions) || partitions.length === 0) {
       return buildLocalTableRoutingDecision(
         tableName,
         null,
@@ -502,8 +500,8 @@ class ControlPlaneKernelIngress {
         partition?.partition_id ||
         partition?.partitionId ||
         null;
-      if (typeof partitionId !== TYPEOF.STRING ||
-          partitionId.length === NUM.ZERO) {
+      if (typeof partitionId !== 'string' ||
+          partitionId.length === 0) {
         return buildLocalTableRoutingDecision(
           tableName,
           null,
@@ -523,7 +521,7 @@ class ControlPlaneKernelIngress {
         resolveCanonicalLeaderRoutingGapState(routingSnapshot);
       const canonicalLeaderGapRecoveryRoutingContract =
         typeof queryExecutor?.resolveCanonicalLeaderGapRecoveryRoutingContract ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           queryExecutor.resolveCanonicalLeaderGapRecoveryRoutingContract(
             partitionId,
             routingSnapshot,
@@ -535,7 +533,7 @@ class ControlPlaneKernelIngress {
       const routableServiceCount = Number(routingSnapshot?.routableServiceCount);
       if (routingSnapshot?.reasonCode ===
             QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS ||
-          !(serviceRowCount > NUM.ZERO)) {
+          !(serviceRowCount > 0)) {
         return buildLocalTableRoutingDecision(
           tableName,
           partitionId,
@@ -548,7 +546,7 @@ class ControlPlaneKernelIngress {
             CANONICAL_LEADER_ROUTING_GAP_STATE.OWNER_MISSING) {
         if (canonicalLeaderGapRecoveryRoutingContract
           ?.recoveryCandidateWidening === true &&
-            routableServiceCount > NUM.ZERO) {
+            routableServiceCount > 0) {
           return buildLocalTableRoutingDecision(
             tableName,
             partitionId,
@@ -571,7 +569,7 @@ class ControlPlaneKernelIngress {
             CANONICAL_LEADER_ROUTING_GAP_STATE.SERVICE_MISSING) {
         if (canonicalLeaderGapRecoveryRoutingContract
           ?.recoveryCandidateWidening === true &&
-            routableServiceCount > NUM.ZERO) {
+            routableServiceCount > 0) {
           return buildLocalTableRoutingDecision(
             tableName,
             partitionId,
@@ -590,7 +588,7 @@ class ControlPlaneKernelIngress {
           routingSnapshot,
         );
       }
-      if (!(routableServiceCount > NUM.ZERO)) {
+      if (!(routableServiceCount > 0)) {
         return buildLocalTableRoutingDecision(
           tableName,
           partitionId,
@@ -601,7 +599,7 @@ class ControlPlaneKernelIngress {
       }
     }
 
-    const firstPartition = partitions[NUM.ZERO];
+    const firstPartition = partitions[0];
     return buildLocalTableRoutingDecision(
       tableName,
       firstPartition?.partition_id || firstPartition?.partitionId || null,
@@ -612,7 +610,7 @@ class ControlPlaneKernelIngress {
   }
 
   resolveBootstrapTargetAddresses(assignment = null, options = {}) {
-    if (!assignment || typeof assignment !== TYPEOF.OBJECT) {
+    if (!assignment || typeof assignment !== 'object') {
       return [];
     }
 
@@ -672,7 +670,7 @@ class ControlPlaneKernelIngress {
 
     const messageRouter = this.getMessageRouter();
     if (!messageRouter ||
-        typeof messageRouter.getConnectionState !== TYPEOF.FUNCTION) {
+        typeof messageRouter.getConnectionState !== 'function') {
       return true;
     }
 
@@ -693,8 +691,8 @@ class ControlPlaneKernelIngress {
   }
 
   isTargetSuppressed(targetAddress) {
-    if (typeof targetAddress !== TYPEOF.STRING ||
-        targetAddress.length === NUM.ZERO) {
+    if (typeof targetAddress !== 'string' ||
+        targetAddress.length === 0) {
       return false;
     }
     this.pruneExpiredState();

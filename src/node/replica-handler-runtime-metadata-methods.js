@@ -21,7 +21,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     AddressManager,
     ESTABLISHED_VOTER_ROLES,
     METADATA_RESOLUTION_POLL_INTERVAL_MS,
-    NUM,
     PRESSURE_WORK_CLASS,
     PARTITION_METADATA_MISSING_PREFIX,
     PartitionServiceRowOwner,
@@ -47,7 +46,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       const deadline = Date.now() + this.syncTimeoutMs;
       let metadataWaitLogged = false;
       let lastError = null;
-      let metadataHydrationCount = NUM.ZERO;
+      let metadataHydrationCount = 0;
       while (Date.now() <= deadline) {
         this.throwIfShuttingDown();
         try {
@@ -190,7 +189,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         options.bootstrapReplicaIds.filter(
           (value) =>
             typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
-              value.length > NUM.ZERO,
+              value.length > 0,
         ) :
         [];
       const requestedPeerAddresses = Array.isArray(
@@ -199,7 +198,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         options.bootstrapPeerAddresses.filter(
           (value) =>
             typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
-              value.length > NUM.ZERO,
+              value.length > 0,
         ) :
         [];
       // Count only established voters from sibling services. Freshly staged
@@ -338,7 +337,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         const siblingPeerCount = replicaIds.filter(
           (candidateReplicaId) => candidateReplicaId !== replicaId,
         ).length;
-        if (siblingPeerCount === NUM.ZERO) {
+        if (siblingPeerCount === 0) {
           throw replicaJoinTopologyMissingError(partitionId, replicaId);
         }
       }
@@ -351,10 +350,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         replicaIds,
         peerAddresses,
         existingReplicaCount: isFreshBootstrapPartition ?
-          NUM.ZERO :
+          0 :
           hasViableLeader ?
-            Math.max(NUM.ONE, establishedExistingReplicaIds.size) :
-            NUM.ZERO,
+            Math.max(1, establishedExistingReplicaIds.size) :
+            0,
       };
     }
     /**
@@ -368,15 +367,15 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       if (
         !partitionId ||
         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        partitionId.length === NUM.ZERO
+        partitionId.length === 0
       ) {
-        return NUM.ZERO;
+        return 0;
       }
       const gateway = this.getControlPlaneSystemTableGateway();
       if (!gateway) {
-        return NUM.ZERO;
+        return 0;
       }
-      let hydratedRows = NUM.ZERO;
+      let hydratedRows = 0;
       try {
         const partitionRows = await this.querySystemTableRows(
           gateway,
@@ -384,12 +383,12 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           SYSTEM_TABLE_HYDRATION_SQL.PARTITION_BY_ID,
           [partitionId],
         );
-        const partitionRow = partitionRows[NUM.ZERO] || null;
+        const partitionRow = partitionRows[0] || null;
         const tableId = partitionRow?.table_id || null;
         let tableRow = null;
         if (
           typeof tableId === REPLICA_HANDLER_TYPEOF.STRING &&
-          tableId.length > NUM.ZERO
+          tableId.length > 0
         ) {
           const tableRows = await this.querySystemTableRows(
             gateway,
@@ -397,7 +396,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             SYSTEM_TABLE_HYDRATION_SQL.TABLE_BY_ID,
             [tableId],
           );
-          tableRow = tableRows[NUM.ZERO] || null;
+          tableRow = tableRows[0] || null;
         }
         const serviceRows = await this.querySystemTableRows(
           gateway,
@@ -410,10 +409,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           tableRow,
           serviceRows,
         });
-        hydratedRows += partitionRow ? NUM.ONE : NUM.ZERO;
-        hydratedRows += tableRow ? NUM.ONE : NUM.ZERO;
+        hydratedRows += partitionRow ? 1 : 0;
+        hydratedRows += tableRow ? 1 : 0;
         hydratedRows += serviceRows.length;
-        if (hydratedRows > NUM.ZERO) {
+        if (hydratedRows > 0) {
           this.logger.debug(
             REPLICA_HANDLER_LOG_MSG.HYDRATED_METADATA_FROM_QUERY,
             {
@@ -433,7 +432,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             nodeId: this.nodeId,
           },
         );
-        return NUM.ZERO;
+        return 0;
       }
     }
     /**
@@ -475,7 +474,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       const tableId = tableRow.table_id || tableRow.tableId || null;
       if (
         typeof tableId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        tableId.length === NUM.ZERO
+        tableId.length === 0
       ) {
         return null;
       }
@@ -507,7 +506,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       if (
         partitionId !== expectedPartitionId ||
         typeof tableId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        tableId.length === NUM.ZERO
+        tableId.length === 0
       ) {
         return null;
       }
@@ -594,7 +593,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     getHydratedMetadataSnapshot(partitionId) {
       if (
         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        partitionId.length === NUM.ZERO
+        partitionId.length === 0
       ) {
         return null;
       }
@@ -609,7 +608,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     setHydratedMetadataSnapshot(partitionId, snapshot = {}) {
       if (
         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        partitionId.length === NUM.ZERO
+        partitionId.length === 0
       ) {
         return;
       }
@@ -635,7 +634,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     clearHydratedMetadataSnapshot(partitionId) {
       if (
         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        partitionId.length === NUM.ZERO
+        partitionId.length === 0
       ) {
         return;
       }
@@ -653,7 +652,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         const serviceId = row?.service_id || row?.replica_id;
         if (
           typeof serviceId === REPLICA_HANDLER_TYPEOF.STRING &&
-          serviceId.length > NUM.ZERO
+          serviceId.length > 0
         ) {
           mergedRows.set(serviceId, row);
         }
@@ -662,7 +661,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         const serviceId = row?.service_id || row?.replica_id;
         if (
           typeof serviceId === REPLICA_HANDLER_TYPEOF.STRING &&
-          serviceId.length > NUM.ZERO
+          serviceId.length > 0
         ) {
           mergedRows.set(serviceId, row);
         }

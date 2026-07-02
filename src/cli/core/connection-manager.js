@@ -9,10 +9,9 @@ import WebSocket from 'ws';
 import {CLI_STREAM} from '../cli-constants.js';
 import {ADMIN_MESSAGE_TYPE} from '../../admin/admin-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_10 = 10;
-const LOCAL_NUM_1000 = 1000;
-const LOCAL_NUM_30000 = 30000;
+const LOCAL_NUM_TEN = 10;
+const LOCAL_NUM_THOUSAND = 1000;
+const LOCAL_NUM_THIRTY_THOUSAND = 30000;
 const LOCAL_STR_DISCONNECTED = 'disconnected';
 const LOCAL_STR_HTTP = 'http://';
 const LOCAL_STR_HTTPS = 'https://';
@@ -20,9 +19,8 @@ const LOCAL_STR_WS = 'ws://';
 const LOCAL_STR_WSS = 'wss://';
 const LOCAL_STR_WS_2 = 'ws:';
 const LOCAL_STR_WSS_2 = 'wss:';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_CONNECTING = 'connecting';
-const LOCAL_STR_13QTI = 'Connection already in progress';
+const LOCAL_STR_CONNECTION_ALREADY_IN_PROGRESS = 'Connection already in progress';
 const LOCAL_STR_OPEN = 'open';
 const LOCAL_STR_CONNECTED = 'connected';
 const LOCAL_STR_MESSAGE = 'message';
@@ -58,16 +56,16 @@ export class ConnectionManager {
     this.currentAddress = null;
 
     /** @type {number} */
-    this.reconnectAttempts = LOCAL_NUM_ZERO;
+    this.reconnectAttempts = 0;
 
     /** @type {number} */
-    this.maxReconnectAttempts = config.maxReconnectAttempts || LOCAL_NUM_10;
+    this.maxReconnectAttempts = config.maxReconnectAttempts || LOCAL_NUM_TEN;
 
     /** @type {number} */
-    this.baseDelay = config.baseDelay || LOCAL_NUM_1000;
+    this.baseDelay = config.baseDelay || LOCAL_NUM_THOUSAND;
 
     /** @type {number} */
-    this.maxDelay = config.maxDelay || LOCAL_NUM_30000;
+    this.maxDelay = config.maxDelay || LOCAL_NUM_THIRTY_THOUSAND;
 
     /** @type {ConnectionStatus} */
     this.status = LOCAL_STR_DISCONNECTED;
@@ -148,7 +146,7 @@ export class ConnectionManager {
 
     // Add API path if not present
     if (!url.includes(CLI_STREAM.ADMIN_PATH)) {
-      url = url.replace(/\/$/, LOCAL_STR_EMPTY) + CLI_STREAM.ADMIN_PATH;
+      url = url.replace(/\/$/, '') + CLI_STREAM.ADMIN_PATH;
     }
 
     return url;
@@ -161,7 +159,7 @@ export class ConnectionManager {
    */
   async connect(nodeAddress) {
     if (this.status === LOCAL_STR_CONNECTING) {
-      throw new Error(LOCAL_STR_13QTI);
+      throw new Error(LOCAL_STR_CONNECTION_ALREADY_IN_PROGRESS);
     }
 
     this.currentAddress = nodeAddress;
@@ -193,7 +191,7 @@ export class ConnectionManager {
       this.ws.on(LOCAL_STR_OPEN, () => {
         clearTimeout(connectionTimeout);
         this.status = LOCAL_STR_CONNECTED;
-        this.reconnectAttempts = LOCAL_NUM_ZERO;
+        this.reconnectAttempts = 0;
         this.onStatusChange?.(LOCAL_STR_CONNECTED);
         resolve();
       });
@@ -346,7 +344,7 @@ export class ConnectionManager {
    * Reset reconnection attempts counter
    */
   resetReconnectAttempts() {
-    this.reconnectAttempts = LOCAL_NUM_ZERO;
+    this.reconnectAttempts = 0;
   }
 
   /**

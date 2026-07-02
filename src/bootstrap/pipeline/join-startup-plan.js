@@ -16,7 +16,6 @@ import {
 import {JOINING_ERROR_MSG} from '../node-joining-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
 
 const READINESS_CONVERGENCE_PHASE =
   'joining:readiness-convergence';
@@ -163,7 +162,7 @@ function assertJoinPlanSegments(plan) {
         JOINING_ERROR_MSG.joinPlanSegmentMissing(segmentName),
       );
     }
-    if (segment.length === LOCAL_NUM_ZERO) {
+    if (segment.length === 0) {
       throw new Error(
         JOINING_ERROR_MSG.joinPlanSegmentEmpty(segmentName),
       );

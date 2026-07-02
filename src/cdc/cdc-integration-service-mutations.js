@@ -10,8 +10,6 @@ const {
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   SQL,
-  TYPEOF,
-  NUM,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,
   normalizeSystemTableVisibilityResult,
@@ -82,8 +80,8 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
       }
       let visibilityResult = buildSystemTableVisibilityResult();
       if (
-        typeof result.affectedRows !== TYPEOF.NUMBER ||
-        result.affectedRows > NUM.ZERO
+        typeof result.affectedRows !== 'number' ||
+        result.affectedRows > 0
       ) {
         visibilityResult = normalizeSystemTableVisibilityResult(
           await context.waitForCacheUpdate(tableName, id, false, {
@@ -130,7 +128,7 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
             error: error.message,
             nodeId: context.nodeId,
             causeId:
-              typeof options?.causeId === TYPEOF.STRING ?
+              typeof options?.causeId === 'string' ?
                 options.causeId :
                 null,
             operation: CDC_OPERATION.DELETE,
@@ -260,7 +258,7 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
             error: error.message,
             nodeId: context.nodeId,
             causeId:
-              typeof options?.causeId === TYPEOF.STRING ?
+              typeof options?.causeId === 'string' ?
                 options.causeId :
                 null,
             operation: CDC_OPERATION.UPSERT,

@@ -36,7 +36,7 @@ const JOINING_UNIFIED_RECONCILE = Object.freeze({
   INFRA_READY_REASON: 'joining_infrastructure_ready',
   MESSAGE_GROUPS_REASON: 'joining_message_groups',
   HYDRATION_REASON: 'joining_hydration_handoff',
-  CHECK_INTERVAL_MS: TIME_MS.MINUTE * (NUM.THIRTY * NUM.TWO),
+  CHECK_INTERVAL_MS: TIME_MS.MINUTE * (NUM.THIRTY * 2),
   RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
 });
 

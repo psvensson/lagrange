@@ -1,6 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
@@ -204,7 +202,7 @@ function normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
 }
 
 function normalizePriorityRecoveryDiagnosticOwnerText(value, fallback) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallback;
 }
@@ -273,7 +271,7 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
     );
   return Object.freeze({
     operationContextAvailable:
-      operationContext && typeof operationContext === TYPEOF.OBJECT,
+      operationContext && typeof operationContext === 'object',
     operationOwnerObservationAbsent:
       !isPriorityRecoverySnapshotObject(snapshot?.operationOwnerObservation),
     ownerDiagnosticAllowed:

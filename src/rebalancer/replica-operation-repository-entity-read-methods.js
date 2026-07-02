@@ -6,7 +6,6 @@ function assignReplicaOperationRepositoryEntityReadMethods(
 ) {
   const {
     ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,
-    NUM,
     OperationType,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -14,7 +13,6 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     UNIFIED_SERVICE_TYPE,
     buildReplicaOperationVisibilityReadOptions,
     resolveReplicaOperationVisibilityReadMode,
@@ -43,7 +41,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
             continue;
           }
           const replicaId = operation.replicaId;
-          if (typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO) {
+          if (typeof replicaId === 'string' && replicaId.length > 0) {
             replicaIds.add(replicaId);
           }
         }
@@ -68,7 +66,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           continue;
         }
         const replicaId = operation.replicaId;
-        if (typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO) {
+        if (typeof replicaId === 'string' && replicaId.length > 0) {
           replicaIds.add(replicaId);
         }
       }
@@ -83,8 +81,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       if (cachedRows !== null) {
         return [...cachedRows]
           .sort((left, right) => {
-            const leftCreatedAt = Number(left?.created_at) || NUM.ZERO;
-            const rightCreatedAt = Number(right?.created_at) || NUM.ZERO;
+            const leftCreatedAt = Number(left?.created_at) || 0;
+            const rightCreatedAt = Number(right?.created_at) || 0;
             if (leftCreatedAt !== rightCreatedAt) {
               return rightCreatedAt - leftCreatedAt;
             }
@@ -246,7 +244,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           (operation) => operation?.type === OperationType.REMOVE,
         ).length;
         if (
-          cachedCount > NUM.ZERO ||
+          cachedCount > 0 ||
         visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
         ) {
           return cachedCount;
@@ -259,7 +257,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         buildReplicaOperationVisibilityReadOptions(visibilityReadMode),
       );
       if (!result.success || !result.rows) {
-        return NUM.ZERO;
+        return 0;
       }
 
       return result.rows
@@ -276,7 +274,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    * @return {Array}
    */
     getEntityServiceRows({partitionId, entityType, entityId}) {
-      if (!this.systemTableCache || typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      if (!this.systemTableCache || typeof this.systemTableCache.filter !== 'function') {
         return [];
       }
       return (
@@ -303,7 +301,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    * @return {Array}
    */
     getEntityInFlightOperationRows({entityType, entityId}) {
-      if (!this.systemTableCache || typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      if (!this.systemTableCache || typeof this.systemTableCache.filter !== 'function') {
         return [];
       }
       return (

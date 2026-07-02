@@ -9,7 +9,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  NUM,
   TRANSPORT_TYPE,
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
@@ -28,7 +27,7 @@ import {
 } from './endpoint-service-constants.js';
 
 const LOCAL_STR_ENDPOINTSERVICE = 'EndpointService';
-const LOCAL_STR_1D19D = 'serviceEndpointsOwner';
+const LOCAL_STR_SERVICEENDPOINTSOWNER = 'serviceEndpointsOwner';
 const LOCAL_STR_SERVICE_ENDPOINTS = 'service_endpoints';
 const LOCAL_STR_READ_WRITE = 'read_write';
 
@@ -63,7 +62,7 @@ class EndpointService extends EventEmitter {
     if (!this.serviceEndpointsOwner) {
       throw createSystemMetadataOwnerRequiredError({
         serviceName: LOCAL_STR_ENDPOINTSERVICE,
-        ownerName: LOCAL_STR_1D19D,
+        ownerName: LOCAL_STR_SERVICEENDPOINTSOWNER,
         tableName: LOCAL_STR_SERVICE_ENDPOINTS,
         operation: LOCAL_STR_READ_WRITE,
         message: ENDPOINT_SVC_ERROR_MSG.MISSING_OWNER,
@@ -107,7 +106,7 @@ class EndpointService extends EventEmitter {
         [COLUMN.ADDRESS]: endpointData.address,
         [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
           TRANSPORT_TYPE.WEBSOCKET,
-        [COLUMN.PRIORITY]: endpointData.priority ?? NUM.ZERO,
+        [COLUMN.PRIORITY]: endpointData.priority ?? 0,
         [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
         [COLUMN.UPDATED_AT]: now,
       };
@@ -126,7 +125,7 @@ class EndpointService extends EventEmitter {
         [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
           TRANSPORT_TYPE.WEBSOCKET,
         [COLUMN.ADDRESS]: endpointData.address,
-        [COLUMN.PRIORITY]: endpointData.priority ?? NUM.ZERO,
+        [COLUMN.PRIORITY]: endpointData.priority ?? 0,
         [COLUMN.METADATA]: endpointData.metadata ?
           JSON.stringify(endpointData.metadata) :
           JSON.stringify({}),

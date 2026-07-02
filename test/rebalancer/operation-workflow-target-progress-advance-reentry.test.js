@@ -91,7 +91,7 @@ function buildPlanningSnapshot(operation) {
       TEST_TARGET_NODE_ID,
     ]),
     pendingAckNodeIds: Object.freeze([]),
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     priorityRecoveryDecisionSnapshots: Object.freeze({
       capturedAt: TEST_CAPTURED_AT_MS,
       publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -151,9 +151,9 @@ function buildPlanningSnapshot(operation) {
       blockedPartitions: Object.freeze([
         Object.freeze({
           partitionId: TEST_PARTITION_ID,
-          readyDistinctNodeCount: NUM.ONE,
-          requiredDistinctNodeCount: NUM.TWO,
-          spreadGap: NUM.ONE,
+          readyDistinctNodeCount: 1,
+          requiredDistinctNodeCount: 2,
+          spreadGap: 1,
         }),
       ]),
     }),
@@ -166,9 +166,9 @@ function createCoordinator(operation, operationRow) {
     sqlQueryEngine: {
       async executeQuery(sql) {
         if (String(sql).includes('replica_operations')) {
-          return {success: true, rows: [operationRow], affectedRows: NUM.ONE};
+          return {success: true, rows: [operationRow], affectedRows: 1};
         }
-        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: NUM.ZERO};
+        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },
     },
     transactionCoordinator: {
@@ -186,7 +186,7 @@ function createCoordinator(operation, operationRow) {
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
-        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: NUM.ZERO};
+        return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },
     },
     controlPlaneReadinessService: {
@@ -238,7 +238,7 @@ test(
         .getOperationsByEntityAuthoritativeObservation = async () => {
           return Object.freeze({
             state: 'present',
-            operationCount: NUM.ONE,
+            operationCount: 1,
             operations: Object.freeze([operation]),
             deferredOutcome: null,
             retryAfterMs: null,
@@ -257,7 +257,7 @@ test(
             [operation],
           );
       await new Promise((resolve) => {
-        setTimeout(resolve, NUM.ZERO);
+        setTimeout(resolve, 0);
       });
 
       t.equal(

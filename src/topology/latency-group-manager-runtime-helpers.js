@@ -2,7 +2,7 @@
  * Runtime config, delay, and group-id helpers for LatencyGroupManager.
  */
 
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {
   LATENCY_TOPOLOGY_CONFIG_KEY,
   LATENCY_TOPOLOGY_DEFAULT,
@@ -35,7 +35,7 @@ function resolveLatencyGroupManagerConfig(config) {
 
 function resolveNumericConfig(config, key, fallback, minValue) {
   const value = config.get(key);
-  if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
   }
   return Math.max(minValue, value);
@@ -43,7 +43,7 @@ function resolveNumericConfig(config, key, fallback, minValue) {
 
 function resolveRatioConfig(config, key, fallback) {
   const value = config.get(key);
-  if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
   }
   return Math.min(
@@ -54,7 +54,7 @@ function resolveRatioConfig(config, key, fallback) {
 
 function computeNextLatencyGroupCycleDelayMs(options) {
   const jitterRange = options.recalcIntervalMs * options.recalcJitterRatio;
-  if (jitterRange <= NUM.ZERO) {
+  if (jitterRange <= 0) {
     return options.recalcIntervalMs;
   }
 
@@ -63,7 +63,7 @@ function computeNextLatencyGroupCycleDelayMs(options) {
     rawRandom :
     LATENCY_GROUP_MANAGER_DEFAULT.RANDOM_CENTER;
   const centeredRandom =
-    (randomValue - LATENCY_GROUP_MANAGER_DEFAULT.RANDOM_CENTER) * NUM.TWO;
+    (randomValue - LATENCY_GROUP_MANAGER_DEFAULT.RANDOM_CENTER) * 2;
   const jitterOffset = Math.round(centeredRandom * jitterRange);
   return Math.max(
     LATENCY_GROUP_MANAGER_DEFAULT.MIN_DELAY_MS,
@@ -75,10 +75,10 @@ function buildLatencyGroupId(options) {
   const baseTimestamp = Number.isFinite(options.timestamp) ?
     Math.floor(options.timestamp) :
     options.nowFn();
-  let attempt = NUM.ZERO;
+  let attempt = 0;
 
   while (true) {
-    const retrySuffix = attempt === NUM.ZERO ?
+    const retrySuffix = attempt === 0 ?
       '' :
       `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_SEPARATOR}` +
         `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_RETRY_MARKER}` +
@@ -91,13 +91,13 @@ function buildLatencyGroupId(options) {
     if (!hasLatencyGroup(options.systemTableCache, groupId)) {
       return groupId;
     }
-    attempt += NUM.ONE;
+    attempt += 1;
   }
 }
 
 function hasLatencyGroup(systemTableCache, groupId) {
   const hasFn = systemTableCache?.has;
-  if (typeof hasFn !== TYPEOF.FUNCTION) {
+  if (typeof hasFn !== 'function') {
     return false;
   }
   const hasResult = hasFn.call(
@@ -108,7 +108,7 @@ function hasLatencyGroup(systemTableCache, groupId) {
 
   // `buildLatencyGroupId()` is synchronous; async cache responses are treated
   // as non-colliding to preserve the original non-blocking retry behavior.
-  if (hasResult && typeof hasResult.then === TYPEOF.FUNCTION) {
+  if (hasResult && typeof hasResult.then === 'function') {
     return false;
   }
 

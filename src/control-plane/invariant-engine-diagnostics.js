@@ -12,7 +12,6 @@ import {
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const INVARIANT_ENTITY_ID_CONTEXT_FIELDS = Object.freeze([
   'operationId',
   'workflowId',
@@ -44,7 +43,7 @@ function resolveInvariantEntityId(result) {
     return null;
   }
   for (const field of INVARIANT_ENTITY_ID_CONTEXT_FIELDS) {
-    if (typeof context[field] === LOCAL_STR_STRING && context[field].length > LOCAL_NUM_ZERO) {
+    if (typeof context[field] === LOCAL_STR_STRING && context[field].length > 0) {
       return context[field];
     }
   }
@@ -96,10 +95,10 @@ function buildInvariantDiagnosticsBundle(invariantResults) {
     [];
   const artifactRecords = buildInvariantArtifactRecords(results);
 
-  let passed = LOCAL_NUM_ZERO;
-  let failed = LOCAL_NUM_ZERO;
-  let hardFailures = LOCAL_NUM_ZERO;
-  let softFailures = LOCAL_NUM_ZERO;
+  let passed = 0;
+  let failed = 0;
+  let hardFailures = 0;
+  let softFailures = 0;
   const breaches = [];
 
   for (const result of results) {

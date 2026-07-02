@@ -128,7 +128,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts: NUM.FIVE,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 
@@ -143,17 +143,17 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
           }
 
           // Should have routed to follower first, then leader
-          if (routedAddresses.length < NUM.TWO) {
+          if (routedAddresses.length < 2) {
             return false;
           }
 
           // First address should be the follower
-          if (routedAddresses[NUM.ZERO] !== followerAddress) {
+          if (routedAddresses[0] !== followerAddress) {
             return false;
           }
 
           // Second address should be the leader from redirect
-          return routedAddresses[NUM.ONE] === leaderAddress;
+          return routedAddresses[1] === leaderAddress;
         },
       ),
       {numRuns: NUM.TEN},
@@ -176,9 +176,9 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         // Generate number of redirects (1-3)
-        fc.integer({min: NUM.ONE, max: NUM.THREE}),
+        fc.integer({min: 1, max: NUM.THREE}),
         async (partitionId, numRedirects) => {
-          let callCount = NUM.ZERO;
+          let callCount = 0;
           const routedAddresses = [];
 
           const services = [
@@ -216,8 +216,8 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
           const router = new QueryRouter({
             systemCache,
             messageRouter,
-            retryAttempts: numRedirects + NUM.ONE, // Just enough for redirects + success
-            retryDelayMs: NUM.ONE,
+            retryAttempts: numRedirects + 1, // Just enough for redirects + success
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 
@@ -233,7 +233,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             }
 
             // Should have made numRedirects + 1 calls (redirects + final success)
-            return callCount === numRedirects + NUM.ONE;
+            return callCount === numRedirects + 1;
           } catch (_error) {
             // Should not throw if redirects are followed properly
             return false;
@@ -265,7 +265,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             fc.string({minLength: 1, maxLength: 10}).filter((s) => /^[a-z0-9-]+$/.test(s)),
             fc.integer({min: 1024, max: 65535}),
           ).map(([host, port]) => `ws://${host}:${port}`),
-          {minLength: NUM.TWO, maxLength: NUM.THREE},
+          {minLength: 2, maxLength: NUM.THREE},
         ),
         // Generate leader address
         fc.constant('ws://leader:9999'),
@@ -314,7 +314,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts: NUM.FIVE,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 
@@ -330,7 +330,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
 
           // After redirect, the leader address should be tried immediately
           // (second call should be to leader address)
-          return routedAddresses[NUM.ONE] === leaderAddress;
+          return routedAddresses[1] === leaderAddress;
         },
       ),
       {numRuns: NUM.TEN},
@@ -358,17 +358,17 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             fc.string({minLength: 1, maxLength: 10}).filter((s) => /^[a-z0-9-]+$/.test(s)),
             fc.integer({min: 1024, max: 65535}),
           ).map(([host, port]) => `ws://${host}:${port}`),
-          {minLength: NUM.TWO, maxLength: NUM.FOUR},
+          {minLength: 2, maxLength: NUM.FOUR},
         ),
         async (partitionId, redirectChain) => {
-          let callIndex = NUM.ZERO;
+          let callIndex = 0;
           const routedAddresses = [];
 
           const services = [
             createServiceEntry(
               partitionId,
               'initial-service',
-              redirectChain[NUM.ZERO],
+              redirectChain[0],
               RAFT_ROLE.FOLLOWER,
             ),
           ];
@@ -383,12 +383,12 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
               callIndex++;
 
               // Return redirect for all but last address in chain
-              if (currentIndex < redirectChain.length - NUM.ONE) {
+              if (currentIndex < redirectChain.length - 1) {
                 return {
                   acknowledged: true,
                   success: false,
                   redirect: QUERY_RESPONSE_TYPE.LEADER_REDIRECT,
-                  leaderAddress: redirectChain[currentIndex + NUM.ONE],
+                  leaderAddress: redirectChain[currentIndex + 1],
                 };
               }
 
@@ -400,8 +400,8 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
           const router = new QueryRouter({
             systemCache,
             messageRouter,
-            retryAttempts: redirectChain.length + NUM.ONE,
-            retryDelayMs: NUM.ONE,
+            retryAttempts: redirectChain.length + 1,
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 
@@ -421,7 +421,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
           }
 
           // Each address in the chain should have been visited in order
-          for (let i = NUM.ZERO; i < redirectChain.length; i++) {
+          for (let i = 0; i < redirectChain.length; i++) {
             if (routedAddresses[i] !== redirectChain[i]) {
               return false;
             }
@@ -450,7 +450,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
         // Generate partition ID
         fc.string({minLength: 1, maxLength: 20}).filter((s) => s.trim().length > 0),
         async (partitionId) => {
-          let callCount = NUM.ZERO;
+          let callCount = 0;
 
           const services = [
             createServiceEntry(
@@ -467,7 +467,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
           const messageRouter = {
             deliver: async () => {
               callCount++;
-              if (callCount === NUM.ONE) {
+              if (callCount === 1) {
                 // Redirect without leaderAddress
                 return {
                   acknowledged: true,
@@ -485,7 +485,7 @@ test('Property 5: QueryRouter Leader Redirect Following', async (t) => {
             systemCache,
             messageRouter,
             retryAttempts: NUM.THREE,
-            retryDelayMs: NUM.ONE,
+            retryDelayMs: 1,
             timeoutMs: NUM.THOUSAND * NUM.TEN,
           });
 

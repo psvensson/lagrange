@@ -20,10 +20,7 @@ import {
 } from './dual-path-closure-constants.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_COMMA_SPACE = ', ';
 
 /**
  * Build a frozen violation result.
@@ -79,12 +76,12 @@ function verifyConcern(concernEntry) {
     entry.concern :
     '';
 
-  if (ownerPaths.length > LOCAL_NUM_ONE) {
+  if (ownerPaths.length > 1) {
     violations.push(buildViolation({
       concern,
       violationType: VIOLATION_TYPE.DUPLICATE_PROGRESSION,
       detail: `${ownerPaths.length} progression paths: ` +
-        ownerPaths.join(LOCAL_STR_128KJ),
+        ownerPaths.join(LOCAL_STR_COMMA_SPACE),
     }));
   }
 
@@ -122,11 +119,11 @@ function verifyClosureState(concernEntries) {
     [];
 
   const allViolations = [];
-  let cleanConcerns = LOCAL_NUM_ZERO;
+  let cleanConcerns = 0;
 
   for (const entry of entries) {
     const violations = verifyConcern(entry);
-    if (violations.length === LOCAL_NUM_ZERO) {
+    if (violations.length === 0) {
       cleanConcerns++;
     }
     for (const v of violations) {
@@ -157,9 +154,9 @@ function verifyClosureState(concernEntries) {
  */
 function buildCleanConcernEntry(concern, ownerPath) {
   return Object.freeze({
-    concern: typeof concern === LOCAL_STR_STRING ? concern : LOCAL_STR_EMPTY,
+    concern: typeof concern === LOCAL_STR_STRING ? concern : '',
     ownerPaths: Object.freeze(
-      typeof ownerPath === LOCAL_STR_STRING && ownerPath.length > LOCAL_NUM_ZERO ?
+      typeof ownerPath === LOCAL_STR_STRING && ownerPath.length > 0 ?
         [ownerPath] :
         [],
     ),
@@ -185,15 +182,15 @@ function buildDefaultConcernRegistry(ownerPathMap) {
   return Object.freeze([
     buildCleanConcernEntry(
       CONCERN.DISPATCH,
-      pathMap[CONCERN.DISPATCH] || LOCAL_STR_EMPTY,
+      pathMap[CONCERN.DISPATCH] || '',
     ),
     buildCleanConcernEntry(
       CONCERN.REBALANCE,
-      pathMap[CONCERN.REBALANCE] || LOCAL_STR_EMPTY,
+      pathMap[CONCERN.REBALANCE] || '',
     ),
     buildCleanConcernEntry(
       CONCERN.SPLIT,
-      pathMap[CONCERN.SPLIT] || LOCAL_STR_EMPTY,
+      pathMap[CONCERN.SPLIT] || '',
     ),
   ]);
 }

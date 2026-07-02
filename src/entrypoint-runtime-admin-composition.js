@@ -24,9 +24,9 @@ import {
 } from './constants/entrypoint.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
-const LOCAL_STR_11E2L = './query/sql-query-engine.js';
-const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
+const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
+const LOCAL_STR_QUERY_SQL_QUERY_ENGINE_JS = './query/sql-query-engine.js';
+const LOCAL_STR_PARTITION_PARTITION_SPLIT_MERGE_MANAGER = './partition/partition-split-merge-manager.js';
 
 // A still-joining (or still-bootstrapping) node builds a cache-backed SQL engine
 // for the EARLY admin runtime (the `onLocalAdminRuntimeReady` surface that
@@ -252,7 +252,7 @@ function hydrateBootstrapApiRuntime(options) {
   options.bootstrapAPI.replicaHandler = options.replicaHandler;
   options.bootstrapAPI.epochManager = options.epochManager;
   options.bootstrapAPI.messageRouter = options.messageRouter;
-  if (Object.hasOwn(options, LOCAL_STR_1KAZK)) {
+  if (Object.hasOwn(options, LOCAL_STR_STARTUPRECOVERYCOORDINATOR)) {
     options.bootstrapAPI.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator || null;
   }
@@ -332,7 +332,7 @@ async function createSqlRuntimeComposition(options) {
     };
   }
 
-  const {SQLQueryEngine} = await import(LOCAL_STR_11E2L);
+  const {SQLQueryEngine} = await import(LOCAL_STR_QUERY_SQL_QUERY_ENGINE_JS);
   const wasmExecutor = createSqlCallbackWasmExecutor();
   const sqlQueryEngine = new SQLQueryEngine({
     systemCache: options.systemTableCache,
@@ -359,7 +359,7 @@ async function createSqlRuntimeComposition(options) {
   });
 
   const {PartitionSplitMergeManager} =
-    await import(LOCAL_STR_1SSS4);
+    await import(LOCAL_STR_PARTITION_PARTITION_SPLIT_MERGE_MANAGER);
   const partitionSplitMergeManager = new PartitionSplitMergeManager({
     nodeId: options.nodeId,
     messageRouter: options.messageRouter,

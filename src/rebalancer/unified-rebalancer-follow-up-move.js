@@ -11,7 +11,6 @@ const {
   EntityType,
   MOVE_REASON,
   MoveType,
-  NUM,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
@@ -25,7 +24,6 @@ const {
   REBALANCER_TARGET_READINESS_MODE,
   ReplicaStatus,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 const {
@@ -50,7 +48,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
               UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
           ).trim(),
         )
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
+        .filter((nodeId) => nodeId.length > 0),
     );
   }
 
@@ -63,7 +61,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       const status = String(
@@ -90,8 +88,8 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
       if (
-        followUpPartitionId.length > NUM.ZERO &&
-        operationPartitionId.length > NUM.ZERO &&
+        followUpPartitionId.length > 0 &&
+        operationPartitionId.length > 0 &&
         operationPartitionId !== followUpPartitionId
       ) {
         continue;
@@ -101,7 +99,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           operation?.targetNodeId ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (targetNodeId.length > NUM.ZERO) {
+      if (targetNodeId.length > 0) {
         pendingTargetNodeIds.add(targetNodeId);
       }
     }
@@ -122,8 +120,8 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
       if (
-        followUpPartitionId.length > NUM.ZERO &&
-        operationPartitionId.length > NUM.ZERO &&
+        followUpPartitionId.length > 0 &&
+        operationPartitionId.length > 0 &&
         operationPartitionId === followUpPartitionId
       ) {
         continue;
@@ -133,7 +131,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           operation?.targetNodeId ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (targetNodeId.length > NUM.ZERO) {
+      if (targetNodeId.length > 0) {
         pendingTargetNodeIds.add(targetNodeId);
       }
     }
@@ -194,7 +192,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     const targetNodeIds = this.normalizePriorityRecoveryFollowUpNodeIds([
       targetState?.[PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD.TARGET_NODES],
     ]);
-    if (targetNodeIds.length === NUM.ZERO) {
+    if (targetNodeIds.length === 0) {
       return eligibleNodeIds;
     }
     const targetNodeIdSet = new Set(targetNodeIds);
@@ -203,18 +201,18 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
 
   isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId) {
     if (
-      nodeId.length === NUM.ZERO ||
-      typeof this.systemTableCache?.get !== TYPEOF.FUNCTION
+      nodeId.length === 0 ||
+      typeof this.systemTableCache?.get !== 'function'
     ) {
       return false;
     }
     const nodeRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    if (!nodeRow || typeof nodeRow !== 'object') {
       return false;
     }
     const status = nodeRow.status;
     const nodeStatusKnownNotActive =
-      typeof status === TYPEOF.STRING && status !== NodeStatus.ACTIVE;
+      typeof status === 'string' && status !== NodeStatus.ACTIVE;
     if (nodeStatusKnownNotActive) {
       return true;
     }
@@ -234,9 +232,9 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
 
   isPriorityRecoveryFollowUpTargetRecoveryEligible(nodeId) {
     if (
-      nodeId.length === NUM.ZERO ||
+      nodeId.length === 0 ||
       typeof this.controlPlaneReadinessService?.getNodeReadinessSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
@@ -288,8 +286,8 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     if (preferredUnusedEligibleNodeId) {
       return preferredUnusedEligibleNodeId;
     }
-    if (unusedEligibleNodeIds.length > NUM.ZERO) {
-      return unusedEligibleNodeIds[NUM.ZERO];
+    if (unusedEligibleNodeIds.length > 0) {
+      return unusedEligibleNodeIds[0];
     }
     return (
       eligibleNodeIds.find(
@@ -313,7 +311,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (nodeId.length === NUM.ZERO) {
+      if (nodeId.length === 0) {
         continue;
       }
       if (!replicasByNodeId.has(nodeId)) {
@@ -322,10 +320,10 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       replicasByNodeId.get(nodeId).push(replica);
     }
     for (const [nodeId, replicas] of replicasByNodeId.entries()) {
-      if (nodeId === targetNodeId || replicas.length <= NUM.ONE) {
+      if (nodeId === targetNodeId || replicas.length <= 1) {
         continue;
       }
-      return replicas[NUM.ZERO];
+      return replicas[0];
     }
     return (
       healthyReplicas.find((replica) => {
@@ -334,7 +332,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
             replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
             UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
         ).trim();
-        return nodeId.length > NUM.ZERO && nodeId !== targetNodeId;
+        return nodeId.length > 0 && nodeId !== targetNodeId;
       }) || null
     );
   }
@@ -345,7 +343,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     move = undefined,
   ) {
     const moveFields =
-      move && typeof move === TYPEOF.OBJECT ?
+      move && typeof move === 'object' ?
         move :
         {};
     return Object.freeze({
@@ -364,7 +362,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       (
         followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE] ===
           undefined &&
-        typeof followUpMove?.type === TYPEOF.STRING
+        typeof followUpMove?.type === 'string'
       )
     );
   }
@@ -508,7 +506,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         sourceReplica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERVICE_ID] ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (sourceNodeId.length === NUM.ZERO || replicaId.length === NUM.ZERO) {
+    if (sourceNodeId.length === 0 || replicaId.length === 0) {
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.SOURCE_UNAVAILABLE,
@@ -603,7 +601,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
             .map((reason) =>
               String(reason?.code || reason?.reason || reason || '').trim(),
             )
-            .filter((reason) => reason.length > NUM.ZERO) :
+            .filter((reason) => reason.length > 0) :
           [];
         this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
           entityId: this.entityId,

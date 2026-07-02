@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PUBLICATION_OWNER_STREAM_OUTCOME,
 } from './publication-owner-constants.js';
@@ -214,7 +213,7 @@ function buildProjectionReadinessDecision(evidence) {
   ]);
   const internalLane = buildProjectionReadinessLane(
     PROJECTION_READINESS_LANE.INTERNAL,
-    internalReasonCodes.length === NUM.ZERO,
+    internalReasonCodes.length === 0,
     internalReasonCodes,
   );
   const repairReasonCodes = normalizeProjectionReadinessDecisionReasons([
@@ -225,7 +224,7 @@ function buildProjectionReadinessDecision(evidence) {
   ]);
   const repairLane = buildProjectionReadinessLane(
     PROJECTION_READINESS_LANE.REPAIR,
-    repairReasonCodes.length === NUM.ZERO,
+    repairReasonCodes.length === 0,
     repairReasonCodes,
   );
   const serveReasonCodes = normalizeProjectionReadinessDecisionReasons([
@@ -238,7 +237,7 @@ function buildProjectionReadinessDecision(evidence) {
   ]);
   const serveLane = buildProjectionReadinessLane(
     PROJECTION_READINESS_LANE.SERVE,
-    repairLane.ready === true && serveReasonCodes.length === NUM.ZERO,
+    repairLane.ready === true && serveReasonCodes.length === 0,
     serveReasonCodes,
   );
   const lanes = Object.freeze({

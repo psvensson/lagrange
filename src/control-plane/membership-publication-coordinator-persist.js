@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
@@ -68,18 +64,18 @@ class MembershipPublicationCoordinatorPersist extends
     let persistedRow = serializeMembershipPublicationRow(row);
     if (
       this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.upsertPublication === TYPEOF.FUNCTION
+      typeof this.controlPlanePublicationsOwner.upsertPublication === 'function'
     ) {
       const publicationId = persistedRow.publication_id || null;
       const canVerifyPersistedRow =
         publicationId &&
         options.skipPublicationWriteReadback !== true &&
-        typeof this.controlPlanePublicationsOwner.getPublication === TYPEOF.FUNCTION;
+        typeof this.controlPlanePublicationsOwner.getPublication === 'function';
       const maxAttempts = normalizePositiveInteger(
         options.publicationWriteMaxAttempts,
         PUBLICATION_WRITE_MAX_ATTEMPTS,
       );
-      for (let attempt = NUM.ZERO; attempt < maxAttempts; attempt += NUM.ONE) {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         if (canVerifyPersistedRow) {
           const currentRow = await this.controlPlanePublicationsOwner.getPublication(
             publicationId,
@@ -95,7 +91,7 @@ class MembershipPublicationCoordinatorPersist extends
             publicationOptions,
           );
         } catch (error) {
-          if (!canVerifyPersistedRow || attempt + NUM.ONE >= maxAttempts) {
+          if (!canVerifyPersistedRow || attempt + 1 >= maxAttempts) {
             throw error;
           }
           const durableRow = await this.controlPlanePublicationsOwner.getPublication(
@@ -152,7 +148,7 @@ class MembershipPublicationCoordinatorPersist extends
         let existingRow = null;
         if (
           this.controlPlanePublicationsOwner &&
-          typeof this.controlPlanePublicationsOwner.getPublication === TYPEOF.FUNCTION
+          typeof this.controlPlanePublicationsOwner.getPublication === 'function'
         ) {
           existingRow = await this.controlPlanePublicationsOwner.getPublication(
             publicationId,
@@ -229,7 +225,7 @@ class MembershipPublicationCoordinatorPersist extends
   getControlPlaneOwnerQueueDepth() {
     const ownerKey = this.buildOwnerKey();
     const queueDiagnostics =
-      typeof this.reconcileQueue?.getDiagnostics === TYPEOF.FUNCTION ?
+      typeof this.reconcileQueue?.getDiagnostics === 'function' ?
         this.reconcileQueue.getDiagnostics() :
         null;
     const pendingKeys = Array.isArray(queueDiagnostics?.pendingKeys) ?
@@ -261,15 +257,15 @@ class MembershipPublicationCoordinatorPersist extends
     const retryableDrainFailureCount = Number.isFinite(
       queueDiagnostics?.retryableDrainFailureCount,
     ) ?
-      Math.max(NUM.ZERO, Math.floor(
+      Math.max(0, Math.floor(
         queueDiagnostics.retryableDrainFailureCount,
       )) :
-      NUM.ZERO;
+      0;
     return Object.freeze({
       pendingWrites,
-      pendingWriteGrowthCount: NUM.ZERO,
+      pendingWriteGrowthCount: 0,
       retainedBacklogGrowthCount:
-        retryingKeys.includes(ownerKey) ? NUM.ONE : NUM.ZERO,
+        retryingKeys.includes(ownerKey) ? 1 : 0,
       sharedPressureBackpressured: false,
       transportPressureBackpressured: false,
       queryPressureBackpressured: false,
@@ -289,7 +285,7 @@ class MembershipPublicationCoordinatorPersist extends
     return Object.freeze({
       reconcileLane: Object.freeze({
         name: this.publicationReconcileLane?.name || null,
-        activeExecutionCount: inFlightExecutions.has(this.buildOwnerKey()) ? NUM.ONE : NUM.ZERO,
+        activeExecutionCount: inFlightExecutions.has(this.buildOwnerKey()) ? 1 : 0,
       }),
       acknowledgementLane: Object.freeze({
         name: this.publicationAcknowledgementLane?.name || null,

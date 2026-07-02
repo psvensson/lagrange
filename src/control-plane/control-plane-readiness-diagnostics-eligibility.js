@@ -2,24 +2,21 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {ControlPlaneReadinessParticipationBase} from './control-plane-readiness-participation-base.js';
 import {installControlPlaneReadinessSnapshotStoreMethods} from './control-plane-readiness-snapshot-store.js';
 
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_1S6CG = 'node_state_reporter';
+const LOCAL_STR_NODE_STATE_REPORTER = 'node_state_reporter';
 const LOCAL_STR_ATTEMPT_TIMEOUT = 'attempt_timeout';
-const LOCAL_STR_1TU6L = 'ControlPlaneReadinessService missing CDC publication owner';
-const LOCAL_STR_IBFUE = 'publication_owner_unavailable';
+const LOCAL_STR_CONTROLPLANEREADINESSSERVICE_MISSING_CDC = 'ControlPlaneReadinessService missing CDC publication owner';
+const LOCAL_STR_PUBLICATION_OWNER_UNAVAILABLE = 'publication_owner_unavailable';
 
 const {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
-  NUM,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_ERROR_MSG,
   STATE,
-  TYPEOF,
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
   normalizeDiagnosticTimestampMs,
@@ -34,10 +31,10 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   constructor(options = {}) {
     super(options);
     const originalGetState = this.getPriorityControlPlaneRecoveryState;
-    if (typeof originalGetState === TYPEOF.FUNCTION) {
+    if (typeof originalGetState === 'function') {
       this.getPriorityControlPlaneRecoveryState = function(context = {}) {
         const state = originalGetState.call(this, context);
-        if (state && typeof state === TYPEOF.OBJECT) {
+        if (state && typeof state === 'object') {
           const snapshot =
             this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
               context,
@@ -77,17 +74,17 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       localExecutionAllowed: participation.localExecutionAllowed === true,
       cacheWatermark:
         participation.cacheWatermark &&
-        typeof participation.cacheWatermark === TYPEOF.OBJECT ?
+        typeof participation.cacheWatermark === 'object' ?
           {...participation.cacheWatermark} :
           null,
       transportState:
         participation.transportState &&
-        typeof participation.transportState === TYPEOF.OBJECT ?
+        typeof participation.transportState === 'object' ?
           {...participation.transportState} :
           null,
       authoritativeRepair:
         participation.authoritativeRepair &&
-        typeof participation.authoritativeRepair === TYPEOF.OBJECT ?
+        typeof participation.authoritativeRepair === 'object' ?
           {...participation.authoritativeRepair} :
           null,
       lifecyclePhase: participation.lifecyclePhase || null,
@@ -143,14 +140,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     if (
       !this.heartbeatService ||
       typeof this.heartbeatService.getHeartbeatPublicationDiagnostics !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
     try {
       const diagnostics =
         this.heartbeatService.getHeartbeatPublicationDiagnostics();
-      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+      return diagnostics && typeof diagnostics === 'object' ?
         diagnostics :
         null;
     } catch (_error) {
@@ -161,8 +158,8 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   getHeartbeatPublicationMode() {
     const publicationMode =
       this.heartbeatService?.lastHeartbeatPublicationDecision?.publicationMode;
-    return typeof publicationMode === TYPEOF.STRING &&
-      publicationMode.length > NUM.ZERO ?
+    return typeof publicationMode === 'string' &&
+      publicationMode.length > 0 ?
       publicationMode :
       null;
   }
@@ -180,7 +177,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     }
 
     const diagnostics = this.getHeartbeatPublicationDiagnostics();
-    if (!diagnostics || diagnostics.publicationPath !== LOCAL_STR_1S6CG) {
+    if (!diagnostics || diagnostics.publicationPath !== LOCAL_STR_NODE_STATE_REPORTER) {
       return false;
     }
 
@@ -195,7 +192,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       diagnostics.lastFailureAt,
     );
     if (
-      Number(diagnostics.consecutiveFailures) > NUM.ZERO ||
+      Number(diagnostics.consecutiveFailures) > 0 ||
       (Number.isFinite(lastFailureAtMs) && lastFailureAtMs > lastSuccessAtMs)
     ) {
       return this.shouldGraceTimedOutLocalReporterFailure({
@@ -244,11 +241,11 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       return false;
     }
 
-    if (String(diagnostics?.lastFailureStage || LOCAL_STR_EMPTY) !== LOCAL_STR_ATTEMPT_TIMEOUT) {
+    if (String(diagnostics?.lastFailureStage || '') !== LOCAL_STR_ATTEMPT_TIMEOUT) {
       return false;
     }
 
-    return Number(diagnostics?.consecutiveFailures) <= NUM.ONE;
+    return Number(diagnostics?.consecutiveFailures) <= 1;
   }
 
   /**
@@ -261,7 +258,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     if (
       this.cdcGroupPropagationService &&
       typeof this.cdcGroupPropagationService.getPublicationModeDiagnostics ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.cdcGroupPropagationService.getPublicationModeDiagnostics();
     }
@@ -269,7 +266,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     if (!this.loggedMissingPublicationOwner) {
       this.loggedMissingPublicationOwner = true;
       this.logMissingOwner(
-        LOCAL_STR_1TU6L,
+        LOCAL_STR_CONTROLPLANEREADINESSSERVICE_MISSING_CDC,
         CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
       );
     }
@@ -280,7 +277,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
 
     return Object.freeze({
       currentMode: CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY,
-      reasonCode: LOCAL_STR_IBFUE,
+      reasonCode: LOCAL_STR_PUBLICATION_OWNER_UNAVAILABLE,
       enteredAt: observedAt,
       recentTransitions: Object.freeze([]),
     });
@@ -297,7 +294,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   buildServeAdmissionSnapshot(context = {}) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
-      typeof context.runtimeAuthority === TYPEOF.OBJECT ?
+      typeof context.runtimeAuthority === 'object' ?
         context.runtimeAuthority :
         this.buildRuntimeAuthoritySnapshot(context);
     const evidence = Object.freeze({
@@ -336,7 +333,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    */
   buildRuntimeServeAdmissionSnapshot(context = {}, runtimeAuthority = null) {
     const resolvedRuntimeAuthority =
-      runtimeAuthority && typeof runtimeAuthority === TYPEOF.OBJECT ?
+      runtimeAuthority && typeof runtimeAuthority === 'object' ?
         runtimeAuthority :
         this.buildRuntimeAuthoritySnapshot(context);
     const transportState = this.getNodeTransportState(
@@ -363,7 +360,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   buildDimensions(context) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
-      typeof context.runtimeAuthority === TYPEOF.OBJECT ?
+      typeof context.runtimeAuthority === 'object' ?
         context.runtimeAuthority :
         this.buildRuntimeAuthoritySnapshot(context);
     const serveEligibleControlPlaneService =
@@ -479,14 +476,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   ) {
     if (
       !membershipPublicationPlanningSnapshot ||
-      typeof membershipPublicationPlanningSnapshot !== TYPEOF.OBJECT
+      typeof membershipPublicationPlanningSnapshot !== 'object'
     ) {
       return false;
     }
     const providedPublicationRecoveryGate =
       membershipPublicationPlanningSnapshot.publicationRecoveryGate &&
       typeof membershipPublicationPlanningSnapshot.publicationRecoveryGate ===
-        TYPEOF.OBJECT ?
+        'object' ?
         membershipPublicationPlanningSnapshot.publicationRecoveryGate :
         null;
     const pendingAckEvidenceState =
@@ -551,7 +548,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       pendingAckCount:
         membershipPublicationPlanningSnapshot.pendingAckCount ??
         providedPublicationRecoveryGate?.pendingAckCount ??
-        NUM.ZERO,
+        0,
       pendingAckEvidenceState,
       missingPublishedNodeIds:
         membershipPublicationPlanningSnapshot.missingPublishedNodeIds ??
@@ -561,7 +558,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
         [],
       publicationExcludesTargetNode:
         typeof membershipPublicationPlanningSnapshot
-          .publicationExcludesTargetNode === TYPEOF.BOOLEAN ?
+          .publicationExcludesTargetNode === 'boolean' ?
           membershipPublicationPlanningSnapshot.publicationExcludesTargetNode :
           providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
     });
@@ -577,7 +574,7 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    */
   shouldAllowTransportBackedRecoveryGrace(context = {}) {
     const nodeEvidence =
-      context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT ?
+      context.nodeEvidence && typeof context.nodeEvidence === 'object' ?
         context.nodeEvidence :
         null;
     const serviceRows = Array.isArray(context.serviceRows) ?
@@ -641,12 +638,12 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   isControlPlanePublished(membershipPublication) {
     if (
       !membershipPublication ||
-      typeof membershipPublication !== TYPEOF.OBJECT
+      typeof membershipPublication !== 'object'
     ) {
       return true;
     }
     return (
-      String(membershipPublication.status || LOCAL_STR_EMPTY).toUpperCase() ===
+      String(membershipPublication.status || '').toUpperCase() ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
     );
   }

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   STARTUP_AUTHORITY_STATE,
 } from '../control-plane/startup-authority-snapshot-owner.js';
@@ -10,16 +9,15 @@ import {
   NODE_REINTEGRATION_REASON,
 } from './node-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 
 function resolveStartupAuthorityAdmissionEvidence(readinessService, nodeId) {
   if (!readinessService ||
       typeof readinessService.getStartupAuthoritySnapshotSync !==
-        TYPEOF.FUNCTION) {
+        'function') {
     return {
       startupAdmissionState:
         POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED,
-      startupAuthorityState: LOCAL_STR_EMPTY,
+      startupAuthorityState: '',
       reasonCodes: [],
     };
   }
@@ -30,7 +28,7 @@ function resolveStartupAuthorityAdmissionEvidence(readinessService, nodeId) {
     );
     const admission =
       startupAuthority?.admission &&
-        typeof startupAuthority.admission === TYPEOF.OBJECT ?
+        typeof startupAuthority.admission === 'object' ?
         startupAuthority.admission :
         {};
     const blocked =
@@ -41,19 +39,19 @@ function resolveStartupAuthorityAdmissionEvidence(readinessService, nodeId) {
       POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED;
     const reasonCode =
       Array.isArray(admission?.reasonCodes) &&
-        admission.reasonCodes.length > NUM.ZERO ?
-        admission.reasonCodes[NUM.ZERO] :
+        admission.reasonCodes.length > 0 ?
+        admission.reasonCodes[0] :
         NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED;
     return {
       startupAdmissionState,
-      startupAuthorityState: startupAuthority?.state || LOCAL_STR_EMPTY,
+      startupAuthorityState: startupAuthority?.state || '',
       reasonCodes: blocked === true ? [reasonCode] : [],
     };
   } catch (_error) {
     return {
       startupAdmissionState:
         POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.PENDING,
-      startupAuthorityState: LOCAL_STR_EMPTY,
+      startupAuthorityState: '',
       reasonCodes: [NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED],
     };
   }
@@ -65,16 +63,16 @@ function resolveStartupAuthorityAdmissionBlockFromEvidence(evidence = {}) {
       evidence.startupAdmissionState ===
         POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.BLOCKED,
     reasonCode:
-      evidence.reasonCodes?.[NUM.ZERO] ||
+      evidence.reasonCodes?.[0] ||
       NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED,
-    startupAuthorityState: evidence.startupAuthorityState || LOCAL_STR_EMPTY,
+    startupAuthorityState: evidence.startupAuthorityState || '',
   };
 }
 
 function buildStartupAdmissionEvidenceFromReconciliationDecision(decision) {
   return {
     startupAdmissionState: decision.evidence.startupAdmission.state,
-    startupAuthorityState: LOCAL_STR_EMPTY,
+    startupAuthorityState: '',
     reasonCodes: decision.evidence.startupAdmission.reasonCodes,
   };
 }
@@ -90,14 +88,14 @@ async function readPostRejoinReconciliationEvidence(
     Object.freeze({
       matches:
         typeof reconciliationService?.resolvePostRejoinReconciliationEvidence ===
-        TYPEOF.FUNCTION,
+        'function',
       read: () =>
         reconciliationService.resolvePostRejoinReconciliationEvidence(context),
     }),
     Object.freeze({
       matches:
         typeof reconciliationService?.getPostRejoinReconciliationEvidenceSync ===
-        TYPEOF.FUNCTION,
+        'function',
       read: () =>
         reconciliationService.getPostRejoinReconciliationEvidenceSync(context),
     }),

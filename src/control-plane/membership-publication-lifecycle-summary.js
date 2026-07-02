@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   MEMBERSHIP_MEMBER_STATE,
   buildMembershipLifecycleSummary,
@@ -6,11 +5,11 @@ import {
 
 function areMembershipLifecycleSummariesEqual(leftSummary, rightSummary) {
   const left =
-    leftSummary && typeof leftSummary === TYPEOF.OBJECT ?
+    leftSummary && typeof leftSummary === 'object' ?
       buildMembershipLifecycleSummary(leftSummary) :
       null;
   const right =
-    rightSummary && typeof rightSummary === TYPEOF.OBJECT ?
+    rightSummary && typeof rightSummary === 'object' ?
       buildMembershipLifecycleSummary(rightSummary) :
       null;
   if (left === null || right === null) {
@@ -37,12 +36,12 @@ function hasMembershipLifecycleSummaryProjectionAdvance(
 ) {
   const baselineProjectionDiagnostics =
     baselineSummary?.projectionDiagnostics &&
-      typeof baselineSummary.projectionDiagnostics === TYPEOF.OBJECT ?
+      typeof baselineSummary.projectionDiagnostics === 'object' ?
       baselineSummary.projectionDiagnostics :
       {};
   const candidateProjectionDiagnostics =
     candidateSummary?.projectionDiagnostics &&
-      typeof candidateSummary.projectionDiagnostics === TYPEOF.OBJECT ?
+      typeof candidateSummary.projectionDiagnostics === 'object' ?
       candidateSummary.projectionDiagnostics :
       {};
   return [
@@ -77,12 +76,12 @@ function hasMembershipLifecycleSummaryProjectionAdvance(
 }
 
 function hasMembershipLifecycleSummaryProjectionEvidence(summary, helperFns = {}) {
-  if (!summary || typeof summary !== TYPEOF.OBJECT) {
+  if (!summary || typeof summary !== 'object') {
     return false;
   }
   const projectionDiagnostics =
     summary.projectionDiagnostics &&
-      typeof summary.projectionDiagnostics === TYPEOF.OBJECT ?
+      typeof summary.projectionDiagnostics === 'object' ?
       summary.projectionDiagnostics :
       {};
   return [
@@ -94,7 +93,7 @@ function hasMembershipLifecycleSummaryProjectionEvidence(summary, helperFns = {}
     projectionDiagnostics.livenessFallbackIncludedNodeIds,
     projectionDiagnostics.runtimeAuthorityIncludedNodeIds,
   ].some((nodeIds) =>
-    helperFns.normalizeNodeIdList(nodeIds).length > NUM.ZERO,
+    helperFns.normalizeNodeIdList(nodeIds).length > 0,
   );
 }
 
@@ -105,7 +104,7 @@ function hasPublishedMembershipAuthoritativeRefreshDebt(
   const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
     publicationRow?.publishedActiveNodeIds,
   );
-  if (publishedActiveNodeIds.length === NUM.ZERO) {
+  if (publishedActiveNodeIds.length === 0) {
     return false;
   }
   return hasMembershipLifecycleSummaryProjectionEvidence(
@@ -124,7 +123,7 @@ function chooseMembershipLifecycleSummaryBase(
   );
   if (
     !planningMembershipLifecycleSummary ||
-    typeof planningMembershipLifecycleSummary !== TYPEOF.OBJECT
+    typeof planningMembershipLifecycleSummary !== 'object'
   ) {
     return derivedSummary;
   }
@@ -202,7 +201,7 @@ function buildPublishedMemberStates(options = {}, helperFns = {}) {
 function buildProjectionDiagnosticsSummary(activeNodeViews = null, helperFns = {}) {
   const projectionDiagnostics =
     activeNodeViews?.projectionDiagnostics &&
-    typeof activeNodeViews.projectionDiagnostics === TYPEOF.OBJECT ?
+    typeof activeNodeViews.projectionDiagnostics === 'object' ?
       activeNodeViews.projectionDiagnostics :
       null;
   if (!projectionDiagnostics) {
@@ -210,8 +209,8 @@ function buildProjectionDiagnosticsSummary(activeNodeViews = null, helperFns = {
   }
   return {
     readinessDecisionMode:
-      typeof projectionDiagnostics.readinessDecisionMode === TYPEOF.STRING &&
-      projectionDiagnostics.readinessDecisionMode.length > NUM.ZERO ?
+      typeof projectionDiagnostics.readinessDecisionMode === 'string' &&
+      projectionDiagnostics.readinessDecisionMode.length > 0 ?
         projectionDiagnostics.readinessDecisionMode :
         null,
     readinessDecisionDimensions: helperFns.normalizeStringList(

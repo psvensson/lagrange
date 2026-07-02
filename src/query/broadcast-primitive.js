@@ -9,7 +9,6 @@
  * Requirements: 5.1, 5.4
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   BROADCAST_MAX_PAYLOAD_BYTES,
 } from '../wasm-service/query-budget-constants.js';
@@ -37,7 +36,7 @@ function validateBroadcastArgs(ref, dataset, budgets) {
       error: PRIMITIVE_ERROR_MSG.BROADCAST_REF_REQUIRED,
     };
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {
       valid: false,
       error: PRIMITIVE_ERROR_MSG.BROADCAST_REF_MUST_BE_STRING,
@@ -83,7 +82,7 @@ function validateUseBroadcastArgs(ref) {
       error: PRIMITIVE_ERROR_MSG.BROADCAST_REF_REQUIRED,
     };
   }
-  if (typeof ref !== TYPEOF.STRING) {
+  if (typeof ref !== 'string') {
     return {
       valid: false,
       error: PRIMITIVE_ERROR_MSG.BROADCAST_REF_MUST_BE_STRING,
@@ -99,7 +98,7 @@ function validateUseBroadcastArgs(ref) {
  * @return {number} Estimated byte count.
  */
 function estimateBroadcastBytes(dataset) {
-  if (!dataset) return NUM.ZERO;
+  if (!dataset) return 0;
   return JSON.stringify(dataset).length;
 }
 
@@ -125,9 +124,9 @@ class BroadcastStore {
       BROADCAST_MAX_PAYLOAD_BYTES;
     this.onTelemetry = options.onTelemetry ?? null;
     this.lineageTracker = options.lineageTracker ?? null;
-    this.stageIndex = options.stageIndex ?? NUM.ZERO;
+    this.stageIndex = options.stageIndex ?? 0;
     this._store = new Map();
-    this._broadcastSeq = NUM.ZERO;
+    this._broadcastSeq = 0;
   }
 
   /**
@@ -167,12 +166,12 @@ class BroadcastStore {
         descriptor, this.stageIndex, PRIMITIVE_TYPE.BROADCAST,
         this._broadcastSeq,
       );
-      this._broadcastSeq += NUM.ONE;
+      this._broadcastSeq += 1;
     }
 
     this._store.set(ref, descriptor);
 
-    if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
+    if (typeof this.onTelemetry === 'function') {
       this.onTelemetry({
         primitive: PRIMITIVE_TYPE.BROADCAST,
         ref,
@@ -209,7 +208,7 @@ class BroadcastStore {
       throw new Error(PRIMITIVE_ERROR_MSG.BROADCAST_REF_NOT_FOUND);
     }
 
-    if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
+    if (typeof this.onTelemetry === 'function') {
       this.onTelemetry({
         primitive: PRIMITIVE_TYPE.USE_BROADCAST,
         ref,

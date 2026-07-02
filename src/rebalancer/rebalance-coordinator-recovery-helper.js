@@ -5,7 +5,6 @@ import {
 } from './rebalance-coordinator-helper-common.js';
 
 const {
-  NUM,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -54,9 +53,9 @@ async function handleRecovery(coordinator) {
   });
 
   const result = {
-    totalIncomplete: NUM.ZERO,
-    markedFailed: NUM.ZERO,
-    reconciled: NUM.ZERO,
+    totalIncomplete: 0,
+    markedFailed: 0,
+    reconciled: 0,
     errors: [],
   };
 

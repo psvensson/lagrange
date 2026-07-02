@@ -6,7 +6,6 @@
 
 import Ajv from 'ajv';
 import {v4 as uuidv4} from 'uuid';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONFIG_ENV,
   CONFIG_ERROR_MSG,
@@ -107,7 +106,7 @@ class ConfigurationManager {
     // Determine expected type from default config
     const defaultValue = this.getByPath(path, DEFAULT_CONFIG);
 
-    if (typeof defaultValue === TYPEOF.NUMBER) {
+    if (typeof defaultValue === 'number') {
       const parsed = Number(value);
       if (isNaN(parsed)) {
         throw new Error(
@@ -118,7 +117,7 @@ class ConfigurationManager {
       return parsed;
     }
 
-    if (typeof defaultValue === TYPEOF.BOOLEAN) {
+    if (typeof defaultValue === 'boolean') {
       return value.toLowerCase() === CONFIG_ENV.TRUE || value === CONFIG_ENV.ONE;
     }
 
@@ -175,7 +174,7 @@ class ConfigurationManager {
     const parts = path.split(CONFIG_SEPARATOR.DOT);
     let current = this.config;
 
-    for (let i = NUM.ZERO; i < parts.length - NUM.ONE; i += NUM.ONE) {
+    for (let i = 0; i < parts.length - 1; i += 1) {
       const part = parts[i];
       if (!(part in current)) {
         current[part] = {};
@@ -183,7 +182,7 @@ class ConfigurationManager {
       current = current[part];
     }
 
-    current[parts[parts.length - NUM.ONE]] = value;
+    current[parts[parts.length - 1]] = value;
   }
 
   /**
@@ -248,7 +247,7 @@ class ConfigurationManager {
     for (const key of Object.keys(source)) {
       if (
         source[key] !== null &&
-        typeof source[key] === TYPEOF.OBJECT &&
+        typeof source[key] === 'object' &&
         !Array.isArray(source[key])
       ) {
         if (!(key in target)) {

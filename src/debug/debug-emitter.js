@@ -2,7 +2,6 @@
  * DebugEmitter builds and emits structured Trace_Event envelopes.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DEBUG_ERROR_MSG,
   DEBUG_TRACE_FIELD as TF,
@@ -14,7 +13,7 @@ const LOCAL_STR_LINEAGEID = 'lineageId';
 const LOCAL_STR_STAGEID = 'stageId';
 const LOCAL_STR_PARTITIONID = 'partitionId';
 const LOCAL_STR_NODEID = 'nodeId';
-const LOCAL_STR_25YCP = 'serviceDefinitionId';
+const LOCAL_STR_SERVICEDEFINITIONID = 'serviceDefinitionId';
 const LOCAL_STR_REPLICAID = 'replicaId';
 const LOCAL_STR_RUNTIMEKIND = 'runtimeKind';
 const LOCAL_STR_SOURCE = 'source';
@@ -59,7 +58,7 @@ class DebugEmitter {
    * @return {boolean}
    */
   emitTrace(request) {
-    if (!request || typeof request !== TYPEOF.OBJECT) {
+    if (!request || typeof request !== 'object') {
       throw new Error(DEBUG_ERROR_MSG.TRACE_EVENT_REQUIRED);
     }
     const level = normalizeLevel(request.level);
@@ -71,7 +70,7 @@ class DebugEmitter {
       return false;
     }
     if (!this.traceCollector ||
-      typeof this.traceCollector.emit !== TYPEOF.FUNCTION) {
+      typeof this.traceCollector.emit !== 'function') {
       return false;
     }
 
@@ -100,7 +99,7 @@ class DebugEmitter {
    */
   isTraceActive(scope = null) {
     if (!this.sessionResolver ||
-      typeof this.sessionResolver.isTraceActive !== TYPEOF.FUNCTION) {
+      typeof this.sessionResolver.isTraceActive !== 'function') {
       return false;
     }
     return this.sessionResolver.isTraceActive(scope || {});
@@ -149,7 +148,7 @@ function buildTraceEvent(request) {
     [TF.SERVICE_DEFINITION_ID]: resolveField(
       scope,
       metadata,
-      LOCAL_STR_25YCP,
+      LOCAL_STR_SERVICEDEFINITIONID,
       fallback.serviceDefinitionId,
     ),
     [TF.REPLICA_ID]: resolveField(scope, metadata, LOCAL_STR_REPLICAID, fallback.replicaId),
@@ -169,7 +168,7 @@ function buildTraceEvent(request) {
  * @return {string}
  */
 function normalizeLevel(level) {
-  if (typeof level !== TYPEOF.STRING ||
+  if (typeof level !== 'string' ||
     !DEBUG_TRACE_LEVEL_SET.has(level)) {
     throw new Error(
       DEBUG_ERROR_MSG.TRACE_LEVEL_INVALID_PREFIX +
@@ -184,8 +183,8 @@ function normalizeLevel(level) {
  * @return {string}
  */
 function normalizeMessage(message) {
-  if (typeof message !== TYPEOF.STRING ||
-    message.length <= NUM.ZERO) {
+  if (typeof message !== 'string' ||
+    message.length <= 0) {
     throw new Error(DEBUG_ERROR_MSG.TRACE_MESSAGE_REQUIRED);
   }
   return message;

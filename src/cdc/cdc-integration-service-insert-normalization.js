@@ -5,11 +5,9 @@ const {
   CDC_ERROR_MSG,
   CDC_INTEGRATION_SERVICE_LITERAL,
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   STATE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   canonicalizeSystemTableRow,
   getSchemaByTableName,
   materializeNormalizedDefaultValue,
@@ -30,7 +28,7 @@ export function normalizeDefaultValue(value) {
           CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_NULL,
     });
   }
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return Object.freeze({
       state: CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_VALUE,
       value,
@@ -45,7 +43,7 @@ export function normalizeDefaultValue(value) {
   ) {
     return Object.freeze({
       state: CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_VALUE,
-      value: trimmed.slice(NUM.ONE, -NUM.ONE),
+      value: trimmed.slice(1, -1),
     });
   }
   if (trimmed.toLowerCase() === CDC_INTEGRATION_SERVICE_LITERAL.NULL) {
@@ -127,22 +125,22 @@ export function applyTableInsertDefaults(tableName, _schema, rowData) {
     rowData[COLUMN.NODE_ADDRESS] = CDC_INTEGRATION_SERVICE_LITERAL.UNKNOWN;
   }
   if (rowData.cpu_cores == null) {
-    rowData.cpu_cores = NUM.ZERO;
+    rowData.cpu_cores = 0;
   }
   if (rowData.memory_mb == null) {
-    rowData.memory_mb = NUM.ZERO;
+    rowData.memory_mb = 0;
   }
   if (rowData.disk_gb == null) {
-    rowData.disk_gb = NUM.ZERO;
+    rowData.disk_gb = 0;
   }
   if (rowData.cpu_usage_percent == null) {
-    rowData.cpu_usage_percent = NUM.ZERO;
+    rowData.cpu_usage_percent = 0;
   }
   if (rowData.memory_usage_percent == null) {
-    rowData.memory_usage_percent = NUM.ZERO;
+    rowData.memory_usage_percent = 0;
   }
   if (rowData.disk_usage_percent == null) {
-    rowData.disk_usage_percent = NUM.ZERO;
+    rowData.disk_usage_percent = 0;
   }
   if (!rowData.status) {
     rowData.status = SERVICE_STATUS.ACTIVE;
@@ -175,7 +173,7 @@ export function prepareInsertData(context, tableName, data, options = {}) {
   const rowData = filterDataForTable(tableName, {
     ...canonicalData,
   });
-  if (Object.keys(rowData).length === NUM.ZERO) {
+  if (Object.keys(rowData).length === 0) {
     throw new Error(
       `${CDC_ERROR_MSG.INSERT_VALID_COLUMNS_PREFIX}${tableName}`,
     );

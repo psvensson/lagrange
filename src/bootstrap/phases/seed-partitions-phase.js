@@ -40,7 +40,6 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
@@ -74,7 +73,7 @@ class SeedPartitionsPhase {
     const logger = d.getLogger();
     const config = d.getConfig();
     const replicaStaggerDelayMs = config.replicaStaggerDelayMs;
-    let queuedPartitionReplicaCount = NUM.ZERO;
+    let queuedPartitionReplicaCount = 0;
     d.resetPartitionReplicas();
 
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
@@ -94,7 +93,7 @@ class SeedPartitionsPhase {
         `${nodeId}${ADDRESS.SEPARATOR}` +
         `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}${replicaId}`,
       );
-      for (let index = NUM.ZERO; index < replicaIds.length; index++) {
+      for (let index = 0; index < replicaIds.length; index++) {
         const replicaId = replicaIds[index];
         const dbPath = d.resolvePartitionDbPath(
           partitionId, replicaId,
@@ -116,9 +115,9 @@ class SeedPartitionsPhase {
             peerAddresses,
             dbPath,
             deferElection: true,
-            createDelayMs: index > NUM.ZERO ?
+            createDelayMs: index > 0 ?
               index * replicaStaggerDelayMs :
-              NUM.ZERO,
+              0,
           },
         );
         queuedPartitionReplicaCount++;
@@ -176,7 +175,7 @@ class SeedPartitionsPhase {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
-    if (options.createDelayMs > NUM.ZERO) {
+    if (options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
     }
 
@@ -185,7 +184,7 @@ class SeedPartitionsPhase {
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       peerTotal: Math.max(
-        NUM.ZERO, options.replicaIds.length - NUM.ONE,
+        0, options.replicaIds.length - 1,
       ),
     });
 
@@ -324,7 +323,7 @@ class SeedPartitionsPhase {
     const messageGroupReplicas = d.getMessageGroupReplicas();
 
     if (messageGroupReplicas &&
-        messageGroupReplicas.length > NUM.ZERO) {
+        messageGroupReplicas.length > 0) {
       logger.info(BOOTSTRAP_LOG_MSG.STARTING_MG_ELECTIONS, {
         totalReplicas: messageGroupReplicas.length,
         nodeId: d.getNodeId(),
@@ -371,7 +370,7 @@ class SeedPartitionsPhase {
       config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
     const timeoutMs = Number.isFinite(configuredTimeoutMs) &&
-      configuredTimeoutMs > NUM.ZERO ?
+      configuredTimeoutMs > 0 ?
       Math.floor(configuredTimeoutMs) :
       BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
     let delay = config.leadershipWaitInitialDelayMs ||
@@ -388,7 +387,7 @@ class SeedPartitionsPhase {
         null;
     const partitionIds = requestedPartitionIds ?
       new Set(requestedPartitionIds.filter((partitionId) =>
-        typeof partitionId === 'string' && partitionId.length > NUM.ZERO,
+        typeof partitionId === 'string' && partitionId.length > 0,
       )) :
       new Set();
     if (!requestedPartitionIds) {
@@ -407,7 +406,7 @@ class SeedPartitionsPhase {
     if (this.satisfiedPartitionLeadershipSetKey === partitionSetKey) {
       logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_IMMEDIATE, {
         partitionCount: partitionIds.size,
-        elapsedMs: NUM.ZERO,
+        elapsedMs: 0,
         cached: true,
       });
       return;
@@ -419,7 +418,7 @@ class SeedPartitionsPhase {
       logger.debug(
         BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_IMMEDIATE, {
           partitionCount: partitionIds.size,
-          elapsedMs: NUM.ZERO,
+          elapsedMs: 0,
         });
       return;
     }
@@ -610,7 +609,7 @@ class SeedPartitionsPhase {
       epochManager.initialize(persistedEpoch);
     } else {
       const initialEpoch = new AssignmentEpoch({
-        epoch: NUM.ZERO,
+        epoch: 0,
         assignments: initialAssignments,
         timestamp: new Date().toISOString(),
         proposedBy: d.getNodeId(),
@@ -651,15 +650,15 @@ class SeedPartitionsPhase {
         );
         const hasRow = result?.success &&
           Array.isArray(result.rows) &&
-          result.rows.length > NUM.ZERO;
+          result.rows.length > 0;
         if (!hasRow) {
           continue;
         }
 
         const configValue =
-          result.rows[NUM.ZERO]?.[COLUMN.CONFIG_VALUE];
+          result.rows[0]?.[COLUMN.CONFIG_VALUE];
         if (typeof configValue !== LOCAL_STR_STRING ||
-            configValue.length === NUM.ZERO) {
+            configValue.length === 0) {
           continue;
         }
 

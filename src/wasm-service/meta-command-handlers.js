@@ -83,7 +83,7 @@ const COLUMN_COUNT = COLUMN_LIST.length;
 
 const INSERT_COLUMNS = COLUMN_LIST.join(', ');
 const INSERT_PLACEHOLDERS = COLUMN_LIST
-  .map((_c, i) => `?${i + NUM.ONE}`)
+  .map((_c, i) => `?${i + 1}`)
   .join(', ');
 
 const SELECT_ALL = `${SQL.SELECT} * FROM ${TABLES.MODULE_MANIFESTS}`;
@@ -139,7 +139,7 @@ function handleGetModule(params) {
   if (!params || !params.version) {
     errors.push(META_COMMAND_ERROR_MSG.VERSION_REQUIRED);
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 
@@ -177,7 +177,7 @@ function handleListModules(params) {
   }
 
   let sql = SELECT_ALL;
-  if (filters.length > NUM.ZERO) {
+  if (filters.length > 0) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 
@@ -186,7 +186,7 @@ function handleListModules(params) {
 
 const SD_INSERT_COLUMNS = SERVICE_DEFINITION_COLUMN_LIST.join(', ');
 const SD_INSERT_PLACEHOLDERS = SERVICE_DEFINITION_COLUMN_LIST
-  .map((_c, i) => `?${i + NUM.ONE}`)
+  .map((_c, i) => `?${i + 1}`)
   .join(', ');
 
 /**
@@ -197,7 +197,7 @@ const SD_INSERT_PLACEHOLDERS = SERVICE_DEFINITION_COLUMN_LIST
 function isValidReplicaCount(count) {
   return Number.isInteger(count) &&
     count >= NUM.THREE &&
-    count % NUM.TWO !== NUM.ZERO;
+    count % 2 !== 0;
 }
 
 /**
@@ -223,7 +223,7 @@ function handleCreateService(params) {
       !isValidReplicaCount(params.replicaCount)) {
     errors.push(META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD);
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 
@@ -324,7 +324,7 @@ function handleUpdateService(params) {
   const sqlParams = [];
 
   const fieldKeys = Object.keys(UPDATABLE_FIELDS);
-  for (let i = NUM.ZERO; i < fieldKeys.length; i++) {
+  for (let i = 0; i < fieldKeys.length; i++) {
     const key = fieldKeys[i];
     if (params[key] !== undefined) {
       let value = params[key];
@@ -342,7 +342,7 @@ function handleUpdateService(params) {
     }
   }
 
-  if (setClauses.length === NUM.ZERO) {
+  if (setClauses.length === 0) {
     return {
       success: false,
       errors: [META_COMMAND_ERROR_MSG.NO_FIELDS_TO_UPDATE],
@@ -385,7 +385,7 @@ function handleScaleService(params) {
   } else if (!isValidReplicaCount(params.replicaCount)) {
     errors.push(META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD);
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 
@@ -513,7 +513,7 @@ function buildMutationResponse(operationId, requestId) {
   if (!requestId) {
     errors.push(META_COMMAND_ERROR_MSG.REQUEST_ID_REQUIRED);
   }
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {success: false, errors};
   }
 

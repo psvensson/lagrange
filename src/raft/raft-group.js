@@ -8,7 +8,7 @@
 
 import {EventEmitter} from 'events';
 import {isRaftPacket} from './raft-packet-utils.js';
-import {ADDRESS, NUM, STRING, TYPEOF} from '../constants/index.js';
+import {ADDRESS, NUM, STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {LeaderActivationGate} from './leader-activation-gate.js';
@@ -49,16 +49,16 @@ const HEARTBEAT_ELECTION_TIMER = 'heartbeat, election';
 const LIFERAFT_DATA_EVENT = 'data';
 
 function resolveActivationNodeId(options = {}) {
-  if (typeof options.nodeId === TYPEOF.STRING &&
-      options.nodeId.length > NUM.ZERO) {
+  if (typeof options.nodeId === 'string' &&
+      options.nodeId.length > 0) {
     return options.nodeId;
   }
-  if (typeof options.unifiedAddress !== TYPEOF.STRING ||
-      options.unifiedAddress.length === NUM.ZERO) {
+  if (typeof options.unifiedAddress !== 'string' ||
+      options.unifiedAddress.length === 0) {
     return LOCAL_STR_SHARED_NODE;
   }
   const [nodeId] = options.unifiedAddress.split(RAFT_GROUP_ADDRESS.SEPARATOR);
-  return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
+  return typeof nodeId === 'string' && nodeId.length > 0 ?
     nodeId :
     LOCAL_STR_SHARED_NODE;
 }
@@ -103,7 +103,7 @@ class RaftGroup extends EventEmitter {
     this.peerAddresses = options.peerAddresses || [];
     this.logAdapter = options.logAdapter || null;
     this.deferElection = options.deferElection || false;
-    this.shouldJoinPeer = typeof options.shouldJoinPeer === TYPEOF.FUNCTION ?
+    this.shouldJoinPeer = typeof options.shouldJoinPeer === 'function' ?
       options.shouldJoinPeer :
       null;
 
@@ -121,12 +121,12 @@ class RaftGroup extends EventEmitter {
     this.activationNodeId = resolveActivationNodeId(options);
     this.leaderActivationStabilizationMs =
       Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+      options.leaderActivationStabilizationMs >= 0 ?
         Math.floor(options.leaderActivationStabilizationMs) :
         RAFT_GROUP_DEFAULT.LEADER_ACTIVATION_STABILIZATION_MS;
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+      options.leaderActivationNodeSpacingMs >= 0 ?
         Math.floor(options.leaderActivationNodeSpacingMs) :
         RAFT_GROUP_DEFAULT.LEADER_ACTIVATION_NODE_SPACING_MS;
     this.leaderActivationScheduler = options.leaderActivationScheduler ||
@@ -234,7 +234,7 @@ class RaftGroup extends EventEmitter {
 
     if (logAdapter) {
       raftOptions[RAFT_GROUP_LIFERAFT_TIMER.LOG] =
-        typeof logAdapter === TYPEOF.FUNCTION ?
+        typeof logAdapter === 'function' ?
           logAdapter :
           function() {
             return logAdapter;
@@ -251,9 +251,9 @@ class RaftGroup extends EventEmitter {
    */
   computeElectionTimeouts() {
     let replicaIndex = this.replicaIds.indexOf(this.replicaId);
-    if (replicaIndex < NUM.ZERO) {
+    if (replicaIndex < 0) {
       const hashCode = this.replicaId.split(STRING.EMPTY).reduce(
-        (acc, char) => acc + char.charCodeAt(NUM.ZERO), NUM.ZERO,
+        (acc, char) => acc + char.charCodeAt(0), 0,
       );
       replicaIndex = this.replicaIds.length +
         (hashCode % HASH_MODULO);
@@ -270,7 +270,7 @@ class RaftGroup extends EventEmitter {
    * @private
    */
   wireRaftEvents() {
-    const isSingleReplica = this.replicaIds.length === NUM.ONE;
+    const isSingleReplica = this.replicaIds.length === 1;
 
     this.raft.on(RAFT_GROUP_LIFERAFT_EVENT.LEADER, () => {
       this.role = RAFT_GROUP_ROLE.LEADER;
@@ -329,14 +329,14 @@ class RaftGroup extends EventEmitter {
    */
   resolveJoinPeerTarget(peerId) {
     if (typeof this.peerAddressResolver.resolveJoinTarget ===
-        TYPEOF.FUNCTION) {
+        'function') {
       const joinTarget = this.peerAddressResolver.resolveJoinTarget(
         peerId,
         this.peerAddresses,
       ) || {};
       const peerAddress =
-        typeof joinTarget.address === TYPEOF.STRING &&
-          joinTarget.address.length > NUM.ZERO ?
+        typeof joinTarget.address === 'string' &&
+          joinTarget.address.length > 0 ?
           joinTarget.address :
           null;
       return {
@@ -376,8 +376,8 @@ class RaftGroup extends EventEmitter {
       if (!shouldJoin) {
         continue;
       }
-      if (typeof peerAddress !== TYPEOF.STRING ||
-          peerAddress.length === NUM.ZERO) {
+      if (typeof peerAddress !== 'string' ||
+          peerAddress.length === 0) {
         throw new Error(RAFT_GROUP_ERROR_MSG.peerJoinFailed(peerId));
       }
       this.logger.info(RAFT_GROUP_LOG_MSG.JOINING_PEER_ADDRESS, {
@@ -403,7 +403,7 @@ class RaftGroup extends EventEmitter {
 
     this.electionStarted = true;
 
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.handleSingleReplicaPromotion();
       return;
     }
@@ -411,7 +411,7 @@ class RaftGroup extends EventEmitter {
     if (this.raft) {
       this.logger.info(RAFT_GROUP_LOG_MSG.STARTING_ELECTION_TIMER, {
         replicaId: this.replicaId,
-        peerCount: this.replicaIds.length - NUM.ONE,
+        peerCount: this.replicaIds.length - 1,
       });
       this.raftProvider.startElectionTimer(this.raft);
     }
@@ -423,7 +423,7 @@ class RaftGroup extends EventEmitter {
    */
   handleSingleReplicaPromotion() {
     if (!this.raft ||
-        typeof this.raft.change !== TYPEOF.FUNCTION) {
+        typeof this.raft.change !== 'function') {
       throw new Error(RAFT_GROUP_ERROR_MSG.SINGLE_REPLICA_CHANGE_REQUIRED);
     }
     const leaderState = this.raft?.constructor?.LEADER;
@@ -466,7 +466,7 @@ class RaftGroup extends EventEmitter {
 
     const senderAddress = payload.address;
     const isValidSenderAddress = senderAddress &&
-      typeof senderAddress === TYPEOF.STRING &&
+      typeof senderAddress === 'string' &&
       senderAddress.includes(ADDRESS.SEPARATOR);
 
     if (!isValidSenderAddress) {

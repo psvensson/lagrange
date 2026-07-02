@@ -4,7 +4,6 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 
 const {
-  NUM,
   PG_EXPR_TYPE,
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
@@ -97,7 +96,7 @@ const queryExecutorSqlCommandMethods = {
     }
 
     // CTE prefix
-    if (ast.ctes && ast.ctes.length > NUM.ZERO) {
+    if (ast.ctes && ast.ctes.length > 0) {
       const recursive = ast.recursive ? 'RECURSIVE ' : '';
       const cteDefs = ast.ctes.map(
         (cte) => `${cte.name} AS (${this.buildSelectSQL(cte.query)})`,
@@ -278,14 +277,14 @@ const queryExecutorSqlCommandMethods = {
       );
       if (
         typeof result?.errorCode === LOCAL_STR_STRING &&
-        result.errorCode.length > NUM.ZERO
+        result.errorCode.length > 0
       ) {
         error.code = result.errorCode;
         error.errorCode = result.errorCode;
       }
       if (
         Number.isFinite(result?.retryAfterMs) &&
-        result.retryAfterMs > NUM.ZERO
+        result.retryAfterMs > 0
       ) {
         error.retryAfterMs = Math.floor(result.retryAfterMs);
       }
@@ -307,39 +306,39 @@ const queryExecutorSqlCommandMethods = {
       }
       if (
         typeof result?.participantNodeId === LOCAL_STR_STRING &&
-        result.participantNodeId.length > NUM.ZERO
+        result.participantNodeId.length > 0
       ) {
         error.participantNodeId = result.participantNodeId;
       }
       if (
         typeof result?.participantAddress === LOCAL_STR_STRING &&
-        result.participantAddress.length > NUM.ZERO
+        result.participantAddress.length > 0
       ) {
         error.participantAddress = result.participantAddress;
       }
       if (
         typeof result?.reasonCode === LOCAL_STR_STRING &&
-        result.reasonCode.length > NUM.ZERO
+        result.reasonCode.length > 0
       ) {
         error.reasonCode = result.reasonCode;
       }
       if (
         typeof result?.participationKind === LOCAL_STR_STRING &&
-        result.participationKind.length > NUM.ZERO
+        result.participationKind.length > 0
       ) {
         error.participationKind = result.participationKind;
       }
       if (
         typeof result?.tableName === LOCAL_STR_STRING &&
-        result.tableName.length > NUM.ZERO
+        result.tableName.length > 0
       ) {
         error.tableName = result.tableName;
-      } else if (typeof ast?.table === LOCAL_STR_STRING && ast.table.length > NUM.ZERO) {
+      } else if (typeof ast?.table === LOCAL_STR_STRING && ast.table.length > 0) {
         error.tableName = ast.table;
       }
       if (
         typeof result?.failedTable === LOCAL_STR_STRING &&
-        result.failedTable.length > NUM.ZERO
+        result.failedTable.length > 0
       ) {
         error.failedTable = result.failedTable;
       }
@@ -429,20 +428,20 @@ const queryExecutorSqlCommandMethods = {
     const fanoutMetrics = this.getLastCoordinatorMetrics();
     const failedResults = results.filter((result) => !result.success);
     const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || NUM.ZERO : NUM.ZERO),
-      NUM.ZERO,
+      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
+      0,
     );
     const returningRows = [];
     for (const result of results) {
       if (
         result.success &&
         Array.isArray(result.rows) &&
-        result.rows.length > NUM.ZERO
+        result.rows.length > 0
       ) {
         returningRows.push(...result.rows);
       }
     }
-    if (failedResults.length > NUM.ZERO) {
+    if (failedResults.length > 0) {
       const failureSummary = buildDistributedFailureSummary(failedResults);
       return {
         success: false,
@@ -467,7 +466,7 @@ const queryExecutorSqlCommandMethods = {
       rows: returningRows,
       distributedMetrics: {
         fanout: fanoutMetrics,
-        failedPartitionCount: NUM.ZERO,
+        failedPartitionCount: 0,
       },
     };
   },
@@ -520,20 +519,20 @@ const queryExecutorSqlCommandMethods = {
     const fanoutMetrics = this.getLastCoordinatorMetrics();
     const failedResults = results.filter((result) => !result.success);
     const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || NUM.ZERO : NUM.ZERO),
-      NUM.ZERO,
+      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
+      0,
     );
     const returningRows = [];
     for (const result of results) {
       if (
         result.success &&
         Array.isArray(result.rows) &&
-        result.rows.length > NUM.ZERO
+        result.rows.length > 0
       ) {
         returningRows.push(...result.rows);
       }
     }
-    if (failedResults.length > NUM.ZERO) {
+    if (failedResults.length > 0) {
       const failureSummary = buildDistributedFailureSummary(failedResults);
       return {
         success: false,
@@ -558,7 +557,7 @@ const queryExecutorSqlCommandMethods = {
       rows: returningRows,
       distributedMetrics: {
         fanout: fanoutMetrics,
-        failedPartitionCount: NUM.ZERO,
+        failedPartitionCount: 0,
       },
     };
   },

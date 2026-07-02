@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   buildMembershipLifecycleSummary,
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
@@ -23,7 +19,7 @@ import {
 
 function closeAcknowledgedMetadataRefreshRow(options = {}) {
   const publicationRow = options.publicationRow;
-  if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+  if (!publicationRow || typeof publicationRow !== 'object') {
     return publicationRow;
   }
   const closureDecision = buildPublicationMetadataRefreshDecision({
@@ -38,7 +34,7 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
     publicationRow.transition_history :
     normalizedPublication.transitionHistory;
   const publishedNodeIdsForState =
-    normalizedPublication.publishedActiveNodeIds.length > NUM.ZERO ?
+    normalizedPublication.publishedActiveNodeIds.length > 0 ?
       normalizedPublication.publishedActiveNodeIds :
       normalizedPublication.requiredAckNodeIds;
   const membershipLifecycleSummary = buildMembershipLifecycleSummary({

@@ -1,4 +1,4 @@
-import {NUM, SERVICE_STATUS, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   buildPartitionRowByPartitionId,
@@ -18,10 +18,10 @@ const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
 
 function normalizeBlockedPriorityPartition(
   entry,
-  requiredDistinctNodeCount = NUM.ZERO,
+  requiredDistinctNodeCount = 0,
   helperFns = {},
 ) {
-  if (!entry || typeof entry !== TYPEOF.OBJECT) {
+  if (!entry || typeof entry !== 'object') {
     return null;
   }
   const partitionId = String(entry.partitionId || entry.partition_id || '').trim();
@@ -34,7 +34,7 @@ function normalizeBlockedPriorityPartition(
   );
   const readyDistinctNodeCount = helperFns.normalizePositiveInteger(
     entry.readyDistinctNodeCount ?? entry.ready_distinct_node_count,
-    NUM.ZERO,
+    0,
   );
   const readyReplicaCount = helperFns.normalizePositiveInteger(
     entry.readyReplicaCount ?? entry.ready_replica_count,
@@ -42,11 +42,11 @@ function normalizeBlockedPriorityPartition(
   );
   const spreadGap = helperFns.normalizePositiveInteger(
     entry.spreadGap ?? entry.spread_gap,
-    Math.max(NUM.ZERO, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
+    Math.max(0, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
   );
   const exclusionReasonCounts =
     entry.exclusionReasonCounts &&
-    typeof entry.exclusionReasonCounts === TYPEOF.OBJECT ?
+    typeof entry.exclusionReasonCounts === 'object' ?
       {...entry.exclusionReasonCounts} :
       null;
   return {
@@ -60,12 +60,12 @@ function normalizeBlockedPriorityPartition(
 }
 
 function normalizePriorityPartitionSummary(summary, options = {}, helperFns = {}) {
-  if (!summary || typeof summary !== TYPEOF.OBJECT) {
+  if (!summary || typeof summary !== 'object') {
     return null;
   }
   const fallbackRequiredDistinctNodeCount = helperFns.normalizePositiveInteger(
     options.requiredDistinctNodeCount,
-    NUM.ZERO,
+    0,
   );
   const requiredDistinctNodeCount = helperFns.normalizePositiveInteger(
     summary.requiredDistinctNodeCount ?? summary.required_distinct_node_count,
@@ -85,7 +85,7 @@ function normalizePriorityPartitionSummary(summary, options = {}, helperFns = {}
   ]);
   const readyEligibleNodeCount = helperFns.normalizePositiveInteger(
     summary.readyEligibleNodeCount ?? summary.ready_eligible_node_count,
-    helperFns.normalizePositiveInteger(options.readyEligibleNodeCount, NUM.ZERO),
+    helperFns.normalizePositiveInteger(options.readyEligibleNodeCount, 0),
   );
   const totalPriorityPartitionCount = helperFns.normalizePositiveInteger(
     summary.totalPriorityPartitionCount ?? summary.total_priority_partition_count,
@@ -93,8 +93,8 @@ function normalizePriorityPartitionSummary(summary, options = {}, helperFns = {}
   );
   const satisfied =
     summary.satisfied === true &&
-    missingPartitionIds.length === NUM.ZERO &&
-    blockedPartitions.length === NUM.ZERO;
+    missingPartitionIds.length === 0 &&
+    blockedPartitions.length === 0;
   return {
     satisfied,
     requiredDistinctNodeCount,
@@ -110,21 +110,21 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
   if (normalizedSummary === null) {
     return null;
   }
-  let blockedPartitionSpreadGap = NUM.ZERO;
-  let blockedPartitionReadyDistinctNodeCount = NUM.ZERO;
+  let blockedPartitionSpreadGap = 0;
+  let blockedPartitionReadyDistinctNodeCount = 0;
   for (const blockedPartition of normalizedSummary.blockedPartitions) {
     blockedPartitionSpreadGap += helperFns.normalizePositiveInteger(
       blockedPartition.spreadGap,
-      NUM.ZERO,
+      0,
     );
     blockedPartitionReadyDistinctNodeCount += helperFns.normalizePositiveInteger(
       blockedPartition.readyDistinctNodeCount,
-      NUM.ZERO,
+      0,
     );
   }
   return {
     normalizedSummary,
-    satisfiedRank: normalizedSummary.satisfied === true ? NUM.ONE : NUM.ZERO,
+    satisfiedRank: normalizedSummary.satisfied === true ? 1 : 0,
     missingPartitionCount: normalizedSummary.missingPartitionIds.length,
     blockedPartitionCount: normalizedSummary.blockedPartitions.length,
     blockedPartitionSpreadGap,
@@ -136,7 +136,7 @@ function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, h
   const leftAdvancement = buildPriorityPartitionSummaryAdvancement(leftSummary, helperFns);
   const rightAdvancement = buildPriorityPartitionSummaryAdvancement(rightSummary, helperFns);
   if (leftAdvancement === null || rightAdvancement === null) {
-    return NUM.ZERO;
+    return 0;
   }
   const decisiveDelta = [
     leftAdvancement.satisfiedRank - rightAdvancement.satisfiedRank,
@@ -147,8 +147,8 @@ function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, h
       rightAdvancement.blockedPartitionReadyDistinctNodeCount,
     leftAdvancement.normalizedSummary.readyEligibleNodeCount -
       rightAdvancement.normalizedSummary.readyEligibleNodeCount,
-  ].find((delta) => delta !== NUM.ZERO);
-  return typeof decisiveDelta === TYPEOF.NUMBER ? decisiveDelta : NUM.ZERO;
+  ].find((delta) => delta !== 0);
+  return typeof decisiveDelta === 'number' ? decisiveDelta : 0;
 }
 
 function chooseMoreAdvancedPriorityPartitionSummary(
@@ -176,7 +176,7 @@ function chooseMoreAdvancedPriorityPartitionSummary(
     normalizedCandidateSummary,
     normalizedBaselineSummary,
     helperFns,
-  ) > NUM.ZERO ?
+  ) > 0 ?
     normalizedCandidateSummary :
     normalizedBaselineSummary;
 }
@@ -192,7 +192,7 @@ function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns
 
 function isReadinessPromotable(readinessEntry = null) {
   const dimensions =
-    readinessEntry?.dimensions && typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    readinessEntry?.dimensions && typeof readinessEntry.dimensions === 'object' ?
       readinessEntry.dimensions :
       null;
   if (!dimensions) {
@@ -222,17 +222,17 @@ function isReadinessPromotable(readinessEntry = null) {
 
 function buildPrioritySpreadEligibleNodeIdSet(options = {}, helperFns = {}) {
   const preferredNodeIds = helperFns.normalizeNodeIdList(
-    options.locallyEligibleNodeIds?.length > NUM.ZERO ?
+    options.locallyEligibleNodeIds?.length > 0 ?
       options.locallyEligibleNodeIds :
-      options.projectedServingNodeIds?.length > NUM.ZERO ?
+      options.projectedServingNodeIds?.length > 0 ?
         options.projectedServingNodeIds :
         options.publishedActiveNodeIds,
   );
-  if (preferredNodeIds.length > NUM.ZERO) {
+  if (preferredNodeIds.length > 0) {
     return new Set(preferredNodeIds);
   }
   const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const promotableNodeIds = helperFns.normalizeNodeIdList(
@@ -256,7 +256,7 @@ function resolvePrioritySpreadReplicaExclusionReason(
   normalizedService,
   readinessByNodeId = {},
 ) {
-  if (!normalizedService || typeof normalizedService !== TYPEOF.OBJECT) {
+  if (!normalizedService || typeof normalizedService !== 'object') {
     return 'invalid_row';
   }
   if (normalizedService.serviceType !== SERVICE_TYPE.PARTITION) {
@@ -285,12 +285,12 @@ function resolvePrioritySpreadReplicaExclusionReason(
 
 function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
-  if (serviceRows.length === NUM.ZERO) {
+  if (serviceRows.length === 0) {
     return null;
   }
   const partitionRows = Array.isArray(options.partitionRows) ? options.partitionRows : [];
   const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const partitionRowByPartitionId = buildPartitionRowByPartitionId(partitionRows);
@@ -307,7 +307,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     observedPriorityServiceRow = true;
     if (!readyReplicaStatsByPartitionId.has(partitionId)) {
       readyReplicaStatsByPartitionId.set(partitionId, {
-        readyReplicaCount: NUM.ZERO,
+        readyReplicaCount: 0,
         nodeIds: new Set(),
         exclusionReasonCounts: {},
       });
@@ -317,17 +317,17 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
       normalizedService,
       readinessByNodeId,
     ) || (
-      eligibleNodeIds.size > NUM.ZERO &&
+      eligibleNodeIds.size > 0 &&
       !eligibleNodeIds.has(normalizedService.nodeId) ?
         'node_not_eligible' :
         null
     );
     if (exclusionReason !== null) {
       stats.exclusionReasonCounts[exclusionReason] =
-        (stats.exclusionReasonCounts[exclusionReason] || NUM.ZERO) + NUM.ONE;
+        (stats.exclusionReasonCounts[exclusionReason] || 0) + 1;
       continue;
     }
-    stats.readyReplicaCount += NUM.ONE;
+    stats.readyReplicaCount += 1;
     stats.nodeIds.add(normalizedService.nodeId);
   }
   const observedPriorityPartitionRow = partitionRows.some((partitionRow) =>
@@ -342,7 +342,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     partitionRowByPartitionId,
     includeInitialWhenMissing: true,
   });
-  if (eligibleNodeIds.size === NUM.ZERO) {
+  if (eligibleNodeIds.size === 0) {
     for (const stats of readyReplicaStatsByPartitionId.values()) {
       for (const nodeId of stats.nodeIds) {
         eligibleNodeIds.add(nodeId);
@@ -356,13 +356,13 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   const blockedPartitions = [];
   for (const partitionId of priorityPartitionIds) {
     const stats = readyReplicaStatsByPartitionId.get(partitionId) || {
-      readyReplicaCount: NUM.ZERO,
+      readyReplicaCount: 0,
       nodeIds: new Set(),
       exclusionReasonCounts: {},
     };
     const readyDistinctNodeCount = stats.nodeIds.size;
-    const spreadGap = Math.max(NUM.ZERO, requiredDistinctNodeCount - readyDistinctNodeCount);
-    if (requiredDistinctNodeCount <= NUM.ONE || spreadGap <= NUM.ZERO) {
+    const spreadGap = Math.max(0, requiredDistinctNodeCount - readyDistinctNodeCount);
+    if (requiredDistinctNodeCount <= 1 || spreadGap <= 0) {
       continue;
     }
     blockedPartitions.push({
@@ -376,7 +376,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   }
   return normalizePriorityPartitionSummary(
     {
-      satisfied: blockedPartitions.length === NUM.ZERO,
+      satisfied: blockedPartitions.length === 0,
       requiredDistinctNodeCount,
       readyEligibleNodeCount: eligibleNodeIds.size,
       totalPriorityPartitionCount: priorityPartitionIds.length,

@@ -20,7 +20,6 @@ import assert from 'node:assert/strict';
 import {
   COLUMN,
   NODE_STATE,
-  NUM,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -146,7 +145,7 @@ function createEvaluator(nodeId, activeNodeIds = []) {
       getCdcIntegrationService: () => null,
       getControlPlaneReadinessService: () => ({
         getStartupAuthoritySnapshotSync: () => ({
-          authorityAvailable: activeNodeIds.length > NUM.ZERO,
+          authorityAvailable: activeNodeIds.length > 0,
           canonicalStartupNodeIds: activeNodeIds,
         }),
       }),
@@ -179,7 +178,7 @@ async (t) => {
         const nodeRows = [
           buildNodeRow(JOINING_NODE_ID, NODE_STATE.JOINING),
         ];
-        for (let i = NUM.ZERO; i < operationCount; i++) {
+        for (let i = 0; i < operationCount; i++) {
           const targetId = activeNodeId(i);
           rows.push(
             buildInFlightReplicaOperationRow(
@@ -215,7 +214,7 @@ async (t) => {
         );
 
         // Verify each returned operation targets an ACTIVE node.
-        for (let i = NUM.ZERO; i < inFlightDetails.length; i++) {
+        for (let i = 0; i < inFlightDetails.length; i++) {
           assert.notEqual(
             inFlightDetails[i].targetNodeId,
             JOINING_NODE_ID,
@@ -247,7 +246,7 @@ async (t) => {
         ];
 
         // Self-targeted operations
-        for (let i = NUM.ZERO; i < selfCount; i++) {
+        for (let i = 0; i < selfCount; i++) {
           rows.push(
             buildInFlightReplicaOperationRow(
               `op-self-mix-${i}`,
@@ -258,7 +257,7 @@ async (t) => {
         }
 
         // ACTIVE-targeted operations
-        for (let i = NUM.ZERO; i < activeCount; i++) {
+        for (let i = 0; i < activeCount; i++) {
           const targetId = activeNodeId(i + selfCount);
           rows.push(
             buildInFlightReplicaOperationRow(
@@ -326,12 +325,12 @@ async (t) => {
   // excluded count.
   assert.equal(
     result.inFlightOperations.length,
-    NUM.ZERO,
+    0,
     'inFlightOperations should be empty when no operations exist',
   );
   assert.equal(
     result.excludedSelfTargetedCount,
-    NUM.ZERO,
+    0,
     'excludedSelfTargetedCount should be 0 when no operations exist',
   );
   t.end();

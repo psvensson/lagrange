@@ -11,7 +11,6 @@ import {
 } from './operation-workflow-owner-ports.js';
 
 const {
-  NUM,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -318,7 +317,7 @@ function selectPriorityRecoveryDispatchPendingReentryOperation(
   if (
     !snapshotOperation ||
     typeof snapshotOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
-    snapshotOperationId.length === NUM.ZERO
+    snapshotOperationId.length === 0
   ) {
     return null;
   }
@@ -357,8 +356,8 @@ function selectPriorityRecoveryDispatchPendingReentryOperation(
   return Object.freeze({
     ...snapshotOperation,
     operationId: snapshotOperationId,
-    ...(workflowStep.length > NUM.ZERO ? {workflowStep} : {}),
-    ...(status.length > NUM.ZERO ? {status} : {}),
+    ...(workflowStep.length > 0 ? {workflowStep} : {}),
+    ...(status.length > 0 ? {status} : {}),
     createdAt: snapshotOperation.createdAtMs,
     updatedAt: snapshotOperation.updatedAtMs,
     completedAt: snapshotOperation.completedAtMs,
@@ -390,7 +389,7 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
     operationAvailable:
       operation &&
       typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
-      operationId.length > NUM.ZERO,
+      operationId.length > 0,
     ownerAdvance:
       snapshot?.actuation?.owner ===
         PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
@@ -696,7 +695,7 @@ function shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
       PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
     Number.isFinite(stepAgeMs) &&
     Number.isFinite(stepTimeoutMs) &&
-    stepTimeoutMs > NUM.ZERO &&
+    stepTimeoutMs > 0 &&
     stepAgeMs >= stepTimeoutMs
   );
 }
@@ -906,7 +905,7 @@ function schedulePriorityRecoveryDispatchPendingReentry(
     } finally {
       owner._reentryLocks.delete(operationId);
     }
-  }, NUM.ZERO);
+  }, 0);
   return true;
 }
 

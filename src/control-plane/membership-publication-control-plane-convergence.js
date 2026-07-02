@@ -1,6 +1,5 @@
 import {
   NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
@@ -15,7 +14,7 @@ import {
 } from './pressure-governor.js';
 
 const CONTROL_PLANE_CONVERGENCE_OUTCOME_SCHEMA_VERSION = 1;
-const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = 1;
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS = NUM.THOUSAND;
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_DELIVERY_PRIORITY = 'critical';
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION = Object.freeze({
@@ -39,7 +38,7 @@ const CONTROL_PLANE_CONVERGENCE_FIELD = Object.freeze({
 });
 
 function normalizeControlPlaneConvergenceRetryAfterMs(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS;
 }
@@ -61,16 +60,16 @@ function buildControlPlaneConvergenceOutcome({
     operation,
     queueBound: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
     retryAfterMs: normalizeControlPlaneConvergenceRetryAfterMs(retryAfterMs),
-    ...(typeof queueOutcome === TYPEOF.STRING &&
-      queueOutcome.length > NUM.ZERO ?
+    ...(typeof queueOutcome === 'string' &&
+      queueOutcome.length > 0 ?
       {queueOutcome} :
       {}),
-    ...(typeof reasonCode === TYPEOF.STRING &&
-      reasonCode.length > NUM.ZERO ?
+    ...(typeof reasonCode === 'string' &&
+      reasonCode.length > 0 ?
       {reasonCode} :
       {}),
-    ...(typeof pressureReason === TYPEOF.STRING &&
-      pressureReason.length > NUM.ZERO ?
+    ...(typeof pressureReason === 'string' &&
+      pressureReason.length > 0 ?
       {pressureReason} :
       {}),
   });

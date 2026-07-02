@@ -1,7 +1,6 @@
 import {NODE_STATE} from '../constants/index.js';
 import {BOOTSTRAP_SUB_PHASE, JOINING_SUB_PHASE} from './node-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const NODE_LIFECYCLE_STATE = NODE_STATE;
 const NODE_LIFECYCLE_DEFAULT_OPTIONS = Object.freeze({});
@@ -132,11 +131,11 @@ const NODE_LIFECYCLE_REPAIR_ONLY_STATES = Object.freeze([
 ]);
 
 function isLoadReadyNodeLifecycleState(state) {
-  return NODE_LIFECYCLE_LOAD_READY_STATES.includes(String(state || LOCAL_STR_EMPTY));
+  return NODE_LIFECYCLE_LOAD_READY_STATES.includes(String(state || ''));
 }
 
 function isRepairOnlyNodeLifecycleState(state) {
-  return NODE_LIFECYCLE_REPAIR_ONLY_STATES.includes(String(state || LOCAL_STR_EMPTY));
+  return NODE_LIFECYCLE_REPAIR_ONLY_STATES.includes(String(state || ''));
 }
 
 function resolveNodeLifecycleTransitionOutcome(fromState, toState) {

@@ -17,7 +17,6 @@
  * @module query/callback-runtime-driver-registry
  */
 
-import {TYPEOF} from '../../constants/index.js';
 import {
   ADAPTER_ERROR_MSG,
   CALLBACK_RUNTIME_KIND,
@@ -42,7 +41,7 @@ class NativeJsCallbackDriver {
    */
   async invokeCallback(batch, descriptor, options) {
     if (options.handler &&
-        typeof options.handler === TYPEOF.FUNCTION) {
+        typeof options.handler === 'function') {
       return options.handler(
         batch, descriptor, options.callbackContext,
       );
@@ -178,7 +177,7 @@ class CallbackRuntimeDriverRegistry {
    */
   registerDriver(runtimeKind, driver) {
     if (!driver ||
-        typeof driver.invokeCallback !== TYPEOF.FUNCTION) {
+        typeof driver.invokeCallback !== 'function') {
       throw new Error(
         ADAPTER_ERROR_MSG.REGISTRY_DRIVER_MISSING_INVOKE,
       );

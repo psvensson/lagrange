@@ -12,8 +12,6 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
     AUTHORITATIVE_REPAIR_FAILURE_CLASS,
     CONTROL_PLANE_CACHE_RECONCILE_INTENT,
     CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
-    NUM,
-    TYPEOF,
     deriveAuthoritativeRepairTables,
     getSystemCachePrimaryKeyField,
     normalizeAuthoritativeRepairTableNames,
@@ -34,13 +32,13 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         this.systemTableCache &&
           this.cacheMutationTarget &&
           typeof this.cacheMutationTarget.applySystemTableChange ===
-            TYPEOF.FUNCTION &&
+            'function' &&
           this.canReadAuthoritativeDiscoveryRows(),
       );
       const repairTableNames = hasCacheMutationTarget ?
         this.resolveAuthoritativeDiscoveryRepairTables(options) :
         [];
-      const hasRepairTables = repairTableNames.length > NUM.ZERO;
+      const hasRepairTables = repairTableNames.length > 0;
       const hasInFlightRepair = Boolean(
         hasRepairTables && this.authoritativeDiscoveryRepairPromise,
       );
@@ -108,15 +106,15 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       const completedAtMs = Number(
         this.lastAuthoritativeDiscoveryRepairCompletedAtMs,
       );
-      if (!Number.isFinite(completedAtMs) || completedAtMs <= NUM.ZERO) {
+      if (!Number.isFinite(completedAtMs) || completedAtMs <= 0) {
         return null;
       }
       const reuseWindowMs =
         Number.isFinite(options?.reuseWindowMs) &&
-        options.reuseWindowMs > NUM.ZERO ?
+        options.reuseWindowMs > 0 ?
           Math.floor(options.reuseWindowMs) :
           AUTHORITATIVE_DISCOVERY_REPAIR.REUSE_WINDOW_MS;
-      if (!Number.isFinite(reuseWindowMs) || reuseWindowMs <= NUM.ZERO) {
+      if (!Number.isFinite(reuseWindowMs) || reuseWindowMs <= 0) {
         return null;
       }
       const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : this.nowFn();
@@ -185,7 +183,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         applied: false,
         skipped: true,
         deferred: true,
-        tableCount: NUM.ZERO,
+        tableCount: 0,
         requestedTableCount: requestedRepairTables.length,
         requestedTableNames: [...requestedRepairTables],
         failedTables: Array.isArray(failureState.failedTables) ?
@@ -193,7 +191,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
           ADMIN_CACHE_DUMP.EMPTY,
         errorCount: Array.isArray(failureState.errors) ?
           failureState.errors.length :
-          NUM.ZERO,
+          0,
         errors: Array.isArray(failureState.errors) ?
           [...failureState.errors] :
           ADMIN_CACHE_DUMP.EMPTY,
@@ -209,9 +207,9 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         failureClass: failureState.failureClass || null,
         failureCount: Number.isFinite(failureState.failureCount) ?
           Math.floor(failureState.failureCount) :
-          NUM.ZERO,
+          0,
         retryAfterMs: Math.max(
-          NUM.ZERO,
+          0,
           Math.floor(retryAtMs - effectiveNowMs),
         ),
         completedAtMs: failureState.completedAtMs || null,
@@ -258,7 +256,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       );
       const normalizedRequestedRepairTables =
         Array.isArray(requestedRepairTables) &&
-        requestedRepairTables.length > NUM.ZERO ?
+        requestedRepairTables.length > 0 ?
           requestedRepairTables :
           AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
       return normalizedRequestedRepairTables.every((tableName) =>
@@ -289,7 +287,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       );
       const normalizedRequestedRepairTables =
         Array.isArray(requestedRepairTables) &&
-        requestedRepairTables.length > NUM.ZERO ?
+        requestedRepairTables.length > 0 ?
           requestedRepairTables :
           AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
       return normalizedRequestedRepairTables.every((tableName) =>
@@ -316,11 +314,11 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
           requestedRepairTables,
         )
       ) {
-        return NUM.ONE;
+        return 1;
       }
       return Math.max(
-        NUM.ONE,
-        Math.floor(Number(lastFailureState.failureCount) || NUM.ZERO) + NUM.ONE,
+        1,
+        Math.floor(Number(lastFailureState.failureCount) || 0) + 1,
       );
     }
 
@@ -352,7 +350,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
             systemTableCache: this.systemTableCache,
           },
         );
-      return result?.mutationCount || NUM.ZERO;
+      return result?.mutationCount || 0;
     }
 
     /**
@@ -366,7 +364,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       return {
         success: true,
         rows: [snapshot],
-        count: NUM.ONE,
+        count: 1,
         partitions: ADMIN_CACHE_DUMP.EMPTY,
         tableName: ADMIN_SERVICE_DISCOVERY.TABLE_NAME,
       };

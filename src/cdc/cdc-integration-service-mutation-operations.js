@@ -55,9 +55,7 @@ const {
   CDC_PRIMARY_KEY,
   CDC_STATS_DEFAULT,
   METRICS_LOG_TAG,
-  NUM,
   SQL,
-  TYPEOF,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -332,7 +330,7 @@ class CDCIntegrationServiceMutationOperations {
               error: error.message,
               nodeId: this.nodeId,
               causeId:
-                typeof options?.causeId === TYPEOF.STRING ?
+                typeof options?.causeId === 'string' ?
                   options.causeId :
                   null,
               operation: CDC_OPERATION.INSERT,
@@ -381,7 +379,7 @@ class CDCIntegrationServiceMutationOperations {
     const updateData = this.filterDataForTable(tableName, {
       ...data,
     });
-    if (Object.keys(updateData).length === NUM.ZERO) {
+    if (Object.keys(updateData).length === 0) {
       throw new Error(
         `${CDC_ERROR_MSG.UPDATE_VALID_COLUMNS_PREFIX}${tableName}`,
       );
@@ -443,17 +441,17 @@ class CDCIntegrationServiceMutationOperations {
         let visibilityResult = buildSystemTableVisibilityResult();
         if (
           options?.skipCacheWait !== true &&
-          (typeof result.affectedRows !== TYPEOF.NUMBER ||
-            result.affectedRows > NUM.ZERO)
+          (typeof result.affectedRows !== 'number' ||
+            result.affectedRows > 0)
         ) {
           const expectedCacheFields =
             options?.expectedCacheFields &&
-            typeof options.expectedCacheFields === TYPEOF.OBJECT ?
+            typeof options.expectedCacheFields === 'object' ?
               options.expectedCacheFields :
               null;
           const minimumCacheFields =
             options?.minimumCacheFields &&
-            typeof options.minimumCacheFields === TYPEOF.OBJECT ?
+            typeof options.minimumCacheFields === 'object' ?
               options.minimumCacheFields :
               null;
           visibilityResult = normalizeSystemTableVisibilityResult(
@@ -517,7 +515,7 @@ class CDCIntegrationServiceMutationOperations {
               error: error.message,
               nodeId: this.nodeId,
               causeId:
-                typeof options?.causeId === TYPEOF.STRING ?
+                typeof options?.causeId === 'string' ?
                   options.causeId :
                   null,
               operation: CDC_OPERATION.UPDATE,

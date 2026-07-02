@@ -3,27 +3,24 @@
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_HYPHEN = '-';
 const LOCAL_STR_HIGH = 'high';
 const LOCAL_STR_SCENARIO_FAILURE = 'scenario_failure';
 const LOCAL_STR_FAILED = 'failed';
-const LOCAL_STR_1Y1O3 = 'benchmark_regression_gate_failure';
+const LOCAL_STR_BENCHMARK_REGRESSION_GATE_FAILURE = 'benchmark_regression_gate_failure';
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_STR_1XCQE = 'benchmark_pipeline_passed';
+const LOCAL_STR_BENCHMARK_PIPELINE_PASSED = 'benchmark_pipeline_passed';
 const LOCAL_STR_OK = 'ok';
-const LOCAL_STR_CN3IO = 'benchmark pipeline did not pass';
-const LOCAL_STR_ENJ8X = 'standard_profiles_present';
-const LOCAL_STR_CQURS = '3-node and 5-node benchmark reports present';
-const LOCAL_STR_192AS = 'missing standardized profile(s)';
+const LOCAL_STR_BENCHMARK_PIPELINE_DID_NOT_PASS = 'benchmark pipeline did not pass';
+const LOCAL_STR_STANDARD_PROFILES_PRESENT = 'standard_profiles_present';
+const LOCAL_STR_3_NODE_AND_5_NODE_BENCHMARK_REPORTS_PRES = '3-node and 5-node benchmark reports present';
+const LOCAL_STR_MISSING_STANDARDIZED_PROFILE_S = 'missing standardized profile(s)';
 const LOCAL_STR_NO_HIGH_INCIDENTS = 'no_high_incidents';
-const LOCAL_STR_I70OS = 'no high-severity incidents detected';
-const LOCAL_STR_1J8HJ = 'rollback_drill_passed';
-const LOCAL_STR_OZF4W = 'rollback drill summary passed';
-const LOCAL_STR_NISIJ = 'rollback drill summary missing or failed';
-const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_NO_HIGH_SEVERITY_INCIDENTS_DETECTED = 'no high-severity incidents detected';
+const LOCAL_STR_ROLLBACK_DRILL_PASSED = 'rollback_drill_passed';
+const LOCAL_STR_ROLLBACK_DRILL_SUMMARY_PASSED = 'rollback drill summary passed';
+const LOCAL_STR_ROLLBACK_DRILL_SUMMARY_MISSING_OR_FAILED = 'rollback drill summary missing or failed';
 const LOCAL_STR_UTF8 = 'utf8';
 
 const STAGE = Object.freeze({
@@ -52,23 +49,23 @@ function parseArgs(argv) {
   let benchmarkSummaryPath = DEFAULT_PATH.benchmarkSummary;
   let rollbackSummaryPath = DEFAULT_PATH.rollbackSummary;
 
-  for (let i = LOCAL_NUM_ZERO; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === ARG.STAGE && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.STAGE && i + 1 < argv.length) {
       stage = String(argv[++i] || STAGE.DEV).trim().toLowerCase();
       continue;
     }
-    if (arg === ARG.BENCHMARK_SUMMARY && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.BENCHMARK_SUMMARY && i + 1 < argv.length) {
       benchmarkSummaryPath = String(argv[++i] || DEFAULT_PATH.benchmarkSummary);
       continue;
     }
-    if (arg === ARG.ROLLBACK_SUMMARY && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.ROLLBACK_SUMMARY && i + 1 < argv.length) {
       rollbackSummaryPath = String(argv[++i] || DEFAULT_PATH.rollbackSummary);
     }
   }
 
   if (!STAGES.includes(stage)) {
-    throw new Error(`invalid stage "${stage}", expected one of: ${STAGES.join(LOCAL_STR_128KJ)}`);
+    throw new Error(`invalid stage "${stage}", expected one of: ${STAGES.join(LOCAL_STR_COMMA_SPACE)}`);
   }
 
   return {
@@ -89,7 +86,7 @@ function buildIncidents(benchmarkSummary) {
     [];
 
   for (const profile of profiles) {
-    if (profile?.exitCode !== LOCAL_NUM_ZERO) {
+    if (profile?.exitCode !== 0) {
       incidents.push({
         severity: LOCAL_STR_HIGH,
         type: LOCAL_STR_SCENARIO_FAILURE,
@@ -101,7 +98,7 @@ function buildIncidents(benchmarkSummary) {
     if (profile?.benchmarkRegressionGate?.status === LOCAL_STR_FAILED) {
       incidents.push({
         severity: LOCAL_STR_HIGH,
-        type: LOCAL_STR_1Y1O3,
+        type: LOCAL_STR_BENCHMARK_REGRESSION_GATE_FAILURE,
         profile: profile.profile || null,
         reportPath: profile.outputPath || null,
         detail: profile?.benchmarkRegressionGate?.reason || LOCAL_STR_UNKNOWN,
@@ -118,9 +115,9 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
 
   const benchmarkPassed = benchmarkSummary?.overall?.passed === true;
   checks.push({
-    check: LOCAL_STR_1XCQE,
+    check: LOCAL_STR_BENCHMARK_PIPELINE_PASSED,
     passed: benchmarkPassed,
-    detail: benchmarkPassed ? LOCAL_STR_OK : LOCAL_STR_CN3IO,
+    detail: benchmarkPassed ? LOCAL_STR_OK : LOCAL_STR_BENCHMARK_PIPELINE_DID_NOT_PASS,
   });
 
   const has3Node = Array.isArray(benchmarkSummary?.profiles) &&
@@ -128,11 +125,11 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
   const has5Node = Array.isArray(benchmarkSummary?.profiles) &&
     benchmarkSummary.profiles.some((entry) => entry.profile === 'benchmark-5node');
   checks.push({
-    check: LOCAL_STR_ENJ8X,
+    check: LOCAL_STR_STANDARD_PROFILES_PRESENT,
     passed: has3Node && has5Node,
     detail: has3Node && has5Node ?
-      LOCAL_STR_CQURS :
-      LOCAL_STR_192AS,
+      LOCAL_STR_3_NODE_AND_5_NODE_BENCHMARK_REPORTS_PRES :
+      LOCAL_STR_MISSING_STANDARDIZED_PROFILE_S,
   });
 
   if (stage !== STAGE.DEV) {
@@ -141,7 +138,7 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
       check: LOCAL_STR_NO_HIGH_INCIDENTS,
       passed: noHighIncidents,
       detail: noHighIncidents ?
-        LOCAL_STR_I70OS :
+        LOCAL_STR_NO_HIGH_SEVERITY_INCIDENTS_DETECTED :
         `${incidents.length} high-severity incident(s) detected`,
     });
   }
@@ -149,11 +146,11 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
   if (stage === STAGE.LIMITED_PRODUCTION) {
     const rollbackPassed = rollbackSummary?.overall?.passed === true;
     checks.push({
-      check: LOCAL_STR_1J8HJ,
+      check: LOCAL_STR_ROLLBACK_DRILL_PASSED,
       passed: rollbackPassed,
       detail: rollbackPassed ?
-        LOCAL_STR_OZF4W :
-        LOCAL_STR_NISIJ,
+        LOCAL_STR_ROLLBACK_DRILL_SUMMARY_PASSED :
+        LOCAL_STR_ROLLBACK_DRILL_SUMMARY_MISSING_OR_FAILED,
     });
   }
 
@@ -205,13 +202,13 @@ async function main() {
   const latestPath = join(outDir, 'latest.json');
 
   await writeFile(
-    timestampedPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+    timestampedPath, JSON.stringify(stageReport, null, 2), LOCAL_STR_UTF8);
   await writeFile(
-    latestByStagePath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
-  await writeFile(latestPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+    latestByStagePath, JSON.stringify(stageReport, null, 2), LOCAL_STR_UTF8);
+  await writeFile(latestPath, JSON.stringify(stageReport, null, 2), LOCAL_STR_UTF8);
 
   if (!stageReport.passed) {
-    process.exitCode = LOCAL_NUM_ONE;
+    process.exitCode = 1;
   }
 }
 
@@ -219,5 +216,5 @@ main().catch((error) => {
   process.stderr.write(
     `raft migration stage gate failed: ${error.message}\n`,
   );
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

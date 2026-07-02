@@ -1,4 +1,4 @@
-import {NUM, TIME_MS, TYPEOF} from '../constants/index.js';
+import {NUM, TIME_MS} from '../constants/index.js';
 import {LIFECYCLE_EVENT, LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
 import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
 import {
@@ -10,12 +10,10 @@ import {
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_J2SMD = 'BOOTSTRAP_TRAFFIC_NOT_READY';
-const LOCAL_STR_1Y6VT = 'Lifecycle traffic readiness';
-const LOCAL_STR_1LT6Z = 'Lifecycle metadata publication readiness';
-const LOCAL_STR_GMYW4 = 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
+const LOCAL_STR_BOOTSTRAP_TRAFFIC_NOT_READY = 'BOOTSTRAP_TRAFFIC_NOT_READY';
+const LOCAL_STR_LIFECYCLE_TRAFFIC_READINESS = 'Lifecycle traffic readiness';
+const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'Lifecycle metadata publication readiness';
+const LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY = 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
 
 // The diagnostics-unavailable variant (added with the progress-contract
 // refactor, fc01198b) is the same tolerance class as
@@ -33,17 +31,17 @@ const TRAFFIC_READINESS_WAIT_DEFAULT = Object.freeze({
   MAX_ATTEMPTS: NUM.SIX,
   INITIAL_DELAY_MS: TIME_MS.SECOND,
   MAX_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
-  BACKOFF_MULTIPLIER: NUM.TWO,
+  BACKOFF_MULTIPLIER: 2,
 });
 
 function normalizePositiveInteger(value, fallback) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
 
 function normalizeBackoffMultiplier(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     value :
     TRAFFIC_READINESS_WAIT_DEFAULT.BACKOFF_MULTIPLIER;
 }
@@ -90,7 +88,7 @@ function isBackgroundWorkReadySnapshot(snapshot, options = {}) {
     return true;
   }
 
-  const partitionId = typeof options?.partitionId === TYPEOF.STRING ?
+  const partitionId = typeof options?.partitionId === 'string' ?
     options.partitionId :
     null;
   if (partitionId &&
@@ -116,15 +114,15 @@ function isMetadataPublicationReadySnapshot(snapshot) {
 
   if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY ||
       snapshot.phase === LIFECYCLE_PHASE.DEGRADED) {
-    return reasons.length > LOCAL_NUM_ZERO &&
+    return reasons.length > 0 &&
       reasons.every((reason) =>
         METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS.includes(reason),
       );
   }
 
   if (snapshot.phase === LIFECYCLE_PHASE.JOIN_READY) {
-    return reasons.length === LOCAL_NUM_ONE &&
-      reasons[LOCAL_NUM_ZERO] === LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
+    return reasons.length === 1 &&
+      reasons[0] === LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
   }
 
   return false;
@@ -137,12 +135,12 @@ function isMetadataPublicationReady(readinessState) {
 }
 
 function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
-  const phase = typeof snapshot?.phase === TYPEOF.STRING ?
+  const phase = typeof snapshot?.phase === 'string' ?
     snapshot.phase :
     null;
   const label =
-    typeof options.label === TYPEOF.STRING &&
-    options.label.length > NUM.ZERO ?
+    typeof options.label === 'string' &&
+    options.label.length > 0 ?
       options.label :
       'Lifecycle traffic readiness';
   const error = new Error(
@@ -151,10 +149,10 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
       `${label} is not satisfied`,
   );
   error.code =
-    typeof options.code === TYPEOF.STRING &&
-    options.code.length > NUM.ZERO ?
+    typeof options.code === 'string' &&
+    options.code.length > 0 ?
       options.code :
-      LOCAL_STR_J2SMD;
+      LOCAL_STR_BOOTSTRAP_TRAFFIC_NOT_READY;
   error.retryAfterMs = normalizePositiveInteger(snapshot?.retryAfterMs, null);
   error.lifecycleReadiness = snapshot || null;
 
@@ -182,8 +180,8 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
 
 function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
   const stableWindowPending = Array.isArray(snapshot?.reasons) &&
-    snapshot.reasons.length === NUM.ONE &&
-    snapshot.reasons[NUM.ZERO] ===
+    snapshot.reasons.length === 1 &&
+    snapshot.reasons[0] ===
       LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
 
   let baseDelay = delayMs;
@@ -191,7 +189,7 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
       Number.isFinite(snapshot?.stableWindowMs) &&
       Number.isFinite(snapshot?.stableElapsedMs)) {
     const remainingMs = Math.max(
-      NUM.ONE,
+      1,
       Math.ceil(snapshot.stableWindowMs - snapshot.stableElapsedMs),
     );
     baseDelay = Math.min(remainingMs, maxDelayMs);
@@ -210,8 +208,8 @@ async function waitForTrafficReadiness(options = {}) {
     ...options,
     isSatisfied: isTrafficReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
-      label: LOCAL_STR_1Y6VT,
-      code: LOCAL_STR_J2SMD,
+      label: LOCAL_STR_LIFECYCLE_TRAFFIC_READINESS,
+      code: LOCAL_STR_BOOTSTRAP_TRAFFIC_NOT_READY,
     }),
   });
 }
@@ -221,21 +219,21 @@ async function waitForMetadataPublicationReadiness(options = {}) {
     ...options,
     isSatisfied: isMetadataPublicationReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
-      label: LOCAL_STR_1LT6Z,
-      code: LOCAL_STR_GMYW4,
+      label: LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS,
+      code: LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY,
     }),
   });
 }
 
 async function waitForLifecycleReadiness(options = {}) {
   const getSnapshot = typeof options.readinessSnapshotProvider ===
-    TYPEOF.FUNCTION ?
+    'function' ?
     options.readinessSnapshotProvider :
     () => getTrafficReadinessSnapshot(options.readinessState || null);
-  const isSatisfied = typeof options.isSatisfied === TYPEOF.FUNCTION ?
+  const isSatisfied = typeof options.isSatisfied === 'function' ?
     options.isSatisfied :
     () => false;
-  const buildError = typeof options.buildError === TYPEOF.FUNCTION ?
+  const buildError = typeof options.buildError === 'function' ?
     options.buildError :
     (snapshot) => buildLifecycleReadinessNotReadyError(snapshot);
   const initialSnapshot = getSnapshot();
@@ -261,12 +259,12 @@ async function waitForLifecycleReadiness(options = {}) {
   const backoffMultiplier = normalizeBackoffMultiplier(
     options.backoffMultiplier,
   );
-  const sleep = typeof options.sleep === TYPEOF.FUNCTION ?
+  const sleep = typeof options.sleep === 'function' ?
     options.sleep :
     (waitMs) => new Promise((resolve) => setTimeout(resolve, waitMs));
 
   let lastSnapshot = initialSnapshot;
-  for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     lastSnapshot = getSnapshot();
     if (!lastSnapshot) {
       return null;
@@ -287,7 +285,7 @@ async function waitForLifecycleReadiness(options = {}) {
       });
     }
 
-    if (typeof options.onRetry === TYPEOF.FUNCTION) {
+    if (typeof options.onRetry === 'function') {
       options.onRetry({
         attempt,
         maxAttempts,
@@ -298,7 +296,7 @@ async function waitForLifecycleReadiness(options = {}) {
 
     await sleep(effectiveDelayMs);
     delayMs = Math.min(
-      Math.max(NUM.ONE, Math.floor(delayMs * backoffMultiplier)),
+      Math.max(1, Math.floor(delayMs * backoffMultiplier)),
       maxDelayMs,
     );
   }

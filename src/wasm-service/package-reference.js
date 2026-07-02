@@ -18,7 +18,6 @@ import {
   PACKAGE_NAME_PATTERN,
 } from './wasm-meta-models-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_STRING = 'string';
 
 /**
@@ -68,14 +67,14 @@ const PKG_REF_ERROR = Object.freeze({
  */
 function parsePackageReference(ref) {
   const errors = collectErrors(ref);
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
   const match = PACKAGE_ID_PATTERN.exec(ref);
   return {
     valid: true,
-    namespace: match[NUM.ONE],
-    name: match[NUM.TWO],
+    namespace: match[1],
+    name: match[2],
     version: match[NUM.THREE],
   };
 }
@@ -103,7 +102,7 @@ function formatPackageReference(parts) {
  */
 function validatePackageReference(ref) {
   const errors = collectErrors(ref);
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
   return {valid: true};
@@ -117,7 +116,7 @@ function validatePackageReference(ref) {
  */
 function collectErrors(ref) {
   const errors = [];
-  if (ref === undefined || ref === null || ref === LOCAL_STR_EMPTY) {
+  if (ref === undefined || ref === null || ref === '') {
     errors.push(PKG_REF_ERROR.INPUT_REQUIRED);
     return errors;
   }
@@ -126,18 +125,18 @@ function collectErrors(ref) {
     return errors;
   }
   const colonIdx = ref.indexOf(PACKAGE_ID_SEPARATOR);
-  if (colonIdx === NUM.NEGATIVE_ONE) {
+  if (colonIdx === -1) {
     errors.push(PKG_REF_ERROR.MISSING_NAMESPACE_SEPARATOR);
     return errors;
   }
   const atIdx = ref.indexOf(PACKAGE_VERSION_SEPARATOR, colonIdx);
-  if (atIdx === NUM.NEGATIVE_ONE) {
+  if (atIdx === -1) {
     errors.push(PKG_REF_ERROR.MISSING_VERSION_SEPARATOR);
     return errors;
   }
-  const namespace = ref.slice(NUM.ZERO, colonIdx);
-  const name = ref.slice(colonIdx + NUM.ONE, atIdx);
-  const version = ref.slice(atIdx + NUM.ONE);
+  const namespace = ref.slice(0, colonIdx);
+  const name = ref.slice(colonIdx + 1, atIdx);
+  const version = ref.slice(atIdx + 1);
 
   validateNamespace(namespace, errors);
   validateName(name, errors);

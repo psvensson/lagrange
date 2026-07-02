@@ -1,7 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   normalizeParticipantRetryAfterMs,
   resolveParticipantBackpressureState,
@@ -21,7 +20,7 @@ function resolveRetryableLeaderFailureRetryAfterMs({
   }
   if (
     typeof participantNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-    participantNodeId.length === NUM.ZERO ||
+    participantNodeId.length === 0 ||
     forRead ||
     typeof executor.messageRouter?.getConnectionState !==
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
@@ -57,7 +56,7 @@ function resolveRetryableLeaderFailureRetryAfterMs({
   );
   if (
     !Number.isFinite(reconnectIntervalMs) ||
-    reconnectIntervalMs <= NUM.ZERO
+    reconnectIntervalMs <= 0
   ) {
     return null;
   }

@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
 } from './priority-recovery-diagnostics-constants.js';
 import {normalizePriorityRecoveryStringList} from './priority-recovery-helpers.js';
@@ -17,7 +13,7 @@ function buildTrackedPriorityRecoveryDecisionSemanticStateMap(
 ) {
   if (
     !partitionIdsBySemanticState ||
-    typeof partitionIdsBySemanticState !== TYPEOF.OBJECT
+    typeof partitionIdsBySemanticState !== 'object'
   ) {
     return null;
   }
@@ -34,7 +30,7 @@ function buildTrackedPriorityRecoveryDecisionSemanticStateMap(
 function hasPriorityRecoveryDecisionSnapshotOwnField(snapshot, fieldName) {
   return (
     snapshot &&
-    typeof snapshot === TYPEOF.OBJECT &&
+    typeof snapshot === 'object' &&
     Object.prototype.hasOwnProperty.call(snapshot, fieldName)
   );
 }
@@ -46,9 +42,9 @@ function resolvePriorityRecoverySourcePartitionStateIds(
 ) {
   const normalizedPartitionId = String(partitionId || LOCAL_STR_EMPTY).trim();
   if (
-    normalizedPartitionId.length === NUM.ZERO ||
+    normalizedPartitionId.length === 0 ||
     !partitionIdsByState ||
-    typeof partitionIdsByState !== TYPEOF.OBJECT
+    typeof partitionIdsByState !== 'object'
   ) {
     return [];
   }
@@ -63,7 +59,7 @@ function isPriorityRecoverySourcePartitionStateMap(
   partitionIdsByState = null,
   orderedStateIds = [],
 ) {
-  if (!partitionIdsByState || typeof partitionIdsByState !== TYPEOF.OBJECT) {
+  if (!partitionIdsByState || typeof partitionIdsByState !== 'object') {
     return false;
   }
   return orderedStateIds.some((stateId) =>

@@ -1,6 +1,5 @@
 import {
   SERVICE_LIFECYCLE_STATE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {ServiceTypeAdapter} from '../service-type-adapter.js';
 
@@ -21,13 +20,13 @@ const HOOK_BACKED_ADAPTER_RUNNING_HEALTH = Object.freeze({
 });
 
 function assertRequiredFunctionHook(value, errorMessage) {
-  if (typeof value !== TYPEOF.FUNCTION) {
+  if (typeof value !== 'function') {
     throw new TypeError(errorMessage);
   }
 }
 
 function assertOptionalFunctionHook(value, errorMessage) {
-  if (typeof value !== TYPEOF.UNDEFINED && typeof value !== TYPEOF.FUNCTION) {
+  if (typeof value !== 'undefined' && typeof value !== 'function') {
     throw new TypeError(errorMessage);
   }
 }

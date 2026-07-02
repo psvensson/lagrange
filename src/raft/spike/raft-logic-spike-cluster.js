@@ -11,13 +11,10 @@ import {
   RAFT_LOGIC_SPIKE_TIME,
 } from './raft-logic-spike-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_12123 = 'Stable leader not observed before timeout';
-const LOCAL_STR_1A7IE = 'Leader node unavailable for failover';
-const LOCAL_STR_139G1 = 'Leader failover did not produce a different leader';
-const LOCAL_STR_R78BQ = 'Cluster is not started';
+const LOCAL_STR_STABLE_LEADER_NOT_OBSERVED_BEFORE_TIMEOU = 'Stable leader not observed before timeout';
+const LOCAL_STR_LEADER_NODE_UNAVAILABLE_FOR_FAILOVER = 'Leader node unavailable for failover';
+const LOCAL_STR_LEADER_FAILOVER_DID_NOT_PRODUCE_A_DIFFER = 'Leader failover did not produce a different leader';
+const LOCAL_STR_CLUSTER_IS_NOT_STARTED = 'Cluster is not started';
 
 const SPIKE_CLUSTER_DEFAULT = Object.freeze({
   SIZE: 3,
@@ -42,7 +39,7 @@ function sleep(ms) {
  */
 function buildReplicaIds(size) {
   const ids = [];
-  for (let i = LOCAL_NUM_ONE; i <= size; i++) {
+  for (let i = 1; i <= size; i++) {
     ids.push(SPIKE_CLUSTER_DEFAULT.REPLICA_ID_PREFIX + String(i));
   }
   return ids;
@@ -64,7 +61,7 @@ function buildReplicaSqlitePath(baseDir, replicaId) {
  * @return {number}
  */
 function majority(size) {
-  return Math.floor(size / LOCAL_NUM_TWO) + LOCAL_NUM_ONE;
+  return Math.floor(size / 2) + 1;
 }
 
 /**
@@ -184,7 +181,7 @@ class RaftLogicSpikeCluster {
         }
         counts.set(
           snapshot.leaderId,
-          (counts.get(snapshot.leaderId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
+          (counts.get(snapshot.leaderId) || 0) + 1,
         );
       }
 
@@ -195,7 +192,7 @@ class RaftLogicSpikeCluster {
       }
     }
 
-    throw new Error(LOCAL_STR_12123);
+    throw new Error(LOCAL_STR_STABLE_LEADER_NOT_OBSERVED_BEFORE_TIMEOU);
   }
 
   /**
@@ -244,7 +241,7 @@ class RaftLogicSpikeCluster {
     const previousLeader = this.adapters.get(previousLeaderId);
     const node = previousLeader ? previousLeader.getNode() : null;
     if (!node) {
-      throw new Error(LOCAL_STR_1A7IE);
+      throw new Error(LOCAL_STR_LEADER_NODE_UNAVAILABLE_FOR_FAILOVER);
     }
 
     await node.stepDown(timeoutMs);
@@ -257,7 +254,7 @@ class RaftLogicSpikeCluster {
       await sleep(RAFT_LOGIC_SPIKE_DEFAULT.LEADER_STABILIZE_WAIT_MS);
     }
 
-    throw new Error(LOCAL_STR_139G1);
+    throw new Error(LOCAL_STR_LEADER_FAILOVER_DID_NOT_PRODUCE_A_DIFFER);
   }
 
   /**
@@ -505,7 +502,7 @@ class RaftLogicSpikeCluster {
    */
   _assertStarted() {
     if (!this._started) {
-      throw new Error(LOCAL_STR_R78BQ);
+      throw new Error(LOCAL_STR_CLUSTER_IS_NOT_STARTED);
     }
   }
 }

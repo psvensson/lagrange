@@ -5,8 +5,6 @@ import {
 } from './sql-query-engine-provisioning-methods.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BINARY = 'binary';
@@ -108,7 +106,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       const remainingMs = getRemainingBudgetMs(effectiveBudget, {
         now: this.nowFn,
       });
-      if (remainingMs <= LOCAL_NUM_ZERO) {
+      if (remainingMs <= 0) {
         break;
       }
       await this.sleep(Math.min(intervalMs, remainingMs));
@@ -187,7 +185,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       distributedPlan.tablePlans.get(tableName) ||
       null;
 
-    if (!rootPlan || rootPlan.partitions.length === LOCAL_NUM_ZERO) {
+    if (!rootPlan || rootPlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -226,7 +224,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         distributedPlan.tablePlans.get(joinAlias) ||
         distributedPlan.tablePlans.get(joinTableName) ||
         null;
-      if (!joinPlan || joinPlan.partitions.length === LOCAL_NUM_ZERO) {
+      if (!joinPlan || joinPlan.partitions.length === 0) {
         return {
           success: false,
           error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
@@ -266,7 +264,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         planningDurationMs,
         executionDurationMs,
         fanout: result.distributedMetrics?.fanout || null,
-        mergeDurationMs: result.distributedMetrics?.mergeDurationMs || LOCAL_NUM_ZERO,
+        mergeDurationMs: result.distributedMetrics?.mergeDurationMs || 0,
       },
     };
   }
@@ -296,7 +294,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       !rawSql ||
       !this.isSystemTable(tableName) ||
       !authoritativeControlPlaneView ||
-      (Array.isArray(ast?.joins) && ast.joins.length > LOCAL_NUM_ZERO)
+      (Array.isArray(ast?.joins) && ast.joins.length > 0)
     ) {
       return null;
     }
@@ -330,10 +328,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       distributedPlan: null,
       distributedDiagnostics: null,
       distributedMetrics: {
-        planningDurationMs: LOCAL_NUM_ZERO,
-        executionDurationMs: LOCAL_NUM_ZERO,
+        planningDurationMs: 0,
+        executionDurationMs: 0,
         fanout: partitions.length,
-        mergeDurationMs: LOCAL_NUM_ZERO,
+        mergeDurationMs: 0,
       },
     };
   }
@@ -348,7 +346,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
    */
   shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast) {
     const primaryKeyColumns = this.getSystemTablePrimaryKeyColumns(tableName);
-    if (primaryKeyColumns.length !== LOCAL_NUM_ONE) {
+    if (primaryKeyColumns.length !== 1) {
       return false;
     }
     const primaryKeyColumn = primaryKeyColumns[0];
@@ -376,7 +374,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
           primaryKeyColumn,
         ) &&
         Array.isArray(whereClause.values) &&
-        whereClause.values.length > LOCAL_NUM_ZERO &&
+        whereClause.values.length > 0 &&
         whereClause.values.every((value) =>
           this.isBoundSystemTableLookupValue(value),
         )
@@ -398,12 +396,12 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     }
     if (
       Array.isArray(schema.primaryKey) &&
-      schema.primaryKey.length > LOCAL_NUM_ZERO
+      schema.primaryKey.length > 0
     ) {
       return schema.primaryKey.filter(
         (columnName) =>
           typeof columnName === LOCAL_STR_STRING &&
-          columnName.length > LOCAL_NUM_ZERO,
+          columnName.length > 0,
       );
     }
     if (!Array.isArray(schema.columns)) {
@@ -415,7 +413,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       .filter(
         (columnName) =>
           typeof columnName === LOCAL_STR_STRING &&
-          columnName.length > LOCAL_NUM_ZERO,
+          columnName.length > 0,
       );
   }
 
@@ -492,7 +490,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
    */
   async executeFromlessSelect(ast, params, _sessionId) {
     const allPartitions = this.systemCache?.getAll?.(TABLES.PARTITIONS) || [];
-    if (allPartitions.length === LOCAL_NUM_ZERO) {
+    if (allPartitions.length === 0) {
       return {
         success: false,
         error: QUERY_ERROR_MSG.NO_PARTITIONS_FOR_TABLE,
@@ -531,16 +529,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     return {
       success: true,
       rows: first.rows || [],
-      count: first.rows?.length || LOCAL_NUM_ZERO,
+      count: first.rows?.length || 0,
       partitions: [targetPartitionId],
       tableName: null,
       distributedPlan: null,
       distributedDiagnostics: null,
       distributedMetrics: {
-        planningDurationMs: LOCAL_NUM_ZERO,
-        executionDurationMs: LOCAL_NUM_ZERO,
+        planningDurationMs: 0,
+        executionDurationMs: 0,
         fanout: null,
-        mergeDurationMs: LOCAL_NUM_ZERO,
+        mergeDurationMs: 0,
       },
     };
   }

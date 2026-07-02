@@ -23,11 +23,10 @@ import {
   LIVE_QUERY_REGEX_REPLACE,
   LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
-  TYPEOF,
 } from './live-query-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_0_POINT_7 = 0.7;
+const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 
 /**
  * Live query event types sent to clients.
@@ -201,7 +200,7 @@ function evaluateLikeExpression(expr, row) {
   const value = evaluateExpression(expr.expression, row);
   const pattern = evaluateExpression(expr.pattern, row);
 
-  if (typeof value !== TYPEOF.STRING || typeof pattern !== TYPEOF.STRING) {
+  if (typeof value !== 'string' || typeof pattern !== 'string') {
     return false;
   }
 
@@ -327,7 +326,7 @@ function sortObject(obj) {
  * @return {Object} Parsed query with isLive flag.
  */
 function parseLiveSelect(sql) {
-  if (!sql || typeof sql !== TYPEOF.STRING) {
+  if (!sql || typeof sql !== 'string') {
     throw new Error(LIVE_QUERY_ERROR_MSG.INVALID_SQL);
   }
 
@@ -493,7 +492,7 @@ class LiveQueryService {
     return {
       queryId: this.queryId,
       expiresAt: this.lastRenewal + this.ttlMs,
-      renewBefore: this.lastRenewal + Math.floor(this.ttlMs * LOCAL_NUM_0_POINT_7),
+      renewBefore: this.lastRenewal + Math.floor(this.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
     };
   }
 

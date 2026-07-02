@@ -3,8 +3,8 @@ import {
   handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
 } from './message-group-service-cdc-propagation-runtime-methods.js';
 
-const LOCAL_STR_WWEY1 = 'Deferred Raft response delivery';
-const LOCAL_STR_OMLJF = 'Failed to send Raft response';
+const LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY = 'Deferred Raft response delivery';
+const LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE = 'Failed to send Raft response';
 
 const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -23,7 +23,6 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MessageStatus,
     NUM,
     RAFT_PACKET_TYPE,
-    TYPEOF,
     buildLatencyCdcPropagationResult,
     isRaftPacket,
     normalizeCauseId,
@@ -98,14 +97,14 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
                   !result?.acknowledged &&
                   shouldDeferImmediateDeliveryRetry(result)
                 ) {
-                  this.logger.debug(LOCAL_STR_WWEY1, {
+                  this.logger.debug(LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY, {
                     destination: senderAddress,
                     retryAfterMs: result.retryAfterMs,
                     errorCode: result?.errorCode || null,
                   });
                 }
               } catch (err) {
-                this.logger.error(LOCAL_STR_OMLJF, {
+                this.logger.error(LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE, {
                   error: err.message,
                   destination: senderAddress,
                 });
@@ -158,7 +157,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
       }
       // Update HLC from remote timestamp if present and is a valid HLC string
       // The timestamp must be a string in HLC format (physical-logical-nodeId)
-      if (message.timestamp && typeof message.timestamp === TYPEOF.STRING) {
+      if (message.timestamp && typeof message.timestamp === 'string') {
         try {
           const remoteTimestamp = HLCTimestamp.fromString(message.timestamp);
           this.hlcClock.update(remoteTimestamp);

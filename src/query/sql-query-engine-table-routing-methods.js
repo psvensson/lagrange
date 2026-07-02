@@ -1,6 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -58,7 +57,7 @@ class SQLQueryEngineTableRoutingMethods {
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > LOCAL_NUM_ZERO) {
+      if (directMatches.length > 0) {
         return visibleDirectMatches;
       }
       const overlayDirectMatches =
@@ -67,7 +66,7 @@ class SQLQueryEngineTableRoutingMethods {
           activePartitionVersion,
         );
       if (
-        overlayDirectMatches.length > LOCAL_NUM_ZERO ||
+        overlayDirectMatches.length > 0 ||
         !tableId ||
         tableId === tableName
       ) {
@@ -81,7 +80,7 @@ class SQLQueryEngineTableRoutingMethods {
       const visibleTableIdMatches = tableIdMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (visibleTableIdMatches.length > LOCAL_NUM_ZERO) {
+      if (visibleTableIdMatches.length > 0) {
         return visibleTableIdMatches;
       }
       return this.getBootstrapRoutingOverlayPartitionsForTable(
@@ -98,7 +97,7 @@ class SQLQueryEngineTableRoutingMethods {
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > LOCAL_NUM_ZERO) {
+      if (directMatches.length > 0) {
         return visibleDirectMatches;
       }
       const overlayDirectMatches =
@@ -107,7 +106,7 @@ class SQLQueryEngineTableRoutingMethods {
           activePartitionVersion,
         );
       if (
-        overlayDirectMatches.length > LOCAL_NUM_ZERO ||
+        overlayDirectMatches.length > 0 ||
         !tableId ||
         tableId === tableName
       ) {
@@ -119,7 +118,7 @@ class SQLQueryEngineTableRoutingMethods {
       ).filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (visibleTableIdMatches.length > LOCAL_NUM_ZERO) {
+      if (visibleTableIdMatches.length > 0) {
         return visibleTableIdMatches;
       }
       return this.getBootstrapRoutingOverlayPartitionsForTable(
@@ -143,7 +142,7 @@ class SQLQueryEngineTableRoutingMethods {
       !partition ||
       typeof partition !== LOCAL_STR_OBJECT ||
       typeof tableRef !== LOCAL_STR_STRING ||
-      tableRef.length === LOCAL_NUM_ZERO
+      tableRef.length === 0
     ) {
       return false;
     }
@@ -461,7 +460,7 @@ class SQLQueryEngineTableRoutingMethods {
   resolveRoutedDeliveryPriority(tableName, deliveryPriority) {
     if (
       typeof deliveryPriority === LOCAL_STR_STRING &&
-      deliveryPriority.length > LOCAL_NUM_ZERO
+      deliveryPriority.length > 0
     ) {
       return deliveryPriority;
     }

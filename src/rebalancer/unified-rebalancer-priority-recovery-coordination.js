@@ -15,7 +15,6 @@ const PUBLICATIONS_WRITE_LEADER_DIAG_MSG =
 const {
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
   getPartitionRowFromCache,
@@ -40,7 +39,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
   bindCoordinatorProgressListeners(coordinator) {
     if (
       !coordinator ||
-      typeof coordinator.on !== TYPEOF.FUNCTION ||
+      typeof coordinator.on !== 'function' ||
       this.isControlPlanePriorityPartition() !== true ||
       this.coordinatorProgressListenerBindings
     ) {
@@ -85,9 +84,9 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
       return;
     }
     const unsubscribe =
-      typeof bindings.coordinator.off === TYPEOF.FUNCTION ?
+      typeof bindings.coordinator.off === 'function' ?
         bindings.coordinator.off.bind(bindings.coordinator) :
-        typeof bindings.coordinator.removeListener === TYPEOF.FUNCTION ?
+        typeof bindings.coordinator.removeListener === 'function' ?
           bindings.coordinator.removeListener.bind(bindings.coordinator) :
           null;
     if (unsubscribe) {
@@ -112,7 +111,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
   ) {
     if (
       !systemTableCache ||
-      typeof systemTableCache.onCacheChange !== TYPEOF.FUNCTION ||
+      typeof systemTableCache.onCacheChange !== 'function' ||
       this.isControlPlanePriorityPartition() !== true ||
       this.priorityRecoveryVisibilityCacheListener
     ) {
@@ -135,7 +134,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
     if (
       !this.priorityRecoveryVisibilityCacheListener ||
       !systemTableCache ||
-      typeof systemTableCache.offCacheChange !== TYPEOF.FUNCTION
+      typeof systemTableCache.offCacheChange !== 'function'
     ) {
       this.priorityRecoveryVisibilityCacheListener = null;
       return;
@@ -146,7 +145,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
 
   buildCoordinatorProgressRebalanceDecision(eventName, payload = {}) {
     const operation =
-      payload?.operation && typeof payload.operation === TYPEOF.OBJECT ?
+      payload?.operation && typeof payload.operation === 'object' ?
         payload.operation :
         {};
     const operationPartitionId = String(
@@ -311,7 +310,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
     if (
       !publicationService ||
       typeof publicationService.enqueueClusterMembershipReconcile !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }

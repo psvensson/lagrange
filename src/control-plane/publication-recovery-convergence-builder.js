@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   buildPublicationOwnerStreamState,
   isPublicationOwnerStreamPublicationPending,
@@ -137,7 +136,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
     !publicationConvergenceGate &&
     !priorityRecoveryDecisionSnapshots &&
     !priorityRecoveryObservation &&
-    activeGateProgressRecords.length === NUM.ZERO
+    activeGateProgressRecords.length === 0
   ) {
     return null;
   }
@@ -292,7 +291,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       normalizeDistinctStringArray(
         publicationConvergenceGate?.missingPublishedNodeIds,
       ).length,
-    ]) === NUM.ZERO &&
+    ]) === 0 &&
     hasActiveGateSelectedPublicationMembershipCohortProof(
       activeGateProgressRecords,
     );
@@ -332,7 +331,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       pendingAckNodeIds: pendingAckEvidence.pendingAckNodeIds,
     });
   const authoritativePublicationMembershipAvailable =
-    authoritativePublicationMembershipNodeIds.length > NUM.ZERO;
+    authoritativePublicationMembershipNodeIds.length > 0;
   const steadyPublishedSelectedPublicationMembershipOpen =
     hasSteadyPublishedSelectedPublicationMembershipOpen({
       publicationConvergence: rawPublicationConvergence,
@@ -346,7 +345,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       authoritativePublicationMembershipNodeIds,
       selectedPublicationMembershipNodeIds,
       selectedPublicationMembershipOpen:
-        pendingAckEvidence.pendingAckCount > NUM.ZERO ||
+        pendingAckEvidence.pendingAckCount > 0 ||
         steadyPublishedSelectedPublicationMembershipOpen === true ||
         publicationConvergenceGate?.publicationPending === true ||
         rawPublicationConvergence?.publicationPending === true,
@@ -361,16 +360,16 @@ function buildCanonicalPublicationConvergence(options = {}) {
     selectedMembershipClosesStaleOpenPublication ||
     steadyPublishedSelectedPublicationMembershipOpen !== true &&
     publicationConvergenceGate?.publicationPending !== true &&
-    pendingAckEvidence.pendingAckCount === NUM.ZERO &&
+    pendingAckEvidence.pendingAckCount === 0 &&
     normalizeMaximumNonNegativeInteger([
       publicationConvergenceGate?.missingPublishedCount,
       normalizeDistinctStringArray(
         publicationConvergenceGate?.missingPublishedNodeIds,
       ).length,
-    ]) === NUM.ZERO;
+    ]) === 0;
   const ownerReconcileNarrowsOpenPublication =
     !authoritativeGateClosesPublicationMembership &&
-    ownerReconcileNarrowedMissingPublishedNodeIds.length > NUM.ZERO;
+    ownerReconcileNarrowedMissingPublishedNodeIds.length > 0;
   const authoritativeMissingPublishedNodeIds = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(publicationConvergenceGate
       ?.missingPublishedNodeIds),

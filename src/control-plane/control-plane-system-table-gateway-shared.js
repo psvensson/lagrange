@@ -6,9 +6,7 @@ export {
 export {
   CDC_OPERATION,
   METRICS_LOG_TAG,
-  NUM,
   SQL,
-  TYPEOF,
 } from '../constants/index.js';
 export {
   INITIAL_PARTITION_IDS,

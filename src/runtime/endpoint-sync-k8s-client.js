@@ -11,22 +11,18 @@ import {readFile} from 'node:fs/promises';
 import {Agent} from 'node:https';
 import {URLSearchParams} from 'node:url';
 import fetch from 'node-fetch';
-import {TYPEOF} from '../constants/index.js';
 import {BaseError} from '../utils/base-error.js';
 import {
   ENDPOINT_SYNC_LABEL,
 } from './endpoint-sync-constants.js';
 
 const LOCAL_STR_COMMA = ',';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_FEBQQ = 'EndpointSyncK8sClient';
+const LOCAL_STR_ENDPOINT_SYNC_K8S_CLIENT = 'EndpointSyncK8sClient';
 const LOCAL_STR_REQUEST = 'request';
 const LOCAL_STR_UTF8 = 'utf8';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_V1 = 'v1';
 const LOCAL_STR_EVENT = 'Event';
-const LOCAL_STR_168NE = 'endpoint-sync-controller-';
-const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_ENDPOINT_SYNC_CONTROLLER = 'endpoint-sync-controller-';
 
 const K8S_DEFAULT = Object.freeze({
   API_HOST: 'kubernetes.default.svc',
@@ -117,7 +113,7 @@ function buildApiServerUrl() {
 function withQuery(path, query = {}) {
   const queryEntries = Object.entries(query)
     .filter(([, value]) => value !== null && value !== undefined && value !== '');
-  if (queryEntries.length === LOCAL_NUM_ZERO) {
+  if (queryEntries.length === 0) {
     return path;
   }
 
@@ -129,8 +125,8 @@ function withQuery(path, query = {}) {
 }
 
 function parseK8sErrorMessage(payload, statusCode) {
-  if (payload && typeof payload === TYPEOF.OBJECT &&
-    typeof payload.message === TYPEOF.STRING) {
+  if (payload && typeof payload === 'object' &&
+    typeof payload.message === 'string') {
     return payload.message;
   }
   return `status=${statusCode}`;
@@ -141,7 +137,7 @@ class EndpointSyncK8sClientError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: LOCAL_STR_FEBQQ,
+        component: LOCAL_STR_ENDPOINT_SYNC_K8S_CLIENT,
         operation: LOCAL_STR_REQUEST,
         metadata,
       },
@@ -164,9 +160,9 @@ async function readK8sServiceAccountFiles() {
     readOptionalFile(K8S_DEFAULT.SERVICE_ACCOUNT_NAMESPACE_PATH),
   ]);
   return {
-    token: typeof tokenRaw === TYPEOF.STRING ? tokenRaw.trim() : LOCAL_STR_EMPTY,
-    caCert: typeof caRaw === TYPEOF.STRING ? caRaw : LOCAL_STR_EMPTY,
-    namespace: typeof namespaceRaw === TYPEOF.STRING ? namespaceRaw.trim() : LOCAL_STR_EMPTY,
+    token: typeof tokenRaw === 'string' ? tokenRaw.trim() : '',
+    caCert: typeof caRaw === 'string' ? caRaw : '',
+    namespace: typeof namespaceRaw === 'string' ? namespaceRaw.trim() : '',
   };
 }
 
@@ -180,7 +176,7 @@ function buildEventManifest(event) {
     kind: LOCAL_STR_EVENT,
     metadata: {
       namespace: event.namespace,
-      generateName: LOCAL_STR_168NE,
+      generateName: LOCAL_STR_ENDPOINT_SYNC_CONTROLLER,
     },
     involvedObject: {
       apiVersion: LOCAL_STR_V1,
@@ -198,7 +194,7 @@ function buildEventManifest(event) {
     },
     firstTimestamp: nowIso,
     lastTimestamp: nowIso,
-    count: LOCAL_NUM_ONE,
+    count: 1,
   };
 }
 
@@ -240,7 +236,7 @@ class EndpointSyncK8sClient {
     const headers = {
       [HEADER.ACCEPT]: HEADER.APPLICATION_JSON,
     };
-    if (typeof this._token === TYPEOF.STRING && this._token.length > LOCAL_NUM_ZERO) {
+    if (typeof this._token === 'string' && this._token.length > 0) {
       headers[HEADER.AUTHORIZATION] = `Bearer ${this._token}`;
     }
     if (body !== null) {
@@ -256,7 +252,7 @@ class EndpointSyncK8sClient {
 
     let payload = null;
     const rawText = await response.text();
-    if (rawText.length > LOCAL_NUM_ZERO) {
+    if (rawText.length > 0) {
       try {
         payload = JSON.parse(rawText);
       } catch (_error) {
@@ -345,7 +341,7 @@ class EndpointSyncK8sClient {
       updateManifest.spec.clusterIP = existing.spec.clusterIP;
     }
     if (Array.isArray(existing?.spec?.clusterIPs) &&
-      existing.spec.clusterIPs.length > LOCAL_NUM_ZERO) {
+      existing.spec.clusterIPs.length > 0) {
       updateManifest.spec.clusterIPs = existing.spec.clusterIPs;
     }
 
@@ -427,7 +423,7 @@ class EndpointSyncK8sClient {
 
   async updateLease(manifest) {
     const resourceVersion = manifest?.metadata?.resourceVersion || '';
-    if (typeof resourceVersion !== TYPEOF.STRING || resourceVersion.length === LOCAL_NUM_ZERO) {
+    if (typeof resourceVersion !== 'string' || resourceVersion.length === 0) {
       throw new EndpointSyncK8sClientError(
         K8S_CLIENT_ERROR.RESOURCE_VERSION_REQUIRED,
       );
@@ -446,7 +442,7 @@ class EndpointSyncK8sClient {
 
   async recordEvent(event) {
     const namespace = event?.namespace || this._defaultNamespace;
-    if (typeof namespace !== TYPEOF.STRING || namespace.length === LOCAL_NUM_ZERO) {
+    if (typeof namespace !== 'string' || namespace.length === 0) {
       return;
     }
 

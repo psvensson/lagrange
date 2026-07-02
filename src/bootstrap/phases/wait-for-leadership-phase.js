@@ -25,10 +25,8 @@ import {
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 
 const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
@@ -115,7 +113,7 @@ class WaitForLeadershipPhase {
             isLeader:
               service?.isLeaderReplica?.() === true,
             leaderId:
-              typeof service?.getLeaderId === TYPEOF.FUNCTION ?
+              typeof service?.getLeaderId === 'function' ?
                 service.getLeaderId() :
                 null,
             requiredTables,
@@ -171,7 +169,7 @@ class WaitForLeadershipPhase {
         const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
         const error = new Error(leadershipTimeout(timeoutMs));
         error.missingLeaders = blockingMissing;
-        error.missingCount = readiness?.missingCount || NUM.ZERO;
+        error.missingCount = readiness?.missingCount || 0;
         error.nonBlockingMissingLeaders = {
           missingMessageGroupLeaders:
             missing.missingMessageGroupLeaders,
@@ -212,7 +210,7 @@ class WaitForLeadershipPhase {
     const partitionId = INITIAL_PARTITION_IDS[tableName];
     if (
       !partitionId ||
-      typeof systemTableCache?.filter !== TYPEOF.FUNCTION
+      typeof systemTableCache?.filter !== 'function'
     ) {
       return false;
     }
@@ -225,11 +223,11 @@ class WaitForLeadershipPhase {
         service?.[COLUMN.PARTITION_ID] === partitionId &&
         service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
         service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED &&
-        typeof service?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        service[COLUMN.ADDRESS].length > NUM.ZERO,
+        typeof service?.[COLUMN.ADDRESS] === 'string' &&
+        service[COLUMN.ADDRESS].length > 0,
     );
 
-    return routableServices.length > NUM.ZERO;
+    return routableServices.length > 0;
   }
 
   /**

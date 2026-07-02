@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_INVARIANT_FALLBACK,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
@@ -69,7 +68,7 @@ const PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE = Object.freeze({
 
 function isRecord(value) {
   return Boolean(value) &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value);
 }
 
@@ -95,7 +94,7 @@ function normalizeNonNegativeInteger(value) {
     return null;
   }
   const normalizedValue = normalizePriorityRecoveryInteger(value);
-  if (!Number.isFinite(normalizedValue) || normalizedValue < NUM.ZERO) {
+  if (!Number.isFinite(normalizedValue) || normalizedValue < 0) {
     return null;
   }
   return normalizedValue;
@@ -103,7 +102,7 @@ function normalizeNonNegativeInteger(value) {
 
 function normalizePriorityRecoverySemanticStateId(semanticState) {
   const normalizedSemanticState = String(semanticState || '').trim();
-  if (normalizedSemanticState.length === NUM.ZERO) {
+  if (normalizedSemanticState.length === 0) {
     return null;
   }
   return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(normalizedSemanticState) ?
@@ -158,7 +157,7 @@ function resolvePriorityRecoveryExplicitSemanticState(
   }
   const partitionId = String(snapshot?.partitionId || '').trim();
   if (
-    partitionId.length === NUM.ZERO ||
+    partitionId.length === 0 ||
     !(explicitSemanticStateByPartitionId instanceof Map)
   ) {
     return null;
@@ -179,7 +178,7 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
       blockedPartition.partition_id ||
       '',
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     const spreadGap = normalizeNonNegativeInteger(
@@ -248,11 +247,11 @@ function normalizePriorityPartitionSummary(summary = null) {
     summary.largestSpreadGap ?? summary.largest_spread_gap,
   );
   const computedTotalSpreadGap = blockedPartitions.reduce((sum, partition) => {
-    return sum + (partition?.spreadGap || NUM.ZERO);
-  }, NUM.ZERO);
+    return sum + (partition?.spreadGap || 0);
+  }, 0);
   const computedLargestSpreadGap = blockedPartitions.reduce((largest, partition) => {
-    return Math.max(largest, partition?.spreadGap || NUM.ZERO);
-  }, NUM.ZERO);
+    return Math.max(largest, partition?.spreadGap || 0);
+  }, 0);
   const normalizedSummary = {
     ...(summary.satisfied === true ? {satisfied: true} : {}),
     ...(summary.satisfied === false ? {satisfied: false} : {}),
@@ -274,20 +273,20 @@ function normalizePriorityPartitionSummary(summary = null) {
           normalizeNonNegativeInteger(summary.totalPriorityPartitionCount),
       } :
       {}),
-    ...(missingPartitionIds.length > NUM.ZERO ? {
+    ...(missingPartitionIds.length > 0 ? {
       missingPartitionIds: Object.freeze([...missingPartitionIds]),
     } : {}),
-    ...(blockedPartitions.length > NUM.ZERO ? {blockedPartitions} : {}),
+    ...(blockedPartitions.length > 0 ? {blockedPartitions} : {}),
     ...(blockedPartitionCount !== null ? {blockedPartitionCount} :
-      blockedPartitions.length > NUM.ZERO ?
+      blockedPartitions.length > 0 ?
         {blockedPartitionCount: blockedPartitions.length} :
         {}),
     ...(largestSpreadGap !== null ? {largestSpreadGap} :
-      blockedPartitions.length > NUM.ZERO ?
+      blockedPartitions.length > 0 ?
         {largestSpreadGap: computedLargestSpreadGap} :
         {}),
     ...(totalSpreadGap !== null ? {totalSpreadGap} :
-      blockedPartitions.length > NUM.ZERO ?
+      blockedPartitions.length > 0 ?
         {totalSpreadGap: computedTotalSpreadGap} :
         {}),
   };
@@ -307,7 +306,7 @@ function normalizePriorityRecoveryInvariantSummary(value) {
     const invariantId = String(
       invariant.invariantId || invariant.id || '',
     ).trim();
-    if (invariantId.length === NUM.ZERO) {
+    if (invariantId.length === 0) {
       continue;
     }
     const reasonCode = String(
@@ -316,19 +315,19 @@ function normalizePriorityRecoveryInvariantSummary(value) {
     const normalizedInvariant = Object.freeze({
       id: invariantId,
       invariantId,
-      reasonCode: reasonCode.length > NUM.ZERO ?
+      reasonCode: reasonCode.length > 0 ?
         reasonCode :
         PRIORITY_RECOVERY_INVARIANT_FALLBACK,
       severity:
-        typeof invariant.severity === TYPEOF.STRING ?
+        typeof invariant.severity === 'string' ?
           invariant.severity :
           null,
       scope:
-        typeof invariant.scope === TYPEOF.STRING ?
+        typeof invariant.scope === 'string' ?
           invariant.scope :
           null,
       owningSubsystem:
-        typeof invariant.owningSubsystem === TYPEOF.STRING ?
+        typeof invariant.owningSubsystem === 'string' ?
           invariant.owningSubsystem :
           null,
       passed: invariant.passed === true,
@@ -349,7 +348,7 @@ function normalizePriorityRecoveryInvariantSummary(value) {
       invariants.sort((left, right) => left.id.localeCompare(right.id)),
     ),
     failingInvariantIds: Object.freeze(normalizedFailingInvariantIds),
-    passed: normalizedFailingInvariantIds.length === NUM.ZERO,
+    passed: normalizedFailingInvariantIds.length === 0,
   });
 }
 
@@ -386,7 +385,7 @@ function collectPriorityRecoveryPartitionIndexes(
       continue;
     }
     const partitionId = String(snapshot.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     if (!Array.isArray(snapshotsByPartitionId.get(partitionId))) {
@@ -470,7 +469,7 @@ function collectPriorityRecoveryDecisionDimension(
   const decisionDimension = String(
     snapshot?.admission?.decisionDimension || '',
   ).trim();
-  if (decisionDimension.length > NUM.ZERO) {
+  if (decisionDimension.length > 0) {
     decisionDimensions.add(decisionDimension);
   }
 }
@@ -483,7 +482,7 @@ function normalizePriorityRecoveryBlockedClassIds(partitionIdsByReason) {
     blockerPartitionIdsByReason[blockerReason] = Object.freeze(
       [...partitionIds].sort(),
     );
-    if (partitionIds.size === NUM.ZERO) {
+    if (partitionIds.size === 0) {
       continue;
     }
     unresolvedClassIds.push(blockerReason);
@@ -512,7 +511,7 @@ function normalizePriorityRecoverySemanticStatePartitions(
   const unresolvedSemanticStateIds = Object.freeze(
     PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS.filter((semanticState) => {
       return normalizedPartitionIdsBySemanticState[semanticState]?.length >
-        NUM.ZERO;
+        0;
     }),
   );
   const blockedPartitionIds = new Set();

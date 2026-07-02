@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 
 const PUBLICATION_OWNER_SEMANTIC_OWNER = 'publication_owner';
 
@@ -16,8 +15,8 @@ const PUBLICATION_OWNER_TEXT = Object.freeze({
 });
 
 const PUBLICATION_OWNER_REVISION_NUMBER = Object.freeze({
-  UNAVAILABLE: NUM.ZERO,
-  MINIMUM_AVAILABLE: NUM.ONE,
+  UNAVAILABLE: 0,
+  MINIMUM_AVAILABLE: 1,
 });
 
 const PUBLICATION_OWNER_REVISION_STATE = Object.freeze({

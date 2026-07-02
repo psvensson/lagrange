@@ -1,6 +1,5 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
@@ -14,7 +13,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   ControlPlanePublicationsOwner,
 }) {
-  const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_COUNT = NUM.ONE;
+  const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_COUNT = 1;
   const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_ASSERTION =
     'authoritative published row should refresh lifecycle metadata without opening a duplicate epoch';
 
@@ -1255,12 +1254,12 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       'published priority spread gaps should use owner-rpc service evidence',
     );
     t.equal(
-      snapshot.serviceRows[NUM.ZERO][COLUMN.STATUS],
+      snapshot.serviceRows[0][COLUMN.STATUS],
       SERVICE_STATUS.ACTIVE,
       'authoritative service visibility should replace stale cache service evidence',
     );
     t.equal(
-      snapshot.serviceRows[NUM.ZERO][COLUMN.UPDATED_AT],
+      snapshot.serviceRows[0][COLUMN.UPDATED_AT],
       authoritativeServiceUpdatedAt,
       'planning should retain the freshest authoritative service row',
     );
@@ -1429,7 +1428,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       'published priority spread gaps should use owner-rpc replica operation evidence',
     );
     t.equal(
-      snapshot.replicaOperationRows[NUM.ZERO]?.[COLUMN.OPERATION_ID],
+      snapshot.replicaOperationRows[0]?.[COLUMN.OPERATION_ID],
       operationId,
       'planning should retain authoritative replica operation rows when cache is empty',
     );

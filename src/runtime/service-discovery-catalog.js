@@ -8,7 +8,6 @@
  * @module runtime/service-discovery-catalog
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {
   ENDPOINT_SYNC_HEALTH,
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
@@ -19,8 +18,6 @@ import {
 } from './endpoint-sync-source-query.js';
 import {groupEndpointRows} from './endpoint-sync-planner.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 const SERVICE_DISCOVERY_DEFAULT = Object.freeze({
   HEALTHY_ONLY: false,
@@ -46,9 +43,9 @@ function toStringAllowlist(values) {
   }
   return new Set(
     values
-      .filter((value) => typeof value === TYPEOF.STRING)
+      .filter((value) => typeof value === 'string')
       .map((value) => value.trim())
-      .filter((value) => value.length > LOCAL_NUM_ZERO),
+      .filter((value) => value.length > 0),
   );
 }
 
@@ -59,11 +56,11 @@ function toStringAllowlist(values) {
  * @return {string|null}
  */
 function resolveDefinitionServiceId(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
   const serviceId = row.service_id || row.serviceId || row.id || null;
-  if (typeof serviceId !== TYPEOF.STRING || serviceId.trim().length === LOCAL_NUM_ZERO) {
+  if (typeof serviceId !== 'string' || serviceId.trim().length === 0) {
     return null;
   }
   return serviceId.trim();
@@ -76,12 +73,12 @@ function resolveDefinitionServiceId(row) {
  * @return {number|null}
  */
 function resolveDefinitionReplicaCount(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
   const rawReplicaCount = row.replica_count ?? row.replicaCount;
   const parsedReplicaCount = Number(rawReplicaCount);
-  if (!Number.isInteger(parsedReplicaCount) || parsedReplicaCount < LOCAL_NUM_ZERO) {
+  if (!Number.isInteger(parsedReplicaCount) || parsedReplicaCount < 0) {
     return null;
   }
   return parsedReplicaCount;
@@ -142,7 +139,7 @@ function buildDesiredReplicaCountMap(serviceIds, desiredByServiceId) {
  * @return {number|null}
  */
 function resolveDesiredReplicaCount(serviceIds, desiredByServiceId) {
-  if (serviceIds.length !== LOCAL_NUM_ONE) {
+  if (serviceIds.length !== 1) {
     return null;
   }
   const serviceId = serviceIds[0];
@@ -160,13 +157,13 @@ function resolveDesiredReplicaCount(serviceIds, desiredByServiceId) {
  * @return {string}
  */
 function resolveDiscoveryHealth(observedReplicaCount, healthyReplicaCount) {
-  if (observedReplicaCount <= LOCAL_NUM_ZERO) {
+  if (observedReplicaCount <= 0) {
     return SERVICE_DISCOVERY_HEALTH.UNKNOWN;
   }
   if (healthyReplicaCount >= observedReplicaCount) {
     return SERVICE_DISCOVERY_HEALTH.HEALTHY;
   }
-  if (healthyReplicaCount === LOCAL_NUM_ZERO) {
+  if (healthyReplicaCount === 0) {
     return SERVICE_DISCOVERY_HEALTH.DEGRADED;
   }
   return SERVICE_DISCOVERY_HEALTH.PARTIAL;

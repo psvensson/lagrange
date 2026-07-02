@@ -1,7 +1,5 @@
 import {
-  NUM,
   TIME_MS,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -39,10 +37,10 @@ function normalizePriorityRecoveryOperationOwnerProgressContractText(
   fallback,
 ) {
   const normalizedValue =
-    typeof value === TYPEOF.STRING ?
+    typeof value === 'string' ?
       value.trim() :
       PRIORITY_RECOVERY_OPERATION_OWNER_PROGRESS_CONTRACT_TEXT_EMPTY;
-  return normalizedValue.length > NUM.ZERO ? normalizedValue : fallback;
+  return normalizedValue.length > 0 ? normalizedValue : fallback;
 }
 
 function isPriorityRecoveryOperationOwnerRemoteHandoffRetryProgress(progress) {
@@ -93,9 +91,9 @@ function resolvePriorityRecoveryOperationOwnerProgressContractRetryAfterMs(
 ) {
   if (
     Number.isFinite(progress?.retryAfterMs) &&
-    progress.retryAfterMs > NUM.ZERO
+    progress.retryAfterMs > 0
   ) {
-    return Math.max(NUM.ZERO, Math.floor(progress.retryAfterMs));
+    return Math.max(0, Math.floor(progress.retryAfterMs));
   }
   if (
     progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ||
@@ -105,7 +103,7 @@ function resolvePriorityRecoveryOperationOwnerProgressContractRetryAfterMs(
   ) {
     return TIME_MS.SECOND;
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function buildPriorityRecoveryOperationOwnerProgressContract(result) {
@@ -160,9 +158,9 @@ function hasPriorityRecoveryOperationOwnerProgress(result) {
   const progress = result?.progress;
   return Boolean(
     result &&
-      typeof result === TYPEOF.OBJECT &&
+      typeof result === 'object' &&
       progress &&
-      typeof progress === TYPEOF.OBJECT &&
+      typeof progress === 'object' &&
       progress.currentOwner === OPERATION_WORKFLOW_OWNER &&
       PRIORITY_RECOVERY_OPERATION_OWNER_PROGRESS_CONTRACT_BOUNDARIES.has(
         progress.blockingBoundary,

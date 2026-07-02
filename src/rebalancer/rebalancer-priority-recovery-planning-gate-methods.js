@@ -16,10 +16,8 @@ import {
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
-  NUM,
   REBALANCER_LOG_MSG,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -42,7 +40,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       operationCreationGate?.operationCreationPartitionId ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (operationCreationPartitionId.length === NUM.ZERO) {
+    if (operationCreationPartitionId.length === 0) {
       return false;
     }
     const inFlightDetails = Array.isArray(
@@ -87,8 +85,8 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     }
     const largestSpreadGap = blockedPartitions.reduce(
       (largestGap, partition) =>
-        Math.max(largestGap, Number(partition?.spreadGap) || NUM.ZERO),
-      NUM.ZERO,
+        Math.max(largestGap, Number(partition?.spreadGap) || 0),
+      0,
     );
     const scheduleDelayMs = this.getPriorityRetryDelayMs();
     return this.buildRebalancePlanningGateDecision({
@@ -120,13 +118,13 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     const normalizedPartitionId = String(
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (normalizedPartitionId.length === NUM.ZERO) {
+    if (normalizedPartitionId.length === 0) {
       return false;
     }
     const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
       {partitionId: normalizedPartitionId},
     );
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return false;
     }
     const snapshots = Array.isArray(
@@ -163,7 +161,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     options = {},
   ) {
     const publicationRow =
-      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
+      event?.data && typeof event.data === 'object' ? event.data : {};
     const publicationStatus = String(
       publicationRow[PRIORITY_RECOVERY_PUBLICATION_EVENT_FIELD.STATUS] ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
@@ -233,7 +231,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
+      normalizedPartitionId.length === 0 ||
       !this.isControlPlanePriorityPartition()
     ) {
       return null;
@@ -241,7 +239,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
       {partitionId: normalizedPartitionId},
     );
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
 

@@ -1,9 +1,7 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
@@ -33,13 +31,12 @@ import {
 } from '../transport/transport-semantic-outcome.js';
 
 const LOCAL_STR_SQL_QUERY_ENGINE = 'sql_query_engine';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_READY = 'ready';
-const LOCAL_STR_WR5H7 = 'control_plane_backpressure';
-const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
+const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
-const LOCAL_STR_106NE = 'authoritative_row_source_unavailable';
-const LOCAL_STR_EA869 = 'authoritative_query_failed';
+const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE = 'authoritative_row_source_unavailable';
+const LOCAL_STR_AUTHORITATIVE_QUERY_FAILED = 'authoritative_query_failed';
 
 const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
@@ -72,21 +69,21 @@ function normalizeReadSource(source) {
 }
 
 function normalizePositiveInteger(value, fallback) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
 
 function applyAuthoritativeViewDefaultReadMode(options = {}) {
   const hasExplicitReadModeContract =
-    typeof options?.readProfile === TYPEOF.STRING ||
-    typeof options?.profile === TYPEOF.STRING ||
-    typeof options?.authoritativeReadMode === TYPEOF.STRING ||
-    typeof options?.ownerReadMode === TYPEOF.STRING ||
-    typeof options?.preferOwnerRpcRead !== TYPEOF.UNDEFINED ||
-    typeof options?.requireOwnerRpcRead !== TYPEOF.UNDEFINED ||
-    typeof options?.allowSqlFallback !== TYPEOF.UNDEFINED ||
-    typeof options?.confirmEmptyLocalReadWithOwnerRpc !== TYPEOF.UNDEFINED;
+    typeof options?.readProfile === 'string' ||
+    typeof options?.profile === 'string' ||
+    typeof options?.authoritativeReadMode === 'string' ||
+    typeof options?.ownerReadMode === 'string' ||
+    typeof options?.preferOwnerRpcRead !== 'undefined' ||
+    typeof options?.requireOwnerRpcRead !== 'undefined' ||
+    typeof options?.allowSqlFallback !== 'undefined' ||
+    typeof options?.confirmEmptyLocalReadWithOwnerRpc !== 'undefined';
   if (hasExplicitReadModeContract) {
     return options;
   }
@@ -99,13 +96,13 @@ function applyAuthoritativeViewDefaultReadMode(options = {}) {
 }
 
 function isReadyLocalQueryTransport(localQueryTransport = null) {
-  if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
+  if (!localQueryTransport || typeof localQueryTransport !== 'object') {
     return false;
   }
   if (localQueryTransport.ready === true) {
     return true;
   }
-  return String(localQueryTransport.state || LOCAL_STR_EMPTY).toLowerCase() === LOCAL_STR_READY;
+  return String(localQueryTransport.state || '').toLowerCase() === LOCAL_STR_READY;
 }
 
 function shouldRetryAuthoritativeReadWithoutOwnerRpc(
@@ -134,16 +131,16 @@ function shouldRetryAuthoritativeReadWithoutOwnerRpc(
     result.causeChain.map((cause) => String(cause || '').toLowerCase()) :
     [];
   return isDeferredTransportSemanticOutcome(transportOutcome) ||
-    causeChain.includes(LOCAL_STR_WR5H7) ||
-    errorText.includes(LOCAL_STR_WR5H7);
+    causeChain.includes(LOCAL_STR_CONTROL_PLANE_BACKPRESSURE) ||
+    errorText.includes(LOCAL_STR_CONTROL_PLANE_BACKPRESSURE);
 }
 
 function freezeRows(rows) {
-  if (!Array.isArray(rows) || rows.length === NUM.ZERO) {
+  if (!Array.isArray(rows) || rows.length === 0) {
     return Object.freeze([]);
   }
   return Object.freeze(rows.map((row) => {
-    return row && typeof row === TYPEOF.OBJECT ?
+    return row && typeof row === 'object' ?
       Object.freeze({...row}) :
       row;
   }));
@@ -175,7 +172,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
     resolveAuthoritativeReadModeContract(resolvedOptions);
   const queryOptions =
     resolvedOptions?.queryOptions &&
-      typeof resolvedOptions.queryOptions === TYPEOF.OBJECT ?
+      typeof resolvedOptions.queryOptions === 'object' ?
       resolvedOptions.queryOptions :
       {};
   const workloadProfile = resolveAuthoritativeReadWorkloadProfile(
@@ -255,11 +252,11 @@ function resolveCompositeSource(reads) {
           source !== AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
       }),
   )];
-  if (sources.length === NUM.ZERO) {
+  if (sources.length === 0) {
     return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
   }
-  if (sources.length === NUM.ONE) {
-    return sources[NUM.ZERO];
+  if (sources.length === 1) {
+    return sources[0];
   }
   return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.MIXED;
 }
@@ -270,7 +267,7 @@ function readNodeSnapshotServicePartitionId(serviceRow = null) {
     serviceRow?.partition_id ??
     serviceRow?.partitionId ??
     null;
-  return typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO ?
+  return typeof partitionId === 'string' && partitionId.length > 0 ?
     partitionId :
     null;
 }
@@ -283,7 +280,7 @@ function collectNodeSnapshotPartitionIds(serviceRows = []) {
           serviceRow?.[COLUMN.SERVICE_TYPE] ??
           serviceRow?.service_type ??
           serviceRow?.serviceType ??
-          LOCAL_STR_EMPTY,
+          '',
         ).toLowerCase() === String(SERVICE_TYPE.PARTITION).toLowerCase();
       })
       .map((serviceRow) => readNodeSnapshotServicePartitionId(serviceRow))
@@ -295,9 +292,9 @@ function buildNodeSnapshotPartitionReadQuery(partitionIds = []) {
   const normalizedPartitionIds = [...new Set(
     (Array.isArray(partitionIds) ? partitionIds : [])
       .map((partitionId) => String(partitionId || '').trim())
-      .filter((partitionId) => partitionId.length > NUM.ZERO),
+      .filter((partitionId) => partitionId.length > 0),
   )];
-  if (normalizedPartitionIds.length === NUM.ZERO) {
+  if (normalizedPartitionIds.length === 0) {
     return null;
   }
   const placeholders = normalizedPartitionIds.map(() => '?').join(', ');
@@ -318,7 +315,7 @@ class AuthoritativeControlPlaneView {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.messageRouter = options.messageRouter || null;
     this.pressureGovernor = options.pressureGovernor || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.queryTimeoutMs = normalizePositiveInteger(
@@ -333,7 +330,7 @@ class AuthoritativeControlPlaneView {
    * @param {Object} [options={}]
    */
   syncOwnerDependencies(options = {}) {
-    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
+    if (Object.hasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
     if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
@@ -349,7 +346,7 @@ class AuthoritativeControlPlaneView {
     return Boolean(
       this.cdcIntegrationService &&
       typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION,
+        'function',
     );
   }
 
@@ -421,13 +418,13 @@ class AuthoritativeControlPlaneView {
       });
       const queryOptions = {
         ...(resolvedOptions.queryOptions &&
-          typeof resolvedOptions.queryOptions === TYPEOF.OBJECT ?
+          typeof resolvedOptions.queryOptions === 'object' ?
           resolvedOptions.queryOptions :
           {}),
         timeoutMs: queryTimeoutMs,
         sessionId:
-          typeof resolvedOptions?.queryOptions?.sessionId === TYPEOF.STRING &&
-            resolvedOptions.queryOptions.sessionId.length > NUM.ZERO ?
+          typeof resolvedOptions?.queryOptions?.sessionId === 'string' &&
+            resolvedOptions.queryOptions.sessionId.length > 0 ?
             resolvedOptions.queryOptions.sessionId :
             `authoritative-control-plane-read:${this.nodeId || 'unknown'}:` +
               `${tableName}:${observedAtMs}`,
@@ -454,7 +451,7 @@ class AuthoritativeControlPlaneView {
         tableName,
         sql,
       });
-      if (typeof deliverySource === TYPEOF.STRING && deliverySource.length > NUM.ZERO) {
+      if (typeof deliverySource === 'string' && deliverySource.length > 0) {
         queryOptions.deliverySource = deliverySource;
       }
       if (!this.canRead()) {
@@ -462,13 +459,13 @@ class AuthoritativeControlPlaneView {
           success: false,
           tableName,
           rows: Object.freeze([]),
-          rowCount: NUM.ZERO,
+          rowCount: 0,
           source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
           usedSqlFallback: false,
           snapshotVersion: null,
           observedAt,
           observedAtMs,
-          error: LOCAL_STR_106NE,
+          error: LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
         });
       }
 
@@ -480,7 +477,7 @@ class AuthoritativeControlPlaneView {
         return Object.freeze({
           ...failure,
           rows: freezeRows(failure.rows),
-          rowCount: NUM.ZERO,
+          rowCount: 0,
           source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
           usedSqlFallback: false,
           snapshotVersion: null,
@@ -558,7 +555,7 @@ class AuthoritativeControlPlaneView {
         return Object.freeze({
           ...failure,
           rows: freezeRows(failure.rows),
-          rowCount: NUM.ZERO,
+          rowCount: 0,
           source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
           usedSqlFallback: false,
           snapshotVersion: null,
@@ -586,7 +583,7 @@ class AuthoritativeControlPlaneView {
             queryTimeoutMs,
         systemTableDiagnostics:
           result?.systemTableDiagnostics &&
-            typeof result.systemTableDiagnostics === TYPEOF.OBJECT ?
+            typeof result.systemTableDiagnostics === 'object' ?
             Object.freeze({...result.systemTableDiagnostics}) :
             null,
         snapshotVersion: resolveSnapshotVersion(rows),
@@ -594,7 +591,7 @@ class AuthoritativeControlPlaneView {
         observedAtMs,
         error: result?.success === true ?
           null :
-          (result?.error || LOCAL_STR_EA869),
+          (result?.error || LOCAL_STR_AUTHORITATIVE_QUERY_FAILED),
       });
     })().finally(() => {
       if (this.inFlightReadsByKey.get(readKey) === inFlightRead) {
@@ -678,7 +675,7 @@ class AuthoritativeControlPlaneView {
     const nodeRow = nodeRows.find((row) => {
       return row?.[COLUMN.NODE_ID] === normalizedNodeId ||
         row?.node_id === normalizedNodeId;
-    }) || nodeRows[NUM.ZERO] || null;
+    }) || nodeRows[0] || null;
     const lastHeartbeat = Number(
       nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
         nodeRow?.last_heartbeat,
@@ -712,7 +709,7 @@ class AuthoritativeControlPlaneView {
           Number.isFinite(lastHeartbeat) ? lastHeartbeat : null,
         heartbeatAgeMs:
           Number.isFinite(lastHeartbeat) ?
-            Math.max(NUM.ZERO, snapshotObservedAtMs - lastHeartbeat) :
+            Math.max(0, snapshotObservedAtMs - lastHeartbeat) :
             null,
       }),
       tables: Object.freeze({

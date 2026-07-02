@@ -103,14 +103,14 @@ function createMockAccounting() {
   return {
     getNodeCapacity: () => ({
       totalBytes: FIXTURE_BUDGET_BYTES,
-      usedBytes: NUM.ZERO,
-      reservedBytes: NUM.ZERO,
+      usedBytes: 0,
+      reservedBytes: 0,
       availableBytes: FIXTURE_BUDGET_BYTES,
     }),
     getCapacitySnapshotForNode: () => ({
       budgetBytes: FIXTURE_BUDGET_BYTES,
-      usedBytes: NUM.ZERO,
-      reservedBytes: NUM.ZERO,
+      usedBytes: 0,
+      reservedBytes: 0,
     }),
     estimateReplicaBytes: () => FIXTURE_ESTIMATED_BYTES,
   };
@@ -197,7 +197,7 @@ async (t) => {
     const ineligible = result.ineligibleNodes || [];
     t.equal(
       ineligible.length,
-      NUM.ZERO,
+      0,
       'no nodes must be ineligible when repair-eligible',
     );
   });
@@ -224,7 +224,7 @@ async (t) => {
   const result = await admission.checkSplit({
     targetNodeIds: [FIXTURE_NODE_ID],
     estimatedBytes: FIXTURE_ESTIMATED_BYTES,
-    requiredReplicaCount: NUM.ONE,
+    requiredReplicaCount: 1,
   });
 
   t.equal(
@@ -292,10 +292,10 @@ async (t) => {
 
   const ineligible = result.ineligibleNodes || [];
   t.ok(
-    ineligible.length > NUM.ZERO,
+    ineligible.length > 0,
     'node must appear in ineligible list',
   );
-  const failedDims = ineligible[NUM.ZERO].failedDimensions;
+  const failedDims = ineligible[0].failedDimensions;
   t.ok(
     failedDims.includes(
       CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,

@@ -45,7 +45,7 @@ import {
 } from './replica-worker-manager-replica-creation.js';
 
 const LOCAL_STR_REPLICA_WORKER_JS = 'replica-worker.js';
-const LOCAL_STR_1P56U = 'replica-worker.bundle.cjs';
+const LOCAL_STR_REPLICA_WORKER_BUNDLE_CJS = 'replica-worker.bundle.cjs';
 const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_ERROR = 'error';
@@ -59,13 +59,13 @@ const LOCAL_STR_9XUGG = 'Target replica not found locally';
 const LOCAL_STR_7II3O = 'Failed to route external worker message';
 const LOCAL_STR_J1K7I = 'Worker message delivered';
 const LOCAL_STR_1J4DX = 'Failed to route local worker message';
-const LOCAL_STR_1P3J1 = 'Health check failed';
-const LOCAL_STR_1VOGR = 'Worker health check failed';
+const LOCAL_STR_HEALTH_CHECK_FAILED = 'Health check failed';
+const LOCAL_STR_WORKER_HEALTH_CHECK_FAILED = 'Worker health check failed';
 const LOCAL_STR_TIMEOUT = 'timeout';
-const LOCAL_STR_1E23B = 'Failed to destroy dedicated replica pool';
+const LOCAL_STR_FAILED_TO_DESTROY_DEDICATED_REPLICA_POOL = 'Failed to destroy dedicated replica pool';
 const LOCAL_STR_ORCT1 = 'Failed to destroy dedicated replica pool after crash';
-const LOCAL_STR_140D3 = 'Failed to stop replica during shutdown';
-const LOCAL_STR_1YHWS = 'Failed to destroy dedicated pool during shutdown';
+const LOCAL_STR_FAILED_TO_STOP_REPLICA_DURING_SHUTDOWN = 'Failed to stop replica during shutdown';
+const LOCAL_STR_FAILED_TO_DESTROY_DEDICATED_POOL_DURING = 'Failed to destroy dedicated pool during shutdown';
 
 /**
  * Error messages for ReplicaWorkerManager.
@@ -203,7 +203,7 @@ function resolveReplicaWorkerPath() {
   return resolvePackagedRuntimeFile({
     moduleDir: REPLICA_WORKER_MODULE_DIR,
     sourceFileName: LOCAL_STR_REPLICA_WORKER_JS,
-    bundledFileName: LOCAL_STR_1P56U,
+    bundledFileName: LOCAL_STR_REPLICA_WORKER_BUNDLE_CJS,
   });
 }
 
@@ -345,7 +345,7 @@ class ReplicaWorkerManager extends EventEmitter {
 
     this.healthCheckTimer = setInterval(() => {
       this.performHealthChecks().catch((error) => {
-        this.logger.error(LOCAL_STR_1P3J1, {
+        this.logger.error(LOCAL_STR_HEALTH_CHECK_FAILED, {
           nodeId: this.nodeId,
           error: error.message,
         });
@@ -419,7 +419,7 @@ class ReplicaWorkerManager extends EventEmitter {
         WORKER_HEALTH_STATUS.UNHEALTHY;
     } catch (error) {
       handle.healthStatus = WORKER_HEALTH_STATUS.UNHEALTHY;
-      this.logger.warn(LOCAL_STR_1VOGR, {
+      this.logger.warn(LOCAL_STR_WORKER_HEALTH_CHECK_FAILED, {
         replicaId,
         error: error.message,
       });
@@ -488,7 +488,7 @@ class ReplicaWorkerManager extends EventEmitter {
       this.workers.delete(replicaId);
 
       await this.destroyDedicatedReplicaPool(replicaId).catch((error) => {
-        this.logger.warn(LOCAL_STR_1E23B, {
+        this.logger.warn(LOCAL_STR_FAILED_TO_DESTROY_DEDICATED_REPLICA_POOL, {
           nodeId: this.nodeId,
           replicaId,
           error: error.message,
@@ -559,7 +559,7 @@ class ReplicaWorkerManager extends EventEmitter {
     return {
       isLeader: response.isLeader || false,
       leaderActivated: response.leaderActivated === true,
-      term: response.term || NUM.ZERO,
+      term: response.term || 0,
       leaderId: response.leaderId || null,
       replicaId: response.replicaId || replicaId,
     };
@@ -690,8 +690,8 @@ class ReplicaWorkerManager extends EventEmitter {
     const partitionCount = this.getWorkersByType(WORKER_ENTITY_TYPE.PARTITION).length;
     const messageGroupCount = this.getWorkersByType(WORKER_ENTITY_TYPE.MESSAGE_GROUP).length;
 
-    let healthyCount = NUM.ZERO;
-    let unhealthyCount = NUM.ZERO;
+    let healthyCount = 0;
+    let unhealthyCount = 0;
 
     for (const handle of this.workers.values()) {
       if (handle.healthStatus === WORKER_HEALTH_STATUS.HEALTHY) {
@@ -738,7 +738,7 @@ class ReplicaWorkerManager extends EventEmitter {
     for (const replicaId of this.workers.keys()) {
       stopPromises.push(
         this.stopReplica(replicaId).catch((error) => {
-          this.logger.warn(LOCAL_STR_140D3, {
+          this.logger.warn(LOCAL_STR_FAILED_TO_STOP_REPLICA_DURING_SHUTDOWN, {
             replicaId,
             error: error.message,
           });
@@ -753,7 +753,7 @@ class ReplicaWorkerManager extends EventEmitter {
     for (const replicaId of this.replicaPools.keys()) {
       poolDestroyPromises.push(
         this.destroyDedicatedReplicaPool(replicaId).catch((error) => {
-          this.logger.warn(LOCAL_STR_1YHWS, {
+          this.logger.warn(LOCAL_STR_FAILED_TO_DESTROY_DEDICATED_POOL_DURING, {
             replicaId,
             error: error.message,
           });

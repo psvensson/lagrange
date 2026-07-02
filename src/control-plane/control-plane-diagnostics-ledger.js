@@ -1,12 +1,11 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
-const LOCAL_NUM_128 = 128;
+const LOCAL_NUM_ONE_HUNDRED_TWENTY_EIGHT = 128;
 
 function freezeValue(value) {
   if (Array.isArray(value)) {
     return Object.freeze(value.map((entry) => freezeValue(entry)));
   }
-  if (value && typeof value === TYPEOF.OBJECT) {
+  if (value && typeof value === 'object') {
     const frozen = {};
     for (const [key, entry] of Object.entries(value)) {
       frozen[key] = freezeValue(entry);
@@ -24,13 +23,13 @@ class ControlPlaneDiagnosticsLedger {
    */
   constructor(options = {}) {
     this.maxEntries = Number.isInteger(options.maxEntries) &&
-      options.maxEntries > NUM.ZERO ?
+      options.maxEntries > 0 ?
       options.maxEntries :
-      LOCAL_NUM_128;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      LOCAL_NUM_ONE_HUNDRED_TWENTY_EIGHT;
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
-    this.nextSequence = NUM.ONE;
+    this.nextSequence = 1;
     this.entries = [];
   }
 
@@ -46,7 +45,7 @@ class ControlPlaneDiagnosticsLedger {
       recordedAt: new Date(recordedAtMs).toISOString(),
       ...entry,
     });
-    this.nextSequence += NUM.ONE;
+    this.nextSequence += 1;
     this.entries.push(normalized);
     if (this.entries.length > this.maxEntries) {
       this.entries = this.entries.slice(this.entries.length - this.maxEntries);
@@ -60,12 +59,12 @@ class ControlPlaneDiagnosticsLedger {
    * @return {Object[]}
    */
   getEntries(options = {}) {
-    const limit = Number.isInteger(options.limit) && options.limit > NUM.ZERO ?
+    const limit = Number.isInteger(options.limit) && options.limit > 0 ?
       options.limit :
       null;
     const entries = limit === null ?
       this.entries :
-      this.entries.slice(Math.max(NUM.ZERO, this.entries.length - limit));
+      this.entries.slice(Math.max(0, this.entries.length - limit));
     return Object.freeze(entries.map((entry) => entry));
   }
 

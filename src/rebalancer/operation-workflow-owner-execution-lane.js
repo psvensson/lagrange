@@ -5,7 +5,6 @@ import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
-  NUM,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_OWNER_ACTION,
   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
@@ -18,7 +17,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
   TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
   WORKFLOW_STEP,
   buildTopologyOperatorWitnessFromWorkflowProgress,
   getControlPlaneRetryAfterMs,
@@ -101,7 +99,7 @@ class OperationWorkflowOwnerExecutionLane
     }
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+      Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
         retryAfterMs :
         OBSERVED_PROGRESS_RETRY_DELAY_MS;
     const timerHandle = this.setTimeoutFn(() => {
@@ -142,7 +140,7 @@ class OperationWorkflowOwnerExecutionLane
     if (
       shouldPreferLocalPriorityReplicaObservation &&
       this.repository &&
-      typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
+      typeof this.repository.getActualReplicaObservation === 'function'
     ) {
       const localObservation =
         await this.repository.getActualReplicaObservation(
@@ -159,7 +157,7 @@ class OperationWorkflowOwnerExecutionLane
     }
     if (
       this.repository &&
-      typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
+      typeof this.repository.getActualReplicaObservation === 'function'
     ) {
       const observation = await this.repository.getActualReplicaObservation(
         replicaId,
@@ -408,10 +406,10 @@ class OperationWorkflowOwnerExecutionLane
    * @return {boolean}
    */
   shouldDelayEmptyIncompleteOperationQuery(now = Date.now()) {
-    if (this.incompleteOperationQueryEmptyBackoffMs <= NUM.ZERO) {
+    if (this.incompleteOperationQueryEmptyBackoffMs <= 0) {
       return false;
     }
-    if (this.lastEmptyIncompleteOperationQueryAtMs <= NUM.ZERO) {
+    if (this.lastEmptyIncompleteOperationQueryAtMs <= 0) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
       return true;
     }
@@ -421,7 +419,7 @@ class OperationWorkflowOwnerExecutionLane
     ) {
       return true;
     }
-    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.lastEmptyIncompleteOperationQueryAtMs = 0;
     return false;
   }
 
@@ -430,7 +428,7 @@ class OperationWorkflowOwnerExecutionLane
    * @return {void}
    */
   clearEmptyIncompleteOperationQueryDelay() {
-    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.lastEmptyIncompleteOperationQueryAtMs = 0;
   }
 
   // --- Workflow step advancement ---
@@ -516,11 +514,11 @@ class OperationWorkflowOwnerExecutionLane
     );
     const currentAttempt =
       this.transitionExecutionAttemptByStepOwnerKey.get(ownerKey);
-    if (Number.isInteger(currentAttempt) && currentAttempt >= NUM.ONE) {
+    if (Number.isInteger(currentAttempt) && currentAttempt >= 1) {
       return currentAttempt;
     }
-    this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, NUM.ONE);
-    return NUM.ONE;
+    this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, 1);
+    return 1;
   }
 
   /**
@@ -535,7 +533,7 @@ class OperationWorkflowOwnerExecutionLane
       step,
     );
     const nextAttempt =
-      this.reserveTransitionExecutionAttempt(operationId, step) + NUM.ONE;
+      this.reserveTransitionExecutionAttempt(operationId, step) + 1;
     this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, nextAttempt);
     return nextAttempt;
   }
@@ -613,7 +611,7 @@ class OperationWorkflowOwnerExecutionLane
    */
   buildTransitionMutationTimeoutBudget(sessionId) {
     if (
-      typeof this.transactionCoordinator?.getTransaction !== TYPEOF.FUNCTION
+      typeof this.transactionCoordinator?.getTransaction !== 'function'
     ) {
       return null;
     }
@@ -650,7 +648,7 @@ class OperationWorkflowOwnerExecutionLane
       confirmPersistence: false,
       timeoutBudget: this.buildTransitionMutationTimeoutBudget(sessionId),
     };
-    if (typeof sessionId !== TYPEOF.STRING || sessionId.length <= NUM.ZERO) {
+    if (typeof sessionId !== 'string' || sessionId.length <= 0) {
       delete persistOptions.sessionId;
     }
     return persistOptions;
@@ -672,9 +670,9 @@ class OperationWorkflowOwnerExecutionLane
     ];
     const partitionId = candidatePartitionIds.find(
       (candidate) =>
-        typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
+        typeof candidate === 'string' && candidate.length > 0,
     );
-    return typeof partitionId === TYPEOF.STRING ?
+    return typeof partitionId === 'string' ?
       partitionId :
       OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
   }

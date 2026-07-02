@@ -1,7 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {NUM, TYPEOF} from '../constants/index.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
   DIRECT: 'direct',
@@ -27,13 +25,13 @@ function buildPartitionWriteEntry(operation, options = {}) {
   return {
     ...operation,
     entryId:
-      typeof operation?.entryId === TYPEOF.STRING &&
-        operation.entryId.length > NUM.ZERO ?
+      typeof operation?.entryId === 'string' &&
+        operation.entryId.length > 0 ?
         operation.entryId :
         randomUUID(),
-    timestamp: timestamp === undefined ? LOCAL_STR_EMPTY : String(timestamp),
+    timestamp: timestamp === undefined ? '' : String(timestamp),
     proposedBy:
-      typeof options.proposedBy === TYPEOF.STRING ?
+      typeof options.proposedBy === 'string' ?
         options.proposedBy :
         PARTITION_WRITE_KERNEL_LITERAL.EMPTY_STRING,
     proposedAt:
@@ -43,7 +41,7 @@ function buildPartitionWriteEntry(operation, options = {}) {
 
 function resolvePartitionWriteCommitMode(options = {}) {
   const replicaIds = Array.isArray(options.replicaIds) ? options.replicaIds : [];
-  if (replicaIds.length <= NUM.ONE) {
+  if (replicaIds.length <= 1) {
     return PARTITION_WRITE_COMMIT_MODE.DIRECT;
   }
 

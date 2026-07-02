@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {PARTITION_SERVICE_INIT_STAGE} from '../partition/partition-service-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
@@ -25,8 +24,8 @@ function assignReplicaHandlerProgressMethods(ReplicaHandler) {
       const progress = this.creationProgressReporter.start({
         ...details,
         stage: PARTITION_SERVICE_INIT_STAGE.STARTING,
-        peerTotal: Math.max(NUM.ZERO, details.peerTotal || NUM.ZERO),
-        peerJoined: NUM.ZERO,
+        peerTotal: Math.max(0, details.peerTotal || 0),
+        peerJoined: 0,
       });
       if (progress && progress.replicaId) {
         this.creationProgressByReplica.set(progress.replicaId, progress);
@@ -48,10 +47,10 @@ function assignReplicaHandlerProgressMethods(ReplicaHandler) {
         update.stage = stageEvent.stage;
       }
       if (Number.isFinite(stageEvent.peerTotal)) {
-        update.peerTotal = Math.max(NUM.ZERO, stageEvent.peerTotal);
+        update.peerTotal = Math.max(0, stageEvent.peerTotal);
       }
       if (Number.isFinite(stageEvent.peerJoined)) {
-        update.peerJoined = Math.max(NUM.ZERO, stageEvent.peerJoined);
+        update.peerJoined = Math.max(0, stageEvent.peerJoined);
       }
       if (stageEvent.peerId) {
         update.peerId = stageEvent.peerId;
@@ -133,14 +132,14 @@ function assignReplicaHandlerProgressMethods(ReplicaHandler) {
         progress.spinnerFrame || REPLICA_HANDLER_PROGRESS.SPINNER_IDLE;
       const peerTotal = Number.isFinite(progress.peerTotal) ?
         progress.peerTotal :
-        NUM.ZERO;
+        0;
       const peerJoined = Number.isFinite(progress.peerJoined) ?
         progress.peerJoined :
-        NUM.ZERO;
+        0;
       const countPendingReplica =
         !status && !this.localServices.has(progress.replicaId);
       const localReplicas =
-        this.localServices.size + (countPendingReplica ? NUM.ONE : NUM.ZERO);
+        this.localServices.size + (countPendingReplica ? 1 : 0);
       const statusText = status ? ` status=${status}` : '';
       const errorText = error ?
         ` error=${this.formatReplicaCreationError(error)}` :

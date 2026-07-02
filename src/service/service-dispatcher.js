@@ -5,7 +5,6 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {
   SUBSYSTEM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
@@ -15,8 +14,6 @@ import {
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_UNKNOWN_ERROR = 'unknown_error';
 
 const SERVICE_DISPATCHER_ERROR = Object.freeze({
@@ -83,16 +80,16 @@ class ServiceDispatcher {
    */
   constructor(options = {}) {
     if (!options.messageRouter ||
-      typeof options.messageRouter.deliver !== TYPEOF.FUNCTION) {
+      typeof options.messageRouter.deliver !== 'function') {
       throw new TypeError(SERVICE_DISPATCHER_ERROR.ROUTER_REQUIRED);
     }
-    if (typeof options.leaderResolver !== TYPEOF.FUNCTION) {
+    if (typeof options.leaderResolver !== 'function') {
       throw new TypeError(SERVICE_DISPATCHER_ERROR.LEADER_RESOLVER_REQUIRED);
     }
-    if (typeof options.authenticate !== TYPEOF.FUNCTION) {
+    if (typeof options.authenticate !== 'function') {
       throw new TypeError(SERVICE_DISPATCHER_ERROR.AUTHN_REQUIRED);
     }
-    if (typeof options.authorize !== TYPEOF.FUNCTION) {
+    if (typeof options.authorize !== 'function') {
       throw new TypeError(SERVICE_DISPATCHER_ERROR.AUTHZ_REQUIRED);
     }
 
@@ -102,14 +99,14 @@ class ServiceDispatcher {
     this._authorize = options.authorize;
     this._logger = options.logger || this._initLogger();
     this._metrics = {
-      dispatchTotal: LOCAL_NUM_ZERO,
-      dispatchSuccess: LOCAL_NUM_ZERO,
-      dispatchFailure: LOCAL_NUM_ZERO,
-      authnFailure: LOCAL_NUM_ZERO,
-      authzFailure: LOCAL_NUM_ZERO,
-      lastDispatchDurationMs: LOCAL_NUM_ZERO,
-      dispatchLatencyMsTotal: LOCAL_NUM_ZERO,
-      dispatchLatencyMsMax: LOCAL_NUM_ZERO,
+      dispatchTotal: 0,
+      dispatchSuccess: 0,
+      dispatchFailure: 0,
+      authnFailure: 0,
+      authzFailure: 0,
+      lastDispatchDurationMs: 0,
+      dispatchLatencyMsTotal: 0,
+      dispatchLatencyMsMax: 0,
       lastError: null,
     };
   }
@@ -145,7 +142,7 @@ class ServiceDispatcher {
    * @private
    */
   _recordDispatchMetrics(status, durationMs, error = null) {
-    this._metrics.dispatchTotal += LOCAL_NUM_ONE;
+    this._metrics.dispatchTotal += 1;
     this._metrics.lastDispatchDurationMs = durationMs;
     this._metrics.dispatchLatencyMsTotal += durationMs;
     this._metrics.dispatchLatencyMsMax = Math.max(
@@ -154,17 +151,17 @@ class ServiceDispatcher {
     );
 
     if (status === DISPATCH_METRIC_STATUS.SUCCESS) {
-      this._metrics.dispatchSuccess += LOCAL_NUM_ONE;
+      this._metrics.dispatchSuccess += 1;
       this._metrics.lastError = null;
       return;
     }
 
-    this._metrics.dispatchFailure += LOCAL_NUM_ONE;
+    this._metrics.dispatchFailure += 1;
     if (status === DISPATCH_METRIC_STATUS.AUTHN_FAILURE) {
-      this._metrics.authnFailure += LOCAL_NUM_ONE;
+      this._metrics.authnFailure += 1;
     }
     if (status === DISPATCH_METRIC_STATUS.AUTHZ_FAILURE) {
-      this._metrics.authzFailure += LOCAL_NUM_ONE;
+      this._metrics.authzFailure += 1;
     }
     this._metrics.lastError = error ? error.message : null;
   }
@@ -264,7 +261,7 @@ class ServiceDispatcher {
         validatedEnvelope,
         authorizedContext,
       );
-      if (!target || typeof target.targetAddress !== TYPEOF.STRING) {
+      if (!target || typeof target.targetAddress !== 'string') {
         throw new Error(SERVICE_DISPATCHER_ERROR.TARGET_ADDRESS_REQUIRED);
       }
 

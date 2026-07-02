@@ -14,7 +14,6 @@
  * @module query/callback-context
  */
 
-import {TYPEOF} from '../../constants/index.js';
 import {
   NESTED_CALL_CLASSIFICATION,
   NESTED_CALL_ERROR_MSG,
@@ -59,10 +58,10 @@ function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
     useBroadcast: (ref) =>
       execCtx.useBroadcast(ref),
     call: (query, params, handler, opts) => {
-      if (typeof query === TYPEOF.STRING) {
+      if (typeof query === 'string') {
         const result = classifyNestedCall(query);
         if (planDiagnostics &&
-            typeof planDiagnostics.recordClassification === TYPEOF.FUNCTION) {
+            typeof planDiagnostics.recordClassification === 'function') {
           planDiagnostics.recordClassification(
             query,
             result.classification,
@@ -85,7 +84,7 @@ function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
         throw error;
       }
       if (callResult &&
-          typeof callResult.then === TYPEOF.FUNCTION) {
+          typeof callResult.then === 'function') {
         return Promise.resolve(callResult).finally(() => {
           budgetEnforcer.decrementInflight();
         });
@@ -96,7 +95,7 @@ function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
     isCancelled: () => execCtx.isCancelled(),
     throwIfCancelled: () => execCtx.throwIfCancelled(),
   };
-  if (debugApi && typeof debugApi.trace === TYPEOF.FUNCTION) {
+  if (debugApi && typeof debugApi.trace === 'function') {
     callbackContext.debug = Object.freeze({
       trace: debugApi.trace,
     });

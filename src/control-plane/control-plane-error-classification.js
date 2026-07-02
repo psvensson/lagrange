@@ -1,13 +1,11 @@
 import {
   NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   PRESSURE_GOVERNOR_ERROR_CODE,
 } from './pressure-governor.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 
-const LOCAL_STR_EMPTY = '';
 
 const RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT =
   'Raft write commit timed out';
@@ -85,32 +83,32 @@ const CONTROL_PLANE_FAILURE_ERROR_CODE = Object.freeze({
 const MAX_LINKED_CONTROL_PLANE_FAILURES = NUM.EIGHT;
 
 function getDirectControlPlaneErrorMessage(value) {
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     return value;
   }
-  if (typeof value?.message === TYPEOF.STRING) {
+  if (typeof value?.message === 'string') {
     return value.message;
   }
-  if (typeof value?.error === TYPEOF.STRING) {
+  if (typeof value?.error === 'string') {
     return value.error;
   }
-  return LOCAL_STR_EMPTY;
+  return '';
 }
 
 function getDirectControlPlaneErrorCode(value) {
-  if (typeof value?.code === TYPEOF.STRING) {
+  if (typeof value?.code === 'string') {
     return value.code;
   }
-  if (typeof value?.errorCode === TYPEOF.STRING) {
+  if (typeof value?.errorCode === 'string') {
     return value.errorCode;
   }
-  return LOCAL_STR_EMPTY;
+  return '';
 }
 
 function getDirectControlPlaneRetryAfterMs(value) {
   return Number.isFinite(value?.retryAfterMs) ?
-    Math.max(NUM.ZERO, Math.floor(value.retryAfterMs)) :
-    NUM.ZERO;
+    Math.max(0, Math.floor(value.retryAfterMs)) :
+    0;
 }
 
 function collectLinkedControlPlaneFailures(value) {
@@ -118,23 +116,23 @@ function collectLinkedControlPlaneFailures(value) {
   const visited = new Set();
   const collected = [];
 
-  while (queue.length > NUM.ZERO &&
+  while (queue.length > 0 &&
       collected.length < MAX_LINKED_CONTROL_PLANE_FAILURES) {
     const candidate = queue.shift();
     if (!candidate) {
       continue;
     }
-    if (typeof candidate === TYPEOF.OBJECT) {
+    if (typeof candidate === 'object') {
       if (visited.has(candidate)) {
         continue;
       }
       visited.add(candidate);
-    } else if (typeof candidate !== TYPEOF.STRING) {
+    } else if (typeof candidate !== 'string') {
       continue;
     }
 
     collected.push(candidate);
-    if (typeof candidate !== TYPEOF.OBJECT) {
+    if (typeof candidate !== 'object') {
       continue;
     }
 
@@ -142,7 +140,7 @@ function collectLinkedControlPlaneFailures(value) {
       queue.push(candidate.cause);
     }
     if (candidate.firstFailedParticipant &&
-        typeof candidate.firstFailedParticipant === TYPEOF.OBJECT) {
+        typeof candidate.firstFailedParticipant === 'object') {
       queue.push(candidate.firstFailedParticipant);
     }
     if (Array.isArray(candidate.participantFailures)) {
@@ -164,7 +162,7 @@ function getControlPlaneErrorCode(value) {
 }
 
 function getControlPlaneRetryAfterMs(value) {
-  let retryAfterMs = NUM.ZERO;
+  let retryAfterMs = 0;
   for (const candidate of collectLinkedControlPlaneFailures(value)) {
     retryAfterMs = Math.max(
       retryAfterMs,
@@ -186,7 +184,7 @@ function isRetryableControlPlaneError(value) {
         PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED) {
       return true;
     }
-    if (getDirectControlPlaneRetryAfterMs(candidate) > NUM.ZERO) {
+    if (getDirectControlPlaneRetryAfterMs(candidate) > 0) {
       return true;
     }
     const message = getDirectControlPlaneErrorMessage(candidate);
@@ -200,16 +198,16 @@ function isRetryableControlPlaneError(value) {
 }
 
 function resolveControlPlanePrimaryFailureReason(summary) {
-  if (summary.authoritativeRowSourceUnavailableCount > NUM.ZERO) {
+  if (summary.authoritativeRowSourceUnavailableCount > 0) {
     return CONTROL_PLANE_FAILURE_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
   }
-  if (summary.distributedParticipantFailureCount > NUM.ZERO) {
+  if (summary.distributedParticipantFailureCount > 0) {
     return CONTROL_PLANE_FAILURE_REASON.DISTRIBUTED_PARTICIPANT_FAILURE;
   }
-  if (summary.reconnectDeliveryFailureCount > NUM.ZERO) {
+  if (summary.reconnectDeliveryFailureCount > 0) {
     return CONTROL_PLANE_FAILURE_REASON.RECONNECT_DELIVERY_FAILURE;
   }
-  if (summary.pressureDegradedCount > NUM.ZERO) {
+  if (summary.pressureDegradedCount > 0) {
     return CONTROL_PLANE_FAILURE_REASON.PRESSURE_DEGRADED;
   }
   return CONTROL_PLANE_FAILURE_REASON.UNKNOWN;
@@ -218,23 +216,23 @@ function resolveControlPlanePrimaryFailureReason(summary) {
 function getControlPlaneFailureSummary(value) {
   const summary = {
     primaryReason: CONTROL_PLANE_FAILURE_REASON.UNKNOWN,
-    linkedFailureCount: NUM.ZERO,
+    linkedFailureCount: 0,
     retryable: isRetryableControlPlaneError(value),
-    authoritativeRowSourceUnavailableCount: NUM.ZERO,
-    distributedParticipantFailureCount: NUM.ZERO,
-    reconnectDeliveryFailureCount: NUM.ZERO,
-    pressureDegradedCount: NUM.ZERO,
+    authoritativeRowSourceUnavailableCount: 0,
+    distributedParticipantFailureCount: 0,
+    reconnectDeliveryFailureCount: 0,
+    pressureDegradedCount: 0,
   };
 
   for (const candidate of collectLinkedControlPlaneFailures(value)) {
-    summary.linkedFailureCount += NUM.ONE;
+    summary.linkedFailureCount += 1;
     const message = getDirectControlPlaneErrorMessage(candidate);
     const errorCode = getDirectControlPlaneErrorCode(candidate);
 
     if (message.includes(
       CONTROL_PLANE_FAILURE_FRAGMENT.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
     )) {
-      summary.authoritativeRowSourceUnavailableCount += NUM.ONE;
+      summary.authoritativeRowSourceUnavailableCount += 1;
     }
     if (
       message.includes(
@@ -243,7 +241,7 @@ function getControlPlaneFailureSummary(value) {
       errorCode ===
         CONTROL_PLANE_FAILURE_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE
     ) {
-      summary.distributedParticipantFailureCount += NUM.ONE;
+      summary.distributedParticipantFailureCount += 1;
     }
     if (
       message.includes(CONTROL_PLANE_FAILURE_FRAGMENT.NO_CONNECTION_TO_NODE) ||
@@ -253,7 +251,7 @@ function getControlPlaneFailureSummary(value) {
         CONTROL_PLANE_FAILURE_FRAGMENT.NO_HANDLER_REGISTERED_FOR_ADDRESS,
       )
     ) {
-      summary.reconnectDeliveryFailureCount += NUM.ONE;
+      summary.reconnectDeliveryFailureCount += 1;
     }
     if (
       message.includes(
@@ -262,7 +260,7 @@ function getControlPlaneFailureSummary(value) {
       errorCode ===
         CONTROL_PLANE_FAILURE_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED
     ) {
-      summary.pressureDegradedCount += NUM.ONE;
+      summary.pressureDegradedCount += 1;
     }
   }
 

@@ -1,8 +1,6 @@
-import {NUM} from '../constants/index.js';
 import {OperationType} from './replica-status.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_NODE_ID = 'node_id';
 const LOCAL_STR_NODEID = 'nodeId';
@@ -26,7 +24,7 @@ const REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = new Set([
 function firstStringField(record, ...keys) {
   for (const key of keys) {
     const value = record?.[key];
-    if (typeof value === LOCAL_STR_STRING && value.length > NUM.ZERO) {
+    if (typeof value === LOCAL_STR_STRING && value.length > 0) {
       return value;
     }
   }
@@ -52,14 +50,14 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
   if (String(firstStringField(
     serviceRow,
     LOCAL_STR_STATUS,
-  ) || LOCAL_STR_EMPTY).toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+  ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
     return false;
   }
   if (String(firstStringField(
     serviceRow,
     LOCAL_STR_NODE_ID,
     LOCAL_STR_NODEID,
-  ) || LOCAL_STR_EMPTY) !== targetNodeId) {
+  ) || '') !== targetNodeId) {
     return false;
   }
   const serviceReplicaId = firstStringField(
@@ -79,7 +77,7 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
       LOCAL_STR_PARTITION_ID,
       LOCAL_STR_PARTITIONID,
       LOCAL_STR_ID,
-    ) || LOCAL_STR_EMPTY) === entityId;
+    ) || '') === entityId;
   }
   if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
     return String(firstStringField(
@@ -87,7 +85,7 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
       LOCAL_STR_GROUP_ID,
       LOCAL_STR_GROUPID,
       LOCAL_STR_ID,
-    ) || LOCAL_STR_EMPTY) === entityId;
+    ) || '') === entityId;
   }
   return true;
 }
@@ -110,14 +108,14 @@ function hasObservedActiveTargetServiceOwnership(record, options = {}) {
     if (String(firstStringField(
       serviceRow,
       LOCAL_STR_STATUS,
-    ) || LOCAL_STR_EMPTY).toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+    ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
       continue;
     }
     if (String(firstStringField(
       serviceRow,
       LOCAL_STR_NODE_ID,
       LOCAL_STR_NODEID,
-    ) || LOCAL_STR_EMPTY) !== targetNodeId) {
+    ) || '') !== targetNodeId) {
       continue;
     }
     const serviceReplicaId = firstStringField(
@@ -209,7 +207,7 @@ function doesObservedSourceReplicaServiceRowBlockRetirement(
       LOCAL_STR_PARTITION_ID,
       LOCAL_STR_PARTITIONID,
       LOCAL_STR_ID,
-    ) || LOCAL_STR_EMPTY) === entityId;
+    ) || '') === entityId;
   }
   if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
     return String(firstStringField(
@@ -217,7 +215,7 @@ function doesObservedSourceReplicaServiceRowBlockRetirement(
       LOCAL_STR_GROUP_ID,
       LOCAL_STR_GROUPID,
       LOCAL_STR_ID,
-    ) || LOCAL_STR_EMPTY) === entityId;
+    ) || '') === entityId;
   }
   return true;
 }

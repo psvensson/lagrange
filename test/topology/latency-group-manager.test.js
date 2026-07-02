@@ -2,7 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {COLUMN, NODE_STATE, NUM, TABLES} from '../../src/constants/index.js';
+import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
 import {
   LATENCY_ASSIGNMENT_STATE,
   LATENCY_GROUP_STATE,
@@ -46,7 +46,7 @@ function createNodeRow(nodeId, groupId = null) {
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: NODE_STATE.ACTIVE,
     [COLUMN.LATENCY_GROUP_ID]: groupId,
-    [COLUMN.CREATED_AT]: NUM.ONE,
+    [COLUMN.CREATED_AT]: 1,
   };
 }
 
@@ -56,8 +56,8 @@ function createGroupRow(groupId, representativeNodeId) {
     [COLUMN.REPRESENTATIVE_NODE_ID]: representativeNodeId,
     [COLUMN.COORDINATOR_NODE_ID]: representativeNodeId,
     [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
-    [COLUMN.CREATED_AT]: NUM.ONE,
-    [COLUMN.UPDATED_AT]: NUM.ONE,
+    [COLUMN.CREATED_AT]: 1,
+    [COLUMN.UPDATED_AT]: 1,
   };
 }
 
@@ -113,7 +113,7 @@ function createMockMeasurementService(latencyByNodeId = {}) {
 
       return {
         rttMs,
-        attempt: NUM.ZERO,
+        attempt: 0,
       };
     },
   };
@@ -414,7 +414,7 @@ test('start schedules periodic cycle with jitter and stop clears timer', async (
     latencyMeasurementService: measurement,
     groupSelectionService: selection,
     nowFn: () => 12000,
-    randomFn: () => NUM.ONE,
+    randomFn: () => 1,
     setTimeoutFn: timerHarness.setTimeoutFn,
     clearTimeoutFn: timerHarness.clearTimeoutFn,
   });

@@ -3,16 +3,12 @@
  */
 
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   DEBUG_METADATA_DEFAULT as DEF,
   DEBUG_METADATA_ERROR_CODE as CODE,
   DEBUG_METADATA_ERROR_MSG as ERR,
 } from './debug-metadata-service-constants.js';
 
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_BASE64 = 'base64';
 
 /**
@@ -32,10 +28,10 @@ function buildBreakpointId(sessionId, index, lineNumber, columnNumber) {
  */
 function buildPlaceholders(count) {
   const placeholders = [];
-  for (let index = NUM.ONE; index <= count; index++) {
+  for (let index = 1; index <= count; index++) {
     placeholders.push(`?${index}`);
   }
-  return placeholders.join(LOCAL_STR_128KJ);
+  return placeholders.join(LOCAL_STR_COMMA_SPACE);
 }
 
 /**
@@ -70,7 +66,7 @@ function normalizeEnvelopeBuffer(value) {
   if (!value) {
     throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.SNAPSHOT_REQUIRED);
   }
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     return Buffer.from(value, LOCAL_STR_BASE64);
   }
   if (Buffer.isBuffer(value)) {
@@ -92,7 +88,7 @@ function normalizeEnvelopeBuffer(value) {
  * @param {*} value
  */
 function assertRequestObject(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.REQUEST_REQUIRED);
   }
 }
@@ -103,7 +99,7 @@ function assertRequestObject(value) {
  * @param {string} code
  */
 function assertNonEmptyString(value, message, code) {
-  if (typeof value !== TYPEOF.STRING || value.trim().length === NUM.ZERO) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw createDebugMetadataError(code, message);
   }
 }
@@ -114,7 +110,7 @@ function assertNonEmptyString(value, message, code) {
  * @return {number}
  */
 function normalizeLimit(value, fallback) {
-  if (!Number.isInteger(value) || value <= NUM.ZERO) {
+  if (!Number.isInteger(value) || value <= 0) {
     return fallback;
   }
   return Math.min(value, DEF.MAX_LIMIT);

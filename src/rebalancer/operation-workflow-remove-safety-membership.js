@@ -1,8 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  TYPEOF,
-  NUM,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
@@ -15,7 +13,7 @@ const {
  * @returns {string[]}
  */
 function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
-  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+  if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return [];
   }
   return normalizeNodeIdList([
@@ -56,13 +54,13 @@ function resolvePriorityRemoveSafetyMembershipSnapshot(
     (nodeId) => !publishedActiveNodeIdSet.has(nodeId),
   );
   const recoveryProjectionCoversProjectedVoters =
-    missingPublishedNodeIds.length > NUM.ZERO &&
-    recoveryProjectionNodeIds.length > NUM.ZERO &&
+    missingPublishedNodeIds.length > 0 &&
+    recoveryProjectionNodeIds.length > 0 &&
     missingPublishedNodeIds.every((nodeId) => {
       return recoveryProjectionNodeIdSet.has(nodeId);
     });
   const useRecoveryProjectionMembership =
-    recoveryProjectionNodeIds.length > NUM.ZERO &&
+    recoveryProjectionNodeIds.length > 0 &&
     (spreadGapPending || recoveryProjectionCoversProjectedVoters);
   const membershipNodeIds = useRecoveryProjectionMembership ?
     recoveryProjectionNodeIds :
@@ -78,7 +76,7 @@ function resolvePriorityRemoveSafetyMembershipSnapshot(
   );
   const publishedActiveNodeIdsPresent =
     planningSnapshot?.publishedActiveNodeIdsPresent === true ||
-    publishedActiveNodeIds.length > NUM.ZERO;
+    publishedActiveNodeIds.length > 0;
 
   return Object.freeze({
     publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),

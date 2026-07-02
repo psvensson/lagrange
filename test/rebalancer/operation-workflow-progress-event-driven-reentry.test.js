@@ -323,7 +323,7 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
       TEST_TARGET_NODE_ID,
     ]),
     pendingAckNodeIds: TEST_EMPTY_LIST,
-    pendingAckCount: NUM.ZERO,
+    pendingAckCount: 0,
     priorityRecoveryDecisionSnapshots: Object.freeze({
       capturedAt: TEST_CAPTURED_AT_MS,
       publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -424,13 +424,13 @@ function buildSqlQueryEngine(operationRow) {
         return {
           success: true,
           rows: TEST_EMPTY_ROWS,
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       }
       return {
         success: true,
         rows: TEST_EMPTY_ROWS,
-        affectedRows: NUM.ZERO,
+        affectedRows: 0,
       };
     },
   };
@@ -453,7 +453,7 @@ function createEventDrivenCoordinator(
         return {
           success: true,
           rows: TEST_EMPTY_ROWS,
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     },
@@ -559,7 +559,7 @@ function assertOperationDispatchRetryHandoffSnapshot(
   );
   t.same(
     [deliveries.length, deferredTimers.length],
-    [NUM.ZERO, NUM.ZERO],
+    [0, 0],
     `active ${label} dispatch retries should not duplicate remote wakes`,
   );
 }
@@ -621,7 +621,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -635,7 +635,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
           [operation],
         );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -704,17 +704,17 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       'the remote wake should arm the bounded handoff verification lane',
     );
 
@@ -737,11 +737,11 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       'owner-observed event-driven re-entry should not require the timeout flag',
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
     t.equal(
       deliveries.length,
-      NUM.TWO,
+      2,
       'owner-observed event-driven re-entry should enqueue a fresh owner wake',
     );
 
@@ -764,7 +764,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       'persisted-not-dispatched event-driven re-entry should not require an owner observation',
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
     t.equal(
       deliveries.length,
@@ -805,7 +805,7 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -819,7 +819,7 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
           [operation],
         );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -849,17 +849,17 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       'the focused PENDING witness should arm the bounded handoff verification lane',
     );
   } finally {
@@ -922,7 +922,7 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -936,7 +936,7 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
           [operation],
         );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -961,24 +961,24 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY,
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY,
     );
 
-    await deferredTimers[NUM.ZERO].fn();
+    await deferredTimers[0].fn();
 
     t.equal(
       deliveries.length,
-      NUM.TWO,
+      2,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
     );
     t.equal(
-      deliveries[NUM.ONE]?.target,
+      deliveries[1]?.target,
       TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
     );
@@ -1062,7 +1062,7 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -1115,21 +1115,21 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
       'diagnostic snapshots should enqueue the workflow owner re-entry',
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       'diagnostic owner re-entry should wake the remote operation owner',
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET,
       'diagnostic owner re-entry should use the canonical dispatch ingress',
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       'diagnostic owner re-entry should arm bounded handoff verification',
     );
   } finally {
@@ -1222,11 +1222,11 @@ test(
         'baseline diagnostic re-entry should arm the first remote retry',
       );
       await new Promise((resolve) => {
-        setTimeout(resolve, NUM.ZERO);
+        setTimeout(resolve, 0);
       });
       t.same(
         [deliveries.length, deferredTimers.length],
-        [NUM.ONE, NUM.ONE],
+        [1, 1],
         'baseline diagnostic re-entry should have one wake and retry',
       );
 
@@ -1239,11 +1239,11 @@ test(
         'first-timeout diagnostics should refresh the remote retry',
       );
       await new Promise((resolve) => {
-        setTimeout(resolve, NUM.ZERO);
+        setTimeout(resolve, 0);
       });
       t.same(
         [deliveries.length, deferredTimers.length],
-        [NUM.TWO, NUM.TWO],
+        [2, 2],
         'first-timeout diagnostics should wake and re-arm verification',
       );
     } finally {
@@ -1357,12 +1357,12 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       completionState:
         PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-      spreadGap: NUM.ZERO,
+      spreadGap: 0,
       nextRequiredAction:
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
     });
     const decisionSnapshot =
-      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots[0];
 
     t.equal(
       decisionSnapshot?.progress?.nextRequiredAction,
@@ -1378,7 +1378,7 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
       TEST_ASSERT_SPREAD_SATISFIED_WAIT_PROGRESS_DRAIN,
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.same(
@@ -1394,7 +1394,7 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     );
     t.same(
       [deliveries.length, deferredTimers.length],
-      [NUM.ZERO, NUM.ZERO],
+      [0, 0],
       TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
     );
   } finally {
@@ -1442,7 +1442,7 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
             PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
           completionState:
             PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-          spreadGap: NUM.ZERO,
+          spreadGap: 0,
         },
       );
 
@@ -1464,7 +1464,7 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
           .getOperationsByEntityAuthoritativeObservation = async () => {
             return Object.freeze({
               state: 'present',
-              operationCount: NUM.ONE,
+              operationCount: 1,
               operations: Object.freeze([operation]),
               deferredOutcome: null,
               retryAfterMs: null,
@@ -1478,7 +1478,7 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
               [operation],
             );
         await new Promise((resolve) => {
-          setTimeout(resolve, NUM.ZERO);
+          setTimeout(resolve, 0);
         });
 
         t.equal(
@@ -1497,12 +1497,12 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
         );
         t.equal(
           deferredTimers.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
         );
       } finally {
@@ -1554,7 +1554,7 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
         PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       completionState:
         PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-      spreadGap: NUM.ZERO,
+      spreadGap: 0,
     },
   );
 
@@ -1612,7 +1612,7 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     );
     t.same(
       [deliveries.length, deferredTimers.length],
-      [NUM.ZERO, NUM.ZERO],
+      [0, 0],
       TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
     );
   } finally {
@@ -1658,7 +1658,7 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -1678,11 +1678,11 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       'direct owner snapshot builds should enqueue one owner wake',
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       'direct owner snapshot builds should use the canonical dispatch ingress',
     );
@@ -1725,22 +1725,22 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       'PENDING priority cache rows should re-enter the workflow owner lane',
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       'PENDING priority cache rows should wake the remote operation owner',
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_CACHE_REENTRY_TARGET,
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_CACHE_REENTRY_TIMER,
     );
 
@@ -1766,16 +1766,16 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       'SENDING priority cache rows should re-enter the workflow owner lane',
     );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
       deliveries.length,
-      NUM.TWO,
+      2,
       'SENDING priority cache rows should re-wake the remote operation owner',
     );
     t.equal(
-      deliveries[NUM.ONE]?.target,
+      deliveries[1]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_CACHE_REENTRY_TARGET,
     );
@@ -1844,7 +1844,7 @@ test(TEST_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -1916,7 +1916,7 @@ test(TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -1926,11 +1926,11 @@ test(TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_REMOTE_TARGET_PROGRESS_WAKE,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_REMOTE_TARGET_PROGRESS_WAKE,
     );
@@ -2001,7 +2001,7 @@ test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.same(
@@ -2098,7 +2098,7 @@ test(TEST_TARGET_SYNC_ACTIVE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -2148,7 +2148,7 @@ test(TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME, async (t) => {
       nextRequiredAction:
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
       completionState: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
-      spreadGap: NUM.ZERO,
+      spreadGap: 0,
       coordinatorOperation: operationWithSourceRemovalProgress,
     },
   );
@@ -2175,12 +2175,12 @@ test(TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME, async (t) => {
           nextRequiredAction:
             PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
           completionState: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
-          spreadGap: NUM.ZERO,
+          spreadGap: 0,
           coordinatorOperation: operationWithSourceRemovalProgress,
         }),
       );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     t.equal(
@@ -2195,7 +2195,7 @@ test(TEST_SOURCE_REMOVAL_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     );
     t.same(
       [deliveries.length, deferredTimers.length],
-      [NUM.ZERO, NUM.ZERO],
+      [0, 0],
       'local source-removal re-entry should not wake the remote owner',
     );
   } finally {
@@ -2244,7 +2244,7 @@ test(TEST_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
       completionState:
         PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-      spreadGap: NUM.ZERO,
+      spreadGap: 0,
       coordinatorOperation: operation,
       timeoutReconcileDue: false,
     },
@@ -2258,7 +2258,7 @@ test(TEST_SOURCE_REMOVAL_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -2345,7 +2345,7 @@ test(TEST_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,
@@ -2373,7 +2373,7 @@ test(TEST_DISPATCH_PENDING_DISPATCH_RETRY_CONTRACT_TEST_NAME, async (t) => {
           [operation],
         );
     await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
 
     assertDispatchPendingDispatchRetrySnapshot(
@@ -2423,21 +2423,21 @@ test(TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deferredTimers.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER,
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
+      0,
       TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY,
     );
 
     coordinator.initialize();
-    await deferredTimers[NUM.ZERO].fn();
+    await deferredTimers[0].fn();
 
     t.equal(
       coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
-      NUM.ZERO,
+      0,
       TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES,
     );
   } finally {
@@ -2462,7 +2462,7 @@ test('event-driven rebalancer handoff waits resolve retry contract fields', asyn
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
           retryAfterMs: null,

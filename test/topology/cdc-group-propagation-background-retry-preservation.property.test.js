@@ -23,7 +23,6 @@ import {
   SERVICE_TYPE,
   SERVICE_STATUS,
   TABLES,
-  NUM,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
@@ -123,8 +122,8 @@ test('Property 3 Preservation A: scheduleBackgroundRetry SHALL schedule ' +
   await fc.assert(
     fc.asyncProperty(
       fc.integer({
-        min: NUM.ONE,
-        max: CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS - NUM.ONE,
+        min: 1,
+        max: CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS - 1,
       }),
       async (attempt) => {
         setupConfig();
@@ -177,7 +176,7 @@ test('Property 3 Preservation A: scheduleBackgroundRetry SHALL schedule ' +
           // MUST schedule a retry timer.
           assert.equal(
             timerCountAfter,
-            timerCountBefore + NUM.ONE,
+            timerCountBefore + 1,
             'scheduleBackgroundRetry should schedule a timer ' +
             `when attempt=${attempt} < MAX_ATTEMPTS=` +
             `${CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS}, ` +
@@ -204,7 +203,7 @@ test('Property 3 Preservation A: successful delivery SHALL NOT trigger ' +
     CDC_GROUP_PROPAGATION_RETRY.BACKGROUND_MAX_ATTEMPTS;
   await fc.assert(
     fc.asyncProperty(
-      fc.integer({min: NUM.ONE, max: maxTotalAttempts - NUM.ONE}),
+      fc.integer({min: 1, max: maxTotalAttempts - 1}),
       async (attempt) => {
         setupConfig();
         const cache = createTopologyCache();
@@ -252,7 +251,7 @@ test('Property 3 Preservation A: successful delivery SHALL NOT trigger ' +
           // One timer should be scheduled for the initial retry.
           assert.equal(
             service.backgroundRetryTimers.size,
-            NUM.ONE,
+            1,
             'One timer should be scheduled for the retry attempt',
           );
 
@@ -265,7 +264,7 @@ test('Property 3 Preservation A: successful delivery SHALL NOT trigger ' +
           // timer is scheduled on success).
           assert.equal(
             service.backgroundRetryTimers.size,
-            NUM.ZERO,
+            0,
             'No background retry timers should remain after ' +
             'successful delivery',
           );
@@ -314,7 +313,7 @@ test('Property 3 Preservation A: clearBackgroundRetryTimers on stop() ' +
     // Schedule multiple background retries with long delays so
     // they remain pending.
     const timerCount = 3;
-    for (let i = NUM.ZERO; i < timerCount; i++) {
+    for (let i = 0; i < timerCount; i++) {
       service.scheduleBackgroundRetry({
         tableName: TEST_TABLE_NAME,
         operation: TEST_OPERATION,
@@ -325,7 +324,7 @@ test('Property 3 Preservation A: clearBackgroundRetryTimers on stop() ' +
           coordinatorNodeId: TEST_COORDINATOR_NODE_ID,
           address: TEST_ADDRESS,
         }],
-        attempt: NUM.ONE,
+        attempt: 1,
       });
     }
 
@@ -340,7 +339,7 @@ test('Property 3 Preservation A: clearBackgroundRetryTimers on stop() ' +
     // After stop(), all timers should be cleared.
     assert.equal(
       service.backgroundRetryTimers.size,
-      NUM.ZERO,
+      0,
       'All background retry timers should be cleared after stop()',
     );
   } finally {

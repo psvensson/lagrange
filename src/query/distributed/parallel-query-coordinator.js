@@ -7,7 +7,7 @@
 
 import {LoggingService} from '../../logging/logging-service.js';
 import {ConfigurationManager} from '../../config/configuration-manager.js';
-import {METRICS_LOG_TAG, NUM, TABLES, TYPEOF} from '../../constants/index.js';
+import {METRICS_LOG_TAG, TABLES} from '../../constants/index.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -27,7 +27,6 @@ import {
   normalizePartitionExecutionFailureSnapshot,
 } from './parallel-query-partition-outcomes.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
@@ -83,8 +82,8 @@ class ParallelQueryCoordinator {
     }
 
     // Track active queries for resource management
-    this.activeConnections = NUM.ZERO;
-    this.queryCounter = NUM.ZERO;
+    this.activeConnections = 0;
+    this.queryCounter = 0;
   }
 
   /**
@@ -131,18 +130,18 @@ class ParallelQueryCoordinator {
     if (!this.systemCache) {
       return null;
     }
-    if (typeof this.systemCache.get === TYPEOF.FUNCTION) {
+    if (typeof this.systemCache.get === 'function') {
       return this.systemCache.get(TABLES.PARTITIONS, partitionId);
     }
-    if (typeof this.systemCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemCache.filter === 'function') {
       const matches = this.systemCache.filter(
         TABLES.PARTITIONS,
         (partition) =>
           partition.partition_id === partitionId,
       );
-      return matches[NUM.ZERO] || null;
+      return matches[0] || null;
     }
-    if (typeof this.systemCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemCache.getAll === 'function') {
       const partitions =
         this.systemCache.getAll(TABLES.PARTITIONS) || [];
       return partitions.find((partition) =>
@@ -212,9 +211,9 @@ class ParallelQueryCoordinator {
         const latencies = formatted.partitionLatencies
           .map((p) => p.latencyMs)
           .filter((l) => l !== null && l !== undefined);
-        const maxPartitionLatencyMs = latencies.length > NUM.ZERO ?
+        const maxPartitionLatencyMs = latencies.length > 0 ?
           Math.max(...latencies) :
-          NUM.ZERO;
+          0;
 
         this.logger.info(METRICS_LOG_TAG.FANOUT_COMPLETE, {
           queryId: formatted.queryId,
@@ -275,9 +274,9 @@ class ParallelQueryCoordinator {
    * @private
    */
   buildPartitionChunks(partitionIds) {
-    const chunkSize = Math.max(this.maxParallelPartitions, NUM.ONE);
+    const chunkSize = Math.max(this.maxParallelPartitions, 1);
     const chunks = [];
-    for (let index = LOCAL_NUM_ZERO; index < partitionIds.length; index += chunkSize) {
+    for (let index = 0; index < partitionIds.length; index += chunkSize) {
       chunks.push(partitionIds.slice(index, index + chunkSize));
     }
     return chunks;
@@ -358,7 +357,7 @@ class ParallelQueryCoordinator {
 
       // Execute with straggler detection if enabled
       if (this.speculativeExecutionEnabled &&
-        partitionIds.length > NUM.ONE) {
+        partitionIds.length > 1) {
         const result = await this.executeWithSpeculativeExecution(
           executionPromises,
           partitionIds,
@@ -438,8 +437,8 @@ class ParallelQueryCoordinator {
     // Start a timer to check for stragglers
     const stragglerCheckInterval = setInterval(() => {
       const medianLatency = metrics.getMedianLatency();
-      if (medianLatency > NUM.ZERO &&
-        pendingPartitions.size > NUM.ZERO) {
+      if (medianLatency > 0 &&
+        pendingPartitions.size > 0) {
         const stragglerThreshold = medianLatency * this.stragglerThresholdMultiplier;
 
         for (const partitionId of pendingPartitions) {
@@ -511,7 +510,7 @@ class ParallelQueryCoordinator {
     pendingPartitions,
   ) {
     const replicas = this.getAlternativeReplicas(partitionId);
-    if (replicas.length === NUM.ZERO) return;
+    if (replicas.length === 0) return;
 
     // Select a different replica
     const alternativeReplica = replicas.find((r) =>
@@ -544,7 +543,7 @@ class ParallelQueryCoordinator {
         );
         return result;
       }
-      speculativeMetrics.complete(result.rows?.length || NUM.ZERO);
+      speculativeMetrics.complete(result.rows?.length || 0);
       if (!results.has(partitionId)) {
         results.set(partitionId, result);
         pendingPartitions.delete(partitionId);
@@ -616,7 +615,7 @@ class ParallelQueryCoordinator {
           ),
         );
       }
-      const rowCount = result.rows?.length || NUM.ZERO;
+      const rowCount = result.rows?.length || 0;
       const bytesRead = estimateResultBytes(result.rows);
       partitionMetrics.complete(rowCount, bytesRead);
       metrics.addPartitionMetrics(partitionMetrics);
@@ -656,7 +655,7 @@ class ParallelQueryCoordinator {
     if (!service) {
       throw new Error(QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND);
     }
-    if (typeof service.executeQuery === TYPEOF.FUNCTION) {
+    if (typeof service.executeQuery === 'function') {
       return service.executeQuery(sql, params);
     }
     throw new Error(QUERY_ERROR_MSG.SERVICE_EXECUTE_UNSUPPORTED);
@@ -669,7 +668,7 @@ class ParallelQueryCoordinator {
    * @private
    */
   resolveTimeoutMs(timeoutMs) {
-    if (Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO) {
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
       return Math.floor(timeoutMs);
     }
     return this.queryTimeoutMs;
@@ -683,7 +682,7 @@ class ParallelQueryCoordinator {
    */
   createCancellationPromise(cancellationToken) {
     if (!cancellationToken ||
-      typeof cancellationToken.onCancel !== TYPEOF.FUNCTION) {
+      typeof cancellationToken.onCancel !== 'function') {
       return null;
     }
 
@@ -692,9 +691,9 @@ class ParallelQueryCoordinator {
         reject(new Error(reason || QUERY_CANCELLED_ERROR));
       };
       cancellationToken.onCancel(rejectWithReason);
-      if (typeof cancellationToken.isCancelled === TYPEOF.FUNCTION &&
+      if (typeof cancellationToken.isCancelled === 'function' &&
         cancellationToken.isCancelled()) {
-        const reason = typeof cancellationToken.getReason === TYPEOF.FUNCTION ?
+        const reason = typeof cancellationToken.getReason === 'function' ?
           cancellationToken.getReason() :
           null;
         rejectWithReason(reason);
@@ -727,7 +726,7 @@ class ParallelQueryCoordinator {
    */
   detectAndLogStragglers(metrics) {
     const medianLatency = metrics.getMedianLatency();
-    if (medianLatency === NUM.ZERO) return;
+    if (medianLatency === 0) return;
 
     const stragglerThreshold = medianLatency * this.stragglerThresholdMultiplier;
 

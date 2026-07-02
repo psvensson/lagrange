@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON,
 } from './priority-recovery-diagnostics-constants.js';
 
@@ -34,11 +30,11 @@ const PRIORITY_RECOVERY_COMPLETION_REASON = Object.freeze({
     'operation_visibility_deferred',
   BLOCKED: 'blocked',
 });
-const PRIORITY_RECOVERY_TEMPORARY_OVERFLOW_VOTER_BUDGET = NUM.TWO;
+const PRIORITY_RECOVERY_TEMPORARY_OVERFLOW_VOTER_BUDGET = 2;
 
 function normalizeNonNegativeInteger(value) {
   const normalized = Number(value);
-  if (!Number.isFinite(normalized) || normalized < NUM.ZERO) {
+  if (!Number.isFinite(normalized) || normalized < 0) {
     return null;
   }
   return Math.floor(normalized);
@@ -59,16 +55,16 @@ function resolvePriorityRecoveryTemporaryOverflowVoterBudget(options = {}) {
       !Number.isFinite(targetReplicaCount) ||
       !Number.isFinite(activeVoterCount) ||
       !Number.isFinite(learnerCount) ||
-      targetReplicaCount <= NUM.ZERO ||
-      learnerCount <= NUM.ZERO ||
+      targetReplicaCount <= 0 ||
+      learnerCount <= 0 ||
       activeVoterCount < targetReplicaCount) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const recoveryCompletionPending =
-    activeOperationCount > NUM.ZERO || plannerUnresolved;
+    activeOperationCount > 0 || plannerUnresolved;
   if (!recoveryCompletionPending) {
-    return NUM.ZERO;
+    return 0;
   }
 
   return PRIORITY_RECOVERY_TEMPORARY_OVERFLOW_VOTER_BUDGET;
@@ -76,17 +72,17 @@ function resolvePriorityRecoveryTemporaryOverflowVoterBudget(options = {}) {
 
 function buildPriorityRecoveryCompletion(options = {}) {
   const assessment =
-    options.assessment && typeof options.assessment === TYPEOF.OBJECT ?
+    options.assessment && typeof options.assessment === 'object' ?
       options.assessment :
       null;
   const planner =
     assessment?.planner &&
-    typeof assessment.planner === TYPEOF.OBJECT ?
+    typeof assessment.planner === 'object' ?
       assessment.planner :
       null;
   const spreadCompletion =
     assessment?.spreadCompletion &&
-    typeof assessment.spreadCompletion === TYPEOF.OBJECT ?
+    typeof assessment.spreadCompletion === 'object' ?
       assessment.spreadCompletion :
       null;
   const targetReplicaCount =
@@ -101,14 +97,14 @@ function buildPriorityRecoveryCompletion(options = {}) {
     normalizeNonNegativeInteger(options.activeOperationCount) ??
     (Array.isArray(assessment?.activeOperationContexts) ?
       assessment.activeOperationContexts.length :
-      NUM.ZERO);
+      0);
   const plannerSpreadGap =
     normalizeNonNegativeInteger(planner?.spreadGap);
   const plannerUnresolved =
     planner?.ready === false ||
     planner?.ready === null ||
     planner?.ready === undefined ||
-    plannerSpreadGap > NUM.ZERO;
+    plannerSpreadGap > 0;
   const priorityRecoveryActive = options.priorityRecoveryActive === true;
   const authoritativeOperationReadDeferred =
     options.authoritativeOperationReadDeferred === true;
@@ -124,7 +120,7 @@ function buildPriorityRecoveryCompletion(options = {}) {
         priorityRecoveryActive,
       });
   const overTargetTemporaryOverflowAllowed =
-    temporaryOverflowVoterBudget > NUM.ZERO;
+    temporaryOverflowVoterBudget > 0;
 
   if (authoritativeOperationReadDeferred) {
     return Object.freeze({
@@ -136,7 +132,7 @@ function buildPriorityRecoveryCompletion(options = {}) {
           .OPERATION_VISIBILITY_DEFERRED,
       retryAfterMs,
       activeOperationCount,
-      temporaryOverflowVoterBudget: NUM.ZERO,
+      temporaryOverflowVoterBudget: 0,
       allowTemporaryOverflowPromotion: false,
       blocked: false,
     });
@@ -165,7 +161,7 @@ function buildPriorityRecoveryCompletion(options = {}) {
         PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.PLANNER_READY,
       retryAfterMs,
       activeOperationCount,
-      temporaryOverflowVoterBudget: NUM.ZERO,
+      temporaryOverflowVoterBudget: 0,
       allowTemporaryOverflowPromotion: false,
       blocked: false,
     });
@@ -181,7 +177,7 @@ function buildPriorityRecoveryCompletion(options = {}) {
           .REPLACE_REMOVE_DISPATCH_PHASE_ON_ELIGIBLE_TARGET,
       retryAfterMs,
       activeOperationCount,
-      temporaryOverflowVoterBudget: NUM.ZERO,
+      temporaryOverflowVoterBudget: 0,
       allowTemporaryOverflowPromotion: false,
       blocked: false,
     });
@@ -194,7 +190,7 @@ function buildPriorityRecoveryCompletion(options = {}) {
       PRIORITY_RECOVERY_COMPLETION_REASON.BLOCKED,
     retryAfterMs,
     activeOperationCount,
-    temporaryOverflowVoterBudget: NUM.ZERO,
+    temporaryOverflowVoterBudget: 0,
     allowTemporaryOverflowPromotion: false,
     blocked: true,
   });

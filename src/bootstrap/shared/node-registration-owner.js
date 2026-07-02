@@ -10,10 +10,8 @@ import {
 } from './node-registration-owner-publication-methods.js';
 import {
   COLUMN,
-  NUM,
   STATE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   JOIN_ADMISSION_PUBLICATION,
@@ -62,7 +60,7 @@ class NodeRegistrationOwner {
           nodeId: this.nodeId,
           nodeAddress: this.nodeAddress,
           reusedEndpointCount:
-            NUM.ONE + existingMembership.metaEndpointRows.length,
+            1 + existingMembership.metaEndpointRows.length,
         });
         return existingMembership;
       }
@@ -157,11 +155,11 @@ class NodeRegistrationOwner {
         `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
       );
       wrappedError.cause = error;
-      if (typeof error?.code === TYPEOF.STRING &&
-        error.code.length > NUM.ZERO) {
+      if (typeof error?.code === 'string' &&
+        error.code.length > 0) {
         wrappedError.code = error.code;
-      } else if (typeof error?.errorCode === TYPEOF.STRING &&
-        error.errorCode.length > NUM.ZERO) {
+      } else if (typeof error?.errorCode === 'string' &&
+        error.errorCode.length > 0) {
         wrappedError.code = error.errorCode;
       }
       if (Number.isFinite(error?.retryAfterMs)) {
@@ -171,7 +169,7 @@ class NodeRegistrationOwner {
         wrappedError.retryable = false;
       }
       if (error?.publicationDiagnostics &&
-        typeof error.publicationDiagnostics === TYPEOF.OBJECT) {
+        typeof error.publicationDiagnostics === 'object') {
         wrappedError.publicationDiagnostics =
           error.publicationDiagnostics;
       }

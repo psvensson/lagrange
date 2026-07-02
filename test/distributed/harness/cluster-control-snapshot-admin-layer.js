@@ -21,7 +21,6 @@ const CONTROL_SNAPSHOT_ADMIN_REPAIR_FIELD = 'repair';
 const CONTROL_SNAPSHOT_OBSERVATION_NEXT_ACTION_FIELD = 'nextAction';
 const CONTROL_SNAPSHOT_OBSERVATION_REASON_CODES_FIELD = 'reasonCodes';
 const CONTROL_SNAPSHOT_REPAIR_TRIGGER_CODES_FIELD = 'triggerCodes';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_TYPE_OBJECT = 'object';
 const LOCAL_TYPE_STRING = 'string';
 const PUBLICATION_CONVERGENCE_GATE_FIELD = 'publicationConvergenceGate';
@@ -48,7 +47,7 @@ const FORCED_CONTROL_SNAPSHOT_FALLBACK_REASON = Object.freeze({
  */
 function resolveAdminRequestStatement(requestPayload) {
   if (!requestPayload || typeof requestPayload !== LOCAL_TYPE_OBJECT) {
-    return LOCAL_STR_EMPTY;
+    return '';
   }
   if (typeof requestPayload.sql === LOCAL_TYPE_STRING) {
     return requestPayload.sql;
@@ -56,7 +55,7 @@ function resolveAdminRequestStatement(requestPayload) {
   if (typeof requestPayload.statement === LOCAL_TYPE_STRING) {
     return requestPayload.statement;
   }
-  return LOCAL_STR_EMPTY;
+  return '';
 }
 
 /**
@@ -84,7 +83,7 @@ function normalizeAdminQueryError(error) {
  * @returns {boolean}
  */
 function isTimeoutErrorMessage(message) {
-  return String(message || LOCAL_STR_EMPTY)
+  return String(message || '')
     .toLowerCase()
     .includes(ERROR_MESSAGE_TIMEOUT_FRAGMENT);
 }
@@ -105,7 +104,7 @@ function normalizeControlSnapshotReasonCodes(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
       .map((value) =>
-        typeof value === LOCAL_TYPE_STRING ? value.trim() : LOCAL_STR_EMPTY)
+        typeof value === LOCAL_TYPE_STRING ? value.trim() : '')
       .filter((value) => value.length > ZERO),
   )].sort();
 }

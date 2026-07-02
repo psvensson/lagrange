@@ -11,7 +11,6 @@ import {
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
   Database,
-  NUM,
   PARTICIPANT_ACK_FIELD,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
@@ -30,7 +29,6 @@ const {
   SPLIT_PARTICIPANT_PREFIX,
   SQL,
   TABLES,
-  TYPEOF,
   assertCritical,
   cloneSplitRoutingEntry,
   extractPartitionSplitRoutingKey,
@@ -292,11 +290,11 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   async yieldSplitBackfillTurn() {
     await new Promise((resolve) => {
-      if (typeof setImmediate === TYPEOF.FUNCTION) {
+      if (typeof setImmediate === 'function') {
         setImmediate(resolve);
         return;
       }
-      setTimeout(resolve, NUM.ZERO);
+      setTimeout(resolve, 0);
     });
   }
   /**
@@ -310,10 +308,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   createSplitSnapshotRowIterator(snapshotDb, metadata) {
     const sql = `SELECT * FROM ${this.tableName} ORDER BY ${metadata.primaryKeyColumn}`;
     const statement = snapshotDb.prepare(sql);
-    if (statement && typeof statement.iterate === TYPEOF.FUNCTION) {
+    if (statement && typeof statement.iterate === 'function') {
       return statement.iterate();
     }
-    if (statement && typeof statement.all === TYPEOF.FUNCTION) {
+    if (statement && typeof statement.all === 'function') {
       return statement.all();
     }
     return [];
@@ -331,14 +329,14 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       .all()
       .map((column) => column.name);
     const rows = this.createSplitSnapshotRowIterator(snapshotDb, metadata);
-    let processedRowCount = NUM.ZERO;
+    let processedRowCount = 0;
     for (const row of rows) {
       await this.applySplitSnapshotRow(row, columns, metadata);
-      processedRowCount += NUM.ONE;
+      processedRowCount += 1;
       if (
-        this.splitSnapshotBackfillYieldEveryRows > NUM.ZERO &&
+        this.splitSnapshotBackfillYieldEveryRows > 0 &&
         processedRowCount % this.splitSnapshotBackfillYieldEveryRows ===
-          NUM.ZERO
+          0
       ) {
         await this.yieldSplitBackfillTurn();
       }
@@ -380,7 +378,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
     if (
       !splitWorkflow ||
-      typeof splitWorkflow.advanceSplitPhase !== TYPEOF.FUNCTION
+      typeof splitWorkflow.advanceSplitPhase !== 'function'
     ) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
@@ -468,7 +466,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     }
     splitReplication.flushInFlight = true;
     try {
-      while (splitReplication.pendingEntries.length > NUM.ZERO) {
+      while (splitReplication.pendingEntries.length > 0) {
         const entry = splitReplication.pendingEntries.shift();
         try {
           await this.replaySplitEntry(entry, splitReplication.metadata);
@@ -602,7 +600,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {number} Current term.
    */
   getCurrentTerm() {
-    return this.storage?.currentTerm || NUM.ZERO;
+    return this.storage?.currentTerm || 0;
   }
   /**
    * Get the partition state.
@@ -625,8 +623,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       role: this.role,
       isLeader: this.isLeader,
       leaderId: this.leaderId,
-      term: this.storage?.currentTerm || NUM.ZERO,
-      logLength: this.storage?.getLogLength() || NUM.ZERO,
+      term: this.storage?.currentTerm || 0,
+      logLength: this.storage?.getLogLength() || 0,
       state: this.state,
       keyRange: this.keyRange,
       sizeBytes: this.sizeBytes,

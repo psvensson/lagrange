@@ -5,8 +5,6 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   GATEWAY_ERROR_MSG,
-  NUM,
-  TYPEOF,
   buildControlPlaneMutationIntent,
   canonicalizeControlPlaneMutation,
   normalizeCoalescingToken,
@@ -17,14 +15,14 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 
-const LOCAL_STR_1IXG4 = 'mutationSingleFlightJoinCount';
+const LOCAL_STR_MUTATIONSINGLEFLIGHTJOINCOUNT = 'mutationSingleFlightJoinCount';
 const GATEWAY_REPLICA_OPERATION_ID_FIELD = 'operation_id';
 const GATEWAY_REPLICA_OPERATION_COALESCING_KEY_PREFIX =
   'replica-operation';
 const GATEWAY_REPLICA_OPERATION_COALESCING_KEY_SEPARATOR = ':';
 
 function normalizeGatewayReplicaOperationMutationId(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
@@ -62,8 +60,8 @@ function applyReplicaOperationMutationCoalescingFallback(
     return options;
   }
   if (
-    typeof options?.coalescingKey === TYPEOF.STRING &&
-    options.coalescingKey.length > NUM.ZERO
+    typeof options?.coalescingKey === 'string' &&
+    options.coalescingKey.length > 0
   ) {
     return options;
   }
@@ -193,8 +191,8 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         writeOptions,
       );
     if (
-      typeof recoveryCandidateSelectionKey === TYPEOF.STRING &&
-      recoveryCandidateSelectionKey.length > NUM.ZERO
+      typeof recoveryCandidateSelectionKey === 'string' &&
+      recoveryCandidateSelectionKey.length > 0
     ) {
       writeOptions = {
         ...writeOptions,
@@ -225,7 +223,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
         outcome: mutationReadinessFailure.outcome,
         success: false,
-        affectedRows: NUM.ZERO,
+        affectedRows: 0,
         error: mutationReadinessFailure.error,
         ...this.buildOperationLedgerDiagnostics(
           tableName,
@@ -252,7 +250,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
         if (
           !normalizedMutation?.row ||
-          typeof normalizedMutation.row !== TYPEOF.OBJECT
+          typeof normalizedMutation.row !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
@@ -267,13 +265,13 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
         if (
           !normalizedMutation?.whereClause ||
-          typeof normalizedMutation.whereClause !== TYPEOF.OBJECT
+          typeof normalizedMutation.whereClause !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
         }
         if (
           !normalizedMutation?.data ||
-          typeof normalizedMutation.data !== TYPEOF.OBJECT
+          typeof normalizedMutation.data !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
         }
@@ -289,7 +287,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
         if (
           !normalizedMutation?.row ||
-          typeof normalizedMutation.row !== TYPEOF.OBJECT
+          typeof normalizedMutation.row !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
@@ -303,7 +301,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       }
       if (
         !normalizedMutation?.whereClause ||
-        typeof normalizedMutation.whereClause !== TYPEOF.OBJECT
+        typeof normalizedMutation.whereClause !== 'object'
       ) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
       }
@@ -338,7 +336,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           requestKey,
           executionFactory,
           {
-            joinMetricName: LOCAL_STR_1IXG4,
+            joinMetricName: LOCAL_STR_MUTATIONSINGLEFLIGHTJOINCOUNT,
             maxTrackedRequests: this.gatewayLimits.maxTrackedMutationRequests,
           },
         ),
@@ -388,7 +386,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         affectedRows: Number(
           result?.partitionResult?.affectedRows ??
             result?.affectedRows ??
-            NUM.ZERO,
+            0,
         ),
         error: result?.success === false ? result?.error || null : null,
         ...this.buildOperationLedgerDiagnostics(tableName, result, {
@@ -409,7 +407,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         outcome:
           error?.outcome || CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
         success: false,
-        affectedRows: NUM.ZERO,
+        affectedRows: 0,
         error: error?.message || String(error),
         ...this.buildOperationLedgerDiagnostics(tableName, error, {
           ...writeOptions,

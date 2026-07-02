@@ -12,10 +12,6 @@
  * admin-helpers.js.
  */
 
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {
   DEBUG_METADATA_ERROR_CODE as DEBUG_METADATA_CODE,
@@ -60,12 +56,12 @@ const HTTP_HEADER_VALUE = Object.freeze({
  * @return {Array<string>}
  */
 function parseHeaderRoles(rolesHeader) {
-  if (typeof rolesHeader !== TYPEOF.STRING) {
+  if (typeof rolesHeader !== 'string') {
     return [];
   }
   return rolesHeader.split(LOCAL_STR_COMMA)
     .map((value) => value.trim())
-    .filter((value) => value.length > NUM.ZERO);
+    .filter((value) => value.length > 0);
 }
 
 /**
@@ -74,7 +70,7 @@ function parseHeaderRoles(rolesHeader) {
  * @return {number|undefined}
  */
 function parseRequestLimit(limitParam) {
-  if (typeof limitParam === TYPEOF.STRING) {
+  if (typeof limitParam === 'string') {
     const parsed = Number.parseInt(limitParam, 10);
     return Number.isInteger(parsed) ? parsed : undefined;
   }
@@ -109,7 +105,7 @@ function buildTraceStreamFilter(query) {
   if (source) {
     filter.source = source;
   }
-  if (levels.length > NUM.ZERO) {
+  if (levels.length > 0) {
     filter.levels = levels;
   }
 
@@ -122,12 +118,12 @@ function buildTraceStreamFilter(query) {
  * @return {Array<string>}
  */
 function parseTraceLevels(levelsParam) {
-  if (typeof levelsParam !== TYPEOF.STRING) {
+  if (typeof levelsParam !== 'string') {
     return [];
   }
   return levelsParam.split(LOCAL_STR_COMMA)
     .map((value) => value.trim())
-    .filter((value) => value.length > NUM.ZERO);
+    .filter((value) => value.length > 0);
 }
 
 /**
@@ -136,11 +132,11 @@ function parseTraceLevels(levelsParam) {
  * @return {string|null}
  */
 function normalizeQueryFilterValue(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const trimmed = value.trim();
-  return trimmed.length > NUM.ZERO ? trimmed : null;
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**
@@ -149,7 +145,7 @@ function normalizeQueryFilterValue(value) {
  * @return {Object}
  */
 function normalizeSnapshotApiPayload(snapshot) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return snapshot;
   }
   if (!snapshot.envelope || !Buffer.isBuffer(snapshot.envelope)) {
@@ -492,7 +488,7 @@ class AdminDebugHandlers {
     }
 
     if (!this.debugDapRouter ||
-      typeof this.debugDapRouter.handleRequest !== TYPEOF.FUNCTION) {
+      typeof this.debugDapRouter.handleRequest !== 'function') {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
         error: ADMIN_DEBUG_ERROR_MSG.DAP_UNAVAILABLE,
       });

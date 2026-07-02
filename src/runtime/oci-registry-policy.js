@@ -10,7 +10,6 @@
  * @module runtime/oci-registry-policy
  */
 
-import {TYPEOF} from '../constants/types.js';
 
 // --- Policy error messages ---
 
@@ -76,7 +75,7 @@ function validateRegistryPolicy(policy) {
   if (policy === null || policy === undefined) {
     return {valid: false, errors: [OCI_POLICY_ERROR.POLICY_REQUIRED]};
   }
-  if (typeof policy !== TYPEOF.OBJECT || Array.isArray(policy)) {
+  if (typeof policy !== 'object' || Array.isArray(policy)) {
     return {valid: false, errors: [OCI_POLICY_ERROR.POLICY_NOT_OBJECT]};
   }
   const errors = [];
@@ -172,7 +171,7 @@ function checkRepositoryAllowed(repository, policy) {
  */
 function enforceImagePolicy(imageRef, policy) {
   let result;
-  if (!imageRef || typeof imageRef !== TYPEOF.STRING) {
+  if (!imageRef || typeof imageRef !== 'string') {
     result = buildImagePolicyResult(
       false,
       OCI_POLICY_DECISION.DENIED,

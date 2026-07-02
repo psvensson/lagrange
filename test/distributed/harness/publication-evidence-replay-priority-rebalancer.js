@@ -2,7 +2,6 @@ import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {NUM} from '../../../src/constants/index.js';
 import {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_LOG_MSG,
@@ -104,7 +103,7 @@ function buildMissingPriorityRecoveryWitness() {
 
 function summarizePriorityRecoveryWitness(witnessCandidate) {
   const witness = isRecord(witnessCandidate) ? witnessCandidate : {};
-  const operationId = normalizeList(witness.operationIds)[NUM.ZERO] ||
+  const operationId = normalizeList(witness.operationIds)[0] ||
     PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
   const summary = {
     [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.AVAILABILITY]:
@@ -181,8 +180,8 @@ function summarizePriorityRecoveryWitnesses(failureBundle = {}) {
 }
 
 function selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses = []) {
-  return priorityRecoveryWitnesses.length > NUM.ZERO ?
-    priorityRecoveryWitnesses[NUM.ZERO] :
+  return priorityRecoveryWitnesses.length > 0 ?
+    priorityRecoveryWitnesses[0] :
     buildMissingPriorityRecoveryWitness();
 }
 
@@ -196,7 +195,7 @@ function selectRebalancerFollowUpWitness(priorityRecoveryWitnesses = []) {
     ] === PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED &&
     witness[
       PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID
-    ].length > NUM.ZERO,
+    ].length > 0,
   ) || buildMissingPriorityRecoveryWitness();
 }
 
@@ -389,27 +388,27 @@ function selectLatestRebalancerHandoffLog(records = []) {
       error: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       errorMessage: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       skipDetail: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
-      timeMs: NUM.ZERO,
-      moveCount: NUM.ZERO,
-      plannedMoveCount: NUM.ZERO,
-      moveLimit: NUM.ZERO,
-      limitedMoveCount: NUM.ZERO,
-      executableMoveCount: NUM.ZERO,
-      preExecuteSkippedMoveCount: NUM.ZERO,
-      readinessGroupCount: NUM.ZERO,
-      readyReadinessGroupCount: NUM.ZERO,
-      blockedReadinessGroupCount: NUM.ZERO,
+      timeMs: 0,
+      moveCount: 0,
+      plannedMoveCount: 0,
+      moveLimit: 0,
+      limitedMoveCount: 0,
+      executableMoveCount: 0,
+      preExecuteSkippedMoveCount: 0,
+      readinessGroupCount: 0,
+      readyReadinessGroupCount: 0,
+      blockedReadinessGroupCount: 0,
       readinessGroups: Object.freeze([]),
       preExecuteSkipReasons: Object.freeze([]),
       preExecutionHandoffState: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       preExecuteReturnState: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
-      totalCandidates: NUM.ZERO,
-      feasibleCount: NUM.ZERO,
-      rejectedCount: NUM.ZERO,
+      totalCandidates: 0,
+      feasibleCount: 0,
+      rejectedCount: 0,
       rejectionReasonCodes: Object.freeze([]),
       targetNodeId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
-      queryDurationMs: NUM.ZERO,
-      rowCount: NUM.ZERO,
+      queryDurationMs: 0,
+      rowCount: 0,
       hasCoordinator: false,
     }),
   );
@@ -495,7 +494,7 @@ function readReplicaOperationRowsFromSnapshotStates(snapshotStates = []) {
       ),
     ])
     .map((row) => normalizeReplicaOperationRow(row))
-    .filter((row) => row.operationId.length > NUM.ZERO);
+    .filter((row) => row.operationId.length > 0);
 }
 
 function selectLatestReplicaOperationRow(rows = []) {
@@ -510,8 +509,8 @@ function selectLatestReplicaOperationRow(rows = []) {
       partitionId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       status: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       workflowStep: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
-      createdAtMs: NUM.ZERO,
-      updatedAtMs: NUM.ZERO,
+      createdAtMs: 0,
+      updatedAtMs: 0,
     }),
   );
 }
@@ -532,7 +531,7 @@ function isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure) {
     evidence.entityId ===
       witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
     evidence.timeMs > terminalFailure.timeMs &&
-    evidence.moveCount > NUM.ZERO
+    evidence.moveCount > 0
   );
 }
 
@@ -622,7 +621,7 @@ function isPostTerminalAdmissionLog(
     admissionBatchStartTimeMs,
   );
   return (
-    postTerminalFeasibilityFilter.timeMs > NUM.ZERO &&
+    postTerminalFeasibilityFilter.timeMs > 0 &&
     evidence.message === message &&
     evidence.nodeId === postTerminalFeasibilityFilter.nodeId &&
     evidence.timeMs > admissionWindowStartTimeMs &&
@@ -705,7 +704,7 @@ function isPostTerminalPersistedReplicaOperation(
     operation.operationId !==
       witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID] &&
     operation.createdAtMs >= postTerminalRebalance.timeMs &&
-    postTerminalRebalance.timeMs > NUM.ZERO
+    postTerminalRebalance.timeMs > 0
   );
 }
 
@@ -727,7 +726,7 @@ function selectRebalancerMoveBlockedReason(evidence = {}) {
     evidence.error,
     evidence.skipDetail,
     evidence.message,
-  ].find((value) => normalizeText(value).length > NUM.ZERO) ||
+  ].find((value) => normalizeText(value).length > 0) ||
     PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
 }
 
@@ -811,14 +810,14 @@ function resolveRebalancerMoveLimitEvidenceState(evidence = {}) {
         PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE
           .LIMITED_MOVES_AVAILABLE,
       matches: (moveLimitEvidence) =>
-        moveLimitEvidence.limitedMoveCount > NUM.ZERO,
+        moveLimitEvidence.limitedMoveCount > 0,
     }),
     Object.freeze({
       state:
         PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE
           .PLANNED_MOVE_COUNT_AVAILABLE,
       matches: (moveLimitEvidence) =>
-        moveLimitEvidence.postTerminalRebalanceMoveCount > NUM.ZERO,
+        moveLimitEvidence.postTerminalRebalanceMoveCount > 0,
     }),
     Object.freeze({
       state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE.MISSING,
@@ -903,7 +902,7 @@ function summarizeRebalancerFollowUpHandoff({
       isTerminalOperationFailureLog(evidence, witness),
     ),
   );
-  const terminalFailureObserved = terminalFailure.timeMs > NUM.ZERO;
+  const terminalFailureObserved = terminalFailure.timeMs > 0;
   const postTerminalRebalance = selectLatestRebalancerHandoffLog(
     logEvidence.filter((evidence) =>
       isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure),
@@ -1018,22 +1017,22 @@ function summarizeRebalancerFollowUpHandoff({
   const handoffEvidence = Object.freeze({
     retainedByWitness,
     terminalFailureObserved,
-    postTerminalRebalanceObserved: postTerminalRebalance.timeMs > NUM.ZERO,
-    postTerminalSuppressionObserved: postTerminalSuppression.timeMs > NUM.ZERO,
+    postTerminalRebalanceObserved: postTerminalRebalance.timeMs > 0,
+    postTerminalSuppressionObserved: postTerminalSuppression.timeMs > 0,
   });
   const followUpState = resolveRebalancerHandoffFollowUpState(handoffEvidence);
   const executionEvidence = Object.freeze({
     followUpState,
-    postTerminalRebalanceObserved: postTerminalRebalance.timeMs > NUM.ZERO,
+    postTerminalRebalanceObserved: postTerminalRebalance.timeMs > 0,
     postTerminalRebalanceMoveCount: postTerminalRebalance.moveCount,
     limitedMoveCount: postTerminalPreExecutionHandoff.limitedMoveCount,
-    moveExecutionObserved: postTerminalMoveExecution.timeMs > NUM.ZERO,
-    moveBlockedObserved: postTerminalMoveBlocked.timeMs > NUM.ZERO,
-    budgetBlockObserved: postTerminalBudgetBlock.timeMs > NUM.ZERO,
-    admissionDeniedObserved: postTerminalAdmissionDenied.timeMs > NUM.ZERO,
-    leadershipLossObserved: postTerminalLeadershipLoss.timeMs > NUM.ZERO,
+    moveExecutionObserved: postTerminalMoveExecution.timeMs > 0,
+    moveBlockedObserved: postTerminalMoveBlocked.timeMs > 0,
+    budgetBlockObserved: postTerminalBudgetBlock.timeMs > 0,
+    admissionDeniedObserved: postTerminalAdmissionDenied.timeMs > 0,
+    leadershipLossObserved: postTerminalLeadershipLoss.timeMs > 0,
     persistedOperationObserved:
-      postTerminalPersistedOperation.operationId.length > NUM.ZERO,
+      postTerminalPersistedOperation.operationId.length > 0,
   });
   const followUpExecutionState =
     resolveRebalancerFollowUpExecutionState(executionEvidence);
@@ -1068,7 +1067,7 @@ function summarizeRebalancerFollowUpHandoff({
       terminalFailure.timeMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_REBALANCE_OBSERVED]:
-      postTerminalRebalance.timeMs > NUM.ZERO,
+      postTerminalRebalance.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_REBALANCE_TIME_MS]:
       postTerminalRebalance.timeMs,
@@ -1077,7 +1076,7 @@ function summarizeRebalancerFollowUpHandoff({
       postTerminalRebalance.moveCount,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_PRE_EXECUTION_HANDOFF_OBSERVED]:
-      postTerminalPreExecutionHandoff.timeMs > NUM.ZERO,
+      postTerminalPreExecutionHandoff.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_PRE_EXECUTION_HANDOFF_TIME_MS]:
       postTerminalPreExecutionHandoff.timeMs,
@@ -1125,7 +1124,7 @@ function summarizeRebalancerFollowUpHandoff({
       executionGapState,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_FEASIBILITY_FILTER_OBSERVED]:
-      postTerminalFeasibilityFilter.timeMs > NUM.ZERO,
+      postTerminalFeasibilityFilter.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_FEASIBLE_CANDIDATE_COUNT]:
       postTerminalFeasibilityFilter.feasibleCount,
@@ -1137,19 +1136,19 @@ function summarizeRebalancerFollowUpHandoff({
       postTerminalFeasibilityFilter.rejectionReasonCodes,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_ADMISSION_ALLOWED_OBSERVED]:
-      postTerminalAdmissionAllowed.length > NUM.ZERO,
+      postTerminalAdmissionAllowed.length > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_ADMISSION_ALLOWED_COUNT]:
       postTerminalAdmissionAllowed.length,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_ADMISSION_DENIED_OBSERVED]:
-      postTerminalAdmissionDenied.timeMs > NUM.ZERO,
+      postTerminalAdmissionDenied.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_BUDGET_BLOCK_OBSERVED]:
-      postTerminalBudgetBlock.timeMs > NUM.ZERO,
+      postTerminalBudgetBlock.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_BUDGET_PRESSURE_OBSERVED]:
-      postTerminalBudgetPressure.timeMs > NUM.ZERO,
+      postTerminalBudgetPressure.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_BUDGET_PRESSURE_TIME_MS]:
       postTerminalBudgetPressure.timeMs,
@@ -1161,37 +1160,37 @@ function summarizeRebalancerFollowUpHandoff({
       postTerminalBudgetPressure.rowCount,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_LEADERSHIP_LOSS_OBSERVED]:
-      postTerminalLeadershipLoss.timeMs > NUM.ZERO,
+      postTerminalLeadershipLoss.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_LEADERSHIP_LOSS_TIME_MS]:
       postTerminalLeadershipLoss.timeMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SIBLING_LEADERSHIP_LOSS_OBSERVED]:
-      postTerminalSiblingLeadershipLoss.timeMs > NUM.ZERO,
+      postTerminalSiblingLeadershipLoss.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SIBLING_LEADERSHIP_LOSS_TIME_MS]:
       postTerminalSiblingLeadershipLoss.timeMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SCHEDULER_HANDOFF_OBSERVED]:
-      postTerminalSchedulerHandoff.timeMs > NUM.ZERO,
+      postTerminalSchedulerHandoff.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SCHEDULER_HANDOFF_TIME_MS]:
       postTerminalSchedulerHandoff.timeMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_MOVE_EXECUTION_OBSERVED]:
-      postTerminalMoveExecution.timeMs > NUM.ZERO,
+      postTerminalMoveExecution.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_MOVE_EXECUTION_TIME_MS]:
       postTerminalMoveExecution.timeMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_MOVE_BLOCKED_OBSERVED]:
-      postTerminalMoveBlocked.timeMs > NUM.ZERO,
+      postTerminalMoveBlocked.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_MOVE_BLOCKED_REASON]:
       selectRebalancerMoveBlockedReason(postTerminalMoveBlocked),
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_PERSISTED_OPERATION_OBSERVED]:
-      postTerminalPersistedOperation.operationId.length > NUM.ZERO,
+      postTerminalPersistedOperation.operationId.length > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_PERSISTED_OPERATION_ID]:
       postTerminalPersistedOperation.operationId,
@@ -1200,7 +1199,7 @@ function summarizeRebalancerFollowUpHandoff({
       postTerminalPersistedOperation.createdAtMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SUPPRESSION_OBSERVED]:
-      postTerminalSuppression.timeMs > NUM.ZERO,
+      postTerminalSuppression.timeMs > 0,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SUPPRESSION_REASON]:
       postTerminalSuppression.message,

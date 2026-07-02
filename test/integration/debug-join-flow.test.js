@@ -16,7 +16,7 @@ import {
   waitFor,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
-import {SERVICE_TYPE, TABLES, NUM} from '../../src/constants/index.js';
+import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {BOOTSTRAP_EVENT} from '../../src/bootstrap/bootstrap-constants.js';
 
 const HTTP_METHOD = Object.freeze({
@@ -131,7 +131,7 @@ test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
     console.log('DEBUG: Registered handlers count:', registeredHandlers.length);
     const partitionPathSegment = '/partition/';
     const partitionHandlers = registeredHandlers.filter((a) => a.includes(partitionPathSegment));
-    console.log('DEBUG: Partition handlers:', partitionHandlers.slice(NUM.ZERO, 5));
+    console.log('DEBUG: Partition handlers:', partitionHandlers.slice(0, 5));
 
     // Test a simple query to nodes table before joining
     console.log('DEBUG: Testing SELECT * FROM nodes...');

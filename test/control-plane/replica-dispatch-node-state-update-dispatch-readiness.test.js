@@ -6,7 +6,6 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NUM,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
@@ -85,7 +84,7 @@ test('ReplicaDispatchService defers not-ready dispatches back onto the ' +
 
     t.equal(
       dispatchCalls,
-      NUM.ZERO,
+      0,
       'not-ready targets should not dispatch inline',
     );
     t.equal(
@@ -117,7 +116,7 @@ test('ReplicaDispatchService defers not-ready dispatches back onto the ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'deferred retry state should clear after re-enqueue',
     );
   } finally {
@@ -198,7 +197,7 @@ test('ReplicaDispatchService uses authoritative readiness before dispatching',
 
       t.equal(
         dispatchCalls,
-        NUM.ZERO,
+        0,
         'authoritative ineligible readiness should block inline dispatch',
       );
       t.equal(
@@ -215,7 +214,7 @@ test('ReplicaDispatchService uses authoritative readiness before dispatching',
             decisionDimension:
               CONTROL_PLANE_READINESS_DIMENSION
                 .CONTROL_PLANE_RECOVERY_ELIGIBLE,
-            maxCachedAgeMs: NUM.ZERO,
+            maxCachedAgeMs: 0,
           },
         },
         'authoritative dispatch readiness should bypass cached snapshots',
@@ -258,7 +257,7 @@ test('ReplicaDispatchService uses recovery eligibility for critical ' +
   const EMPTY_STEPS_HISTORY = '[]';
 
   const authoritativeCalls = [];
-  let dispatchCalls = NUM.ZERO;
+  let dispatchCalls = 0;
   const operationRow = {
     operation_id: OPERATION_ID,
     type: OperationType.REPLACE,
@@ -307,7 +306,7 @@ test('ReplicaDispatchService uses recovery eligibility for critical ' +
     },
     rebalanceCoordinator: {
       async dispatchOperation() {
-        dispatchCalls += NUM.ONE;
+        dispatchCalls += 1;
         return {success: true};
       },
       isOperationLocallyOwned() {
@@ -321,16 +320,16 @@ test('ReplicaDispatchService uses recovery eligibility for critical ' +
 
     t.equal(
       dispatchCalls,
-      NUM.ONE,
+      1,
       'critical system-table dispatch should proceed on recovery eligibility',
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'recovery-eligible critical dispatch should not defer as not-ready',
     );
     t.same(
-      authoritativeCalls[NUM.ZERO],
+      authoritativeCalls[0],
       {
         nodeId: TARGET_NODE_ID,
         options: {
@@ -338,7 +337,7 @@ test('ReplicaDispatchService uses recovery eligibility for critical ' +
           decisionDimension:
             CONTROL_PLANE_READINESS_DIMENSION
               .CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          maxCachedAgeMs: NUM.ZERO,
+          maxCachedAgeMs: 0,
         },
       },
       'critical dispatch readiness should refresh the recovery dimension',
@@ -357,7 +356,7 @@ test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
   const OPERATION_ID = 'op-priority-recovery-bootstrap-dispatch-1';
   const PARTITION_ID = 'replica_operations-p1';
   const REPLICA_ID = 'replica_operations-p1-r4';
-  let dispatchCalls = NUM.ZERO;
+  let dispatchCalls = 0;
   const operationRow = {
     operation_id: OPERATION_ID,
     type: OperationType.ADD,
@@ -418,7 +417,7 @@ test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
     },
     rebalanceCoordinator: {
       async dispatchOperation() {
-        dispatchCalls += NUM.ONE;
+        dispatchCalls += 1;
         return {success: true};
       },
       isOperationLocallyOwned() {
@@ -432,12 +431,12 @@ test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
 
     t.equal(
       dispatchCalls,
-      NUM.ONE,
+      1,
       'priority dispatch should proceed when the only blocker is the recovery loop',
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'circular priority recovery evidence should not arm a not-ready retry',
     );
   } finally {
@@ -454,7 +453,7 @@ test('ReplicaDispatchService admits self-target priority dispatch with ' +
   const OPERATION_ID = 'op-self-priority-recovery-bootstrap-dispatch-1';
   const PARTITION_ID = 'replica_operations-p1';
   const REPLICA_ID = 'replica_operations-p1-r4';
-  let dispatchCalls = NUM.ZERO;
+  let dispatchCalls = 0;
   const operationRow = {
     operation_id: OPERATION_ID,
     type: OperationType.REPLACE,
@@ -530,7 +529,7 @@ test('ReplicaDispatchService admits self-target priority dispatch with ' +
     },
     rebalanceCoordinator: {
       async dispatchOperation() {
-        dispatchCalls += NUM.ONE;
+        dispatchCalls += 1;
         return {success: true};
       },
       isOperationLocallyOwned() {
@@ -544,12 +543,12 @@ test('ReplicaDispatchService admits self-target priority dispatch with ' +
 
     t.equal(
       dispatchCalls,
-      NUM.ONE,
+      1,
       'self-target priority recovery dispatch should proceed',
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'self-target recovery dispatch should not arm a not-ready retry',
     );
   } finally {
@@ -638,7 +637,7 @@ test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
   ];
 
   for (const testCase of cases) {
-    let dispatchCalls = NUM.ZERO;
+    let dispatchCalls = 0;
     const service = createService({
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
@@ -654,7 +653,7 @@ test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
       },
       rebalanceCoordinator: {
         async dispatchOperation() {
-          dispatchCalls += NUM.ONE;
+          dispatchCalls += 1;
           return {success: true};
         },
         isOperationLocallyOwned() {
@@ -668,12 +667,12 @@ test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
 
       t.equal(
         dispatchCalls,
-        NUM.ZERO,
+        0,
         `${testCase.name} should not dispatch through the bootstrap grace`,
       );
       t.equal(
         service.operationDispatchDeferredRetries.size,
-        NUM.ONE,
+        1,
         `${testCase.name} should stay on the not-ready retry path`,
       );
     } finally {
@@ -746,7 +745,7 @@ test('ReplicaDispatchService defers dispatch when authoritative readiness ' +
 
     t.equal(
       dispatchCalls,
-      NUM.ZERO,
+      0,
       'readiness refresh failures should not dispatch inline',
     );
     t.equal(

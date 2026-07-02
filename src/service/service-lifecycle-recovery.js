@@ -1,9 +1,7 @@
 import {
-  NUM,
   SERVICE_LIFECYCLE_OPERATION,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_OPERATION_STATE,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   LIFECYCLE_MGR_MSG,
@@ -33,11 +31,11 @@ function buildRecoveryResult(status, fields = {}) {
 }
 
 function parseOperationCommand(command) {
-  if (typeof command !== TYPEOF.STRING) {
+  if (typeof command !== 'string') {
     return null;
   }
   const separatorIndex = command.indexOf(OPERATION_COMMAND_SEPARATOR);
-  if (separatorIndex <= NUM.ZERO) {
+  if (separatorIndex <= 0) {
     return null;
   }
   const lifecycleOperation = command.slice(0, separatorIndex);
@@ -308,7 +306,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
 
 async function recoverPendingOperations(manager, options = {}) {
   const resolveServiceContext = options.resolveServiceContext;
-  if (typeof resolveServiceContext !== TYPEOF.FUNCTION) {
+  if (typeof resolveServiceContext !== 'function') {
     throw new TypeError(LIFECYCLE_MGR_MSG.RECOVERY_RESOLVER_REQUIRED);
   }
   const defaultContext = options.context || {};

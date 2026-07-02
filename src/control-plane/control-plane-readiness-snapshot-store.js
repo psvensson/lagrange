@@ -1,8 +1,6 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_REFRESH = '::refresh=';
 const LOCAL_STR_STALE = '::stale=';
 const LOCAL_STR_PLANNING = '::planning=';
@@ -14,10 +12,8 @@ const LOCAL_STR_SIGNATURE_LIST_SEPARATOR = ',';
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   PROJECTION_READINESS_CONTRACT_STATE,
   TABLES,
-  TYPEOF,
   compareNodeHeartbeatWatermarks,
   normalizeIsoTimestamp,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
@@ -73,11 +69,11 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       // MISSING entirely keeps the original bridge semantics: the stored
       // snapshot is the best available answer; rebuilding from the lagged
       // row would move the answer backwards.
-      if (watermarkComparison < NUM.ZERO) {
+      if (watermarkComparison < 0) {
         return null;
       }
       if (
-        watermarkComparison === NUM.ZERO &&
+        watermarkComparison === 0 &&
         this.isReadinessSnapshotInvalidated(nodeId, capturedAtMs)
       ) {
         return null;
@@ -87,11 +83,11 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     return Object.freeze({
       ...storedSnapshot,
       publication:
-        publication && typeof publication === TYPEOF.OBJECT ?
+        publication && typeof publication === 'object' ?
           Object.freeze({...publication}) :
           storedSnapshot.publication ?? null,
       membershipPublication:
-        membershipPublication && typeof membershipPublication === TYPEOF.OBJECT ?
+        membershipPublication && typeof membershipPublication === 'object' ?
           Object.freeze({...membershipPublication}) :
           storedSnapshot.membershipPublication ?? null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
@@ -147,7 +143,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   buildStoredReadinessSnapshotWatermark(snapshot) {
     const nodeEvidence = snapshot?.nodeEvidence;
-    if (!nodeEvidence || typeof nodeEvidence !== TYPEOF.OBJECT) {
+    if (!nodeEvidence || typeof nodeEvidence !== 'object') {
       return null;
     }
 
@@ -161,13 +157,13 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       watermark.readyLeaseExpiresAt = readyLeaseExpiresAt;
     }
     if (
-      typeof nodeEvidence.rowConnectionState === TYPEOF.STRING &&
-      nodeEvidence.rowConnectionState.length > NUM.ZERO
+      typeof nodeEvidence.rowConnectionState === 'string' &&
+      nodeEvidence.rowConnectionState.length > 0
     ) {
       watermark.connectionState = nodeEvidence.rowConnectionState;
     }
 
-    return Object.keys(watermark).length > NUM.ZERO ?
+    return Object.keys(watermark).length > 0 ?
       Object.freeze(watermark) :
       null;
   },
@@ -180,7 +176,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   getCachedReadinessSnapshot(nodeId, maxCachedAgeMs, options = {}) {
-    if (!nodeId || maxCachedAgeMs <= NUM.ZERO) {
+    if (!nodeId || maxCachedAgeMs <= 0) {
       return null;
     }
     const snapshot = this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
@@ -215,7 +211,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     }
     const decisionDimension = this.resolveReadinessDecisionDimension(options);
     const dimensions = snapshot?.dimensions;
-    if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+    if (!dimensions || typeof dimensions !== 'object') {
       return true;
     }
     return dimensions[decisionDimension] !== true;
@@ -237,7 +233,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return false;
     }
     const dimensions = snapshot?.dimensions;
-    if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+    if (!dimensions || typeof dimensions !== 'object') {
       return false;
     }
     const decisionDimension = this.resolveReadinessDecisionDimension(options);
@@ -251,8 +247,8 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   resolveReadinessDecisionDimension(options = {}) {
-    return typeof options.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO ?
+    return typeof options.decisionDimension === 'string' &&
+      options.decisionDimension.length > 0 ?
       options.decisionDimension :
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   },
@@ -355,7 +351,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       currentEpoch.lastEventSignature = signature;
       if (currentEpoch.events.length > this.recoveryEpochEventLimit) {
         currentEpoch.events.splice(
-          LOCAL_NUM_ZERO,
+          0,
           currentEpoch.events.length - this.recoveryEpochEventLimit,
         );
       }
@@ -394,7 +390,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   isRecoverySnapshotActive(snapshot) {
     const projectionReadinessContract =
       snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+      typeof snapshot.projectionReadinessContract === 'object' ?
         snapshot.projectionReadinessContract :
         null;
     return projectionReadinessContract?.recoveryOpen !== false;
@@ -411,27 +407,27 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   buildRecoveryEpochSignature(nodeId, snapshot) {
     const dimensions =
-      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
         snapshot.dimensions :
         {};
     const projectionReadinessContract =
       snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+      typeof snapshot.projectionReadinessContract === 'object' ?
         snapshot.projectionReadinessContract :
         null;
     const reasonCodes = Array.isArray(snapshot?.reasons) ?
       snapshot.reasons
-        .map((reason) => String(reason?.code || LOCAL_STR_EMPTY))
+        .map((reason) => String(reason?.code || ''))
         .filter(Boolean)
         .join(LOCAL_STR_SIGNATURE_LIST_SEPARATOR) :
-      LOCAL_STR_EMPTY;
+      '';
     const priorityReasonCodes = Array.isArray(
       projectionReadinessContract?.priorityRecovery?.reasonCodes,
     ) ?
       projectionReadinessContract.priorityRecovery.reasonCodes.join(
         LOCAL_STR_SIGNATURE_LIST_SEPARATOR,
       ) :
-      LOCAL_STR_EMPTY;
+      '';
     const dimensionBits = [
       CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
       CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
@@ -444,10 +440,10 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       .map((dimension) =>
         dimensions[dimension] === true ? LOCAL_STR_ONE : LOCAL_STR_ZERO,
       )
-      .join(LOCAL_STR_EMPTY);
+      .join('');
     return [
       nodeId,
-      snapshot?.lifecycleState || LOCAL_STR_EMPTY,
+      snapshot?.lifecycleState || '',
       dimensionBits,
       projectionReadinessContract?.state ||
         PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
@@ -471,7 +467,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs) {
     const dimensions =
-      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
         snapshot.dimensions :
         {};
     const reasonCodes = Array.isArray(snapshot?.reasons) ?
@@ -485,7 +481,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       [];
     const projectionReadinessContract =
       snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+      typeof snapshot.projectionReadinessContract === 'object' ?
         snapshot.projectionReadinessContract :
         null;
     return Object.freeze({
@@ -587,7 +583,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   buildReadinessEvaluationKey(nodeId, options = {}) {
     return (
-      String(nodeId || LOCAL_STR_EMPTY) +
+      String(nodeId || '') +
       LOCAL_STR_REFRESH +
       String(options.allowAuthoritativeRefresh === true) +
       LOCAL_STR_STALE +
@@ -605,7 +601,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   subscribeToCacheChanges() {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.onCacheChange !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.onCacheChange !== 'function'
     ) {
       return;
     }
@@ -660,16 +656,16 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       this.lastReadinessSnapshotClusterInvalidatedAtMs,
     );
     const invalidatedAtMs = Math.max(
-      Number.isFinite(perNodeInvalidatedAtMs) ? perNodeInvalidatedAtMs : NUM.ZERO,
-      Number.isFinite(clusterInvalidatedAtMs) ? clusterInvalidatedAtMs : NUM.ZERO,
+      Number.isFinite(perNodeInvalidatedAtMs) ? perNodeInvalidatedAtMs : 0,
+      Number.isFinite(clusterInvalidatedAtMs) ? clusterInvalidatedAtMs : 0,
     );
-    if (invalidatedAtMs <= NUM.ZERO) {
+    if (invalidatedAtMs <= 0) {
       return false;
     }
     const snapshotAtMs = Number.isFinite(capturedAtMs) ?
       capturedAtMs :
       Number(this.lastReadinessSnapshotAtMsByNodeId.get(nodeId));
-    if (!Number.isFinite(snapshotAtMs) || snapshotAtMs <= NUM.ZERO) {
+    if (!Number.isFinite(snapshotAtMs) || snapshotAtMs <= 0) {
       return true;
     }
     return invalidatedAtMs >= snapshotAtMs;

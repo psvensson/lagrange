@@ -6,7 +6,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION, TABLES, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION, TABLES} from '../constants/index.js';
 import {LiveQueryManager} from './live-query-manager.js';
 import {LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
 
@@ -34,14 +34,14 @@ function resolvePartitionRow(systemTableCache, partitionId) {
     return null;
   }
 
-  if (typeof systemTableCache.get === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.get === 'function') {
     const direct = systemTableCache.get(TABLES.PARTITIONS, partitionId);
     if (direct) {
       return direct;
     }
   }
 
-  if (typeof systemTableCache.find !== TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.find !== 'function') {
     return null;
   }
 
@@ -168,7 +168,7 @@ function initLogger() {
 function createLiveQueryCacheSubscriptionAdapter(options = {}) {
   const systemTableCache = options.systemTableCache || null;
   const onPartitionTopologyChange =
-    typeof options.onPartitionTopologyChange === TYPEOF.FUNCTION ?
+    typeof options.onPartitionTopologyChange === 'function' ?
       options.onPartitionTopologyChange :
       null;
   const logger = initLogger();
@@ -185,7 +185,7 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
       const topologyChange = buildPartitionTopologyChange(operation, record);
       if (topologyChange) {
         const maybePromise = onPartitionTopologyChange(topologyChange);
-        if (maybePromise && typeof maybePromise.catch === TYPEOF.FUNCTION) {
+        if (maybePromise && typeof maybePromise.catch === 'function') {
           maybePromise.catch((error) => {
             logger.warn(LOG_MSG_PARTITION_HANDLER_FAILED, {
               error: error.message,
@@ -240,12 +240,12 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
   };
 
   if (systemTableCache &&
-      typeof systemTableCache.onCacheChange === TYPEOF.FUNCTION) {
+      typeof systemTableCache.onCacheChange === 'function') {
     systemTableCache.onCacheChange(cacheListener);
   }
 
   const subscribeToPartition = async (partitionId, queryId, handler) => {
-    if (!queryId || typeof handler !== TYPEOF.FUNCTION) {
+    if (!queryId || typeof handler !== 'function') {
       return;
     }
 
@@ -276,7 +276,7 @@ function createLiveQueryCacheSubscriptionAdapter(options = {}) {
 
   const shutdown = () => {
     if (systemTableCache &&
-        typeof systemTableCache.offCacheChange === TYPEOF.FUNCTION) {
+        typeof systemTableCache.offCacheChange === 'function') {
       systemTableCache.offCacheChange(cacheListener);
     }
     subscriptionsByQueryId.clear();

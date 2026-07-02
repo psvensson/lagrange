@@ -19,7 +19,6 @@ import {
   ADAPTER_LOG_MSG,
 } from '../sql-adapter-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * PostgresWireAdapter maps authenticated protocol sessions to
@@ -182,7 +181,7 @@ class PostgresWireAdapter {
       unsupported.push(feature);
     }
 
-    if (unsupported.length > LOCAL_NUM_ZERO) {
+    if (unsupported.length > 0) {
       this.logger.debug(ADAPTER_LOG_MSG.UNSUPPORTED_FEATURE, {
         sessionId,
         unsupported,

@@ -88,7 +88,7 @@ const REBALANCER_DEFAULT = Object.freeze({
     CRITICAL_CHECK_DELAY_MS: 5000,
     MAX_CONCURRENT_MOVES: NUM.FIVE,
     MOVE_TIMEOUT_MS: 300000,
-    MOVE_BATCH_SIZE: NUM.TWO,
+    MOVE_BATCH_SIZE: 2,
     INTER_BATCH_DELAY_MS: 100,
     REBALANCE_BUDGET: 10,
     CRITICAL_BUDGET_MULTIPLIER: 2,
@@ -136,7 +136,7 @@ const REBALANCER_DEFAULT_POLICY = Object.freeze({
   }),
   RUNTIME_SERVICE: Object.freeze({
     targetReplicaCount: NUM.THREE,
-    minReplicaCount: NUM.ONE,
+    minReplicaCount: 1,
     maxReplicaCount: NUM.SEVEN,
     placementConstraints: {
       spreadAcrossNodes: true,

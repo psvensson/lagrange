@@ -6,7 +6,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM, STRING, SERVICE_TYPE} from '../constants/index.js';
+import {STRING, SERVICE_TYPE} from '../constants/index.js';
 import {BOOTSTRAP_PHASE} from './bootstrap-constants.js';
 import {
   BOOTSTRAP_TRACKER_EVENT,
@@ -36,9 +36,9 @@ class BootstrapStateTracker extends EventEmitter {
     this.phaseHistory = [];
     this.startTime = null;
     this.phaseStartTime = null;
-    this.servicesCreated = NUM.ZERO;
-    this.partitionsCreated = NUM.ZERO;
-    this.messageGroupsCreated = NUM.ZERO;
+    this.servicesCreated = 0;
+    this.partitionsCreated = 0;
+    this.messageGroupsCreated = 0;
     this.raftStateChanges = [];
     this.errors = [];
 
@@ -97,7 +97,7 @@ class BootstrapStateTracker extends EventEmitter {
   transitionToPhase(phase, context = {}) {
     const previousPhase = this.currentPhase;
     const now = Date.now();
-    const phaseDuration = this.phaseStartTime ? now - this.phaseStartTime : NUM.ZERO;
+    const phaseDuration = this.phaseStartTime ? now - this.phaseStartTime : 0;
 
     // Record phase completion
     if (previousPhase !== BootstrapPhase.NOT_STARTED) {
@@ -245,7 +245,7 @@ class BootstrapStateTracker extends EventEmitter {
    */
   completeTracking(success, context = {}) {
     const endTime = Date.now();
-    const totalDuration = this.startTime ? endTime - this.startTime : NUM.ZERO;
+    const totalDuration = this.startTime ? endTime - this.startTime : 0;
 
     // Transition to final phase
     this.transitionToPhase(
@@ -272,7 +272,7 @@ class BootstrapStateTracker extends EventEmitter {
         failedPhase: this.currentPhase,
         servicesCreated: this.servicesCreated,
         errorCount: this.errors.length,
-        lastError: this.errors[this.errors.length - NUM.ONE]?.message || null,
+        lastError: this.errors[this.errors.length - 1]?.message || null,
         ...context,
       });
     }
@@ -304,7 +304,7 @@ class BootstrapStateTracker extends EventEmitter {
       phaseHistory: [...this.phaseHistory],
       raftStateChanges: this.raftStateChanges.length,
       errors: this.errors.length,
-      duration: this.startTime ? Date.now() - this.startTime : NUM.ZERO,
+      duration: this.startTime ? Date.now() - this.startTime : 0,
     };
   }
 
@@ -366,9 +366,9 @@ class BootstrapStateTracker extends EventEmitter {
     this.phaseHistory = [];
     this.startTime = null;
     this.phaseStartTime = null;
-    this.servicesCreated = NUM.ZERO;
-    this.partitionsCreated = NUM.ZERO;
-    this.messageGroupsCreated = NUM.ZERO;
+    this.servicesCreated = 0;
+    this.partitionsCreated = 0;
+    this.messageGroupsCreated = 0;
     this.raftStateChanges = [];
     this.errors = [];
   }

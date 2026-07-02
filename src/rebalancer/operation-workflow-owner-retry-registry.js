@@ -4,11 +4,9 @@ import * as DISPATCH_REARM_EVIDENCE
   from './operation-workflow-dispatch-rearm-evidence.js';
 
 const {
-  NUM,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-  TYPEOF,
   DISPATCH_RETRY_DELAY_MS,
   DISPATCH_RETRY_MAX_DELAY_MS,
   DISPATCH_RETRY_BACKOFF_MULTIPLIER,
@@ -49,23 +47,23 @@ class OperationWorkflowOwnerRetryRegistry {
     this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
     this.getActualReplicaStatus = options.getActualReplicaStatus;
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.setTimeoutFn === 'function' ?
         options.setTimeoutFn :
         setTimeout;
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+      typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :
         clearTimeout;
     this.randomFn =
-      typeof options.randomFn === TYPEOF.FUNCTION ?
+      typeof options.randomFn === 'function' ?
         options.randomFn :
         Math.random;
-    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.lastEmptyIncompleteOperationQueryAtMs = 0;
     this.incompleteOperationQueryEmptyBackoffMs =
-      options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
+      options.incompleteOperationQueryEmptyBackoffMs || 0;
     this.replicaOperationDispatchTimeoutMs =
       Number.isFinite(options.replicaOperationDispatchTimeoutMs) &&
-      options.replicaOperationDispatchTimeoutMs > NUM.ZERO ?
+      options.replicaOperationDispatchTimeoutMs > 0 ?
         Math.floor(options.replicaOperationDispatchTimeoutMs) :
         REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
     this.safetyDeferredLogStateByOperationId = new Map();
@@ -197,7 +195,7 @@ class OperationWorkflowOwnerRetryRegistry {
     }
 
     const retryDelayMs =
-      Number.isFinite(delayMs) && delayMs > NUM.ZERO ?
+      Number.isFinite(delayMs) && delayMs > 0 ?
         delayMs :
         OBSERVED_PROGRESS_RETRY_DELAY_MS;
     const timerHandle = this.setTimeoutFn(() => {
@@ -316,24 +314,24 @@ class OperationWorkflowOwnerRetryRegistry {
    */
   resolveCreatedOperationHandoffRetryDelayMs(
     operationId,
-    retryAfterFloorMs = NUM.ZERO,
+    retryAfterFloorMs = 0,
   ) {
     const previousAttempts = operationId ?
       Number(
         this.createdOperationHandoffRetryAttemptByOperationId.get(operationId),
-      ) || NUM.ZERO :
-      NUM.ZERO;
-    const attempt = previousAttempts + NUM.ONE;
+      ) || 0 :
+      0;
+    const attempt = previousAttempts + 1;
     if (operationId) {
       this.createdOperationHandoffRetryAttemptByOperationId.set(
         operationId,
         attempt,
       );
     }
-    if (Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > 0) {
       return Math.min(
         DISPATCH_RETRY_MAX_DELAY_MS,
-        Math.max(NUM.ONE, Math.floor(retryAfterFloorMs)),
+        Math.max(1, Math.floor(retryAfterFloorMs)),
       );
     }
     const exponential =
@@ -342,12 +340,12 @@ class OperationWorkflowOwnerRetryRegistry {
     const cappedExponential = Math.min(exponential, DISPATCH_RETRY_MAX_DELAY_MS);
     const flooredDelay = cappedExponential;
     const jitterSpan = flooredDelay * DISPATCH_RETRY_JITTER_RATIO;
-    const jitter = jitterSpan > NUM.ZERO ?
+    const jitter = jitterSpan > 0 ?
       Math.floor(this.randomFn() * jitterSpan) :
-      NUM.ZERO;
+      0;
     return Math.min(
       DISPATCH_RETRY_MAX_DELAY_MS,
-      Math.max(NUM.ONE, Math.floor(flooredDelay) + jitter),
+      Math.max(1, Math.floor(flooredDelay) + jitter),
     );
   }
 
@@ -360,9 +358,9 @@ class OperationWorkflowOwnerRetryRegistry {
    */
   countActiveCreatedOperationHandoffRetriesByTargetNode(targetNodeId) {
     if (!targetNodeId) {
-      return NUM.ZERO;
+      return 0;
     }
-    let count = NUM.ZERO;
+    let count = 0;
     for (const [
       operationId,
       retryTargetNodeId,
@@ -371,7 +369,7 @@ class OperationWorkflowOwnerRetryRegistry {
         retryTargetNodeId === targetNodeId &&
         this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
       ) {
-        count += NUM.ONE;
+        count += 1;
       }
     }
     return count;
@@ -416,9 +414,9 @@ class OperationWorkflowOwnerRetryRegistry {
       return Math.floor(nextAttemptAt);
     }
     const retryAfterMs = Number(retry?.retryAfterMs);
-    return Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+    return Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
       now + Math.floor(retryAfterMs) :
-      NUM.ZERO;
+      0;
   }
 
   /**
@@ -451,7 +449,7 @@ class OperationWorkflowOwnerRetryRegistry {
       operationId,
       Object.freeze({
         nextAttemptAt: deadlineMs,
-        retryAfterMs: Math.max(NUM.ONE, deadlineMs - now),
+        retryAfterMs: Math.max(1, deadlineMs - now),
         errorMessage: retry?.errorMessage || null,
       }),
     );
@@ -548,7 +546,7 @@ class OperationWorkflowOwnerRetryRegistry {
    * @return {void}
    * @private
    */
-  recordTransitionRetryGrace(operationId, context = {}, delayMs = NUM.ZERO) {
+  recordTransitionRetryGrace(operationId, context = {}, delayMs = 0) {
     this.transitionRetryGrace.record(operationId, context, delayMs);
   }
 

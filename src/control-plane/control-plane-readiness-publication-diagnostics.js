@@ -13,8 +13,6 @@ import {ControlPlaneReadinessDiagnosticsEligibility} from './control-plane-readi
 const {
   MEMBERSHIP_PUBLICATION_READ_LANE,
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
-  NUM,
-  TYPEOF,
   buildControlPlanePublicationStory,
   resolveMembershipPublicationReadLane,
   resolveMembershipPublicationReadOptions,
@@ -29,24 +27,24 @@ class ControlPlaneReadinessPublicationDiagnostics
     readOptions = {},
   ) {
     const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     const normalizedReadOptions = resolveMembershipPublicationReadOptions({
       lane: resolveMembershipPublicationReadLane(readOptions?.lane),
       queryTimeoutMs:
         Number.isFinite(readOptions?.queryTimeoutMs) &&
-        readOptions.queryTimeoutMs > NUM.ZERO ?
+        readOptions.queryTimeoutMs > 0 ?
           readOptions.queryTimeoutMs :
           this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
     let row = null;
-    if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
+    if (typeof service.getLatestPublicationForNode === 'function') {
       row = await service.getLatestPublicationForNode(
         nodeId,
         normalizedReadOptions,
       );
-    } else if (typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
+    } else if (typeof service.getLatestClusterPublication === 'function') {
       row = await service.getLatestClusterPublication(normalizedReadOptions);
     }
     return this.buildMembershipPublicationDiagnostics(row, observedAt);
@@ -67,7 +65,7 @@ class ControlPlaneReadinessPublicationDiagnostics
       resolveMembershipPublicationReadScope(readOptions?.scope) ===
         MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
       typeof this.membershipPublicationService
-        ?.getLatestClusterPublicationSync === TYPEOF.FUNCTION;
+        ?.getLatestClusterPublicationSync === 'function';
     if (memoizableRead && this.membershipPublicationDiagnosticsMemo) {
       return this.membershipPublicationDiagnosticsMemo.diagnostics;
     }
@@ -128,14 +126,14 @@ class ControlPlaneReadinessPublicationDiagnostics
     const service = this.membershipPublicationService;
     if (
       service &&
-      typeof service.deriveClusterMembershipCandidate === TYPEOF.FUNCTION
+      typeof service.deriveClusterMembershipCandidate === 'function'
     ) {
       const candidate = await service.deriveClusterMembershipCandidate({
         deferNestedPriorityRecoveryPlanning: true,
         publisherNodeId: nodeId || this.nodeId,
         nowMs: observedAt,
       });
-      if (candidate && typeof candidate === TYPEOF.OBJECT) {
+      if (candidate && typeof candidate === 'object') {
         return this.normalizeMembershipPublicationPlanningSnapshot(candidate);
       }
     }
@@ -155,14 +153,14 @@ class ControlPlaneReadinessPublicationDiagnostics
     const service = this.membershipPublicationService;
     if (
       service &&
-      typeof service.deriveClusterMembershipCandidateSync === TYPEOF.FUNCTION
+      typeof service.deriveClusterMembershipCandidateSync === 'function'
     ) {
       const candidate = service.deriveClusterMembershipCandidateSync({
         deferNestedPriorityRecoveryPlanning: true,
         publisherNodeId: nodeId || this.nodeId,
         nowMs: observedAt,
       });
-      if (candidate && typeof candidate === TYPEOF.OBJECT) {
+      if (candidate && typeof candidate === 'object') {
         return this.normalizeMembershipPublicationPlanningSnapshot(candidate);
       }
     }

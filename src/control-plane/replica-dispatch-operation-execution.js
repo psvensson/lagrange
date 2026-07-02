@@ -21,11 +21,9 @@ const {
   DISPATCH_LOG_MSG,
   DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
-  NUM,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
-  TYPEOF,
   assertCritical,
   getControlPlaneErrorMessage,
   isCoordinatorOwnedOperationType,
@@ -58,7 +56,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
   async handleReplicaOperationDispatch(payload) {
     const operationRow =
       payload?.[ControlPlaneField.OPERATION_ROW] &&
-      typeof payload[ControlPlaneField.OPERATION_ROW] === TYPEOF.OBJECT ?
+      typeof payload[ControlPlaneField.OPERATION_ROW] === 'object' ?
         payload[ControlPlaneField.OPERATION_ROW] :
         null;
     const operationId =
@@ -265,7 +263,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     try {
       let dispatchResult = null;
       if (
-        typeof this.rebalanceCoordinator.dispatchOperation === TYPEOF.FUNCTION
+        typeof this.rebalanceCoordinator.dispatchOperation === 'function'
       ) {
         dispatchResult =
           await this.rebalanceCoordinator.dispatchOperation(rowOperation, {
@@ -343,7 +341,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         }
         if (
           (!dispatchResult ||
-            getControlPlaneErrorMessage(dispatchResult).length === NUM.ZERO) &&
+            getControlPlaneErrorMessage(dispatchResult).length === 0) &&
           (await this.recoverUnsuccessfulDispatchResult(
             operationId,
             row,
@@ -556,13 +554,13 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
   buildDispatchReadinessRefreshFailureError(targetNodeId, dispatchReadiness) {
     const originalError = dispatchReadiness?.error;
     const originalMessage =
-      typeof originalError?.message === TYPEOF.STRING &&
-      originalError.message.length > NUM.ZERO ?
+      typeof originalError?.message === 'string' &&
+      originalError.message.length > 0 ?
         originalError.message :
         String(originalError || DISPATCH_READINESS_ERROR_REASON.UNKNOWN);
     const code =
-      typeof originalError?.code === TYPEOF.STRING &&
-      originalError.code.length > NUM.ZERO ?
+      typeof originalError?.code === 'string' &&
+      originalError.code.length > 0 ?
         originalError.code :
         DISPATCH_READINESS_ERROR_CODE.TARGET_NODE_READINESS_REFRESH_FAILED;
     return this.buildDispatchReadinessGateError(

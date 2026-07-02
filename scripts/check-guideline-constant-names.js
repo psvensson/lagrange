@@ -11,7 +11,6 @@ import {
 import {EXIT_CODE, SCRIPT_TEXT} from './guideline-check-constants.js';
 
 const ARG_START_INDEX = 2;
-const LOCAL_NUM_ONE = 1;
 const HELP_FLAG = '--help';
 const HELP_SHORT_FLAG = '-h';
 const JSON_FLAG = '--json';
@@ -76,8 +75,8 @@ function collectOpaqueConstantNameViolationsFromSource(source, filePath) {
 
     violations.push({
       filePath,
-      line: node.loc?.start?.line || LOCAL_NUM_ONE,
-      column: node.loc?.start?.column + LOCAL_NUM_ONE || LOCAL_NUM_ONE,
+      line: node.loc?.start?.line || 1,
+      column: node.loc?.start?.column + 1 || 1,
       value: node.id.name,
       kind: VIOLATION_KIND,
       reason: VIOLATION_REASON,

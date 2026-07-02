@@ -17,7 +17,6 @@ import {
   TRANSPORT_DEFAULT,
 } from '../constants/transport.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Subsystem name for logging.
@@ -253,7 +252,7 @@ class ConnectionPool {
    */
   async closeIdleConnections() {
     if (this.isShuttingDown) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
 
     this.logger.debug(POOL_LOG_MSG.CLOSING_IDLE_CONNECTIONS);
@@ -267,7 +266,7 @@ class ConnectionPool {
       }
     }
 
-    let closedCount = LOCAL_NUM_ZERO;
+    let closedCount = 0;
     for (const nodeId of expiredNodeIds) {
       const connection = this.connections.get(nodeId);
       if (connection) {

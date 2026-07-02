@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from './control-plane-readiness-constants.js';
@@ -22,13 +21,13 @@ import {
 } from './priority-recovery-snapshot.js';
 
 function normalizePriorityPartitionSummary(value) {
-  return value && typeof value === TYPEOF.OBJECT ?
+  return value && typeof value === 'object' ?
     value :
     null;
 }
 
 function normalizePriorityRecoveryClosureWitness(value) {
-  return value && typeof value === TYPEOF.OBJECT ?
+  return value && typeof value === 'object' ?
     value :
     null;
 }
@@ -115,14 +114,14 @@ function hasZeroPrioritySpreadGapSummary(priorityPartitionSummary = null) {
     priorityPartitionSummary.blockedPartitions :
     [];
   return hasPrioritySpreadMetricEvidence(priorityPartitionSummary) &&
-    missingPartitionIds.length === NUM.ZERO &&
-    blockedPartitions.length === NUM.ZERO &&
+    missingPartitionIds.length === 0 &&
+    blockedPartitions.length === 0 &&
     normalizeNonNegativeInteger(priorityPartitionSummary?.blockedPartitionCount) ===
-      NUM.ZERO &&
+      0 &&
     normalizeNonNegativeInteger(priorityPartitionSummary?.largestSpreadGap) ===
-      NUM.ZERO &&
+      0 &&
     normalizeNonNegativeInteger(priorityPartitionSummary?.totalSpreadGap) ===
-      NUM.ZERO;
+      0;
 }
 
 function resolvePrioritySpreadPendingFromSummary(priorityPartitionSummary = null) {
@@ -183,7 +182,7 @@ function buildPrioritySpreadDecision(options = {}) {
       reasonCodes,
     });
   const closureWitnessPrioritySpreadPending =
-    typeof priorityRecoveryClosureWitness?.prioritySpreadPending === TYPEOF.BOOLEAN ?
+    typeof priorityRecoveryClosureWitness?.prioritySpreadPending === 'boolean' ?
       priorityRecoveryClosureWitness.prioritySpreadPending :
       null;
   const summaryPrioritySpreadPending =

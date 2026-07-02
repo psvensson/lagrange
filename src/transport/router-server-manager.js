@@ -25,14 +25,14 @@ import {
   INPROC,
 } from './inproc-transport.js';
 
-const LOCAL_STR_1MC96 = 'RouterServerManager requires nodeId';
-const LOCAL_STR_XQYG0 = 'RouterServerManager requires logger';
-const LOCAL_STR_1FXN6 = 'RouterServerManager requires routerId';
-const LOCAL_STR_1O5ND = 'RouterServerManager requires nodeConnections';
-const LOCAL_STR_REN10 = 'RouterServerManager requires onMessage callback';
-const LOCAL_STR_1A5M9 = 'RouterServerManager requires onConnectionClose callback';
-const LOCAL_STR_16804 = 'RouterServerManager requires emit function';
-const LOCAL_STR_17COI = 'Invalid wsPort for in-process server';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_NODEID = 'RouterServerManager requires nodeId';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_LOGGER = 'RouterServerManager requires logger';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ROUTERID = 'RouterServerManager requires routerId';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_NODECONNECT = 'RouterServerManager requires nodeConnections';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ONMESSAGE_C = 'RouterServerManager requires onMessage callback';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ONCONNECTIO = 'RouterServerManager requires onConnectionClose callback';
+const LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_EMIT_FUNCTI = 'RouterServerManager requires emit function';
+const LOCAL_STR_INVALID_WSPORT_FOR_IN_PROCESS_SERVER = 'Invalid wsPort for in-process server';
 const LOCAL_STR_EADDRINUSE = 'EADDRINUSE';
 
 const ConnectionState = CONNECTION_STATE;
@@ -102,25 +102,25 @@ class RouterServerManager {
    */
   constructor(options) {
     if (!options.nodeId) {
-      throw new Error(LOCAL_STR_1MC96);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_NODEID);
     }
     if (!options.logger) {
-      throw new Error(LOCAL_STR_XQYG0);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_LOGGER);
     }
     if (!options.routerId) {
-      throw new Error(LOCAL_STR_1FXN6);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ROUTERID);
     }
     if (!options.nodeConnections) {
-      throw new Error(LOCAL_STR_1O5ND);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_NODECONNECT);
     }
     if (!options.onMessage) {
-      throw new Error(LOCAL_STR_REN10);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ONMESSAGE_C);
     }
     if (!options.onConnectionClose) {
-      throw new Error(LOCAL_STR_1A5M9);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_ONCONNECTIO);
     }
     if (!options.emit) {
-      throw new Error(LOCAL_STR_16804);
+      throw new Error(LOCAL_STR_ROUTERSERVERMANAGER_REQUIRES_EMIT_FUNCTI);
     }
 
     this.nodeId = options.nodeId;
@@ -190,7 +190,7 @@ class RouterServerManager {
   startInProcessServer() {
     const portKey = Number(this.wsPort);
     if (!Number.isFinite(portKey)) {
-      throw new Error(LOCAL_STR_17COI);
+      throw new Error(LOCAL_STR_INVALID_WSPORT_FOR_IN_PROCESS_SERVER);
     }
     if (INPROC.serversByPort.has(portKey)) {
       const err = new Error(ROUTER_ERROR_MSG.addressInUse(portKey));

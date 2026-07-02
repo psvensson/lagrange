@@ -19,7 +19,6 @@ function assignReplicaOperationRepositoryRowMethods(
   options = {},
 ) {
   const {
-    NUM,
     OPERATION_METADATA_KEY,
     OperationType,
     REBALANCE_COORDINATOR_LOG_MSG,
@@ -27,7 +26,6 @@ function assignReplicaOperationRepositoryRowMethods(
     ReplicaOperationField,
     SERVICE_TYPE,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     WORKFLOW_STEP,
     buildReplicaOperationSemanticWitnesses,
     getOperationMetadataObject,
@@ -91,14 +89,14 @@ function assignReplicaOperationRepositoryRowMethods(
         stepsHistory,
         OPERATION_METADATA_KEY.REPLICA_IDS,
       );
-      if (replicaIds.length > NUM.ZERO) {
+      if (replicaIds.length > 0) {
         operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
       }
       const peerAddresses = getOperationMetadataStringArray(
         stepsHistory,
         OPERATION_METADATA_KEY.PEER_ADDRESSES,
       );
-      if (peerAddresses.length > NUM.ZERO) {
+      if (peerAddresses.length > 0) {
         operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
       }
       const bootstrapTableMetadata = getOperationMetadataObject(
@@ -147,7 +145,7 @@ function assignReplicaOperationRepositoryRowMethods(
       );
       const isUnsettledReplace =
       operation?.type === OperationType.REPLACE &&
-      targetNodeId.length > NUM.ZERO &&
+      targetNodeId.length > 0 &&
       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED &&
       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
       const isSystemReplace =
@@ -162,10 +160,10 @@ function assignReplicaOperationRepositoryRowMethods(
       // loss without handing ownership back to a degraded source.
         return targetNodeId;
       }
-      if (sourceNodeId.length > NUM.ZERO) {
+      if (sourceNodeId.length > 0) {
         return sourceNodeId;
       }
-      if (targetNodeId.length > NUM.ZERO) {
+      if (targetNodeId.length > 0) {
         return targetNodeId;
       }
       return null;
@@ -219,7 +217,7 @@ function assignReplicaOperationRepositoryRowMethods(
         }
         throw error;
       }
-      if (typeof applySystemTableChange !== TYPEOF.FUNCTION) {
+      if (typeof applySystemTableChange !== 'function') {
         return false;
       }
       try {
@@ -290,14 +288,14 @@ function assignReplicaOperationRepositoryRowMethods(
       }
       const sourceReplicaId = this.getReplaceSourceReplicaId(operation);
       if (
-        typeof sourceReplicaId !== TYPEOF.STRING ||
-        sourceReplicaId.length === NUM.ZERO
+        typeof sourceReplicaId !== 'string' ||
+        sourceReplicaId.length === 0
       ) {
         return null;
       }
       if (
-        typeof operation?.replicaId !== TYPEOF.STRING ||
-        operation.replicaId.length === NUM.ZERO
+        typeof operation?.replicaId !== 'string' ||
+        operation.replicaId.length === 0
       ) {
         return null;
       }
@@ -315,10 +313,10 @@ function assignReplicaOperationRepositoryRowMethods(
       if (!this.systemTableCache || !operationId) {
         return null;
       }
-      if (typeof this.systemTableCache.get === TYPEOF.FUNCTION) {
+      if (typeof this.systemTableCache.get === 'function') {
         return this.systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId) || null;
       }
-      if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      if (typeof this.systemTableCache.getAll === 'function') {
         const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
         return rows.find((row) => row?.operation_id === operationId) || null;
       }
@@ -330,13 +328,13 @@ function assignReplicaOperationRepositoryRowMethods(
    * @return {Array|null} null when cache is unavailable
    */
     filterReplicaOperationRowsFromCache(predicate) {
-      if (!this.systemTableCache || typeof predicate !== TYPEOF.FUNCTION) {
+      if (!this.systemTableCache || typeof predicate !== 'function') {
         return null;
       }
-      if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+      if (typeof this.systemTableCache.filter === 'function') {
         return this.systemTableCache.filter(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, predicate) || [];
       }
-      if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      if (typeof this.systemTableCache.getAll === 'function') {
         const rows = this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
         return rows.filter(predicate);
       }
@@ -350,8 +348,8 @@ function assignReplicaOperationRepositoryRowMethods(
     hasReplicaOperationCacheObservationBoundary() {
       return Boolean(
         this.systemTableCache &&
-      (typeof this.systemTableCache.filter === TYPEOF.FUNCTION ||
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION),
+      (typeof this.systemTableCache.filter === 'function' ||
+        typeof this.systemTableCache.getAll === 'function'),
       );
     }
   }

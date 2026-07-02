@@ -7,7 +7,6 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
   HEARTBEAT_CONFIG_KEY,
@@ -45,17 +44,17 @@ class HeartbeatService extends EventEmitter {
     this.systemTableCache = options.systemTableCache || null;
     this.quietMode = options.quietMode || null;
     this.nodeStateReporter =
-      typeof options.nodeStateReporter === TYPEOF.FUNCTION ? options.nodeStateReporter : null;
+      typeof options.nodeStateReporter === 'function' ? options.nodeStateReporter : null;
     this.verifyReporterVisibilityOnSuccess = options.verifyReporterVisibilityOnSuccess === true;
-    this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.setIntervalFn =
-      typeof options.setIntervalFn === TYPEOF.FUNCTION ? options.setIntervalFn : setInterval;
+      typeof options.setIntervalFn === 'function' ? options.setIntervalFn : setInterval;
     this.clearIntervalFn =
-      typeof options.clearIntervalFn === TYPEOF.FUNCTION ? options.clearIntervalFn : clearInterval;
+      typeof options.clearIntervalFn === 'function' ? options.clearIntervalFn : clearInterval;
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION ? options.setTimeoutFn : setTimeout;
+      typeof options.setTimeoutFn === 'function' ? options.setTimeoutFn : setTimeout;
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ? options.clearTimeoutFn : clearTimeout;
+      typeof options.clearTimeoutFn === 'function' ? options.clearTimeoutFn : clearTimeout;
     this.authoritativeControlPlaneView = options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
@@ -108,8 +107,8 @@ class HeartbeatService extends EventEmitter {
       options.reporterVisibilityRetryIntervalMs,
     );
     this.heartbeatTimer = null;
-    this.heartbeatConsecutiveFailures = NUM.ZERO;
-    this.heartbeatCount = NUM.ZERO;
+    this.heartbeatConsecutiveFailures = 0;
+    this.heartbeatCount = 0;
     this.state = HEARTBEAT_STATE.CREATED;
     this.heartbeatInFlight = false;
     this.heartbeatAttemptSequence = ZERO;
@@ -131,7 +130,7 @@ class HeartbeatService extends EventEmitter {
       targetNodeId: null,
       targetServiceType: null,
       targetServiceId: null,
-      consecutiveFailures: NUM.ZERO,
+      consecutiveFailures: 0,
     };
     this.lastReporterVisibilityVerifiedAt = null;
     this.lastReporterVisibilityTargetAddress = null;
@@ -139,7 +138,7 @@ class HeartbeatService extends EventEmitter {
     this.lastReporterVisibilityAttemptTargetAddress = null;
     this.nodeHeartbeatReporterVisibilityState = HEARTBEAT_REPORTER_VISIBILITY_STATE.IDLE;
     this.reporterVisibilityVerificationPromise = null;
-    this.quietModeSuppressedCounts = {nodeHeartbeatWrites: NUM.ZERO, endpointUpserts: NUM.ZERO};
+    this.quietModeSuppressedCounts = {nodeHeartbeatWrites: 0, endpointUpserts: 0};
     this.quietModeBypassReasonHistogram = {};
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(HEARTBEAT_SUBSYSTEM);

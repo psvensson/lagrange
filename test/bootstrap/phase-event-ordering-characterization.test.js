@@ -146,7 +146,7 @@ test('Seed bootstrap - emits phase:start and phase:complete in correct order',
       'should emit exactly one start and one complete per phase',
     );
 
-    for (let i = NUM.ZERO; i < expectedEvents.length; i++) {
+    for (let i = 0; i < expectedEvents.length; i++) {
       t.equal(
         events[i].type,
         expectedEvents[i].type,
@@ -373,7 +373,7 @@ test('Seed bootstrap - phase failure emits phase:failed and phaseFailed events',
     const registrationEvents = events.filter(
       (e) => e.phase === BOOTSTRAP_PHASE.REGISTRATION,
     );
-    t.equal(registrationEvents.length, NUM.ZERO,
+    t.equal(registrationEvents.length, 0,
       'phases after failure should not emit any events');
   });
 
@@ -598,7 +598,7 @@ test('Join startup - phase failure emits phaseFailed event with error',
     const wsEvents = events.filter(
       (e) => e.phase === JOINING_PHASE.CONNECTING_WEBSOCKET,
     );
-    t.equal(wsEvents.length, NUM.TWO,
+    t.equal(wsEvents.length, 2,
       'failed phase should emit start + phaseFailed');
     t.equal(wsEvents[0].type, BOOTSTRAP_EVENT.PHASE_START,
       'first event for failed phase should be start');
@@ -611,7 +611,7 @@ test('Join startup - phase failure emits phaseFailed event with error',
     const leadershipEvents = events.filter(
       (e) => e.phase === JOINING_PHASE.WAITING_LEADERSHIP,
     );
-    t.equal(leadershipEvents.length, NUM.ZERO,
+    t.equal(leadershipEvents.length, 0,
       'phases after failure should not emit any events');
   });
 
@@ -875,7 +875,7 @@ async (t) => {
   }
 
   // Verify subPhase values match BOOTSTRAP_SUB_PHASE mapping
-  const firstStart = startPayloads[NUM.ZERO];
+  const firstStart = startPayloads[0];
   t.equal(
     firstStart.subPhase,
     BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE,
@@ -925,10 +925,10 @@ async (t) => {
 
   await bootstrap.bootstrap();
 
-  t.equal(failedPayloads.length, NUM.ONE,
+  t.equal(failedPayloads.length, 1,
     'exactly one phaseFailed event emitted');
 
-  const payload = failedPayloads[NUM.ZERO];
+  const payload = failedPayloads[0];
   for (const key of LIFECYCLE_TUPLE_FAILED_KEYS) {
     t.ok(
       key in payload,
@@ -999,7 +999,7 @@ async (t) => {
   // Verify subPhase values match JOINING_PHASE_TO_SUB_PHASE mapping.
   // The last phase (readiness convergence) is terminal and auto-advances
   // to READY, which resets subPhase to null.
-  const lastComplete = completePayloads[completePayloads.length - NUM.ONE];
+  const lastComplete = completePayloads[completePayloads.length - 1];
   t.equal(
     lastComplete.phase,
     READINESS_CONVERGENCE_PHASE,
@@ -1045,10 +1045,10 @@ async (t) => {
 
   await service.join();
 
-  t.equal(failedPayloads.length, NUM.ONE,
+  t.equal(failedPayloads.length, 1,
     'exactly one phaseFailed event emitted');
 
-  const payload = failedPayloads[NUM.ZERO];
+  const payload = failedPayloads[0];
   for (const key of LIFECYCLE_TUPLE_FAILED_KEYS) {
     t.ok(
       key in payload,
@@ -1113,8 +1113,8 @@ async (t) => {
   await service.join();
 
   // Both paths must emit the same set of lifecycle tuple keys
-  const seedKeys = Object.keys(seedComplete[NUM.ZERO]).sort();
-  const joinKeys = Object.keys(joinComplete[NUM.ZERO]).sort();
+  const seedKeys = Object.keys(seedComplete[0]).sort();
+  const joinKeys = Object.keys(joinComplete[0]).sort();
 
   t.same(
     seedKeys,

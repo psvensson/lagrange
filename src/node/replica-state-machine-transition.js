@@ -2,7 +2,6 @@ import {AddressManager} from '../address/address-manager.js';
 import {
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -20,7 +19,6 @@ import {
   REPLICA_STATE_MACHINE_TRANSITION,
 } from './replica-state-machine-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_BACKGROUND = 'background';
 
@@ -272,7 +270,7 @@ async function updateReplicaStateInCdc(
       serviceId,
     );
     const hasServiceCacheLookup =
-      typeof stateMachine.systemTableCache?.get === TYPEOF.FUNCTION;
+      typeof stateMachine.systemTableCache?.get === 'function';
     const cachedService = hasServiceCacheLookup ?
       stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
       null;
@@ -283,7 +281,7 @@ async function updateReplicaStateInCdc(
     // converges either way. The marker clears when a durable write
     // commits.
     const remoteExistenceUnconfirmed =
-      typeof stateMachine.isServiceRowLocalOnly === TYPEOF.FUNCTION &&
+      typeof stateMachine.isServiceRowLocalOnly === 'function' &&
       stateMachine.isServiceRowLocalOnly(serviceId);
     const shouldUpsertMissingServiceRow =
       (hasServiceCacheLookup && !cachedService) ||
@@ -309,7 +307,7 @@ async function updateReplicaStateInCdc(
       mutation,
       persistenceOptions,
     );
-    if (typeof stateMachine.clearServiceRowLocalOnly === TYPEOF.FUNCTION) {
+    if (typeof stateMachine.clearServiceRowLocalOnly === 'function') {
       // Durable write committed — remote existence confirmed (CL-016).
       stateMachine.clearServiceRowLocalOnly(serviceId);
     }
@@ -354,10 +352,10 @@ async function clearCanonicalPartitionLeaderIfNeeded(
   if (!replicaState ||
       replicaState.serviceType !== SERVICE_TYPE.PARTITION ||
       !CLEARS_CANONICAL_PARTITION_LEADER_STATES.has(replicaState.state) ||
-      typeof replicaState.partitionId !== TYPEOF.STRING ||
-      replicaState.partitionId.length === LOCAL_NUM_ZERO ||
-      typeof replicaState.nodeId !== TYPEOF.STRING ||
-      replicaState.nodeId.length === LOCAL_NUM_ZERO) {
+      typeof replicaState.partitionId !== 'string' ||
+      replicaState.partitionId.length === 0 ||
+      typeof replicaState.nodeId !== 'string' ||
+      replicaState.nodeId.length === 0) {
     return;
   }
   if (stateMachine.hasOtherActivePartitionReplicaOnLeaderNode(replicaState)) {
@@ -392,7 +390,7 @@ async function clearCanonicalPartitionLeaderIfNeeded(
 function hasOtherActivePartitionReplicaOnLeaderNode(stateMachine, replicaState) {
   if (!replicaState ||
       !stateMachine.systemTableCache ||
-      typeof stateMachine.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      typeof stateMachine.systemTableCache.filter !== 'function') {
     return false;
   }
 
@@ -495,19 +493,19 @@ function buildCreateCdcData(
   // blocked partition; the mode=load ACTIVE-wait root). Preserve them from
   // the cached row when present.
   const cachedRow =
-    typeof stateMachine.systemTableCache?.get === TYPEOF.FUNCTION ?
+    typeof stateMachine.systemTableCache?.get === 'function' ?
       stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
       null;
   const preservedColumns = {};
   if (
-    typeof cachedRow?.raft_role === TYPEOF.STRING &&
-    cachedRow.raft_role.length > LOCAL_NUM_ZERO
+    typeof cachedRow?.raft_role === 'string' &&
+    cachedRow.raft_role.length > 0
   ) {
     preservedColumns.raft_role = cachedRow.raft_role;
   }
   if (
-    typeof cachedRow?.group_id === TYPEOF.STRING &&
-    cachedRow.group_id.length > LOCAL_NUM_ZERO
+    typeof cachedRow?.group_id === 'string' &&
+    cachedRow.group_id.length > 0
   ) {
     preservedColumns.group_id = cachedRow.group_id;
   }

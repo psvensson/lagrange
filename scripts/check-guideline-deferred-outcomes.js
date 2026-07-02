@@ -8,11 +8,8 @@ import {
 } from './guideline-check-shared.js';
 
 const LOCAL_STR_SLASH = '/';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1X81I = 'hotspot owner path no longer exposes the required structured ';
-const LOCAL_STR_KT4VY = 'structured deferred-outcome hotspot';
-const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_HOTSPOT_OWNER_PATH_NO_LONGER_EXPOSES_THE = 'hotspot owner path no longer exposes the required structured ';
+const LOCAL_STR_STRUCTURED_DEFERRED_OUTCOME_HOTSPOT = 'structured deferred-outcome hotspot';
 
 const RULE_REFERENCE =
   'doctrine.md §5 Slower Under Pressure, Never Less Correct';
@@ -58,15 +55,15 @@ function collectDeferredOutcomeViolationsFromSource(source, filePath) {
     return [];
   }
   return requiredFragments
-    .filter((fragment) => !String(source || LOCAL_STR_EMPTY).includes(fragment))
+    .filter((fragment) => !String(source || '').includes(fragment))
     .map((fragment) => ({
       filePath,
-      line: LOCAL_NUM_ONE,
-      column: LOCAL_NUM_ONE,
+      line: 1,
+      column: 1,
       kind: VIOLATION_KIND,
       target: fragment,
       reason:
-        LOCAL_STR_1X81I +
+        LOCAL_STR_HOTSPOT_OWNER_PATH_NO_LONGER_EXPOSES_THE +
         `deferred-outcome fragment "${fragment}"`,
       ruleReference: RULE_REFERENCE,
     }));
@@ -87,11 +84,11 @@ async function buildDeferredOutcomeViolationReport(pathsToScan) {
 function formatDeferredOutcomeHumanSummary(report) {
   return formatGuidelineHumanSummary(
     report,
-    LOCAL_STR_KT4VY,
+    LOCAL_STR_STRUCTURED_DEFERRED_OUTCOME_HOTSPOT,
   );
 }
 
-async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
+async function main(argv = process.argv.slice(2)) {
   return runGuidelineCheck(
     argv,
     buildDeferredOutcomeViolationReport,

@@ -6,11 +6,9 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   GATEWAY_ERROR_MSG,
   GATEWAY_LOG_MSG,
-  NUM,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   SQL,
-  TYPEOF,
   buildAuthoritativeControlPlaneReadIntent,
   buildProjectionControlPlaneReadIntent,
   buildPressureAdmissionFailure,
@@ -42,7 +40,7 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   return Object.entries(canonicalizeSystemTableRow(tableName, data)).filter(
     ([key, value]) => {
       return allowedColumns.has(key) &&
-        typeof value !== TYPEOF.UNDEFINED;
+        typeof value !== 'undefined';
     },
   );
 }
@@ -158,7 +156,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       options?.enforcePressureAdmission === true ||
       options?.allowPressureDefer === true ||
       options?.allowPressureDegrade === true ||
-      typeof options?.workClass === TYPEOF.STRING;
+      typeof options?.workClass === 'string';
     if (!shouldEvaluate) {
       return null;
     }
@@ -196,7 +194,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     const sqlQueryEngine = this.resolveSqlQueryEngine();
     if (
       !sqlQueryEngine ||
-      typeof sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION
+      typeof sqlQueryEngine.executeQuery !== 'function'
     ) {
       throw new Error(GATEWAY_ERROR_MSG.SQL_ENGINE_REQUIRED);
     }
@@ -232,7 +230,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       return false;
     }
     return (
-      typeof this.resolveSqlQueryEngine()?.executeQuery === TYPEOF.FUNCTION
+      typeof this.resolveSqlQueryEngine()?.executeQuery === 'function'
     );
   },
 
@@ -250,14 +248,14 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT
     ) {
-      if (!mutation?.row || typeof mutation.row !== TYPEOF.OBJECT) {
+      if (!mutation?.row || typeof mutation.row !== 'object') {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
       }
       const rowEntries = buildSchemaFilteredSqlMutationEntries(
         tableName,
         mutation.row,
       );
-      if (rowEntries.length === NUM.ZERO) {
+      if (rowEntries.length === 0) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
       }
       const columns = rowEntries.map(([key]) => key).join(', ');
@@ -282,10 +280,10 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     const whereEntries = Object.entries(mutation.whereClause).filter(
       ([key, value]) => {
         return allowedColumns.has(key) &&
-          typeof value !== TYPEOF.UNDEFINED;
+          typeof value !== 'undefined';
       },
     );
-    if (whereEntries.length === NUM.ZERO) {
+    if (whereEntries.length === 0) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
     }
     const whereClause = whereEntries.map(([key]) => `${key} = ?`).join(' AND ');
@@ -297,14 +295,14 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       };
     }
 
-    if (!mutation?.data || typeof mutation.data !== TYPEOF.OBJECT) {
+    if (!mutation?.data || typeof mutation.data !== 'object') {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
     }
     const updateEntries = buildSchemaFilteredSqlMutationEntries(
       tableName,
       mutation.data,
     );
-    if (updateEntries.length === NUM.ZERO) {
+    if (updateEntries.length === 0) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
     }
     const setClause = updateEntries.map(([key]) => `${key} = ?`).join(', ');
@@ -381,7 +379,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
         result.rowCount :
         Array.isArray(result?.rows) ?
           result.rows.length :
-          NUM.ZERO,
+          0,
       error: result?.success === false ? result?.error || null : null,
       ...this.buildOperationLedgerDiagnostics(
         descriptor.tableName || null,
@@ -392,7 +390,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
         },
       ),
       sessionId:
-        typeof options?.sessionId === TYPEOF.STRING ? options.sessionId : null,
+        typeof options?.sessionId === 'string' ? options.sessionId : null,
     });
     return result;
   },

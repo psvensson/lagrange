@@ -1,6 +1,3 @@
-import {
-  TYPEOF,
-} from '../constants/index.js';
 import {isPriorityRecoveryEmergencyPartition} from './priority-recovery-admission-constants.js';
 import {normalizePriorityRecoveryStringList} from './priority-recovery-helpers.js';
 import {
@@ -26,7 +23,7 @@ function isPriorityRecoveryOrdinarySerialLanePartitionId(partitionId) {
 function isPriorityRecoveryOrdinarySerialLaneOperationContext(
   operationContext,
 ) {
-  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+  if (!operationContext || typeof operationContext !== 'object') {
     return false;
   }
   const partitionId = String(operationContext.partitionId || '').trim();
@@ -49,7 +46,7 @@ function isPriorityRecoveryOrdinarySerialLaneOperationContext(
 function isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
   operationContext,
 ) {
-  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+  if (!operationContext || typeof operationContext !== 'object') {
     return false;
   }
   const partitionId = String(operationContext.partitionId || '').trim();
@@ -74,7 +71,7 @@ function buildPriorityRecoveryOrdinarySerialLaneOperationContexts(
 ) {
   const byPartitionId =
     replicaOperationContexts?.byPartitionId &&
-    typeof replicaOperationContexts.byPartitionId === TYPEOF.OBJECT ?
+    typeof replicaOperationContexts.byPartitionId === 'object' ?
       replicaOperationContexts.byPartitionId :
       {};
   return Object.values(byPartitionId)
@@ -96,7 +93,7 @@ function buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts(
 ) {
   const byPartitionId =
     replicaOperationContexts?.byPartitionId &&
-    typeof replicaOperationContexts.byPartitionId === TYPEOF.OBJECT ?
+    typeof replicaOperationContexts.byPartitionId === 'object' ?
       replicaOperationContexts.byPartitionId :
       {};
   return Object.values(byPartitionId)

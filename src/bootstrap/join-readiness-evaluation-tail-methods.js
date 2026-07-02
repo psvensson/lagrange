@@ -3,10 +3,6 @@ import {
   compareJoinSchemaVersions,
 } from './join-schema-version-resolver.js';
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   JOIN_READINESS_REASON,
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
@@ -18,7 +14,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
   const joinReadinessReasonPrecedence =
     options.joinReadinessReasonPrecedence || [];
   const canonicalJoinReadinessLogIntervalMs =
-    options.canonicalJoinReadinessLogIntervalMs || NUM.ZERO;
+    options.canonicalJoinReadinessLogIntervalMs || 0;
 
   return {
     /**
@@ -69,7 +65,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
         promotionReasons: promotion.reasons,
         reasons,
         ready:
-          reasons.length === NUM.ZERO &&
+          reasons.length === 0 &&
           promotion.readyToPromote === true,
       };
     },
@@ -96,7 +92,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       } else if (compareJoinSchemaVersions(
         appliedVersion,
         requiredVersion,
-      ) < NUM.ZERO) {
+      ) < 0) {
         reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_LAG);
       }
 
@@ -120,7 +116,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
      * @return {Object}
      */
     normalizeCanonicalJoinReadinessSnapshot(snapshot) {
-      const source = snapshot && typeof snapshot === TYPEOF.OBJECT ?
+      const source = snapshot && typeof snapshot === 'object' ?
         snapshot :
         {};
       const requiredVersion = normalizeJoinSchemaVersion(
@@ -131,7 +127,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       );
       const requiredNodeIds = Array.isArray(source.requiredNodeIds) ?
         source.requiredNodeIds.filter((value) =>
-          typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+          typeof value === 'string' && value.length > 0,
         ) :
         [this.nodeId];
 
@@ -146,24 +142,24 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
         requiredNodeIds,
         topologySnapshotEpoch:
           Number.isFinite(source.topologySnapshotEpoch) ?
-            Math.max(NUM.ZERO, Math.floor(source.topologySnapshotEpoch)) :
+            Math.max(0, Math.floor(source.topologySnapshotEpoch)) :
             null,
         appliedTopologyEpoch:
           Number.isFinite(source.appliedTopologyEpoch) ?
-            Math.max(NUM.ZERO, Math.floor(source.appliedTopologyEpoch)) :
+            Math.max(0, Math.floor(source.appliedTopologyEpoch)) :
             null,
         missingLeaders:
           source.missingLeaders &&
-          typeof source.missingLeaders === TYPEOF.OBJECT ?
+          typeof source.missingLeaders === 'object' ?
             source.missingLeaders :
             null,
         inFlightReplicaOperations:
           Number.isFinite(source.inFlightReplicaOperations) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.inFlightReplicaOperations),
             ) :
-            NUM.ZERO,
+            0,
         inFlightReplicaOperationDetails:
           Array.isArray(source.inFlightReplicaOperationDetails) ?
             source.inFlightReplicaOperationDetails :
@@ -171,31 +167,31 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
         excludedSelfTargetedCount:
           Number.isFinite(source.excludedSelfTargetedCount) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.excludedSelfTargetedCount),
             ) :
-            NUM.ZERO,
+            0,
         excludedWarmingTargetCount:
           Number.isFinite(source.excludedWarmingTargetCount) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.excludedWarmingTargetCount),
             ) :
-            NUM.ZERO,
+            0,
         excludedNonDiscoveryPartitionCount:
           Number.isFinite(source.excludedNonDiscoveryPartitionCount) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.excludedNonDiscoveryPartitionCount),
             ) :
-            NUM.ZERO,
+            0,
         excludedRemotePriorityControlPlaneCount:
           Number.isFinite(source.excludedRemotePriorityControlPlaneCount) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.excludedRemotePriorityControlPlaneCount),
             ) :
-            NUM.ZERO,
+            0,
         excludedRemotePriorityControlPlaneOperationDetails:
           Array.isArray(
             source.excludedRemotePriorityControlPlaneOperationDetails,
@@ -207,12 +203,12 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
             source.excludedSelfSourcePriorityControlPlaneCount,
           ) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(
                 source.excludedSelfSourcePriorityControlPlaneCount,
               ),
             ) :
-            NUM.ZERO,
+            0,
         excludedSelfSourcePriorityControlPlaneOperationDetails:
           Array.isArray(
             source.excludedSelfSourcePriorityControlPlaneOperationDetails,
@@ -222,77 +218,77 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
         missingNodeEndpointNodeIds:
           Array.isArray(source.missingNodeEndpointNodeIds) ?
             source.missingNodeEndpointNodeIds.filter((value) =>
-              typeof value === TYPEOF.STRING &&
-              value.length > NUM.ZERO,
+              typeof value === 'string' &&
+              value.length > 0,
             ) :
             [],
         missingPostgresWireNodeIds:
           Array.isArray(source.missingPostgresWireNodeIds) ?
             source.missingPostgresWireNodeIds.filter((value) =>
-              typeof value === TYPEOF.STRING &&
-              value.length > NUM.ZERO,
+              typeof value === 'string' &&
+              value.length > 0,
             ) :
             [],
         controlPlaneTargetAddress:
-          typeof source.controlPlaneTargetAddress === TYPEOF.STRING &&
-          source.controlPlaneTargetAddress.length > NUM.ZERO ?
+          typeof source.controlPlaneTargetAddress === 'string' &&
+          source.controlPlaneTargetAddress.length > 0 ?
             source.controlPlaneTargetAddress :
             null,
         controlPlaneTargetCandidates:
           Array.isArray(source.controlPlaneTargetCandidates) ?
             source.controlPlaneTargetCandidates.filter((value) =>
-              typeof value === TYPEOF.STRING &&
-              value.length > NUM.ZERO,
+              typeof value === 'string' &&
+              value.length > 0,
             ) :
             [],
         controlPlaneTargetConnectionStates:
           source.controlPlaneTargetConnectionStates &&
-          typeof source.controlPlaneTargetConnectionStates === TYPEOF.OBJECT ?
+          typeof source.controlPlaneTargetConnectionStates === 'object' ?
             source.controlPlaneTargetConnectionStates :
             null,
         observedSchemaByNodeId:
           source.observedSchemaByNodeId &&
-          typeof source.observedSchemaByNodeId === TYPEOF.OBJECT ?
+          typeof source.observedSchemaByNodeId === 'object' ?
             source.observedSchemaByNodeId :
             null,
         snapshotRevision:
           Number.isFinite(source.snapshotRevision) ?
-            Math.max(NUM.ZERO, Math.floor(source.snapshotRevision)) :
+            Math.max(0, Math.floor(source.snapshotRevision)) :
             null,
         snapshotRevisionSource:
-          typeof source.snapshotRevisionSource === TYPEOF.STRING &&
-          source.snapshotRevisionSource.length > NUM.ZERO ?
+          typeof source.snapshotRevisionSource === 'string' &&
+          source.snapshotRevisionSource.length > 0 ?
             source.snapshotRevisionSource :
             null,
         snapshotRevisionState:
-          typeof source.snapshotRevisionState === TYPEOF.STRING &&
-          source.snapshotRevisionState.length > NUM.ZERO ?
+          typeof source.snapshotRevisionState === 'string' &&
+          source.snapshotRevisionState.length > 0 ?
             source.snapshotRevisionState :
             null,
         snapshotExpectedMinimumRevision:
           Number.isFinite(source.snapshotExpectedMinimumRevision) ?
             Math.max(
-              NUM.ZERO,
+              0,
               Math.floor(source.snapshotExpectedMinimumRevision),
             ) :
             null,
         snapshotRevisionGap:
           Number.isFinite(source.snapshotRevisionGap) ?
-            Math.max(NUM.ZERO, Math.floor(source.snapshotRevisionGap)) :
+            Math.max(0, Math.floor(source.snapshotRevisionGap)) :
             null,
         snapshotResumeToken:
-          typeof source.snapshotResumeToken === TYPEOF.STRING &&
-          source.snapshotResumeToken.length > NUM.ZERO ?
+          typeof source.snapshotResumeToken === 'string' &&
+          source.snapshotResumeToken.length > 0 ?
             source.snapshotResumeToken :
             null,
         snapshotObservedAt:
-          typeof source.snapshotObservedAt === TYPEOF.STRING &&
-          source.snapshotObservedAt.length > NUM.ZERO ?
+          typeof source.snapshotObservedAt === 'string' &&
+          source.snapshotObservedAt.length > 0 ?
             source.snapshotObservedAt :
             null,
         snapshotObservedAtMs:
           Number.isFinite(source.snapshotObservedAtMs) ?
-            Math.max(NUM.ZERO, Math.floor(source.snapshotObservedAtMs)) :
+            Math.max(0, Math.floor(source.snapshotObservedAtMs)) :
             null,
       };
     },
@@ -312,12 +308,12 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
         [];
       const requiredNodeIds =
         Array.isArray(evaluation?.requiredNodeIds) &&
-        evaluation.requiredNodeIds.length > NUM.ZERO ?
+        evaluation.requiredNodeIds.length > 0 ?
           evaluation.requiredNodeIds :
           [this.nodeId];
       const observedByNodeId =
         evaluation?.observedSchemaByNodeId &&
-        typeof evaluation.observedSchemaByNodeId === TYPEOF.OBJECT ?
+        typeof evaluation.observedSchemaByNodeId === 'object' ?
           evaluation.observedSchemaByNodeId :
           {};
 
@@ -348,7 +344,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       const force = options.force === true;
       if (
         !force &&
-        this.lastCanonicalJoinBlockedLogAtMs > NUM.ZERO &&
+        this.lastCanonicalJoinBlockedLogAtMs > 0 &&
         nowMs - this.lastCanonicalJoinBlockedLogAtMs <
           canonicalJoinReadinessLogIntervalMs
       ) {
@@ -426,7 +422,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
     recordObservedSnapshotRevisionMetadata(revisionMetadata = null) {
       const revision =
         Number.isFinite(revisionMetadata?.revision) ?
-          Math.max(NUM.ZERO, Math.floor(revisionMetadata.revision)) :
+          Math.max(0, Math.floor(revisionMetadata.revision)) :
           null;
       if (revision === null) {
         return;
@@ -439,14 +435,14 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       }
       this.highestObservedSnapshotRevision = revision;
       this.highestObservedSnapshotResumeToken =
-        typeof revisionMetadata?.resumeToken === TYPEOF.STRING &&
-        revisionMetadata.resumeToken.length > NUM.ZERO ?
+        typeof revisionMetadata?.resumeToken === 'string' &&
+        revisionMetadata.resumeToken.length > 0 ?
           revisionMetadata.resumeToken :
           null;
     },
 
     recordObservedSnapshotFromSnapshot(snapshot = null) {
-      if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      if (!snapshot || typeof snapshot !== 'object') {
         return;
       }
       this.recordObservedSnapshotRevisionMetadata({
@@ -462,13 +458,13 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
     resolveBootstrapTopologySnapshotMeta() {
       const delegateMeta =
         this.delegates.getBootstrapTopologySnapshotMeta?.();
-      if (delegateMeta && typeof delegateMeta === TYPEOF.OBJECT) {
+      if (delegateMeta && typeof delegateMeta === 'object') {
         return delegateMeta;
       }
 
       const bootstrapResponse = this.delegates.getBootstrapResponse?.();
       const responseMeta = bootstrapResponse?.topologySnapshotMeta;
-      return responseMeta && typeof responseMeta === TYPEOF.OBJECT ?
+      return responseMeta && typeof responseMeta === 'object' ?
         responseMeta :
         null;
     },
@@ -485,7 +481,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       }
 
       return [...new Set(topologySnapshotMeta.activeNodeIds.filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        typeof value === 'string' && value.length > 0,
       ))];
     },
 
@@ -497,13 +493,13 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       const delegatedEpoch =
         this.delegates.getBootstrapTopologySnapshotEpoch?.();
       if (Number.isFinite(delegatedEpoch)) {
-        return Math.max(NUM.ZERO, Math.floor(delegatedEpoch));
+        return Math.max(0, Math.floor(delegatedEpoch));
       }
       const topologySnapshotMeta =
         this.resolveBootstrapTopologySnapshotMeta();
       if (Number.isFinite(topologySnapshotMeta?.topologyEpoch)) {
         return Math.max(
-          NUM.ZERO,
+          0,
           Math.floor(topologySnapshotMeta.topologyEpoch),
         );
       }
@@ -511,7 +507,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
       const bootstrapResponse = this.delegates.getBootstrapResponse?.();
       if (Number.isFinite(bootstrapResponse?.currentEpoch?.epoch)) {
         return Math.max(
-          NUM.ZERO,
+          0,
           Math.floor(bootstrapResponse.currentEpoch.epoch),
         );
       }
@@ -524,13 +520,13 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
      * @return {number}
      */
     resolveAppliedTopologyEpoch(systemTableCache) {
-      if (typeof systemTableCache?.getEpoch === TYPEOF.FUNCTION) {
+      if (typeof systemTableCache?.getEpoch === 'function') {
         const cacheEpoch = systemTableCache.getEpoch();
         if (Number.isFinite(cacheEpoch)) {
-          return Math.max(NUM.ZERO, Math.floor(cacheEpoch));
+          return Math.max(0, Math.floor(cacheEpoch));
         }
       }
-      return NUM.ZERO;
+      return 0;
     },
 
     /**
@@ -554,7 +550,7 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
      */
     getJoinReadinessReasonRank(reason) {
       const index = joinReadinessReasonPrecedence.indexOf(reason);
-      return index >= NUM.ZERO ?
+      return index >= 0 ?
         index :
         joinReadinessReasonPrecedence.length;
     },

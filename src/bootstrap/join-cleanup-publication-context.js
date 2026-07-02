@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   JOINING_CLEANUP_STEP,
 } from './node-joining-constants.js';
@@ -14,12 +13,12 @@ const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
 
 function resolveJoinCleanupRegisteredNodeId(cleanupContext, nodeId) {
   if (
-    typeof cleanupContext?.registeredNodeId === TYPEOF.STRING &&
-    cleanupContext.registeredNodeId.length > NUM.ZERO
+    typeof cleanupContext?.registeredNodeId === 'string' &&
+    cleanupContext.registeredNodeId.length > 0
   ) {
     return cleanupContext.registeredNodeId;
   }
-  return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
+  return typeof nodeId === 'string' && nodeId.length > 0 ?
     nodeId :
     null;
 }
@@ -27,12 +26,12 @@ function resolveJoinCleanupRegisteredNodeId(cleanupContext, nodeId) {
 function normalizeCleanupNodeIdList(value) {
   return [...new Set((Array.isArray(value) ? value : [])
     .filter((nodeId) =>
-      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      typeof nodeId === 'string' && nodeId.length > 0,
     ))].sort();
 }
 
 function resolvePublicationRowNodeIds(publicationRow, fieldName) {
-  if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+  if (!publicationRow || typeof publicationRow !== 'object') {
     return [];
   }
   const snakeFieldName = fieldName.replace(
@@ -49,13 +48,13 @@ function resolvePublicationRowNodeIds(publicationRow, fieldName) {
 function resolveLatestMembershipPublicationRow(membershipPublicationService) {
   if (
     typeof membershipPublicationService?.getLatestPublicationRowSync ===
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return membershipPublicationService.getLatestPublicationRowSync();
   }
   if (
     typeof membershipPublicationService?.getLatestClusterPublicationSync ===
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return membershipPublicationService.getLatestClusterPublicationSync();
   }
@@ -86,7 +85,7 @@ function buildFailedJoinMembershipPublicationContext(options = {}) {
     [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.EXCLUDED_NODE_IDS]:
       [registeredNodeId],
   };
-  if (publishedActiveNodeIds.length === NUM.ZERO) {
+  if (publishedActiveNodeIds.length === 0) {
     return targetContext;
   }
   return {
@@ -98,7 +97,7 @@ function buildFailedJoinMembershipPublicationContext(options = {}) {
     [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.REQUIRED_ACK_NODE_IDS]:
       publishedActiveNodeIds,
     [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.ACKNOWLEDGED_NODE_IDS]:
-      acknowledgedNodeIds.length > NUM.ZERO ?
+      acknowledgedNodeIds.length > 0 ?
         acknowledgedNodeIds :
         publishedActiveNodeIds,
   };

@@ -23,11 +23,9 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     CONTROL_PLANE_READINESS_DIMENSION,
     CONTROL_PLANE_READ_STRATEGY,
     EMPTY_STRING,
-    NUM,
     SERVICE_TYPE_PARTITION,
     STATUS_ACTIVE,
     TABLES,
-    TYPEOF,
     firstStringField,
     getControlPlaneRetryAfterMs,
     isTableCdcReadinessRelevant,
@@ -117,8 +115,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
           },
         ) :
         {
-          inFlightCount: NUM.ZERO,
-          staleInFlightCount: NUM.ZERO,
+          inFlightCount: 0,
+          staleInFlightCount: 0,
           stepHistogram: {},
           oldestInFlightAgeMs: null,
           operationTimelineById: {},
@@ -143,7 +141,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         localPartitionCdcState,
         replicaOpsInFlight: replicaOperationSummary.inFlightCount,
         staleReplicaOpsInFlight: Number(
-          replicaOperationSummary.staleInFlightCount || NUM.ZERO,
+          replicaOperationSummary.staleInFlightCount || 0,
         ),
         oldestReplicaOperationAgeMs: Number.isFinite(
           replicaOperationSummary.oldestInFlightAgeMs,
@@ -152,7 +150,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
           null,
         replicaOperationTimelineById:
           replicaOperationSummary.operationTimelineById &&
-          typeof replicaOperationSummary.operationTimelineById === TYPEOF.OBJECT ?
+          typeof replicaOperationSummary.operationTimelineById === 'object' ?
             replicaOperationSummary.operationTimelineById :
             {},
         replicaOperationSummary,
@@ -166,14 +164,14 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     buildServiceDiscoveryProjectionReadinessByNodeId(options = {}) {
       const providedReadinessByNodeId =
         options.projectionReadinessByNodeId &&
-          typeof options.projectionReadinessByNodeId === TYPEOF.OBJECT ?
+          typeof options.projectionReadinessByNodeId === 'object' ?
           options.projectionReadinessByNodeId :
           options.readinessByNodeId &&
-            typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+            typeof options.readinessByNodeId === 'object' ?
             options.readinessByNodeId :
             options.controlPlaneDiagnostics?.readinessByNodeId &&
               typeof options.controlPlaneDiagnostics.readinessByNodeId ===
-                TYPEOF.OBJECT ?
+                'object' ?
               options.controlPlaneDiagnostics.readinessByNodeId :
               null;
       const projectionReadinessByNodeId = new Map();
@@ -201,7 +199,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
      * @return {Object}
      */
     normalizeServiceDiscoveryProjectionReadiness(readiness) {
-      if (readiness?.lanes && typeof readiness.lanes === TYPEOF.OBJECT) {
+      if (readiness?.lanes && typeof readiness.lanes === 'object') {
         return readiness;
       }
       return buildProjectionReadinessState(readiness || {});
@@ -237,7 +235,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       );
       if (
         !(projectionReadinessByNodeId instanceof Map) ||
-        projectionReadinessByNodeId.size === NUM.ZERO
+        projectionReadinessByNodeId.size === 0
       ) {
         return [...activeNodeIds];
       }
@@ -258,7 +256,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
      */
     buildDiscoveryLocalTargetPartitionIds(partitionIds, serviceRows) {
       const localPartitionIds = new Set();
-      if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      if (!(partitionIds instanceof Set) || partitionIds.size === 0) {
         return localPartitionIds;
       }
       for (const serviceRow of serviceRows) {
@@ -322,7 +320,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     isAuthoritativeDiscoveryReadOwner(gateway = null) {
       return Boolean(
         gateway &&
-          typeof gateway.executeRead === TYPEOF.FUNCTION,
+          typeof gateway.executeRead === 'function',
       );
     } /**
      * Resolve the canonical authoritative read owner, including the late
@@ -433,8 +431,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       const tableScopedDiscoveryRepair =
         reason ===
           AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT &&
-        (typeof options.tableName === TYPEOF.STRING ||
-          typeof options.tableId === TYPEOF.STRING);
+        (typeof options.tableName === 'string' ||
+          typeof options.tableId === 'string');
       const allowRoutedAuthoritativeFallback =
         controlSnapshotRepairRead === true ||
         tableScopedDiscoveryRepair === true;
@@ -444,7 +442,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         );
       const queryTimeoutMs =
         Number.isFinite(options.queryTimeoutMs) &&
-        options.queryTimeoutMs > NUM.ZERO ?
+        options.queryTimeoutMs > 0 ?
           Math.floor(options.queryTimeoutMs) :
           AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS;
       const routingReadinessDimension =
@@ -501,7 +499,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       error.code = queryResult?.errorCode || null;
       error.retryAfterMs = getControlPlaneRetryAfterMs(queryResult) || null;
       error.readSource =
-        typeof queryResult?.source === TYPEOF.STRING ?
+        typeof queryResult?.source === 'string' ?
           queryResult.source :
           null;
       error.localQueryTransport = normalizeLocalQueryTransportDiagnostic(
@@ -525,14 +523,14 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         [];
       error.firstFailedParticipant =
         queryResult?.firstFailedParticipant &&
-        typeof queryResult.firstFailedParticipant === TYPEOF.OBJECT ?
+        typeof queryResult.firstFailedParticipant === 'object' ?
           {
             ...queryResult.firstFailedParticipant,
           } :
           null;
       error.distributedMetrics =
         queryResult?.distributedMetrics &&
-        typeof queryResult.distributedMetrics === TYPEOF.OBJECT ?
+        typeof queryResult.distributedMetrics === 'object' ?
           queryResult.distributedMetrics :
           null;
       return error;
@@ -577,7 +575,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         options.cdcReadinessApplies !== true ||
         !isTableCdcReadinessRelevant(tableName) ||
         !(localTargetPartitionIds instanceof Set) ||
-        localTargetPartitionIds.size === NUM.ZERO
+        localTargetPartitionIds.size === 0
       ) {
         return state;
       }
@@ -594,23 +592,23 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         if (
           !partitionService ||
           typeof partitionService.getCDCSubscriptionDiagnostics !==
-            TYPEOF.FUNCTION
+            'function'
         ) {
           markDiscoveryLocalPartitionCdcDiagnosticsMissing(state, partitionId);
           continue;
         }
         const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-        if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+        if (!diagnostics || typeof diagnostics !== 'object') {
           markDiscoveryLocalPartitionCdcDiagnosticsMissing(state, partitionId);
           continue;
         }
-        const subscriberCount = Number(diagnostics.subscriberCount || NUM.ZERO);
-        const bufferedEvents = Number(diagnostics.bufferedEvents || NUM.ZERO);
+        const subscriberCount = Number(diagnostics.subscriberCount || 0);
+        const bufferedEvents = Number(diagnostics.bufferedEvents || 0);
         const replayInFlight = diagnostics.bufferReplayInFlight === true;
-        if (subscriberCount <= NUM.ZERO) {
+        if (subscriberCount <= 0) {
           markDiscoveryLocalPartitionCdcNoSubscriber(state, partitionId);
         }
-        if (bufferedEvents > NUM.ZERO || replayInFlight) {
+        if (bufferedEvents > 0 || replayInFlight) {
           markDiscoveryLocalPartitionCdcBuffered(state, partitionId);
         }
       }
@@ -631,7 +629,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
      */
     buildDiscoveryLocalTargetReplicaStateByNodeId(partitionIds, serviceRows) {
       const stateByNodeId = new Map();
-      if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      if (!(partitionIds instanceof Set) || partitionIds.size === 0) {
         return stateByNodeId;
       }
       for (const serviceRow of serviceRows) {
@@ -684,7 +682,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
             'raftRole',
           ) || EMPTY_STRING,
         ).toLowerCase();
-        if (raftRole.length > NUM.ZERO) {
+        if (raftRole.length > 0) {
           nodeState.replicaRoles.add(raftRole);
         }
         if (!isActiveVoterReadyPartitionReplica(serviceRow)) {

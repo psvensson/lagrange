@@ -4,10 +4,6 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../control-plane/owner-contract-outcome.js';
 import {
-  NUM,
-  TYPEOF,
-} from '../../constants/index.js';
-import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   classifyTransportDeliveryOutcome,
 } from '../../transport/transport-semantic-outcome.js';
@@ -15,8 +11,6 @@ import {
   JOINING_ERROR_MSG,
 } from '../node-joining-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_SLASH = '/';
 
 const NODE_STATE_UPDATE_PUBLICATION_PATH = 'node_state_reporter';
@@ -55,8 +49,8 @@ function createNodeStateUpdateDeferredPublicationState(overrides = {}) {
   return {
     state: NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE.NONE,
     reason: NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON.NONE,
-    retryAfterMs: NUM.ZERO,
-    nextAttemptAtMs: NUM.ZERO,
+    retryAfterMs: 0,
+    nextAttemptAtMs: 0,
     message: null,
     publicationMode: null,
     publicationDiagnostics: null,
@@ -69,8 +63,8 @@ function buildNodeStateUpdatePublicationOutcome(overrides = {}) {
     contractState: OWNER_CONTRACT_STATE.READY,
     nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
     reasonCodes: Object.freeze([]),
-    retryAfterMs: NUM.ZERO,
-    nextAttemptAtMs: NUM.ZERO,
+    retryAfterMs: 0,
+    nextAttemptAtMs: 0,
     publicationMode: null,
     publicationDiagnostics: null,
     ...overrides,
@@ -98,9 +92,9 @@ function buildNodeStateUpdatePublicationDiagnostics(
   return Object.freeze({
     publicationPath: NODE_STATE_UPDATE_PUBLICATION_PATH,
     targetAddress,
-    targetNodeId: targetAddressParts[LOCAL_NUM_ZERO] || null,
-    targetServiceType: targetAddressParts[LOCAL_NUM_ONE] || null,
-    targetServiceId: targetAddressParts.slice(NUM.TWO).join(LOCAL_STR_SLASH) ||
+    targetNodeId: targetAddressParts[0] || null,
+    targetServiceType: targetAddressParts[1] || null,
+    targetServiceId: targetAddressParts.slice(2).join(LOCAL_STR_SLASH) ||
       null,
     nodeStatePublicationMode: publicationMode,
   });
@@ -117,7 +111,7 @@ function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
   const deliveryError = new Error(
     deliveryOutcome?.error || defaultErrorMessage,
   );
-  if (typeof deliveryOutcome?.errorCode === TYPEOF.STRING) {
+  if (typeof deliveryOutcome?.errorCode === 'string') {
     deliveryError.code = deliveryOutcome.errorCode;
   }
   if (deliveryOutcome?.deferRetry === true) {
@@ -125,7 +119,7 @@ function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
   }
   if (Number.isFinite(deliveryOutcome?.retryAfterMs)) {
     deliveryError.retryAfterMs = Math.max(
-      NUM.ZERO,
+      0,
       Math.floor(deliveryOutcome.retryAfterMs),
     );
   }
@@ -135,7 +129,7 @@ function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
 function buildNodeStateUpdatePublicationFailureAction(overrides = {}) {
   const failureAction = {
     retryTarget: NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.NONE,
-    retryAfterMs: NUM.ZERO,
+    retryAfterMs: 0,
     reasonCodes: Object.freeze([]),
     ...overrides,
   };
@@ -156,11 +150,11 @@ function buildNodeStateUpdatePublicationFailureAction(overrides = {}) {
 
 function resolveNodeStateUpdateRetryAfterMs(error, failureAction) {
   if (Number.isFinite(error?.retryAfterMs)) {
-    return Math.max(NUM.ZERO, Math.floor(error.retryAfterMs));
+    return Math.max(0, Math.floor(error.retryAfterMs));
   }
   if (
     Number.isFinite(failureAction?.retryAfterMs) &&
-    failureAction.retryAfterMs > NUM.ZERO
+    failureAction.retryAfterMs > 0
   ) {
     return Math.floor(failureAction.retryAfterMs);
   }
@@ -180,7 +174,7 @@ function buildNodeStateUpdatePublicationFailureError(
   wrappedError.contractState = failureAction.contractState;
   wrappedError.nextAction = failureAction.nextAction;
   wrappedError.reasonCodes = failureAction.reasonCodes;
-  if (typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO) {
+  if (typeof error?.code === 'string' && error.code.length > 0) {
     wrappedError.code = error.code;
   }
   if (error?.deferRetry === true) {

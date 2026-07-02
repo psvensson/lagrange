@@ -4,11 +4,9 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './prior
 
 const {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   SERVICE_TYPE,
-  TYPEOF,
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationContextFromRecord,
   normalizePriorityRecoveryOperationPartitionId,
@@ -91,13 +89,13 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       authoritativeObservation?.operations,
     ) ?
       authoritativeObservation.operations.filter((operation) => {
-        return operation && typeof operation === TYPEOF.OBJECT;
+        return operation && typeof operation === 'object';
       }) :
       [];
     const selection =
       this.decidePriorityRecoveryPartitionObservationSelection({
         authoritativeOperationAvailable:
-          authoritativeOperations.length > NUM.ZERO,
+          authoritativeOperations.length > 0,
         authoritativeDeferred:
           this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
             authoritativeObservation,
@@ -117,7 +115,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
         operationRecords: authoritativeOperations,
         incompleteObservation:
           authoritativeObservation &&
-          typeof authoritativeObservation === TYPEOF.OBJECT ?
+          typeof authoritativeObservation === 'object' ?
             authoritativeObservation :
             null,
       });
@@ -146,10 +144,10 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
             ),
           explicitObservationAvailable:
             explicitObservation &&
-            typeof explicitObservation === TYPEOF.OBJECT,
+            typeof explicitObservation === 'object',
           repositoryObservationAvailable:
             repositoryObservation &&
-            typeof repositoryObservation === TYPEOF.OBJECT,
+            typeof repositoryObservation === 'object',
         }),
       )?.state ||
       PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE.ABSENT;
@@ -204,9 +202,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
           INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY ||
         (
           incompleteObservation &&
-          typeof incompleteObservation === TYPEOF.OBJECT &&
-          authoritativeOperations.length === NUM.ZERO &&
-          incompleteObservation?.operationCount === NUM.ZERO
+          typeof incompleteObservation === 'object' &&
+          authoritativeOperations.length === 0 &&
+          incompleteObservation?.operationCount === 0
         )
       )
     );
@@ -220,8 +218,8 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     planningDecisionSnapshot = null,
   ) {
     const matchedOperationId =
-      typeof planningDecisionSnapshot?.operationId === TYPEOF.STRING &&
-      planningDecisionSnapshot.operationId.length > NUM.ZERO ?
+      typeof planningDecisionSnapshot?.operationId === 'string' &&
+      planningDecisionSnapshot.operationId.length > 0 ?
         planningDecisionSnapshot.operationId :
         null;
     const matchedOperationContext =
@@ -229,7 +227,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
         return operationContext?.operationId === matchedOperationId;
       }) || null;
     const representativeOperationContext =
-      operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
+      operationContexts.length === 1 ? operationContexts[0] : null;
     const operationId =
       matchedOperationId ||
       representativeOperationContext?.operationId ||
@@ -253,9 +251,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
   ) {
     if (
       !snapshot ||
-      typeof snapshot !== TYPEOF.OBJECT ||
+      typeof snapshot !== 'object' ||
       !planningDecisionSnapshot ||
-      typeof planningDecisionSnapshot !== TYPEOF.OBJECT
+      typeof planningDecisionSnapshot !== 'object'
     ) {
       return snapshot;
     }
@@ -270,8 +268,8 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     );
     const serialWaitOperationIds = [...serialWaitOperationIdSet];
     if (
-      serialWaitPartitionIds.length === NUM.ZERO &&
-      serialWaitOperationIds.length === NUM.ZERO
+      serialWaitPartitionIds.length === 0 &&
+      serialWaitOperationIds.length === 0
     ) {
       return snapshot;
     }
@@ -279,7 +277,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       ...snapshot,
       coordinator: Object.freeze({
         ...(snapshot?.coordinator && typeof snapshot.coordinator ===
-          TYPEOF.OBJECT ?
+          'object' ?
           snapshot.coordinator :
           {}),
         serialWaitOperationCount: serialWaitOperationIds.length,
@@ -303,8 +301,8 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
       [];
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
-      snapshots.length === NUM.ZERO
+      normalizedPartitionId.length === 0 ||
+      snapshots.length === 0
     ) {
       return null;
     }
@@ -340,21 +338,21 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       partitionId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
     ).trim();
     if (
-      normalizedPartitionId.length === NUM.ZERO ||
+      normalizedPartitionId.length === 0 ||
       !planningSnapshot ||
-      typeof planningSnapshot !== TYPEOF.OBJECT
+      typeof planningSnapshot !== 'object'
     ) {
       return null;
     }
     const operationRecords = (Array.isArray(operations) ? operations : [])
       .filter((operation) => {
-        return operation && typeof operation === TYPEOF.OBJECT;
+        return operation && typeof operation === 'object';
       });
     const capturedAtMs = Date.now();
     const stepTimeoutMsByWorkflowStep =
       this.buildPriorityRecoveryWorkflowStepTimeoutMap(
         operationRecords.find((operation) =>
-          operation && typeof operation === TYPEOF.OBJECT,
+          operation && typeof operation === 'object',
         ) || null,
       );
     const operationContexts = operationRecords
@@ -393,7 +391,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       );
     if (planningDecisionSnapshot) {
       if (authoritativeOperationReadDeferred !== true) {
-        if (operationContexts.length === NUM.ZERO) {
+        if (operationContexts.length === 0) {
           return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
             planningDecisionSnapshot,
           );
@@ -415,7 +413,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       }
     }
     const representativeOperationContext =
-      operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
+      operationContexts.length === 1 ? operationContexts[0] : null;
     const snapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId: normalizedPartitionId,
       capturedAt: capturedAtMs,
@@ -439,7 +437,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     const partitionId = normalizePriorityRecoveryOperationPartitionId(
       operation,
     );
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       return null;
     }
     const planningSnapshot =
@@ -458,16 +456,16 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     const normalizedPartitionId = String(
       partitionId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
     ).trim();
-    if (normalizedPartitionId.length === NUM.ZERO) {
+    if (normalizedPartitionId.length === 0) {
       return null;
     }
     let operationRecords = (Array.isArray(operations) ? operations : [])
-      .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
+      .filter((operation) => operation && typeof operation === 'object');
     let incompleteObservation = null;
     if (
       this.repository &&
       typeof this.repository.getOperationsByEntityAuthoritativeObservation ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const authoritativeObservation =
         await this.repository.getOperationsByEntityAuthoritativeObservation(

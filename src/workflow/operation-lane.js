@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const LOCAL_STR_OPERATION_LANE = 'operation-lane';
 
@@ -19,12 +18,12 @@ class OperationLane {
     this.name = options.name || LOCAL_STR_OPERATION_LANE;
     this.workflowCoordinator = options.workflowCoordinator || null;
     if (!this.workflowCoordinator ||
-        typeof this.workflowCoordinator.runExclusive !== TYPEOF.FUNCTION) {
+        typeof this.workflowCoordinator.runExclusive !== 'function') {
       throw new Error(OPERATION_LANE_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED);
     }
     this.timeoutPolicy = options.timeoutPolicy || null;
     this.ownerKeyFactory =
-      typeof options.ownerKeyFactory === TYPEOF.FUNCTION ?
+      typeof options.ownerKeyFactory === 'function' ?
         options.ownerKeyFactory :
         null;
   }
@@ -35,18 +34,18 @@ class OperationLane {
    * @return {string}
    */
   resolveOwnerKey(context = {}) {
-    if (typeof context === TYPEOF.STRING && context.length > NUM.ZERO) {
+    if (typeof context === 'string' && context.length > 0) {
       return context;
     }
 
     const explicitOwnerKey = String(context?.ownerKey || '');
-    if (explicitOwnerKey.length > NUM.ZERO) {
+    if (explicitOwnerKey.length > 0) {
       return explicitOwnerKey;
     }
 
     if (this.ownerKeyFactory) {
       const derivedOwnerKey = String(this.ownerKeyFactory(context) || '');
-      if (derivedOwnerKey.length > NUM.ZERO) {
+      if (derivedOwnerKey.length > 0) {
         return derivedOwnerKey;
       }
     }
@@ -57,7 +56,7 @@ class OperationLane {
       context?.partitionId,
     ]) {
       const normalizedFallback = String(fallback || '');
-      if (normalizedFallback.length > NUM.ZERO) {
+      if (normalizedFallback.length > 0) {
         return normalizedFallback;
       }
     }
@@ -72,11 +71,11 @@ class OperationLane {
    * @return {Promise<*>}
    */
   run(context, executionFactory) {
-    if (typeof executionFactory !== TYPEOF.FUNCTION) {
+    if (typeof executionFactory !== 'function') {
       throw new Error(OPERATION_LANE_ERROR_MSG.EXECUTION_FACTORY_REQUIRED);
     }
 
-    const normalizedContext = typeof context === TYPEOF.STRING ?
+    const normalizedContext = typeof context === 'string' ?
       {ownerKey: context} :
       (context || {});
     const ownerKey = this.resolveOwnerKey(normalizedContext);

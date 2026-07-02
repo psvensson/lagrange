@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {resolveCdcPropagationDeliveryProfile} from
   '../cache/cdc-propagation-delivery-profile.js';
 import {
@@ -72,7 +71,7 @@ const MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE = Object.freeze({
   REMOTE_TARGETS_AVAILABLE: 'remote_targets_available',
 });
 
-const MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH = NUM.ONE;
+const MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH = 1;
 
 const MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE = Object.freeze({
   NON_RETRYABLE_DEFER: 'non_retryable_defer',
@@ -116,39 +115,39 @@ function normalizeCDCForwardDeliveryEvents(
   payload = null,
 ) {
   const fallbackTableName =
-    typeof payload?.tableName === TYPEOF.STRING &&
-      payload.tableName.length > NUM.ZERO ?
+    typeof payload?.tableName === 'string' &&
+      payload.tableName.length > 0 ?
       payload.tableName :
-      typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO ?
+      typeof tableName === 'string' && tableName.length > 0 ?
         tableName :
         null;
   const payloadEvents = Array.isArray(payload?.events) ?
     payload.events :
     [payload];
   const normalizedEvents = payloadEvents
-    .filter((event) => event && typeof event === TYPEOF.OBJECT)
+    .filter((event) => event && typeof event === 'object')
     .map((event) => ({
       tableName:
-        typeof event?.tableName === TYPEOF.STRING &&
-          event.tableName.length > NUM.ZERO ?
+        typeof event?.tableName === 'string' &&
+          event.tableName.length > 0 ?
           event.tableName :
           fallbackTableName,
-      data: event?.data && typeof event.data === TYPEOF.OBJECT ?
+      data: event?.data && typeof event.data === 'object' ?
         event.data :
         null,
       operation:
-        typeof event?.operation === TYPEOF.STRING &&
-          event.operation.length > NUM.ZERO ?
+        typeof event?.operation === 'string' &&
+          event.operation.length > 0 ?
           event.operation :
           null,
     }));
-  if (normalizedEvents.length === NUM.ZERO) {
+  if (normalizedEvents.length === 0) {
     return [{
       tableName: fallbackTableName,
       data: null,
       operation:
-        typeof payload?.operation === TYPEOF.STRING &&
-          payload.operation.length > NUM.ZERO ?
+        typeof payload?.operation === 'string' &&
+          payload.operation.length > 0 ?
           payload.operation :
           null,
     }];

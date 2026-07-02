@@ -5,7 +5,6 @@
  * delegates all control-snapshot-related calls to it. Cohesive repair and
  * publication handoff helpers live in semantic sibling modules.
  */
-import {NUM, TYPEOF} from '../constants/index.js';
 import {AUTHORITATIVE_REPAIR_TRIGGER} from './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
@@ -207,7 +206,7 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         controlPlaneDiagnostics,
       ) !== true ||
       typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return snapshot;
     }
@@ -227,7 +226,7 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
     } catch (_error) {
       const failureOutcome =
         typeof this.buildMembershipPublicationHandoffOwnerCommandErrorOutcome ===
-          TYPEOF.FUNCTION ?
+          'function' ?
           this.buildMembershipPublicationHandoffOwnerCommandErrorOutcome(
             _error,
             publicationActiveGateHandoff,
@@ -594,7 +593,7 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
     }
     const failedTables = Array.isArray(options.repair?.failedTables) ?
       options.repair.failedTables.filter(
-        (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        (value) => typeof value === 'string' && value.length > 0,
       ) :
       ADMIN_CACHE_DUMP.EMPTY;
     return isReplicaOperationsOnlyTableSet(failedTables);

@@ -3,7 +3,6 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './opera
 
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
-  NUM,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -27,7 +26,6 @@ const {
   TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE,
   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE,
   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE,
-  TYPEOF,
   WORKFLOW_STEP,
   buildTimeoutClassification,
   createChildTimeoutBudget,
@@ -58,7 +56,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   isActiveReplaceSourceReplicaVisibleInCache(operation, sourceReplicaId) {
     if (
       !this.repository ||
-      typeof this.repository.getObservedReplicaRowFromCache !== TYPEOF.FUNCTION
+      typeof this.repository.getObservedReplicaRowFromCache !== 'function'
     ) {
       return false;
     }
@@ -75,7 +73,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
     const sourceReplicaStatus =
       typeof this.repository.normalizeObservedReplicaLifecycle ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.repository.normalizeObservedReplicaLifecycle(sourceReplicaRow) :
         sourceReplicaRow.status;
     return ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES.has(
@@ -114,7 +112,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       ).trim();
       if (!this.repository.isOperationLocallyOwned(operation)) {
         if (
-          operationId.length > NUM.ZERO &&
+          operationId.length > 0 &&
           this.hasActiveCreatedOperationHandoffRetry(operationId)
         ) {
           return true;
@@ -124,7 +122,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         return (
           remoteOwnerWoken === true ||
           (
-            operationId.length > NUM.ZERO &&
+            operationId.length > 0 &&
             this.hasActiveCreatedOperationHandoffRetry(operationId)
           )
         );
@@ -400,21 +398,21 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       fallbackOperation?.operationId || '',
     ).trim();
     const hasVisibilityOperation =
-      visibilityOperationId.length > NUM.ZERO &&
+      visibilityOperationId.length > 0 &&
       visibilityOperation &&
-      typeof visibilityOperation === TYPEOF.OBJECT;
+      typeof visibilityOperation === 'object';
     const hasFallbackOperation =
-      fallbackOperationId.length > NUM.ZERO &&
+      fallbackOperationId.length > 0 &&
       fallbackOperation &&
-      typeof fallbackOperation === TYPEOF.OBJECT;
+      typeof fallbackOperation === 'object';
     const visibilityWorkflowRank =
       hasVisibilityOperation ?
         this.getOperationWorkflowStepRank(visibilityOperation) :
-        NUM.NEGATIVE_ONE;
+        -1;
     const fallbackWorkflowRank =
       hasFallbackOperation ?
         this.getOperationWorkflowStepRank(fallbackOperation) :
-        NUM.NEGATIVE_ONE;
+        -1;
     const visibilityUpdatedAt = Number(visibilityOperation?.updatedAt);
     const fallbackUpdatedAt = Number(fallbackOperation?.updatedAt);
     const fallbackWorkflowRankAhead =

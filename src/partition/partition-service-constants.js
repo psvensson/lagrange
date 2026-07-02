@@ -454,7 +454,7 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   PENDING_REQUEST_SHUTDOWN_TIMEOUT_MS: TIME_MS.SECOND * 30,
   DEFAULT_QUERY_TIMEOUT_MS: NUM.HUNDRED,
   SIZE_BYTES_DIVISOR: NUM.BYTES_PER_MIB,
-  SIZE_MB_PRECISION: NUM.TWO,
+  SIZE_MB_PRECISION: 2,
   // Raft timing: heartbeat should be much smaller than election timeout
   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
   // On single-node clusters, all replicas are on same node so network is fast
@@ -471,12 +471,12 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   CDC_WHERE_LIMIT: NUM.HUNDRED,
   CDC_PARSE_LIMIT: NUM.HUNDRED,
   CDC_REDACTION_LIMIT: NUM.HUNDRED,
-  CDC_PARSE_SLICE_START: NUM.ZERO,
+  CDC_PARSE_SLICE_START: 0,
   CDC_PARSE_SLICE_END: NUM.HUNDRED,
   CDC_TABLE_NAME_EXTRACTION_STATE_FOUND: 'found',
   CDC_TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
-  LIFERAFT_SINGLE_REPLICA_COUNT: NUM.ONE,
-  ADDRESS_PARTS_MIN: NUM.ONE,
+  LIFERAFT_SINGLE_REPLICA_COUNT: 1,
+  ADDRESS_PARTS_MIN: 1,
 });
 
 export {

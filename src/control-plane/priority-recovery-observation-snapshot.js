@@ -6,7 +6,6 @@
  * Prohibited fallbacks: do not invent semantic state when canonical evidence is absent.
  * Primary tests: test/control-plane/priority-recovery-snapshot.test.js.
  */
-import {NUM, TYPEOF} from '../constants/index.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {RECOVERY_PROTOCOL_STATE} from './membership-lifecycle-constants.js';
 import {buildPriorityRecoveryPressureConditions} from './priority-recovery-helpers.js';
@@ -103,9 +102,9 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
     hasRequiredAckNodeEvidence &&
     (
       normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
-      NUM.ZERO
-    ) === NUM.ZERO &&
-    pendingRequiredAckNodeIds.length === NUM.ZERO;
+      0
+    ) === 0 &&
+    pendingRequiredAckNodeIds.length === 0;
   const observationPendingAckNodeIds = Object.freeze(
     hasClosedRequiredAckGate ?
       LOCAL_EMPTY_LIST :
@@ -121,25 +120,25 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
   );
   const observationCurrentPendingAckCount = Math.max(
     normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
-      NUM.ZERO,
+      0,
     normalizeNonNegativeInteger(publicationConvergence?.pendingAckCount) ??
-      NUM.ZERO,
+      0,
     normalizeNonNegativeInteger(
       activeGateContext.activeGateProgress?.pendingAckCount,
-    ) ?? NUM.ZERO,
+    ) ?? 0,
   );
   const observationFallbackPendingAckCount =
     normalizeNonNegativeInteger(
       activeGateContext.activeGateBestProgress?.pendingAckCount,
-    ) ?? NUM.ZERO;
+    ) ?? 0;
   const hasClosedPendingAckGate =
-    observationPendingAckNodeIds.length === NUM.ZERO &&
+    observationPendingAckNodeIds.length === 0 &&
     hasClosedRequiredAckGate;
   const observationPendingAckCount =
-    observationPendingAckNodeIds.length > NUM.ZERO ?
+    observationPendingAckNodeIds.length > 0 ?
       observationPendingAckNodeIds.length :
       hasClosedPendingAckGate ?
-        NUM.ZERO :
+        0 :
         Math.max(
           observationCurrentPendingAckCount,
           observationFallbackPendingAckCount,
@@ -187,16 +186,16 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
         observationMissingPublishedNodeIds.length,
         normalizeNonNegativeInteger(
           publicationConvergenceGate?.missingPublishedCount,
-        ) ?? NUM.ZERO,
+        ) ?? 0,
         normalizeNonNegativeInteger(
           publicationConvergence?.missingPublishedCount,
-        ) ?? NUM.ZERO,
+        ) ?? 0,
         normalizeNonNegativeInteger(
           activeGateContext.activeGateProgress?.missingPublishedCount,
-        ) ?? NUM.ZERO,
+        ) ?? 0,
         normalizeNonNegativeInteger(
           activeGateContext.activeGateBestProgress?.missingPublishedCount,
-        ) ?? NUM.ZERO,
+        ) ?? 0,
       );
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     options.logsTable,
@@ -259,7 +258,7 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
       activeGateContext,
     ),
     priorityRecoveryClosureState:
-      typeof priorityRecoveryClosureWitness?.state === TYPEOF.STRING ?
+      typeof priorityRecoveryClosureWitness?.state === 'string' ?
         priorityRecoveryClosureWitness.state :
         null,
     ...(activeGateContext.activeGateProgress ?
@@ -319,7 +318,7 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
     priorityRecoveryInvariantCount:
       Array.isArray(priorityRecoveryInvariants?.invariants) ?
         priorityRecoveryInvariants.invariants.length :
-        NUM.ZERO,
+        0,
   });
 }
 

@@ -9,8 +9,6 @@ import {
 } from './control-plane-snapshot-revision.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const CONTROL_PLANE_SNAPSHOT_SERVICE_DISCOVERY_REPAIR_FAILED_MESSAGE =
@@ -44,8 +42,8 @@ const CONTROL_PLANE_SNAPSHOT_REASON_CODE = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => typeof value === LOCAL_STR_STRING ? value.trim() : LOCAL_STR_EMPTY)
-      .filter((value) => value.length > LOCAL_NUM_ZERO),
+      .map((value) => typeof value === LOCAL_STR_STRING ? value.trim() : '')
+      .filter((value) => value.length > 0),
   )].sort();
 }
 
@@ -54,7 +52,7 @@ function normalizeRetryAfterMs(value) {
     return null;
   }
   const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue) || parsedValue < LOCAL_NUM_ZERO) {
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
     return null;
   }
   return Math.floor(parsedValue);
@@ -219,7 +217,7 @@ function buildAppliedControlSnapshotRepairObservation(
   if (postRepairEvaluation?.shouldRepair === true) {
     return buildStaleSnapshotObservation(
       repairedSnapshot,
-      postRepairReasonCodes.length > LOCAL_NUM_ZERO ?
+      postRepairReasonCodes.length > 0 ?
         postRepairReasonCodes :
         reasonCodes,
       appliedRepairOptions,

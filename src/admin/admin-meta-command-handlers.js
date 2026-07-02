@@ -9,7 +9,6 @@
 import {SQL, TABLES, COLUMN, WASM_META_ACTION} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 
 const ADMIN_META_ACTION = Object.freeze({
   EXECUTE_QUERY: 'executeQuery',
@@ -134,7 +133,7 @@ function handleListServices(params) {
     );
   }
 
-  if (filters.length > LOCAL_NUM_ZERO) {
+  if (filters.length > 0) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 
@@ -207,7 +206,7 @@ function handleListInterGroupLatencies(params) {
     filters.push(`${COLUMN.TARGET_GROUP_ID} = ?${sqlParams.length}`);
   }
 
-  if (filters.length > LOCAL_NUM_ZERO) {
+  if (filters.length > 0) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 

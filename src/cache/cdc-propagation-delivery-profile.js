@@ -1,10 +1,8 @@
 import {
   CDC_OPERATION,
   COLUMN,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from
   './system-cache-key-descriptor.js';
@@ -62,14 +60,14 @@ const CDC_PROPAGATION_RECORD_VERSION_FIELDS = Object.freeze([
 ]);
 
 function normalizeCdcPropagationTableName(tableName) {
-  return typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO ?
+  return typeof tableName === 'string' && tableName.length > 0 ?
     tableName :
     null;
 }
 
 function normalizeCdcPropagationOperation(operation) {
   return (
-    typeof operation === TYPEOF.STRING &&
+    typeof operation === 'string' &&
     CDC_PROPAGATION_DELIVERY_REPLACE_PENDING_OPERATIONS.has(operation)
   ) ?
     operation :
@@ -77,10 +75,10 @@ function normalizeCdcPropagationOperation(operation) {
 }
 
 function normalizeCdcPropagationReplacementValue(value) {
-  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+  if (typeof value === 'string' && value.length > 0) {
     return value;
   }
-  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
   }
   return null;
@@ -115,13 +113,13 @@ function resolveCriticalVisibilityDeliverySource(events = []) {
       .map((event) => normalizeCdcPropagationTableName(event?.tableName))
       .filter(Boolean),
   )];
-  if (criticalTableNames.length !== NUM.ONE) {
+  if (criticalTableNames.length !== 1) {
     return LATENCY_TOPOLOGY_DELIVERY_SOURCE.CRITICAL_VISIBILITY;
   }
-  const tableName = criticalTableNames[NUM.ZERO];
-  if (events.length === NUM.ONE) {
+  const tableName = criticalTableNames[0];
+  if (events.length === 1) {
     const primaryKeyValue =
-      resolveCdcPropagationPrimaryKeyValue(events[NUM.ZERO]);
+      resolveCdcPropagationPrimaryKeyValue(events[0]);
     if (primaryKeyValue) {
       return buildCriticalVisibilityCdcPropagationDeliverySource(
         tableName,
@@ -136,7 +134,7 @@ function resolveCriticalVisibilityDeliverySource(events = []) {
 
 function resolveCdcPropagationPrimaryKeyValue(event = null) {
   const tableName = normalizeCdcPropagationTableName(event?.tableName);
-  const data = event?.data && typeof event.data === TYPEOF.OBJECT ?
+  const data = event?.data && typeof event.data === 'object' ?
     event.data :
     null;
   if (!tableName || !data) {
@@ -147,7 +145,7 @@ function resolveCdcPropagationPrimaryKeyValue(event = null) {
 }
 
 function resolveCdcPropagationRecordVersion(event = null) {
-  const data = event?.data && typeof event.data === TYPEOF.OBJECT ?
+  const data = event?.data && typeof event.data === 'object' ?
     event.data :
     null;
   if (!data) {
@@ -165,10 +163,10 @@ function resolveCdcPropagationRecordVersion(event = null) {
 }
 
 function buildCriticalVisibilityCdcPropagationReplacePendingKey(events = []) {
-  if (!Array.isArray(events) || events.length !== NUM.ONE) {
+  if (!Array.isArray(events) || events.length !== 1) {
     return null;
   }
-  const event = events[NUM.ZERO];
+  const event = events[0];
   const tableName = normalizeCdcPropagationTableName(event?.tableName);
   const operation = normalizeCdcPropagationOperation(event?.operation);
   const primaryKeyValue = resolveCdcPropagationPrimaryKeyValue(event);
@@ -226,11 +224,11 @@ function buildCdcPropagationDeliveryProfile(state, events = []) {
 function normalizeCdcPropagationEvents(events) {
   return Array.isArray(events) ?
     events
-      .filter((event) => event && typeof event === TYPEOF.OBJECT)
+      .filter((event) => event && typeof event === 'object')
       .map((event) => ({
         tableName: normalizeCdcPropagationTableName(event.tableName),
         operation: normalizeCdcPropagationOperation(event.operation),
-        data: event.data && typeof event.data === TYPEOF.OBJECT ? event.data : null,
+        data: event.data && typeof event.data === 'object' ? event.data : null,
       })) :
     [];
 }
@@ -246,7 +244,7 @@ function isCriticalPartitionServiceRow(row = null) {
 }
 
 function isCriticalCdcPropagationEvent(event = null) {
-  const tableName = typeof event?.tableName === TYPEOF.STRING ? event.tableName : null;
+  const tableName = typeof event?.tableName === 'string' ? event.tableName : null;
   if (!tableName) {
     return true;
   }
@@ -260,7 +258,7 @@ function isCriticalCdcPropagationEvent(event = null) {
 }
 
 function isBackgroundChurnCdcPropagationEvent(event = null) {
-  const tableName = typeof event?.tableName === TYPEOF.STRING ? event.tableName : null;
+  const tableName = typeof event?.tableName === 'string' ? event.tableName : null;
   return Boolean(tableName && BACKGROUND_CDC_PROPAGATION_TABLES.has(tableName));
 }
 
@@ -273,7 +271,7 @@ function resolveCdcPropagationDeliveryProfile(events = [], options = {}) {
   }
 
   const normalizedEvents = normalizeCdcPropagationEvents(events);
-  if (normalizedEvents.length === NUM.ZERO) {
+  if (normalizedEvents.length === 0) {
     return buildCdcPropagationDeliveryProfile(
       CDC_PROPAGATION_DELIVERY_STATE.CRITICAL_VISIBILITY,
       [],

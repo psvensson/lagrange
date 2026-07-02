@@ -1,9 +1,7 @@
-import {TYPEOF} from '../constants/index.js';
 import {OperationLane} from './operation-lane.js';
 import {WORKFLOW_ERROR_MSG} from './workflow-constants.js';
 
-const LOCAL_STR_ATDIQ = 'workflow-step-runner';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_WORKFLOW_STEP_RUNNER = 'workflow-step-runner';
 const LOCAL_STR_RESULT = 'result';
 
 class WorkflowStepRunner {
@@ -13,22 +11,22 @@ class WorkflowStepRunner {
   constructor(options = {}) {
     this.workflowCoordinator = options.workflowCoordinator || null;
     if (!this.workflowCoordinator ||
-        typeof this.workflowCoordinator.getWorkflowById !== TYPEOF.FUNCTION ||
-        typeof this.workflowCoordinator.transitionStep !== TYPEOF.FUNCTION ||
-        typeof this.workflowCoordinator.updateWorkflow !== TYPEOF.FUNCTION) {
+        typeof this.workflowCoordinator.getWorkflowById !== 'function' ||
+        typeof this.workflowCoordinator.transitionStep !== 'function' ||
+        typeof this.workflowCoordinator.updateWorkflow !== 'function') {
       throw new Error(WORKFLOW_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED);
     }
     this.operationLane = options.operationLane ||
       new OperationLane({
-        name: options.name || LOCAL_STR_ATDIQ,
+        name: options.name || LOCAL_STR_WORKFLOW_STEP_RUNNER,
         workflowCoordinator: this.workflowCoordinator,
         timeoutPolicy: options.timeoutPolicy || null,
         ownerKeyFactory: ({workflowId}) => {
           return this.workflowCoordinator.getWorkflowById(workflowId)?.ownerKey ||
-            LOCAL_STR_EMPTY;
+            '';
         },
       });
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
   }
@@ -82,7 +80,7 @@ class WorkflowStepRunner {
             stepName: options.stepName || null,
             observedAt: this.now(),
           });
-          if (typeof options.onError === TYPEOF.FUNCTION) {
+          if (typeof options.onError === 'function') {
             return options.onError({
               error,
               ownerKey,
@@ -105,7 +103,7 @@ class WorkflowStepRunner {
    * @private
    */
   async persistStepResult(workflowId, stepResult) {
-    if (!stepResult || typeof stepResult !== TYPEOF.OBJECT) {
+    if (!stepResult || typeof stepResult !== 'object') {
       return;
     }
 
@@ -124,7 +122,7 @@ class WorkflowStepRunner {
     }
 
     if (stepResult.updates &&
-        typeof stepResult.updates === TYPEOF.OBJECT) {
+        typeof stepResult.updates === 'object') {
       await this.workflowCoordinator.updateWorkflow(
         workflowId,
         stepResult.updates,

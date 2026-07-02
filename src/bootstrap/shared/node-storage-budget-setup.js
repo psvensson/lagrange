@@ -24,7 +24,7 @@ import {
   STORAGE_CAPACITY_SUBSYSTEM,
 } from '../../rebalancer/storage-capacity-constants.js';
 
-const LOCAL_STR_11023 = 'NodeStorageBudgetSetup';
+const LOCAL_STR_NODESTORAGEBUDGETSETUP = 'NodeStorageBudgetSetup';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STARTUP = 'startup';
 
@@ -70,12 +70,12 @@ class NodeStorageBudgetSetup {
 
     if (!nodeId) {
       throw new DependencyError(
-        LOCAL_STR_11023, ERROR_MSG.NODE_ID_REQUIRED,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP, ERROR_MSG.NODE_ID_REQUIRED,
       );
     }
     if (!cdcIntegrationService) {
       throw new DependencyError(
-        LOCAL_STR_11023, ERROR_MSG.CDC_REQUIRED,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP, ERROR_MSG.CDC_REQUIRED,
       );
     }
 
@@ -116,12 +116,12 @@ class NodeStorageBudgetSetup {
 
     if (!nodeRow) {
       throw new DependencyError(
-        LOCAL_STR_11023, ERROR_MSG.NODE_ROW_REQUIRED,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP, ERROR_MSG.NODE_ROW_REQUIRED,
       );
     }
     if (typeof budgetService?.registerNodeBudget !== LOCAL_STR_FUNCTION) {
       throw new DependencyError(
-        LOCAL_STR_11023,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP,
         ERROR_MSG.REGISTER_NODE_BUDGET_REQUIRED,
       );
     }
@@ -192,12 +192,12 @@ class NodeStorageBudgetSetup {
 
     if (!nodeRow) {
       throw new DependencyError(
-        LOCAL_STR_11023, ERROR_MSG.NODE_ROW_REQUIRED,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP, ERROR_MSG.NODE_ROW_REQUIRED,
       );
     }
     if (typeof budgetService?.resolveBudgetRow !== LOCAL_STR_FUNCTION) {
       throw new DependencyError(
-        LOCAL_STR_11023,
+        LOCAL_STR_NODESTORAGEBUDGETSETUP,
         ERROR_MSG.RESOLVE_BUDGET_ROW_REQUIRED,
       );
     }

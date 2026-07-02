@@ -1,11 +1,9 @@
 import {assertCritical} from '../../utils/assert.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
@@ -209,7 +207,7 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
     const retainedSnapshotRows = Array.isArray(options.retainedSnapshotRows) ?
       options.retainedSnapshotRows :
       [];
-    if (tableName !== TABLES.PARTITIONS || mergedRows.length === NUM.ZERO) {
+    if (tableName !== TABLES.PARTITIONS || mergedRows.length === 0) {
       return mergedRows;
     }
 
@@ -266,7 +264,7 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
       return stabilization.row;
     });
 
-    if (retainedCacheOwnerPartitionIds.length > NUM.ZERO) {
+    if (retainedCacheOwnerPartitionIds.length > 0) {
       this.warnBootstrapTopologySnapshot(
         BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY
           .RETAINED_CACHED_PARTITION_OWNER_DURING_CONVERGENCE,
@@ -280,14 +278,14 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
           [BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_PAYLOAD
             .PARTITION_IDS]: retainedCacheOwnerPartitionIds
             .slice(
-              NUM.ZERO,
+              0,
               BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_MAX_IDS,
             ),
         },
       );
     }
 
-    if (stabilizedPartitionIds.length > NUM.ZERO) {
+    if (stabilizedPartitionIds.length > 0) {
       this.warnBootstrapTopologySnapshot(
         BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY
           .AUTHORITATIVE_PARTITION_OWNER_MISSING_DURING_CONVERGENCE,
@@ -301,7 +299,7 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
           [BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_PAYLOAD
             .PARTITION_IDS]: stabilizedPartitionIds
             .slice(
-              NUM.ZERO,
+              0,
               BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_MAX_IDS,
             ),
         },
@@ -406,13 +404,13 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
       return readBootstrapTopologySnapshotServiceRaftRole(serviceRow) ===
         String(RAFT_ROLE.LEADER).toLowerCase();
     });
-    if (explicitLeaderServices.length === NUM.ONE) {
+    if (explicitLeaderServices.length === 1) {
       return explicitLeaderServices;
     }
     if (!this.isBootstrapRoutingGraceWindow(partitionRow)) {
       return [];
     }
-    return services.length === NUM.ONE ? [services[NUM.ZERO]] : [];
+    return services.length === 1 ? [services[0]] : [];
   },
   hasActivePartitionServiceOnNode(
     partitionId,
@@ -421,10 +419,10 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
     partitionRow = null,
   ) {
     if (
-      typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO ||
-      typeof nodeId !== TYPEOF.STRING ||
-      nodeId.length === NUM.ZERO
+      typeof partitionId !== 'string' ||
+      partitionId.length === 0 ||
+      typeof nodeId !== 'string' ||
+      nodeId.length === 0
     ) {
       return false;
     }
@@ -451,12 +449,12 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
     const partitionServices = this.getPartitionServices();
-    if (!partitionServices || partitionServices.size === NUM.ZERO) {
+    if (!partitionServices || partitionServices.size === 0) {
       return [];
     }
 
     const partitionRows =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+      typeof systemTableCache.filter === 'function' ?
         systemTableCache.filter(TABLES.PARTITIONS, (row) => {
           const rowTableName =
             row?.[COLUMN.TABLE_NAME] || row?.table_name || row?.tableName;
@@ -470,10 +468,10 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
         row?.[COLUMN.PARTITION_ID] || row?.partition_id || row?.partitionId,
       )
       .filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        typeof value === 'string' && value.length > 0,
       ),
     )];
-    if (partitionIds.length === NUM.ZERO) {
+    if (partitionIds.length === 0) {
       return [];
     }
 
@@ -484,7 +482,7 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
         if (
           service?.partitionId !== partitionId ||
           service?.initialized !== true ||
-          typeof service?.db?.prepare !== TYPEOF.FUNCTION
+          typeof service?.db?.prepare !== 'function'
         ) {
           continue;
         }
@@ -519,7 +517,7 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
       const rows = Array.isArray(rowSet) ? rowSet : [];
       for (const row of rows) {
         const key = row?.[keyField] ?? row?.id;
-        if (typeof key === TYPEOF.UNDEFINED || key === null) {
+        if (typeof key === 'undefined' || key === null) {
           continue;
         }
         const existing = mergedRows.get(key);

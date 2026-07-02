@@ -1,7 +1,5 @@
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_SHARED_NODE = 'shared-node';
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -9,7 +7,7 @@ const DEFAULT_LEADER_ACTIVATION_NODE_SPACING_MS = 25;
 const SHARED_LEADER_ACTIVATION_SCHEDULERS = new Map();
 
 function normalizeSpacingMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
     DEFAULT_LEADER_ACTIVATION_NODE_SPACING_MS;
 }
@@ -38,14 +36,14 @@ class LeaderActivationScheduler {
 
   constructor(options = {}) {
     this.nodeId =
-      typeof options.nodeId === LOCAL_STR_STRING && options.nodeId.length > LOCAL_NUM_ZERO ?
+      typeof options.nodeId === LOCAL_STR_STRING && options.nodeId.length > 0 ?
         options.nodeId :
         LOCAL_STR_SHARED_NODE;
     this.spacingMs = normalizeSpacingMs(options.spacingMs);
     this.queue = [];
-    this.nextEntryId = NUM.ONE;
+    this.nextEntryId = 1;
     this.dispatchTimer = null;
-    this.lastDispatchAt = NUM.ZERO;
+    this.lastDispatchAt = 0;
     this.destroyed = false;
   }
 
@@ -66,7 +64,7 @@ class LeaderActivationScheduler {
       run,
       canceled: false,
     };
-    this.nextEntryId += NUM.ONE;
+    this.nextEntryId += 1;
     this.queue.push(entry);
     this.scheduleDrain();
 
@@ -78,12 +76,12 @@ class LeaderActivationScheduler {
   }
 
   scheduleDrain() {
-    if (this.destroyed || this.dispatchTimer || this.queue.length === NUM.ZERO) {
+    if (this.destroyed || this.dispatchTimer || this.queue.length === 0) {
       return;
     }
 
     const delayMs = Math.max(
-      NUM.ZERO,
+      0,
       (this.lastDispatchAt + this.spacingMs) - Date.now(),
     );
     this.dispatchTimer = setTimeout(() => {
@@ -100,7 +98,7 @@ class LeaderActivationScheduler {
       return;
     }
 
-    while (this.queue.length > NUM.ZERO) {
+    while (this.queue.length > 0) {
       const entry = this.queue.shift();
       if (!entry || entry.canceled) {
         continue;
@@ -120,7 +118,7 @@ class LeaderActivationScheduler {
 
   shutdown() {
     this.destroyed = true;
-    this.queue.length = NUM.ZERO;
+    this.queue.length = 0;
     if (this.dispatchTimer) {
       clearTimeout(this.dispatchTimer);
       this.dispatchTimer = null;

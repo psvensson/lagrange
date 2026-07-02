@@ -25,7 +25,7 @@ import {
 import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
-import {COLUMN, NUM} from '../../src/constants/index.js';
+import {COLUMN} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {PRESSURE_WORK_CLASS} from
@@ -108,7 +108,7 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
           updates.push(row);
           return {
             success: true,
-            partitionResult: {affectedRows: NUM.ZERO},
+            partitionResult: {affectedRows: 0},
           };
         },
         upsertSystemTableRow: async (_table, row) => {

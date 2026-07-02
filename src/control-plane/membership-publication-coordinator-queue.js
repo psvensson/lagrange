@@ -1,6 +1,5 @@
 import {
   NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
@@ -30,7 +29,7 @@ import {
 } from './membership-publication-coordinator-reconcile.js';
 
 const CONTROL_PLANE_CONVERGENCE_OUTCOME_SCHEMA_VERSION = 1;
-const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = 1;
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS = NUM.THOUSAND;
 const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_ENQUEUED =
   'enqueued';
@@ -159,7 +158,7 @@ const MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST =
   });
 
 function normalizeCriticalConvergenceRetryAfterMs(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS;
 }
@@ -180,7 +179,7 @@ function buildCriticalConvergenceQueueOutcome({
     queueBound: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
     queueOutcome,
     retryAfterMs: normalizeCriticalConvergenceRetryAfterMs(retryAfterMs),
-    ...(typeof reasonCode === TYPEOF.STRING && reasonCode.length > NUM.ZERO ?
+    ...(typeof reasonCode === 'string' && reasonCode.length > 0 ?
       {reasonCode} :
       {}),
   });
@@ -188,7 +187,7 @@ function buildCriticalConvergenceQueueOutcome({
 
 function buildCriticalConvergenceQueueEvidence(reconcileQueue, ownerKey) {
   const ownerAlreadyPending =
-    typeof reconcileQueue?.has === TYPEOF.FUNCTION ?
+    typeof reconcileQueue?.has === 'function' ?
       reconcileQueue.has(ownerKey) :
       reconcileQueue?.pending instanceof Map &&
         reconcileQueue.pending.has(ownerKey);
@@ -197,7 +196,7 @@ function buildCriticalConvergenceQueueEvidence(reconcileQueue, ownerKey) {
     (
       reconcileQueue?.pending instanceof Map ?
         reconcileQueue.pending.size :
-        NUM.ZERO
+        0
     );
   return Object.freeze({
     queueStopped: reconcileQueue?.stopped === true,
@@ -226,7 +225,7 @@ function resolveCriticalConvergenceQueueFailureReason(error) {
 }
 
 function isMembershipPublicationReconcileContext(value) {
-  return value && typeof value === TYPEOF.OBJECT;
+  return value && typeof value === 'object';
 }
 
 function hasActiveGateOwnerReconcileMembershipPublicationContext(context) {
@@ -256,7 +255,7 @@ function mergeMembershipPublicationReconcileNodeIds(left, right) {
 
 function excludeMembershipPublicationReconcileNodeIds(nodeIds, excludedNodeIds) {
   const excluded = new Set(normalizeNodeIdList(excludedNodeIds));
-  if (excluded.size === NUM.ZERO) {
+  if (excluded.size === 0) {
     return normalizeNodeIdList(nodeIds);
   }
   return normalizeNodeIdList(nodeIds).filter((nodeId) =>
@@ -269,7 +268,7 @@ function filterMembershipPublicationReconcileExclusions(
   includedNodeIds,
 ) {
   const included = new Set(normalizeNodeIdList(includedNodeIds));
-  if (included.size === NUM.ZERO) {
+  if (included.size === 0) {
     return normalizeNodeIdList(excludedNodeIds);
   }
   return normalizeNodeIdList(excludedNodeIds).filter((nodeId) =>
@@ -290,7 +289,7 @@ function applyMembershipPublicationReconcileNodeList(
   nextContext,
 ) {
   if (
-    nodeIds.length > NUM.ZERO ||
+    nodeIds.length > 0 ||
     hasMembershipPublicationReconcileContextField(
       previousContext,
       fieldName,
@@ -329,7 +328,7 @@ function filterMembershipPublicationHandoffContext(
 ) {
   if (
     !isMembershipPublicationReconcileContext(handoff) ||
-    normalizeNodeIdList(excludedNodeIds).length === NUM.ZERO
+    normalizeNodeIdList(excludedNodeIds).length === 0
   ) {
     return handoff;
   }
@@ -364,8 +363,8 @@ function resolveMembershipPublicationReconcileFlag(previousValue, nextValue) {
 }
 
 function resolvePublicationRowEpoch(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
-    return NUM.ZERO;
+  if (!row || typeof row !== 'object') {
+    return 0;
   }
   const epoch = Number(
     row[MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_EPOCH] ??
@@ -373,7 +372,7 @@ function resolvePublicationRowEpoch(row) {
         MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_EPOCH_SNAKE
       ],
   );
-  return Number.isFinite(epoch) && epoch > NUM.ZERO ? epoch : NUM.ZERO;
+  return Number.isFinite(epoch) && epoch > 0 ? epoch : 0;
 }
 
 function selectLatestPublicationRow(previousContext, nextContext) {
@@ -573,7 +572,7 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
         .PUBLICATION_ACTIVE_GATE_HANDOFF
     ] = publicationActiveGateHandoff;
   }
-  if (excludedNodeIds.length > NUM.ZERO) {
+  if (excludedNodeIds.length > 0) {
     mergedContext[
       MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
     ] = excludedNodeIds;
@@ -635,7 +634,7 @@ class MembershipPublicationCoordinatorQueue extends
   constructor(options = {}) {
     super(options);
     if (
-      typeof this.reconcileQueue?.configureRetryPolicy === TYPEOF.FUNCTION
+      typeof this.reconcileQueue?.configureRetryPolicy === 'function'
     ) {
       this.reconcileQueue.configureRetryPolicy({
         isRetryableError: isRetryableControlPlaneError,

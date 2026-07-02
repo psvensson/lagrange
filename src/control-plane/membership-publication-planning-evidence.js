@@ -1,9 +1,7 @@
 import {createHash} from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import {
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from './control-plane-system-table-gateway.js';
 import {resolveActiveNodeViews} from './active-node-projection.js';
@@ -69,7 +67,7 @@ function resolvePlanningEvidenceRowKey(tableName, row = {}) {
     const key = String(
       row?.[keyField] || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
     ).trim();
-    if (key.length > NUM.ZERO) {
+    if (key.length > 0) {
       return key;
     }
   }
@@ -78,17 +76,17 @@ function resolvePlanningEvidenceRowKey(tableName, row = {}) {
 
 function resolvePlanningEvidenceRowVersion(row = {}) {
   const versions = MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS
-    .map((fieldName) => normalizePositiveInteger(row?.[fieldName], NUM.ZERO))
-    .filter((value) => value > NUM.ZERO);
-  if (versions.length === NUM.ZERO) {
-    return NUM.ZERO;
+    .map((fieldName) => normalizePositiveInteger(row?.[fieldName], 0))
+    .filter((value) => value > 0);
+  if (versions.length === 0) {
+    return 0;
   }
   return Math.max(...versions);
 }
 
 function countPlanningEvidenceRowFields(row = {}) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
-    return NUM.ZERO;
+  if (!row || typeof row !== 'object') {
+    return 0;
   }
   return Object.keys(row).length;
 }
@@ -105,14 +103,14 @@ function comparePlanningEvidenceRows(leftRow = {}, rightRow = {}) {
   const decisiveDelta = [
     rightRank.version - leftRank.version,
     rightRank.fieldCount - leftRank.fieldCount,
-  ].find((delta) => delta !== NUM.ZERO);
-  return typeof decisiveDelta === TYPEOF.NUMBER ? decisiveDelta : NUM.ZERO;
+  ].find((delta) => delta !== 0);
+  return typeof decisiveDelta === 'number' ? decisiveDelta : 0;
 }
 
 function mergePlanningEvidenceRows(tableName, authoritativeRows = [], projectionRows = []) {
   const keyFields =
     MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE[tableName] || [];
-  if (keyFields.length === NUM.ZERO) {
+  if (keyFields.length === 0) {
     return authoritativeRows;
   }
   const rowByKey = new Map();
@@ -122,12 +120,12 @@ function mergePlanningEvidenceRows(tableName, authoritativeRows = [], projection
     ...normalizeTableRowsResult(projectionRows),
   ]) {
     const key = resolvePlanningEvidenceRowKey(tableName, row);
-    if (key.length === NUM.ZERO) {
+    if (key.length === 0) {
       unkeyedRows.push(row);
       continue;
     }
     const existingRow = rowByKey.get(key);
-    if (!existingRow || comparePlanningEvidenceRows(existingRow, row) >= NUM.ZERO) {
+    if (!existingRow || comparePlanningEvidenceRows(existingRow, row) >= 0) {
       rowByKey.set(key, row);
     }
   }
@@ -154,7 +152,7 @@ function resolveControlPlanePublicationsOwner(options = {}) {
   const membershipPublicationRuntimeOwner = options.membershipPublicationRuntimeOwner || null;
   if (
     membershipPublicationRuntimeOwner &&
-    typeof membershipPublicationRuntimeOwner.getControlPlanePublicationsOwner === TYPEOF.FUNCTION
+    typeof membershipPublicationRuntimeOwner.getControlPlanePublicationsOwner === 'function'
   ) {
     return membershipPublicationRuntimeOwner.getControlPlanePublicationsOwner() || null;
   }
@@ -171,7 +169,7 @@ function resolveMembershipPublicationReadProfile(readProfile = null) {
 }
 
 function normalizeReplicaOperationView(operation) {
-  if (!operation || typeof operation !== TYPEOF.OBJECT) {
+  if (!operation || typeof operation !== 'object') {
     return null;
   }
   const stepsHistory = Array.isArray(operation.stepsHistory) ?
@@ -236,8 +234,8 @@ function buildPublicationAcknowledgementReadOptions(options = {}) {
 }
 
 function hasExplicitMembershipPublicationTarget(options = {}) {
-  return normalizeNodeIdList(options.publishedActiveNodeIds).length > NUM.ZERO &&
-    normalizeNodeIdList(options.requiredAckNodeIds).length > NUM.ZERO;
+  return normalizeNodeIdList(options.publishedActiveNodeIds).length > 0 &&
+    normalizeNodeIdList(options.requiredAckNodeIds).length > 0;
 }
 
 function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
@@ -264,7 +262,7 @@ function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
 function buildMembershipPublicationEvidenceSnapshot(options = {}) {
   const priorityRecoveryPlanningSnapshot =
     options.priorityRecoveryPlanningSnapshot &&
-      typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
+      typeof options.priorityRecoveryPlanningSnapshot === 'object' ?
       options.priorityRecoveryPlanningSnapshot :
       null;
   const targetNodeDecision = buildMembershipPublicationTargetNodeDecision({
@@ -281,12 +279,12 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
     replicaOperationRows:
       Array.isArray(options.replicaOperationRows) ? options.replicaOperationRows : [],
     readinessByNodeId:
-      options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+      options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
         options.readinessByNodeId :
         null,
     readinessEntries: Array.isArray(options.readinessEntries) ? options.readinessEntries : [],
     recoveryEpochsByNodeId:
-      options.recoveryEpochsByNodeId && typeof options.recoveryEpochsByNodeId === TYPEOF.OBJECT ?
+      options.recoveryEpochsByNodeId && typeof options.recoveryEpochsByNodeId === 'object' ?
         options.recoveryEpochsByNodeId :
         null,
     connectedNodeIds: normalizeNodeIdList(options.connectedNodeIds),
@@ -307,23 +305,23 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
     }),
     priorityPartitionSummary:
       options.priorityPartitionSummary &&
-      typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof options.priorityPartitionSummary === 'object' ?
         options.priorityPartitionSummary :
         null,
     priorityRecoveryPlanningSnapshot,
     membershipLifecycleSummary:
       options.membershipLifecycleSummary &&
-      typeof options.membershipLifecycleSummary === TYPEOF.OBJECT ?
+      typeof options.membershipLifecycleSummary === 'object' ?
         options.membershipLifecycleSummary :
         null,
     targetNodeId: targetNodeDecision.nodeId,
     targetNodeState: targetNodeDecision.state,
     admissionState:
-      typeof options.admissionState === TYPEOF.STRING &&
-        options.admissionState.length > NUM.ZERO ?
+      typeof options.admissionState === 'string' &&
+        options.admissionState.length > 0 ?
         options.admissionState :
-        typeof priorityRecoveryPlanningSnapshot?.admissionState === TYPEOF.STRING &&
-          priorityRecoveryPlanningSnapshot.admissionState.length > NUM.ZERO ?
+        typeof priorityRecoveryPlanningSnapshot?.admissionState === 'string' &&
+          priorityRecoveryPlanningSnapshot.admissionState.length > 0 ?
           priorityRecoveryPlanningSnapshot.admissionState :
           null,
     admissionReasonCodes: Array.isArray(options.admissionReasonCodes) ?
@@ -333,10 +331,10 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
         [],
     clusterIncarnationFence:
       options.clusterIncarnationFence &&
-        typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
+        typeof options.clusterIncarnationFence === 'object' ?
         options.clusterIncarnationFence :
         priorityRecoveryPlanningSnapshot?.clusterIncarnationFence &&
-          typeof priorityRecoveryPlanningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+          typeof priorityRecoveryPlanningSnapshot.clusterIncarnationFence === 'object' ?
           priorityRecoveryPlanningSnapshot.clusterIncarnationFence :
           null,
     publisherNodeId: String(
@@ -345,7 +343,7 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
     localNodeId: String(options.localNodeId || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY),
     localNodeResponsive: options.localNodeResponsive === true,
     reasonCode:
-      typeof options.reasonCode === TYPEOF.STRING && options.reasonCode.length > NUM.ZERO ?
+      typeof options.reasonCode === 'string' && options.reasonCode.length > 0 ?
         options.reasonCode :
         null,
     nowMs: normalizePositiveInteger(options.nowMs, Date.now()),
@@ -359,12 +357,12 @@ function resolveObservedActiveNodeIds(options = {}) {
     options.latestPublishedPublicationRow,
   );
   const observedPublishedMembershipRow =
-    publishedBaselineNodeIds.length > NUM.ZERO ?
+    publishedBaselineNodeIds.length > 0 ?
       {
         publication_epoch:
             latestPublishedPublicationRow?.publicationEpoch ??
             latestPublicationRow?.publicationEpoch ??
-            NUM.ONE,
+            1,
         status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
         published_active_node_ids: publishedBaselineNodeIds,
       } :
@@ -380,13 +378,13 @@ function resolveObservedActiveNodeIds(options = {}) {
 
 function buildLatestRecoveryEpochByNodeId(recoveryEpochsByNodeId = {}) {
   const entries = {};
-  if (!recoveryEpochsByNodeId || typeof recoveryEpochsByNodeId !== TYPEOF.OBJECT) {
+  if (!recoveryEpochsByNodeId || typeof recoveryEpochsByNodeId !== 'object') {
     return entries;
   }
   for (const [nodeId, history] of Object.entries(recoveryEpochsByNodeId)) {
     const epochs = Array.isArray(history) ? history : [];
     const latestEpoch = epochs[epochs.length - 1] || null;
-    if (!latestEpoch || typeof latestEpoch !== TYPEOF.OBJECT) {
+    if (!latestEpoch || typeof latestEpoch !== 'object') {
       continue;
     }
     const epochId = String(latestEpoch.epochId || '').trim();
@@ -443,7 +441,7 @@ function shouldPreferAuthoritativeMembershipState(options = {}) {
 function buildServingMemberStatesByNodeId(existingStates = {}, publishedNodeIds = []) {
   const normalizedPublishedNodeIds = normalizeNodeIdList(publishedNodeIds);
   const normalizedExistingStates =
-    existingStates && typeof existingStates === TYPEOF.OBJECT ? existingStates : {};
+    existingStates && typeof existingStates === 'object' ? existingStates : {};
   const memberStatesByNodeId = Object.keys(normalizedExistingStates).reduce(
     (accumulator, nodeId) => {
       accumulator[nodeId] =
@@ -474,7 +472,7 @@ function deriveMembershipPublicationId(candidate = {}) {
   const digest = createHash('sha256').update(fingerprint).digest('hex').slice(0, 24);
   return (
     MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.MEMBERSHIP_PUBLICATION +
-    normalizePositiveInteger(candidate.publicationEpoch, NUM.ONE) +
+    normalizePositiveInteger(candidate.publicationEpoch, 1) +
     MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY_2 +
     digest
   );
@@ -502,7 +500,7 @@ function buildMembershipPublicationRow(options = {}) {
       options.publicationId || deriveMembershipPublicationId(candidate) || uuidv4(),
     ),
     publication_kind: String(candidate.publicationKind || MEMBERSHIP_PUBLICATION_KIND),
-    publication_epoch: normalizePositiveInteger(candidate.publicationEpoch, NUM.ONE),
+    publication_epoch: normalizePositiveInteger(candidate.publicationEpoch, 1),
     publisher_node_id: String(
       candidate.publisherNodeId || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
     ),
@@ -513,12 +511,12 @@ function buildMembershipPublicationRow(options = {}) {
     acknowledged_node_ids: normalizeNodeIdList(candidate.acknowledgedNodeIds),
     priority_partition_summary:
       candidate.priorityPartitionSummary &&
-      typeof candidate.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof candidate.priorityPartitionSummary === 'object' ?
         candidate.priorityPartitionSummary :
         null,
     membership_lifecycle_summary:
       candidate.membershipLifecycleSummary &&
-      typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT ?
+      typeof candidate.membershipLifecycleSummary === 'object' ?
         candidate.membershipLifecycleSummary :
         buildMembershipLifecycleSummary({
           lifecycleState:
@@ -571,8 +569,8 @@ function buildMembershipPublicationAcknowledgementDecision(options = {}) {
     ackState: publicationOwnerStream.ackState,
     acknowledgementChanged,
     allAcknowledged:
-      machineDecision.evidence.requiredAckCount > NUM.ZERO &&
-      machineDecision.evidence.pendingAckCount === NUM.ZERO,
+      machineDecision.evidence.requiredAckCount > 0 &&
+      machineDecision.evidence.pendingAckCount === 0,
     machineDecision,
   });
 }
@@ -591,8 +589,8 @@ function buildPublicationMetadataRefreshDecision(options = {}) {
     nextStatus: machineDecision.nextStatus,
     reasonCode: machineDecision.reasonCode,
     allRequiredAcknowledged:
-      machineDecision.evidence.requiredAckCount > NUM.ZERO &&
-      machineDecision.evidence.pendingAckCount === NUM.ZERO,
+      machineDecision.evidence.requiredAckCount > 0 &&
+      machineDecision.evidence.pendingAckCount === 0,
     terminalPublication: machineDecision.evidence.terminalPublication,
     shouldClose:
       machineDecision.action ===

@@ -12,8 +12,6 @@ import {
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 const RAFT_PACKET_TYPE = Object.freeze({
   VOTE: 'vote',
@@ -94,11 +92,11 @@ const RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS = new Set([
 const REPLICA_SERVICE_SUFFIX_PATTERN = /-r\d+$/;
 
 function extractServiceIdFromUnifiedAddress(address) {
-  if (typeof address !== LOCAL_STR_STRING || address.length === LOCAL_NUM_ZERO) {
+  if (typeof address !== LOCAL_STR_STRING || address.length === 0) {
     return null;
   }
   const separatorIndex = address.lastIndexOf(ADDRESS.SEPARATOR);
-  if (separatorIndex <= LOCAL_NUM_ZERO || separatorIndex === address.length - LOCAL_NUM_ONE) {
+  if (separatorIndex <= 0 || separatorIndex === address.length - 1) {
     return null;
   }
   return address.slice(separatorIndex + ADDRESS.SEPARATOR.length);
@@ -168,7 +166,7 @@ function resolveNormalizedTargetReplicaStatus(packet = null) {
     return null;
   }
   const normalizedTargetReplicaStatus = targetReplicaStatus.trim().toLowerCase();
-  return normalizedTargetReplicaStatus.length > LOCAL_NUM_ZERO ?
+  return normalizedTargetReplicaStatus.length > 0 ?
     normalizedTargetReplicaStatus :
     null;
 }
@@ -179,7 +177,7 @@ function resolveNormalizedTargetAddress(packet = null) {
       continue;
     }
     const normalizedAddress = address.trim();
-    if (normalizedAddress.length > LOCAL_NUM_ZERO) {
+    if (normalizedAddress.length > 0) {
       return normalizedAddress;
     }
   }
@@ -193,7 +191,7 @@ function isRaftHeartbeatAppendPacket(packet = null) {
   if (packetType !== RAFT_PACKET_TYPE.APPEND) {
     return false;
   }
-  return !Array.isArray(packet?.data) || packet.data.length === LOCAL_NUM_ZERO;
+  return !Array.isArray(packet?.data) || packet.data.length === 0;
 }
 
 function buildHeartbeatAppendReplacePendingKey(packet = null) {
@@ -247,7 +245,7 @@ function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null)
   if (packetType !== RAFT_PACKET_TYPE.APPEND) {
     return false;
   }
-  if (!Array.isArray(packet?.data) || packet.data.length === LOCAL_NUM_ZERO) {
+  if (!Array.isArray(packet?.data) || packet.data.length === 0) {
     return false;
   }
   return resolveNormalizedTargetReplicaStatus(packet) === ReplicaStatus.SYNCING ||
@@ -267,7 +265,7 @@ function isPriorityControlPlaneReadinessControlPacket(
   if (
     packetType === RAFT_PACKET_TYPE.APPEND &&
     Array.isArray(packet?.data) &&
-    packet.data.length > LOCAL_NUM_ZERO
+    packet.data.length > 0
   ) {
     return false;
   }
@@ -297,7 +295,7 @@ function isMessageGroupTargetAddress(packet = null) {
 function resolveMessageGroupReadinessDeliveryOptions(packet, packetType) {
   const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
     Array.isArray(packet?.data) &&
-    packet.data.length > LOCAL_NUM_ZERO;
+    packet.data.length > 0;
   if (hasAppendEntries) {
     return null;
   }

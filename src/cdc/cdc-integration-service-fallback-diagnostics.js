@@ -5,7 +5,6 @@ const {
   AUTHORITATIVE_FALLBACK_PHASE,
   AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
   CDC_INTEGRATION_SERVICE_LITERAL,
-  NUM,
   normalizeAuthoritativeFallbackOutcome,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
@@ -40,10 +39,10 @@ export function recordAuthoritativeFallbackSignal(context, options = {}) {
     rowKey,
     phase,
     outcome,
-    totalCount: NUM.ZERO,
-    lastRecordedAt: NUM.ZERO,
+    totalCount: 0,
+    lastRecordedAt: 0,
   };
-  totalEntry.totalCount += NUM.ONE;
+  totalEntry.totalCount += 1;
   totalEntry.lastRecordedAt = nowMs;
   context.authoritativeFallbackTotals.set(identity, totalEntry);
 
@@ -63,7 +62,7 @@ export function recordAuthoritativeFallbackSignal(context, options = {}) {
     nowMs,
   );
 
-  let windowCount = NUM.ZERO;
+  let windowCount = 0;
   for (const entry of context.authoritativeFallbackHistory) {
     if (
       entry.tableName === tableName &&
@@ -71,7 +70,7 @@ export function recordAuthoritativeFallbackSignal(context, options = {}) {
       entry.phase === phase &&
       entry.outcome === outcome
     ) {
-      windowCount += NUM.ONE;
+      windowCount += 1;
     }
   }
 
@@ -106,45 +105,45 @@ export function getAuthoritativeFallbackDiagnostics(context) {
 
   const phases = {
     [AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
     [AUTHORITATIVE_FALLBACK_PHASE.RECOVERY]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
     [AUTHORITATIVE_FALLBACK_PHASE.STEADY_STATE]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
   };
 
   const outcomes = {
     [AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
     [AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
     [AUTHORITATIVE_FALLBACK_OUTCOME.FAILED]: {
-      windowCount: NUM.ZERO,
-      totalCount: NUM.ZERO,
+      windowCount: 0,
+      totalCount: 0,
     },
   };
 
   const byTable = {};
-  let totalCount = NUM.ZERO;
+  let totalCount = 0;
 
   for (const totalEntry of context.authoritativeFallbackTotals.values()) {
     totalCount += totalEntry.totalCount;
     phases[totalEntry.phase].totalCount += totalEntry.totalCount;
     outcomes[totalEntry.outcome].totalCount += totalEntry.totalCount;
     const tableEntry = byTable[totalEntry.tableName] || {
-      totalCount: NUM.ZERO,
-      windowCount: NUM.ZERO,
-      lastRecordedAt: NUM.ZERO,
+      totalCount: 0,
+      windowCount: 0,
+      lastRecordedAt: 0,
     };
     tableEntry.totalCount += totalEntry.totalCount;
     tableEntry.lastRecordedAt = Math.max(
@@ -155,14 +154,14 @@ export function getAuthoritativeFallbackDiagnostics(context) {
   }
 
   for (const entry of context.authoritativeFallbackHistory) {
-    phases[entry.phase].windowCount += NUM.ONE;
-    outcomes[entry.outcome].windowCount += NUM.ONE;
+    phases[entry.phase].windowCount += 1;
+    outcomes[entry.outcome].windowCount += 1;
     const tableEntry = byTable[entry.tableName] || {
-      totalCount: NUM.ZERO,
-      windowCount: NUM.ZERO,
-      lastRecordedAt: NUM.ZERO,
+      totalCount: 0,
+      windowCount: 0,
+      lastRecordedAt: 0,
     };
-    tableEntry.windowCount += NUM.ONE;
+    tableEntry.windowCount += 1;
     tableEntry.lastRecordedAt = Math.max(
       tableEntry.lastRecordedAt,
       entry.recordedAt,
@@ -177,7 +176,7 @@ export function getAuthoritativeFallbackDiagnostics(context) {
     }));
 
   return {
-    schemaVersion: NUM.ONE,
+    schemaVersion: 1,
     nodeId: context.nodeId,
     windowMs: context.authoritativeFallbackWindowMs,
     totalCount,

@@ -1,7 +1,6 @@
 import {
   COLUMN,
   NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -75,11 +74,11 @@ const BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY = Object.freeze({
 });
 
 function normalizeBootstrapTopologySnapshotRowKey(value) {
-  if (typeof value === TYPEOF.UNDEFINED || value === null) {
+  if (typeof value === 'undefined' || value === null) {
     return null;
   }
   const normalizedValue = String(value).trim();
-  return normalizedValue.length > NUM.ZERO ? normalizedValue : null;
+  return normalizedValue.length > 0 ? normalizedValue : null;
 }
 
 function readBootstrapTopologySnapshotRowKey(tableName, row) {
@@ -124,8 +123,8 @@ function readBootstrapTopologySnapshotServiceType(row) {
     row?.service_type ??
     row?.serviceType ??
     null;
-  return typeof serviceType === TYPEOF.STRING &&
-    serviceType.length > NUM.ZERO ?
+  return typeof serviceType === 'string' &&
+    serviceType.length > 0 ?
     serviceType :
     null;
 }
@@ -135,8 +134,8 @@ function readBootstrapTopologySnapshotServiceStatus(row) {
     row?.[COLUMN.STATUS] ??
     row?.status ??
     null;
-  return typeof status === TYPEOF.STRING &&
-    status.length > NUM.ZERO ?
+  return typeof status === 'string' &&
+    status.length > 0 ?
     status :
     null;
 }
@@ -147,8 +146,8 @@ function readBootstrapTopologySnapshotServiceRaftRole(row) {
     row?.raft_role ??
     row?.raftRole ??
     null;
-  return typeof raftRole === TYPEOF.STRING &&
-    raftRole.length > NUM.ZERO ?
+  return typeof raftRole === 'string' &&
+    raftRole.length > 0 ?
     raftRole.toLowerCase() :
     null;
 }
@@ -160,7 +159,7 @@ function resolveAuthoritativeSystemTableRowSourceSelection(options = {}) {
     [];
   const mergedRows = Array.isArray(options.mergedRows) ? options.mergedRows : [];
 
-  if (localRowSets.length === NUM.ZERO) {
+  if (localRowSets.length === 0) {
     return Object.freeze({
       source: BOOTSTRAP_TOPOLOGY_SNAPSHOT_ROW_SOURCE.CACHE,
       reason:
@@ -169,7 +168,7 @@ function resolveAuthoritativeSystemTableRowSourceSelection(options = {}) {
     });
   }
 
-  if (mergedRows.length === NUM.ZERO && cacheRows.length > NUM.ZERO) {
+  if (mergedRows.length === 0 && cacheRows.length > 0) {
     return Object.freeze({
       source: BOOTSTRAP_TOPOLOGY_SNAPSHOT_ROW_SOURCE.CACHE,
       reason:
@@ -197,7 +196,7 @@ function resolveBootstrapTopologySnapshotPositiveInteger(
     return fallbackValue;
   }
   const normalizedValue = Math.floor(value);
-  if (normalizedValue <= NUM.ZERO) {
+  if (normalizedValue <= 0) {
     return fallbackValue;
   }
   return normalizedValue;

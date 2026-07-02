@@ -199,7 +199,7 @@ function createMockDispatchService(options = {}) {
       tracking.claimCalled = true;
       return {
         partitionResult: {
-          affectedRows: claimSucceeds ? NUM.ONE : NUM.ZERO,
+          affectedRows: claimSucceeds ? 1 : 0,
         },
       };
     },
@@ -325,7 +325,7 @@ test('Property 5: Dispatch handler verification', async (t) => {
               return false;
             }
 
-            if (tracking.dispatchedEvents.length !== NUM.ONE) {
+            if (tracking.dispatchedEvents.length !== 1) {
               return false;
             }
 
@@ -375,7 +375,7 @@ test('Property 5: Dispatch handler verification', async (t) => {
             }
 
             // A dispatch event should have been emitted
-            if (tracking.dispatchedEvents.length !== NUM.ONE) {
+            if (tracking.dispatchedEvents.length !== 1) {
               return false;
             }
 
@@ -433,7 +433,7 @@ test('Property 5: Dispatch handler verification', async (t) => {
               return false;
             }
 
-            if (tracking.dispatchedEvents.length !== NUM.ONE) {
+            if (tracking.dispatchedEvents.length !== 1) {
               return false;
             }
 
@@ -528,7 +528,7 @@ test('Property 5: Dispatch handler verification', async (t) => {
               return false;
             }
 
-            if (tracking.dispatchedEvents.length !== NUM.ONE) {
+            if (tracking.dispatchedEvents.length !== 1) {
               return false;
             }
 

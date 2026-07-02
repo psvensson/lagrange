@@ -18,7 +18,6 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {
@@ -59,10 +58,10 @@ class CDCPipelineReadinessGate extends EventEmitter {
       options.cdcPropagatedTables ||
       CDC_PIPELINE_READINESS_GATE.EMPTY_PROPAGATED_TABLES;
     this._pipelineProven = false;
-    this._now = typeof options.now === TYPEOF.FUNCTION ?
+    this._now = typeof options.now === 'function' ?
       options.now :
       CDC_PIPELINE_READINESS_NOW;
-    this._sleep = typeof options.sleep === TYPEOF.FUNCTION ?
+    this._sleep = typeof options.sleep === 'function' ?
       options.sleep :
       CDC_PIPELINE_READINESS_SLEEP;
 
@@ -125,7 +124,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
       );
     }
 
-    const ready = unmetConditions.length === NUM.ZERO;
+    const ready = unmetConditions.length === 0;
     return {ready, unmetConditions};
   }
 
@@ -182,7 +181,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
             unmetConditions: result.unmetConditions,
             timeoutMs: timeout,
             timeoutKind,
-            lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startMs),
+            lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
           },
         );
         emitInvariant(this, {
@@ -194,7 +193,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
             unmetConditions: result.unmetConditions,
             timeoutMs: timeout,
             timeoutKind,
-            lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startMs),
+            lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
           },
         });
         const error = new Error(
@@ -206,7 +205,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
         error.unmetConditions = result.unmetConditions;
         error.timeoutMs = timeout;
         error.timeoutKind = timeoutKind;
-        error.lastProgressElapsedMs = Math.max(NUM.ZERO, lastProgressAtMs - startMs);
+        error.lastProgressElapsedMs = Math.max(0, lastProgressAtMs - startMs);
         throw error;
       }
 
@@ -239,10 +238,10 @@ class CDCPipelineReadinessGate extends EventEmitter {
 
     // Seed-node path: verify per-partition subscribers.
     const partitionServices = context.partitionServices;
-    if (this.cdcPropagatedTables.length === NUM.ZERO) {
+    if (this.cdcPropagatedTables.length === 0) {
       return true;
     }
-    if (!partitionServices || partitionServices.size === NUM.ZERO) {
+    if (!partitionServices || partitionServices.size === 0) {
       return false;
     }
 
@@ -251,7 +250,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
       for (const partition of partitionServices.values()) {
         if (partition.tableName === tableName &&
             partition.cdcSubscribers &&
-            partition.cdcSubscribers.size > NUM.ZERO) {
+            partition.cdcSubscribers.size > 0) {
           hasSubscriber = true;
           break;
         }
@@ -273,19 +272,19 @@ class CDCPipelineReadinessGate extends EventEmitter {
    */
   _checkPropagationLeader(context) {
     const messageGroupServices = context.messageGroupServices;
-    if (!messageGroupServices || messageGroupServices.size === NUM.ZERO) {
+    if (!messageGroupServices || messageGroupServices.size === 0) {
       return false;
     }
 
     for (const mg of messageGroupServices.values()) {
-      if (typeof mg.isLeaderReplica === TYPEOF.FUNCTION &&
+      if (typeof mg.isLeaderReplica === 'function' &&
           mg.isLeaderReplica()) {
         return true;
       }
-      if (typeof mg.getLeaderId === TYPEOF.FUNCTION) {
+      if (typeof mg.getLeaderId === 'function') {
         const leaderId = mg.getLeaderId();
-        if (typeof leaderId === TYPEOF.STRING &&
-            leaderId.length > NUM.ZERO) {
+        if (typeof leaderId === 'string' &&
+            leaderId.length > 0) {
           return true;
         }
       }
@@ -306,7 +305,7 @@ class CDCPipelineReadinessGate extends EventEmitter {
     for (const tableName of this.cdcPropagatedTables) {
       try {
         const records = this.systemTableCache.getAll(tableName);
-        if (records && records.length > NUM.ZERO) {
+        if (records && records.length > 0) {
           return true;
         }
       } catch (error) {

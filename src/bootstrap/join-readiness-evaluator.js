@@ -10,7 +10,6 @@
 import {CONNECTION_STATE} from '../constants/transport.js';
 import {
   NODE_STATE,
-  NUM,
 } from '../constants/index.js';
 import {
   JOIN_READINESS_REASON,
@@ -47,7 +46,7 @@ const CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS = 5000;
 const CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES = new Set(
   JOIN_READINESS_REPAIR.TABLES.map((tableName) =>
     String(tableName || '').trim().toLowerCase(),
-  ).filter((tableName) => tableName.length > NUM.ZERO),
+  ).filter((tableName) => tableName.length > 0),
 );
 
 /**
@@ -82,12 +81,12 @@ class JoinReadinessEvaluator {
     this.delegates = options.delegates || {};
 
     // Mutable convergence state
-    this.lastCanonicalJoinRepairAtMs = NUM.ZERO;
+    this.lastCanonicalJoinRepairAtMs = 0;
     this.canonicalJoinRepairPromise = null;
-    this.lastMeshConnectivityRepairAtMs = NUM.ZERO;
+    this.lastMeshConnectivityRepairAtMs = 0;
     this.meshConnectivityRepairPromise = null;
     this.lastClusterMeshSignature = null;
-    this.lastCanonicalJoinBlockedLogAtMs = NUM.ZERO;
+    this.lastCanonicalJoinBlockedLogAtMs = 0;
     this.highestObservedSnapshotRevision = null;
     this.highestObservedSnapshotResumeToken = null;
   }

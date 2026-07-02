@@ -64,18 +64,17 @@ import {
   readCString,
 } from './pgwire-buffer-codec.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
 const LOCAL_STR_ROLLBACK = 'ROLLBACK';
-const LOCAL_NUM_0X7FFFFFFF = 0x7FFFFFFF;
+const LOCAL_NUM_INT32_MAX = 0x7FFFFFFF;
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
-const LOCAL_NUM_0X4E = 0x4E;
-const LOCAL_NUM_16 = 16;
-const LOCAL_STR_1RBWE = 'current transaction is aborted, commands ignored ';
-const LOCAL_STR_1ZW3J = 'until end of transaction block';
+const LOCAL_NUM_SEVENTY_EIGHT = 0x4E;
+const LOCAL_NUM_SIXTEEN = 16;
+const LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS = 'current transaction is aborted, commands ignored ';
+const LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK = 'until end of transaction block';
 const LOCAL_STR_UNNAMED = '(unnamed)';
 
 // --- Internal handler states ---
@@ -112,9 +111,9 @@ class PgWireProtocolHandler {
     this._logger = options.logger || console;
     this._phase = HANDLER_PHASE.STARTUP;
     this._session = null;
-    this._buffer = Buffer.alloc(LOCAL_NUM_ZERO);
-    this._pid = (Math.random() * LOCAL_NUM_0X7FFFFFFF) | LOCAL_NUM_ZERO;
-    this._secretKey = (Math.random() * LOCAL_NUM_0X7FFFFFFF) | LOCAL_NUM_ZERO;
+    this._buffer = Buffer.alloc(0);
+    this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
+    this._secretKey = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
 
     this._onData = this._onData.bind(this);
     this._onError = this._onError.bind(this);
@@ -144,7 +143,7 @@ class PgWireProtocolHandler {
       this._adapter.closeSession(sid);
       this._session.close();
     }
-    this._buffer = Buffer.alloc(LOCAL_NUM_ZERO);
+    this._buffer = Buffer.alloc(0);
   }
 
   /**
@@ -210,7 +209,7 @@ class PgWireProtocolHandler {
     // Check for SSL request
     if (version === PG_SSL_REQUEST_CODE) {
       // Respond with 'N' (SSL not supported), stay in startup
-      this._socket.write(Buffer.from([LOCAL_NUM_0X4E])); // 'N'
+      this._socket.write(Buffer.from([LOCAL_NUM_SEVENTY_EIGHT])); // 'N'
       return;
     }
 
@@ -294,7 +293,7 @@ class PgWireProtocolHandler {
     this._logger.debug(PG_HANDLER_LOG.AUTH_OK, {sessionId});
 
     // Process any remaining buffered data
-    if (this._buffer.length > LOCAL_NUM_ZERO) {
+    if (this._buffer.length > 0) {
       this._processMessages();
     }
   }
@@ -358,13 +357,13 @@ class PgWireProtocolHandler {
       break;
     default:
       this._logger.debug(PG_HANDLER_LOG.UNSUPPORTED_MSG, {
-        type: `0x${type.toString(LOCAL_NUM_16)}`,
+        type: `0x${type.toString(LOCAL_NUM_SIXTEEN)}`,
       });
       this._sendError(
         PG_SEVERITY.ERROR,
         PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
         `${PG_HANDLER_ERROR.UNKNOWN_MESSAGE_TYPE}: ` +
-            `0x${type.toString(LOCAL_NUM_16)}`,
+            `0x${type.toString(LOCAL_NUM_SIXTEEN)}`,
       );
       break;
     }
@@ -388,7 +387,7 @@ class PgWireProtocolHandler {
       sessionId: this._session.sessionId,
     });
 
-    if (!query || query.trim().length === LOCAL_NUM_ZERO) {
+    if (!query || query.trim().length === 0) {
       this._socket.write(buildEmptyQueryResponse());
       this._socket.write(
         buildReadyForQuery(this._session.getTransactionState()),
@@ -403,8 +402,8 @@ class PgWireProtocolHandler {
         this._sendError(
           PG_SEVERITY.ERROR,
           PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_1RBWE +
-            LOCAL_STR_1ZW3J,
+          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
+            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
         );
         this._socket.write(
           buildReadyForQuery(this._session.getTransactionState()),
@@ -560,8 +559,8 @@ class PgWireProtocolHandler {
         this._sendError(
           PG_SEVERITY.ERROR,
           PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_1RBWE +
-            LOCAL_STR_1ZW3J,
+          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
+            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
         );
         return;
       }
@@ -643,7 +642,7 @@ class PgWireProtocolHandler {
 
       // Send result set for SELECT-like queries
       const columns = extractColumns(result);
-      if (columns.length > LOCAL_NUM_ZERO && Array.isArray(result?.rows)) {
+      if (columns.length > 0 && Array.isArray(result?.rows)) {
         this._socket.write(buildRowDescription(columns));
         for (const row of result.rows) {
           const values = extractRowValues(row, columns);

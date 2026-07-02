@@ -4,13 +4,11 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './prior
 const {
   DEFAULT_MIN_REPLICA_COUNT,
   INITIAL_PARTITION_IDS,
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   isPriorityControlPlanePartition,
   normalizePriorityRecoveryOperationPartitionId,
   readAuthoritativeControlPlaneRows,
@@ -32,7 +30,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       return mergedRow;
     };
     const appendRow = (row, preferIncoming = false) => {
-      if (!row || typeof row !== TYPEOF.OBJECT) {
+      if (!row || typeof row !== 'object') {
         return;
       }
       const rowId = this.getReplicaRowIdentity(row);
@@ -75,7 +73,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       if (
         !result?.success ||
         !Array.isArray(result.rows) ||
-        result.rows.length === NUM.ZERO
+        result.rows.length === 0
       ) {
         return cachedRows;
       }
@@ -90,7 +88,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (
       !partitionId ||
       !systemTableCache ||
-      typeof systemTableCache.get !== TYPEOF.FUNCTION
+      typeof systemTableCache.get !== 'function'
     ) {
       return null;
     }
@@ -126,11 +124,11 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       if (
         !result?.success ||
         !Array.isArray(result.rows) ||
-        result.rows.length === NUM.ZERO
+        result.rows.length === 0
       ) {
         return cachedRow;
       }
-      return this.mergePartitionRowForSafety(result.rows[NUM.ZERO], cachedRow);
+      return this.mergePartitionRowForSafety(result.rows[0], cachedRow);
     } catch {
       return cachedRow;
     }
@@ -149,7 +147,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       const policy =
         await this.tablePolicyService.getPolicyForPartition(partitionId);
       const minReplicaCount = Number(policy?.minReplicaCount);
-      if (Number.isFinite(minReplicaCount) && minReplicaCount > NUM.ZERO) {
+      if (Number.isFinite(minReplicaCount) && minReplicaCount > 0) {
         return Math.floor(minReplicaCount);
       }
     } catch (error) {
@@ -171,8 +169,8 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       return false;
     }
     const decisionDimension =
-      typeof options?.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO ?
+      typeof options?.decisionDimension === 'string' &&
+      options.decisionDimension.length > 0 ?
         options.decisionDimension :
         this.resolveOperationReadinessDecisionDimension(
           options?.partitionId || null,
@@ -182,7 +180,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       participationKind &&
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService
-        .getControlPlaneParticipationSync === TYPEOF.FUNCTION
+        .getControlPlaneParticipationSync === 'function'
     ) {
       const participation =
         this.controlPlaneReadinessService.getControlPlaneParticipationSync(
@@ -221,15 +219,15 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (
       !readinessService ||
       (typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead !==
-        TYPEOF.FUNCTION &&
+        'function' &&
       (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-        TYPEOF.FUNCTION &&
+        'function' &&
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION))
+          'function'))
     ) {
       return null;
     }
@@ -240,7 +238,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       partitionId ===
         INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS] &&
       typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead(
         publicationNodeId,
@@ -249,7 +247,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
     if (
       typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
         publicationNodeId,
@@ -258,7 +256,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
     if (
       typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
         publicationNodeId,
@@ -267,7 +265,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
     if (
       typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
         publicationNodeId,
@@ -276,7 +274,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
     if (
       typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
         publicationNodeId,
@@ -287,15 +285,15 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   normalizePriorityPublicationStatus(planningSnapshot) {
-    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
     const publicationStatus =
-      typeof planningSnapshot.publicationStatus === TYPEOF.STRING &&
-      planningSnapshot.publicationStatus.length > NUM.ZERO ?
+      typeof planningSnapshot.publicationStatus === 'string' &&
+      planningSnapshot.publicationStatus.length > 0 ?
         planningSnapshot.publicationStatus :
-        typeof planningSnapshot.status === TYPEOF.STRING &&
-            planningSnapshot.status.length > NUM.ZERO ?
+        typeof planningSnapshot.status === 'string' &&
+            planningSnapshot.status.length > 0 ?
           planningSnapshot.status :
           null;
     return publicationStatus ? publicationStatus.trim().toUpperCase() : null;

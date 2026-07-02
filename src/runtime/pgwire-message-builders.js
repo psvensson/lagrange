@@ -12,12 +12,9 @@ import {
 } from './pgwire-protocol-constants.js';
 import {writeCString} from './pgwire-buffer-codec.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
 const LOCAL_NUM_FOUR = 4;
-const LOCAL_NUM_18 = 18;
-const LOCAL_NUM_25 = 25;
+const LOCAL_NUM_EIGHTEEN = 18;
+const LOCAL_NUM_TWENTY_FIVE = 25;
 const LOCAL_STR_UTF8 = 'utf8';
 
 /**
@@ -29,9 +26,9 @@ const LOCAL_STR_UTF8 = 'utf8';
  */
 function buildMessage(type, payload) {
   const len = PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + payload.length;
-  const buf = Buffer.allocUnsafe(LOCAL_NUM_ONE + len);
-  buf[LOCAL_NUM_ZERO] = type;
-  buf.writeInt32BE(len, LOCAL_NUM_ONE);
+  const buf = Buffer.allocUnsafe(1 + len);
+  buf[0] = type;
+  buf.writeInt32BE(len, 1);
   payload.copy(buf, PG_BUFFER_LIMIT.MSG_HEADER_SIZE);
   return buf;
 }
@@ -42,7 +39,7 @@ function buildMessage(type, payload) {
  */
 function buildAuthOk() {
   const payload = Buffer.allocUnsafe(PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE);
-  payload.writeInt32BE(PG_AUTH_TYPE.OK, LOCAL_NUM_ZERO);
+  payload.writeInt32BE(PG_AUTH_TYPE.OK, 0);
   return buildMessage(PG_BACKEND_MSG.AUTH, payload);
 }
 
@@ -53,10 +50,10 @@ function buildAuthOk() {
  * @return {Buffer}
  */
 function buildParameterStatus(name, value) {
-  const nameLen = Buffer.byteLength(name, LOCAL_STR_UTF8) + LOCAL_NUM_ONE;
-  const valLen = Buffer.byteLength(value, LOCAL_STR_UTF8) + LOCAL_NUM_ONE;
+  const nameLen = Buffer.byteLength(name, LOCAL_STR_UTF8) + 1;
+  const valLen = Buffer.byteLength(value, LOCAL_STR_UTF8) + 1;
   const payload = Buffer.allocUnsafe(nameLen + valLen);
-  const off = writeCString(payload, name, LOCAL_NUM_ZERO);
+  const off = writeCString(payload, name, 0);
   writeCString(payload, value, off);
   return buildMessage(PG_BACKEND_MSG.PARAMETER_STATUS, payload);
 }
@@ -69,7 +66,7 @@ function buildParameterStatus(name, value) {
  */
 function buildBackendKeyData(pid, secretKey) {
   const payload = Buffer.allocUnsafe(8);
-  payload.writeInt32BE(pid, LOCAL_NUM_ZERO);
+  payload.writeInt32BE(pid, 0);
   payload.writeInt32BE(secretKey, LOCAL_NUM_FOUR);
   return buildMessage(PG_BACKEND_MSG.BACKEND_KEY_DATA, payload);
 }
@@ -80,8 +77,8 @@ function buildBackendKeyData(pid, secretKey) {
  * @return {Buffer}
  */
 function buildReadyForQuery(txState) {
-  const payload = Buffer.allocUnsafe(LOCAL_NUM_ONE);
-  payload[LOCAL_NUM_ZERO] = txState;
+  const payload = Buffer.allocUnsafe(1);
+  payload[0] = txState;
   return buildMessage(PG_BACKEND_MSG.READY_FOR_QUERY, payload);
 }
 
@@ -98,18 +95,18 @@ function buildErrorResponse(severity, code, message) {
     {id: PG_ERROR_FIELD.CODE, val: code},
     {id: PG_ERROR_FIELD.MESSAGE, val: message},
   ];
-  let size = LOCAL_NUM_ONE;
+  let size = 1;
   for (const f of fields) {
-    size += LOCAL_NUM_ONE + Buffer.byteLength(f.val, LOCAL_STR_UTF8) +
-      LOCAL_NUM_ONE;
+    size += 1 + Buffer.byteLength(f.val, LOCAL_STR_UTF8) +
+      1;
   }
   const payload = Buffer.allocUnsafe(size);
-  let off = LOCAL_NUM_ZERO;
+  let off = 0;
   for (const f of fields) {
     payload[off++] = f.id;
     off = writeCString(payload, f.val, off);
   }
-  payload[off] = LOCAL_NUM_ZERO;
+  payload[off] = 0;
   return buildMessage(PG_BACKEND_MSG.ERROR_RESPONSE, payload);
 }
 
@@ -119,22 +116,22 @@ function buildErrorResponse(severity, code, message) {
  * @return {Buffer}
  */
 function buildRowDescription(columns) {
-  let size = LOCAL_NUM_TWO;
+  let size = 2;
   for (const col of columns) {
-    size += Buffer.byteLength(col.name, LOCAL_STR_UTF8) + LOCAL_NUM_ONE +
-      LOCAL_NUM_18;
+    size += Buffer.byteLength(col.name, LOCAL_STR_UTF8) + 1 +
+      LOCAL_NUM_EIGHTEEN;
   }
   const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(columns.length, LOCAL_NUM_ZERO);
-  let off = LOCAL_NUM_TWO;
+  payload.writeInt16BE(columns.length, 0);
+  let off = 2;
   for (const col of columns) {
     off = writeCString(payload, col.name, off);
-    payload.writeInt32BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_TWO;
-    payload.writeInt32BE(LOCAL_NUM_25, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(-LOCAL_NUM_ONE, off); off += LOCAL_NUM_TWO;
-    payload.writeInt32BE(-LOCAL_NUM_ONE, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_TWO;
+    payload.writeInt32BE(0, off); off += LOCAL_NUM_FOUR;
+    payload.writeInt16BE(0, off); off += 2;
+    payload.writeInt32BE(LOCAL_NUM_TWENTY_FIVE, off); off += LOCAL_NUM_FOUR;
+    payload.writeInt16BE(-1, off); off += 2;
+    payload.writeInt32BE(-1, off); off += LOCAL_NUM_FOUR;
+    payload.writeInt16BE(0, off); off += 2;
   }
   return buildMessage(PG_BACKEND_MSG.ROW_DESCRIPTION, payload);
 }
@@ -145,7 +142,7 @@ function buildRowDescription(columns) {
  * @return {Buffer}
  */
 function buildDataRow(values) {
-  let size = LOCAL_NUM_TWO;
+  let size = 2;
   for (const v of values) {
     if (v === null || v === undefined) {
       size += LOCAL_NUM_FOUR;
@@ -155,11 +152,11 @@ function buildDataRow(values) {
     }
   }
   const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(values.length, LOCAL_NUM_ZERO);
-  let off = LOCAL_NUM_TWO;
+  payload.writeInt16BE(values.length, 0);
+  let off = 2;
   for (const v of values) {
     if (v === null || v === undefined) {
-      payload.writeInt32BE(-LOCAL_NUM_ONE, off);
+      payload.writeInt32BE(-1, off);
       off += LOCAL_NUM_FOUR;
     } else {
       const s = String(v);
@@ -179,9 +176,9 @@ function buildDataRow(values) {
  * @return {Buffer}
  */
 function buildCommandComplete(tag) {
-  const len = Buffer.byteLength(tag, LOCAL_STR_UTF8) + LOCAL_NUM_ONE;
+  const len = Buffer.byteLength(tag, LOCAL_STR_UTF8) + 1;
   const payload = Buffer.allocUnsafe(len);
-  writeCString(payload, tag, LOCAL_NUM_ZERO);
+  writeCString(payload, tag, 0);
   return buildMessage(PG_BACKEND_MSG.COMMAND_COMPLETE, payload);
 }
 

@@ -17,7 +17,6 @@ import {
   isRetryablePartitionTransitionState,
 } from './partition-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_OBJECT = 'object';
 
 const RETRYABLE_MANAGED_SPLIT_TIMEOUT_CLASSIFICATION_SET = new Set([
@@ -26,7 +25,7 @@ const RETRYABLE_MANAGED_SPLIT_TIMEOUT_CLASSIFICATION_SET = new Set([
 ]);
 
 function normalizeManagedSplitExecutionFailureMessage(errorOrFailure) {
-  return String(errorOrFailure?.message || LOCAL_STR_EMPTY).toLowerCase();
+  return String(errorOrFailure?.message || '').toLowerCase();
 }
 
 function resolveManagedSplitRetryableTimeoutClassification(

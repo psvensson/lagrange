@@ -6,7 +6,6 @@ const {
   CDC_PIPELINE_METRIC,
   CONTROL_PLANE_PARTITION_IDS,
   ERRORS,
-  NUM,
   PARTITION_CDC_EVENT_BUILD_STATE,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
@@ -20,7 +19,6 @@ const {
   SQL,
   STRING,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   fs,
 } = PARTITION_SERVICE_SHARED;
 
@@ -39,7 +37,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       partitionId: this.partitionId,
       entryType: entry.type,
       sql: entry.sql ?
-        entry.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
+        entry.sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
         null,
       subscriberCount: this.cdcSubscribers.size,
     });
@@ -52,7 +50,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     }
     const tableName = envelopeResult.cdcEventEnvelope.tableName;
     if (
-      this.cdcSubscribers.size === NUM.ZERO &&
+      this.cdcSubscribers.size === 0 &&
       !this.shouldBufferCdcWithoutSubscribers(tableName)
     ) {
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
@@ -66,7 +64,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     });
     this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
     if (
-      this.cdcSubscribers.size > NUM.ZERO &&
+      this.cdcSubscribers.size > 0 &&
       this.cdcEventBuffer.hasEvents()
     ) {
       this.bufferCDCEventForRetry(
@@ -75,7 +73,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       );
       return;
     }
-    if (this.cdcSubscribers.size === NUM.ZERO) {
+    if (this.cdcSubscribers.size === 0) {
       if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
         return;
       }
@@ -105,8 +103,8 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       subscriberCount: this.cdcSubscribers.size,
     });
     const subscriberSnapshot = [...this.cdcSubscribers];
-    let deliveredCount = NUM.ZERO;
-    let deliveryFailureCount = NUM.ZERO;
+    let deliveredCount = 0;
+    let deliveryFailureCount = 0;
     for (const subscriber of subscriberSnapshot) {
       try {
         await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
@@ -124,7 +122,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
         });
       }
     }
-    if (deliveryFailureCount > NUM.ZERO) {
+    if (deliveryFailureCount > 0) {
       this.bufferCDCEventForRetry(
         cdcEvent,
         PARTITION_SERVICE_LITERAL.SUBSCRIBER_DELIVERY_FAILED,
@@ -145,7 +143,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @return {Promise<*>}
    */
   trackPendingCDCEvent(promise) {
-    if (!promise || typeof promise.finally !== TYPEOF.FUNCTION) {
+    if (!promise || typeof promise.finally !== 'function') {
       return promise;
     }
     this.pendingCDCEventDeliveries.add(promise);
@@ -166,7 +164,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     let entryType = entry?.type || null;
     if (
       entryType === PARTITION_SERVICE_OPERATION.QUERY &&
-      typeof entry?.sql === TYPEOF.STRING
+      typeof entry?.sql === 'string'
     ) {
       const sqlUpper = entry.sql.trim().toUpperCase();
       if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase())) {
@@ -240,11 +238,11 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     });
   }
   waitForCommittedWrite(entryId, options = {}) {
-    if (typeof entryId !== TYPEOF.STRING || entryId.length === NUM.ZERO) {
+    if (typeof entryId !== 'string' || entryId.length === 0) {
       return Promise.reject(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE));
     }
     const timeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO ?
+      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
         Math.floor(options.timeoutMs) :
         PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS;
     let resolvePending = null;
@@ -266,7 +264,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
         timeoutId,
         logIndex: Number.isFinite(options?.logIndex) ? options.logIndex : null,
         result:
-          options?.result && typeof options.result === TYPEOF.OBJECT ?
+          options?.result && typeof options.result === 'object' ?
             {...options.result} :
             null,
       });
@@ -282,7 +280,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return false;
     }
     pending.result =
-      result && typeof result === TYPEOF.OBJECT ? {...result} : null;
+      result && typeof result === 'object' ? {...result} : null;
     return true;
   }
   resolveCommittedWrite(entryId, result = null) {
@@ -291,10 +289,10 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return false;
     }
     const resolvedResult = {
-      ...(pending.result && typeof pending.result === TYPEOF.OBJECT ?
+      ...(pending.result && typeof pending.result === 'object' ?
         pending.result :
         {}),
-      ...(result && typeof result === TYPEOF.OBJECT ? result : {}),
+      ...(result && typeof result === 'object' ? result : {}),
     };
     if (
       !Number.isFinite(resolvedResult.logIndex) &&
@@ -305,7 +303,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     return this.proposalQueue.resolve(entryId, resolvedResult);
   }
   rejectCommittedWrite(entryId, error) {
-    if (typeof entryId !== TYPEOF.STRING || entryId.length === NUM.ZERO) {
+    if (typeof entryId !== 'string' || entryId.length === 0) {
       return false;
     }
     return this.proposalQueue.reject(entryId, error);
@@ -331,7 +329,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       STRING.EMPTY;
     return [
       command.proposedBy || STRING.EMPTY,
-      String(command.proposedAt || NUM.ZERO),
+      String(command.proposedAt || 0),
       command.timestamp || STRING.EMPTY,
       command.sql,
       params,
@@ -624,7 +622,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   async calculatePartitionSize() {
     if (!this.db) {
-      return NUM.ZERO;
+      return 0;
     }
     try {
       const pageCount = this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_PAGE_COUNT, {
@@ -646,18 +644,18 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
         partitionId: this.partitionId,
         error: error.message,
       });
-      return NUM.ZERO;
+      return 0;
     }
   }
   calculateOnDiskPartitionSize() {
     if (
-      typeof this.dbPath !== TYPEOF.STRING ||
-      this.dbPath.length === NUM.ZERO ||
+      typeof this.dbPath !== 'string' ||
+      this.dbPath.length === 0 ||
       this.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH
     ) {
-      return NUM.ZERO;
+      return 0;
     }
-    let totalSizeBytes = NUM.ZERO;
+    let totalSizeBytes = 0;
     for (const candidatePath of [this.dbPath, `${this.dbPath}-wal`]) {
       try {
         totalSizeBytes += fs.statSync(candidatePath).size;

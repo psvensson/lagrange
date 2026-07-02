@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {REPLICA_RECOVERY_NUM} from './replica-recovery-constants.js';
 
 /**
@@ -8,12 +7,12 @@ import {REPLICA_RECOVERY_NUM} from './replica-recovery-constants.js';
  */
 function sortReplicaRecoveryNodesByLoad(nodes) {
   return [...nodes].sort((a, b) => {
-    const loadA = (a.cpu_usage_percent || NUM.ZERO) +
-      (a.memory_usage_percent || NUM.ZERO) +
-      (a.disk_usage_percent || NUM.ZERO);
-    const loadB = (b.cpu_usage_percent || NUM.ZERO) +
-      (b.memory_usage_percent || NUM.ZERO) +
-      (b.disk_usage_percent || NUM.ZERO);
+    const loadA = (a.cpu_usage_percent || 0) +
+      (a.memory_usage_percent || 0) +
+      (a.disk_usage_percent || 0);
+    const loadB = (b.cpu_usage_percent || 0) +
+      (b.memory_usage_percent || 0) +
+      (b.disk_usage_percent || 0);
     return loadA - loadB;
   });
 }

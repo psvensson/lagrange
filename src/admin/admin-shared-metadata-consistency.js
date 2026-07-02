@@ -1,40 +1,38 @@
 import {
   COLUMN,
-  NUM,
-  TYPEOF,
 } from '../constants/index.js';
 
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_PARTITION = 'partition';
-const LOCAL_STR_ZBNMX = 'leader_node_id_missing';
-const LOCAL_STR_1RF9D = 'leader_service_missing';
+const LOCAL_STR_LEADER_NODE_ID_MISSING = 'leader_node_id_missing';
+const LOCAL_STR_LEADER_SERVICE_MISSING = 'leader_service_missing';
 const LOCAL_STR_NODE_ID = 'node_id';
 const LOCAL_STR_NODEID = 'nodeId';
 const LOCAL_STR_LEADER_NODE_ID = 'leader_node_id';
 const LOCAL_STR_LEADERNODEID = 'leaderNodeId';
 
 function normalizeNodeId(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeNonEmptyString(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeLowerString(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim().toLowerCase();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function collectNodeIds(rows, fieldCandidates, predicate = null) {
@@ -88,7 +86,7 @@ function isPartitionServiceRow(row) {
 
 function evaluatePartitionReplicaTopology(options = {}) {
   const partitionRow = options.partitionRow &&
-    typeof options.partitionRow === TYPEOF.OBJECT ?
+    typeof options.partitionRow === 'object' ?
     options.partitionRow :
     null;
   const partitionId = normalizeNonEmptyString(
@@ -105,7 +103,7 @@ function evaluatePartitionReplicaTopology(options = {}) {
     partitionRow?.[COLUMN.REPLICA_COUNT] ??
       partitionRow?.replica_count ??
       partitionRow?.replicaCount ??
-      NUM.ZERO,
+      0,
   );
   const requiresAddress = options.requiresAddress === true;
   const requireLeaderNodeId = options.requireLeaderNodeId === true;
@@ -145,24 +143,24 @@ function evaluatePartitionReplicaTopology(options = {}) {
   const canonicalLeaderReplica = leaderNodeId ?
     activeReplicaNodeIds.includes(leaderNodeId) :
     false;
-  const leaderServiceVisible = leaderRoleNodeIds.length > NUM.ZERO;
+  const leaderServiceVisible = leaderRoleNodeIds.length > 0;
   const leaderKnown = canonicalLeaderReplica || leaderServiceVisible;
-  const hasLeaderMetadata = Boolean(leaderNodeId) || leaderRoleNodeIds.length > NUM.ZERO;
+  const hasLeaderMetadata = Boolean(leaderNodeId) || leaderRoleNodeIds.length > 0;
   const overTargetReplicaCount =
     Number.isInteger(desiredReplicaCount) &&
-    desiredReplicaCount > NUM.ZERO &&
+    desiredReplicaCount > 0 &&
     activeReplicaNodeIds.length > desiredReplicaCount;
   const missingLeaderNodeId =
     requireLeaderNodeId &&
     !leaderNodeId &&
-    activeReplicaNodeIds.length > NUM.ZERO;
+    activeReplicaNodeIds.length > 0;
   let lastErrorCode = null;
   if (missingLeaderNodeId) {
-    lastErrorCode = LOCAL_STR_ZBNMX;
+    lastErrorCode = LOCAL_STR_LEADER_NODE_ID_MISSING;
   } else if (hasLeaderMetadata &&
-      activeReplicaNodeIds.length > NUM.ZERO &&
+      activeReplicaNodeIds.length > 0 &&
       leaderKnown !== true) {
-    lastErrorCode = LOCAL_STR_1RF9D;
+    lastErrorCode = LOCAL_STR_LEADER_SERVICE_MISSING;
   }
   const topologyState = overTargetReplicaCount || lastErrorCode ?
     'invalid' :
@@ -174,7 +172,7 @@ function evaluatePartitionReplicaTopology(options = {}) {
     partitionId,
     leaderNodeId,
     desiredReplicaCount:
-      Number.isInteger(desiredReplicaCount) && desiredReplicaCount > NUM.ZERO ?
+      Number.isInteger(desiredReplicaCount) && desiredReplicaCount > 0 ?
         desiredReplicaCount :
         null,
     activeReplicaNodeIds: Object.freeze(activeReplicaNodeIds),
@@ -226,7 +224,7 @@ function evaluateSharedMetadataNodeCoverage(options = {}) {
   );
 
   return Object.freeze({
-    hasCoverageGap: missingNodeIds.length > NUM.ZERO,
+    hasCoverageGap: missingNodeIds.length > 0,
     observedNodeIds: Object.freeze(sortNodeIds(observedNodeIds)),
     referencedNodeIds: Object.freeze(sortNodeIds(referencedNodeIds)),
     missingNodeIds: Object.freeze(missingNodeIds),

@@ -1,7 +1,6 @@
-import {NUM} from '../constants/index.js';
 import {OWNER_OUTCOME_FRESHNESS} from './owner-outcome-contract.js';
 
-const PROJECTION_FRESHNESS_DEFAULT_UNKNOWN_EPOCH = NUM.ZERO;
+const PROJECTION_FRESHNESS_DEFAULT_UNKNOWN_EPOCH = 0;
 
 function normalizeProjectionEpoch(value) {
   const epoch = Number(value);

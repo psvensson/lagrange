@@ -270,10 +270,10 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         await this.awaitLocalQueryTransportReadinessForReadySignal();
         const stats = await NodeService.getInstance().getNodeStats();
         const cpuCores = Number.isFinite(stats?.cpu?.count) ?
-          stats.cpu.count : NUM.ZERO;
+          stats.cpu.count : 0;
         const totalMemoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
           Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
-          NUM.ZERO;
+          0;
         const diskGb = Number.isFinite(stats?.diskGb) ?
           stats.diskGb : NUM.HUNDRED;
         const now = Date.now();
@@ -286,13 +286,13 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           [COLUMN.DISK_GB]: diskGb,
           [COLUMN.CPU_USAGE_PERCENT]:
             Number.isFinite(stats?.cpu?.usagePercent) ?
-              stats.cpu.usagePercent : NUM.ZERO,
+              stats.cpu.usagePercent : 0,
           [COLUMN.MEMORY_USAGE_PERCENT]:
             Number.isFinite(stats?.memory?.usagePercent) ?
-              stats.memory.usagePercent : NUM.ZERO,
+              stats.memory.usagePercent : 0,
           [COLUMN.DISK_USAGE_PERCENT]:
             Number.isFinite(stats?.diskUsagePercent) ?
-              stats.diskUsagePercent : NUM.ZERO,
+              stats.diskUsagePercent : 0,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.CAPABILITIES]: JSON.stringify([]),

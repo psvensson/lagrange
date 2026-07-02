@@ -19,7 +19,7 @@ const HLC_SEPARATOR = Object.freeze({
 
 const HLC_PART = Object.freeze({
   MIN_COUNT: NUM.THREE,
-  NODE_ID_INDEX: NUM.TWO,
+  NODE_ID_INDEX: 2,
   PARSE_RADIX: NUM.TEN,
 });
 

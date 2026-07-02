@@ -54,8 +54,8 @@ function initConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageSoftPressurePercent:
         STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
       storageHardPressurePercent:
@@ -242,8 +242,8 @@ test('evaluateAllPartitions - defers split when capacity ' +
   });
 
   t.equal(results.evaluated, true);
-  t.equal(results.splitCandidates.length, NUM.ZERO);
-  t.equal(results.splitDeferred.length, NUM.ONE);
+  t.equal(results.splitCandidates.length, 0);
+  t.equal(results.splitDeferred.length, 1);
   t.equal(results.splitDeferred[0].partitionId, 'partition-1');
   t.equal(
     results.splitDeferred[0].reason,
@@ -265,8 +265,8 @@ test('evaluateAllPartitions - allows split when capacity ' +
     targetNodeId: 'node-1',
   });
 
-  t.equal(results.splitCandidates.length, NUM.ONE);
-  t.equal(results.splitDeferred.length, NUM.ZERO);
+  t.equal(results.splitCandidates.length, 1);
+  t.equal(results.splitDeferred.length, 0);
   t.equal(results.splitCandidates[0], 'partition-1');
   manager.shutdown();
 });
@@ -280,8 +280,8 @@ test('evaluateAllPartitions - skips preflight when no ' +
   // Without targetNodeId, preflight is skipped
   const results = await manager.evaluateAllPartitions();
 
-  t.equal(results.splitCandidates.length, NUM.ONE);
-  t.equal(results.splitDeferred.length, NUM.ZERO);
+  t.equal(results.splitCandidates.length, 1);
+  t.equal(results.splitDeferred.length, 0);
   manager.shutdown();
 });
 
@@ -300,7 +300,7 @@ test('evaluateAllPartitions - emits splitDeferred event on ' +
     targetNodeId: 'node-1',
   });
 
-  t.equal(events.length, NUM.ONE);
+  t.equal(events.length, 1);
   t.equal(events[0].partitionId, 'partition-1');
   t.equal(
     events[0].reason,
@@ -349,7 +349,7 @@ test('evaluateAllPartitions - merge candidates remain eligible ' +
   });
 
   // Merges are never blocked by capacity pressure
-  t.equal(results.mergeCandidates.length, NUM.ONE);
+  t.equal(results.mergeCandidates.length, 1);
   t.equal(results.mergeCandidates[0].leftId, 'partition-left');
   t.equal(
     results.mergeCandidates[0].rightId, 'partition-right');

@@ -9,13 +9,11 @@ const {
   CONTROL_PLANE_READINESS_DIMENSION,
   ENTITY_TYPE,
   INITIAL_PARTITION_IDS,
-  NUM,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TYPEOF,
   normalizeLocalQueryTransportReadiness,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
@@ -32,7 +30,7 @@ const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
 const AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER = false;
 
 function isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) {
-  if (typeof errorMessage !== TYPEOF.STRING) {
+  if (typeof errorMessage !== 'string') {
     return false;
   }
 
@@ -60,19 +58,19 @@ function isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) {
     ),
   );
 
-  return Number.isInteger(timeoutValue) && timeoutValue > NUM.ZERO;
+  return Number.isInteger(timeoutValue) && timeoutValue > 0;
 }
 
 function normalizeAuthoritativeReadLocalQueryTransport(
   localQueryTransportReadiness = null,
 ) {
   return localQueryTransportReadiness &&
-    typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+    typeof localQueryTransportReadiness === 'object' ?
     {
       state: localQueryTransportReadiness.state || null,
       ready: localQueryTransportReadiness.ready === true,
       reason: localQueryTransportReadiness.reason || null,
-      retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+      retryAfterMs: localQueryTransportReadiness.retryAfterMs || 0,
     } :
     null;
 }
@@ -99,7 +97,7 @@ function shouldRetryOwnerRpcReadViaSqlFallback(
   ).toUpperCase();
 
   const errorMessage =
-    typeof ownerRpcResult?.error === TYPEOF.STRING ?
+    typeof ownerRpcResult?.error === 'string' ?
       ownerRpcResult.error :
       ownerRpcResult?.error?.message || ownerRpcResult?.message;
 
@@ -109,7 +107,7 @@ function shouldRetryOwnerRpcReadViaSqlFallback(
     ownerRpcResult?.deferRetry === true ||
     (
       Number.isFinite(ownerRpcResult?.retryAfterMs) &&
-      ownerRpcResult.retryAfterMs > NUM.ZERO
+      ownerRpcResult.retryAfterMs > 0
     )
   );
 }
@@ -119,11 +117,11 @@ function buildOwnerRpcSqlFallbackQueryOptions(
   baseDiagnostics = {},
 ) {
   const resolvedQueryOptions =
-    queryOptions && typeof queryOptions === TYPEOF.OBJECT ? queryOptions : {};
+    queryOptions && typeof queryOptions === 'object' ? queryOptions : {};
 
   const sessionId =
-    typeof resolvedQueryOptions.sessionId === TYPEOF.STRING &&
-    resolvedQueryOptions.sessionId.length > NUM.ZERO ?
+    typeof resolvedQueryOptions.sessionId === 'string' &&
+    resolvedQueryOptions.sessionId.length > 0 ?
       `${resolvedQueryOptions.sessionId}${AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX}` :
       null;
 
@@ -147,7 +145,7 @@ async function executeAuthoritativeSqlFallbackRead(
   baseDiagnostics,
   localQueryTransportReadiness = null,
 ) {
-  if (typeof service.sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+  if (typeof service.sqlQueryEngine?.executeQuery !== 'function') {
     return null;
   }
 
@@ -169,7 +167,7 @@ async function executeAuthoritativeSqlFallbackRead(
     rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
     rowCount: Array.isArray(queryResult?.rows) ?
       queryResult.rows.length :
-      NUM.ZERO,
+      0,
     source: AUTHORITATIVE_SQL_FALLBACK_SOURCE,
     usedSqlFallback: true,
     localReadHit: false,
@@ -192,7 +190,7 @@ function getLocalQueryTransportReadiness(service) {
   if (
     !service.messageRouter ||
     typeof service.messageRouter.getQueryDataPlaneTransportReadiness !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return null;
   }
@@ -217,7 +215,7 @@ function maybeReseedBootstrapOverlay(service, tableName, queryResult) {
   if (
     !service.sqlQueryEngine ||
     typeof service.sqlQueryEngine.installRecoveryRoutingOverlayEntry !==
-      TYPEOF.FUNCTION
+      'function'
   ) {
     return {
       reseeded: false,
@@ -234,7 +232,7 @@ function maybeReseedBootstrapOverlay(service, tableName, queryResult) {
   const connectedNodes = service.messageRouter ?
     service.messageRouter.getConnectedNodes() :
     [];
-  if (connectedNodes.length === NUM.ZERO) {
+  if (connectedNodes.length === 0) {
     return {
       reseeded: false,
     };
@@ -284,7 +282,7 @@ function buildOwnerRpcReadResult({
     rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
     rowCount: Array.isArray(queryResult?.rows) ?
       queryResult.rows.length :
-      NUM.ZERO,
+      0,
     source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
     localReadHit: false,
     localReplicaFallbackHit: false,
@@ -319,7 +317,7 @@ async function executeAuthoritativeOwnerRpcRead(
   const queryExecutor = service.sqlQueryEngine?.queryExecutor || null;
   if (
     !queryExecutor ||
-    typeof queryExecutor.executeOnPartition !== TYPEOF.FUNCTION
+    typeof queryExecutor.executeOnPartition !== 'function'
   ) {
     return null;
   }
@@ -340,7 +338,7 @@ async function executeAuthoritativeOwnerRpcRead(
   });
 
   const executionOptions = {
-    ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+    ...(options.queryOptions && typeof options.queryOptions === 'object' ?
       options.queryOptions :
       {}),
     routingReadinessDimension,

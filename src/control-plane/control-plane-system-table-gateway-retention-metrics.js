@@ -1,7 +1,5 @@
 import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  NUM,
-  TYPEOF,
 } from './control-plane-system-table-gateway-shared.js';
 
 const controlPlaneSystemTableGatewayRetentionMetricsMethods = {
@@ -76,9 +74,9 @@ const controlPlaneSystemTableGatewayRetentionMetricsMethods = {
       limits: {...this.gatewayLimits},
       retainedRequestCapacity,
       retainedRequestUtilization:
-        retainedRequestCapacity > NUM.ZERO ?
+        retainedRequestCapacity > 0 ?
           retainedRequests.total / retainedRequestCapacity :
-          NUM.ZERO,
+          0,
       boundedByTrackedCapacity:
         retainedRequests.total <= retainedRequestCapacity,
       maxObservedRetainedRequestCount:
@@ -120,7 +118,7 @@ const controlPlaneSystemTableGatewayRetentionMetricsMethods = {
    * @private
    */
   incrementGatewayMetric(metricName) {
-    if (typeof this.gatewayMetrics?.[metricName] !== TYPEOF.NUMBER) {
+    if (typeof this.gatewayMetrics?.[metricName] !== 'number') {
       return;
     }
     this.gatewayMetrics[metricName] +=
@@ -133,10 +131,10 @@ const controlPlaneSystemTableGatewayRetentionMetricsMethods = {
    * @private
    */
   addGatewayMetric(metricName, amount) {
-    if (typeof this.gatewayMetrics?.[metricName] !== TYPEOF.NUMBER) {
+    if (typeof this.gatewayMetrics?.[metricName] !== 'number') {
       return;
     }
-    if (!Number.isFinite(amount) || amount <= NUM.ZERO) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       return;
     }
     this.gatewayMetrics[metricName] += Math.floor(amount);
@@ -148,10 +146,10 @@ const controlPlaneSystemTableGatewayRetentionMetricsMethods = {
    * @private
    */
   recordGatewayLatency(metricName, latencyMs) {
-    if (typeof this.gatewayMetrics?.[metricName] !== TYPEOF.NUMBER) {
+    if (typeof this.gatewayMetrics?.[metricName] !== 'number') {
       return;
     }
-    if (!Number.isFinite(latencyMs) || latencyMs < NUM.ZERO) {
+    if (!Number.isFinite(latencyMs) || latencyMs < 0) {
       return;
     }
     this.gatewayMetrics[metricName] = Math.max(

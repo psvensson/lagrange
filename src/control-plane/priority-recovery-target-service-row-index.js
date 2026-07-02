@@ -1,8 +1,6 @@
 import {
   FIELD,
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
@@ -17,7 +15,7 @@ function priorityRecoveryTargetServiceIndexNodeEntry() {
 }
 
 function readPriorityRecoveryTargetServiceRowIndexFields(serviceRow) {
-  if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+  if (!serviceRow || typeof serviceRow !== 'object') {
     return null;
   }
   const serviceType = String(
@@ -101,7 +99,7 @@ function resolvePriorityRecoveryTargetServiceIndexLookup(
   }
   const targetNodeId = String(operationContext?.targetNodeId || '').trim();
   const partitionId = String(operationContext?.partitionId || '').trim();
-  if (targetNodeId.length === NUM.ZERO || partitionId.length === NUM.ZERO) {
+  if (targetNodeId.length === 0 || partitionId.length === 0) {
     return null;
   }
   const nodeEntry = targetServiceRowIndex.get(targetNodeId);
@@ -112,10 +110,10 @@ function mergePriorityRecoveryTargetServiceIndexRows(
   exactRows,
   wildcardRows,
 ) {
-  if (exactRows.length === NUM.ZERO) {
+  if (exactRows.length === 0) {
     return wildcardRows;
   }
-  if (wildcardRows.length === NUM.ZERO) {
+  if (wildcardRows.length === 0) {
     return exactRows;
   }
   return [...exactRows, ...wildcardRows];

@@ -12,7 +12,6 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
@@ -126,12 +125,12 @@ class NodeLifecycleService extends EventEmitter {
     const data = {
       node_id: nodeData.node_id,
       node_address: nodeData.node_address,
-      cpu_cores: nodeData.cpu_cores || NUM.ZERO,
-      memory_mb: nodeData.memory_mb || NUM.ZERO,
-      disk_gb: nodeData.disk_gb || NUM.ZERO,
-      cpu_usage_percent: nodeData.cpu_usage_percent || NUM.ZERO,
-      memory_usage_percent: nodeData.memory_usage_percent || NUM.ZERO,
-      disk_usage_percent: nodeData.disk_usage_percent || NUM.ZERO,
+      cpu_cores: nodeData.cpu_cores || 0,
+      memory_mb: nodeData.memory_mb || 0,
+      disk_gb: nodeData.disk_gb || 0,
+      cpu_usage_percent: nodeData.cpu_usage_percent || 0,
+      memory_usage_percent: nodeData.memory_usage_percent || 0,
+      disk_usage_percent: nodeData.disk_usage_percent || 0,
       status: NODE_STATUS.ACTIVE,
       last_heartbeat: now,
       created_at: now,

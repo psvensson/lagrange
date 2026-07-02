@@ -1,4 +1,4 @@
-import {NUM, STRING, SERVICE_PROFILE} from '../constants/index.js';
+import {STRING, SERVICE_PROFILE} from '../constants/index.js';
 import {RUNTIME_FIELD} from '../constants/runtime.js';
 import {
   TIMER_STATUS,
@@ -214,8 +214,8 @@ function deserializeServiceDefinition(row) {
     status:
       row[SD_COL.STATUS] ??
       WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
-    createdAt: row[SD_COL.CREATED_AT] ?? NUM.ZERO,
-    updatedAt: row[SD_COL.UPDATED_AT] ?? NUM.ZERO,
+    createdAt: row[SD_COL.CREATED_AT] ?? 0,
+    updatedAt: row[SD_COL.UPDATED_AT] ?? 0,
   };
   return applyRuntimeDefaults(raw);
 }
@@ -229,14 +229,14 @@ function serializeTimerEntry(entry) {
   const obj = {
     [TE_FIELD.TIMER_ID]: entry[TE_FIELD.TIMER_ID],
     [TE_FIELD.SERVICE_ID]: entry[TE_FIELD.SERVICE_ID],
-    [TE_FIELD.DELAY_MS]: entry[TE_FIELD.DELAY_MS] ?? NUM.ZERO,
-    [TE_FIELD.FIRE_AT]: entry[TE_FIELD.FIRE_AT] ?? NUM.ZERO,
+    [TE_FIELD.DELAY_MS]: entry[TE_FIELD.DELAY_MS] ?? 0,
+    [TE_FIELD.FIRE_AT]: entry[TE_FIELD.FIRE_AT] ?? 0,
     [TE_FIELD.PAYLOAD]:
       entry[TE_FIELD.PAYLOAD] ?? {},
     [TE_FIELD.STATUS]:
       entry[TE_FIELD.STATUS] ?? TIMER_STATUS.ACTIVE,
     [TE_FIELD.CREATED_AT]:
-      entry[TE_FIELD.CREATED_AT] ?? NUM.ZERO,
+      entry[TE_FIELD.CREATED_AT] ?? 0,
   };
   return JSON.stringify(obj);
 }
@@ -252,15 +252,15 @@ function deserializeTimerEntry(json) {
     [TE_FIELD.TIMER_ID]: parsed[TE_FIELD.TIMER_ID],
     [TE_FIELD.SERVICE_ID]: parsed[TE_FIELD.SERVICE_ID],
     [TE_FIELD.DELAY_MS]:
-      parsed[TE_FIELD.DELAY_MS] ?? NUM.ZERO,
+      parsed[TE_FIELD.DELAY_MS] ?? 0,
     [TE_FIELD.FIRE_AT]:
-      parsed[TE_FIELD.FIRE_AT] ?? NUM.ZERO,
+      parsed[TE_FIELD.FIRE_AT] ?? 0,
     [TE_FIELD.PAYLOAD]:
       parsed[TE_FIELD.PAYLOAD] ?? {},
     [TE_FIELD.STATUS]:
       parsed[TE_FIELD.STATUS] ?? TIMER_STATUS.ACTIVE,
     [TE_FIELD.CREATED_AT]:
-      parsed[TE_FIELD.CREATED_AT] ?? NUM.ZERO,
+      parsed[TE_FIELD.CREATED_AT] ?? 0,
   };
 }
 

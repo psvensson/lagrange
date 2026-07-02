@@ -9,7 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -249,7 +249,7 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async evaluateNodeHealth(node, now) {
-    const lastHeartbeat = node.last_heartbeat || NUM.ZERO;
+    const lastHeartbeat = node.last_heartbeat || 0;
     const timeSinceHeartbeat = now - lastHeartbeat;
 
     // Node recovery detected
@@ -342,7 +342,7 @@ class FailureDetector extends EventEmitter {
   async handleNodeFailure(node, now) {
     this.logger.error(FAILURE_DETECTOR_LOG_MSG.NODE_FAILURE_DETECTED, {
       nodeId: node.node_id,
-      lastHeartbeat: new Date(node.last_heartbeat || NUM.ZERO).toISOString(),
+      lastHeartbeat: new Date(node.last_heartbeat || 0).toISOString(),
       threshold: this.currentFailureThreshold,
     });
 
@@ -535,7 +535,7 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   ensureAdaptiveThresholdResetTimer() {
-    if (this.adaptiveResetTimer || this.recentFailures.size === NUM.ZERO) {
+    if (this.adaptiveResetTimer || this.recentFailures.size === 0) {
       return;
     }
 
@@ -543,7 +543,7 @@ class FailureDetector extends EventEmitter {
       const now = Date.now();
 
       for (const [nodeId, failures] of this.recentFailures) {
-        if (failures.length === NUM.ZERO) {
+        if (failures.length === 0) {
           continue;
         }
 
@@ -561,7 +561,7 @@ class FailureDetector extends EventEmitter {
         }
       }
 
-      if (this.recentFailures.size === NUM.ZERO) {
+      if (this.recentFailures.size === 0) {
         this.stopAdaptiveThresholdResetTimer();
       }
     }, FAILURE_DETECTOR_DEFAULT.ADAPTIVE_RESET_INTERVAL_MS);
@@ -668,7 +668,7 @@ class FailureDetector extends EventEmitter {
    */
   getFailureRepairIntentRecords() {
     if (
-      typeof this.failureRepairIntentRecorder?.getRecords === TYPEOF.FUNCTION
+      typeof this.failureRepairIntentRecorder?.getRecords === 'function'
     ) {
       return this.failureRepairIntentRecorder.getRecords();
     }

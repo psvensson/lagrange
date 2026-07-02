@@ -3,7 +3,6 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 const {
   AddressManager,
   ENTITY_TYPE,
-  NUM,
   PARTITION_SERVICE_TYPE,
   ReplicaStatus,
   SERVICE_TYPE,
@@ -13,13 +12,13 @@ const {
 function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
   if (
     typeof serviceRow.address === 'string' &&
-    serviceRow.address.length > NUM.ZERO
+    serviceRow.address.length > 0
   ) {
     return serviceRow.address;
   }
   if (
     typeof serviceRow.node_id === 'string' &&
-    serviceRow.node_id.length > NUM.ZERO
+    serviceRow.node_id.length > 0
   ) {
     return addressManager.format(
       serviceRow.node_id,
@@ -53,7 +52,7 @@ function findStaleAddressesForReplica(
     .filter((address) => {
       if (
         typeof address !== 'string' ||
-        address.length === NUM.ZERO ||
+        address.length === 0 ||
         address === expectedAddress
       ) {
         return false;
@@ -88,7 +87,7 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
       );
     },
   );
-  if (services.length === NUM.ZERO) {
+  if (services.length === 0) {
     return;
   }
   const addressManager = AddressManager.getInstance();
@@ -118,7 +117,7 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
     currentNodes
       .map((node) => node?.address)
       .filter(
-        (address) => typeof address === 'string' && address.length > NUM.ZERO,
+        (address) => typeof address === 'string' && address.length > 0,
       ),
   );
   for (const [

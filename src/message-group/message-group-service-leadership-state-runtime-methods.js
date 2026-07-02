@@ -7,7 +7,6 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
     LifeRaft,
     MESSAGE_GROUP_SERVICE_LITERAL,
     MESSAGE_GROUP_SERVICE_LOG_MSG,
-    NUM,
     RaftRole,
     normalizePublishedRaftRole,
   } = deps;
@@ -47,7 +46,7 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
           this.updateRebalancerLeadership();
           const existingSubscriptions = this.cdcHandler.getSubscriptions();
           if (
-            existingSubscriptions.length > NUM.ZERO &&
+            existingSubscriptions.length > 0 &&
             this.lastLeaderCdcResubscribeTerm !== term
           ) {
             this.lastLeaderCdcResubscribeTerm = term;
@@ -85,7 +84,7 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
           });
         },
         {
-          immediate: this.replicaIds.length === NUM.ONE,
+          immediate: this.replicaIds.length === 1,
           shouldActivate: () => this.raft !== null && this.isLeaderReplica(),
         },
       );

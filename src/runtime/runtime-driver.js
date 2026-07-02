@@ -20,10 +20,9 @@
  */
 
 import {ALLOWED_RUNTIME_KINDS} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {DriverNotImplementedError} from './runtime-driver-errors.js';
 
-const LOCAL_STR_8NMJ4 = 'RuntimeDriver is abstract and cannot be instantiated directly';
+const LOCAL_STR_RUNTIMEDRIVER_IS_ABSTRACT_AND_CANNOT_BE = 'RuntimeDriver is abstract and cannot be instantiated directly';
 const LOCAL_STR_KIND = 'kind';
 const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
 const LOCAL_STR_PREPARE = 'prepare';
@@ -97,10 +96,10 @@ class RuntimeDriver {
   constructor(kind) {
     if (new.target === RuntimeDriver) {
       throw new Error(
-        LOCAL_STR_8NMJ4,
+        LOCAL_STR_RUNTIMEDRIVER_IS_ABSTRACT_AND_CANNOT_BE,
       );
     }
-    if (typeof kind !== TYPEOF.STRING || !ALLOWED_RUNTIME_KINDS.has(kind)) {
+    if (typeof kind !== 'string' || !ALLOWED_RUNTIME_KINDS.has(kind)) {
       throw new Error(
         `RuntimeDriver requires a valid runtime kind, got '${kind}'`,
       );

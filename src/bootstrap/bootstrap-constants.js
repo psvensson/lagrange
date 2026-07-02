@@ -170,7 +170,7 @@ const BOOTSTRAP_UNIFIED_RECONCILE = Object.freeze({
   INFRA_READY_REASON: 'bootstrap_infrastructure_ready',
   MESSAGE_GROUPS_REASON: 'bootstrap_message_groups',
   PARTITIONS_REASON: 'bootstrap_partitions',
-  CHECK_INTERVAL_MS: TIME_MS.MINUTE * (NUM.THIRTY * NUM.TWO),
+  CHECK_INTERVAL_MS: TIME_MS.MINUTE * (NUM.THIRTY * 2),
   RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
 });
 

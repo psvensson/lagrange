@@ -59,7 +59,6 @@ import {
   OperationJournalError,
   IdempotencyCheckError,
 } from './runtime-driver-errors.js';
-import {TYPEOF} from '../constants/types.js';
 import {
   UNIFIED_SERVICE_TYPE,
 } from '../constants/unified-service-lifecycle.js';
@@ -74,15 +73,14 @@ import {
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 
 const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_STR_1SK8V = 'registry must be an instance of RuntimeDriverRegistry';
-const LOCAL_STR_6SQ8N = 'query executor factory must be a function';
-const LOCAL_STR_BYITH = 'endpoint writer must be a function';
-const LOCAL_STR_1FJ0H = 'endpoint remover must be a function';
-const LOCAL_STR_1DAXA = 'operation writer must be a function';
-const LOCAL_STR_NPQTQ = 'idempotency reader must be a function';
-const LOCAL_STR_1199D = 'state projection writer must be a function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_REGISTRY_MUST_BE_AN_INSTANCE_OF_RUNTIMED = 'registry must be an instance of RuntimeDriverRegistry';
+const LOCAL_STR_QUERY_EXECUTOR_FACTORY_MUST_BE_A_FUNCTIO = 'query executor factory must be a function';
+const LOCAL_STR_ENDPOINT_WRITER_MUST_BE_A_FUNCTION = 'endpoint writer must be a function';
+const LOCAL_STR_ENDPOINT_REMOVER_MUST_BE_A_FUNCTION = 'endpoint remover must be a function';
+const LOCAL_STR_OPERATION_WRITER_MUST_BE_A_FUNCTION = 'operation writer must be a function';
+const LOCAL_STR_IDEMPOTENCY_READER_MUST_BE_A_FUNCTION = 'idempotency reader must be a function';
+const LOCAL_STR_STATE_PROJECTION_WRITER_MUST_BE_A_FUNCTI = 'state projection writer must be a function';
+const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_NONE = 'none';
 const LOCAL_STR_17O4M = 'service definition is missing runtime_kind';
 const LOCAL_STR_VUZ91 = 'replica context is missing runtime_kind';
@@ -94,7 +92,7 @@ const LOCAL_STR_VUZ91 = 'replica context is missing runtime_kind';
  * @return {string|undefined} The runtime kind value.
  */
 function resolveRuntimeKind(definition) {
-  if (!definition || typeof definition !== TYPEOF.OBJECT) {
+  if (!definition || typeof definition !== 'object') {
     return undefined;
   }
   return definition[RUNTIME_FIELD.RUNTIME_KIND] ??
@@ -108,7 +106,7 @@ function resolveRuntimeKind(definition) {
  * @return {string} Service identifier or 'unknown'.
  */
 function resolveServiceId(definition) {
-  if (!definition || typeof definition !== TYPEOF.OBJECT) {
+  if (!definition || typeof definition !== 'object') {
     return LOCAL_STR_UNKNOWN;
   }
   return definition.serviceId ??
@@ -131,16 +129,16 @@ function validateEndpointIntent(intent) {
   const host = intent?.[ENDPOINT_INTENT_FIELD.HOST];
   const protocol = intent?.[ENDPOINT_INTENT_FIELD.PROTOCOL];
   const invalidReason =
-    !intent || typeof intent !== TYPEOF.OBJECT ?
+    !intent || typeof intent !== 'object' ?
       'endpoint intent must be a non-null object' :
-      typeof port !== TYPEOF.NUMBER ||
+      typeof port !== 'number' ||
         !Number.isInteger(port) ||
         port < MIN_PORT ||
         port > MAX_PORT ?
         `port must be an integer in [${MIN_PORT}, ${MAX_PORT}]` :
-        host !== undefined && typeof host !== TYPEOF.STRING ?
+        host !== undefined && typeof host !== 'string' ?
           'host must be a string when provided' :
-          protocol !== undefined && typeof protocol !== TYPEOF.STRING ?
+          protocol !== undefined && typeof protocol !== 'string' ?
             'protocol must be a string when provided' :
             '';
 
@@ -167,7 +165,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     super();
     if (!(registry instanceof RuntimeDriverRegistry)) {
       throw new TypeError(
-        LOCAL_STR_1SK8V,
+        LOCAL_STR_REGISTRY_MUST_BE_AN_INSTANCE_OF_RUNTIMED,
       );
     }
     /** @type {RuntimeDriverRegistry} */
@@ -286,9 +284,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If factory is not a function.
    */
   setQueryExecutorFactory(factory) {
-    if (typeof factory !== TYPEOF.FUNCTION) {
+    if (typeof factory !== 'function') {
       throw new TypeError(
-        LOCAL_STR_6SQ8N,
+        LOCAL_STR_QUERY_EXECUTOR_FACTORY_MUST_BE_A_FUNCTIO,
       );
     }
     this._queryExecutorFactory = factory;
@@ -309,9 +307,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If writer is not a function.
    */
   setEndpointWriter(writer) {
-    if (typeof writer !== TYPEOF.FUNCTION) {
+    if (typeof writer !== 'function') {
       throw new TypeError(
-        LOCAL_STR_BYITH,
+        LOCAL_STR_ENDPOINT_WRITER_MUST_BE_A_FUNCTION,
       );
     }
     this._endpointWriter = writer;
@@ -331,9 +329,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If remover is not a function.
    */
   setEndpointRemover(remover) {
-    if (typeof remover !== TYPEOF.FUNCTION) {
+    if (typeof remover !== 'function') {
       throw new TypeError(
-        LOCAL_STR_1FJ0H,
+        LOCAL_STR_ENDPOINT_REMOVER_MUST_BE_A_FUNCTION,
       );
     }
     this._endpointRemover = remover;
@@ -354,9 +352,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If writer is not a function.
    */
   setOperationWriter(writer) {
-    if (typeof writer !== TYPEOF.FUNCTION) {
+    if (typeof writer !== 'function') {
       throw new TypeError(
-        LOCAL_STR_1DAXA,
+        LOCAL_STR_OPERATION_WRITER_MUST_BE_A_FUNCTION,
       );
     }
     this._operationWriter = writer;
@@ -380,9 +378,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If reader is not a function.
    */
   setIdempotencyReader(reader) {
-    if (typeof reader !== TYPEOF.FUNCTION) {
+    if (typeof reader !== 'function') {
       throw new TypeError(
-        LOCAL_STR_NPQTQ,
+        LOCAL_STR_IDEMPOTENCY_READER_MUST_BE_A_FUNCTION,
       );
     }
     this._idempotencyReader = reader;
@@ -402,9 +400,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @throws {TypeError} If writer is not a function.
    */
   setStateProjectionWriter(writer) {
-    if (typeof writer !== TYPEOF.FUNCTION) {
+    if (typeof writer !== 'function') {
       throw new TypeError(
-        LOCAL_STR_1199D,
+        LOCAL_STR_STATE_PROJECTION_WRITER_MUST_BE_A_FUNCTI,
       );
     }
     this._stateProjectionWriter = writer;
@@ -525,8 +523,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       const rows = await this._idempotencyReader(
         check.sql, check.params,
       );
-      if (rows && rows.length > LOCAL_NUM_ZERO) {
-        return rows[LOCAL_NUM_ZERO];
+      if (rows && rows.length > 0) {
+        return rows[0];
       }
       return null;
     } catch (err) {
@@ -584,7 +582,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     if (!result.success) {
       throw new OperationJournalError(
         runtimeKind, serviceId, command,
-        result.errors.join(LOCAL_STR_1AM9G),
+        result.errors.join(LOCAL_STR_SEMI_SPACE),
       );
     }
     try {
@@ -704,7 +702,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         operation,
         runtimeKind,
         serviceId,
-        validation.errors.join(LOCAL_STR_1AM9G),
+        validation.errors.join(LOCAL_STR_SEMI_SPACE),
       );
     }
   }

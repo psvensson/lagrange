@@ -3,10 +3,9 @@ import {
   createTopLevelOperationBudget,
   getRemainingBudgetMs,
 } from '../control-plane/timeout-budget.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 
-function normalizePositiveInteger(value, fallback = NUM.ZERO) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+function normalizePositiveInteger(value, fallback = 0) {
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     fallback;
 }
@@ -20,7 +19,7 @@ class TimeoutPolicy {
     this.configuredBudgetMs = normalizePositiveInteger(
       options.configuredBudgetMs,
     );
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
   }
@@ -35,7 +34,7 @@ class TimeoutPolicy {
       options.configuredBudgetMs,
       this.configuredBudgetMs,
     );
-    if (configuredBudgetMs <= NUM.ZERO) {
+    if (configuredBudgetMs <= 0) {
       return null;
     }
     return createTopLevelOperationBudget({

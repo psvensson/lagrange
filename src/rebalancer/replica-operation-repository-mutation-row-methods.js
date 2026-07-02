@@ -2,10 +2,7 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryMutationRowMethods(
   ReplicaOperationRepository,
-  options = {},
 ) {
-  const {NUM, TYPEOF} = options;
-
   class ReplicaOperationRepositoryMutationRowMethods {
     buildReplicaOperationRow(operation) {
       return {
@@ -51,8 +48,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
     ) {
       const whereClause = {operation_id: operation.operationId};
       if (
-        typeof expectedWorkflowStep === TYPEOF.STRING &&
-        expectedWorkflowStep.length > NUM.ZERO
+        typeof expectedWorkflowStep === 'string' &&
+        expectedWorkflowStep.length > 0
       ) {
         whereClause.workflow_step = expectedWorkflowStep;
       }
@@ -71,8 +68,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         operation.operationId,
       ];
       if (
-        typeof expectedWorkflowStep === TYPEOF.STRING &&
-        expectedWorkflowStep.length > NUM.ZERO
+        typeof expectedWorkflowStep === 'string' &&
+        expectedWorkflowStep.length > 0
       ) {
         params.push(expectedWorkflowStep);
       }

@@ -1,4 +1,4 @@
-import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isPriorityControlPlanePartition,
@@ -685,7 +685,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       const progress = this.startReplicaCreationProgress({
         partitionId,
         replicaId,
-        peerTotal: NUM.ZERO,
+        peerTotal: 0,
       });
       let partitionService = null;
       try {
@@ -743,11 +743,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // Determine if this replica is joining an already-established Raft group.
         // Provisional sibling service rows alone are not enough; fresh partition
         // bring-up must bootstrap voters until a leader or active voter exists.
-        const isJoiningExistingGroup = existingReplicaCount > NUM.ZERO;
+        const isJoiningExistingGroup = existingReplicaCount > 0;
         this.updateReplicaCreationProgress(progress, {
           peerTotal: Array.isArray(replicaIds) ?
-            Math.max(NUM.ZERO, replicaIds.length - NUM.ONE) :
-            NUM.ZERO,
+            Math.max(0, replicaIds.length - 1) :
+            0,
         });
         partitionService = await this.createPartitionService({
           partitionId,
@@ -906,12 +906,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             typeof error?.code === REPLICA_HANDLER_TYPEOF.STRING ?
               error.code :
               REPLICA_HANDLER_LITERAL.VALUE;
-        if (errorCode.length > NUM.ZERO) {
+        if (errorCode.length > 0) {
           failedOutcomeOptions.errorCode = errorCode;
         }
         if (
           Number.isFinite(error?.retryAfterMs) &&
-          error.retryAfterMs > NUM.ZERO
+          error.retryAfterMs > 0
         ) {
           failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
         }

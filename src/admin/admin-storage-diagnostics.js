@@ -7,13 +7,13 @@
  * Requirements: 10.3, 10.4, 10.5
  */
 
-import {SQL, TABLES, COLUMN, NUM} from '../constants/index.js';
+import {SQL, TABLES, COLUMN} from '../constants/index.js';
 import {
   RESERVATION_STATUS,
   STORAGE_ADMIN_COMMAND,
 } from '../rebalancer/storage-capacity-constants.js';
 
-const LOCAL_STR_FZHH8 = 'accountingService not available';
+const LOCAL_STR_ACCOUNTINGSERVICE_NOT_AVAILABLE = 'accountingService not available';
 
 const SELECT_ALL_FROM = `${SQL.SELECT} * FROM`;
 
@@ -30,7 +30,7 @@ async function handleGetStorageCapacity(params, context) {
   if (!accountingService) {
     return {
       success: false,
-      errors: [LOCAL_STR_FZHH8],
+      errors: [LOCAL_STR_ACCOUNTINGSERVICE_NOT_AVAILABLE],
     };
   }
 
@@ -82,7 +82,7 @@ function handleGetStorageReservations(params) {
     );
   }
 
-  if (filters.length > NUM.ZERO) {
+  if (filters.length > 0) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 

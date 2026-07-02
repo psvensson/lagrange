@@ -15,7 +15,6 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
     countReplayServiceRows,
     it,
     join,
-    NUM,
     OWNER_CONTRACT_NEXT_ACTION,
     OWNER_CONTRACT_STATE,
     PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
@@ -372,7 +371,7 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
     );
     assert.equal(
       replaySummary.ownerRpcCacheRepair.selectedWitnessLatestRetryAfterMs,
-      NUM.ZERO,
+      0,
     );
     assert.deepEqual(
       replaySummary.ownerRpcCacheRepair.nodeIds,

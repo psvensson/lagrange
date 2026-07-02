@@ -49,8 +49,8 @@ function initializeConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageReservationTtlMs:
         STORAGE_CAPACITY_DEFAULT.RESERVATION_TTL_MS,
       ...overrides,
@@ -82,7 +82,7 @@ function createTrackingSqlEngine() {
           steps_history: history,
           entity_type: entityType, entity_id: entityId,
         });
-        return {success: true, changes: NUM.ONE};
+        return {success: true, changes: 1};
       }
 
       if (sql.includes('INSERT INTO storage_reservations')) {
@@ -99,13 +99,13 @@ function createTrackingSqlEngine() {
           created_at: created, updated_at: updated,
           expires_at: expires, released_at: null,
         });
-        return {success: true, changes: NUM.ONE};
+        return {success: true, changes: 1};
       }
 
       if (sql.includes('UPDATE storage_reservations')) {
         const [newStatus, updated, released, reservationIdOrOperationId,
           activeStatus] = params;
-        let changes = NUM.ZERO;
+        let changes = 0;
         for (const [key, row] of reservations) {
           const matchesOperation = row.operation_id === reservationIdOrOperationId;
           const matchesReservation =
@@ -156,7 +156,7 @@ function createTrackingSqlEngine() {
       }
 
       if (sql.includes('SELECT * FROM storage_reservations')) {
-        if (params.length > NUM.ZERO) {
+        if (params.length > 0) {
           const [status] = params;
           const active = Array.from(reservations.values())
             .filter((r) => r.status === status);
@@ -280,16 +280,16 @@ test('createOperation - creates reservation for ADD operation',
 
     await coordinator.createOperation(move);
 
-    t.equal(sqlEngine.reservations.size, NUM.ONE,
+    t.equal(sqlEngine.reservations.size, 1,
       'one reservation created');
 
-    const res = Array.from(sqlEngine.reservations.values())[NUM.ZERO];
+    const res = Array.from(sqlEngine.reservations.values())[0];
     t.equal(res.status, RESERVATION_STATUS.ACTIVE);
     t.equal(res.target_node_id, 'target-node');
     t.equal(res.partition_id, 'p-1');
     t.equal(res.reason_code, RESERVATION_REASON.ADD_REPLICA);
-    t.equal(res.amplification_factor, NUM.ONE);
-    t.ok(res.estimated_bytes > NUM.ZERO, 'estimated bytes positive');
+    t.equal(res.amplification_factor, 1);
+    t.ok(res.estimated_bytes > 0, 'estimated bytes positive');
     t.ok(res.expires_at > res.created_at, 'expires after creation');
     t.end();
   });
@@ -312,8 +312,8 @@ test('createOperation - creates reservation for REPLACE operation',
 
     await coordinator.createOperation(move);
 
-    t.equal(sqlEngine.reservations.size, NUM.ONE);
-    const res = Array.from(sqlEngine.reservations.values())[NUM.ZERO];
+    t.equal(sqlEngine.reservations.size, 1);
+    const res = Array.from(sqlEngine.reservations.values())[0];
     t.equal(res.reason_code, RESERVATION_REASON.REPLACE_REPLICA);
     t.equal(res.status, RESERVATION_STATUS.ACTIVE);
     t.end();
@@ -386,7 +386,7 @@ test('createOperation - no reservation for REMOVE operation',
 
     await coordinator.createOperation(move);
 
-    t.equal(sqlEngine.reservations.size, NUM.ZERO,
+    t.equal(sqlEngine.reservations.size, 0,
       'no reservation for REMOVE');
     t.end();
   });
@@ -420,7 +420,7 @@ test('createOperation - fails fast when accounting service is absent',
       /storageAccountingService/,
     );
 
-    t.equal(sqlEngine.reservations.size, NUM.ZERO,
+    t.equal(sqlEngine.reservations.size, 0,
       'no reservation is created when admission dependencies are missing');
     t.end();
   });
@@ -447,7 +447,7 @@ test('createOperation - emits reservationCreated event', async (t) => {
   t.ok(emitted.reservationId, 'has reservationId');
   t.ok(emitted.operationId, 'has operationId');
   t.equal(emitted.targetNodeId, 'target-node');
-  t.ok(emitted.estimatedBytes > NUM.ZERO);
+  t.ok(emitted.estimatedBytes > 0);
   t.end();
 });
 
@@ -464,17 +464,17 @@ test('completeOperation - releases reservation', async (t) => {
     nodeId: 'target-node',
   });
 
-  t.equal(sqlEngine.reservations.size, NUM.ONE);
+  t.equal(sqlEngine.reservations.size, 1);
   const resBefore = Array.from(
     sqlEngine.reservations.values(),
-  )[NUM.ZERO];
+  )[0];
   t.equal(resBefore.status, RESERVATION_STATUS.ACTIVE);
 
   await coordinator.completeOperation(op);
 
   const resAfter = Array.from(
     sqlEngine.reservations.values(),
-  )[NUM.ZERO];
+  )[0];
   t.equal(resAfter.status, RESERVATION_STATUS.RELEASED);
   t.ok(resAfter.released_at, 'released_at set');
   t.end();
@@ -506,7 +506,7 @@ test('releaseReservationForOperation - uses reservation_id keyed update',
       partition_id: 'p-1',
       target_node_id: 'target-node',
       estimated_bytes: NUM.HUNDRED,
-      amplification_factor: NUM.ONE,
+      amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
       created_at: now,
@@ -524,7 +524,7 @@ test('releaseReservationForOperation - uses reservation_id keyed update',
       entityId: 'p-1',
     });
 
-    t.ok(reservationUpdates.length > NUM.ZERO,
+    t.ok(reservationUpdates.length > 0,
       'reservation release should issue at least one reservation update');
     for (const call of reservationUpdates) {
       t.equal(call.params[3], reservationId,
@@ -546,7 +546,7 @@ test('failOperation - releases reservation', async (t) => {
 
   await coordinator.failOperation(op, 'test failure');
 
-  const res = Array.from(sqlEngine.reservations.values())[NUM.ZERO];
+  const res = Array.from(sqlEngine.reservations.values())[0];
   t.equal(res.status, RESERVATION_STATUS.RELEASED);
   t.ok(res.released_at, 'released_at set');
   t.end();
@@ -591,11 +591,11 @@ test('failOperation - no release for REMOVE operation', async (t) => {
   });
 
   // No reservation was created
-  t.equal(sqlEngine.reservations.size, NUM.ZERO);
+  t.equal(sqlEngine.reservations.size, 0);
 
   // failOperation should not error even without reservation
   await coordinator.failOperation(op, 'test failure');
-  t.equal(sqlEngine.reservations.size, NUM.ZERO);
+  t.equal(sqlEngine.reservations.size, 0);
   t.end();
 });
 
@@ -615,7 +615,7 @@ test('reservation expires_at uses configured TTL', async (t) => {
   });
   const after = Date.now();
 
-  const res = Array.from(sqlEngine.reservations.values())[NUM.ZERO];
+  const res = Array.from(sqlEngine.reservations.values())[0];
   t.ok(res.expires_at >= before + customTtl);
   t.ok(res.expires_at <= after + customTtl);
   t.end();
@@ -638,7 +638,7 @@ test('reconcileReservations - expires stale reservations',
       partition_id: 'p-1',
       target_node_id: 'node-1',
       estimated_bytes: NUM.HUNDRED,
-      amplification_factor: NUM.ONE,
+      amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
       created_at: pastTime - NUM.THOUSAND,
@@ -653,7 +653,7 @@ test('reconcileReservations - expires stale reservations',
 
     const result = await coordinator.reconcileReservations();
 
-    t.equal(result.expired, NUM.ONE);
+    t.equal(result.expired, 1);
     const res = sqlEngine.reservations.get('res-stale');
     t.equal(res.status, RESERVATION_STATUS.EXPIRED);
     t.end();
@@ -673,7 +673,7 @@ test('reconcileReservations - releases orphan reservations',
       partition_id: 'p-1',
       target_node_id: 'node-1',
       estimated_bytes: NUM.HUNDRED,
-      amplification_factor: NUM.ONE,
+      amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
       created_at: Date.now(),
@@ -697,7 +697,7 @@ test('reconcileReservations - releases orphan reservations',
 
     const result = await coordinator.reconcileReservations();
 
-    t.equal(result.orphansReleased, NUM.ONE);
+    t.equal(result.orphansReleased, 1);
     const res = sqlEngine.reservations.get('res-orphan');
     t.equal(res.status, RESERVATION_STATUS.RELEASED);
     t.end();
@@ -717,7 +717,7 @@ test('reconcileReservations - skips non-terminal active reservations',
       partition_id: 'p-1',
       target_node_id: 'node-1',
       estimated_bytes: NUM.HUNDRED,
-      amplification_factor: NUM.ONE,
+      amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
       created_at: Date.now(),
@@ -741,7 +741,7 @@ test('reconcileReservations - skips non-terminal active reservations',
 
     const result = await coordinator.reconcileReservations();
 
-    t.equal(result.orphansReleased, NUM.ZERO);
+    t.equal(result.orphansReleased, 0);
     const res = sqlEngine.reservations.get('res-inflight');
     t.equal(res.status, RESERVATION_STATUS.ACTIVE,
       'reservation stays active');
@@ -761,7 +761,7 @@ test('reconcileReservations - skips orphan release while operation visibility ' 
     partition_id: TEST_DEFERRED_PARTITION_ID,
     target_node_id: TEST_DEFERRED_TARGET_NODE_ID,
     estimated_bytes: NUM.HUNDRED,
-    amplification_factor: NUM.ONE,
+    amplification_factor: 1,
     status: RESERVATION_STATUS.ACTIVE,
     reason_code: RESERVATION_REASON.ADD_REPLICA,
     created_at: Date.now(),
@@ -779,7 +779,7 @@ test('reconcileReservations - skips orphan release while operation visibility ' 
 
   const result = await coordinator.reconcileReservations();
 
-  t.equal(result.orphansReleased, NUM.ZERO);
+  t.equal(result.orphansReleased, 0);
   const reservation = sqlEngine.reservations.get(TEST_DEFERRED_RESERVATION_ID);
   t.equal(
     reservation.status,
@@ -807,8 +807,8 @@ test('reconcileReservations - works without accounting service',
     coordinator.initialize();
 
     const result = await coordinator.reconcileReservations();
-    t.equal(result.expired, NUM.ZERO);
-    t.equal(result.orphansReleased, NUM.ZERO);
+    t.equal(result.expired, 0);
+    t.equal(result.orphansReleased, 0);
     t.end();
   });
 
@@ -848,7 +848,7 @@ test('handleRecovery - reconciles reservations after operations',
       partition_id: 'p-1',
       target_node_id: 'node-1',
       estimated_bytes: NUM.HUNDRED,
-      amplification_factor: NUM.ONE,
+      amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
       created_at: Date.now(),
@@ -872,7 +872,7 @@ test('handleRecovery - reconciles reservations after operations',
 
     const result = await coordinator.handleRecovery();
 
-    t.equal(result.reservationsOrphansReleased, NUM.ONE);
+    t.equal(result.reservationsOrphansReleased, 1);
     const res = sqlEngine.reservations.get('res-recovery');
     t.equal(res.status, RESERVATION_STATUS.RELEASED);
     t.end();
@@ -890,12 +890,12 @@ test('stats track reservation lifecycle counts', async (t) => {
     nodeId: 'target-node',
   });
 
-  t.equal(coordinator.stats.reservationsCreated, NUM.ONE);
-  t.equal(coordinator.stats.reservationsReleased, NUM.ZERO);
+  t.equal(coordinator.stats.reservationsCreated, 1);
+  t.equal(coordinator.stats.reservationsReleased, 0);
 
   await coordinator.completeOperation(op);
 
-  t.equal(coordinator.stats.reservationsReleased, NUM.ONE);
+  t.equal(coordinator.stats.reservationsReleased, 1);
   t.end();
 });
 
@@ -912,7 +912,7 @@ test('reservation ID is derived from operation ID', async (t) => {
     nodeId: 'target-node',
   });
 
-  const res = Array.from(sqlEngine.reservations.values())[NUM.ZERO];
+  const res = Array.from(sqlEngine.reservations.values())[0];
   t.equal(res.reservation_id, `res-${op.operationId}`);
   t.equal(res.operation_id, op.operationId);
   t.end();

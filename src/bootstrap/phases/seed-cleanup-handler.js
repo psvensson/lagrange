@@ -20,8 +20,6 @@ import {
 import {
   ADDRESS,
   ENTITY_TYPE,
-  NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
@@ -92,7 +90,7 @@ class SeedCleanupHandler {
         ...d.getPartitionServices().keys(),
       ],
       createdMessageGroups:
-        d.getMessageGroupsCreated() > NUM.ZERO ?
+        d.getMessageGroupsCreated() > 0 ?
           [d.getInitialMessageGroupId()] : [],
       registeredNodeId: d.getNodeId(),
     };
@@ -143,7 +141,7 @@ class SeedCleanupHandler {
 
     const startIndex = PHASE_TO_CLEANUP_INDEX[failedPhase];
     const effectiveStart = startIndex !== undefined ?
-      startIndex : NUM.ZERO;
+      startIndex : 0;
 
     const stepsToRun =
       CLEANUP_STEPS_REVERSE_ORDER.slice(effectiveStart);
@@ -488,7 +486,7 @@ class SeedCleanupHandler {
         async ([replicaId, partition]) => {
           if (!partition ||
               typeof partition.quiesceRebalancing !==
-                TYPEOF.FUNCTION) {
+                'function') {
             return;
           }
           try {
@@ -508,7 +506,7 @@ class SeedCleanupHandler {
         .map(async ([replicaId, messageGroup]) => {
           if (!messageGroup ||
               typeof messageGroup.quiesceRebalancing !==
-                TYPEOF.FUNCTION) {
+                'function') {
             return;
           }
           try {

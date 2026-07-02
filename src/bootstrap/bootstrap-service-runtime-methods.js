@@ -23,7 +23,6 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
-  NUM,
   STATE,
   TABLES,
 } from '../constants/index.js';
@@ -49,7 +48,7 @@ function createBootstrapServiceRuntimeMethods() {
       ) ||
         (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || [])
           .filter((row) => row?.[COLUMN.NODE_ID] === this.nodeId);
-      return localEndpointRows.length > NUM.ZERO;
+      return localEndpointRows.length > 0;
     },
 
     async activateMessageGroupServiceRows() {
@@ -250,7 +249,7 @@ function createBootstrapServiceRuntimeMethods() {
           ...this.partitionServices.keys(),
         ],
         createdMessageGroups:
-          this.messageGroupsCreated > NUM.ZERO ?
+          this.messageGroupsCreated > 0 ?
             [INITIAL_MESSAGE_GROUP_ID] :
             [],
         registeredNodeId: this.nodeId,
@@ -412,7 +411,7 @@ function createBootstrapServiceRuntimeMethods() {
         nodeId: this.nodeId,
         phase: this.phase,
         startTime: this.startTime,
-        duration: this.startTime ? Date.now() - this.startTime : NUM.ZERO,
+        duration: this.startTime ? Date.now() - this.startTime : 0,
         servicesCreated: this.servicesCreated,
         partitionsCreated: this.partitionsCreated,
         messageGroupsCreated: this.messageGroupsCreated,

@@ -10,7 +10,6 @@
 import {
   NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   JOIN_READINESS_SCHEMA_FIELDS,
@@ -28,15 +27,15 @@ export function tryParseJoinSchemaHlc(value) {
   if (parts.length < NUM.THREE) {
     return null;
   }
-  const physical = Number.parseInt(parts[NUM.ZERO], 10);
-  const logical = Number.parseInt(parts[NUM.ONE], 10);
+  const physical = Number.parseInt(parts[0], 10);
+  const logical = Number.parseInt(parts[1], 10);
   if (!Number.isFinite(physical) || !Number.isFinite(logical)) {
     return null;
   }
   return {
     physical,
     logical,
-    nodeId: parts.slice(NUM.TWO).join(HLC_DELIMITER),
+    nodeId: parts.slice(2).join(HLC_DELIMITER),
   };
 }
 
@@ -48,7 +47,7 @@ export function tryParseJoinSchemaHlc(value) {
  */
 export function compareJoinSchemaVersions(left, right) {
   if (left === right) {
-    return NUM.ZERO;
+    return 0;
   }
 
   const leftHlc = tryParseJoinSchemaHlc(left);
@@ -78,14 +77,14 @@ export function compareJoinSchemaVersions(left, right) {
  * @return {string|null}
  */
 export function normalizeJoinSchemaVersion(value) {
-  if (typeof value === TYPEOF.STRING) {
+  if (typeof value === 'string') {
     const normalized = value.trim();
-    return normalized.length > NUM.ZERO ? normalized : null;
+    return normalized.length > 0 ? normalized : null;
   }
-  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
   }
-  if (typeof value === TYPEOF.BIGINT) {
+  if (typeof value === 'bigint') {
     return String(value);
   }
   return null;
@@ -104,7 +103,7 @@ export function selectNewestJoinSchemaVersion(current, candidate) {
   if (!current) {
     return candidate;
   }
-  return compareJoinSchemaVersions(candidate, current) >= NUM.ZERO ?
+  return compareJoinSchemaVersions(candidate, current) >= 0 ?
     candidate :
     current;
 }
@@ -115,7 +114,7 @@ export function selectNewestJoinSchemaVersion(current, candidate) {
  * @return {string|null}
  */
 export function extractJoinSchemaVersionFromRecord(record) {
-  if (!record || typeof record !== TYPEOF.OBJECT) {
+  if (!record || typeof record !== 'object') {
     return null;
   }
   for (const fieldName of JOIN_READINESS_SCHEMA_FIELDS) {
@@ -138,7 +137,7 @@ export function extractCanonicalTableMetadataSchemaVersion(
   tableName,
 ) {
   if (!systemTableCache ||
-      typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
+      typeof systemTableCache.filter !== 'function') {
     return null;
   }
 
@@ -167,7 +166,7 @@ export function extractCanonicalCacheSchemaVersion(
   tableName,
 ) {
   if (!systemTableCache ||
-      typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      typeof systemTableCache.getAll !== 'function') {
     return null;
   }
 
@@ -194,7 +193,7 @@ export function extractCanonicalSnapshotSchemaVersion(
   tableName,
 ) {
   if (!systemTableSnapshots ||
-      typeof systemTableSnapshots !== TYPEOF.OBJECT) {
+      typeof systemTableSnapshots !== 'object') {
     return null;
   }
 

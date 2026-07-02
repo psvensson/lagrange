@@ -16,7 +16,6 @@
  * Interface (both): random(): number in [0, 1).
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 
 // mulberry32 constants — a small, fast, well-distributed 32-bit PRNG. Chosen for a
 // deterministic test/harness stream, NOT cryptographic use.
@@ -47,15 +46,15 @@ class SeededRandomSource {
    */
   constructor(options = {}) {
     const seed = Number(options.seed);
-    this._state = (Number.isFinite(seed) ? seed : NUM.ZERO) >>> NUM.ZERO;
+    this._state = (Number.isFinite(seed) ? seed : 0) >>> 0;
   }
 
   random() {
-    this._state = (this._state + MULBERRY32_INCREMENT) | NUM.ZERO;
+    this._state = (this._state + MULBERRY32_INCREMENT) | 0;
     let t = this._state;
     t = Math.imul(t ^ (t >>> MULBERRY32_MUL_A), MULBERRY32_MUL_B_OR | t);
     t = (t + Math.imul(t ^ (t >>> MULBERRY32_MUL_C), MULBERRY32_MUL_D_OR | t)) ^ t;
-    return ((t ^ (t >>> MULBERRY32_SHIFT)) >>> NUM.ZERO) / MULBERRY32_DIVISOR;
+    return ((t ^ (t >>> MULBERRY32_SHIFT)) >>> 0) / MULBERRY32_DIVISOR;
   }
 }
 
@@ -68,7 +67,7 @@ class SeededRandomSource {
  */
 function resolveRandomSource(options = {}) {
   const candidate = options && options.randomSource;
-  if (candidate && typeof candidate.random === TYPEOF.FUNCTION) {
+  if (candidate && typeof candidate.random === 'function') {
     return candidate;
   }
   return new RealRandomSource();

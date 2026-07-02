@@ -185,12 +185,12 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
           ) {
-            const operationId = params[NUM.ZERO];
+            const operationId = params[0];
             const operationRow = operationRows.get(operationId) || null;
             return {
               success: true,
               rows: operationRow ? [{...operationRow}] : [],
-              affectedRows: operationRow ? NUM.ONE : NUM.ZERO,
+              affectedRows: operationRow ? 1 : 0,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
@@ -206,34 +206,34 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
               row.target_node_id === TEST_TARGET_NODE_ID,
                 )
                 .map((row) => ({...row})),
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
             const operationRow = operationRows.get(params[7]);
-            operationRow.status = params[NUM.ZERO];
-            operationRow.workflow_step = params[NUM.ONE];
-            operationRow.updated_at = params[NUM.TWO];
+            operationRow.status = params[0];
+            operationRow.workflow_step = params[1];
+            operationRow.updated_at = params[2];
             operationRow.completed_at = params[NUM.THREE];
             operationRow.error_message = params[NUM.FOUR];
             operationRow.steps_history = params[NUM.FIVE];
             operationRow.replica_id = params[NUM.SIX];
             return {
               success: true,
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -366,32 +366,32 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
           ) {
-            const operationId = params[NUM.ZERO];
+            const operationId = params[0];
             return {
               success: true,
               rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
               affectedRows:
-            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+            operationId === TEST_OPERATION_ID ? 1 : 0,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
             return {
               success: true,
               rows: [{...operationRow}],
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -456,7 +456,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           .getOperationsByEntityAuthoritativeObservation = async () => {
             return Object.freeze({
               state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: NUM.ONE,
+              operationCount: 1,
               operations: Object.freeze([operation]),
               deferredOutcome: null,
               retryAfterMs: null,
@@ -485,17 +485,17 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER,
         );
         t.equal(
-          deliveries[NUM.ZERO]?.target,
+          deliveries[0]?.target,
           TEST_REPLICA_DISPATCH_TARGET,
           TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
         );
         t.equal(
@@ -542,32 +542,32 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
           ) {
-            const operationId = params[NUM.ZERO];
+            const operationId = params[0];
             return {
               success: true,
               rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
               affectedRows:
-            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+            operationId === TEST_OPERATION_ID ? 1 : 0,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
             return {
               success: true,
               rows: [{...operationRow}],
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -632,7 +632,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           .getOperationsByEntityAuthoritativeObservation = async () => {
             return Object.freeze({
               state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: NUM.ONE,
+              operationCount: 1,
               operations: Object.freeze([operation]),
               deferredOutcome: null,
               retryAfterMs: null,
@@ -664,27 +664,27 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE,
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_OWNER_LANE_HELD_DEFERS_REENTRY,
         );
 
         releaseOwnerLane();
         await heldOwnerLane;
-        nowMs += deferredTimers[NUM.ZERO].delayMs;
-        await deferredTimers[NUM.ZERO].fn();
+        nowMs += deferredTimers[0].delayMs;
+        await deferredTimers[0].fn();
 
         t.equal(
           deliveries.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES,
         );
         t.equal(
-          deliveries[NUM.ZERO]?.target,
+          deliveries[0]?.target,
           TEST_REPLICA_DISPATCH_TARGET,
           TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
         );
@@ -726,32 +726,32 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
           ) {
-            const operationId = params[NUM.ZERO];
+            const operationId = params[0];
             return {
               success: true,
               rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
               affectedRows:
-            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+            operationId === TEST_OPERATION_ID ? 1 : 0,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
             return {
               success: true,
               rows: [{...operationRow}],
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -816,7 +816,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           .getOperationsByEntityAuthoritativeObservation = async () => {
             return Object.freeze({
               state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: NUM.ONE,
+              operationCount: 1,
               operations: Object.freeze([operation]),
               deferredOutcome: null,
               retryAfterMs: null,
@@ -869,17 +869,17 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
         );
         t.ok(
-          snapshot?.progress?.progressContract?.retryAfterMs > NUM.ZERO,
+          snapshot?.progress?.progressContract?.retryAfterMs > 0,
           TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE,
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED,
         );
       } finally {
@@ -976,17 +976,17 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       });
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES,
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         TEST_REPLICA_DISPATCH_TARGET,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET,
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER,
       );
     } finally {
@@ -1093,17 +1093,17 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       );
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE,
       );
       t.equal(
-        deliveries[NUM.ZERO]?.target,
+        deliveries[0]?.target,
         TEST_REPLICA_DISPATCH_TARGET,
         TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET,
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER,
       );
     } finally {
@@ -1214,18 +1214,18 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE,
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED,
         );
         t.equal(
           coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
             .size,
-          NUM.ONE,
+          1,
           TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED,
         );
       } finally {
@@ -1368,7 +1368,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         }
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE,
         );
         t.equal(
@@ -1413,14 +1413,14 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes('WHERE operation_id = ?')
           ) {
-            const operationId = params[NUM.ZERO];
+            const operationId = params[0];
             const operationRow =
           authoritativeOperationRows.find((row) =>
             row.operation_id === operationId);
             return {
               success: true,
               rows: operationRow ? [{...operationRow}] : [],
-              affectedRows: operationRow ? NUM.ONE : NUM.ZERO,
+              affectedRows: operationRow ? 1 : 0,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
@@ -1434,13 +1434,13 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             return {
               success: true,
               rows: [],
-              affectedRows: NUM.ZERO,
+              affectedRows: 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -1560,7 +1560,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_RETRY_DEFERRED_HANDOFF_NO_INLINE_WAKE,
         );
         t.equal(
@@ -1602,25 +1602,25 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
         );
 
-        const refreshedUpdatedAt = TEST_CAPTURED_AT_MS - NUM.ONE;
-        authoritativeOperationRows[NUM.ZERO] = Object.freeze({
-          ...authoritativeOperationRows[NUM.ZERO],
+        const refreshedUpdatedAt = TEST_CAPTURED_AT_MS - 1;
+        authoritativeOperationRows[0] = Object.freeze({
+          ...authoritativeOperationRows[0],
           workflow_step: WORKFLOW_STEP.SENDING,
           updated_at: refreshedUpdatedAt,
         });
-        await deferredTimers[NUM.ZERO].fn();
+        await deferredTimers[0].fn();
         t.equal(
           deliveries.length,
-          NUM.ONE,
+          1,
           TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
         );
         t.equal(
-          deliveries[NUM.ZERO]?.payload?.operationRow?.workflow_step,
+          deliveries[0]?.payload?.operationRow?.workflow_step,
           WORKFLOW_STEP.SENDING,
           TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
         );
         t.equal(
-          deliveries[NUM.ZERO]?.payload?.operationRow?.updated_at,
+          deliveries[0]?.payload?.operationRow?.updated_at,
           refreshedUpdatedAt,
           TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
         );

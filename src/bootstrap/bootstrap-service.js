@@ -107,25 +107,23 @@ import {
 import {
   createBootstrapServiceRuntimeMethods,
 } from './bootstrap-service-runtime-methods.js';
-import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_BOOTSTRAPSERVICE = 'BootstrapService';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_9RBME = 'createRuntimeStartupWiring';
-const LOCAL_STR_1TQ8P = 'triggerRebalancingOnAllPartitions';
-const LOCAL_STR_1VE2J = 'Retrying seed steady-state control-plane writers until ';
-const LOCAL_STR_1TW15 = 'lifecycle metadata publication readiness is satisfied';
-const LOCAL_STR_L9TQM = 'Deferring seed steady-state control-plane writers until ';
+const LOCAL_STR_CREATERUNTIMESTARTUPWIRING = 'createRuntimeStartupWiring';
+const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPartitions';
+const LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE = 'Retrying seed steady-state control-plane writers until ';
+const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'lifecycle metadata publication readiness is satisfied';
+const LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN = 'Deferring seed steady-state control-plane writers until ';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 
 function resolveBootstrapWorkflowDataDir(options = {}) {
-  if (typeof options.dataDir === LOCAL_STR_STRING && options.dataDir.length > LOCAL_NUM_ZERO) {
+  if (typeof options.dataDir === LOCAL_STR_STRING && options.dataDir.length > 0) {
     return options.dataDir;
   }
   const dataDirectoryManager = options.dataDirectoryManager || null;
@@ -162,12 +160,12 @@ class BootstrapService extends EventEmitter {
     this.wsPort = options.wsPort || null;
     this.config = {...BOOTSTRAP_DEFAULT, ...options.config};
     this.config.replicaStaggerDelayMs = Number.isFinite(this.config.replicaStaggerDelayMs) ?
-      Math.max(NUM.ZERO, this.config.replicaStaggerDelayMs) :
+      Math.max(0, this.config.replicaStaggerDelayMs) :
       BOOTSTRAP_DEFAULT.replicaStaggerDelayMs;
     this.config.maxConcurrentServiceActions = Number.isFinite(
       this.config.maxConcurrentServiceActions,
     ) ?
-      Math.max(NUM.ONE, Math.floor(this.config.maxConcurrentServiceActions)) :
+      Math.max(1, Math.floor(this.config.maxConcurrentServiceActions)) :
       BOOTSTRAP_DEFAULT.maxConcurrentServiceActions;
     this.config.replicaRegistrationTraceEnabled = Boolean(
       this.config.replicaRegistrationTraceEnabled,
@@ -182,7 +180,7 @@ class BootstrapService extends EventEmitter {
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
-      Math.max(NUM.ZERO, this.config.nodeReadyRebalanceDelayMs) :
+      Math.max(0, this.config.nodeReadyRebalanceDelayMs) :
       BOOTSTRAP_REBALANCE_DELAY_MS;
     this.clusterIncarnationFence =
       options.clusterIncarnationFence &&
@@ -193,7 +191,7 @@ class BootstrapService extends EventEmitter {
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({
         maxConcurrent: this.config.maxConcurrentServiceActions,
-        reservedClassASlots: NUM.ONE,
+        reservedClassASlots: 1,
       });
 
     // Services created during bootstrap
@@ -353,16 +351,16 @@ class BootstrapService extends EventEmitter {
     });
     this.startTime = null;
     this.phaseStartTime = null;
-    this.servicesCreated = NUM.ZERO;
-    this.partitionsCreated = NUM.ZERO;
-    this.messageGroupsCreated = NUM.ZERO;
+    this.servicesCreated = 0;
+    this.partitionsCreated = 0;
+    this.messageGroupsCreated = 0;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
     this.logger.debug(BootstrapLog.RUNTIME_WIRING_READY, {
       nodeId: this.nodeId,
-      owner: LOCAL_STR_9RBME,
+      owner: LOCAL_STR_CREATERUNTIMESTARTUPWIRING,
       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
@@ -379,7 +377,7 @@ class BootstrapService extends EventEmitter {
         executeNodeReadyRebalance: (reason) => {
           if (Object.prototype.hasOwnProperty.call(
             this,
-            LOCAL_STR_1TQ8P,
+            LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS,
           )) {
             this.triggerRebalancingOnAllPartitions(reason);
             return;
@@ -397,8 +395,8 @@ class BootstrapService extends EventEmitter {
           sleep: (delayMs) => this.sleep(delayMs),
           onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
             this.logger.warn(
-              LOCAL_STR_1VE2J +
-              LOCAL_STR_1TW15,
+              LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE +
+              LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS,
               {
                 nodeId: this.nodeId,
                 attempt,
@@ -411,8 +409,8 @@ class BootstrapService extends EventEmitter {
         }),
         onMetadataPublicationReadinessDeferred: (error) => {
           this.logger.warn(
-            LOCAL_STR_L9TQM +
-            LOCAL_STR_1TW15,
+            LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN +
+            LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS,
             {
               nodeId: this.nodeId,
               error: error?.message || String(error),
@@ -631,7 +629,7 @@ class BootstrapService extends EventEmitter {
       });
 
       // Exit with non-zero code (Requirement 6.16)
-      process.exit(NUM.ONE);
+      process.exit(1);
     }
 
     return result;

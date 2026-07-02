@@ -15,7 +15,6 @@ const {
   SERVICE_STATUS,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   unwrapRowReadResult,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -93,7 +92,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     if (
       localHandlerAddress &&
       this.messageRouter &&
-      typeof this.messageRouter.isRegistered === TYPEOF.FUNCTION &&
+      typeof this.messageRouter.isRegistered === 'function' &&
       this.messageRouter.isRegistered(localHandlerAddress)
     ) {
       return true;
@@ -101,7 +100,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
 
     const serviceRows =
       this.servicesOwner &&
-      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION ?
+      typeof this.servicesOwner.listServicesFromCache === 'function' ?
         (await this.servicesOwner.listServicesFromCache()).rows || [] :
         this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
     return serviceRows.some((row) => {
@@ -148,7 +147,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
   async getNodeRow(nodeId) {
     if (
       this.nodesOwner &&
-      typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION
+      typeof this.nodesOwner.getNodeFromCache === 'function'
     ) {
       const result = await this.nodesOwner.getNodeFromCache(nodeId);
       return unwrapRowReadResult(result) || {};
@@ -170,14 +169,14 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     const gateway = this.getControlPlaneSystemTableGateway();
     let result = null;
 
-    if (typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
+    if (typeof gateway.readAuthoritativeRows === 'function') {
       result = await gateway.readAuthoritativeRows(
         SYSTEM_TABLE_NAME.NODES,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         [nodeId],
         {owner: DISPATCH_SUBSYSTEM},
       );
-    } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
+    } else if (typeof gateway.executeRead === 'function') {
       result = await gateway.executeRead(
         {
           tableName: SYSTEM_TABLE_NAME.NODES,
@@ -189,7 +188,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
           owner: DISPATCH_SUBSYSTEM,
         },
       );
-    } else if (typeof gateway.readRows === TYPEOF.FUNCTION) {
+    } else if (typeof gateway.readRows === 'function') {
       result = await gateway.readRows(
         SYSTEM_TABLE_NAME.NODES,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
@@ -269,7 +268,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
       if (
         readError?.deferRetry === true ||
         (typeof this.cdcIntegrationService?.isTransientCdcError ===
-          TYPEOF.FUNCTION &&
+          'function' &&
           this.cdcIntegrationService.isTransientCdcError(readMessage)) ||
         readMessage.includes(
           DISPATCH_READINESS_ERROR_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
@@ -330,7 +329,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     const authoritativeOperationQuery =
       this.rebalanceCoordinator?.repository &&
       typeof this.rebalanceCoordinator.repository
-        .queryAuthoritativeOperationById === TYPEOF.FUNCTION ?
+        .queryAuthoritativeOperationById === 'function' ?
         this.rebalanceCoordinator.repository.queryAuthoritativeOperationById.bind(
           this.rebalanceCoordinator.repository,
         ) :
@@ -349,19 +348,19 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     }
 
     const gateway = this.controlPlaneSystemTableGateway;
-    if (!operationId || !gateway || typeof gateway !== TYPEOF.OBJECT) {
+    if (!operationId || !gateway || typeof gateway !== 'object') {
       return null;
     }
 
     let result = null;
-    if (typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
+    if (typeof gateway.readAuthoritativeRows === 'function') {
       result = await gateway.readAuthoritativeRows(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
         [operationId],
         {owner: DISPATCH_SUBSYSTEM},
       );
-    } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
+    } else if (typeof gateway.executeRead === 'function') {
       result = await gateway.executeRead(
         {
           tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -373,7 +372,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
           owner: DISPATCH_SUBSYSTEM,
         },
       );
-    } else if (typeof gateway.readRows === TYPEOF.FUNCTION) {
+    } else if (typeof gateway.readRows === 'function') {
       result = await gateway.readRows(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
@@ -408,7 +407,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     const visibilityObservationQuery =
       this.rebalanceCoordinator?.repository &&
       typeof this.rebalanceCoordinator.repository
-        .getOperationByIdVisibilityObservation === TYPEOF.FUNCTION ?
+        .getOperationByIdVisibilityObservation === 'function' ?
         this.rebalanceCoordinator.repository.getOperationByIdVisibilityObservation.bind(
           this.rebalanceCoordinator.repository,
         ) :
@@ -419,7 +418,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
         allowPriorityRecoveryDeferredVisibility: true,
       });
       const operation =
-        observation?.operation && typeof observation.operation === TYPEOF.OBJECT ?
+        observation?.operation && typeof observation.operation === 'object' ?
           observation.operation :
           null;
       return Object.freeze({
@@ -428,7 +427,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
           null,
         deferredOutcome:
           observation?.deferredOutcome &&
-          typeof observation.deferredOutcome === TYPEOF.OBJECT ?
+          typeof observation.deferredOutcome === 'object' ?
             {...observation.deferredOutcome} :
             null,
       });
@@ -451,7 +450,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     if (
       this.replicaOperationsOwner &&
       typeof this.replicaOperationsOwner.getReplicaOperationFromCache ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const result =
         await this.replicaOperationsOwner.getReplicaOperationFromCache(
@@ -507,7 +506,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     if (
       tableName === SYSTEM_TABLE_NAME.NODES &&
       this.nodesOwner &&
-      typeof this.nodesOwner.listNodesFromCache === TYPEOF.FUNCTION
+      typeof this.nodesOwner.listNodesFromCache === 'function'
     ) {
       const result = await this.nodesOwner.listNodesFromCache();
       return Array.isArray(result?.rows) ? result.rows : [];
@@ -516,7 +515,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
       tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
       this.replicaOperationsOwner &&
       typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const result =
         await this.replicaOperationsOwner.listReplicaOperationsFromCache();
@@ -525,7 +524,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     if (
       tableName === SYSTEM_TABLE_NAME.SERVICES &&
       this.servicesOwner &&
-      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION
+      typeof this.servicesOwner.listServicesFromCache === 'function'
     ) {
       const result = await this.servicesOwner.listServicesFromCache();
       return Array.isArray(result?.rows) ? result.rows : [];

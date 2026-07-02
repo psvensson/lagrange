@@ -19,17 +19,15 @@ import {
 } from './admin-test-run-progress.js';
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_VERBOSE = '--verbose';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
 const LOCAL_STR_STOP_REQUESTED = 'Stop requested';
-const LOCAL_NUM_90 = 90;
-const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_NINETY = 90;
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_NUMBER = 'number';
-const LOCAL_NUM_TWO = 2;
 
 const FILE_ENCODING = 'utf8';
 const PROCESS_EXIT_SUCCESS = 0;
@@ -263,7 +261,7 @@ const adminTestRunLifecycleMethods = Object.freeze({
     this.updateRunProgress(run, {
       phase: RUN_PROGRESS_PHASE.STOPPING,
       message: LOCAL_STR_STOP_REQUESTED,
-      percent: Math.max(LOCAL_NUM_90, Number(run.progress?.percent || LOCAL_NUM_ZERO)),
+      percent: Math.max(LOCAL_NUM_NINETY, Number(run.progress?.percent || 0)),
     });
     this.publishStatus(run);
     await this.persistRunMetadata(run);
@@ -333,8 +331,8 @@ const adminTestRunLifecycleMethods = Object.freeze({
       phase: input?.phase || RUN_PROGRESS_PHASE.STARTING,
       message: input?.message || EMPTY_STRING,
       percent: Math.max(
-        LOCAL_NUM_ZERO,
-        Math.min(LOCAL_NUM_100, Number(input?.percent || LOCAL_NUM_ZERO)),
+        0,
+        Math.min(LOCAL_NUM_ONE_HUNDRED, Number(input?.percent || 0)),
       ),
       updatedAt: new Date(this.now()).toISOString(),
     };
@@ -580,7 +578,7 @@ const adminTestRunLifecycleMethods = Object.freeze({
     const metadataPath = this.resolveMetadataFilePath(run.runId);
     await writeFile(
       metadataPath,
-      JSON.stringify(metadata, null, LOCAL_NUM_TWO),
+      JSON.stringify(metadata, null, 2),
       FILE_ENCODING,
     );
   },

@@ -1,10 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
-const LOCAL_STR_1UEBY = 'message-groups-owner';
+const LOCAL_STR_MESSAGE_GROUPS_OWNER = 'message-groups-owner';
 
 class MessageGroupsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = LOCAL_STR_1UEBY;
+  static OWNER_NAME = LOCAL_STR_MESSAGE_GROUPS_OWNER;
   static TABLE_NAME = TABLES.MESSAGE_GROUPS;
 
   async getMessageGroup(groupId, options = {}) {

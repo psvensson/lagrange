@@ -5,7 +5,7 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
  */
 
-import {NUM, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   PEER_ADDRESS_RESOLVER_ADDRESS,
@@ -50,7 +50,7 @@ class PeerAddressResolver {
     }
 
     // Path 2: peerAddresses array → search and return
-    if (peerAddresses && peerAddresses.length > NUM.ZERO) {
+    if (peerAddresses && peerAddresses.length > 0) {
       const found = this.resolveFromPeerAddresses(peerId, peerAddresses);
       if (found) {
         return found;

@@ -6,7 +6,6 @@ import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
 
 const {
-  NUM,
   OPERATION_OWNER_ACTION,
   OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -15,7 +14,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   ReplicaOperationResponseStatus,
-  TYPEOF,
   WORKFLOW_STEP,
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -33,7 +31,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     if (
       typeof removeSafetyEvaluation?.handoffFailureError ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      removeSafetyEvaluation.handoffFailureError.length > NUM.ZERO
+      removeSafetyEvaluation.handoffFailureError.length > 0
     ) {
       return removeSafetyEvaluation.handoffFailureError;
     }
@@ -141,7 +139,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   getOperationIdFromInput(operationInput) {
     if (
       typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.length > NUM.ZERO
+      operationInput.length > 0
     ) {
       return operationInput;
     }
@@ -154,14 +152,14 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     if (
       typeof operationInput.operationId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.operationId.length > NUM.ZERO
+      operationInput.operationId.length > 0
     ) {
       return operationInput.operationId;
     }
     if (
       typeof operationInput.operation_id ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.operation_id.length > NUM.ZERO
+      operationInput.operation_id.length > 0
     ) {
       return operationInput.operation_id;
     }
@@ -179,10 +177,10 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   shouldPreserveDispatchInputForTransitionRetry(operationInput) {
     return (
       operationInput &&
-      typeof operationInput === TYPEOF.OBJECT &&
+      typeof operationInput === 'object' &&
       (
-        typeof operationInput.operationId === TYPEOF.STRING ||
-        typeof operationInput.operation_id === TYPEOF.STRING
+        typeof operationInput.operationId === 'string' ||
+        typeof operationInput.operation_id === 'string'
       )
     );
   }
@@ -195,7 +193,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   async resolveDispatchOperation(operationInput) {
     if (
       typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.length > NUM.ZERO
+      operationInput.length > 0
     ) {
       return this.repository.queryOperationById(operationInput);
     }
@@ -208,7 +206,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     if (
       typeof operationInput.operationId ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.operationId.length > NUM.ZERO
+      operationInput.operationId.length > 0
     ) {
       if (!isCoordinatorOwnedOperationType(operationInput.type)) {
         return null;
@@ -218,7 +216,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         this.repository.getReplaceSourceReplicaId(operation);
       if (
         typeof sourceReplicaId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        sourceReplicaId.length > NUM.ZERO
+        sourceReplicaId.length > 0
       ) {
         operation.sourceReplicaId = sourceReplicaId;
       }
@@ -227,7 +225,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     if (
       typeof operationInput.operation_id ===
         OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.operation_id.length > NUM.ZERO
+      operationInput.operation_id.length > 0
     ) {
       const operation = this.repository.rowToOperation(operationInput);
       return isCoordinatorOwnedOperationType(operation?.type) ?

@@ -3,7 +3,6 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  NUM,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -120,7 +119,7 @@ test('ReplicaDispatchService dispatches same-node operations through the ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'same-node local-handler dispatch should not remain queued for retry',
     );
   } finally {
@@ -225,7 +224,7 @@ test('ReplicaDispatchService trusts router-registered same-node handler ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'router-registered local capability should not leave the operation parked for retry',
     );
   } finally {
@@ -319,7 +318,7 @@ test('ReplicaDispatchService ready-node retries reuse ready sync evidence ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'ready-node sync reuse should not leave the operation parked for another dispatch retry',
     );
   } finally {
@@ -414,7 +413,7 @@ test('ReplicaDispatchService falls back to ready sync recovery evidence ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'sync fallback should not leave a deferred dispatch retry behind',
     );
   } finally {
@@ -511,7 +510,7 @@ test('ReplicaDispatchService falls back to ready sync recovery evidence ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'sync fallback should not leave a deferred dispatch retry behind',
     );
   } finally {
@@ -614,7 +613,7 @@ test('ReplicaDispatchService falls back to ready sync recovery evidence ' +
     );
     t.equal(
       service.operationDispatchDeferredRetries.size,
-      NUM.ZERO,
+      0,
       'sync fallback should not leave a deferred dispatch retry behind when readiness is already satisfied',
     );
   } finally {

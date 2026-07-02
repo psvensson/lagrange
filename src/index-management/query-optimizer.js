@@ -15,8 +15,7 @@ import {
 } from './index-constants.js';
 import {QUERY_AST_NODE, QUERY_AST_TYPE} from '../query/query-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_ORDER_BY = 'order_by';
 const LOCAL_STR_COMMA = ',';
 
@@ -137,16 +136,16 @@ class QueryOptimizer {
     }
 
     // Generate hints
-    if (result.usableIndices.length === LOCAL_NUM_ZERO && whereColumns.length > LOCAL_NUM_ZERO) {
+    if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `${INDEX_HINT.WHERE_GENERIC_PREFIX}${whereColumns.join(LOCAL_STR_128KJ)}`,
+        `${INDEX_HINT.WHERE_GENERIC_PREFIX}${whereColumns.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
 
-    if (orderByColumns.length > LOCAL_NUM_ZERO &&
+    if (orderByColumns.length > 0 &&
         !result.usableIndices.some((i) => i.usage === LOCAL_STR_ORDER_BY)) {
       result.hints.push(
-        `${INDEX_HINT.ORDER_BY_PREFIX}${orderByColumns.join(LOCAL_STR_128KJ)}`,
+        `${INDEX_HINT.ORDER_BY_PREFIX}${orderByColumns.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
   }
@@ -173,9 +172,9 @@ class QueryOptimizer {
       }
     }
 
-    if (result.usableIndices.length === LOCAL_NUM_ZERO && whereColumns.length > LOCAL_NUM_ZERO) {
+    if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(LOCAL_STR_128KJ)}`,
+        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
   }
@@ -202,9 +201,9 @@ class QueryOptimizer {
       }
     }
 
-    if (result.usableIndices.length === LOCAL_NUM_ZERO && whereColumns.length > LOCAL_NUM_ZERO) {
+    if (result.usableIndices.length === 0 && whereColumns.length > 0) {
       result.hints.push(
-        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(LOCAL_STR_128KJ)}`,
+        `${INDEX_HINT.WHERE_PREFIX}${whereColumns.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
   }
@@ -306,7 +305,7 @@ class QueryOptimizer {
    * @private
    */
   checkIndexMatch(indexColumns, queryColumns) {
-    if (!indexColumns || !queryColumns || queryColumns.length === LOCAL_NUM_ZERO) {
+    if (!indexColumns || !queryColumns || queryColumns.length === 0) {
       return {usable: false, matchedColumns: [], covering: false};
     }
 
@@ -314,7 +313,7 @@ class QueryOptimizer {
 
     // Check if index prefix matches query columns
     // An index on (a, b, c) can be used for queries on (a), (a, b), or (a, b, c)
-    for (let i = LOCAL_NUM_ZERO; i < indexColumns.length && i < queryColumns.length; i++) {
+    for (let i = 0; i < indexColumns.length && i < queryColumns.length; i++) {
       if (queryColumns.includes(indexColumns[i])) {
         matchedColumns.push(indexColumns[i]);
       } else {
@@ -323,7 +322,7 @@ class QueryOptimizer {
     }
 
     // Also check if any query column matches any index column (less optimal but still useful)
-    if (matchedColumns.length === LOCAL_NUM_ZERO) {
+    if (matchedColumns.length === 0) {
       for (const queryCol of queryColumns) {
         if (indexColumns.includes(queryCol)) {
           matchedColumns.push(queryCol);
@@ -378,7 +377,7 @@ class QueryOptimizer {
     }
 
     // Suggest index for WHERE clause columns
-    if (whereColumns.length > LOCAL_NUM_ZERO) {
+    if (whereColumns.length > 0) {
       const whereKey = whereColumns.sort().join(',');
       if (!existingIndexColumns.has(whereKey)) {
         suggestions.push({
@@ -390,7 +389,7 @@ class QueryOptimizer {
     }
 
     // Suggest index for ORDER BY columns
-    if (orderByColumns.length > LOCAL_NUM_ZERO) {
+    if (orderByColumns.length > 0) {
       const orderKey = orderByColumns.join(',');
       if (!existingIndexColumns.has(orderKey)) {
         suggestions.push({
@@ -402,7 +401,7 @@ class QueryOptimizer {
     }
 
     // Suggest index for JOIN columns
-    if (joinColumns.length > LOCAL_NUM_ZERO) {
+    if (joinColumns.length > 0) {
       for (const col of joinColumns) {
         const hasIndex = existingIndices.some((idx) =>
           idx.columnNames[0] === col,

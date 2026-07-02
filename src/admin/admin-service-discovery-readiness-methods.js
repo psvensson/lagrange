@@ -13,9 +13,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
     AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES,
     AUTHORITATIVE_DISCOVERY_REPAIR,
     EMPTY_STRING,
-    NUM,
     TABLES,
-    TYPEOF,
     evaluateAuthoritativeRepairPolicy,
     evaluateSharedMetadataNodeCoverage,
     normalizeDiscoveryTableId,
@@ -61,10 +59,10 @@ function assignAdminServiceDiscoveryReadinessMethods(
         this.systemTableCache &&
           this.cacheMutationTarget &&
           typeof this.cacheMutationTarget.applySystemTableChange ===
-            TYPEOF.FUNCTION &&
+            'function' &&
           this.canReadAuthoritativeDiscoveryRows() &&
           snapshot &&
-          typeof snapshot === TYPEOF.OBJECT,
+          typeof snapshot === 'object',
       );
     }
 
@@ -92,7 +90,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
 
     collectAuthoritativeDiscoveryReplicaReadiness(services = []) {
       const readinessSummary = {
-        readyReplicaCount: NUM.ZERO,
+        readyReplicaCount: 0,
         selectedNodeIds: new Set(),
         hasCacheGapReasons: false,
       };
@@ -116,7 +114,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
         ADMIN_CACHE_DUMP.EMPTY;
       for (const replica of replicas) {
         const readiness = replica?.readiness || null;
-        if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+        if (!readiness || typeof readiness !== 'object') {
           continue;
         }
         const reasons = Array.isArray(readiness.reasons) ?
@@ -137,8 +135,8 @@ function assignAdminServiceDiscoveryReadinessMethods(
       readiness,
       reasons,
     ) {
-      if (readiness.benchmarkReady === true || reasons.length === NUM.ZERO) {
-        readinessSummary.readyReplicaCount += NUM.ONE;
+      if (readiness.benchmarkReady === true || reasons.length === 0) {
+        readinessSummary.readyReplicaCount += 1;
         const nodeId = String(replica?.nodeId || EMPTY_STRING);
         if (nodeId) {
           readinessSummary.selectedNodeIds.add(nodeId);
@@ -162,7 +160,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
     }
 
     resolveDiscoveryServiceEndpointsCount() {
-      if (typeof this.systemTableCache.count === TYPEOF.FUNCTION) {
+      if (typeof this.systemTableCache.count === 'function') {
         return this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS);
       }
       return this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;

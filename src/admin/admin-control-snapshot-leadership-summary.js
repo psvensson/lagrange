@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
@@ -97,7 +97,7 @@ function firstNonNegativeIntegerField(row, ...fieldNames) {
   for (const fieldName of fieldNames) {
     const value = row?.[fieldName];
     const numericValue = Number(value);
-    if (Number.isFinite(numericValue) && numericValue >= NUM.ZERO) {
+    if (Number.isFinite(numericValue) && numericValue >= 0) {
       return {
         state: PARTITION_LEADER_AUTHORITY_INTEGER_STATE_AVAILABLE,
         value: Math.floor(numericValue),
@@ -149,8 +149,8 @@ function buildPartitionLeaderAuthorityCertificate({
 
 function normalizeControlSnapshotCanonicalLeader(canonicalLeaderNodeId) {
   if (
-    typeof canonicalLeaderNodeId === TYPEOF.STRING &&
-    canonicalLeaderNodeId.length > NUM.ZERO
+    typeof canonicalLeaderNodeId === 'string' &&
+    canonicalLeaderNodeId.length > 0
   ) {
     return {
       state: PARTITION_LEADER_AUTHORITY_LEADER_STATE_AVAILABLE,
@@ -172,15 +172,15 @@ function resolveControlSnapshotLeaderDecision({
     Array.isArray(replicaLeaderNodeIds) ? replicaLeaderNodeIds : [],
   );
   const hasSingleReplicaLeader =
-    normalizedReplicaLeaderNodeIds.length === NUM.ONE;
+    normalizedReplicaLeaderNodeIds.length === 1;
   const hasMultipleReplicaLeaders =
-    normalizedReplicaLeaderNodeIds.length > NUM.ONE;
+    normalizedReplicaLeaderNodeIds.length > 1;
   const hasCanonicalLeader =
     canonicalLeader.state === PARTITION_LEADER_AUTHORITY_LEADER_STATE_AVAILABLE;
   const replicaLeaderDisagrees =
     hasCanonicalLeader &&
     hasSingleReplicaLeader &&
-    canonicalLeader.value !== normalizedReplicaLeaderNodeIds[NUM.ZERO];
+    canonicalLeader.value !== normalizedReplicaLeaderNodeIds[0];
   const decision = {
     leaderState: canonicalLeader.state,
     leaderSource: PARTITION_LEADER_AUTHORITY_SOURCE_PARTITIONS,
@@ -196,12 +196,12 @@ function resolveControlSnapshotLeaderDecision({
 
 function resolvePublicationPendingAckCount(publicationConvergence = null) {
   if (Number.isInteger(publicationConvergence?.pendingAckCount)) {
-    return Math.max(NUM.ZERO, publicationConvergence.pendingAckCount);
+    return Math.max(0, publicationConvergence.pendingAckCount);
   }
   if (Array.isArray(publicationConvergence?.pendingAckNodeIds)) {
     return publicationConvergence.pendingAckNodeIds.length;
   }
-  return NUM.ZERO;
+  return 0;
 }
 
 function isPostPublicationPriorityRecoveryClosed(
@@ -209,7 +209,7 @@ function isPostPublicationPriorityRecoveryClosed(
 ) {
   const publicationConvergence =
     controlPlaneDiagnostics?.publicationConvergence &&
-    typeof controlPlaneDiagnostics.publicationConvergence === TYPEOF.OBJECT ?
+    typeof controlPlaneDiagnostics.publicationConvergence === 'object' ?
       controlPlaneDiagnostics.publicationConvergence :
       controlPlaneDiagnostics;
   const publicationStatus = String(
@@ -220,12 +220,12 @@ function isPostPublicationPriorityRecoveryClosed(
   ).toUpperCase();
   const priorityPartitionSummary =
     publicationConvergence?.priorityPartitionSummary &&
-    typeof publicationConvergence.priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof publicationConvergence.priorityPartitionSummary === 'object' ?
       publicationConvergence.priorityPartitionSummary :
       null;
   return (
     publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED &&
-    resolvePublicationPendingAckCount(publicationConvergence) === NUM.ZERO &&
+    resolvePublicationPendingAckCount(publicationConvergence) === 0 &&
     priorityPartitionSummary?.satisfied === true
   );
 }
@@ -256,9 +256,9 @@ function countPostPublicationStaleInFlightDiscounts(
   if (
     isPostPublicationPriorityRecoveryClosed(controlPlaneDiagnostics) !== true
   ) {
-    return NUM.ZERO;
+    return 0;
   }
-  let discountCount = NUM.ZERO;
+  let discountCount = 0;
   for (const row of Array.isArray(rows) ? rows : []) {
     if (
       isReplicaOperationInFlight(row, livenessOptions) !== true ||
@@ -267,7 +267,7 @@ function countPostPublicationStaleInFlightDiscounts(
     ) {
       continue;
     }
-    discountCount += NUM.ONE;
+    discountCount += 1;
   }
   return discountCount;
 }
@@ -470,7 +470,7 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
         continue;
       }
       voterCounts[partitionId] =
-        (voterCounts[partitionId] || NUM.ZERO) + NUM.ONE;
+        (voterCounts[partitionId] || 0) + 1;
     }
     return voterCounts;
   }
@@ -486,17 +486,17 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
   ) {
     const scopedPartitionIds =
       options.partitionIds instanceof Set &&
-      options.partitionIds.size > NUM.ZERO ?
+      options.partitionIds.size > 0 ?
         options.partitionIds :
         null;
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         readAllSharedRows(this.systemTableCache, TABLES.SERVICES) :
         ADMIN_CACHE_DUMP.EMPTY;
     const isStartup =
       this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION ?
+      typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
         this.startupRecoveryCoordinator.evaluate()?.ready !== true :
         false;
     const livenessOptions = {
@@ -517,7 +517,7 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
         options.controlPlaneDiagnostics,
       );
     const effectiveStaleInFlightCount = Math.max(
-      NUM.ZERO,
+      0,
       livenessSummary.staleInFlightCount - staleInFlightDiscountCount,
     );
     return {

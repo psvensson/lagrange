@@ -24,7 +24,6 @@ import {
 import {
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  NUM,
   SERVICE_STATUS,
   STATE,
   TIME_MS,
@@ -102,7 +101,7 @@ async function waitForOperationDispatchQueueDrain(service = null) {
     await Promise.resolve();
   }
   await new Promise((resolve) => {
-    setTimeout(resolve, NUM.ZERO);
+    setTimeout(resolve, 0);
   });
   if (Array.isArray(service?.operationDispatchQueues)) {
     await Promise.all(
@@ -330,7 +329,7 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, {skip: 'STALE: dead test re-enabled; e
     workflowStep: WORKFLOW_STEP.PENDING,
     stepsHistory: [],
   };
-  let authoritativeQueryCount = NUM.ZERO;
+  let authoritativeQueryCount = 0;
   const enqueueCalls = [];
   const blockedPartitions = [
     READY_RETRY_PARTITION_ID,
@@ -472,7 +471,7 @@ test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, {skip: 'STALE: dead test re-enable
     workflowStep: WORKFLOW_STEP.PENDING,
     stepsHistory: [],
   };
-  let authoritativeQueryCount = NUM.ZERO;
+  let authoritativeQueryCount = 0;
   const enqueueCalls = [];
   const service = createService({
     nodeId: READY_RETRY_TARGET_NODE_ID,
@@ -598,7 +597,7 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
     [],
     [authoritativeOperation],
   ];
-  let authoritativeQueryCount = NUM.ZERO;
+  let authoritativeQueryCount = 0;
   const enqueueCalls = [];
   const service = createService({
     nodeId: READY_RETRY_TARGET_NODE_ID,
@@ -797,7 +796,7 @@ async (t) => {
   );
   t.equal(
     enqueueCalls.length,
-    NUM.ZERO,
+    0,
     'ready-node retry should not enqueue remote-owned rows for local dispatch reconcile',
   );
 
@@ -858,7 +857,7 @@ async (t) => {
 
   t.equal(
     enqueueCalls.length,
-    NUM.ZERO,
+    0,
     'ready-node retry must ignore bootstrap-owned reservations',
   );
 
@@ -897,7 +896,7 @@ async (t) => {
 
   t.equal(
     enqueueCalls.length,
-    NUM.ZERO,
+    0,
     'CDC dispatch trigger must ignore bootstrap-owned reservations',
   );
 

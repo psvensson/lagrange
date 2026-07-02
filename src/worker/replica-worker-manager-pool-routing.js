@@ -12,7 +12,6 @@ function createReplicaWorkerManagerPoolRoutingMethods(deps = {}) {
     Piscina,
     MANAGER_DEFAULT,
     MANAGER_LOG_MSG,
-    NUM,
     WORKER_MANAGER_ADDRESS_SEGMENT,
     LOCAL_STR_ERROR,
     LOCAL_STR_MESSAGE,
@@ -83,8 +82,8 @@ function createReplicaWorkerManagerPoolRoutingMethods(deps = {}) {
     createDedicatedReplicaPool(replicaId) {
       const pool = new Piscina({
         filename: this.workerPath,
-        maxThreads: NUM.ONE,
-        minThreads: NUM.ONE,
+        maxThreads: 1,
+        minThreads: 1,
         idleTimeout: MANAGER_DEFAULT.IDLE_TIMEOUT_MS,
       });
       this.setupPoolEventHandlersFor(pool);

@@ -1,13 +1,11 @@
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {
-  NUM,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY,
   PRIORITY_RECOVERY_FOLLOW_UP_DECISION,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
@@ -19,7 +17,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     const normalizedValue = String(
       value || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    return normalizedValue.length > NUM.ZERO ?
+    return normalizedValue.length > 0 ?
       normalizedValue :
       PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE;
   }
@@ -108,7 +106,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     if (
       !workflowOwner ||
       typeof workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
@@ -117,7 +115,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         this.entityId,
         [],
       );
-    return decisionSnapshot && typeof decisionSnapshot === TYPEOF.OBJECT ?
+    return decisionSnapshot && typeof decisionSnapshot === 'object' ?
       decisionSnapshot :
       null;
   }
@@ -167,7 +165,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
   ) {
     const followUpDecision =
       this.buildPriorityRecoverySurrogateFollowUpDecisions(planningSnapshot)[
-        NUM.ZERO
+        0
       ];
     if (followUpDecision) {
       return followUpDecision;
@@ -206,7 +204,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     const partitionId =
       this.resolvePriorityRecoveryFollowUpPartitionId(decisionSnapshot);
     if (
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       followUpPartitionIds.has(partitionId)
     ) {
       return true;
@@ -311,7 +309,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       const normalizedPartitionId = String(
         partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (normalizedPartitionId.length === NUM.ZERO) {
+      if (normalizedPartitionId.length === 0) {
         return null;
       }
       return this.normalizePriorityRecoverySurrogateFollowUpDecisionSnapshot(
@@ -335,7 +333,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         )
         .filter(
           (partitionId) =>
-            partitionId.length > NUM.ZERO && partitionId !== this.entityId,
+            partitionId.length > 0 && partitionId !== this.entityId,
         ) :
       [];
     for (const partitionId of candidatePartitionIds) {
@@ -354,7 +352,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
       if (
-        blockedPartitionId.length === NUM.ZERO ||
+        blockedPartitionId.length === 0 ||
         blockedPartitionId === this.entityId
       ) {
         continue;
@@ -368,7 +366,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     addFollowUpDecision(fallbackDecision);
     return skippedSettledCandidate === true ?
       Object.freeze(followUpDecisions) :
-      Object.freeze(followUpDecisions.slice(NUM.ZERO, NUM.ONE));
+      Object.freeze(followUpDecisions.slice(0, 1));
   }
 
   buildPriorityRecoverySurrogateDecisionFromPlanning(
@@ -398,7 +396,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         partition?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      return partitionId.length > NUM.ZERO && partitionId !== this.entityId;
+      return partitionId.length > 0 && partitionId !== this.entityId;
     });
     if (!blockedPartition) {
       return null;
@@ -466,7 +464,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         .map((snapshot) =>
           this.resolvePriorityRecoveryFollowUpPartitionId(snapshot),
         )
-        .filter((partitionId) => partitionId.length > NUM.ZERO),
+        .filter((partitionId) => partitionId.length > 0),
     );
     const topologyBlockingPartitionIds =
       this.buildGlobalTopologyBlockingPartitionIdSet();
@@ -481,7 +479,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
             partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
           ).trim(),
         )
-        .filter((partitionId) => partitionId.length > NUM.ZERO) :
+        .filter((partitionId) => partitionId.length > 0) :
       [];
     const rankedRawCandidatePartitionIds =
       this.rankPriorityRecoveryClosureWitnessFollowUpPartitionIds(
@@ -515,8 +513,8 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         Object.freeze(needsOperationRawCandidatePartitionIds),
       needsOperationCandidatePartitionIds:
         Object.freeze(needsOperationCandidatePartitionIds),
-      hasRawCandidate: rawCandidatePartitionIds.length > NUM.ZERO,
-      hasUnblockedCandidate: candidatePartitionIds.length > NUM.ZERO,
+      hasRawCandidate: rawCandidatePartitionIds.length > 0,
+      hasUnblockedCandidate: candidatePartitionIds.length > 0,
       topologyBlockingPartitionIds,
     });
   }

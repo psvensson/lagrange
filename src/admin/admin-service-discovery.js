@@ -163,9 +163,9 @@ const BENCHMARK_DEGRADATION_STATE = Object.freeze({
   DRAIN_BLOCKED: 'drain_blocked',
 });
 const BENCHMARK_DEGRADATION_PRIORITY = Object.freeze({
-  [BENCHMARK_DEGRADATION_STATE.HEALTHY]: NUM.ZERO,
-  [BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING]: NUM.ONE,
-  [BENCHMARK_DEGRADATION_STATE.MOVE_PENDING]: NUM.TWO,
+  [BENCHMARK_DEGRADATION_STATE.HEALTHY]: 0,
+  [BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING]: 1,
+  [BENCHMARK_DEGRADATION_STATE.MOVE_PENDING]: 2,
   [BENCHMARK_DEGRADATION_STATE.DRAIN_BLOCKED]: NUM.THREE,
   [BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED]: NUM.FOUR,
   [BENCHMARK_DEGRADATION_STATE.MOVE_FAILED]: NUM.FIVE,
@@ -216,7 +216,7 @@ const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
  */
 function compareSchemaVersionValues(left, right) {
   if (left === right) {
-    return NUM.ZERO;
+    return 0;
   }
   const leftNumber = Number(left);
   const rightNumber = Number(right);
@@ -231,7 +231,7 @@ function compareSchemaVersionValues(left, right) {
  * @return {boolean}
  */
 function isActiveVoterReadyPartitionReplica(serviceRow) {
-  if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+  if (!serviceRow || typeof serviceRow !== 'object') {
     return false;
   }
   const serviceType = firstStringField(
@@ -275,7 +275,7 @@ function selectNewestSchemaVersion(current, candidate) {
   if (!current) {
     return candidate;
   }
-  return compareSchemaVersionValues(candidate, current) >= NUM.ZERO ?
+  return compareSchemaVersionValues(candidate, current) >= 0 ?
     candidate :
     current;
 } /**
@@ -284,7 +284,7 @@ function selectNewestSchemaVersion(current, candidate) {
  * @return {string|null}
  */
 function extractSchemaVersionFromRecord(record) {
-  if (!record || typeof record !== TYPEOF.OBJECT) {
+  if (!record || typeof record !== 'object') {
     return null;
   }
   for (const fieldName of SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES) {
@@ -308,12 +308,12 @@ function parseDiscoveryListQuery(rawValue) {
       }
       return;
     }
-    if (typeof inputValue !== TYPEOF.STRING) {
+    if (typeof inputValue !== 'string') {
       return;
     }
     for (const value of inputValue.split(',')) {
       const trimmedValue = value.trim();
-      if (trimmedValue.length > NUM.ZERO) {
+      if (trimmedValue.length > 0) {
         values.push(trimmedValue);
       }
     }
@@ -327,10 +327,10 @@ function parseDiscoveryListQuery(rawValue) {
  * @return {boolean}
  */
 function parseDiscoveryBooleanQuery(rawValue, fallback) {
-  if (typeof rawValue === TYPEOF.BOOLEAN) {
+  if (typeof rawValue === 'boolean') {
     return rawValue;
   }
-  if (typeof rawValue !== TYPEOF.STRING) {
+  if (typeof rawValue !== 'string') {
     return fallback;
   }
   const normalizedValue = rawValue.trim().toLowerCase();
@@ -367,7 +367,7 @@ function parseServiceDiscoverySqlQuery(sql) {
   if (tableAndIdMatch) {
     return {
       isQuery: true,
-      tableName: normalizeIdentifier(tableAndIdMatch[NUM.ONE]),
+      tableName: normalizeIdentifier(tableAndIdMatch[1]),
       tableId: normalizeDiscoveryTableId(
         tableAndIdMatch[ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE_2],
       ),
@@ -383,7 +383,7 @@ function parseServiceDiscoverySqlQuery(sql) {
   }
   return {
     isQuery: true,
-    tableName: normalizeIdentifier(match[NUM.ONE]),
+    tableName: normalizeIdentifier(match[1]),
     tableId: null,
   };
 } // ── AdminServiceDiscovery class ─────────────────────────────────────────────
@@ -414,7 +414,7 @@ class AdminServiceDiscovery {
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.partitionServicesProvider =
-      typeof deps.partitionServicesProvider === TYPEOF.FUNCTION ?
+      typeof deps.partitionServicesProvider === 'function' ?
         deps.partitionServicesProvider :
         null;
     this.partitionServices =
@@ -425,19 +425,19 @@ class AdminServiceDiscovery {
       null;
     this.controlPlaneSnapshotOwner = deps.controlPlaneSnapshotOwner || null;
     this.buildPreflightCacheFreshnessSummary =
-      typeof deps.buildPreflightCacheFreshnessSummary === TYPEOF.FUNCTION ?
+      typeof deps.buildPreflightCacheFreshnessSummary === 'function' ?
         deps.buildPreflightCacheFreshnessSummary :
         null;
     this.buildControlSnapshotReplicaOperationSummary =
       typeof deps.buildControlSnapshotReplicaOperationSummary ===
-      TYPEOF.FUNCTION ?
+      'function' ?
         deps.buildControlSnapshotReplicaOperationSummary :
         null;
     this.nowFn =
-      typeof deps.nowFn === TYPEOF.FUNCTION ? deps.nowFn : () => Date.now();
+      typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
     this.authoritativeDiscoveryRepairPromise = null;
-    this.lastAuthoritativeDiscoveryRepairAtMs = NUM.ZERO;
-    this.lastAuthoritativeDiscoveryRepairCompletedAtMs = NUM.ZERO;
+    this.lastAuthoritativeDiscoveryRepairAtMs = 0;
+    this.lastAuthoritativeDiscoveryRepairCompletedAtMs = 0;
     this.lastAuthoritativeDiscoveryRepairResult = null;
     this.lastAuthoritativeDiscoveryRepairFailureState = null;
   } /**
@@ -448,7 +448,7 @@ class AdminServiceDiscovery {
   buildLocalServiceDiscoverySnapshot(options = {}) {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.SERVICE_DISCOVERY_UNAVAILABLE);
     }
@@ -487,7 +487,7 @@ class AdminServiceDiscovery {
     }));
     const replicaCount = services.reduce(
       (count, service) => count + service.observedReplicaCount,
-      NUM.ZERO,
+      0,
     );
     return {
       schemaVersion: ADMIN_SERVICE_DISCOVERY.SCHEMA_VERSION,
@@ -497,7 +497,7 @@ class AdminServiceDiscovery {
       replicaCount,
       replicaOperations:
         readinessContext.replicaOperationSummary &&
-        typeof readinessContext.replicaOperationSummary === TYPEOF.OBJECT ?
+        typeof readinessContext.replicaOperationSummary === 'object' ?
           readinessContext.replicaOperationSummary :
           null,
       services,
@@ -513,7 +513,7 @@ class AdminServiceDiscovery {
     if (
       this.controlPlaneSnapshotOwner &&
       typeof this.controlPlaneSnapshotOwner.resolveServiceDiscoverySnapshot ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.controlPlaneSnapshotOwner.resolveServiceDiscoverySnapshot(
         snapshot,

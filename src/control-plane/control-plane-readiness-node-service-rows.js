@@ -9,7 +9,6 @@ const {
   LOCAL_STR_12BRF,
   LOCAL_STR_BOOLEAN,
   LOCAL_STR_EMPTY,
-  NUM,
   PRESSURE_STATE,
   READINESS_ERROR_MSG,
   RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES,
@@ -17,7 +16,6 @@ const {
   SERVICE_TYPE,
   STATE,
   TABLES,
-  TYPEOF,
   compactEligibilitySnapshot,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
@@ -31,14 +29,14 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       options.allowAuthoritativeRefresh === true &&
       this.nodesOwner &&
-      typeof this.nodesOwner.listNodes === TYPEOF.FUNCTION
+      typeof this.nodesOwner.listNodes === 'function'
     ) {
       const result = await this.nodesOwner.listNodes(options);
       return Array.isArray(result?.rows) ? result.rows : [];
     }
     if (
       this.nodesOwner &&
-      typeof this.nodesOwner.listNodesFromCache === TYPEOF.FUNCTION
+      typeof this.nodesOwner.listNodesFromCache === 'function'
     ) {
       const result = await this.nodesOwner.listNodesFromCache(options);
       return Array.isArray(result?.rows) ? result.rows : [];
@@ -55,7 +53,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       options.allowAuthoritativeRefresh === true &&
       this.servicesOwner &&
-      typeof this.servicesOwner.listServices === TYPEOF.FUNCTION
+      typeof this.servicesOwner.listServices === 'function'
     ) {
       const result = await this.servicesOwner.listServices(options);
       return Array.isArray(result?.rows) ?
@@ -65,7 +63,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       this.servicesOwner &&
       typeof this.servicesOwner.listServicesForNodeFromCache ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       const result = await this.servicesOwner.listServicesForNodeFromCache(
         nodeId,
@@ -80,21 +78,21 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       options.allowAuthoritativeRefresh === true &&
       this.servicesOwner &&
-      typeof this.servicesOwner.listServices === TYPEOF.FUNCTION
+      typeof this.servicesOwner.listServices === 'function'
     ) {
       const result = await this.servicesOwner.listServices(options);
       return Array.isArray(result?.rows) ? result.rows : [];
     }
     if (
       this.servicesOwner &&
-      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION
+      typeof this.servicesOwner.listServicesFromCache === 'function'
     ) {
       const result = await this.servicesOwner.listServicesFromCache(options);
       return Array.isArray(result?.rows) ? result.rows : [];
     }
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
       return [];
     }
@@ -105,7 +103,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (!this.systemTableCache) {
       return null;
     }
-    if (typeof this.systemTableCache.get === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.get === 'function') {
       return this.systemTableCache.get(TABLES.NODES, nodeId) || null;
     }
 
@@ -116,7 +114,7 @@ class ControlPlaneReadinessNodeServiceRows extends
   getNodeRows() {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
       return [];
     }
@@ -127,12 +125,12 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (!this.systemTableCache) {
       return [];
     }
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       return this.systemTableCache.filter(TABLES.SERVICES, (row) => {
         return row?.[COLUMN.NODE_ID] === nodeId;
       });
     }
-    if (typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll !== 'function') {
       return [];
     }
     return this.systemTableCache.getAll(TABLES.SERVICES).filter((row) => {
@@ -144,7 +142,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       nodeId === this.nodeId &&
       this.nodeLifecycleStateMachine &&
-      typeof this.nodeLifecycleStateMachine.getState === TYPEOF.FUNCTION
+      typeof this.nodeLifecycleStateMachine.getState === 'function'
     ) {
       return this.nodeLifecycleStateMachine.getState();
     }
@@ -155,7 +153,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       this.storageAccountingService &&
       typeof this.storageAccountingService.getCapacitySnapshotForNode ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.storageAccountingService.getCapacitySnapshotForNode(nodeId);
     }
@@ -176,7 +174,7 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   hasRoutableService(serviceRows) {
-    if (serviceRows.length === NUM.ZERO) {
+    if (serviceRows.length === 0) {
       return true;
     }
     if (
@@ -196,7 +194,7 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   hasWritableControlPlaneService(serviceRows) {
-    if (serviceRows.length === NUM.ZERO) {
+    if (serviceRows.length === 0) {
       return true;
     }
     const hasMessageGroupRows = serviceRows.some((serviceRow) => {
@@ -212,7 +210,7 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   hasServeEligibleControlPlaneService(serviceRows) {
-    if (serviceRows.length === NUM.ZERO) {
+    if (serviceRows.length === 0) {
       return true;
     }
     const hasMessageGroupRows = serviceRows.some((serviceRow) => {
@@ -265,12 +263,12 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   hasAddressedService(serviceRow) {
-    return typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-      serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+    return typeof serviceRow?.[COLUMN.ADDRESS] === 'string' &&
+      serviceRow[COLUMN.ADDRESS].length > 0;
   }
 
   hasAddressedMessageGroupServiceWithStatuses(serviceRows, allowedStatuses) {
-    if (!Array.isArray(allowedStatuses) || allowedStatuses.length === NUM.ZERO) {
+    if (!Array.isArray(allowedStatuses) || allowedStatuses.length === 0) {
       return false;
     }
     return serviceRows.some((serviceRow) => {
@@ -314,7 +312,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     }
     if (
       !Number.isFinite(Number(capacity.budgetBytes)) ||
-      Number(capacity.budgetBytes) <= NUM.ZERO
+      Number(capacity.budgetBytes) <= 0
     ) {
       return false;
     }
@@ -330,7 +328,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     }
     if (
       !Number.isFinite(Number(capacity.budgetBytes)) ||
-      Number(capacity.budgetBytes) <= NUM.ZERO
+      Number(capacity.budgetBytes) <= 0
     ) {
       return CONTROL_PLANE_READINESS_REASON.STORAGE_BUDGET_UNAVAILABLE;
     }
@@ -358,7 +356,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     const status = String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase();
 
     return Object.freeze({
-      status: status.length > NUM.ZERO ? status : null,
+      status: status.length > 0 ? status : null,
       rowConnectionState: transportState.rowState,
       routerConnectionState: transportState.routerState,
       transportConnected: transportState.connected,
@@ -396,7 +394,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       !this.messageRouter ||
       typeof this.messageRouter.getQueryDataPlaneTransportReadiness !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return normalizeLocalQueryTransportEvidence(null);
     }
@@ -410,7 +408,7 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (
       nodeId &&
       this.messageRouter &&
-      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION
+      typeof this.messageRouter.getConnectionState === 'function'
     ) {
       routerState = String(
         this.messageRouter.getConnectionState(nodeId) || LOCAL_STR_EMPTY,
@@ -419,11 +417,11 @@ class ControlPlaneReadinessNodeServiceRows extends
 
     const rowStateRaw = String(nodeRow?.[COLUMN.CONNECTION_STATE] || '')
       .toLowerCase();
-    const normalizedRowState = rowStateRaw.length > NUM.ZERO ?
+    const normalizedRowState = rowStateRaw.length > 0 ?
       rowStateRaw :
       null;
     const normalizedRouterState =
-      typeof routerState === TYPEOF.STRING && routerState.length > NUM.ZERO ?
+      typeof routerState === 'string' && routerState.length > 0 ?
         routerState :
         null;
 
@@ -466,8 +464,8 @@ class ControlPlaneReadinessNodeServiceRows extends
       Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]),
     );
     const hasStatusField =
-      typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
-      nodeRow[COLUMN.STATUS].length > NUM.ZERO;
+      typeof nodeRow?.[COLUMN.STATUS] === 'string' &&
+      nodeRow[COLUMN.STATUS].length > 0;
 
     if (!hasLeaseField && !hasStatusField) {
       return !!nodeRow;

@@ -14,7 +14,6 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS,
     INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
     INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
-    NUM,
     PRIORITY_RECOVERY_COMPLETION_STATE,
     PRIORITY_RECOVERY_INCOMPLETE_OPERATION_OWNER_VISIBILITY_GRACE_MS,
     PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STALE_GRACE_MS,
@@ -26,7 +25,6 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
     REPLICA_OPERATION_VISIBILITY_REASON,
-    TYPEOF,
     buildPriorityRecoveryCompletion,
     getControlPlaneRetryAfterMs,
     hasPriorityRecoverySpreadGap,
@@ -44,7 +42,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
    */
     getRetryableIncompleteOperationReadBackoffMs(result) {
       const retryAfterMs = getControlPlaneRetryAfterMs(result);
-      if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
         return Math.min(
           INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS,
           Math.max(INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS, retryAfterMs),
@@ -60,7 +58,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
    */
     getRetryableReplicaOperationReadRetryDelayMs(result) {
       const retryAfterMs = getControlPlaneRetryAfterMs(result);
-      if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
         return Math.max(
           REPLICA_OPERATION_READ_RETRY_DELAY_MS,
           Math.min(REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS, retryAfterMs),
@@ -87,7 +85,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         null;
     }
     cloneIncompleteOperationObservation(operation) {
-      return operation && typeof operation === TYPEOF.OBJECT ?
+      return operation && typeof operation === 'object' ?
         {
           ...operation,
           stepsHistory: Array.isArray(operation.stepsHistory) ?
@@ -127,7 +125,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return null;
       }
       const witness = this.ownerPersistedTransitionVisibilityWitnesses.get(operationId);
-      if (!witness || typeof witness !== TYPEOF.OBJECT) {
+      if (!witness || typeof witness !== 'object') {
         return null;
       }
       if (
@@ -167,8 +165,8 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       const normalizedEntityType = String(entityType || '').trim();
       const normalizedEntityId = String(entityId || '').trim();
       if (
-        normalizedEntityType.length === NUM.ZERO ||
-      normalizedEntityId.length === NUM.ZERO
+        normalizedEntityType.length === 0 ||
+      normalizedEntityId.length === 0
       ) {
         return [];
       }
@@ -194,7 +192,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         const entityMatches =
         (operationEntityType === normalizedEntityType &&
           operationEntityId === normalizedEntityId) ||
-        (operationEntityType.length === NUM.ZERO &&
+        (operationEntityType.length === 0 &&
           String(operation.partitionId || '').trim() === normalizedEntityId);
         if (!entityMatches) {
           continue;
@@ -244,11 +242,11 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     ) {
       if (
         !expectedOperation ||
-      typeof expectedOperation !== TYPEOF.OBJECT ||
+      typeof expectedOperation !== 'object' ||
       !observedOperation ||
-      typeof observedOperation !== TYPEOF.OBJECT ||
+      typeof observedOperation !== 'object' ||
       !witness ||
-      typeof witness !== TYPEOF.OBJECT
+      typeof witness !== 'object'
       ) {
         return false;
       }
@@ -322,8 +320,8 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         (entry) => entry?.operationId === operation.operationId,
       );
       if (this.isOperationTerminal(operation)) {
-        if (operationIndex >= NUM.ZERO) {
-          observedOperations.splice(operationIndex, NUM.ONE);
+        if (operationIndex >= 0) {
+          observedOperations.splice(operationIndex, 1);
         }
         this.recordIncompleteOperationObservation(observedOperations, {
           source: INCOMPLETE_OPERATION_OBSERVATION_SOURCE.OWNER_PERSISTED_TRANSITION,
@@ -331,7 +329,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return;
       }
       const observedOperation = this.cloneIncompleteOperationObservation(operation);
-      if (operationIndex >= NUM.ZERO) {
+      if (operationIndex >= 0) {
         observedOperations[operationIndex] = observedOperation;
       } else {
         observedOperations.push(observedOperation);
@@ -352,7 +350,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       deferredOutcome?.completionState ===
       PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED;
       const state =
-      normalizedOperations.length > NUM.ZERO ?
+      normalizedOperations.length > 0 ?
         INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
         hasDeferredOwnerRead ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
@@ -380,7 +378,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       const observedAt = Date.now();
       if (
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         return (
           readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
@@ -391,7 +389,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       }
       if (
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         return (
           readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
@@ -400,14 +398,14 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           ) || null
         );
       }
-      if (typeof readinessService.getPriorityRecoveryPlanningAnswerSync === TYPEOF.FUNCTION) {
+      if (typeof readinessService.getPriorityRecoveryPlanningAnswerSync === 'function') {
         return (
           readinessService.getPriorityRecoveryPlanningAnswerSync(this.nodeId, observedAt) || null
         );
       }
       if (
         typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         return (
           readinessService.getMembershipPublicationPlanningAnswerSync(
@@ -416,14 +414,14 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           ) || null
         );
       }
-      if (typeof readinessService.getPriorityRecoveryPlanningSnapshotSync === TYPEOF.FUNCTION) {
+      if (typeof readinessService.getPriorityRecoveryPlanningSnapshotSync === 'function') {
         return (
           readinessService.getPriorityRecoveryPlanningSnapshotSync(this.nodeId, observedAt) || null
         );
       }
       if (
         typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         return (
           readinessService.getMembershipPublicationPlanningSnapshotSync(
@@ -435,7 +433,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       return null;
     }
     isPriorityRecoveryOwnerReadActive(planningSnapshot = null) {
-      if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      if (!planningSnapshot || typeof planningSnapshot !== 'object') {
         return false;
       }
       const publicationStatus = String(
@@ -444,7 +442,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         .trim()
         .toUpperCase();
       if (
-        publicationStatus.length > NUM.ZERO &&
+        publicationStatus.length > 0 &&
       publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
       ) {
         return true;
@@ -454,7 +452,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     canReuseLastIncompleteOperationObservation() {
       return (
         Array.isArray(this.lastIncompleteOperationObservation) &&
-      this.lastIncompleteOperationObservation.length > NUM.ZERO &&
+      this.lastIncompleteOperationObservation.length > 0 &&
       Date.now() - this.lastIncompleteOperationObservationAtMs <=
         this.resolveIncompleteOperationObservationGraceMs()
       );
@@ -473,7 +471,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         options.fallbackOperations.length :
         Array.isArray(options.cachedOperations) ?
           options.cachedOperations.length :
-          NUM.ZERO;
+          0;
       return {
         completionState: completion.state,
         reasonCode: completion.reasonCode,
@@ -484,7 +482,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           Math.floor(options.queryDurationMs) :
           null,
         source:
-        typeof options.source === TYPEOF.STRING ?
+        typeof options.source === 'string' ?
           options.source :
           INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ,
       };
@@ -508,11 +506,11 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           Math.floor(options.queryDurationMs) :
           null,
         operationId:
-        typeof options.operationId === TYPEOF.STRING ?
+        typeof options.operationId === 'string' ?
           options.operationId :
           null,
         source:
-        typeof options.source === TYPEOF.STRING ?
+        typeof options.source === 'string' ?
           options.source :
           REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_FAILURE,
@@ -520,7 +518,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     }
     buildOwnerPersistedTransitionDeferredVisibilityOutcome(options = {}) {
       const operationId =
-      typeof options.operationId === TYPEOF.STRING ?
+      typeof options.operationId === 'string' ?
         options.operationId :
         null;
       if (!operationId) {
@@ -540,7 +538,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           null,
         operationId,
         source:
-        typeof options.source === TYPEOF.STRING ?
+        typeof options.source === 'string' ?
           options.source :
           REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
             .OWNER_PERSISTED_TRANSITION_EMPTY_READ,
@@ -560,7 +558,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         options.fallbackOperations.length :
         Array.isArray(options.cachedOperations) ?
           options.cachedOperations.length :
-          NUM.ZERO;
+          0;
       return {
         completionState: completion.state,
         reasonCode: completion.reasonCode,
@@ -570,10 +568,10 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         queryDurationMs: Number.isFinite(options.queryDurationMs) ?
           Math.floor(options.queryDurationMs) :
           null,
-        entityType: typeof options.entityType === TYPEOF.STRING ? options.entityType : null,
-        entityId: typeof options.entityId === TYPEOF.STRING ? options.entityId : null,
+        entityType: typeof options.entityType === 'string' ? options.entityType : null,
+        entityId: typeof options.entityId === 'string' ? options.entityId : null,
         source:
-        typeof options.source === TYPEOF.STRING ?
+        typeof options.source === 'string' ?
           options.source :
           ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE.PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ,
       };
@@ -585,7 +583,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       deferredOutcome?.confirmationState ===
         REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED;
       const normalizedOperation =
-      operation && typeof operation === TYPEOF.OBJECT ? {...operation} : null;
+      operation && typeof operation === 'object' ? {...operation} : null;
       return Object.freeze({
         state: normalizedOperation ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
@@ -608,7 +606,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED;
       return Object.freeze({
         state:
-        normalizedOperations.length > NUM.ZERO ?
+        normalizedOperations.length > 0 ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
           hasDeferredOwnerRead ?
             INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
@@ -639,8 +637,8 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       appendOperations(authoritativeOperations);
 
       return [...mergedByOperationId.values()].sort((left, right) => {
-        const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
-        const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
+        const leftUpdatedAt = Number(left?.updatedAt) || 0;
+        const rightUpdatedAt = Number(right?.updatedAt) || 0;
         if (leftUpdatedAt !== rightUpdatedAt) {
           return leftUpdatedAt - rightUpdatedAt;
         }
@@ -662,7 +660,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       let visibleOperations = [];
 
       if (
-        cachedOperations.length > NUM.ZERO &&
+        cachedOperations.length > 0 &&
       visibilitySupplementMode ===
         INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE.AUTHORITATIVE_SUPPLEMENT &&
       visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
@@ -674,7 +672,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           }),
         );
       } else if (
-        cachedOperations.length > NUM.ZERO &&
+        cachedOperations.length > 0 &&
       visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED
       ) {
         this.recordIncompleteOperationObservation(cachedOperations);
@@ -694,7 +692,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       });
     }
     resolveDeferredIncompleteOperationReadFallback(cachedOperations = []) {
-      if (Array.isArray(cachedOperations) && cachedOperations.length > NUM.ZERO) {
+      if (Array.isArray(cachedOperations) && cachedOperations.length > 0) {
         return this.cloneIncompleteOperationObservationSet(cachedOperations);
       }
       if (this.canReuseLastIncompleteOperationObservation()) {
@@ -711,17 +709,17 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       return (
         result?.success === true &&
       Array.isArray(result?.rows) &&
-      result.rows.length === NUM.ZERO &&
+      result.rows.length === 0 &&
       queryDurationMs >= INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS &&
       this.isPriorityRecoveryOwnerReadActive(planningSnapshot) &&
-      (cachedOperations.length > NUM.ZERO || this.canReuseLastIncompleteOperationObservation())
+      (cachedOperations.length > 0 || this.canReuseLastIncompleteOperationObservation())
       );
     }
     shouldDeferEntityOperationEmptyRead(result, queryDurationMs, planningSnapshot = null) {
       return (
         result?.success === true &&
       Array.isArray(result?.rows) &&
-      result.rows.length === NUM.ZERO &&
+      result.rows.length === 0 &&
       queryDurationMs >= INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS &&
       this.isPriorityRecoveryOwnerReadActive(planningSnapshot)
       );
@@ -738,8 +736,8 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         options.fallbackOperations :
         [];
       const hasReusableOperationEvidence =
-      cachedOperations.length > NUM.ZERO ||
-      fallbackOperations.length > NUM.ZERO ||
+      cachedOperations.length > 0 ||
+      fallbackOperations.length > 0 ||
       this.canReuseLastIncompleteOperationObservation();
       return (
         result?.success === false &&

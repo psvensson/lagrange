@@ -12,7 +12,6 @@ const {
   JOINING_HTTP,
   JOIN_BACKFILL_QUERY,
   NODE_JOINING_SERVICE_LITERAL,
-  NUM,
   NodeService,
   NodeStorageBudgetSetup,
   RAFT_ROLE,
@@ -21,7 +20,6 @@ const {
   STRING,
   TABLES,
   TIME_MS,
-  TYPEOF,
   canonicalizeSystemTableRow,
   classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
@@ -43,7 +41,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       this.bootstrapResponse?.systemTableSnapshots || null;
     const hasBootstrapSnapshot =
       systemTableSnapshots !== null &&
-      typeof systemTableSnapshots === TYPEOF.OBJECT &&
+      typeof systemTableSnapshots === 'object' &&
       Object.prototype.hasOwnProperty.call(systemTableSnapshots, tableName);
     const bootstrapSnapshotRows = Array.isArray(
       systemTableSnapshots?.[tableName],
@@ -69,7 +67,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       sql,
       options,
     );
-    if (replicaQuery && replicaQuery.rowSets.length > NUM.ZERO) {
+    if (replicaQuery && replicaQuery.rowSets.length > 0) {
       rowSets.push(...replicaQuery.rowSets);
       const observedCounts = replicaQuery.rowSets.map((rows) => rows.length);
       const mergedCount = this.mergeBackfillRowSets(
@@ -95,7 +93,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         );
       }
     }
-    if (rowSets.length === NUM.ZERO) {
+    if (rowSets.length === 0) {
       throw new Error(
         `Failed to backfill propagated table ${tableName}: ` +
           `${routedResult?.error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED}`,
@@ -122,10 +120,10 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       return null;
     }
     const partitions =
-      typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION ?
+      typeof sqlQueryEngine?.getTablePartitions === 'function' ?
         sqlQueryEngine.getTablePartitions(tableName) :
         [];
-    if (!Array.isArray(partitions) || partitions.length !== NUM.ONE) {
+    if (!Array.isArray(partitions) || partitions.length !== 1) {
       return null;
     }
     const partitionId =
@@ -135,12 +133,12 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     }
     const queryExecutor = sqlQueryEngine?.queryExecutor || null;
     const partitionServices =
-      typeof queryExecutor?.getRoutablePartitionServices === TYPEOF.FUNCTION ?
+      typeof queryExecutor?.getRoutablePartitionServices === 'function' ?
         queryExecutor.getRoutablePartitionServices(partitionId) :
         [];
     if (
       !Array.isArray(partitionServices) ||
-      partitionServices.length === NUM.ZERO
+      partitionServices.length === 0
     ) {
       return null;
     }
@@ -149,8 +147,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     for (const service of partitionServices) {
       const address = service?.address || null;
       if (
-        typeof address !== TYPEOF.STRING ||
-        address.length === NUM.ZERO ||
+        typeof address !== 'string' ||
+        address.length === 0 ||
         seenAddresses.has(address)
       ) {
         continue;
@@ -158,12 +156,12 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       seenAddresses.add(address);
       deliveryTargets.push(address);
     }
-    if (deliveryTargets.length === NUM.ZERO) {
+    if (deliveryTargets.length === 0) {
       return null;
     }
     const messageRouter =
       queryExecutor?.messageRouter || this.messageRouter || null;
-    if (!messageRouter || typeof messageRouter.deliver !== TYPEOF.FUNCTION) {
+    if (!messageRouter || typeof messageRouter.deliver !== 'function') {
       return null;
     }
     const replicaResults = [];
@@ -180,7 +178,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const rowSets = replicaResults
       .filter((result) => result.success)
       .map((result) => result.rows);
-    return rowSets.length > NUM.ZERO ? {partitionId, rowSets} : null;
+    return rowSets.length > 0 ? {partitionId, rowSets} : null;
   }
   /**
    * Query one partition replica address for join backfill.
@@ -262,7 +260,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         const key =
           canonicalRow?.[keyField] ??
           canonicalRow?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
-        if (typeof key === TYPEOF.UNDEFINED || key === null) {
+        if (typeof key === 'undefined' || key === null) {
           continue;
         }
         const existing = mergedRows.get(key);
@@ -285,7 +283,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const existingVersion = extractJoinSchemaVersionFromRecord(existing);
     if (candidateVersion && existingVersion) {
       return (
-        compareJoinSchemaVersions(candidateVersion, existingVersion) > NUM.ZERO
+        compareJoinSchemaVersions(candidateVersion, existingVersion) > 0
       );
     }
     if (candidateVersion && !existingVersion) {
@@ -305,7 +303,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    */
   async httpPost(url, body, options = {}) {
     const timeoutMs = Number.isFinite(options?.timeoutMs) &&
-      options.timeoutMs > NUM.ZERO ?
+      options.timeoutMs > 0 ?
       Math.floor(options.timeoutMs) :
       this.config.httpTimeoutMs;
     // AbortController is a global in Node.js 22+
@@ -386,20 +384,20 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    */
   parseRetryAfterHeaderMs(retryAfterHeader) {
     if (
-      typeof retryAfterHeader !== TYPEOF.STRING ||
-      retryAfterHeader.length === NUM.ZERO
+      typeof retryAfterHeader !== 'string' ||
+      retryAfterHeader.length === 0
     ) {
       return null;
     }
     const deltaSeconds = Number(retryAfterHeader);
-    if (Number.isFinite(deltaSeconds) && deltaSeconds >= NUM.ZERO) {
+    if (Number.isFinite(deltaSeconds) && deltaSeconds >= 0) {
       return Math.floor(deltaSeconds * TIME_MS.SECOND);
     }
     const retryAtMs = Date.parse(retryAfterHeader);
     if (!Number.isFinite(retryAtMs)) {
       return null;
     }
-    return Math.max(NUM.ZERO, retryAtMs - this.now());
+    return Math.max(0, retryAtMs - this.now());
   }
   /**
    * Create the shared CDC pipeline readiness gate.
@@ -560,16 +558,16 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       phase: this.phase,
       lifecycleState: this.lifecycleStateMachine.getState(),
       startTime: this.startTime,
-      duration: this.startTime ? this.now() - this.startTime : NUM.ZERO,
+      duration: this.startTime ? this.now() - this.startTime : 0,
       messageGroupCount: this.messageGroupServices.size,
       lastError: this.lastError?.message || null,
     };
     if (
       !this.joinReadinessEvaluator ||
       typeof this.joinReadinessEvaluator.buildCanonicalJoinReadinessSnapshot !==
-        TYPEOF.FUNCTION ||
+        'function' ||
       typeof this.joinReadinessEvaluator
-        .evaluateCanonicalJoinReadinessSnapshot !== TYPEOF.FUNCTION
+        .evaluateCanonicalJoinReadinessSnapshot !== 'function'
     ) {
       return baseStatus;
     }
@@ -617,7 +615,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    */
   getSeedContactStartupAuthoritySnapshot() {
     return this.seedContactStartupAuthority &&
-      typeof this.seedContactStartupAuthority === TYPEOF.OBJECT ?
+      typeof this.seedContactStartupAuthority === 'object' ?
       this.seedContactStartupAuthority :
       null;
   }
@@ -637,11 +635,11 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         groupIds.add(service.groupId);
       }
     }
-    if (groupIds.size === NUM.ZERO) {
+    if (groupIds.size === 0) {
       return false;
     }
     const services =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+      typeof systemTableCache.filter === 'function' ?
         systemTableCache.filter(
           TABLES.SERVICES,
           (service) =>
@@ -655,11 +653,11 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
               groupIds.has(service?.[COLUMN.GROUP_ID]) &&
               service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
         );
-    if (services.length === NUM.ZERO) {
+    if (services.length === 0) {
       return false;
     }
     const groupRows =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+      typeof systemTableCache.filter === 'function' ?
         systemTableCache.filter(TABLES.MESSAGE_GROUPS, (group) =>
           groupIds.has(group?.[COLUMN.GROUP_ID]),
         ) :
@@ -669,13 +667,13 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const activeServiceExistsForCanonicalLeader = groupRows.some((group) => {
       const groupId =
         group?.[COLUMN.GROUP_ID] || group?.group_id || group?.groupId || null;
-      if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+      if (typeof groupId !== 'string' || groupId.length === 0) {
         return false;
       }
       const groupServices = services.filter(
         (service) => service?.[COLUMN.GROUP_ID] === groupId,
       );
-      if (groupServices.length === NUM.ZERO) {
+      if (groupServices.length === 0) {
         return false;
       }
       const leaderIdentity = resolveCanonicalLeaderIdentitySnapshot({
@@ -684,8 +682,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         serviceRows: groupServices,
       });
       return (
-        typeof leaderIdentity?.leaderNodeId === TYPEOF.STRING &&
-        leaderIdentity.leaderNodeId.length > NUM.ZERO
+        typeof leaderIdentity?.leaderNodeId === 'string' &&
+        leaderIdentity.leaderNodeId.length > 0
       );
     });
     if (activeServiceExistsForCanonicalLeader) {

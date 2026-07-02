@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
@@ -44,7 +43,7 @@ const AUTHORITATIVE_REPAIR_REPLAY_BACKLOG_FRAGMENTS = Object.freeze([
 ]);
 
 function pushUniqueCause(causeChain, cause) {
-  if (typeof cause !== TYPEOF.STRING || cause.length === NUM.ZERO) {
+  if (typeof cause !== 'string' || cause.length === 0) {
     return;
   }
   if (!causeChain.includes(cause)) {
@@ -53,51 +52,51 @@ function pushUniqueCause(causeChain, cause) {
 }
 
 function normalizeFirstFailedParticipant(participant, tableName = null) {
-  if (!participant || typeof participant !== TYPEOF.OBJECT) {
+  if (!participant || typeof participant !== 'object') {
     return null;
   }
   return {
     partitionId:
-      typeof participant.partitionId === TYPEOF.STRING ?
+      typeof participant.partitionId === 'string' ?
         participant.partitionId :
         null,
     participantNodeId:
-      typeof participant.participantNodeId === TYPEOF.STRING ?
+      typeof participant.participantNodeId === 'string' ?
         participant.participantNodeId :
         null,
     participantAddress:
-      typeof participant.participantAddress === TYPEOF.STRING ?
+      typeof participant.participantAddress === 'string' ?
         participant.participantAddress :
         null,
     errorCode: getControlPlaneErrorCode(participant) || null,
     error: getControlPlaneErrorMessage(participant) || null,
     durationMs: Number.isFinite(participant.durationMs) ?
-      Math.max(NUM.ZERO, Math.floor(participant.durationMs)) :
+      Math.max(0, Math.floor(participant.durationMs)) :
       null,
     retryAfterMs: getControlPlaneRetryAfterMs(participant) || null,
     backpressured:
-      typeof participant.backpressured === TYPEOF.BOOLEAN ?
+      typeof participant.backpressured === 'boolean' ?
         participant.backpressured :
         isRetryableControlPlaneError(participant),
     failedTable:
-      typeof participant.failedTable === TYPEOF.STRING ?
+      typeof participant.failedTable === 'string' ?
         participant.failedTable :
         tableName,
   };
 }
 
 function normalizeLocalQueryTransportDiagnostic(localQueryTransport) {
-  if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
+  if (!localQueryTransport || typeof localQueryTransport !== 'object') {
     return null;
   }
   const ready =
-    typeof localQueryTransport.ready === TYPEOF.BOOLEAN ?
+    typeof localQueryTransport.ready === 'boolean' ?
       localQueryTransport.ready :
       null;
   return {
     state:
-      typeof localQueryTransport.state === TYPEOF.STRING &&
-      localQueryTransport.state.length > NUM.ZERO ?
+      typeof localQueryTransport.state === 'string' &&
+      localQueryTransport.state.length > 0 ?
         localQueryTransport.state :
         ready === true ?
           'ready' :
@@ -106,8 +105,8 @@ function normalizeLocalQueryTransportDiagnostic(localQueryTransport) {
             'unknown',
     ready,
     reason:
-      typeof localQueryTransport.reason === TYPEOF.STRING &&
-      localQueryTransport.reason.length > NUM.ZERO ?
+      typeof localQueryTransport.reason === 'string' &&
+      localQueryTransport.reason.length > 0 ?
         localQueryTransport.reason :
         null,
     retryAfterMs: getControlPlaneRetryAfterMs(localQueryTransport) || null,
@@ -124,7 +123,7 @@ function deriveAuthoritativeRepairCauseChain(error, firstFailedParticipant) {
   if (
     errorCode === 'DISTRIBUTED_PARTICIPANT_FAILURE' ||
     (Array.isArray(error?.participantFailures) &&
-      error.participantFailures.length > NUM.ZERO) ||
+      error.participantFailures.length > 0) ||
     errorMessage.includes('participant failures')
   ) {
     pushUniqueCause(
@@ -175,7 +174,7 @@ function summarizeAuthoritativeRepairError(tableName, error) {
   const firstFailedParticipant = normalizeFirstFailedParticipant(
     error?.firstFailedParticipant ||
       (Array.isArray(error?.participantFailures) ?
-        error.participantFailures[NUM.ZERO] :
+        error.participantFailures[0] :
         null),
     tableName,
   );
@@ -185,7 +184,7 @@ function summarizeAuthoritativeRepairError(tableName, error) {
     errorCode: getControlPlaneErrorCode(error) || null,
     retryAfterMs: getControlPlaneRetryAfterMs(error) || null,
     readSource:
-      typeof error?.readSource === TYPEOF.STRING ? error.readSource : null,
+      typeof error?.readSource === 'string' ? error.readSource : null,
     localQueryTransport: normalizeLocalQueryTransportDiagnostic(
       error?.localQueryTransport,
     ),
@@ -200,7 +199,7 @@ function summarizeAuthoritativeRepairError(tableName, error) {
 function shouldAbortAuthoritativeRepairTableReads(errorSummary = null) {
   const causeChain = Array.isArray(errorSummary?.causeChain) ?
     errorSummary.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     EMPTY_ARRAY;
   return (
@@ -213,11 +212,11 @@ function normalizeAuthoritativeRepairTableNames(tableNames = []) {
   return uniqueSorted(
     (Array.isArray(tableNames) ? tableNames : EMPTY_ARRAY)
       .map((tableName) =>
-        typeof tableName === TYPEOF.STRING ?
+        typeof tableName === 'string' ?
           tableName.trim() :
           EMPTY_STRING,
       )
-      .filter((tableName) => tableName.length > NUM.ZERO),
+      .filter((tableName) => tableName.length > 0),
   );
 }
 
@@ -225,11 +224,11 @@ function normalizeAuthoritativeRepairCauseChain(causeChain = []) {
   return uniqueSorted(
     (Array.isArray(causeChain) ? causeChain : EMPTY_ARRAY)
       .map((cause) =>
-        typeof cause === TYPEOF.STRING ?
+        typeof cause === 'string' ?
           cause.trim() :
           EMPTY_STRING,
       )
-      .filter((cause) => cause.length > NUM.ZERO),
+      .filter((cause) => cause.length > 0),
   );
 }
 
@@ -255,7 +254,7 @@ function resolveAuthoritativeRepairFailureBaseRetryAfterMs(
     errorSummaries :
     EMPTY_ARRAY) {
     const retryAfterMs = Number(errorSummary?.retryAfterMs);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
       retryHints.push(Math.floor(retryAfterMs));
     }
     const participantRetryAfterMs = Number(
@@ -263,7 +262,7 @@ function resolveAuthoritativeRepairFailureBaseRetryAfterMs(
     );
     if (
       Number.isFinite(participantRetryAfterMs) &&
-      participantRetryAfterMs > NUM.ZERO
+      participantRetryAfterMs > 0
     ) {
       retryHints.push(Math.floor(participantRetryAfterMs));
     }
@@ -272,7 +271,7 @@ function resolveAuthoritativeRepairFailureBaseRetryAfterMs(
     );
     if (
       Number.isFinite(localQueryTransportRetryAfterMs) &&
-      localQueryTransportRetryAfterMs > NUM.ZERO
+      localQueryTransportRetryAfterMs > 0
     ) {
       retryHints.push(Math.floor(localQueryTransportRetryAfterMs));
     }
@@ -285,7 +284,7 @@ function resolveAuthoritativeRepairFailureMaxRetryAfterMs(
   baseRetryAfterMs,
 ) {
   const normalizedBaseRetryAfterMs =
-    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO ?
+    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > 0 ?
       Math.floor(baseRetryAfterMs) :
       AUTHORITATIVE_REPAIR_COOLDOWN_MS;
   if (failureClass === AUTHORITATIVE_REPAIR_FAILURE_CLASS.PRESSURE_OR_TIMEOUT) {
@@ -307,15 +306,15 @@ function computeAuthoritativeRepairFailureRetryAfterMs(
   maxRetryAfterMs,
 ) {
   const normalizedFailureCount =
-    Number.isFinite(failureCount) && failureCount > NUM.ZERO ?
+    Number.isFinite(failureCount) && failureCount > 0 ?
       Math.floor(failureCount) :
-      NUM.ONE;
+      1;
   const normalizedBaseRetryAfterMs =
-    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO ?
+    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > 0 ?
       Math.floor(baseRetryAfterMs) :
       AUTHORITATIVE_REPAIR_COOLDOWN_MS;
   const normalizedMaxRetryAfterMs =
-    Number.isFinite(maxRetryAfterMs) && maxRetryAfterMs > NUM.ZERO ?
+    Number.isFinite(maxRetryAfterMs) && maxRetryAfterMs > 0 ?
       Math.floor(maxRetryAfterMs) :
       resolveAuthoritativeRepairFailureMaxRetryAfterMs(
         failureClass,
@@ -328,13 +327,13 @@ function computeAuthoritativeRepairFailureRetryAfterMs(
     const scaledRetryAfterMs =
       minimumRetryAfterMs *
       AUTHORITATIVE_REPAIR_FAILURE_RETRY_POLICY.BACKOFF_MULTIPLIER **
-        (normalizedFailureCount - NUM.ONE);
+        (normalizedFailureCount - 1);
     return Math.min(normalizedMaxRetryAfterMs, scaledRetryAfterMs);
   }
   const scaledRetryAfterMs =
     normalizedBaseRetryAfterMs *
     AUTHORITATIVE_REPAIR_FAILURE_RETRY_POLICY.BACKOFF_MULTIPLIER **
-      (normalizedFailureCount - NUM.ONE);
+      (normalizedFailureCount - 1);
   return Math.min(normalizedMaxRetryAfterMs, scaledRetryAfterMs);
 }
 

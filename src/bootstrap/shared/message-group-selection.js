@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 
 const MESSAGE_GROUP_SELECTION_REASON = Object.freeze({
   OWNER_NOT_READY: 'operational message-group ingress not ready',
@@ -22,8 +21,8 @@ function normalizeRequiredTables(requiredTables) {
   return [...new Set(
     (Array.isArray(requiredTables) ? requiredTables : [])
       .filter((tableName) =>
-        typeof tableName === TYPEOF.STRING &&
-        tableName.length > NUM.ZERO,
+        typeof tableName === 'string' &&
+        tableName.length > 0,
       ),
   )];
 }
@@ -36,7 +35,7 @@ function listMessageGroupServices(messageGroupServices) {
     return messageGroupServices.filter(Boolean);
   }
   if (messageGroupServices &&
-      typeof messageGroupServices[Symbol.iterator] === TYPEOF.FUNCTION) {
+      typeof messageGroupServices[Symbol.iterator] === 'function') {
     return [...messageGroupServices].filter(Boolean);
   }
   return [];
@@ -44,19 +43,19 @@ function listMessageGroupServices(messageGroupServices) {
 
 function normalizeSelectionReadiness(readiness, fallbackReason) {
   if (readiness === true) {
-    return buildSelectionReadiness(true, NUM.ZERO, null);
-  } else if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
-    return buildSelectionReadiness(false, NUM.ZERO, fallbackReason);
+    return buildSelectionReadiness(true, 0, null);
+  } else if (!readiness || typeof readiness !== 'object') {
+    return buildSelectionReadiness(false, 0, fallbackReason);
   }
 
   return buildSelectionReadiness(
     readiness.ready === true,
     Number.isFinite(readiness.retryAfterMs) &&
-      readiness.retryAfterMs > NUM.ZERO ?
+      readiness.retryAfterMs > 0 ?
       Math.floor(readiness.retryAfterMs) :
-      NUM.ZERO,
-    typeof readiness.reason === TYPEOF.STRING &&
-      readiness.reason.length > NUM.ZERO ?
+      0,
+    typeof readiness.reason === 'string' &&
+      readiness.reason.length > 0 ?
       readiness.reason :
       fallbackReason,
   );
@@ -69,8 +68,8 @@ function isMessageGroupInitialized(service) {
 function canReuseCapturedIngressOwner(service) {
   return isMessageGroupInitialized(service) === true &&
     (
-      typeof service?.subscribeToCDC === TYPEOF.FUNCTION ||
-      typeof service?.sendMessage === TYPEOF.FUNCTION
+      typeof service?.subscribeToCDC === 'function' ||
+      typeof service?.sendMessage === 'function'
     );
 }
 
@@ -78,13 +77,13 @@ function resolveLeaderReadiness(service, requiredTables) {
   if (!service) {
     return buildSelectionReadiness(
       false,
-      NUM.ZERO,
+      0,
       MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     );
   }
 
-  if (requiredTables.length > NUM.ZERO &&
-      typeof service.getMetadataIngressReadiness === TYPEOF.FUNCTION) {
+  if (requiredTables.length > 0 &&
+      typeof service.getMetadataIngressReadiness === 'function') {
     return normalizeSelectionReadiness(
       service.getMetadataIngressReadiness({requiredTables}),
       MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
@@ -92,21 +91,21 @@ function resolveLeaderReadiness(service, requiredTables) {
   }
 
   return isMessageGroupInitialized(service) ?
-    buildSelectionReadiness(true, NUM.ZERO, null) :
+    buildSelectionReadiness(true, 0, null) :
     buildSelectionReadiness(
       false,
-      NUM.ZERO,
+      0,
       MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     );
 }
 
 function resolveRelayReadiness(service, requiredTables) {
   if (!service ||
-      requiredTables.length === NUM.ZERO ||
-      typeof service.getMetadataIngressReadiness !== TYPEOF.FUNCTION) {
+      requiredTables.length === 0 ||
+      typeof service.getMetadataIngressReadiness !== 'function') {
     return buildSelectionReadiness(
       false,
-      NUM.ZERO,
+      0,
       MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     );
   }
@@ -139,7 +138,7 @@ function buildOperationalMessageGroupSelection(
     reason,
     route,
   };
-  if (typeof state === TYPEOF.STRING && state.length > NUM.ZERO) {
+  if (typeof state === 'string' && state.length > 0) {
     selection.state = state;
   }
   return selection;
@@ -151,13 +150,13 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
   for (const service of services) {
     if (service?.isLeaderReplica?.() !== true ||
         isMessageGroupInitialized(service) !== true ||
-        typeof service?.sendMessage !== TYPEOF.FUNCTION) {
+        typeof service?.sendMessage !== 'function') {
       continue;
     }
     return {
       service,
       ready: true,
-      retryAfterMs: NUM.ZERO,
+      retryAfterMs: 0,
       reason: null,
       route: MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
       state: MESSAGE_GROUP_SELECTION_STATE.LEADER_READY,
@@ -166,13 +165,13 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
 
   for (const service of services) {
     if (isMessageGroupInitialized(service) !== true ||
-        typeof service?.sendMessage !== TYPEOF.FUNCTION) {
+        typeof service?.sendMessage !== 'function') {
       continue;
     }
     return {
       service,
       ready: true,
-      retryAfterMs: NUM.ZERO,
+      retryAfterMs: 0,
       reason: null,
       route: service?.isLeaderReplica?.() === true ?
         MESSAGE_GROUP_SELECTION_ROUTE.LEADER :
@@ -186,7 +185,7 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
   return {
     service: null,
     ready: false,
-    retryAfterMs: NUM.ZERO,
+    retryAfterMs: 0,
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     route: null,
     state: MESSAGE_GROUP_SELECTION_STATE.DEFER_OWNER_NOT_READY,
@@ -205,12 +204,12 @@ async function resolveMetadataIngressReadinessAsync(
     ) :
     {
       ready: false,
-      retryAfterMs: NUM.ZERO,
+      retryAfterMs: 0,
       reason: fallbackReason,
     };
   if (baseReadiness.ready === true ||
-      requiredTables.length === NUM.ZERO ||
-      typeof service?.resolveMetadataIngressForwardSelection !== TYPEOF.FUNCTION) {
+      requiredTables.length === 0 ||
+      typeof service?.resolveMetadataIngressForwardSelection !== 'function') {
     return baseReadiness;
   }
 
@@ -222,7 +221,7 @@ async function resolveMetadataIngressReadinessAsync(
     if (service?.isCurrentRaftLeader?.() === true ||
         selection?.localIngress === true ||
         (Array.isArray(selection?.targets) &&
-          selection.targets.length > NUM.ZERO)) {
+          selection.targets.length > 0)) {
       const retryAfterMs = Number.isFinite(
         selection?.strictForwardRetryAfterMs,
       ) ?
@@ -240,7 +239,7 @@ async function resolveMetadataIngressReadinessAsync(
         baseReadiness.retryAfterMs,
         Number.isFinite(selection?.strictForwardRetryAfterMs) ?
           selection.strictForwardRetryAfterMs :
-          NUM.ZERO,
+          0,
       ),
       reason: baseReadiness.reason,
     };
@@ -259,7 +258,7 @@ function recordNotReadyCandidate(summary, readiness) {
       summary.retryAfterMs,
       Number.isFinite(readiness.retryAfterMs) ?
         readiness.retryAfterMs :
-        NUM.ZERO,
+        0,
     ),
   };
 }
@@ -272,7 +271,7 @@ function resolveOperationalMessageGroupSelection(
   const requiredTables = normalizeRequiredTables(options.requiredTables);
   let deferredSummary = {
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    retryAfterMs: NUM.ZERO,
+    retryAfterMs: 0,
   };
 
   for (const service of services) {
@@ -337,7 +336,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
   const reuseCapturedIngress = options.reuseCapturedIngress === true;
   let deferredSummary = {
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    retryAfterMs: NUM.ZERO,
+    retryAfterMs: 0,
   };
 
   for (const service of services) {
@@ -345,7 +344,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
       continue;
     }
     const readiness =
-      requiredTables.length > NUM.ZERO ?
+      requiredTables.length > 0 ?
         await resolveMetadataIngressReadinessAsync(
           service,
           requiredTables,
@@ -374,14 +373,14 @@ async function resolveOperationalMessageGroupSelectionAsync(
       return buildOperationalMessageGroupSelection(
         preferredService,
         true,
-        NUM.ZERO,
+        0,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
         MESSAGE_GROUP_SELECTION_STATE.PREFERRED_CAPTURED,
       );
     }
     const readiness =
-      requiredTables.length > NUM.ZERO ?
+      requiredTables.length > 0 ?
         await resolveMetadataIngressReadinessAsync(
           preferredService,
           requiredTables,
@@ -414,7 +413,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
       continue;
     }
     const readiness =
-      requiredTables.length > NUM.ZERO ?
+      requiredTables.length > 0 ?
         await resolveMetadataIngressReadinessAsync(
           service,
           requiredTables,
@@ -454,7 +453,7 @@ function getBootstrapMessageGroupService(messageGroupServices) {
       return service;
     }
   }
-  return services[NUM.ZERO] || null;
+  return services[0] || null;
 }
 
 function buildMessageGroupOwnerNotReadyError(
@@ -462,8 +461,8 @@ function buildMessageGroupOwnerNotReadyError(
   options = {},
 ) {
   const message =
-    typeof options.message === TYPEOF.STRING &&
-      options.message.length > NUM.ZERO ?
+    typeof options.message === 'string' &&
+      options.message.length > 0 ?
       options.message :
       selection?.reason ||
       MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY;
@@ -472,10 +471,10 @@ function buildMessageGroupOwnerNotReadyError(
   error.deferRetry = true;
 
   const retryAfterMs = Number.isFinite(selection?.retryAfterMs) &&
-    selection.retryAfterMs > NUM.ZERO ?
+    selection.retryAfterMs > 0 ?
     Math.floor(selection.retryAfterMs) :
-    NUM.ZERO;
-  if (retryAfterMs > NUM.ZERO) {
+    0;
+  if (retryAfterMs > 0) {
     error.retryAfterMs = retryAfterMs;
   }
 

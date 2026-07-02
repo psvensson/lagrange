@@ -12,7 +12,6 @@
  * Requirements: 4.3, 4.5, 7.3
  */
 
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   CALLBACK_MIN_PARAMS,
   CALLBACK_MAX_PARAMS,
@@ -46,7 +45,7 @@ function validateCallbackDescriptor(descriptor) {
     errors.push(CALLBACK_ERROR_MSG.EXPORT_NAME_REQUIRED);
   }
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -75,7 +74,7 @@ function validateCallbackSignature(exportFn, _exportName) {
     return {valid: false, errors};
   }
 
-  if (typeof exportFn !== TYPEOF.FUNCTION) {
+  if (typeof exportFn !== 'function') {
     errors.push(CALLBACK_ERROR_MSG.EXPORT_NOT_FUNCTION);
     return {valid: false, errors};
   }
@@ -92,7 +91,7 @@ function validateCallbackSignature(exportFn, _exportName) {
     errors.push(CALLBACK_ERROR_MSG.PARAM_COUNT_TOO_MANY);
   }
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -126,7 +125,7 @@ function validateCallbackAgainstManifest(exportName, manifest) {
     errors.push(CALLBACK_ERROR_MSG.RUN_EXPORT_MISMATCH);
   }
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 /**
@@ -159,7 +158,7 @@ function validateCallback(descriptor, manifest, exportFn) {
   );
   allErrors.push(...sigResult.errors);
 
-  return {valid: allErrors.length === NUM.ZERO, errors: allErrors};
+  return {valid: allErrors.length === 0, errors: allErrors};
 }
 
 /**
@@ -172,7 +171,7 @@ function validateCallback(descriptor, manifest, exportFn) {
  * @return {boolean} True if fn is an async function.
  */
 function isAsyncFunction(fn) {
-  if (typeof fn !== TYPEOF.FUNCTION) return false;
+  if (typeof fn !== 'function') return false;
   return fn.constructor.name === LOCAL_STR_ASYNCFUNCTION;
 }
 

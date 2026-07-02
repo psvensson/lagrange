@@ -61,8 +61,6 @@ import {
   getOrderedParticipantDetails,
 } from './distributed-transaction-records.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
@@ -102,27 +100,27 @@ class DistributedTransactionCoordinator {
     this.epochSource =
       options.epochSource ||
       (() => {
-        this.nextEpoch += LOCAL_NUM_ONE;
+        this.nextEpoch += 1;
         return this.nextEpoch;
       });
     this.transactionBudgetMs =
       Number.isFinite(options.transactionBudgetMs) &&
-      options.transactionBudgetMs > LOCAL_NUM_ZERO ?
+      options.transactionBudgetMs > 0 ?
         Math.floor(options.transactionBudgetMs) :
         TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
     this.participantRetryMaxRetries =
       Number.isFinite(options.participantRetryMaxRetries) &&
-      options.participantRetryMaxRetries >= LOCAL_NUM_ZERO ?
+      options.participantRetryMaxRetries >= 0 ?
         Math.floor(options.participantRetryMaxRetries) :
         PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
     this.participantRetryBaseDelayMs =
       Number.isFinite(options.participantRetryBaseDelayMs) &&
-      options.participantRetryBaseDelayMs > LOCAL_NUM_ZERO ?
+      options.participantRetryBaseDelayMs > 0 ?
         Math.floor(options.participantRetryBaseDelayMs) :
         PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
     this.participantRetryMaxDelayMs =
       Number.isFinite(options.participantRetryMaxDelayMs) &&
-      options.participantRetryMaxDelayMs > LOCAL_NUM_ZERO ?
+      options.participantRetryMaxDelayMs > 0 ?
         Math.floor(options.participantRetryMaxDelayMs) :
         PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
     this.sleep =
@@ -133,13 +131,13 @@ class DistributedTransactionCoordinator {
     this.loadRecoveryStateForSweep = options.loadRecoveryStateForSweep || null;
     this.recoverySweepIntervalMs =
       Number.isFinite(options.recoverySweepIntervalMs) &&
-      options.recoverySweepIntervalMs > LOCAL_NUM_ZERO ?
+      options.recoverySweepIntervalMs > 0 ?
         Math.floor(options.recoverySweepIntervalMs) :
         RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
     this.recoverySweepTimer = null;
     this.recoverySweepInFlight = false;
-    this.recoverySweepDeferredUntilMs = LOCAL_NUM_ZERO;
-    this.recoverySweepDeferredAttempts = LOCAL_NUM_ZERO;
+    this.recoverySweepDeferredUntilMs = 0;
+    this.recoverySweepDeferredAttempts = 0;
     this.workflowCoordinator =
       options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
@@ -343,7 +341,7 @@ class DistributedTransactionCoordinator {
         WRITE_OPERATION_STATUS.FAILED;
     operation.retryCount = Number.isInteger(result?.retryCount) ?
       result.retryCount :
-      LOCAL_NUM_ZERO;
+      0;
     operation.lastError =
       result?.success === true ?
         null :

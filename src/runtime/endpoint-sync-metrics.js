@@ -7,7 +7,6 @@
  * @module runtime/endpoint-sync-metrics
  */
 
-import {NUM} from '../constants/index.js';
 import {ENDPOINT_SYNC_METRIC} from './endpoint-sync-constants.js';
 
 /**
@@ -18,8 +17,8 @@ import {ENDPOINT_SYNC_METRIC} from './endpoint-sync-constants.js';
  */
 function normalizeNonNegativeNumber(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < NUM.ZERO) {
-    return NUM.ZERO;
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
   }
   return parsed;
 }
@@ -30,11 +29,11 @@ function normalizeNonNegativeNumber(value) {
 class EndpointSyncMetrics {
   constructor() {
     this._metrics = {
-      [ENDPOINT_SYNC_METRIC.RECONCILE_DURATION_MS]: NUM.ZERO,
-      [ENDPOINT_SYNC_METRIC.RECONCILE_FAILURES_TOTAL]: NUM.ZERO,
-      [ENDPOINT_SYNC_METRIC.EXPORTED_SERVICES]: NUM.ZERO,
-      [ENDPOINT_SYNC_METRIC.EXPORTED_ENDPOINTS]: NUM.ZERO,
-      [ENDPOINT_SYNC_METRIC.PORT_CONFLICT_TOTAL]: NUM.ZERO,
+      [ENDPOINT_SYNC_METRIC.RECONCILE_DURATION_MS]: 0,
+      [ENDPOINT_SYNC_METRIC.RECONCILE_FAILURES_TOTAL]: 0,
+      [ENDPOINT_SYNC_METRIC.EXPORTED_SERVICES]: 0,
+      [ENDPOINT_SYNC_METRIC.EXPORTED_ENDPOINTS]: 0,
+      [ENDPOINT_SYNC_METRIC.PORT_CONFLICT_TOTAL]: 0,
     };
   }
 
@@ -53,7 +52,7 @@ class EndpointSyncMetrics {
    *
    * @param {number} [count=1] - Counter increment.
    */
-  incrementReconcileFailures(count = NUM.ONE) {
+  incrementReconcileFailures(count = 1) {
     this._metrics[ENDPOINT_SYNC_METRIC.RECONCILE_FAILURES_TOTAL] +=
       normalizeNonNegativeNumber(count);
   }
@@ -83,7 +82,7 @@ class EndpointSyncMetrics {
    *
    * @param {number} [count=1] - Counter increment.
    */
-  incrementPortConflicts(count = NUM.ONE) {
+  incrementPortConflicts(count = 1) {
     this._metrics[ENDPOINT_SYNC_METRIC.PORT_CONFLICT_TOTAL] +=
       normalizeNonNegativeNumber(count);
   }

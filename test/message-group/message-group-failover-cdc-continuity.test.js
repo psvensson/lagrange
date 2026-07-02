@@ -220,7 +220,7 @@ test(
       const subs = service.cdcHandler.getSubscriptions();
       t.equal(
         subs.length,
-        NUM.ONE,
+        1,
         'repeated re-subscription should not duplicate entries',
       );
       t.ok(
@@ -256,12 +256,12 @@ test(
       // No CDC subscriptions registered.
       t.equal(
         service.cdcHandler.getSubscriptions().length,
-        NUM.ZERO,
+        0,
         'should have no subscriptions initially',
       );
 
       // Track subscribeToCDC calls.
-      let subscribeCalls = NUM.ZERO;
+      let subscribeCalls = 0;
       const originalSubscribeToCDC =
         service.subscribeToCDC.bind(service);
       service.subscribeToCDC = async (tableName) => {
@@ -280,7 +280,7 @@ test(
 
       t.equal(
         subscribeCalls,
-        NUM.ZERO,
+        0,
         'should not call subscribeToCDC when no tables were subscribed',
       );
 
@@ -344,7 +344,7 @@ test(
       );
       t.equal(
         resubscribeLog?.fields?.tableCount,
-        NUM.TWO,
+        2,
         'log should report correct table count',
       );
 

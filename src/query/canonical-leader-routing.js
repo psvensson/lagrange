@@ -1,8 +1,6 @@
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
@@ -46,14 +44,14 @@ const CANONICAL_LEADER_REFERENCE_STATE = Object.freeze({
 });
 
 function normalizeCanonicalLeaderNodeIdValue(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     null;
 }
 
 function normalizeCanonicalLeaderServiceStatus(service = null) {
   const status = service?.[COLUMN.STATUS] ?? service?.status ?? null;
-  if (typeof status !== TYPEOF.STRING || status.length === NUM.ZERO) {
+  if (typeof status !== 'string' || status.length === 0) {
     return null;
   }
   return status.toLowerCase();
@@ -80,7 +78,7 @@ function readCanonicalLeaderServiceNodeId(service = null) {
 function readCanonicalLeaderServiceRole(service = null) {
   const role = service?.[COLUMN.RAFT_ROLE] ?? service?.raft_role ??
     service?.raftRole ?? null;
-  return typeof role === TYPEOF.STRING && role.length > NUM.ZERO ?
+  return typeof role === 'string' && role.length > 0 ?
     role.toLowerCase() :
     null;
 }
@@ -112,7 +110,7 @@ function buildCanonicalLeaderIdentitySnapshot(
   state,
   source,
   leaderNodeId,
-  leaderWitnessNodeCount = NUM.ZERO,
+  leaderWitnessNodeCount = 0,
 ) {
   const normalizedLeaderNodeId =
     normalizeCanonicalLeaderNodeIdValue(leaderNodeId);
@@ -137,7 +135,7 @@ function resolveCanonicalLeaderIdentitySnapshot(options = {}) {
       CANONICAL_LEADER_IDENTITY_STATE.OWNER_CONFIRMED,
       CANONICAL_LEADER_IDENTITY_SOURCE.OWNER_ROW,
       ownerLeaderNodeId,
-      NUM.ZERO,
+      0,
     );
   }
   const retainedLeaderNodeId = normalizeCanonicalLeaderNodeIdValue(
@@ -148,18 +146,18 @@ function resolveCanonicalLeaderIdentitySnapshot(options = {}) {
       CANONICAL_LEADER_IDENTITY_STATE.RETAINED_RUNTIME,
       CANONICAL_LEADER_IDENTITY_SOURCE.RETAINED_RUNTIME,
       retainedLeaderNodeId,
-      NUM.ZERO,
+      0,
     );
   }
 
   const partitionPresent = options.partitionPresent === true ||
-    (options.partition && typeof options.partition === TYPEOF.OBJECT);
+    (options.partition && typeof options.partition === 'object');
   if (!partitionPresent) {
     return buildCanonicalLeaderIdentitySnapshot(
       CANONICAL_LEADER_IDENTITY_STATE.MISSING,
       CANONICAL_LEADER_IDENTITY_SOURCE.NONE,
       null,
-      NUM.ZERO,
+      0,
     );
   }
 
@@ -171,16 +169,16 @@ function resolveCanonicalLeaderIdentitySnapshot(options = {}) {
       .filter((nodeId) => nodeId !== null),
   )];
 
-  if (leaderWitnessNodeIds.length === NUM.ONE) {
+  if (leaderWitnessNodeIds.length === 1) {
     return buildCanonicalLeaderIdentitySnapshot(
       CANONICAL_LEADER_IDENTITY_STATE.SERVICE_ROLE_DERIVED,
       CANONICAL_LEADER_IDENTITY_SOURCE.SERVICE_ROLE,
-      leaderWitnessNodeIds[NUM.ZERO],
+      leaderWitnessNodeIds[0],
       leaderWitnessNodeIds.length,
     );
   }
 
-  if (leaderWitnessNodeIds.length > NUM.ONE) {
+  if (leaderWitnessNodeIds.length > 1) {
     return buildCanonicalLeaderIdentitySnapshot(
       CANONICAL_LEADER_IDENTITY_STATE.AMBIGUOUS_SERVICE_ROLE,
       CANONICAL_LEADER_IDENTITY_SOURCE.SERVICE_ROLE,
@@ -193,7 +191,7 @@ function resolveCanonicalLeaderIdentitySnapshot(options = {}) {
     CANONICAL_LEADER_IDENTITY_STATE.MISSING,
     CANONICAL_LEADER_IDENTITY_SOURCE.NONE,
     null,
-    NUM.ZERO,
+    0,
   );
 }
 
@@ -204,7 +202,7 @@ function countCanonicalLeaderActiveServices(
   const normalizedLeaderNodeId =
     normalizeCanonicalLeaderNodeIdValue(leaderNodeId);
   if (normalizedLeaderNodeId === null) {
-    return NUM.ZERO;
+    return 0;
   }
   return serviceRows.filter((service) => {
     return readCanonicalLeaderServiceNodeId(service) === normalizedLeaderNodeId &&
@@ -217,7 +215,7 @@ function buildCanonicalPartitionLeaderObservation(
   state,
   reasonCode,
   leaderNodeId = null,
-  leaderWitnessNodeCount = NUM.ZERO,
+  leaderWitnessNodeCount = 0,
 ) {
   const normalizedLeaderNodeId =
     normalizeCanonicalLeaderNodeIdValue(leaderNodeId);
@@ -235,14 +233,14 @@ function buildCanonicalPartitionLeaderObservation(
 function resolveCanonicalPartitionLeaderObservation(options = {}) {
   const identitySnapshot =
     options.identitySnapshot &&
-      typeof options.identitySnapshot === TYPEOF.OBJECT ?
+      typeof options.identitySnapshot === 'object' ?
       options.identitySnapshot :
       resolveCanonicalLeaderIdentitySnapshot(options);
   const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
   const partitionPresent = options.partitionPresent === true ||
     (
       options.partition &&
-      typeof options.partition === TYPEOF.OBJECT
+      typeof options.partition === 'object'
     );
   const activeLeaderServiceCount = countCanonicalLeaderActiveServices(
     serviceRows,
@@ -252,7 +250,7 @@ function resolveCanonicalPartitionLeaderObservation(options = {}) {
   if (
     identitySnapshot.state === CANONICAL_LEADER_IDENTITY_STATE.OWNER_CONFIRMED
   ) {
-    return activeLeaderServiceCount > NUM.ZERO ?
+    return activeLeaderServiceCount > 0 ?
       buildCanonicalPartitionLeaderObservation(
         CANONICAL_PARTITION_LEADER_OBSERVATION_STATE.AVAILABLE,
         CANONICAL_PARTITION_LEADER_OBSERVATION_REASON.OWNER_ROW_CONFIRMED,
@@ -271,7 +269,7 @@ function resolveCanonicalPartitionLeaderObservation(options = {}) {
     identitySnapshot.state ===
       CANONICAL_LEADER_IDENTITY_STATE.RETAINED_RUNTIME
   ) {
-    return activeLeaderServiceCount > NUM.ZERO ?
+    return activeLeaderServiceCount > 0 ?
       buildCanonicalPartitionLeaderObservation(
         CANONICAL_PARTITION_LEADER_OBSERVATION_STATE.AVAILABLE,
         CANONICAL_PARTITION_LEADER_OBSERVATION_REASON
@@ -315,16 +313,16 @@ function resolveCanonicalLeaderRoutingGapState(routingSnapshot = null) {
   );
 
   if (canonicalLeaderNodeId === null) {
-    return serviceRowCount > NUM.ZERO ||
-      activeAddressedServiceCount > NUM.ZERO ?
+    return serviceRowCount > 0 ||
+      activeAddressedServiceCount > 0 ?
       CANONICAL_LEADER_ROUTING_GAP_STATE.OWNER_MISSING :
       CANONICAL_LEADER_ROUTING_GAP_STATE.NONE;
   }
 
-  if (canonicalLeaderServiceCount === NUM.ZERO &&
+  if (canonicalLeaderServiceCount === 0 &&
       (
-        activeAddressedServiceCount > NUM.ZERO ||
-        serviceRowCount === NUM.ZERO
+        activeAddressedServiceCount > 0 ||
+        serviceRowCount === 0
       )) {
     return CANONICAL_LEADER_ROUTING_GAP_STATE.SERVICE_MISSING;
   }

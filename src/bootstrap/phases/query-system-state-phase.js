@@ -28,9 +28,7 @@ import {
 } from '../node-joining-constants.js';
 import {
   CDC_OPERATION,
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {canonicalizeSystemTableRow} from '../../control-plane/system-row-normalizers.js';
 import {
@@ -176,7 +174,7 @@ class QuerySystemStatePhase {
         TABLES.MESSAGE_GROUPS,
       ];
 
-      let totalCachedRecords = NUM.ZERO;
+      let totalCachedRecords = 0;
       for (const tableName of systemTables) {
         const records =
           systemTableCache.getAll(tableName) || [];
@@ -291,7 +289,7 @@ class QuerySystemStatePhase {
       JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
     );
 
-    if (tables.length === NUM.ZERO) {
+    if (tables.length === 0) {
       logger.info(LOG_BLOCKING_BACKFILL_SKIPPED, {
         nodeId: this.nodeId,
         tableCount: JOIN_BACKFILL_SCOPE.BLOCKING_TABLES.length,
@@ -339,7 +337,7 @@ class QuerySystemStatePhase {
    */
   resolveSnapshotBackfillPlan(tableNames = []) {
     const bootstrapResponse =
-      typeof this.delegates.getBootstrapResponse === TYPEOF.FUNCTION ?
+      typeof this.delegates.getBootstrapResponse === 'function' ?
         this.delegates.getBootstrapResponse() :
         null;
     return resolveBootstrapSnapshotBackfillPlan({
@@ -365,7 +363,7 @@ class QuerySystemStatePhase {
     } = this.resolveSnapshotBackfillPlan(
       JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
     );
-    if (!Array.isArray(tables) || tables.length === NUM.ZERO) {
+    if (!Array.isArray(tables) || tables.length === 0) {
       this.delegates.getLogger().info(LOG_OPPORTUNISTIC_BACKFILL_SKIPPED, {
         nodeId: this.nodeId,
         tableCount: JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES.length,
@@ -448,7 +446,7 @@ class QuerySystemStatePhase {
     // Hydrate each system table from snapshots
     const systemTables = CACHE_HYDRATION_TABLES;
 
-    let totalRecords = NUM.ZERO;
+    let totalRecords = 0;
 
     for (const tableName of systemTables) {
       const records = snapshots[tableName];
@@ -507,7 +505,7 @@ class QuerySystemStatePhase {
         tablesHydrated: systemTables.filter(
           (t) =>
             Array.isArray(snapshots[t]) &&
-            snapshots[t].length > NUM.ZERO,
+            snapshots[t].length > 0,
         ).length,
       },
     );
@@ -578,19 +576,19 @@ class QuerySystemStatePhase {
   async registerNodeInCluster() {
     const logger = this.delegates.getLogger();
     const maxAttempts = this.resolveJoinRegistrationMaxAttempts();
-    let attempt = NUM.ZERO;
+    let attempt = 0;
     let nextDelayMs = JOIN_NODE_REGISTRATION_RETRY_DELAY_MS;
 
     while (true) {
-      attempt += NUM.ONE;
+      attempt += 1;
       try {
         const messageRouter =
-          typeof this.delegates.getMessageRouter === TYPEOF.FUNCTION ?
+          typeof this.delegates.getMessageRouter === 'function' ?
             this.delegates.getMessageRouter() :
             null;
         if (messageRouter &&
             typeof this.delegates.connectToClusterNodes ===
-            TYPEOF.FUNCTION) {
+            'function') {
           await this.delegates.connectToClusterNodes({
             requireReadyConnections: true,
           });
@@ -609,7 +607,7 @@ class QuerySystemStatePhase {
           JOIN_NODE_REGISTRATION_MAX_DELAY_MS,
           Math.max(
             JOIN_NODE_REGISTRATION_RETRY_DELAY_MS,
-            retryAfterMs > NUM.ZERO ? retryAfterMs : nextDelayMs,
+            retryAfterMs > 0 ? retryAfterMs : nextDelayMs,
           ),
         );
 
@@ -618,14 +616,14 @@ class QuerySystemStatePhase {
           attempt,
           maxAttempts,
           delayMs,
-          retryAfterMs: retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+          retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
           error: error?.message || String(error),
         });
 
         await this.sleep(delayMs);
         nextDelayMs = Math.min(
           JOIN_NODE_REGISTRATION_MAX_DELAY_MS,
-          delayMs * NUM.TWO,
+          delayMs * 2,
         );
       }
     }
@@ -662,7 +660,7 @@ class QuerySystemStatePhase {
     const upsertOptions = this.getJoinTimeUpsertOptions();
     if (
       typeof cdcIntegrationService?.upsertSystemTableRow ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return cdcIntegrationService.upsertSystemTableRow(
         tableName,
@@ -728,15 +726,15 @@ class QuerySystemStatePhase {
   resolveJoinRegistrationMaxAttempts() {
     const configured =
       this.delegates.getConfig?.()?.joinRegistrationMaxAttempts;
-    if (Number.isFinite(configured) && configured >= NUM.ONE) {
-      return Math.max(NUM.ONE, Math.floor(configured));
+    if (Number.isFinite(configured) && configured >= 1) {
+      return Math.max(1, Math.floor(configured));
     }
     return JOIN_NODE_REGISTRATION_MAX_ATTEMPTS;
   }
 
   async sleep(delayMs) {
     const sleepImpl = this.delegates.getSleep?.();
-    if (typeof sleepImpl === TYPEOF.FUNCTION) {
+    if (typeof sleepImpl === 'function') {
       await sleepImpl(delayMs);
       return;
     }
@@ -751,7 +749,7 @@ class QuerySystemStatePhase {
    * @return {void}
    */
   seedJoinTimeCacheRow(tableName, rowData) {
-    if (!rowData || typeof rowData !== TYPEOF.OBJECT) {
+    if (!rowData || typeof rowData !== 'object') {
       return;
     }
 
@@ -760,7 +758,7 @@ class QuerySystemStatePhase {
     if (
       !systemTableCache ||
       typeof systemTableCache.applySystemTableChange !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return;
     }

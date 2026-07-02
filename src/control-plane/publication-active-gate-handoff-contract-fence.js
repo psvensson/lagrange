@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES,
 } from './publication-active-gate-handoff-contract-decision.js';
@@ -36,7 +35,7 @@ function resolvePublicationActiveGateHandoffDurablePublishedNodeIds(
     normalizePublicationActiveGateHandoffNodeIdList(
       options.publishedActiveNodeIds,
     );
-  if (explicitPublishedNodeIds.length > NUM.ZERO) {
+  if (explicitPublishedNodeIds.length > 0) {
     return explicitPublishedNodeIds;
   }
   return normalizePublicationActiveGateHandoffNodeIdList(
@@ -51,7 +50,7 @@ function isPublicationActiveGateHandoffDurablePublicationAvailable({
   publicationEpoch,
   publicationStatus,
 }) {
-  return nodeIds.length > NUM.ZERO ||
+  return nodeIds.length > 0 ||
     publicationEpoch !== PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH ||
     publicationStatus ===
       PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_STATUS.PUBLISHED;
@@ -65,8 +64,8 @@ function isPublicationActiveGateHandoffDurablePublicationCovered({
 }) {
   return available === true &&
     stale !== true &&
-    targetNodeIds.length > NUM.ZERO &&
-    missingNodeIds.length === NUM.ZERO;
+    targetNodeIds.length > 0 &&
+    missingNodeIds.length === 0;
 }
 
 function resolvePublicationActiveGateHandoffDurablePublicationEvidenceState({
@@ -237,14 +236,14 @@ function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
   const revision =
     resolvePublicationActiveGateHandoffSnapshotCoverageRevision(options);
   const stale = isPublicationActiveGateHandoffSnapshotCoverageStale(options);
-  const available = nodeIds.length > NUM.ZERO || revision !== null;
+  const available = nodeIds.length > 0 || revision !== null;
   const quorumCount =
     resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds);
   const coveredTargetNodeCount = targetNodeIds.length - missingNodeIds.length;
   const covered =
     available === true &&
     stale !== true &&
-    targetNodeIds.length > NUM.ZERO &&
+    targetNodeIds.length > 0 &&
     coveredTargetNodeCount >= quorumCount;
   return Object.freeze({
     state: stale === true ?
@@ -299,7 +298,7 @@ function buildPublicationActiveGateHandoffPresenceEvidence({
     missingNodeIds,
     missingNodeCount: missingNodeIds.length,
     complete:
-      targetNodeIds.length > NUM.ZERO &&
+      targetNodeIds.length > 0 &&
       presentTargetNodeCount >= quorumCount,
   });
 }
@@ -326,7 +325,7 @@ function resolvePublicationActiveGateCatchupFenceMissingProofReasons(
   const fenceGaps = [];
   appendPublicationActiveGateCatchupFenceReason({
     reasons: fenceGaps,
-    condition: evidence.targetNodeIds.length === NUM.ZERO,
+    condition: evidence.targetNodeIds.length === 0,
     reason: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON.TARGETS_UNAVAILABLE,
   });
   appendPublicationActiveGateCatchupFenceReason({

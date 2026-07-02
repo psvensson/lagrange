@@ -30,7 +30,6 @@ import {
 
 const LOCAL_STR_MESSAGEROUTERSETUP = 'MessageRouterSetup';
 const LOCAL_STR_NODEID = 'nodeId';
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Subsystem identifier for logging.
@@ -145,7 +144,7 @@ class MessageRouterSetup {
     // like "joining-node-id/lifecycle" -> routes to node "joining-node-id"
     messageRouter.setServiceNodeResolver((address) => {
       const match = address.match(/^([^/]+)\//);
-      return match ? match[LOCAL_NUM_ONE] : null;
+      return match ? match[1] : null;
     });
     messageRouter.setNodeAddressResolver(
       createNodeWebSocketAddressResolver(),

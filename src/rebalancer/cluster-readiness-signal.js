@@ -17,7 +17,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {COLUMN, NUM, TABLES} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {NODE_STATE} from '../constants/node-state.js';
 import {
   CDC_LIFECYCLE_LOG_MSG,
@@ -41,7 +41,7 @@ class ClusterReadinessSignal {
   constructor(options = {}) {
     this.cdcPipelineReadinessGate = options.cdcPipelineReadinessGate;
     this.systemTableCache = options.systemTableCache;
-    this.expectedNodeCount = options.expectedNodeCount || NUM.ZERO;
+    this.expectedNodeCount = options.expectedNodeCount || 0;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -71,7 +71,7 @@ class ClusterReadinessSignal {
       unmetConditions.push(CLUSTER_READINESS_CONDITION.CACHE_HYDRATED);
     }
 
-    const ready = unmetConditions.length === NUM.ZERO;
+    const ready = unmetConditions.length === 0;
 
     if (!ready) {
       this.logger.info(CDC_LIFECYCLE_LOG_MSG.CLUSTER_NOT_READY, {
@@ -106,8 +106,8 @@ class ClusterReadinessSignal {
    * @private
    */
   _checkNodesRegistered() {
-    if (!this.systemTableCache || this.expectedNodeCount <= NUM.ZERO) {
-      return this.expectedNodeCount <= NUM.ZERO;
+    if (!this.systemTableCache || this.expectedNodeCount <= 0) {
+      return this.expectedNodeCount <= 0;
     }
 
     try {
@@ -156,7 +156,7 @@ class ClusterReadinessSignal {
     for (const tableName of ClusterReadinessSignal.CORE_HYDRATION_TABLES) {
       try {
         const records = this.systemTableCache.getAll(tableName);
-        if (!records || records.length === NUM.ZERO) {
+        if (!records || records.length === 0) {
           return false;
         }
       } catch (_err) {

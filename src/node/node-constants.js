@@ -118,7 +118,7 @@ const NODE_LIFECYCLE_ERROR_NAME = Object.freeze({
 
 const NODE_LIFECYCLE_ERROR_MSG = Object.freeze({
   invalidTransition: (currentState, attemptedState, validTransitions) => {
-    const validStr = validTransitions.length > NUM.ZERO ?
+    const validStr = validTransitions.length > 0 ?
       validTransitions.join(', ') : STRING.NONE;
     return `Invalid state transition from '${currentState}' to '${attemptedState}'. ` +
       `Valid transitions from '${currentState}': ${validStr}`;
@@ -279,11 +279,11 @@ const NODE_REINTEGRATION_ERROR_MSG = Object.freeze({
 
 const NODE_REINTEGRATION_DEFAULT = Object.freeze({
   CHECK_INTERVAL_MS: TIME_MS.SECOND * NUM.TEN,
-  IDLE_BACKOFF_MULTIPLIER: NUM.TWO,
+  IDLE_BACKOFF_MULTIPLIER: 2,
   MAX_CHECK_INTERVAL_MS: TIME_MS.MINUTE,
   REINTEGRATION_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
   HEALTH_CHECK_COUNT: NUM.THREE,
-  HEALTH_CHECK_INTERVAL_MS: TIME_MS.SECOND * NUM.TWO,
+  HEALTH_CHECK_INTERVAL_MS: TIME_MS.SECOND * 2,
   HEALTHY_HEARTBEAT_WINDOW_MS: TIME_MS.SECOND * NUM.TEN,
   CLEANUP_DELAY_MS: TIME_MS.MINUTE,
 });

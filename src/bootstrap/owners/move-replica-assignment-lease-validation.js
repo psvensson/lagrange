@@ -1,10 +1,8 @@
 import {
   COLUMN,
   HTTP_STATUS,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
   WORKFLOW_STEP,
 } from '../../constants/index.js';
 import {
@@ -19,7 +17,7 @@ import {
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
 } from '../bootstrap-api-constants.js';
 
-const LOCAL_STR_1IOIF = 'failed to persist MOVE_REPLICA assignment lease renewal';
+const LOCAL_STR_FAILED_TO_PERSIST_MOVE_REPLICA_ASSIGNMEN = 'failed to persist MOVE_REPLICA assignment lease renewal';
 
 const moveReplicaAssignmentLeaseValidationMethods = {
   isMoveReplicaHandoffRequest(serviceData) {
@@ -37,7 +35,7 @@ const moveReplicaAssignmentLeaseValidationMethods = {
     if (targetNodeId === this.getSeedNodeId()) {
       return false;
     }
-    if (typeof assignmentId === TYPEOF.STRING && assignmentId.length > NUM.ZERO) {
+    if (typeof assignmentId === 'string' && assignmentId.length > 0) {
       return true;
     }
     return this.getMessageGroupServices()?.has?.(serviceId) === true;
@@ -49,7 +47,7 @@ const moveReplicaAssignmentLeaseValidationMethods = {
     }
 
     const assignmentId = serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID];
-    if (typeof assignmentId !== TYPEOF.STRING || assignmentId.length === NUM.ZERO) {
+    if (typeof assignmentId !== 'string' || assignmentId.length === 0) {
       throw this.buildRegisterServiceValidationError(
         HTTP_STATUS.BAD_REQUEST,
         BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_REQUIRED,
@@ -141,8 +139,8 @@ const moveReplicaAssignmentLeaseValidationMethods = {
       return false;
     }
     const renewalWindowMs = Math.max(
-      NUM.ONE,
-      Math.floor(this.getMoveReplicaAssignmentLeaseMs() / NUM.TWO),
+      1,
+      Math.floor(this.getMoveReplicaAssignmentLeaseMs() / 2),
     );
     return reservation.leaseExpiresAt - now <= renewalWindowMs;
   },
@@ -157,8 +155,8 @@ const moveReplicaAssignmentLeaseValidationMethods = {
 
     const now = Number.isFinite(options.now) ? Math.floor(options.now) : Date.now();
     const force = options.force === true;
-    const phase = typeof options.phase === TYPEOF.STRING &&
-      options.phase.length > NUM.ZERO ?
+    const phase = typeof options.phase === 'string' &&
+      options.phase.length > 0 ?
       options.phase :
       MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED;
     if (force) {
@@ -236,7 +234,7 @@ const moveReplicaAssignmentLeaseValidationMethods = {
               status,
               error:
                 updateResult.error ||
-                LOCAL_STR_1IOIF,
+                LOCAL_STR_FAILED_TO_PERSIST_MOVE_REPLICA_ASSIGNMEN,
             },
           );
           return force ? null : reservation;

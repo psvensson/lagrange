@@ -2,7 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {COLUMN, NUM, TABLES} from '../../src/constants/index.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   LATENCY_MEASUREMENT_SAMPLE_QUALITY,
 } from '../../src/topology/latency-measurement-constants.js';
@@ -227,7 +227,7 @@ test('measureAndRecordInterGroupLatency persists sample via CDC', async (t) => {
   assert.equal(result.success, true);
   assert.ok(result.sample);
   assert.equal(cdc.calls.length, 1);
-  assert.equal(cdc.calls[0].row[COLUMN.SAMPLE_COUNT], NUM.ONE);
+  assert.equal(cdc.calls[0].row[COLUMN.SAMPLE_COUNT], 1);
   assert.equal(cdc.calls[0].row[COLUMN.LATENCY_MS], 12);
   teardownConfig();
   t.end();

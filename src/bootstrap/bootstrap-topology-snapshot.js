@@ -1,21 +1,21 @@
 import {assertCritical} from '../utils/assert.js';
 import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {normalizeNodeRow} from '../control-plane/system-row-normalizers.js';
 
 const LOCAL_STR_ACTIVE = 'active';
-const LOCAL_STR_8XO15 = 'bootstrap topology snapshot requires systemTableCache.getAll';
+const LOCAL_STR_BOOTSTRAP_TOPOLOGY_SNAPSHOT_REQUIRES_SYS = 'bootstrap topology snapshot requires systemTableCache.getAll';
 
-const DEFAULT_TOPOLOGY_EPOCH = NUM.ZERO;
+const DEFAULT_TOPOLOGY_EPOCH = 0;
 
 function resolvePublishedTopologyEpoch(systemTableCache, currentEpoch) {
   if (Number.isFinite(currentEpoch?.epoch)) {
-    return Math.max(NUM.ZERO, Math.floor(currentEpoch.epoch));
+    return Math.max(0, Math.floor(currentEpoch.epoch));
   }
-  if (typeof systemTableCache?.getEpoch === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache?.getEpoch === 'function') {
     const cacheEpoch = systemTableCache.getEpoch();
     if (Number.isFinite(cacheEpoch)) {
-      return Math.max(NUM.ZERO, Math.floor(cacheEpoch));
+      return Math.max(0, Math.floor(cacheEpoch));
     }
   }
   return DEFAULT_TOPOLOGY_EPOCH;
@@ -27,7 +27,7 @@ function resolveActiveNodeIds(nodeRows) {
   for (const row of rows) {
     const normalizedRow = normalizeNodeRow(row);
     const {nodeId, status} = normalizedRow;
-    if (nodeId.length === NUM.ZERO) {
+    if (nodeId.length === 0) {
       continue;
     }
     if (status === LOCAL_STR_ACTIVE) {
@@ -42,19 +42,19 @@ function buildBootstrapTopologySnapshotEnvelope(options = {}) {
     options.systemTableCache,
     'bootstrap topology snapshot requires systemTableCache',
   );
-  if (typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-    throw new Error(LOCAL_STR_8XO15);
+  if (typeof systemTableCache.getAll !== 'function') {
+    throw new Error(LOCAL_STR_BOOTSTRAP_TOPOLOGY_SNAPSHOT_REQUIRES_SYS);
   }
 
   const hydrationTables = Array.isArray(options.hydrationTables) ?
     [...options.hydrationTables] :
     [...CACHE_HYDRATION_TABLES];
   const resolveSnapshotRows =
-    typeof options.resolveSnapshotRows === TYPEOF.FUNCTION ?
+    typeof options.resolveSnapshotRows === 'function' ?
       options.resolveSnapshotRows :
       (_tableName, cacheRows) => cacheRows;
   const publishedAt =
-    typeof options.now === TYPEOF.FUNCTION ?
+    typeof options.now === 'function' ?
       options.now() :
       Date.now();
 

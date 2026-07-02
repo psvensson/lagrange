@@ -8,7 +8,6 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
     INITIAL_MESSAGE_GROUP_ID,
     MESSAGE_GROUP_SERVICE_LITERAL,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     isSystemTableWriteReady,
   } = deps;
 
@@ -155,7 +154,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
       this.peerReconciliationScheduled = false;
       if (
         this.systemTableCache &&
-        typeof this.systemTableCache.offCacheChange === TYPEOF.FUNCTION &&
+        typeof this.systemTableCache.offCacheChange === 'function' &&
         this.systemTableCacheChangeListener
       ) {
         this.systemTableCache.offCacheChange(
@@ -170,7 +169,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
       this.joinSuppressedHeartbeat = null;
       if (
         typeof this.releaseMetadataPublicationReadinessListener ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         this.releaseMetadataPublicationReadinessListener();
       }

@@ -7,7 +7,6 @@
  * @module runtime/endpoint-sync-k8s-reconciler
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {BaseError} from '../utils/base-error.js';
 import {
   ENDPOINT_SYNC_HEALTH,
@@ -20,10 +19,8 @@ import {
   normalizeDns1123Segment,
 } from './endpoint-sync-naming.js';
 
-const LOCAL_STR_65Q9P = 'EndpointSyncK8sReconciler';
+const LOCAL_STR_ENDPOINT_SYNC_K8S_RECONCILER = 'EndpointSyncK8sReconciler';
 const LOCAL_STR_RECONCILE = 'reconcile';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
 
 const K8S_KIND = Object.freeze({
   SERVICE: 'Service',
@@ -85,7 +82,7 @@ class EndpointSyncReconcilerError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: LOCAL_STR_65Q9P,
+        component: LOCAL_STR_ENDPOINT_SYNC_K8S_RECONCILER,
         operation: LOCAL_STR_RECONCILE,
         metadata,
       },
@@ -210,7 +207,7 @@ function buildEndpointSliceManifest(
  */
 function isManagedResource(resource) {
   const labels = resource?.metadata?.labels || null;
-  if (!labels || typeof labels !== TYPEOF.OBJECT) {
+  if (!labels || typeof labels !== 'object') {
     return false;
   }
   return labels[ENDPOINT_SYNC_LABEL.MANAGED_KEY] ===
@@ -252,28 +249,28 @@ function collectStaleManagedResourceNames(existingResources, desiredNames) {
  * @param {Object} options - Reconcile options.
  */
 function validateReconcileOptions(options) {
-  if (!options || typeof options !== TYPEOF.OBJECT) {
+  if (!options || typeof options !== 'object') {
     throw new EndpointSyncReconcilerError(
       K8S_RECONCILE_ERROR.CLIENT_REQUIRED,
     );
   }
 
   const k8sClient = options.k8sClient;
-  if (!k8sClient || typeof k8sClient !== TYPEOF.OBJECT) {
+  if (!k8sClient || typeof k8sClient !== 'object') {
     throw new EndpointSyncReconcilerError(
       K8S_RECONCILE_ERROR.CLIENT_REQUIRED,
     );
   }
 
   for (const methodName of REQUIRED_CLIENT_METHOD) {
-    if (typeof k8sClient[methodName] !== TYPEOF.FUNCTION) {
+    if (typeof k8sClient[methodName] !== 'function') {
       throw new EndpointSyncReconcilerError(
         `${K8S_RECONCILE_ERROR.CLIENT_METHOD_MISSING_PREFIX}: ${methodName}`,
       );
     }
   }
 
-  if (!options.namespace || typeof options.namespace !== TYPEOF.STRING) {
+  if (!options.namespace || typeof options.namespace !== 'string') {
     throw new EndpointSyncReconcilerError(
       K8S_RECONCILE_ERROR.NAMESPACE_REQUIRED,
     );
@@ -326,10 +323,10 @@ async function reconcilePlannedExports(options) {
   for (const plannedExport of options.plannedExports) {
     const serviceManifest = buildServiceManifest(plannedExport, options.namespace);
     desiredServiceNames.add(serviceManifest.metadata.name);
-    summary.desiredServices += LOCAL_NUM_ONE;
+    summary.desiredServices += 1;
 
     const sliceManifests = [];
-    for (let idx = LOCAL_NUM_ZERO; idx < plannedExport.slicePlans.length; idx += LOCAL_NUM_ONE) {
+    for (let idx = 0; idx < plannedExport.slicePlans.length; idx += 1) {
       const sliceManifest = buildEndpointSliceManifest(
         plannedExport,
         plannedExport.slicePlans[idx],
@@ -339,12 +336,12 @@ async function reconcilePlannedExports(options) {
       );
       desiredEndpointSliceNames.add(sliceManifest.metadata.name);
       sliceManifests.push(sliceManifest);
-      summary.desiredEndpointSlices += LOCAL_NUM_ONE;
+      summary.desiredEndpointSlices += 1;
     }
 
     try {
       await options.k8sClient.upsertService(serviceManifest);
-      summary.upsertedServices += LOCAL_NUM_ONE;
+      summary.upsertedServices += 1;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: plannedExport.serviceKey,
@@ -360,7 +357,7 @@ async function reconcilePlannedExports(options) {
     for (const sliceManifest of sliceManifests) {
       try {
         await options.k8sClient.upsertEndpointSlice(sliceManifest);
-        summary.upsertedEndpointSlices += LOCAL_NUM_ONE;
+        summary.upsertedEndpointSlices += 1;
       } catch (error) {
         groupFailed = true;
         summary.groupFailures.push({
@@ -388,7 +385,7 @@ async function reconcilePlannedExports(options) {
   for (const serviceName of staleServiceNames) {
     try {
       await options.k8sClient.deleteService(options.namespace, serviceName);
-      summary.deletedServices += LOCAL_NUM_ONE;
+      summary.deletedServices += 1;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: null,
@@ -410,7 +407,7 @@ async function reconcilePlannedExports(options) {
   for (const sliceName of staleEndpointSliceNames) {
     try {
       await options.k8sClient.deleteEndpointSlice(options.namespace, sliceName);
-      summary.deletedEndpointSlices += LOCAL_NUM_ONE;
+      summary.deletedEndpointSlices += 1;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: null,

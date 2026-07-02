@@ -16,7 +16,6 @@ function assignReplicaOperationRepositoryObservationMethods(
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     COORDINATOR_OWNER_COMPONENT,
-    NUM,
     RAFT_ROLE,
     READ_MODEL_DIVERGENCE_TYPE,
     REBALANCE_COORDINATOR_EVENT,
@@ -28,7 +27,6 @@ function assignReplicaOperationRepositoryObservationMethods(
     SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     buildDivergenceEvent,
     readAuthoritativeControlPlaneRows,
   } = options;
@@ -43,11 +41,11 @@ function assignReplicaOperationRepositoryObservationMethods(
     readObservedReplicaRowString(row, ...fieldNames) {
       for (const fieldName of fieldNames) {
         const value = row?.[fieldName];
-        if (typeof value !== TYPEOF.STRING) {
+        if (typeof value !== 'string') {
           continue;
         }
         const normalizedValue = value.trim();
-        if (normalizedValue.length > NUM.ZERO) {
+        if (normalizedValue.length > 0) {
           return normalizedValue.toLowerCase();
         }
       }
@@ -135,16 +133,16 @@ function assignReplicaOperationRepositoryObservationMethods(
         }
         const rowNodeId = String(row.node_id || row.nodeId || '');
         if (
-          normalizedTargetNodeId.length > NUM.ZERO &&
-        rowNodeId.length > NUM.ZERO &&
+          normalizedTargetNodeId.length > 0 &&
+        rowNodeId.length > 0 &&
         rowNodeId !== normalizedTargetNodeId
         ) {
           return false;
         }
         const rowPartitionId = String(row.partition_id || row.partitionId || '');
         if (
-          normalizedPartitionId.length > NUM.ZERO &&
-        rowPartitionId.length > NUM.ZERO &&
+          normalizedPartitionId.length > 0 &&
+        rowPartitionId.length > 0 &&
         rowPartitionId !== normalizedPartitionId
         ) {
           return false;
@@ -161,8 +159,8 @@ function assignReplicaOperationRepositoryObservationMethods(
         return [];
       };
       if (
-        normalizedReplicaId.length > NUM.ZERO &&
-        typeof this.systemTableCache.get === TYPEOF.FUNCTION
+        normalizedReplicaId.length > 0 &&
+        typeof this.systemTableCache.get === 'function'
       ) {
         const cachedRow = this.systemTableCache.get(
           SYSTEM_TABLE_NAME.SERVICES,
@@ -173,7 +171,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         }
       }
       const serviceRows = readAllServiceRows();
-      if (normalizedReplicaId.length > NUM.ZERO) {
+      if (normalizedReplicaId.length > 0) {
         const exactReplicaRow = serviceRows.find((row) => {
           const rowReplicaId = String(
             row?.service_id || row?.serviceId || row?.replica_id || row?.replicaId || '',
@@ -264,8 +262,8 @@ function assignReplicaOperationRepositoryObservationMethods(
           authoritativeReadFailed = true;
           return;
         }
-        if (Array.isArray(result.rows) && result.rows.length > NUM.ZERO) {
-          observedRow = result.rows[NUM.ZERO];
+        if (Array.isArray(result.rows) && result.rows.length > 0) {
+          observedRow = result.rows[0];
         }
       };
       if (replicaId) {
@@ -370,7 +368,7 @@ function assignReplicaOperationRepositoryObservationMethods(
       if (
         !replicaId ||
       !this.systemTableCache ||
-      typeof this.systemTableCache.get !== TYPEOF.FUNCTION
+      typeof this.systemTableCache.get !== 'function'
       ) {
         return;
       }

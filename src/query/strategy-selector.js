@@ -9,7 +9,6 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 10.3
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {LOOKUP_ACCESS_PATH} from './distributed/distributed-context-constants.js';
 import {
   STRATEGY,
@@ -273,7 +272,7 @@ function validateInput(input) {
   if (sideSize === undefined || sideSize === null) {
     throw new Error(STRATEGY_ERROR_MSG.SIDE_SIZE_REQUIRED);
   }
-  if (typeof sideSize !== TYPEOF.NUMBER || sideSize < NUM.ZERO) {
+  if (typeof sideSize !== 'number' || sideSize < 0) {
     throw new Error(STRATEGY_ERROR_MSG.SIDE_SIZE_MUST_BE_NUMBER);
   }
 }

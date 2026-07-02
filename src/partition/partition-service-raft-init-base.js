@@ -14,7 +14,6 @@ const {
   Database,
   ENTITY_TYPE,
   LifeRaft,
-  NUM,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
@@ -39,7 +38,6 @@ const {
   SQLiteLogAdapter,
   SYSTEM_TABLE_NAME,
   TABLES,
-  TYPEOF,
   applyRuntimeRaftTiming,
   assertCritical,
   computeReplicaElectionTimeouts,
@@ -67,14 +65,14 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @private
    */
   getCachedSystemTableRow(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== TYPEOF.FUNCTION) {
+    if (!this.systemTableCache || typeof predicate !== 'function') {
       return null;
     }
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       const rows = this.systemTableCache.filter(tableName, predicate);
-      return rows[NUM.ZERO] || null;
+      return rows[0] || null;
     }
-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(tableName) || [];
       return rows.find(predicate) || null;
     }
@@ -88,13 +86,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @private
    */
   getCachedSystemTableRows(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== TYPEOF.FUNCTION) {
+    if (!this.systemTableCache || typeof predicate !== 'function') {
       return [];
     }
-    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.filter === 'function') {
       return this.systemTableCache.filter(tableName, predicate);
     }
-    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache.getAll === 'function') {
       const rows = this.systemTableCache.getAll(tableName) || [];
       return rows.filter(predicate);
     }
@@ -117,13 +115,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
         service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED,
     );
-    if (serviceRows.length === NUM.ZERO) {
+    if (serviceRows.length === 0) {
       return null;
     }
     const resolveLeaderReplicaId = (leaderNodeId) => {
       if (
-        typeof leaderNodeId !== TYPEOF.STRING ||
-        leaderNodeId.length === NUM.ZERO
+        typeof leaderNodeId !== 'string' ||
+        leaderNodeId.length === 0
       ) {
         return null;
       }
@@ -134,8 +132,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         leaderReplica?.[COLUMN.REPLICA_ID] ||
         leaderReplica?.[COLUMN.SERVICE_ID] ||
         null;
-      return typeof leaderReplicaId === TYPEOF.STRING &&
-        leaderReplicaId.length > NUM.ZERO ?
+      return typeof leaderReplicaId === 'string' &&
+        leaderReplicaId.length > 0 ?
         leaderReplicaId :
         null;
     };
@@ -214,19 +212,19 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   warmHlcFromCommittedLog() {
     try {
       if (!this.logAdapter ||
-        typeof this.logAdapter.getCommittedIndex !== TYPEOF.FUNCTION ||
-        typeof this.logAdapter.getRange !== TYPEOF.FUNCTION) {
+        typeof this.logAdapter.getCommittedIndex !== 'function' ||
+        typeof this.logAdapter.getRange !== 'function') {
         return;
       }
       const committedIndex = this.logAdapter.getCommittedIndex();
-      if (!Number.isFinite(committedIndex) || committedIndex <= NUM.ZERO) {
+      if (!Number.isFinite(committedIndex) || committedIndex <= 0) {
         return;
       }
-      const entries = this.logAdapter.getRange(NUM.ONE, committedIndex);
+      const entries = this.logAdapter.getRange(1, committedIndex);
       let maxHlc = null;
       for (const entry of entries) {
         const witnessed = HLCTimestamp.tryFromString(entry?.command?.timestamp);
-        if (witnessed && (maxHlc === null || witnessed.compare(maxHlc) > NUM.ZERO)) {
+        if (witnessed && (maxHlc === null || witnessed.compare(maxHlc) > 0)) {
           maxHlc = witnessed;
         }
       }
@@ -396,8 +394,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const isSingleReplica = () => {
       const peerCount = Array.isArray(this.raft?.nodes) ?
         this.raft.nodes.length :
-        NUM.ZERO;
-      return this.replicaIds.length === NUM.ONE && peerCount === NUM.ZERO;
+        0;
+      return this.replicaIds.length === 1 && peerCount === 0;
     };
     const shouldIgnoreDemotionEvent = (eventName) => {
       if (isSingleReplica() && this.isLeader) {
@@ -474,8 +472,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.storage.currentTerm = term;
       },
     });
-    const totalPeerCount = Math.max(NUM.ZERO, this.replicaIds.length - NUM.ONE);
-    let joinedPeerCount = NUM.ZERO;
+    const totalPeerCount = Math.max(0, this.replicaIds.length - 1);
+    let joinedPeerCount = 0;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS, {
       peerTotal: totalPeerCount,
       peerJoined: joinedPeerCount,
@@ -497,7 +495,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           });
         }
         this.raftProvider.joinPeer(this.raft, peerAddress);
-        joinedPeerCount += NUM.ONE;
+        joinedPeerCount += 1;
         this.reportInitializationStage(
           PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
           {
@@ -511,7 +509,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
     this.reconcileRaftPeersFromCache();
     this.maybeInitializeRebalancer();
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       assertCritical(
         this.raft &&
           typeof this.raft.change === PARTITION_SERVICE_TYPE.FUNCTION,
@@ -558,7 +556,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (this.electionStarted) {
       return;
     }
-    if (this.replicaIds.length === NUM.ONE) {
+    if (this.replicaIds.length === 1) {
       this.electionStarted = true;
       return;
     }
@@ -567,7 +565,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        peerCount: this.replicaIds.length - NUM.ONE,
+        peerCount: this.replicaIds.length - 1,
       });
       this.raftProvider.startElectionTimer(this.raft);
     }
@@ -597,7 +595,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       !Number.isFinite(baseElectionMinMs) ||
       !Number.isFinite(baseElectionMaxMs) ||
       (hasTickInterval &&
-        (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= NUM.ZERO)) ||
+        (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0)) ||
       baseElectionMinMs > baseElectionMaxMs
     ) {
       return false;
@@ -622,7 +620,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.raftTimingConfig?.tickIntervalMs || null,
     };
     const shouldRearmTimer =
-      this.replicaIds.length > NUM.ONE &&
+      this.replicaIds.length > 1 &&
       (!this.deferElection || this.electionStarted);
     const applied = applyRuntimeRaftTiming({
       raft: this.raft,
@@ -660,7 +658,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (
       !this.raft ||
       !Number.isFinite(tickIntervalMs) ||
-      tickIntervalMs <= NUM.ZERO
+      tickIntervalMs <= 0
     ) {
       return false;
     }

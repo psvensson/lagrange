@@ -4,7 +4,7 @@
  * on SQL strings, a logger, and an optional DB handle.
  */
 
-import {NUM, STRING} from '../constants/index.js';
+import {STRING} from '../constants/index.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
@@ -36,7 +36,7 @@ export function extractConjunctiveWhereColumns(whereContent) {
       const cleanPart = part.trim()
         .replace(/^\(+|\)+$/g, STRING.EMPTY);
       const match = cleanPart.match(/^(\w+)\s*=/);
-      return match ? match[NUM.ONE] : null;
+      return match ? match[1] : null;
     })
     .filter(Boolean);
 }
@@ -64,7 +64,7 @@ export function parseValue(val) {
     val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
       (val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
       val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
-    return val.slice(NUM.ONE, -NUM.ONE);
+    return val.slice(1, -1);
   }
   // Try to parse as number
   const num = Number(val);
@@ -86,7 +86,7 @@ export function parseValuesFromSQL(valuesStr) {
   let inQuote = false;
   let quoteChar = null;
 
-  for (let i = NUM.ZERO; i < valuesStr.length; i++) {
+  for (let i = 0; i < valuesStr.length; i++) {
     const char = valuesStr[i];
 
     if (!inQuote && (char === PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE ||
@@ -95,10 +95,10 @@ export function parseValuesFromSQL(valuesStr) {
       quoteChar = char;
     } else if (inQuote && char === quoteChar) {
       // Check for escaped quote
-      if (i + NUM.ONE < valuesStr.length &&
-        valuesStr[i + NUM.ONE] === quoteChar) {
+      if (i + 1 < valuesStr.length &&
+        valuesStr[i + 1] === quoteChar) {
         current += char;
-        i += NUM.ONE; // Skip next quote
+        i += 1; // Skip next quote
       } else {
         inQuote = false;
         quoteChar = null;
@@ -139,17 +139,17 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   if (!columnsMatch || !valuesMatch) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
       sql: sql.substring(
-        NUM.ZERO,
+        0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
     });
     return {};
   }
 
-  const columns = columnsMatch[NUM.ONE].split(
+  const columns = columnsMatch[1].split(
     PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
   ).map((c) => c.trim());
-  const valuesStr = valuesMatch[NUM.ONE];
+  const valuesStr = valuesMatch[1];
 
   // Parse values - handle quoted strings and numbers
   const values = parseValuesFromSQL(valuesStr);
@@ -164,14 +164,14 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
 
   // Build data object
   const data = {};
-  for (let i = NUM.ZERO; i < columns.length; i++) {
+  for (let i = 0; i < columns.length; i++) {
     data[columns[i]] = values[i];
   }
 
   // Try to fetch the full row from DB to get any default values
   // Find the primary key column (usually first column or 'id')
-  const pkColumn = columns[NUM.ZERO];
-  const pkValue = values[NUM.ZERO];
+  const pkColumn = columns[0];
+  const pkValue = values[0];
 
   if (db && pkValue !== null && pkValue !== undefined) {
     try {
@@ -212,8 +212,8 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
   const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
   if (whereMatch) {
-    const keyColumn = whereMatch[NUM.ONE];
-    const keyValue = whereMatch[NUM.TWO];
+    const keyColumn = whereMatch[1];
+    const keyValue = whereMatch[2];
     if (shouldEmitCdcRowFetchInfoLog(tableName)) {
       logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
         tableName,
@@ -256,7 +256,7 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   } else {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
       sql: sql.substring(
-        NUM.ZERO,
+        0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
     });
@@ -274,13 +274,13 @@ export function extractDeleteDataFromSQL(sql, logger) {
   // Match WHERE clause: WHERE col = 'val'
   const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
   if (whereMatch) {
-    const keyColumn = whereMatch[NUM.ONE];
-    const keyValue = whereMatch[NUM.TWO];
+    const keyColumn = whereMatch[1];
+    const keyValue = whereMatch[2];
     return {[keyColumn]: keyValue};
   }
   logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
     sql: sql.substring(
-      NUM.ZERO,
+      0,
       PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
     ),
   });
@@ -299,7 +299,7 @@ export function extractDeleteDataFromSQL(sql, logger) {
 export function extractDataFromParameterizedSQL(
   sql, params, tableName, operationType, logger,
 ) {
-  if (!params || params.length === NUM.ZERO) {
+  if (!params || params.length === 0) {
     return {};
   }
 
@@ -313,7 +313,7 @@ export function extractDataFromParameterizedSQL(
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
           sql: sql.substring(
-            NUM.ZERO,
+            0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
         },
@@ -321,7 +321,7 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    const columns = columnsMatch[NUM.ONE].split(
+    const columns = columnsMatch[1].split(
       PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
     ).map((c) => c.trim());
     if (columns.length !== params.length) {
@@ -334,7 +334,7 @@ export function extractDataFromParameterizedSQL(
 
     // Build data object from columns and params
     const data = {};
-    for (let i = NUM.ZERO; i < columns.length; i++) {
+    for (let i = 0; i < columns.length; i++) {
       data[columns[i]] = params[i];
     }
 
@@ -356,7 +356,7 @@ export function extractDataFromParameterizedSQL(
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
           sql: sql.substring(
-            NUM.ZERO,
+            0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
         },
@@ -365,17 +365,17 @@ export function extractDataFromParameterizedSQL(
     }
 
     // Extract column names from SET clause
-    const setColumns = setMatch[NUM.ONE].split(
+    const setColumns = setMatch[1].split(
       PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
     ).map((part) => {
       const match = part.trim().match(/^(\w+)\s*=/);
-      return match ? match[NUM.ONE] : null;
+      return match ? match[1] : null;
     }).filter(Boolean);
 
     // Extract column names from WHERE clause
     // Handle parentheses around the WHERE clause: WHERE (col = ?)
     const whereColumns = whereMatch ?
-      extractConjunctiveWhereColumns(whereMatch[NUM.ONE]) :
+      extractConjunctiveWhereColumns(whereMatch[1]) :
       [];
 
     const allColumns = [...setColumns, ...whereColumns];
@@ -390,14 +390,14 @@ export function extractDataFromParameterizedSQL(
     // Build data object while preserving UPDATE semantics:
     // SET-column values are authoritative; WHERE-only columns backfill keys.
     const data = {};
-    let paramIndex = NUM.ZERO;
+    let paramIndex = 0;
     for (const column of setColumns) {
       data[column] = params[paramIndex];
-      paramIndex += NUM.ONE;
+      paramIndex += 1;
     }
     for (const column of whereColumns) {
       const value = params[paramIndex];
-      paramIndex += NUM.ONE;
+      paramIndex += 1;
       if (!Object.prototype.hasOwnProperty.call(data, column)) {
         data[column] = value;
       }
@@ -419,7 +419,7 @@ export function extractDataFromParameterizedSQL(
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
           sql: sql.substring(
-            NUM.ZERO,
+            0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
         },
@@ -427,7 +427,7 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    const whereContent = whereMatch[NUM.ONE].trim();
+    const whereContent = whereMatch[1].trim();
     const whereColumns = extractConjunctiveWhereColumns(whereContent);
 
     if (whereColumns.length !== params.length) {
@@ -440,7 +440,7 @@ export function extractDataFromParameterizedSQL(
     }
 
     const data = {};
-    for (let i = NUM.ZERO; i < whereColumns.length; i++) {
+    for (let i = 0; i < whereColumns.length; i++) {
       data[whereColumns[i]] = params[i];
     }
 

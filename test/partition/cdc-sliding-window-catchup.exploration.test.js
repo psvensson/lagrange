@@ -25,7 +25,6 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
-import {NUM} from '../../src/constants/index.js';
 import {
   buildEventIdentity,
 } from '../../src/partition/cdc-event-buffer.js';
@@ -177,10 +176,10 @@ test(
                 // - pre-subscriber buffer is empty
                 // - events were delivered to existing subscriber
                 const bufferSize = partition.cdcEventBuffer.size();
-                if (bufferSize !== NUM.ZERO) {
+                if (bufferSize !== 0) {
                   return true; // skip — not bug condition
                 }
-                if (subscriberAEvents.length === NUM.ZERO) {
+                if (subscriberAEvents.length === 0) {
                   return true; // skip — no events delivered
                 }
 
@@ -201,12 +200,12 @@ test(
 
                 // The handshake must indicate sliding window replay
                 if (slidingWindowReplayed === undefined ||
-                    slidingWindowReplayed <= NUM.ZERO) {
+                    slidingWindowReplayed <= 0) {
                   return false;
                 }
 
                 // Subscriber B must have received events
-                if (subscriberBEvents.length === NUM.ZERO) {
+                if (subscriberBEvents.length === 0) {
                   return false;
                 }
 

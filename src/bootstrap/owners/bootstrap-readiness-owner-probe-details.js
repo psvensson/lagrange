@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {buildPublicationRecoveryProtocolSnapshot} from '../../control-plane/recovery-protocol-snapshot.js';
 import {buildBootstrapReadinessStage} from '../bootstrap-readiness-ladder.js';
 import {
@@ -16,7 +15,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     const response = {
       ready: snapshot.ready === true,
       phase:
-        typeof snapshot.phase === TYPEOF.STRING ?
+        typeof snapshot.phase === 'string' ?
           snapshot.phase :
           LIFECYCLE_PHASE.INIT,
       state: snapshot.state,
@@ -37,8 +36,8 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     this.appendMembershipPublicationFields(response, snapshot);
     this.appendReadinessStageFields(response);
     if (
-      typeof options.scope === TYPEOF.STRING &&
-      options.scope.length > NUM.ZERO
+      typeof options.scope === 'string' &&
+      options.scope.length > 0
     ) {
       response.scope = options.scope;
     }
@@ -49,9 +48,9 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     if (
       options.scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
       !response ||
-      typeof response !== TYPEOF.OBJECT ||
+      typeof response !== 'object' ||
       !this.lastBootstrapJoinProjectionEvaluation ||
-      typeof this.lastBootstrapJoinProjectionEvaluation !== TYPEOF.OBJECT
+      typeof this.lastBootstrapJoinProjectionEvaluation !== 'object'
     ) {
       return response;
     }
@@ -62,30 +61,30 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   appendReadinessProgressFields(response, snapshot) {
     if (
       !response ||
-      typeof response !== TYPEOF.OBJECT ||
+      typeof response !== 'object' ||
       !snapshot ||
-      typeof snapshot !== TYPEOF.OBJECT
+      typeof snapshot !== 'object'
     ) {
       return response;
     }
     if (Number.isFinite(snapshot.phaseRank)) {
-      response.phaseRank = Math.max(NUM.ZERO, Math.floor(snapshot.phaseRank));
+      response.phaseRank = Math.max(0, Math.floor(snapshot.phaseRank));
     }
     if (Number.isFinite(snapshot.transitionCount)) {
       response.readinessEpoch = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(snapshot.transitionCount),
       );
     }
     if (Number.isFinite(snapshot.stableWindowMs)) {
       response.stableWindowMs = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(snapshot.stableWindowMs),
       );
     }
     if (Number.isFinite(snapshot.stableElapsedMs)) {
       response.stableElapsedMs = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(snapshot.stableElapsedMs),
       );
     }
@@ -97,9 +96,9 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   appendStartupRecoveryFields(response, snapshot, options = {}) {
     if (
       !response ||
-      typeof response !== TYPEOF.OBJECT ||
+      typeof response !== 'object' ||
       !snapshot ||
-      typeof snapshot !== TYPEOF.OBJECT
+      typeof snapshot !== 'object'
     ) {
       return response;
     }
@@ -109,7 +108,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     const priorityRecoveryHealth = this.getPriorityControlPlaneRecoveryHealth();
     const priorityRecoveryDetails =
       priorityRecoveryHealth?.details &&
-      typeof priorityRecoveryHealth.details === TYPEOF.OBJECT ?
+      typeof priorityRecoveryHealth.details === 'object' ?
         priorityRecoveryHealth.details :
         null;
     const startupRecoverySnapshot =
@@ -142,10 +141,10 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     if (
       options.scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
       !this.lastBootstrapJoinProjectionEvaluation ||
-      typeof this.lastBootstrapJoinProjectionEvaluation !== TYPEOF.OBJECT ||
+      typeof this.lastBootstrapJoinProjectionEvaluation !== 'object' ||
       this.lastBootstrapJoinProjectionEvaluation.canProjectReady !== true ||
       !Array.isArray(this.lastBootstrapJoinProjectionEvaluation.reasons) ||
-      this.lastBootstrapJoinProjectionEvaluation.reasons.length === NUM.ZERO
+      this.lastBootstrapJoinProjectionEvaluation.reasons.length === 0
     ) {
       return snapshot;
     }
@@ -156,75 +155,75 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   },
   evaluateStartupRecovery(options) {
     const coordinator = this.getStartupRecoveryCoordinator();
-    if (!coordinator || typeof coordinator.evaluate !== TYPEOF.FUNCTION) {
+    if (!coordinator || typeof coordinator.evaluate !== 'function') {
       return null;
     }
     const startupRecovery = coordinator.evaluate(options);
-    return startupRecovery && typeof startupRecovery === TYPEOF.OBJECT ?
+    return startupRecovery && typeof startupRecovery === 'object' ?
       startupRecovery :
       null;
   },
   appendStartupRecoverySnapshotFields(response, startupRecovery) {
     if (
-      typeof startupRecovery.recoveryStage === TYPEOF.STRING &&
-      startupRecovery.recoveryStage.length > NUM.ZERO
+      typeof startupRecovery.recoveryStage === 'string' &&
+      startupRecovery.recoveryStage.length > 0
     ) {
       response.recoveryStage = startupRecovery.recoveryStage;
     }
     if (Number.isFinite(startupRecovery.recoveryStageRank)) {
       response.recoveryStageRank = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(startupRecovery.recoveryStageRank),
       );
     }
-    if (typeof startupRecovery.controlPlaneRecoveryReady === TYPEOF.BOOLEAN) {
+    if (typeof startupRecovery.controlPlaneRecoveryReady === 'boolean') {
       response.controlPlaneRecoveryReady =
         startupRecovery.controlPlaneRecoveryReady;
     }
-    if (typeof startupRecovery.metadataPublicationReady === TYPEOF.BOOLEAN) {
+    if (typeof startupRecovery.metadataPublicationReady === 'boolean') {
       response.metadataPublicationReady =
         startupRecovery.metadataPublicationReady;
     }
-    if (typeof startupRecovery.backgroundWorkReady === TYPEOF.BOOLEAN) {
+    if (typeof startupRecovery.backgroundWorkReady === 'boolean') {
       response.backgroundWorkReady = startupRecovery.backgroundWorkReady;
     }
-    if (typeof startupRecovery.recoveryBlocked === TYPEOF.BOOLEAN) {
+    if (typeof startupRecovery.recoveryBlocked === 'boolean') {
       response.recoveryBlocked = startupRecovery.recoveryBlocked;
     }
     if (
-      typeof startupRecovery.startupAuthorityState === TYPEOF.STRING &&
-      startupRecovery.startupAuthorityState.length > NUM.ZERO
+      typeof startupRecovery.startupAuthorityState === 'string' &&
+      startupRecovery.startupAuthorityState.length > 0
     ) {
       response.startupAuthorityState = startupRecovery.startupAuthorityState;
     }
-    if (typeof startupRecovery.startupAuthorityAvailable === TYPEOF.BOOLEAN) {
+    if (typeof startupRecovery.startupAuthorityAvailable === 'boolean') {
       response.startupAuthorityAvailable =
         startupRecovery.startupAuthorityAvailable;
     }
     if (
       startupRecovery.startupAuthorityFailure &&
-      typeof startupRecovery.startupAuthorityFailure === TYPEOF.OBJECT
+      typeof startupRecovery.startupAuthorityFailure === 'object'
     ) {
       response.startupAuthorityFailure =
         startupRecovery.startupAuthorityFailure;
     }
     if (
-      typeof startupRecovery.startupAuthorityFailureReason === TYPEOF.STRING &&
-      startupRecovery.startupAuthorityFailureReason.length > NUM.ZERO
+      typeof startupRecovery.startupAuthorityFailureReason === 'string' &&
+      startupRecovery.startupAuthorityFailureReason.length > 0
     ) {
       response.startupAuthorityFailureReason =
         startupRecovery.startupAuthorityFailureReason;
     }
     if (
       startupRecovery.startupAuthorityPublication &&
-      typeof startupRecovery.startupAuthorityPublication === TYPEOF.OBJECT
+      typeof startupRecovery.startupAuthorityPublication === 'object'
     ) {
       response.startupAuthorityPublication =
         startupRecovery.startupAuthorityPublication;
     }
     if (
-      typeof startupRecovery.publicationObservationState === TYPEOF.STRING &&
-      startupRecovery.publicationObservationState.length > NUM.ZERO
+      typeof startupRecovery.publicationObservationState === 'string' &&
+      startupRecovery.publicationObservationState.length > 0
     ) {
       response.startupAuthorityPublicationObservationState =
         startupRecovery.publicationObservationState;
@@ -238,7 +237,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       startupRecovery.targetParticipation ||
       startupRecovery.recoveryProtocolState ||
       (Array.isArray(startupRecovery.priorityRecoveryReasonCodes) &&
-        startupRecovery.priorityRecoveryReasonCodes.length > NUM.ZERO);
+        startupRecovery.priorityRecoveryReasonCodes.length > 0);
     if (!hasPriorityRecoveryProtocolDetails) {
       return priorityRecoveryDetails;
     }
@@ -252,21 +251,21 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   appendPriorityRecoveryProtocolFields(response, details) {
     if (
       !response ||
-      typeof response !== TYPEOF.OBJECT ||
+      typeof response !== 'object' ||
       !details ||
-      typeof details !== TYPEOF.OBJECT
+      typeof details !== 'object'
     ) {
       return response;
     }
     if (
-      typeof details.recoveryProtocolState === TYPEOF.STRING &&
-      details.recoveryProtocolState.length > NUM.ZERO
+      typeof details.recoveryProtocolState === 'string' &&
+      details.recoveryProtocolState.length > 0
     ) {
       response.recoveryProtocolState = details.recoveryProtocolState;
     }
     if (
       Array.isArray(details.priorityRecoveryReasonCodes) &&
-      details.priorityRecoveryReasonCodes.length > NUM.ZERO
+      details.priorityRecoveryReasonCodes.length > 0
     ) {
       response.priorityRecoveryReasonCodes = Object.freeze([
         ...details.priorityRecoveryReasonCodes,
@@ -274,14 +273,14 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     }
     if (
       details.targetParticipation &&
-      typeof details.targetParticipation === TYPEOF.OBJECT
+      typeof details.targetParticipation === 'object'
     ) {
       response.targetParticipation = details.targetParticipation;
     }
     return response;
   },
   appendMembershipPublicationFields(response, snapshot) {
-    if (!response || typeof response !== TYPEOF.OBJECT) {
+    if (!response || typeof response !== 'object') {
       return response;
     }
     const membershipPublication = this.getMembershipPublicationDiagnostics(
@@ -292,27 +291,27 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     }
     if (Number.isFinite(membershipPublication.publicationEpoch)) {
       response.publishedControlPlaneEpoch = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(membershipPublication.publicationEpoch),
       );
     }
     if (
-      typeof membershipPublication.status === TYPEOF.STRING &&
-      membershipPublication.status.length > NUM.ZERO
+      typeof membershipPublication.status === 'string' &&
+      membershipPublication.status.length > 0
     ) {
       response.publishedControlPlaneStatus = membershipPublication.status;
     }
     if (
       typeof membershipPublication.publicationObservationState ===
-        TYPEOF.STRING &&
-      membershipPublication.publicationObservationState.length > NUM.ZERO
+        'string' &&
+      membershipPublication.publicationObservationState.length > 0
     ) {
       response.publishedControlPlaneObservationState =
         membershipPublication.publicationObservationState;
     }
     const publicationRecoveryGate =
       membershipPublication.publicationRecoveryGate &&
-      typeof membershipPublication.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof membershipPublication.publicationRecoveryGate === 'object' ?
         membershipPublication.publicationRecoveryGate :
         null;
     if (publicationRecoveryGate) {
@@ -327,17 +326,17 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   },
   appendPublicationRecoveryGateFields(response, publicationRecoveryGate) {
     if (
-      typeof publicationRecoveryGate.state === TYPEOF.STRING &&
-      publicationRecoveryGate.state.length > NUM.ZERO
+      typeof publicationRecoveryGate.state === 'string' &&
+      publicationRecoveryGate.state.length > 0
     ) {
       response.publishedControlPlaneGateState = publicationRecoveryGate.state;
     }
-    if (typeof publicationRecoveryGate.ready === TYPEOF.BOOLEAN) {
+    if (typeof publicationRecoveryGate.ready === 'boolean') {
       response.publishedControlPlaneGateReady = publicationRecoveryGate.ready;
     }
     if (Number.isFinite(publicationRecoveryGate.pendingAckCount)) {
       response.publishedControlPlanePendingAckCount = Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(publicationRecoveryGate.pendingAckCount),
       );
     }
@@ -345,13 +344,13 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   appendPublicationAckFields(response, membershipPublication) {
     if (Array.isArray(membershipPublication.requiredAckNodeIds)) {
       response.publishedControlPlaneRequiredAckCount = Math.max(
-        NUM.ZERO,
+        0,
         membershipPublication.requiredAckNodeIds.length,
       );
     }
     if (Array.isArray(membershipPublication.acknowledgedNodeIds)) {
       response.publishedControlPlaneAcknowledgedCount = Math.max(
-        NUM.ZERO,
+        0,
         membershipPublication.acknowledgedNodeIds.length,
       );
     }
@@ -360,14 +359,14 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       Number.isFinite(response.publishedControlPlaneAcknowledgedCount)
     ) {
       response.publishedControlPlanePendingAckCount = Math.max(
-        NUM.ZERO,
+        0,
         response.publishedControlPlaneRequiredAckCount -
           response.publishedControlPlaneAcknowledgedCount,
       );
     }
   },
   appendReadinessStageFields(response) {
-    if (!response || typeof response !== TYPEOF.OBJECT) {
+    if (!response || typeof response !== 'object') {
       return response;
     }
     const readinessStage = buildBootstrapReadinessStage({
@@ -387,26 +386,26 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   },
   getControlPlanePublicationStory(observedAt) {
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     try {
       if (
-        typeof service.getControlPlanePublicationStorySync === TYPEOF.FUNCTION
+        typeof service.getControlPlanePublicationStorySync === 'function'
       ) {
         return service.getControlPlanePublicationStorySync(
           this.getSeedNodeId(),
           observedAt,
         );
       }
-      if (typeof service.getControlPlanePublicationStory !== TYPEOF.FUNCTION) {
+      if (typeof service.getControlPlanePublicationStory !== 'function') {
         return null;
       }
       const story = service.getControlPlanePublicationStory(
         this.getSeedNodeId(),
         observedAt,
       );
-      if (story && typeof story.then === TYPEOF.FUNCTION) {
+      if (story && typeof story.then === 'function') {
         return null;
       }
       return story;
@@ -418,18 +417,18 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     const publicationStory = this.getControlPlanePublicationStory(observedAt);
     if (
       publicationStory?.membershipPublication &&
-      typeof publicationStory.membershipPublication === TYPEOF.OBJECT
+      typeof publicationStory.membershipPublication === 'object'
     ) {
       return publicationStory.membershipPublication;
     }
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== TYPEOF.OBJECT) {
+    if (!service || typeof service !== 'object') {
       return null;
     }
     try {
       if (
         typeof service.getMembershipPublicationDiagnosticsSync ===
-        TYPEOF.FUNCTION
+        'function'
       ) {
         return service.getMembershipPublicationDiagnosticsSync(
           this.getSeedNodeId(),
@@ -437,7 +436,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
         );
       }
       if (
-        typeof service.getMembershipPublicationDiagnostics !== TYPEOF.FUNCTION
+        typeof service.getMembershipPublicationDiagnostics !== 'function'
       ) {
         return null;
       }
@@ -445,7 +444,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
         this.getSeedNodeId(),
         observedAt,
       );
-      if (diagnostics && typeof diagnostics.then === TYPEOF.FUNCTION) {
+      if (diagnostics && typeof diagnostics.then === 'function') {
         return null;
       }
       return diagnostics;
@@ -461,7 +460,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     if (
       service &&
       typeof service.buildMembershipPublicationPlanningSnapshot ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       try {
         return service.buildMembershipPublicationPlanningSnapshot({
@@ -480,7 +479,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   },
   logBootstrapJoinReadinessProjection(snapshot, response) {
     const logger = this.getLogger();
-    if (!logger || typeof logger.info !== TYPEOF.FUNCTION) {
+    if (!logger || typeof logger.info !== 'function') {
       return;
     }
     if (snapshot?.ready === true) {
@@ -497,7 +496,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     );
     const projectionEvaluation =
       this.lastBootstrapJoinProjectionEvaluation &&
-      typeof this.lastBootstrapJoinProjectionEvaluation === TYPEOF.OBJECT ?
+      typeof this.lastBootstrapJoinProjectionEvaluation === 'object' ?
         {
           canProjectReady:
               this.lastBootstrapJoinProjectionEvaluation.canProjectReady ===

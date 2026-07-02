@@ -1,4 +1,3 @@
-import {NUM} from '../../constants/index.js';
 import {
   isRetryableControlPlaneError,
   getControlPlaneRetryAfterMs,
@@ -19,14 +18,13 @@ import {
   moveReplicaAssignmentVisibilityPolicyMethods,
 } from './move-replica-assignment-visibility-policy.js';
 
-const LOCAL_NUM_ZERO = 0;
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS = 250;
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS = 5000;
 
 class MoveReplicaAssignmentOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.nextReservationSqlRetryAtMs = LOCAL_NUM_ZERO;
+    this.nextReservationSqlRetryAtMs = 0;
     this.nextRenewalWriteRetryAtByAssignmentId = new Map();
   }
 
@@ -66,15 +64,15 @@ class MoveReplicaAssignmentOwner {
   }
 
   getMoveReplicaAssignmentLeaseMs() {
-    return this.delegates.getMoveReplicaAssignmentLeaseMs?.() || LOCAL_NUM_ZERO;
+    return this.delegates.getMoveReplicaAssignmentLeaseMs?.() || 0;
   }
 
   getMoveReplicaAssignmentSweepIntervalMs() {
-    return this.delegates.getMoveReplicaAssignmentSweepIntervalMs?.() || LOCAL_NUM_ZERO;
+    return this.delegates.getMoveReplicaAssignmentSweepIntervalMs?.() || 0;
   }
 
   getBootstrapAdmissionRetryAfterMs() {
-    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || LOCAL_NUM_ZERO;
+    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || 0;
   }
 
   async executeBootstrapControlPlaneQuery(sql, params, options = {}) {
@@ -112,7 +110,7 @@ class MoveReplicaAssignmentOwner {
 
   getRetryableMoveReplicaAssignmentBackoffMs(value) {
     const retryAfterMs = getControlPlaneRetryAfterMs(value);
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
       return Math.min(
         MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS,
         Math.max(
@@ -130,7 +128,7 @@ class MoveReplicaAssignmentOwner {
   }
 
   clearReservationSqlRetryBackoff() {
-    this.nextReservationSqlRetryAtMs = NUM.ZERO;
+    this.nextReservationSqlRetryAtMs = 0;
   }
 
   shouldAttemptReservationSqlRefresh(now = Date.now()) {
@@ -159,7 +157,7 @@ class MoveReplicaAssignmentOwner {
       return true;
     }
     const retryAt =
-      this.nextRenewalWriteRetryAtByAssignmentId.get(assignmentId) || NUM.ZERO;
+      this.nextRenewalWriteRetryAtByAssignmentId.get(assignmentId) || 0;
     return retryAt <= now;
   }
 }

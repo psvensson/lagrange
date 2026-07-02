@@ -1,8 +1,6 @@
 import {
   COLUMN,
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
@@ -51,7 +49,7 @@ const bootstrapTopologySnapshotOwnerLeaderIdentityMethods = {
         this.getRetainedBootstrapPartitionSnapshotRow(partitionId),
     });
     const resolvedServiceRows =
-      Array.isArray(serviceRows) && serviceRows.length > NUM.ZERO ?
+      Array.isArray(serviceRows) && serviceRows.length > 0 ?
         serviceRows :
         this.getPublishedBootstrapAuthoritativeTableRows(TABLES.SERVICES)
           .filter((serviceRow) => {
@@ -97,7 +95,7 @@ const bootstrapTopologySnapshotOwnerLeaderIdentityMethods = {
   },
   isFreshPartitionBootstrapWindow(partitionOrId) {
     const partition =
-      partitionOrId && typeof partitionOrId === TYPEOF.OBJECT ?
+      partitionOrId && typeof partitionOrId === 'object' ?
         partitionOrId :
         this.getPublishedBootstrapPartitionSnapshotRow(partitionOrId);
     if (!this.isBootstrapRoutingGraceWindow(partition)) {
@@ -121,11 +119,11 @@ const bootstrapTopologySnapshotOwnerLeaderIdentityMethods = {
       String(service?.raft_role || '').toLowerCase() ===
         String(RAFT_ROLE.LEADER).toLowerCase(),
     );
-    if (leaderServices.length === NUM.ONE) {
+    if (leaderServices.length === 1) {
       return leaderServices;
     }
 
-    return services.length === NUM.ONE ? [services[NUM.ZERO]] : [];
+    return services.length === 1 ? [services[0]] : [];
   },
 };
 

@@ -11,7 +11,6 @@
  * Requirements: 8.2, 8.3
  */
 
-import {NUM} from '../constants/index.js';
 import {
   MODULE_MANIFEST_FIELD as MF,
   MODULE_MANIFEST_ERROR_MSG as ERR,
@@ -70,7 +69,7 @@ function enforceCapabilityPolicy(manifest, policy) {
   }
 
   return {
-    valid: errors.length === NUM.ZERO,
+    valid: errors.length === 0,
     errors,
     allowed,
     denied,
@@ -151,7 +150,7 @@ function checkUndeclaredCapabilities(
   }
 
   return {
-    valid: errors.length === NUM.ZERO,
+    valid: errors.length === 0,
     errors,
     undeclared,
   };

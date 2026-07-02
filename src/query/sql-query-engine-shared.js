@@ -146,7 +146,6 @@ import {MIGRATION_STATUS} from '../migration/migration-constants.js';
 import {MigrationCoordinator} from '../migration/migration-coordinator.js';
 import {MigrationPipeline} from '../migration/migration-pipeline.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 
@@ -240,9 +239,9 @@ function resolveRetryableControlPlaneMutationDeferState(queryOptions = {}) {
 
 function createEmptyTransactionRecoveryReplaySummary() {
   return {
-    totalRecovered: LOCAL_NUM_ZERO,
-    resumed: LOCAL_NUM_ZERO,
-    failed: LOCAL_NUM_ZERO,
+    totalRecovered: 0,
+    resumed: 0,
+    failed: 0,
     results: [],
   };
 }
@@ -253,7 +252,7 @@ function hasActiveAddressedPartitionService(service) {
     typeof service === LOCAL_STR_OBJECT &&
     service.status === STATUS_ACTIVE &&
     typeof service.address === LOCAL_STR_STRING &&
-    service.address.length > LOCAL_NUM_ZERO,
+    service.address.length > 0,
   );
 }
 

@@ -10,7 +10,6 @@ const {
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
-  TYPEOF,
   WORKFLOW_STEP,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
@@ -226,7 +225,7 @@ function withOwnerHandoffState(Base) {
 
       if (
         !this.messageRouter ||
-        typeof this.messageRouter.deliver !== TYPEOF.FUNCTION
+        typeof this.messageRouter.deliver !== 'function'
       ) {
         return false;
       }

@@ -6,11 +6,8 @@ import {
 } from '../../control-plane/control-plane-error-classification.js';
 import {
   ENTITY_TYPE,
-  TYPEOF,
 } from '../../constants/index.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
   NODE_ID_REQUIRED:
@@ -31,11 +28,11 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
 });
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
-      typeof service.getUnifiedAddress === TYPEOF.FUNCTION) {
+      typeof service.getUnifiedAddress === 'function') {
     return service.getUnifiedAddress();
   }
-  if (typeof service?.unifiedAddress === TYPEOF.STRING &&
-      service.unifiedAddress.length > LOCAL_NUM_ZERO) {
+  if (typeof service?.unifiedAddress === 'string' &&
+      service.unifiedAddress.length > 0) {
     return service.unifiedAddress;
   }
   return AddressManager.getInstance().format(
@@ -50,11 +47,11 @@ function isTransientActivationError(error) {
 }
 
 async function activateMessageGroupServiceRows(options = {}) {
-  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === LOCAL_NUM_ZERO) {
+  if (typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
   const activateReplica =
-    typeof options.activateReplica === TYPEOF.FUNCTION ?
+    typeof options.activateReplica === 'function' ?
       options.activateReplica :
       null;
   const systemTableWriter = options.systemTableWriter || null;
@@ -70,10 +67,10 @@ async function activateMessageGroupServiceRows(options = {}) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.ENDPOINTS_REQUIRED);
   }
   const isReplicaHandlerRegistered =
-    typeof options.isReplicaHandlerRegistered === TYPEOF.FUNCTION ?
+    typeof options.isReplicaHandlerRegistered === 'function' ?
       options.isReplicaHandlerRegistered :
       options.messageRouter &&
-        typeof options.messageRouter.isRegistered === TYPEOF.FUNCTION ?
+        typeof options.messageRouter.isRegistered === 'function' ?
         (replicaId, service) => {
           return options.messageRouter.isRegistered(
             resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
@@ -89,19 +86,19 @@ async function activateMessageGroupServiceRows(options = {}) {
     new Map();
   const owner = activateReplica ? null : new MessageGroupServiceRowOwner({
     systemTableWriter,
-    now: typeof options.now === TYPEOF.FUNCTION ?
+    now: typeof options.now === 'function' ?
       options.now :
       () => Date.now(),
   });
   const resolveExtraFields =
-    typeof options.resolveExtraFields === TYPEOF.FUNCTION ?
+    typeof options.resolveExtraFields === 'function' ?
       options.resolveExtraFields :
       () => null;
-  let activatedCount = LOCAL_NUM_ZERO;
+  let activatedCount = 0;
 
   for (const [replicaId, service] of messageGroupServices.entries()) {
     const groupId = service?.groupId || null;
-    if (typeof groupId !== TYPEOF.STRING || groupId.length === LOCAL_NUM_ZERO) {
+    if (typeof groupId !== 'string' || groupId.length === 0) {
       continue;
     }
     const handlerRegistered = await Promise.resolve(
@@ -128,11 +125,11 @@ async function activateMessageGroupServiceRows(options = {}) {
       } else {
         await owner.activateReplica(activationContext);
       }
-      activatedCount += LOCAL_NUM_ONE;
+      activatedCount += 1;
     } catch (error) {
       if (options.deferTransientFailures === true &&
           isTransientActivationError(error)) {
-        if (typeof options.onDeferredActivation === TYPEOF.FUNCTION) {
+        if (typeof options.onDeferredActivation === 'function') {
           await Promise.resolve(options.onDeferredActivation({
             groupId,
             replicaId,

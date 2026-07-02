@@ -288,7 +288,7 @@ test('Req 11.3 — MovePlanner consumes admission and pressure ' +
   });
 
   await t.test('accepts accountingService dependency', (t) => {
-    const mockAccounting = {estimateReplicaBytes: () => NUM.ZERO};
+    const mockAccounting = {estimateReplicaBytes: () => 0};
     const planner = new MovePlanner({
       entityId: 'p-1',
       entityType: SERVICE_TYPE.PARTITION,
@@ -403,7 +403,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
   });
 
   await t.test('accepts storageAccountingService dependency', (t) => {
-    const mockAccounting = {estimateReplicaBytes: () => NUM.ZERO};
+    const mockAccounting = {estimateReplicaBytes: () => 0};
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
@@ -715,7 +715,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
     const nodes = [{node_id: 'n-1'}, {node_id: 'n-2'}];
     const {feasibleNodes, diagnostics} =
       await planner.filterNodesByCapacity(nodes, NUM.THOUSAND);
-    t.equal(feasibleNodes.length, NUM.ZERO,
+    t.equal(feasibleNodes.length, 0,
       'all nodes must be rejected when admission denies');
     t.equal(diagnostics.rejectedCount, nodes.length);
     t.end();

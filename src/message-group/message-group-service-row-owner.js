@@ -4,12 +4,10 @@ import {
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   GROUP_ID_REQUIRED: 'MessageGroupServiceRowOwner requires groupId',
@@ -30,20 +28,20 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
 });
 
 function assertRequiredString(value, errorMessage) {
-  if (typeof value !== TYPEOF.STRING || value.length === LOCAL_NUM_ZERO) {
+  if (typeof value !== 'string' || value.length === 0) {
     throw new Error(errorMessage);
   }
 }
 
 function resolveMessageGroupRaftRole(service) {
   const isLeader = service?.isLeader === true ||
-    (typeof service?.isLeaderReplica === TYPEOF.FUNCTION &&
+    (typeof service?.isLeaderReplica === 'function' &&
       service.isLeaderReplica());
   if (isLeader) {
     return RAFT_ROLE.LEADER;
   }
 
-  if (typeof service?.getRole === TYPEOF.FUNCTION) {
+  if (typeof service?.getRole === 'function') {
     return normalizePublishedRaftRole(service.getRole());
   }
 
@@ -53,7 +51,7 @@ function resolveMessageGroupRaftRole(service) {
 class MessageGroupServiceRowOwner {
   constructor(options = {}) {
     this.systemTableWriter = options.systemTableWriter || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
   }
@@ -114,7 +112,7 @@ class MessageGroupServiceRowOwner {
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
     ) {
       throw new Error(
         MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
@@ -144,7 +142,7 @@ class MessageGroupServiceRowOwner {
   async updateReplicaStatus(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
     ) {
       throw new Error(
         MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
@@ -155,7 +153,7 @@ class MessageGroupServiceRowOwner {
       ...options,
       timestamp: options.timestamp ?? this.now(),
     });
-    if (typeof this.systemTableWriter.updateSystemTableRow !== TYPEOF.FUNCTION) {
+    if (typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
       await this.systemTableWriter.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.SERVICES,
         row,
@@ -183,7 +181,7 @@ class MessageGroupServiceRowOwner {
   async removeReplica(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.deleteSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.deleteSystemTableRow !== 'function'
     ) {
       throw new Error(
         MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.DELETE_REQUIRED,
@@ -200,7 +198,7 @@ class MessageGroupServiceRowOwner {
       service_id: replicaId,
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
     };
-    if (typeof nodeId === TYPEOF.STRING && nodeId.length > LOCAL_NUM_ZERO) {
+    if (typeof nodeId === 'string' && nodeId.length > 0) {
       whereClause.node_id = nodeId;
     }
 

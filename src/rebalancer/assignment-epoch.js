@@ -1,26 +1,24 @@
-const LOCAL_STR_1QWCK = 'EpochImmutabilityError';
-const LOCAL_STR_19AU2 = 'EpochValidationError';
+const LOCAL_STR_EPOCHIMMUTABILITYERROR = 'EpochImmutabilityError';
+const LOCAL_STR_EPOCHVALIDATIONERROR = 'EpochValidationError';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_HNIK6 = 'Options must be an object';
+const LOCAL_STR_OPTIONS_MUST_BE_AN_OBJECT = 'Options must be an object';
 const LOCAL_STR_OPTIONS = 'options';
 const LOCAL_STR_NUMBER = 'number';
-const LOCAL_STR_14LRZ = 'Epoch must be a number';
+const LOCAL_STR_EPOCH_MUST_BE_A_NUMBER = 'Epoch must be a number';
 const LOCAL_STR_EPOCH = 'epoch';
-const LOCAL_STR_1NV6K = 'Epoch must be an integer';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_181I7 = 'Epoch must be non-negative';
-const LOCAL_STR_ZQJIK = 'Assignments must be an object';
+const LOCAL_STR_EPOCH_MUST_BE_AN_INTEGER = 'Epoch must be an integer';
+const LOCAL_STR_EPOCH_MUST_BE_NON_NEGATIVE = 'Epoch must be non-negative';
+const LOCAL_STR_ASSIGNMENTS_MUST_BE_AN_OBJECT = 'Assignments must be an object';
 const LOCAL_STR_ASSIGNMENTS = 'assignments';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_1QIQB = 'Partition ID must be a non-empty string';
-const LOCAL_STR_6BVZP = 'Timestamp must be a string';
+const LOCAL_STR_PARTITION_ID_MUST_BE_A_NON_EMPTY_STRING = 'Partition ID must be a non-empty string';
+const LOCAL_STR_TIMESTAMP_MUST_BE_A_STRING = 'Timestamp must be a string';
 const LOCAL_STR_TIMESTAMP = 'timestamp';
-const LOCAL_STR_1M05H = 'Timestamp cannot be empty';
-const LOCAL_STR_HSI91 = 'ProposedBy must be a string';
+const LOCAL_STR_TIMESTAMP_CANNOT_BE_EMPTY = 'Timestamp cannot be empty';
+const LOCAL_STR_PROPOSEDBY_MUST_BE_A_STRING = 'ProposedBy must be a string';
 const LOCAL_STR_PROPOSEDBY = 'proposedBy';
-const LOCAL_STR_14QI7 = 'ProposedBy cannot be empty';
+const LOCAL_STR_PROPOSEDBY_CANNOT_BE_EMPTY = 'ProposedBy cannot be empty';
 const LOCAL_STR_JSON = 'json';
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Assignment Epoch - Immutable versioned snapshot of partition assignments.
@@ -38,7 +36,7 @@ class EpochImmutabilityError extends Error {
    */
   constructor(message) {
     super(message);
-    this.name = LOCAL_STR_1QWCK;
+    this.name = LOCAL_STR_EPOCHIMMUTABILITYERROR;
   }
 }
 
@@ -53,7 +51,7 @@ class EpochValidationError extends Error {
    */
   constructor(message, field) {
     super(message);
-    this.name = LOCAL_STR_19AU2;
+    this.name = LOCAL_STR_EPOCHVALIDATIONERROR;
     this.field = field;
   }
 }
@@ -107,7 +105,7 @@ class AssignmentEpoch {
   _validateOptions(options) {
     if (options === null || typeof options !== LOCAL_STR_OBJECT) {
       throw new EpochValidationError(
-        LOCAL_STR_HNIK6,
+        LOCAL_STR_OPTIONS_MUST_BE_AN_OBJECT,
         LOCAL_STR_OPTIONS,
       );
     }
@@ -115,19 +113,19 @@ class AssignmentEpoch {
     // Validate epoch number
     if (typeof options.epoch !== LOCAL_STR_NUMBER) {
       throw new EpochValidationError(
-        LOCAL_STR_14LRZ,
+        LOCAL_STR_EPOCH_MUST_BE_A_NUMBER,
         LOCAL_STR_EPOCH,
       );
     }
     if (!Number.isInteger(options.epoch)) {
       throw new EpochValidationError(
-        LOCAL_STR_1NV6K,
+        LOCAL_STR_EPOCH_MUST_BE_AN_INTEGER,
         LOCAL_STR_EPOCH,
       );
     }
-    if (options.epoch < LOCAL_NUM_ZERO) {
+    if (options.epoch < 0) {
       throw new EpochValidationError(
-        LOCAL_STR_181I7,
+        LOCAL_STR_EPOCH_MUST_BE_NON_NEGATIVE,
         LOCAL_STR_EPOCH,
       );
     }
@@ -135,7 +133,7 @@ class AssignmentEpoch {
     // Validate assignments
     if (options.assignments === null || typeof options.assignments !== LOCAL_STR_OBJECT) {
       throw new EpochValidationError(
-        LOCAL_STR_ZQJIK,
+        LOCAL_STR_ASSIGNMENTS_MUST_BE_AN_OBJECT,
         LOCAL_STR_ASSIGNMENTS,
       );
     }
@@ -144,7 +142,7 @@ class AssignmentEpoch {
     for (const [partitionId, nodeList] of Object.entries(options.assignments)) {
       if (!partitionId || typeof partitionId !== LOCAL_STR_STRING) {
         throw new EpochValidationError(
-          LOCAL_STR_1QIQB,
+          LOCAL_STR_PARTITION_ID_MUST_BE_A_NON_EMPTY_STRING,
           LOCAL_STR_ASSIGNMENTS,
         );
       }
@@ -167,13 +165,13 @@ class AssignmentEpoch {
     // Validate timestamp
     if (typeof options.timestamp !== LOCAL_STR_STRING) {
       throw new EpochValidationError(
-        LOCAL_STR_6BVZP,
+        LOCAL_STR_TIMESTAMP_MUST_BE_A_STRING,
         LOCAL_STR_TIMESTAMP,
       );
     }
     if (!options.timestamp) {
       throw new EpochValidationError(
-        LOCAL_STR_1M05H,
+        LOCAL_STR_TIMESTAMP_CANNOT_BE_EMPTY,
         LOCAL_STR_TIMESTAMP,
       );
     }
@@ -181,13 +179,13 @@ class AssignmentEpoch {
     // Validate proposedBy
     if (typeof options.proposedBy !== LOCAL_STR_STRING) {
       throw new EpochValidationError(
-        LOCAL_STR_HSI91,
+        LOCAL_STR_PROPOSEDBY_MUST_BE_A_STRING,
         LOCAL_STR_PROPOSEDBY,
       );
     }
     if (!options.proposedBy) {
       throw new EpochValidationError(
-        LOCAL_STR_14QI7,
+        LOCAL_STR_PROPOSEDBY_CANNOT_BE_EMPTY,
         LOCAL_STR_PROPOSEDBY,
       );
     }
@@ -300,7 +298,7 @@ class AssignmentEpoch {
    * @return {number} Total number of replica assignments across all partitions.
    */
   getTotalReplicaCount() {
-    let count = LOCAL_NUM_ZERO;
+    let count = 0;
     for (const nodeList of Object.values(this._assignments)) {
       count += nodeList.length;
     }
@@ -395,7 +393,7 @@ class AssignmentEpoch {
    */
   static createInitial(timestamp, proposedBy) {
     return new AssignmentEpoch({
-      epoch: LOCAL_NUM_ZERO,
+      epoch: 0,
       assignments: {},
       timestamp,
       proposedBy,
@@ -413,7 +411,7 @@ class AssignmentEpoch {
    */
   static createNext(previousEpoch, newAssignments, timestamp, proposedBy) {
     return new AssignmentEpoch({
-      epoch: previousEpoch.epoch + LOCAL_NUM_ONE,
+      epoch: previousEpoch.epoch + 1,
       assignments: newAssignments,
       timestamp,
       proposedBy,

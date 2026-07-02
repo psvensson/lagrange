@@ -1,4 +1,3 @@
-import {TYPEOF} from '../constants/index.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
   LIFECYCLE_REASON,
@@ -8,7 +7,6 @@ import {
 } from '../control-plane/control-plane-constants.js';
 import {PressureGovernor} from '../control-plane/pressure-governor.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const CONTROL_PLANE_WRITE_HEALTH_DEFAULT = Object.freeze({
   FAILURE_THRESHOLD: 3,
@@ -41,26 +39,26 @@ const BACKGROUND_PUBLICATION_MODE_SET = new Set([
 ]);
 
 function normalizeFailureThreshold(value) {
-  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     CONTROL_PLANE_WRITE_HEALTH_DEFAULT.FAILURE_THRESHOLD;
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ? Math.floor(value) : LOCAL_NUM_ZERO;
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function normalizeNonEmptyString(value, fallbackValue) {
-  return typeof value === TYPEOF.STRING && value.length > LOCAL_NUM_ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallbackValue;
 }
 
 function getHeartbeatPublicationDiagnostics(heartbeatService) {
   if (typeof heartbeatService?.getHeartbeatPublicationDiagnostics ===
-      TYPEOF.FUNCTION) {
+      'function') {
     const diagnostics = heartbeatService.getHeartbeatPublicationDiagnostics();
-    return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+    return diagnostics && typeof diagnostics === 'object' ?
       diagnostics :
       Object.freeze({});
   }
@@ -70,10 +68,10 @@ function getHeartbeatPublicationDiagnostics(heartbeatService) {
 function getControlPlanePublicationStory(owner) {
   const observedAt = Date.now();
   if (typeof owner?.controlPlaneReadinessService
-    ?.getControlPlanePublicationStorySync === TYPEOF.FUNCTION) {
+    ?.getControlPlanePublicationStorySync === 'function') {
     const story = owner.controlPlaneReadinessService
       .getControlPlanePublicationStorySync(owner?.nodeId || null, observedAt);
-    return story && typeof story === TYPEOF.OBJECT ?
+    return story && typeof story === 'object' ?
       story :
       null;
   }
@@ -88,9 +86,9 @@ function getHeartbeatPublicationMode(heartbeatService) {
 }
 
 function getRouterStats(owner) {
-  if (typeof owner?.messageRouter?.getStats === TYPEOF.FUNCTION) {
+  if (typeof owner?.messageRouter?.getStats === 'function') {
     const stats = owner.messageRouter.getStats();
-    return stats && typeof stats === TYPEOF.OBJECT ? stats : Object.freeze({});
+    return stats && typeof stats === 'object' ? stats : Object.freeze({});
   }
   return Object.freeze({});
 }
@@ -112,7 +110,7 @@ function hasContainedBackgroundBacklog(routerStats = {}) {
     );
     const pendingCritical = normalizeNonNegativeInteger(queue?.pendingCritical);
     const criticalReserve = normalizeNonNegativeInteger(queue?.criticalReserve);
-    return backgroundPendingLimit > LOCAL_NUM_ZERO &&
+    return backgroundPendingLimit > 0 &&
       pendingBackground >= backgroundPendingLimit &&
       pendingCritical < criticalReserve;
   });
@@ -123,7 +121,7 @@ function buildControlPlaneWriteHealthSnapshot(owner, failureThreshold) {
   const publicationStory = getControlPlanePublicationStory(owner);
   const diagnostics =
     publicationStory?.nodeStatePublication &&
-      typeof publicationStory.nodeStatePublication === TYPEOF.OBJECT ?
+      typeof publicationStory.nodeStatePublication === 'object' ?
       publicationStory.nodeStatePublication :
       getHeartbeatPublicationDiagnostics(heartbeatService);
   const routerStats = getRouterStats(owner);

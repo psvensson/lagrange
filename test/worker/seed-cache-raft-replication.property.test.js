@@ -22,7 +22,6 @@ import {
 import {
   SEED_CACHE_MESSAGE_TYPE,
 } from '../../src/worker/worker-constants.js';
-import {NUM} from '../../src/constants/index.js';
 
 /**
  * Test constants for SEED_CACHE Raft replication property tests.
@@ -87,7 +86,7 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
 
     // Mock Raft instance for command tracking
     const mockRaft = {
-      term: NUM.ONE,
+      term: 1,
       command: (commandStr, callback) => {
         const command = JSON.parse(commandStr);
         replicatedCommands.push(command);
@@ -110,7 +109,7 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
       isLeaderReplica: () => isLeader,
       getRole: () => isLeader ? 'leader' : 'follower',
       getLeaderId: () => isLeader ? options.replicaId : null,
-      getCurrentTerm: () => NUM.ONE,
+      getCurrentTerm: () => 1,
       getRaftInstance: () => mockRaft,
       shutdown: async () => {},
     };
@@ -262,7 +261,7 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
             // Verify follower did NOT replicate via Raft
             assert.strictEqual(
               replicatedCommands.length,
-              NUM.ZERO,
+              0,
               'Follower should not replicate via Raft',
             );
 
@@ -403,7 +402,7 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
           });
 
           // Override Raft to fail at specific index
-          let commandCount = NUM.ZERO;
+          let commandCount = 0;
           const mockRaft =
             service.raftGroup.getRaftInstance();
           mockRaft.command = (commandStr, callback) => {
@@ -515,11 +514,11 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
             // Verify replicated command preserves all data fields
             assert.strictEqual(
               replicatedCommands.length,
-              NUM.ONE,
+              1,
               'Should have one replicated command',
             );
 
-            const command = replicatedCommands[NUM.ZERO];
+            const command = replicatedCommands[0];
             assert.deepStrictEqual(
               command.data,
               entry.data,
@@ -605,7 +604,7 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
             );
             assert.strictEqual(
               followerResult.replicatedCommands.length,
-              NUM.ZERO,
+              0,
               'Follower should not replicate',
             );
             assert.strictEqual(
@@ -655,12 +654,12 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
             );
             assert.strictEqual(
               response.entriesApplied,
-              NUM.ZERO,
+              0,
               'entriesApplied should be zero',
             );
             assert.strictEqual(
               replicatedCommands.length,
-              NUM.ZERO,
+              0,
               'No commands should be replicated',
             );
           } finally {

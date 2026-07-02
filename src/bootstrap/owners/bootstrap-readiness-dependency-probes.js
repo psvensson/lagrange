@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {BOOTSTRAP_PHASE} from '../bootstrap-constants.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
@@ -34,7 +33,7 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
       return true;
     }
     if (
-      typeof bootstrapService.isBootstrapStartupComplete === TYPEOF.FUNCTION
+      typeof bootstrapService.isBootstrapStartupComplete === 'function'
     ) {
       return bootstrapService.isBootstrapStartupComplete();
     }
@@ -53,7 +52,7 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
       this.getMessageRouter() || bootstrapService?.messageRouter || null;
     return (
       typeof messageRouter?.getQueryDataPlaneTransportReadiness ===
-      TYPEOF.FUNCTION
+      'function'
     );
   },
   getLocalQueryTransportReadiness() {
@@ -70,20 +69,20 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
   },
   recordReadinessProbeResult(endpoint, statusCode) {
     const readinessState = this.getReadinessState();
-    if (typeof readinessState?.recordProbeResult !== TYPEOF.FUNCTION) {
+    if (typeof readinessState?.recordProbeResult !== 'function') {
       return;
     }
     readinessState.recordProbeResult(endpoint, statusCode);
   },
   markDraining(options = {}) {
     const readinessState = this.getReadinessState();
-    if (typeof readinessState?.beginDrain === TYPEOF.FUNCTION) {
+    if (typeof readinessState?.beginDrain === 'function') {
       return readinessState.beginDrain({
         drainDeadlineMs: options.drainDeadlineMs,
         reasonCode: options.reasonCode || LIFECYCLE_REASON.NODE_DRAINING,
       });
     }
-    if (typeof readinessState?.transitionTo === TYPEOF.FUNCTION) {
+    if (typeof readinessState?.transitionTo === 'function') {
       return readinessState.transitionTo(
         BOOTSTRAP_READINESS_OWNER_LITERAL.DEGRADED_2,
         {
@@ -106,33 +105,33 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
       code: options.code,
       reasons,
       retryAfterMs: Number.isFinite(options.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
+        Math.max(0, Math.floor(options.retryAfterMs)) :
         Number.isFinite(snapshot.retryAfterMs) ?
           snapshot.retryAfterMs :
-          NUM.ZERO,
+          0,
     };
     if (
-      typeof options.phase === TYPEOF.STRING &&
-      options.phase.length > NUM.ZERO
+      typeof options.phase === 'string' &&
+      options.phase.length > 0
     ) {
       response.phase = options.phase;
     }
     if (
       options.startupAuthority &&
-      typeof options.startupAuthority === TYPEOF.OBJECT
+      typeof options.startupAuthority === 'object'
     ) {
       response[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY] =
         options.startupAuthority;
     }
     if (
-      typeof snapshot.state === TYPEOF.STRING &&
-      snapshot.state.length > NUM.ZERO
+      typeof snapshot.state === 'string' &&
+      snapshot.state.length > 0
     ) {
       response.state = snapshot.state;
     }
     if (
       options.leaderReadiness &&
-      typeof options.leaderReadiness === TYPEOF.OBJECT
+      typeof options.leaderReadiness === 'object'
     ) {
       response.leaderReadiness = {
         ...options.leaderReadiness,
@@ -162,7 +161,7 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
       return this.evaluateReadinessSnapshot();
     } catch (_error) {
       const fallbackSnapshot =
-        typeof readinessState?.getSnapshot === TYPEOF.FUNCTION ?
+        typeof readinessState?.getSnapshot === 'function' ?
           readinessState.getSnapshot() :
           null;
       if (fallbackSnapshot) {
@@ -173,14 +172,14 @@ const BOOTSTRAP_READINESS_DEPENDENCY_PROBE_METHODS = Object.freeze({
         phase: LIFECYCLE_PHASE.INIT,
         state: BOOTSTRAP_PHASE.NOT_STARTED,
         reasons: [],
-        retryAfterMs: NUM.ZERO,
+        retryAfterMs: 0,
         timestamp: Date.now(),
       };
     }
   },
   mergeReadinessReasons(reasons, reasonCode) {
     const merged = Array.isArray(reasons) ? [...reasons] : [];
-    if (typeof reasonCode !== TYPEOF.STRING || reasonCode.length === NUM.ZERO) {
+    if (typeof reasonCode !== 'string' || reasonCode.length === 0) {
       return merged;
     }
     if (!merged.includes(reasonCode)) {

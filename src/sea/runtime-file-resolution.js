@@ -1,10 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 /**
  * Resolve the directory of the calling module without relying on import.meta.
@@ -17,7 +15,7 @@ function resolveModuleDirectory(skipFn) {
   const originalPrepareStackTrace = Error.prepareStackTrace;
   const originalStackTraceLimit = Error.stackTraceLimit;
   try {
-    Error.stackTraceLimit = LOCAL_NUM_10;
+    Error.stackTraceLimit = LOCAL_NUM_TEN;
     Error.prepareStackTrace = (_error, stack) => stack;
 
     const holder = {};
@@ -26,7 +24,7 @@ function resolveModuleDirectory(skipFn) {
     const stack = Array.isArray(holder.stack) ? holder.stack : [];
     for (const frame of stack) {
       const fileName = frame?.getFileName?.();
-      if (typeof fileName === LOCAL_STR_STRING && fileName.length > LOCAL_NUM_ZERO) {
+      if (typeof fileName === LOCAL_STR_STRING && fileName.length > 0) {
         return path.dirname(fileName);
       }
     }
@@ -71,7 +69,7 @@ function resolvePackagedRuntimeFile(options) {
     }
   }
 
-  return candidates[candidates.length - LOCAL_NUM_ONE];
+  return candidates[candidates.length - 1];
 }
 
 export {

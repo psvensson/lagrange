@@ -245,21 +245,21 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_SQL_PRIORITY_DISPATCH,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[0]?.target,
       TEST_REPLICA_HANDLER_DISPATCH_TARGET,
       TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.options?.timeoutMs,
+      deliveries[0]?.options?.timeoutMs,
       TEST_HANDOFF_TIMEOUT_MS,
       TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.options?.deliverySource,
+      deliveries[0]?.options?.deliverySource,
       TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
       TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
     );
@@ -279,40 +279,40 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
     );
     t.equal(
-      updateOptions[NUM.ZERO]?.disableSystemWriteSession,
+      updateOptions[0]?.disableSystemWriteSession,
       true,
       TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
     );
     t.equal(
-      Object.hasOwn(updateOptions[NUM.ZERO] || {}, 'sessionId'),
+      Object.hasOwn(updateOptions[0] || {}, 'sessionId'),
       false,
       TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
     );
     t.equal(
-      updateParams[NUM.ZERO]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+      updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
       TEST_STEP_PENDING,
       TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
     );
     t.equal(
-      updateOptions[NUM.ZERO]?.timeoutBudget?.configuredBudgetMs,
+      updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
       TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
       TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
     );
     t.ok(
-      updateOptions[NUM.ZERO]?.timeoutMs <=
+      updateOptions[0]?.timeoutMs <=
       TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
-      updateOptions[NUM.ZERO]?.timeoutMs > NUM.ZERO,
+      updateOptions[0]?.timeoutMs > 0,
       TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
     );
     t.equal(
-      updateOptions[NUM.ONE]?.timeoutBudget?.configuredBudgetMs,
+      updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
       TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
       TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
     );
     t.ok(
-      updateOptions[NUM.ONE]?.timeoutMs <=
+      updateOptions[1]?.timeoutMs <=
       TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
-      updateOptions[NUM.ONE]?.timeoutMs > NUM.ZERO,
+      updateOptions[1]?.timeoutMs > 0,
       TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
     );
 
@@ -403,7 +403,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           'dispatch retry should arm exactly one timer',
         );
         t.equal(
@@ -423,7 +423,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
         const expiredBudgetOperation = {
           ...operation,
-          createdAt: NUM.ZERO,
+          createdAt: 0,
           updatedAt: staleCreatingUpdatedAt,
         };
         t.equal(
@@ -528,16 +528,16 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ONE,
+          1,
           'critical create dispatch should attempt delivery once',
         );
         t.equal(
           deferredTimers.length,
-          NUM.ONE,
+          1,
           'reconnecting delivery should arm one dispatch retry',
         );
         t.equal(
-          deferredTimers[NUM.ZERO]?.delayMs,
+          deferredTimers[0]?.delayMs,
           TEST_RETRY_AFTER_MS,
           'dispatch retry should preserve the router reconnect retry-after',
         );
@@ -566,13 +566,13 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += NUM.ONE;
+          updateCount += 1;
           updateParams.push([...params]);
-          if (updateCount === NUM.ONE) {
+          if (updateCount === 1) {
             return {
               success: false,
               error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
@@ -589,29 +589,29 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
               },
             };
           }
-          operationRow.status = params[NUM.ZERO];
-          operationRow.workflow_step = params[NUM.ONE];
-          operationRow.updated_at = params[NUM.TWO];
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
           operationRow.completed_at = params[NUM.THREE];
           operationRow.error_message = params[NUM.FOUR];
           operationRow.steps_history = params[NUM.FIVE];
           operationRow.replica_id = params[NUM.SIX];
           return {
             success: true,
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         }
         return {
           success: true,
           rows: [],
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     };
@@ -690,7 +690,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      1,
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH,
     );
     t.equal(
@@ -699,7 +699,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP,
     );
     t.equal(
-      updateParams[NUM.ONE]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+      updateParams[1]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
       TEST_STEP_PENDING,
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_CAS,
     );
@@ -725,19 +725,19 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       async executeQuery(sql, params = [], options = {}) {
         const normalizedSql = String(sql);
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += NUM.ONE;
+          updateCount += 1;
           updateOptions.push({...options});
-          if (updateCount === NUM.ONE || updateCount === NUM.THREE) {
-            operationRow.status = params[NUM.ZERO];
-            operationRow.workflow_step = params[NUM.ONE];
-            operationRow.updated_at = params[NUM.TWO];
+          if (updateCount === 1 || updateCount === NUM.THREE) {
+            operationRow.status = params[0];
+            operationRow.workflow_step = params[1];
+            operationRow.updated_at = params[2];
             operationRow.completed_at = params[NUM.THREE];
             operationRow.error_message = params[NUM.FOUR];
             operationRow.steps_history = params[NUM.FIVE];
             operationRow.replica_id = params[NUM.SIX];
             return {
               success: true,
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           return {
@@ -760,7 +760,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
         ) {
-          const operationId = params[NUM.ZERO];
+          const operationId = params[0];
           return {
             success: true,
             rows: operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
@@ -768,28 +768,28 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
               [],
             affectedRows:
             operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
-              NUM.ONE :
-              NUM.ZERO,
+              1 :
+              0,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         }
         return {
           success: true,
           rows: [],
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     };
@@ -859,7 +859,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       enableTimeouts: false,
     });
     coordinator.workflowOwner.repository
-      .replicaOperationAuthoritativeVisibilityTimeoutMs = NUM.ZERO;
+      .replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
 
     const pendingTimeoutMs = coordinator.getTimeoutForStep(
       WORKFLOW_STEP.PENDING,
@@ -887,12 +887,12 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_SQL_PRIORITY_DISPATCH,
       );
       t.equal(
         updateCount,
-        NUM.TWO,
+        2,
         TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
       );
       t.equal(
@@ -901,7 +901,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW,
       );
       t.equal(
-        updateOptions[NUM.ONE]?.timeoutBudget?.configuredBudgetMs,
+        updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
         TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
         TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
       );
@@ -912,11 +912,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       );
       t.equal(
         deferredTimers.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER,
       );
 
-      await deferredTimers[NUM.ZERO].fn();
+      await deferredTimers[0].fn();
 
       t.equal(
         updateCount,
@@ -941,7 +941,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
   registerCase(TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME, async (t) => {
     const deliveries = [];
-    let updateCount = NUM.ZERO;
+    let updateCount = 0;
     const nowMs = Date.now();
     const operationRow = buildPendingOperationRow({
       operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
@@ -967,42 +967,42 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       async executeQuery(sql, params = []) {
         const normalizedSql = String(sql);
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += NUM.ONE;
-          operationRow.status = params[NUM.ZERO];
-          operationRow.workflow_step = params[NUM.ONE];
-          operationRow.updated_at = params[NUM.TWO];
+          updateCount += 1;
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
           operationRow.completed_at = params[NUM.THREE];
           operationRow.error_message = params[NUM.FOUR];
           operationRow.steps_history = params[NUM.FIVE];
           operationRow.replica_id = params[NUM.SIX];
           return {
             success: true,
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
-          const requestedReplicaId = params[NUM.ZERO];
-          const requestedNodeId = params[NUM.ONE];
+          const requestedReplicaId = params[0];
+          const requestedNodeId = params[1];
           const serviceMatches =
           requestedReplicaId === TEST_LOCAL_OWNER_REPLICA_ID ||
           requestedNodeId === TEST_TARGET_NODE_ID;
           return {
             success: true,
             rows: serviceMatches ? [{...serviceRow}] : [],
-            affectedRows: serviceMatches ? NUM.ONE : NUM.ZERO,
+            affectedRows: serviceMatches ? 1 : 0,
           };
         }
         return {
           success: true,
           rows: [],
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     };
@@ -1083,7 +1083,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       );
       t.equal(
         deliveries.length,
-        NUM.ZERO,
+        0,
         TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE,
       );
       t.equal(
@@ -1096,7 +1096,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_STATUS_ACTIVE,
         TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STATUS,
       );
-      t.ok(updateCount >= NUM.ONE, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP);
+      t.ok(updateCount >= 1, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP);
     } finally {
       await coordinator.shutdown();
     }
@@ -1105,7 +1105,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase(TEST_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_RECONCILE_TEST_NAME,
     async (t) => {
       const deliveries = [];
-      let updateCount = NUM.ZERO;
+      let updateCount = 0;
       const nowMs = Date.now();
       const operationRow = buildPendingOperationRow({
         operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
@@ -1131,42 +1131,42 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
           if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-            updateCount += NUM.ONE;
-            operationRow.status = params[NUM.ZERO];
-            operationRow.workflow_step = params[NUM.ONE];
-            operationRow.updated_at = params[NUM.TWO];
+            updateCount += 1;
+            operationRow.status = params[0];
+            operationRow.workflow_step = params[1];
+            operationRow.updated_at = params[2];
             operationRow.completed_at = params[NUM.THREE];
             operationRow.error_message = params[NUM.FOUR];
             operationRow.steps_history = params[NUM.FIVE];
             operationRow.replica_id = params[NUM.SIX];
             return {
               success: true,
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
             return {
               success: true,
               rows: [{...operationRow}],
-              affectedRows: NUM.ONE,
+              affectedRows: 1,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
-            const requestedReplicaId = params[NUM.ZERO];
-            const requestedNodeId = params[NUM.ONE];
+            const requestedReplicaId = params[0];
+            const requestedNodeId = params[1];
             const serviceMatches =
             requestedReplicaId === TEST_LOCAL_OWNER_REPLICA_ID ||
             requestedNodeId === TEST_TARGET_NODE_ID;
             return {
               success: true,
               rows: serviceMatches ? [{...serviceRow}] : [],
-              affectedRows: serviceMatches ? NUM.ONE : NUM.ZERO,
+              affectedRows: serviceMatches ? 1 : 0,
             };
           }
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         },
       };
@@ -1247,7 +1247,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         );
         t.equal(
           deliveries.length,
-          NUM.ZERO,
+          0,
           TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE,
         );
         t.equal(
@@ -1261,7 +1261,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STATUS,
         );
         t.ok(
-          updateCount >= NUM.ONE,
+          updateCount >= 1,
           TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP,
         );
       } finally {
@@ -1288,10 +1288,10 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
           updateCount += 1;
           updateOptions.push({...options});
-          if (updateCount === NUM.ONE) {
-            operationRow.status = params[NUM.ZERO];
-            operationRow.workflow_step = params[NUM.ONE];
-            operationRow.updated_at = params[NUM.TWO];
+          if (updateCount === 1) {
+            operationRow.status = params[0];
+            operationRow.workflow_step = params[1];
+            operationRow.updated_at = params[2];
             operationRow.completed_at = params[NUM.THREE];
             operationRow.error_message = params[NUM.FOUR];
             operationRow.steps_history = params[NUM.FIVE];
@@ -1299,14 +1299,14 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           }
           return {
             success: true,
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
         ) {
-          const operationId = params[NUM.ZERO];
+          const operationId = params[0];
           return {
             success: true,
             rows: operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
@@ -1314,28 +1314,28 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
               [],
             affectedRows:
             operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
-              NUM.ONE :
-              NUM.ZERO,
+              1 :
+              0,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: NUM.ONE,
+            affectedRows: 1,
           };
         }
         if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
           return {
             success: true,
             rows: [],
-            affectedRows: NUM.ZERO,
+            affectedRows: 0,
           };
         }
         return {
           success: true,
           rows: [],
-          affectedRows: NUM.ZERO,
+          affectedRows: 0,
         };
       },
     };
@@ -1399,7 +1399,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       enableTimeouts: false,
     });
     coordinator.workflowOwner.repository
-      .replicaOperationAuthoritativeVisibilityTimeoutMs = NUM.ZERO;
+      .replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
 
     const pendingTimeoutMs = coordinator.getTimeoutForStep(
       WORKFLOW_STEP.PENDING,
@@ -1427,12 +1427,12 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
       t.equal(
         deliveries.length,
-        NUM.ONE,
+        1,
         TEST_ASSERT_SQL_PRIORITY_DISPATCH,
       );
       t.equal(
         updateCount,
-        NUM.TWO,
+        2,
         TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
       );
       t.equal(
@@ -1441,14 +1441,14 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_ASSERT_SQL_PRIORITY_STALE_ROW,
       );
       t.equal(
-        updateOptions[NUM.ZERO]?.timeoutBudget?.configuredBudgetMs,
+        updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
         TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
         TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
       );
       t.ok(
-        updateOptions[NUM.ZERO]?.timeoutMs <=
+        updateOptions[0]?.timeoutMs <=
         TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
-        updateOptions[NUM.ZERO]?.timeoutMs > NUM.ZERO,
+        updateOptions[0]?.timeoutMs > 0,
         TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
       );
       t.equal(

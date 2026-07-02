@@ -31,7 +31,6 @@ import {NodeService} from '../../src/node/node-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
-import {NUM} from '../../src/constants/index.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -221,14 +220,14 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       const peerAddresses = [];
 
       // Generate replica IDs and peer addresses
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         replicaIds.push(replicaId);
         peerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
       // Create each replica in a worker process
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: replicaIds[i],
@@ -256,11 +255,11 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       // PHASE 2: Wait for leader election
       // =========================================================================
       let leaderHandle = null;
-      let leaderCount = NUM.ZERO;
+      let leaderCount = 0;
 
       const leaderElected = await waitFor(
         async () => {
-          leaderCount = NUM.ZERO;
+          leaderCount = 0;
           leaderHandle = null;
 
           for (const handle of handles) {
@@ -272,24 +271,24 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
           }
 
           // Exactly one leader should be elected
-          return leaderCount === NUM.ONE;
+          return leaderCount === 1;
         },
         TEST_CONFIG.LEADER_ELECTION_TIMEOUT_MS,
         TEST_CONFIG.LEADER_ELECTION_POLL_MS,
       );
 
       t.ok(leaderElected, 'Leader election completed');
-      t.equal(leaderCount, NUM.ONE, 'Exactly one leader elected');
+      t.equal(leaderCount, 1, 'Exactly one leader elected');
       t.ok(leaderHandle, 'Leader handle is available');
 
       // Verify leader status
       const leaderStatus = await workerManager.getLeadershipStatus(leaderHandle.replicaId);
       t.ok(leaderStatus.isLeader, 'Leader reports isLeader=true');
       t.ok(leaderStatus.leaderActivated, 'Leader activation completed');
-      t.ok(leaderStatus.term >= NUM.ONE, 'Leader has valid term');
+      t.ok(leaderStatus.term >= 1, 'Leader has valid term');
 
       // Verify followers
-      let followerCount = NUM.ZERO;
+      let followerCount = 0;
       for (const handle of handles) {
         if (handle.replicaId !== leaderHandle.replicaId) {
           const status = await workerManager.getLeadershipStatus(handle.replicaId);
@@ -301,7 +300,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
 
       t.equal(
         followerCount,
-        TEST_CONFIG.REPLICA_COUNT - NUM.ONE,
+        TEST_CONFIG.REPLICA_COUNT - 1,
         'Remaining replicas are followers',
       );
     } finally {
@@ -388,13 +387,13 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       const replicaIds = [];
       const peerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         replicaIds.push(replicaId);
         peerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: replicaIds[i],
@@ -430,7 +429,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       );
 
       // Verify messages were routed between workers
-      t.ok(routedMessages.length > NUM.ZERO, 'Messages were routed through MessageRouter');
+      t.ok(routedMessages.length > 0, 'Messages were routed through MessageRouter');
 
       // Verify all messages have valid addresses
       const allValidAddresses = routedMessages.every((msg) => {
@@ -444,7 +443,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       // Verify messages went to different replicas (cross-worker communication)
       const uniqueTargets = new Set(routedMessages.map((m) => m.targetAddress));
       t.ok(
-        uniqueTargets.size >= NUM.TWO,
+        uniqueTargets.size >= 2,
         'Messages routed to multiple worker replicas',
       );
     } finally {
@@ -506,13 +505,13 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       const replicaIds = [];
       const peerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         replicaIds.push(replicaId);
         peerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: replicaIds[i],
@@ -555,7 +554,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       const initialStatus = await workerManager.getLeadershipStatus(leaderHandle.replicaId);
       const initialTerm = initialStatus.term;
 
-      t.ok(initialTerm >= NUM.ONE, 'Leader has valid initial term');
+      t.ok(initialTerm >= 1, 'Leader has valid initial term');
 
       // Wait a bit for heartbeats to propagate (log replication)
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -568,11 +567,11 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       }
 
       // All replicas should have the same term after replication
-      const allSameTerm = terms.every((term) => term === terms[NUM.ZERO]);
+      const allSameTerm = terms.every((term) => term === terms[0]);
       t.ok(allSameTerm, 'All replicas have consistent term after replication');
 
       // Verify followers recognize the leader
-      let followersRecognizeLeader = NUM.ZERO;
+      let followersRecognizeLeader = 0;
       for (const handle of handles) {
         if (handle.replicaId !== leaderHandle.replicaId) {
           const status = await workerManager.getLeadershipStatus(handle.replicaId);
@@ -584,7 +583,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       }
 
       t.ok(
-        followersRecognizeLeader >= NUM.ONE,
+        followersRecognizeLeader >= 1,
         'At least one follower recognizes the leader',
       );
     } finally {
@@ -646,13 +645,13 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       const replicaIds = [];
       const peerAddresses = [];
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const replicaId = `${TEST_CONFIG.PARTITION_ID}-r${i}`;
         replicaIds.push(replicaId);
         peerAddresses.push(`${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`);
       }
 
-      for (let i = NUM.ZERO; i < TEST_CONFIG.REPLICA_COUNT; i++) {
+      for (let i = 0; i < TEST_CONFIG.REPLICA_COUNT; i++) {
         const handle = await workerManager.createPartitionReplica({
           partitionId: TEST_CONFIG.PARTITION_ID,
           replicaId: replicaIds[i],

@@ -1,11 +1,9 @@
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  NUM,
   SERVICE_STATUS,
   STATE,
   TRANSPORT_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -33,8 +31,7 @@ import {
   normalizeNodeIdList,
 } from './active-node-projection-normalizers.js';
 
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_5O9M1 = 'published_membership';
+const LOCAL_STR_PUBLISHED_MEMBERSHIP = 'published_membership';
 const LOCAL_STR_UNPUBLISHED = 'unpublished';
 const LOCAL_STR_PROJECTED = 'projected';
 
@@ -109,7 +106,7 @@ function hasFreshProjectionLiveness(nodeRow, options = {}) {
 
 function buildReadinessByNodeId(options = {}) {
   if (options.readinessByNodeId &&
-      typeof options.readinessByNodeId === TYPEOF.OBJECT) {
+      typeof options.readinessByNodeId === 'object') {
     return options.readinessByNodeId;
   }
 
@@ -133,8 +130,8 @@ function isCanonicalWebSocketEndpointRow(endpointRow) {
     String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
     normalizedEndpoint.status ===
       String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
-    typeof normalizedEndpoint.address === TYPEOF.STRING &&
-    normalizedEndpoint.address.length > NUM.ZERO;
+    typeof normalizedEndpoint.address === 'string' &&
+    normalizedEndpoint.address.length > 0;
 }
 
 function hasCanonicalWebSocketEndpoints(nodeEndpointRows = []) {
@@ -158,14 +155,14 @@ function hasCanonicalActiveService(nodeId, serviceRows = []) {
       return normalizedService.nodeId === nodeId &&
         normalizedService.status ===
           String(SERVICE_STATUS.ACTIVE).toLowerCase() &&
-        typeof normalizedService.serviceId === TYPEOF.STRING &&
-          normalizedService.serviceId.length > NUM.ZERO;
+        typeof normalizedService.serviceId === 'string' &&
+          normalizedService.serviceId.length > 0;
     });
 }
 
 function hasRuntimeTransportEvidence(nodeId, options = {}) {
   const normalizedNodeId = String(nodeId || '').trim();
-  if (normalizedNodeId.length === NUM.ZERO) {
+  if (normalizedNodeId.length === 0) {
     return false;
   }
   const connectedNodeIds = new Set(normalizeNodeIdList(options.connectedNodeIds));
@@ -175,14 +172,14 @@ function hasRuntimeTransportEvidence(nodeId, options = {}) {
   const readinessByNodeId = buildReadinessByNodeId(options);
   const readinessEntry = readinessByNodeId?.[normalizedNodeId] || null;
   const nodeEvidence = readinessEntry?.nodeEvidence &&
-    typeof readinessEntry.nodeEvidence === TYPEOF.OBJECT ?
+    typeof readinessEntry.nodeEvidence === 'object' ?
     readinessEntry.nodeEvidence :
     null;
   if (nodeEvidence?.transportConnected === true) {
     return true;
   }
   return options.localNodeResponsive === true &&
-    String(options.localNodeId || LOCAL_STR_EMPTY).trim() === normalizedNodeId &&
+    String(options.localNodeId || '').trim() === normalizedNodeId &&
     nodeEvidence?.localQueryTransportReady !== false;
 }
 
@@ -233,10 +230,10 @@ function evaluateProjectionReadinessDimensions(
   options = {},
 ) {
   const projectionReadiness =
-    readinessEntry?.lanes && typeof readinessEntry.lanes === TYPEOF.OBJECT ?
+    readinessEntry?.lanes && typeof readinessEntry.lanes === 'object' ?
       readinessEntry :
       buildProjectionReadinessState(
-        readinessEntry && typeof readinessEntry === TYPEOF.OBJECT ?
+        readinessEntry && typeof readinessEntry === 'object' ?
           readinessEntry :
           {},
       );
@@ -394,7 +391,7 @@ function isSwimAliveProtected(nodeId, options = {}) {
     return false;
   }
   const verdicts = options.swimVerdictByNodeId;
-  if (!verdicts || typeof verdicts !== TYPEOF.OBJECT) {
+  if (!verdicts || typeof verdicts !== 'object') {
     return false;
   }
   return verdicts[nodeId] === SWIM_VERDICT_ALIVE;
@@ -626,8 +623,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
 
   const projectedActiveNodeIds = [...new Set(
     activeNodeIds.filter((nodeId) =>
-      typeof nodeId === TYPEOF.STRING &&
-      nodeId.length > NUM.ZERO,
+      typeof nodeId === 'string' &&
+      nodeId.length > 0,
     ),
   )].sort();
   return Object.freeze({
@@ -724,7 +721,7 @@ function resolveActiveNodeViews(options = {}) {
 
   return Object.freeze({
     authoritativeSource: hasPublishedMembership ?
-      LOCAL_STR_5O9M1 :
+      LOCAL_STR_PUBLISHED_MEMBERSHIP :
       LOCAL_STR_UNPUBLISHED,
     authoritativeActiveNodeIds: Object.freeze([...authoritativeActiveNodeIds]),
     projectedServingNodeIds: Object.freeze([...projectedServingNodeIds]),
@@ -734,7 +731,7 @@ function resolveActiveNodeViews(options = {}) {
     ]),
     membershipFreeze,
     effectiveSource: hasPublishedMembership ?
-      LOCAL_STR_5O9M1 :
+      LOCAL_STR_PUBLISHED_MEMBERSHIP :
       LOCAL_STR_PROJECTED,
     effectiveActiveNodeIds: Object.freeze(effectiveActiveNodeIds),
     projectedActiveNodeIds: Object.freeze([...projectedActiveNodeIds]),

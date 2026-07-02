@@ -8,7 +8,6 @@
  * Requirements: 5.1, 5.3, 9.1
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   EMIT_MAX_BYTES,
 } from '../wasm-service/query-budget-constants.js';
@@ -32,7 +31,7 @@ function validateEmitArgs(key, value) {
   if (key === undefined || key === null) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.EMIT_KEY_REQUIRED};
   }
-  if (typeof key !== TYPEOF.STRING && !(key instanceof Uint8Array)) {
+  if (typeof key !== 'string' && !(key instanceof Uint8Array)) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.EMIT_KEY_REQUIRED};
   }
   if (value === undefined || value === null) {
@@ -55,7 +54,7 @@ function validateEmitArgs(key, value) {
  * @return {number} Total byte size.
  */
 function computeEmitRecordBytes(key, value) {
-  const keyBytes = typeof key === TYPEOF.STRING ?
+  const keyBytes = typeof key === 'string' ?
     key.length : key.byteLength;
   return keyBytes + value.byteLength;
 }
@@ -92,12 +91,12 @@ class ShuffleBuffer {
     this.onSpill = options.onSpill ?? null;
     this.onTelemetry = options.onTelemetry ?? null;
     this.lineageTracker = options.lineageTracker ?? null;
-    this.stageIndex = options.stageIndex ?? NUM.ZERO;
+    this.stageIndex = options.stageIndex ?? 0;
 
     this.records = [];
-    this.totalBytes = NUM.ZERO;
-    this.totalRecords = NUM.ZERO;
-    this.spillCount = NUM.ZERO;
+    this.totalBytes = 0;
+    this.totalRecords = 0;
+    this.spillCount = 0;
     this.state = EMIT_QUEUE_STATE.ACCEPTING;
   }
 
@@ -147,7 +146,7 @@ class ShuffleBuffer {
 
     this.records.push(record);
     this.totalBytes += recordBytes;
-    this.totalRecords += NUM.ONE;
+    this.totalRecords += 1;
 
     // Check spill threshold
     if (this.totalBytes >= this.spillThresholdBytes &&
@@ -163,7 +162,7 @@ class ShuffleBuffer {
     }
 
     // Report telemetry
-    if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
+    if (typeof this.onTelemetry === 'function') {
       this.onTelemetry({
         primitive: PRIMITIVE_TYPE.EMIT,
         recordBytes,
@@ -177,7 +176,7 @@ class ShuffleBuffer {
     return {
       [EMIT_FIELD.BYTE_COUNT]: recordBytes,
       [EMIT_FIELD.QUEUE_SIZE]: this.records.length,
-      [EMIT_FIELD.SPILLED]: this.spillCount > NUM.ZERO,
+      [EMIT_FIELD.SPILLED]: this.spillCount > 0,
       [EMIT_FIELD.BACKPRESSURE]: backpressure,
     };
   }
@@ -223,7 +222,7 @@ class ShuffleBuffer {
 
     const toSpill = this.records;
     this.records = [];
-    this.spillCount += NUM.ONE;
+    this.spillCount += 1;
 
     await this.onSpill(toSpill);
 

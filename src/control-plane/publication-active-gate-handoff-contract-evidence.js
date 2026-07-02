@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
@@ -113,7 +112,7 @@ function normalizePublicationActiveGateHandoffPublicationSnapshot(
     missingPublishedNodeIds,
   );
   const nodeDebtState =
-    pendingAckCount > NUM.ZERO || missingPublishedCount > NUM.ZERO ?
+    pendingAckCount > 0 || missingPublishedCount > 0 ?
       PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE.PRESENT :
       PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE.ABSENT;
   return Object.freeze({
@@ -303,7 +302,7 @@ function collectPublicationActiveGateHandoffTargetEvidenceNodeIds(
 function resolvePublicationActiveGateHandoffExpectedNodeIds(options = {}) {
   const explicitExpectedNodeIds =
     normalizePublicationActiveGateHandoffNodeIdList(options.expectedNodeIds);
-  if (explicitExpectedNodeIds.length > NUM.ZERO) {
+  if (explicitExpectedNodeIds.length > 0) {
     return explicitExpectedNodeIds;
   }
   return normalizePublicationActiveGateHandoffNodeIdList([
@@ -328,7 +327,7 @@ function resolvePublicationActiveGateHandoffPublishedActiveNodeIds(
     normalizePublicationActiveGateHandoffNodeIdList(
       options.publishedActiveNodeIds,
     );
-  if (explicitPublishedNodeIds.length > NUM.ZERO) {
+  if (explicitPublishedNodeIds.length > 0) {
     return explicitPublishedNodeIds;
   }
   const activeNodeViewPublishedNodeIds =
@@ -337,7 +336,7 @@ function resolvePublicationActiveGateHandoffPublishedActiveNodeIds(
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
       ],
     );
-  if (activeNodeViewPublishedNodeIds.length > NUM.ZERO) {
+  if (activeNodeViewPublishedNodeIds.length > 0) {
     return activeNodeViewPublishedNodeIds;
   }
   return normalizePublicationActiveGateHandoffNodeIdList(
@@ -471,7 +470,7 @@ function normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
   const hasUnresolvedEvidence = [
     ...blockerCounts,
     ...blockerListLengths,
-  ].some((value) => value > NUM.ZERO);
+  ].some((value) => value > 0);
   if (hasUnresolvedEvidence) {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED;
   }
@@ -481,7 +480,7 @@ function normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
         PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS[
           index
         ].length &&
-      cleanCounts.every((value) => value === NUM.ZERO),
+      cleanCounts.every((value) => value === 0),
     );
   return hasExplicitCleanEvidence ?
     PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN :

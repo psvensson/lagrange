@@ -275,18 +275,18 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      */
     getPendingRequestTrackerAggregate() {
       const aggregate = {
-        pendingCount: NUM.ZERO,
-        maxPendingRequests: NUM.ZERO,
-        availableCapacity: NUM.ZERO,
-        saturationPercent: NUM.ZERO,
-        trackedTotal: NUM.ZERO,
-        resolvedTotal: NUM.ZERO,
-        rejectedTotal: NUM.ZERO,
-        timedOutTotal: NUM.ZERO,
-        staleCleanedTotal: NUM.ZERO,
-        backpressureRejectTotal: NUM.ZERO,
-        maxPendingObserved: NUM.ZERO,
-        replicaCountWithTracker: NUM.ZERO,
+        pendingCount: 0,
+        maxPendingRequests: 0,
+        availableCapacity: 0,
+        saturationPercent: 0,
+        trackedTotal: 0,
+        resolvedTotal: 0,
+        rejectedTotal: 0,
+        timedOutTotal: 0,
+        staleCleanedTotal: 0,
+        backpressureRejectTotal: 0,
+        maxPendingObserved: 0,
+        replicaCountWithTracker: 0,
       };
       for (const service of this.localServices.values()) {
         if (
@@ -305,50 +305,50 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         if (!tracker || typeof tracker !== REPLICA_HANDLER_TYPEOF.OBJECT) {
           continue;
         }
-        aggregate.replicaCountWithTracker += NUM.ONE;
+        aggregate.replicaCountWithTracker += 1;
         aggregate.pendingCount += Number.isFinite(tracker.pendingCount) ?
           tracker.pendingCount :
-          NUM.ZERO;
+          0;
         aggregate.maxPendingRequests += Number.isFinite(
           tracker.maxPendingRequests,
         ) ?
           tracker.maxPendingRequests :
-          NUM.ZERO;
+          0;
         aggregate.availableCapacity += Number.isFinite(
           tracker.availableCapacity,
         ) ?
           tracker.availableCapacity :
-          NUM.ZERO;
+          0;
         aggregate.trackedTotal += Number.isFinite(tracker.trackedTotal) ?
           tracker.trackedTotal :
-          NUM.ZERO;
+          0;
         aggregate.resolvedTotal += Number.isFinite(tracker.resolvedTotal) ?
           tracker.resolvedTotal :
-          NUM.ZERO;
+          0;
         aggregate.rejectedTotal += Number.isFinite(tracker.rejectedTotal) ?
           tracker.rejectedTotal :
-          NUM.ZERO;
+          0;
         aggregate.timedOutTotal += Number.isFinite(tracker.timedOutTotal) ?
           tracker.timedOutTotal :
-          NUM.ZERO;
+          0;
         aggregate.staleCleanedTotal += Number.isFinite(
           tracker.staleCleanedTotal,
         ) ?
           tracker.staleCleanedTotal :
-          NUM.ZERO;
+          0;
         aggregate.backpressureRejectTotal += Number.isFinite(
           tracker.backpressureRejectTotal,
         ) ?
           tracker.backpressureRejectTotal :
-          NUM.ZERO;
+          0;
         aggregate.maxPendingObserved = Math.max(
           aggregate.maxPendingObserved,
           Number.isFinite(tracker.maxPendingObserved) ?
             tracker.maxPendingObserved :
-            NUM.ZERO,
+            0,
         );
       }
-      if (aggregate.maxPendingRequests > NUM.ZERO) {
+      if (aggregate.maxPendingRequests > 0) {
         aggregate.saturationPercent = Math.round(
           (aggregate.pendingCount / aggregate.maxPendingRequests) * NUM.HUNDRED,
         );

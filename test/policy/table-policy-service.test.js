@@ -275,9 +275,9 @@ test('TablePolicyService - validatePolicy rejects invalid placement constraints'
     const invalidPolicy = {
       placementConstraints: {
         [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          NUM.NEGATIVE_ONE,
+          -1,
         [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
-          NUM.HUNDRED + NUM.ONE,
+          NUM.HUNDRED + 1,
         [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
           STRING.EMPTY,
       },
@@ -788,9 +788,9 @@ test('TablePolicyService - validateMessageGroupPolicy rejects invalid placement 
     const result = service.validateMessageGroupPolicy({
       placementConstraints: {
         [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          NUM.NEGATIVE_ONE,
+          -1,
         [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
-          NUM.HUNDRED + NUM.ONE,
+          NUM.HUNDRED + 1,
       },
     });
     t.notOk(result.valid,
@@ -908,13 +908,13 @@ test('TablePolicyService - message group policy uses same validation path as tab
     const tableResult = service.validatePolicy({
       placementConstraints: {
         [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          NUM.NEGATIVE_ONE,
+          -1,
       },
     });
     const mgResult = service.validateMessageGroupPolicy({
       placementConstraints: {
         [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          NUM.NEGATIVE_ONE,
+          -1,
       },
     });
 

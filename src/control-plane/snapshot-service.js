@@ -1,6 +1,5 @@
 import {OwnerQueue} from './owner-queue.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * SnapshotService coordinates active-gate snapshot operations and write queue management.
@@ -11,7 +10,7 @@ class SnapshotService {
    * @return {boolean}
    */
   static isQueuePressureDetected() {
-    return OwnerQueue.isDeferred() || OwnerQueue.getPendingWritesCount() > LOCAL_NUM_ZERO;
+    return OwnerQueue.isDeferred() || OwnerQueue.getPendingWritesCount() > 0;
   }
 
   /**
@@ -19,7 +18,7 @@ class SnapshotService {
    * @return {Promise<number>} The number of written entries drained.
    */
   static async drainQueueForSnapshot() {
-    let drainedCount = LOCAL_NUM_ZERO;
+    let drainedCount = 0;
     if (this.isQueuePressureDetected()) {
       drainedCount = await OwnerQueue.drain();
     }

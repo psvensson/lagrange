@@ -30,7 +30,6 @@ import {
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -75,7 +74,7 @@ test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
 
     t.equal(
       enqueueCalls.length,
-      NUM.ZERO,
+      0,
       'non-owner nodes must not enqueue replica operation dispatch work',
     );
 

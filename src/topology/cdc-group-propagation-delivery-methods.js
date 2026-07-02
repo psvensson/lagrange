@@ -5,7 +5,6 @@
 import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
 import {resolveCdcPropagationDeliveryProfile} from '../cache/cdc-propagation-delivery-profile.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {PRESSURE_GOVERNOR_ACTION, PressureGovernor} from '../control-plane/pressure-governor.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
 import {
@@ -31,7 +30,7 @@ function sortObjectKeys(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => sortObjectKeys(entry));
   }
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return value;
   }
   return Object.keys(value)
@@ -61,11 +60,11 @@ class CDCGroupPropagationDeliveryMethods {
       replayOnly: options?.replayOnly === true,
     });
     if (allowDeferToExistingRetry && retryKey && this.backgroundRetryEntriesByKey.has(retryKey)) {
-      this.scheduleDeferredDeliveryEvents(events, options, NUM.ONE);
+      this.scheduleDeferredDeliveryEvents(events, options, 1);
       return this.buildDeferredFailures(options.targets);
     }
     if (trafficGate.state === CDC_GROUP_PROPAGATION_TRAFFIC_GATE_STATE.DEFER_RETRY_WAVE) {
-      this.scheduleDeferredDeliveryEvents(events, options, NUM.ONE);
+      this.scheduleDeferredDeliveryEvents(events, options, 1);
       return this.buildDeferredFailures(options.targets);
     }
     if (this.shouldBatchImmediateDelivery(options)) {
@@ -73,15 +72,15 @@ class CDCGroupPropagationDeliveryMethods {
     }
     let pendingTargets = Array.isArray(options.targets) ? [...options.targets] : [];
     let deliveryFailures = [];
-    let attempt = NUM.ONE;
-    const maxAttempts = Math.max(NUM.ONE, this.deliveryRetryMaxAttempts);
-    while (pendingTargets.length > NUM.ZERO && attempt <= maxAttempts) {
+    let attempt = 1;
+    const maxAttempts = Math.max(1, this.deliveryRetryMaxAttempts);
+    while (pendingTargets.length > 0 && attempt <= maxAttempts) {
       deliveryFailures = await this.deliverToTargets({
         ...options,
         events,
         targets: pendingTargets,
       });
-      if (deliveryFailures.length === NUM.ZERO) {
+      if (deliveryFailures.length === 0) {
         return [];
       }
       if (attempt >= maxAttempts) {
@@ -99,9 +98,9 @@ class CDCGroupPropagationDeliveryMethods {
       });
       await this.sleep(retryDelayMs);
       pendingTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-      attempt += NUM.ONE;
+      attempt += 1;
     }
-    if (deliveryFailures.length > NUM.ZERO) {
+    if (deliveryFailures.length > 0) {
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
         nodeId: this.nodeId,
         tableName: deliveryLabel.tableName,
@@ -114,7 +113,7 @@ class CDCGroupPropagationDeliveryMethods {
       this.scheduleDeferredDeliveryEvents(
         events,
         {...options, targets: retryTargets},
-        maxAttempts + NUM.ONE,
+        maxAttempts + 1,
       );
     }
     return deliveryFailures;
@@ -126,14 +125,14 @@ class CDCGroupPropagationDeliveryMethods {
    * @private
    */ describeDeliveryEvents(events) {
     const normalizedEvents = Array.isArray(events) ? events : [];
-    if (normalizedEvents.length === NUM.ZERO) {
-      return {tableName: null, operation: null, eventCount: NUM.ZERO};
+    if (normalizedEvents.length === 0) {
+      return {tableName: null, operation: null, eventCount: 0};
     }
-    if (normalizedEvents.length === NUM.ONE) {
+    if (normalizedEvents.length === 1) {
       return {
-        tableName: normalizedEvents[NUM.ZERO].tableName || null,
-        operation: normalizedEvents[NUM.ZERO].operation || null,
-        eventCount: NUM.ONE,
+        tableName: normalizedEvents[0].tableName || null,
+        operation: normalizedEvents[0].operation || null,
+        eventCount: 1,
       };
     }
     return {
@@ -169,13 +168,13 @@ class CDCGroupPropagationDeliveryMethods {
     if (options?.allowBatching === false || options?.events) {
       return false;
     }
-    if (typeof options?.tableName !== TYPEOF.STRING || options.tableName.length === NUM.ZERO) {
+    if (typeof options?.tableName !== 'string' || options.tableName.length === 0) {
       return false;
     }
     if (!isTableInternalCachePropagationEnabled(options.tableName)) {
       return false;
     }
-    return Array.isArray(options.targets) && options.targets.length > NUM.ZERO;
+    return Array.isArray(options.targets) && options.targets.length > 0;
   }
   /**
    * Queue one immediate propagation wave into the canonical batch owner.
@@ -228,15 +227,15 @@ class CDCGroupPropagationDeliveryMethods {
         ...new Set(
           options.targets
             .map((target) => target?.groupId)
-            .filter((groupId) => typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO),
+            .filter((groupId) => typeof groupId === 'string' && groupId.length > 0),
         ),
       ].sort() :
       [];
-    if (targetGroupIds.length === NUM.ZERO) {
+    if (targetGroupIds.length === 0) {
       return null;
     }
     const sourceGroupId =
-      typeof options?.sourceGroupId === TYPEOF.STRING ? options.sourceGroupId : '';
+      typeof options?.sourceGroupId === 'string' ? options.sourceGroupId : '';
     return [sourceGroupId, targetGroupIds.join(CDC_GROUP_PROPAGATION_SERVICE_LITERAL.VALUE)].join(
       CDC_GROUP_PROPAGATION_SERVICE_LITERAL.VALUE_2,
     );
@@ -272,7 +271,7 @@ class CDCGroupPropagationDeliveryMethods {
     }
     const events = [...entry.pendingEventsByKey.values()];
     entry.pendingEventsByKey.clear();
-    if (events.length === NUM.ZERO) {
+    if (events.length === 0) {
       this.resolveImmediateBatch(entry, []);
       return;
     }
@@ -285,7 +284,7 @@ class CDCGroupPropagationDeliveryMethods {
           data: event.data,
           sourceGroupId: entry.sourceGroupId,
           targets: entry.targets,
-          attempt: NUM.ONE,
+          attempt: 1,
         });
       }
       this.resolveImmediateBatch(entry, this.buildDeferredFailures(entry.targets));
@@ -325,7 +324,7 @@ class CDCGroupPropagationDeliveryMethods {
     if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
       return;
     }
-    if (!Array.isArray(options.targets) || options.targets.length === NUM.ZERO) {
+    if (!Array.isArray(options.targets) || options.targets.length === 0) {
       return;
     }
     const {tableName, operation, data, sourceGroupId, targets} = options;
@@ -340,9 +339,9 @@ class CDCGroupPropagationDeliveryMethods {
       return;
     }
     const attempt =
-      Number.isFinite(options.attempt) && options.attempt > NUM.ZERO ?
+      Number.isFinite(options.attempt) && options.attempt > 0 ?
         Math.floor(options.attempt) :
-        NUM.ONE;
+        1;
     options = null;
     const maxTotalAttempts = this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
     if (attempt >= maxTotalAttempts) {
@@ -379,9 +378,9 @@ class CDCGroupPropagationDeliveryMethods {
       return;
     }
     const attempt =
-      Number.isFinite(entry?.attempt) && entry.attempt > NUM.ZERO ?
+      Number.isFinite(entry?.attempt) && entry.attempt > 0 ?
         Math.floor(entry.attempt) :
-        NUM.ONE;
+        1;
     const maxTotalAttempts = this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
     if (attempt >= maxTotalAttempts) {
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
@@ -390,7 +389,7 @@ class CDCGroupPropagationDeliveryMethods {
         operation: entry?.operation,
         attempt,
         maxTotalAttempts,
-        failureCount: entry?.pendingEventsByKey?.size || NUM.ZERO,
+        failureCount: entry?.pendingEventsByKey?.size || 0,
         background: true,
       });
       if (retryKey) {
@@ -448,17 +447,17 @@ class CDCGroupPropagationDeliveryMethods {
         ...new Set(
           options.targets
             .map((target) => target?.groupId)
-            .filter((groupId) => typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO),
+            .filter((groupId) => typeof groupId === 'string' && groupId.length > 0),
         ),
       ].sort() :
       [];
-    if (targetGroupIds.length === NUM.ZERO) {
+    if (targetGroupIds.length === 0) {
       return null;
     }
-    const tableName = typeof options.tableName === TYPEOF.STRING ? options.tableName : '';
-    const operation = typeof options.operation === TYPEOF.STRING ? options.operation : '';
+    const tableName = typeof options.tableName === 'string' ? options.tableName : '';
+    const operation = typeof options.operation === 'string' ? options.operation : '';
     const sourceGroupId =
-      typeof options.sourceGroupId === TYPEOF.STRING ? options.sourceGroupId : '';
+      typeof options.sourceGroupId === 'string' ? options.sourceGroupId : '';
     return [
       tableName,
       operation,
@@ -474,9 +473,9 @@ class CDCGroupPropagationDeliveryMethods {
    * @return {string}
    * @private
    */ buildBackgroundRetryEventKey(options) {
-    const tableName = typeof options?.tableName === TYPEOF.STRING ? options.tableName : '';
-    const operation = typeof options?.operation === TYPEOF.STRING ? options.operation : '';
-    const data = options?.data && typeof options.data === TYPEOF.OBJECT ? options.data : null;
+    const tableName = typeof options?.tableName === 'string' ? options.tableName : '';
+    const operation = typeof options?.operation === 'string' ? options.operation : '';
+    const data = options?.data && typeof options.data === 'object' ? options.data : null;
     const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
     const pkValue = data?.[pkField] ?? data?.id ?? null;
     if (pkValue !== null && pkValue !== undefined) {
@@ -527,7 +526,7 @@ class CDCGroupPropagationDeliveryMethods {
       return;
     }
     entry.pendingEventsByKey.clear();
-    if (pendingEvents.length === NUM.ZERO) {
+    if (pendingEvents.length === 0) {
       if (retryKey) {
         this.backgroundRetryEntriesByKey.delete(retryKey);
       }
@@ -542,18 +541,18 @@ class CDCGroupPropagationDeliveryMethods {
       sourceGroupId: entry.sourceGroupId,
       targets: entry.targets,
     });
-    if (deliveryFailures.length > NUM.ZERO) {
+    if (deliveryFailures.length > 0) {
       for (const pendingEvent of pendingEvents) {
         this.recordBackgroundRetryEvent(entry, pendingEvent.eventKey, pendingEvent.data);
       }
     }
-    if (entry.pendingEventsByKey.size === NUM.ZERO) {
+    if (entry.pendingEventsByKey.size === 0) {
       if (retryKey) {
         this.backgroundRetryEntriesByKey.delete(retryKey);
       }
       return;
     }
-    entry.attempt += NUM.ONE;
+    entry.attempt += 1;
     this.rescheduleBackgroundRetryEntry(retryKey, entry);
   }
   /**
@@ -626,7 +625,7 @@ class CDCGroupPropagationDeliveryMethods {
     const targetsByGroupId = new Map();
     for (const failure of deliveryFailures) {
       const groupId = failure?.targetGroupId;
-      if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+      if (typeof groupId !== 'string' || groupId.length === 0) {
         continue;
       }
       targetsByGroupId.set(groupId, {
@@ -645,10 +644,10 @@ class CDCGroupPropagationDeliveryMethods {
    * @private
    */
   computeRetryDelayMs(attempt) {
-    const safeAttempt = Number.isFinite(attempt) && attempt > NUM.ZERO ? attempt : NUM.ONE;
-    const exponentialFactor = Math.pow(this.deliveryRetryBackoffMultiplier, safeAttempt - NUM.ONE);
+    const safeAttempt = Number.isFinite(attempt) && attempt > 0 ? attempt : 1;
+    const exponentialFactor = Math.pow(this.deliveryRetryBackoffMultiplier, safeAttempt - 1);
     const delayMs = this.deliveryRetryDelayMs * exponentialFactor;
-    return Math.min(this.deliveryRetryMaxDelayMs, Math.max(NUM.ONE, Math.floor(delayMs)));
+    return Math.min(this.deliveryRetryMaxDelayMs, Math.max(1, Math.floor(delayMs)));
   }
 
   /**
@@ -681,7 +680,7 @@ class CDCGroupPropagationDeliveryMethods {
     }
     const deliveryFailures = [];
     for (const target of options.targets) {
-      if (!this.messageRouter || typeof this.messageRouter.deliver !== TYPEOF.FUNCTION) {
+      if (!this.messageRouter || typeof this.messageRouter.deliver !== 'function') {
         deliveryFailures.push({
           targetGroupId: target.groupId,
           coordinatorNodeId: target.coordinatorNodeId,
@@ -692,7 +691,7 @@ class CDCGroupPropagationDeliveryMethods {
       }
 
       const payload =
-        events.length > NUM.ONE ?
+        events.length > 1 ?
           {
             type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
             events,
@@ -752,7 +751,7 @@ class CDCGroupPropagationDeliveryMethods {
           data: event.data,
         })) :
       [];
-    if (explicitEvents.length > NUM.ZERO) {
+    if (explicitEvents.length > 0) {
       return explicitEvents;
     }
     return [

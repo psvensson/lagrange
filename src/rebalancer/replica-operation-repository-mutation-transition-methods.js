@@ -5,9 +5,7 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
   options = {},
 ) {
   const {
-    NUM,
     REPLICA_OPERATION_TRANSITION_LANE,
-    TYPEOF,
     isPriorityControlPlanePartition,
   } = options;
 
@@ -52,10 +50,10 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
     buildReplicaOperationTransitionPartitionClassificationInput(options = {}) {
       const operation = options.operation;
       const partitionRow =
-        options.partitionRow && typeof options.partitionRow === TYPEOF.OBJECT ?
+        options.partitionRow && typeof options.partitionRow === 'object' ?
           options.partitionRow :
           operation?.partitionRow &&
-              typeof operation.partitionRow === TYPEOF.OBJECT ?
+              typeof operation.partitionRow === 'object' ?
             operation.partitionRow :
             null;
       const partitionIdCandidate =
@@ -66,12 +64,12 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
         partitionRow?.partitionId ??
         null;
       const partitionId =
-        typeof partitionIdCandidate === TYPEOF.STRING ?
+        typeof partitionIdCandidate === 'string' ?
           partitionIdCandidate.trim() :
           null;
       return {
         partitionId:
-          partitionId && partitionId.length > NUM.ZERO ? partitionId : null,
+          partitionId && partitionId.length > 0 ? partitionId : null,
         partitionRow,
       };
     }

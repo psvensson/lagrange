@@ -4,7 +4,6 @@ import {SafetyInterval} from '../../src/wasm-service/safety-interval.js';
 import {
   DEFAULT_SAFETY_INTERVAL_MS,
 } from '../../src/wasm-service/wasm-service-constants.js';
-import {NUM} from '../../src/constants/index.js';
 
 describe('SafetyInterval', () => {
   describe('constructor', () => {
@@ -20,9 +19,9 @@ describe('SafetyInterval', () => {
 
     it('should initialize indices and timestamp to zero', () => {
       const si = new SafetyInterval();
-      assert.equal(si.lastLeaderIndex, NUM.ZERO);
-      assert.equal(si.lastLeaderTimestamp, NUM.ZERO);
-      assert.equal(si.localAppliedIndex, NUM.ZERO);
+      assert.equal(si.lastLeaderIndex, 0);
+      assert.equal(si.lastLeaderTimestamp, 0);
+      assert.equal(si.localAppliedIndex, 0);
     });
   });
 

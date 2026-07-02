@@ -22,20 +22,20 @@ function deriveWsAddressFromNodeAddress(nodeAddress) {
   }
 
   const colonIndex = nodeAddress.lastIndexOf(':');
-  if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+  if (colonIndex === -1 || colonIndex === 0) {
     // No colon found or colon at start (empty hostname)
     return null;
   }
 
-  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-  if (!hostname || hostname.length === NUM.ZERO) {
+  const hostname = nodeAddress.substring(0, colonIndex);
+  if (!hostname || hostname.length === 0) {
     return null;
   }
 
-  const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+  const portStr = nodeAddress.substring(colonIndex + 1);
   const restPort = parseInt(portStr, NUM.TEN);
 
-  if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+  if (!Number.isFinite(restPort) || restPort <= 0) {
     return null;
   }
 

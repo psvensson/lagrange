@@ -21,11 +21,9 @@ const {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
   NODE_JOINING_SERVICE_LITERAL,
-  NUM,
   NodeService,
   STARTUP_JOIN_MODE,
   STRING,
-  TYPEOF,
   assertCritical,
   waitForLocalQueryTransportReadiness,
   waitForMetadataPublicationReadiness,
@@ -110,9 +108,9 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
   getReadySignalMetadataPublicationReadinessSnapshot() {
     const readinessState = this.bootstrapReadinessState;
     const snapshot =
-      typeof readinessState?.evaluate === TYPEOF.FUNCTION ?
+      typeof readinessState?.evaluate === 'function' ?
         readinessState.evaluate() :
-        typeof readinessState?.getSnapshot === TYPEOF.FUNCTION ?
+        typeof readinessState?.getSnapshot === 'function' ?
           readinessState.getSnapshot() :
           null;
     return this.resolveReadySignalMetadataPublicationReadinessSnapshot(
@@ -120,7 +118,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     );
   }
   resolveReadySignalMetadataPublicationReadinessSnapshot(snapshot) {
-    if (snapshot && typeof snapshot === TYPEOF.OBJECT) {
+    if (snapshot && typeof snapshot === 'object') {
       snapshot = {
         ...snapshot,
         backpressured: this.isLocalRouterBackpressured(),
@@ -129,7 +127,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     if (
       isMetadataPublicationReadySnapshot(snapshot) ||
       !snapshot ||
-      typeof snapshot !== TYPEOF.OBJECT ||
+      typeof snapshot !== 'object' ||
       this.isBootstrapStartupComplete() !== true ||
       this.getSeedContactStartupAuthoritySnapshot()?.authorityAvailable !== true
     ) {
@@ -137,7 +135,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     }
     const snapshotReasons = Array.isArray(snapshot.reasons) ?
       snapshot.reasons.filter((reason) =>
-        typeof reason === TYPEOF.STRING && reason.length > NUM.ZERO,
+        typeof reason === 'string' && reason.length > 0,
       ) :
       [];
     if (canBypassBootstrapInitPriorityReasons(snapshotReasons, snapshot)) {
@@ -231,22 +229,22 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
       diskUsagePercent: stats.diskUsagePercent,
     };
     const maxAttempts = Number.isFinite(this.config.readySignalMaxAttempts) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts)) :
+      Math.max(1, Math.floor(this.config.readySignalMaxAttempts)) :
       JOINING_DEFAULT.readySignalMaxAttempts;
     const maxDelayMs = Number.isFinite(this.config.readySignalRetryMaxDelayMs) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs)) :
+      Math.max(1, Math.floor(this.config.readySignalRetryMaxDelayMs)) :
       JOINING_DEFAULT.readySignalRetryMaxDelayMs;
     const backoffMultiplier =
       Number.isFinite(this.config.readySignalRetryBackoffMultiplier) &&
-      this.config.readySignalRetryBackoffMultiplier > NUM.ZERO ?
+      this.config.readySignalRetryBackoffMultiplier > 0 ?
         this.config.readySignalRetryBackoffMultiplier :
         JOINING_DEFAULT.readySignalRetryBackoffMultiplier;
     let delayMs = Number.isFinite(this.config.readySignalRetryDelayMs) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs)) :
+      Math.max(1, Math.floor(this.config.readySignalRetryDelayMs)) :
       JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
     const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
-    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
         this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
@@ -331,7 +329,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     if (
       !cdcIntegrationService ||
       typeof cdcIntegrationService.hydrateCdcPropagatedTablesFromAuthority !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       this.logger.warn(JOINING_LOG_MSG.CDC_CATCHUP_HYDRATION_SKIPPED, {
         nodeId: this.nodeId,
@@ -382,7 +380,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
       return;
     }
     if (
-      typeof this.heartbeatService?.setNodeStateReporter !== TYPEOF.FUNCTION
+      typeof this.heartbeatService?.setNodeStateReporter !== 'function'
     ) {
       return;
     }
@@ -390,7 +388,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
   }
   resolveControlPlaneNodeStateUpdateTimeoutMs(options = {}) {
     const explicitTimeoutMs = Number(options.timeoutMs);
-    if (Number.isFinite(explicitTimeoutMs) && explicitTimeoutMs > NUM.ZERO) {
+    if (Number.isFinite(explicitTimeoutMs) && explicitTimeoutMs > 0) {
       return Math.floor(explicitTimeoutMs);
     }
     const leadershipWaitTimeoutMs = Number(
@@ -398,12 +396,12 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     );
     if (
       Number.isFinite(leadershipWaitTimeoutMs) &&
-      leadershipWaitTimeoutMs > NUM.ZERO
+      leadershipWaitTimeoutMs > 0
     ) {
       return Math.floor(leadershipWaitTimeoutMs);
     }
     const httpTimeoutMs = Number(this.config?.httpTimeoutMs);
-    if (Number.isFinite(httpTimeoutMs) && httpTimeoutMs > NUM.ZERO) {
+    if (Number.isFinite(httpTimeoutMs) && httpTimeoutMs > 0) {
       return Math.floor(httpTimeoutMs);
     }
     return JOINING_DEFAULT.leadershipWaitTimeoutMs;

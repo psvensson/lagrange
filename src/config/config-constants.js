@@ -1,5 +1,5 @@
 import os from 'os';
-import {COLUMN, NUM, STRING, TYPEOF} from '../constants/index.js';
+import {COLUMN, STRING} from '../constants/index.js';
 import {CONFIG_KEY} from './config-key-constants.js';
 import {LATENCY_PROPAGATION_MODE} from './config-latency-constants.js';
 import {CONFIG_SCHEMA} from './config-schema-constants.js';
@@ -89,9 +89,9 @@ const CONFIG_ERROR_MSG = Object.freeze({
 });
 
 const CONFIG_STATS_DEFAULT = Object.freeze({
-  reads: NUM.ZERO,
-  writes: NUM.ZERO,
-  watcherNotifications: NUM.ZERO,
+  reads: 0,
+  writes: 0,
+  watcherNotifications: 0,
 });
 
 const CONFIG_TABLE_COLUMN = Object.freeze({
@@ -789,5 +789,4 @@ export {
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
   STRING,
-  TYPEOF,
 };

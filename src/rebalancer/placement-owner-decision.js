@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PLACEMENT_OWNER,
   PLACEMENT_OWNER_FILTER_ACTION,
@@ -23,7 +22,7 @@ const PLACEMENT_OWNER_NO_DOMINANT_GROUP = '';
 
 function selectDominantGroupId(existingGroupCounts) {
   let dominantGroupId = PLACEMENT_OWNER_NO_DOMINANT_GROUP;
-  let dominantCount = NUM.ZERO;
+  let dominantCount = 0;
   for (const [groupId, count] of existingGroupCounts.entries()) {
     if (count > dominantCount) {
       dominantGroupId = groupId;
@@ -32,7 +31,7 @@ function selectDominantGroupId(existingGroupCounts) {
     }
     if (
       count === dominantCount &&
-      dominantGroupId.length > NUM.ZERO &&
+      dominantGroupId.length > 0 &&
       groupId < dominantGroupId
     ) {
       dominantGroupId = groupId;
@@ -46,13 +45,13 @@ function buildPlacementOwnerFilterResult(evidence) {
     (candidate) => candidate.valid === true,
   );
   const state =
-    acceptedCandidates.length === NUM.ZERO ?
+    acceptedCandidates.length === 0 ?
       PLACEMENT_OWNER_FILTER_STATE.NO_CANDIDATES :
-      evidence.capacityDiagnostics.rejectedCount > NUM.ZERO ?
+      evidence.capacityDiagnostics.rejectedCount > 0 ?
         PLACEMENT_OWNER_FILTER_STATE.CAPACITY_CONSTRAINED :
         PLACEMENT_OWNER_FILTER_STATE.CANDIDATES_ACCEPTED;
   const action =
-    acceptedCandidates.length === NUM.ZERO ?
+    acceptedCandidates.length === 0 ?
       PLACEMENT_OWNER_FILTER_ACTION.REJECT :
       PLACEMENT_OWNER_FILTER_ACTION.ACCEPT;
   const reason =
@@ -89,8 +88,8 @@ function calculateTopologyScoreDimensions(candidate, evidence) {
     PLACEMENT_OWNER_NO_DOMINANT_GROUP;
   if (
     evidence.placementConstraints.preferSameLatencyGroup === true &&
-    dominantGroupId.length > NUM.ZERO &&
-    candidateGroupId.length > NUM.ZERO
+    dominantGroupId.length > 0 &&
+    candidateGroupId.length > 0
   ) {
     dimensions.push(buildScoreDimension(
       PLACEMENT_OWNER_SCORE_DIMENSION.SAME_LATENCY_GROUP,
@@ -101,7 +100,7 @@ function calculateTopologyScoreDimensions(candidate, evidence) {
   }
   if (
     evidence.placementConstraints.preferLatencyGroupDiversity === true &&
-    candidateGroupId.length > NUM.ZERO
+    candidateGroupId.length > 0
   ) {
     dimensions.push(buildScoreDimension(
       PLACEMENT_OWNER_SCORE_DIMENSION.LATENCY_GROUP_DIVERSITY,
@@ -156,14 +155,14 @@ function sumPrimaryScore(dimensions) {
       (entry) =>
         entry.dimension !== PLACEMENT_OWNER_SCORE_DIMENSION.DISK_TIE_BREAKER,
     )
-    .reduce((total, entry) => total + entry.value, NUM.ZERO);
+    .reduce((total, entry) => total + entry.value, 0);
 }
 
 function getTieBreakerScore(dimensions) {
   return dimensions.find(
     (entry) =>
       entry.dimension === PLACEMENT_OWNER_SCORE_DIMENSION.DISK_TIE_BREAKER,
-  )?.value || NUM.ZERO;
+  )?.value || 0;
 }
 
 function buildPlacementOwnerScoreResult(evidence, filterResult) {
@@ -192,7 +191,7 @@ function buildPlacementOwnerScoreResult(evidence, filterResult) {
     owner: PLACEMENT_OWNER,
     phase: PLACEMENT_OWNER_PHASE.SCORE,
     state:
-      rankedCandidates.length === NUM.ZERO ?
+      rankedCandidates.length === 0 ?
         PLACEMENT_OWNER_SCORE_STATE.NO_SCORED_CANDIDATES :
         PLACEMENT_OWNER_SCORE_STATE.RANKED_CANDIDATES,
     scoreProfile: evidence.scoreProfile,
@@ -229,7 +228,7 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
       !evidence.transitionReservations.has(nodeId),
     );
   const leaderReserved =
-    evidence.leaderRetentionNodeId.length > NUM.ZERO &&
+    evidence.leaderRetentionNodeId.length > 0 &&
       scoreResult.rankedNodeIds.includes(evidence.leaderRetentionNodeId) &&
       !evidence.transitionReservations.has(evidence.leaderRetentionNodeId) ?
       [evidence.leaderRetentionNodeId] :
@@ -242,16 +241,16 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   // by rank. Dedup preserves this order; the leader appears once.
   const reservedNodeIds = [
     ...new Set([...transitionReserved, ...leaderReserved, ...incumbentReserved]),
-  ].slice(NUM.ZERO, targetCount);
+  ].slice(0, targetCount);
   const reservedNodeIdSet = new Set(reservedNodeIds);
   const deferredNodeIds = scoreResult.rankedNodeIds
     .filter((nodeId) =>
       evidence.transitionDeferrals.has(nodeId) &&
       !reservedNodeIdSet.has(nodeId),
     )
-    .slice(NUM.ZERO, targetCount);
+    .slice(0, targetCount);
   const state =
-    reservedNodeIds.length > NUM.ZERO || deferredNodeIds.length > NUM.ZERO ?
+    reservedNodeIds.length > 0 || deferredNodeIds.length > 0 ?
       PLACEMENT_OWNER_RESERVATION_STATE.RESERVATIONS_APPLIED :
       PLACEMENT_OWNER_RESERVATION_STATE.NO_RESERVATIONS;
   const reasons = [];
@@ -260,7 +259,7 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   )) {
     reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.SAME_ENTITY_TRANSITION);
   }
-  if (evidence.leaderRetentionNodeId.length > NUM.ZERO &&
+  if (evidence.leaderRetentionNodeId.length > 0 &&
       reservedNodeIds.includes(evidence.leaderRetentionNodeId)) {
     reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.LEADER_RETENTION);
   }
@@ -269,7 +268,7 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
   )) {
     reasons.push(PLACEMENT_OWNER_RESERVATION_REASON.INCUMBENT_RETENTION);
   }
-  if (deferredNodeIds.length > NUM.ZERO) {
+  if (deferredNodeIds.length > 0) {
     reasons.push(
       PLACEMENT_OWNER_RESERVATION_REASON.GLOBAL_SYSTEM_TRANSITION_DEFERRED,
     );
@@ -279,7 +278,7 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
     phase: PLACEMENT_OWNER_PHASE.RESERVE,
     state,
     reasons: Object.freeze(
-      reasons.length > NUM.ZERO ?
+      reasons.length > 0 ?
         reasons :
         [PLACEMENT_OWNER_RESERVATION_REASON.NONE],
     ),
@@ -312,15 +311,15 @@ function selectIntentTargetNodeIds(scoreResult, reservationResult) {
   const selectedNodeIdSet = new Set(selectedNodeIds);
   return scoreResult.rankedNodeIds
     .filter((nodeId) => selectedNodeIdSet.has(nodeId))
-    .slice(NUM.ZERO, reservationResult.targetCount);
+    .slice(0, reservationResult.targetCount);
 }
 
 function buildPlacementOwnerIntent(evidence, filterResult, scoreResult, reservationResult) {
   const state =
-    evidence.targetCount === NUM.ZERO ?
+    evidence.targetCount === 0 ?
       PLACEMENT_OWNER_INTENT_STATE.NO_TARGET_REQUESTED :
       filterResult.action === PLACEMENT_OWNER_FILTER_ACTION.REJECT ||
-        scoreResult.rankedNodeIds.length === NUM.ZERO ?
+        scoreResult.rankedNodeIds.length === 0 ?
         PLACEMENT_OWNER_INTENT_STATE.NO_CANDIDATES :
         PLACEMENT_OWNER_INTENT_STATE.TARGETS_SELECTED;
   const action =

@@ -7,7 +7,6 @@
  * @module runtime/endpoint-sync-config
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {
   ENDPOINT_SYNC_ALLOWED_UNHEALTHY_POLICIES,
   ENDPOINT_SYNC_BOOLEAN,
@@ -17,8 +16,6 @@ import {
   ENDPOINT_SYNC_REGEX,
 } from './endpoint-sync-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
 
 /**
  * Parse a comma-separated list into trimmed non-empty values.
@@ -27,14 +24,14 @@ const LOCAL_STR_EMPTY = '';
  * @return {Array<string>} Parsed values.
  */
 function parseCsvList(raw) {
-  if (typeof raw !== TYPEOF.STRING) {
+  if (typeof raw !== 'string') {
     return [];
   }
   return raw
     .trim()
     .split(ENDPOINT_SYNC_REGEX.COMMA_SPLIT)
     .map((item) => item.trim())
-    .filter((item) => item.length > LOCAL_NUM_ZERO);
+    .filter((item) => item.length > 0);
 }
 
 /**
@@ -47,10 +44,10 @@ function parseCsvList(raw) {
  * @return {boolean}
  */
 function parseBooleanEnv(raw, fallback, envKey, errors) {
-  if (raw === undefined || raw === null || raw === LOCAL_STR_EMPTY) {
+  if (raw === undefined || raw === null || raw === '') {
     return fallback;
   }
-  if (typeof raw !== TYPEOF.STRING) {
+  if (typeof raw !== 'string') {
     errors.push(`${ENDPOINT_SYNC_ERROR.INVALID_BOOLEAN_PREFIX}: ${envKey}`);
     return fallback;
   }
@@ -79,12 +76,12 @@ function parseBooleanEnv(raw, fallback, envKey, errors) {
  * @return {number}
  */
 function parsePositiveIntegerEnv(raw, fallback, envKey, errors) {
-  if (raw === undefined || raw === null || raw === LOCAL_STR_EMPTY) {
+  if (raw === undefined || raw === null || raw === '') {
     return fallback;
   }
 
   const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed <= LOCAL_NUM_ZERO) {
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     errors.push(`${ENDPOINT_SYNC_ERROR.INVALID_INTEGER_PREFIX}: ${envKey}`);
     return fallback;
   }
@@ -112,11 +109,11 @@ function buildEndpointSyncConfig(env = process.env) {
 
   const adminStreamUrlRaw = env[ENDPOINT_SYNC_ENV.ADMIN_STREAM_URL] || '';
   const adminStreamUrl =
-    typeof adminStreamUrlRaw === TYPEOF.STRING ?
+    typeof adminStreamUrlRaw === 'string' ?
       adminStreamUrlRaw.trim() :
       '';
 
-  if (adminStreamUrl.length === LOCAL_NUM_ZERO) {
+  if (adminStreamUrl.length === 0) {
     errors.push(ENDPOINT_SYNC_ERROR.ADMIN_STREAM_URL_REQUIRED);
   } else if (!ENDPOINT_SYNC_REGEX.WS_SCHEME.test(adminStreamUrl)) {
     errors.push(ENDPOINT_SYNC_ERROR.ADMIN_STREAM_URL_INVALID);
@@ -127,7 +124,7 @@ function buildEndpointSyncConfig(env = process.env) {
     normalizeProtocols(parseCsvList(protocolAllowlistRaw)) :
     [...ENDPOINT_SYNC_DEFAULT.PROTOCOL_ALLOWLIST];
 
-  if (protocolAllowlist.length === LOCAL_NUM_ZERO) {
+  if (protocolAllowlist.length === 0) {
     errors.push(ENDPOINT_SYNC_ERROR.PROTOCOL_ALLOWLIST_EMPTY);
   }
 
@@ -138,7 +135,7 @@ function buildEndpointSyncConfig(env = process.env) {
     env[ENDPOINT_SYNC_ENV.UNHEALTHY_POLICY] ||
     ENDPOINT_SYNC_DEFAULT.UNHEALTHY_POLICY;
   const unhealthyPolicy =
-    typeof unhealthyPolicyRaw === TYPEOF.STRING ?
+    typeof unhealthyPolicyRaw === 'string' ?
       unhealthyPolicyRaw.trim() :
       '';
   if (!ENDPOINT_SYNC_ALLOWED_UNHEALTHY_POLICIES.has(unhealthyPolicy)) {
@@ -149,10 +146,10 @@ function buildEndpointSyncConfig(env = process.env) {
     env[ENDPOINT_SYNC_ENV.SERVICE_NAME_PREFIX] ||
     ENDPOINT_SYNC_DEFAULT.SERVICE_NAME_PREFIX;
   const serviceNamePrefix =
-    typeof serviceNamePrefixRaw === TYPEOF.STRING ?
+    typeof serviceNamePrefixRaw === 'string' ?
       serviceNamePrefixRaw.trim().toLowerCase() :
       '';
-  if (serviceNamePrefix.length === LOCAL_NUM_ZERO) {
+  if (serviceNamePrefix.length === 0) {
     errors.push(ENDPOINT_SYNC_ERROR.SERVICE_NAME_PREFIX_REQUIRED);
   }
 
@@ -160,22 +157,22 @@ function buildEndpointSyncConfig(env = process.env) {
     env[ENDPOINT_SYNC_ENV.LEASE_NAME] ||
     ENDPOINT_SYNC_DEFAULT.LEASE_NAME;
   const leaseName =
-    typeof leaseNameRaw === TYPEOF.STRING ?
+    typeof leaseNameRaw === 'string' ?
       leaseNameRaw.trim() :
       '';
-  if (leaseName.length === LOCAL_NUM_ZERO) {
+  if (leaseName.length === 0) {
     errors.push(ENDPOINT_SYNC_ERROR.LEASE_NAME_REQUIRED);
   }
 
   const targetNamespaceRaw = env[ENDPOINT_SYNC_ENV.TARGET_NAMESPACE] || '';
   const targetNamespace =
-    typeof targetNamespaceRaw === TYPEOF.STRING ?
+    typeof targetNamespaceRaw === 'string' ?
       targetNamespaceRaw.trim() :
       '';
 
   const leaseNamespaceRaw = env[ENDPOINT_SYNC_ENV.LEASE_NAMESPACE] || '';
   const leaseNamespace =
-    typeof leaseNamespaceRaw === TYPEOF.STRING ?
+    typeof leaseNamespaceRaw === 'string' ?
       leaseNamespaceRaw.trim() :
       '';
 
@@ -246,7 +243,7 @@ function buildEndpointSyncConfig(env = process.env) {
   };
 
   return {
-    valid: errors.length === LOCAL_NUM_ZERO,
+    valid: errors.length === 0,
     errors,
     config,
   };

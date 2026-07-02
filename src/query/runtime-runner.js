@@ -9,7 +9,6 @@
  * @module query/runtime-runner
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {BudgetEnforcer} from './budget-enforcer.js';
 import {CancellationToken} from './cancellation-token.js';
 import {LineageTracker} from './lineage-tracker.js';
@@ -22,13 +21,12 @@ import {
   RUNTIME_ERROR_MSG as ERR,
 } from './runtime-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Counter for generating unique query IDs per process.
  * @type {number}
  */
-let queryIdCounter = LOCAL_NUM_ZERO;
+let queryIdCounter = 0;
 
 /**
  * Generate a unique query ID for lineage tracking.
@@ -61,7 +59,7 @@ function validateSnapshot(snapshot) {
     throw new Error(ERR.INVALID_SNAPSHOT_MODE);
   }
   if (snapshot.ts !== undefined &&
-      typeof snapshot.ts !== TYPEOF.NUMBER) {
+      typeof snapshot.ts !== 'number') {
     throw new Error(ERR.INVALID_SNAPSHOT_TS);
   }
 }
@@ -74,11 +72,11 @@ function validateSnapshot(snapshot) {
 function validateOpts(opts) {
   if (!opts) return;
   if (opts.session !== undefined &&
-      typeof opts.session !== TYPEOF.STRING) {
+      typeof opts.session !== 'string') {
     throw new Error(ERR.INVALID_SESSION);
   }
   if (opts.budgets !== undefined &&
-      (typeof opts.budgets !== TYPEOF.OBJECT ||
+      (typeof opts.budgets !== 'object' ||
        opts.budgets === null)) {
     throw new Error(ERR.INVALID_BUDGETS);
   }
@@ -114,7 +112,7 @@ async function run(userFn, opts) {
   if (userFn === undefined || userFn === null) {
     throw new Error(ERR.USER_FN_REQUIRED);
   }
-  if (typeof userFn !== TYPEOF.FUNCTION) {
+  if (typeof userFn !== 'function') {
     throw new Error(ERR.USER_FN_MUST_BE_FUNCTION);
   }
   validateOpts(opts);
@@ -146,7 +144,7 @@ async function run(userFn, opts) {
     const result = await userFn(ctx);
     ctx.closeOutputStream();
     const outputRows = ctx.getResults();
-    if (outputRows.length > LOCAL_NUM_ZERO) {
+    if (outputRows.length > 0) {
       const telemetry = ctx.getOutTelemetry();
       return {result, output: outputRows, telemetry};
     }

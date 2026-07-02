@@ -2,14 +2,11 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_THREE = 3;
 
 const {
   AddressManager,
   ENTITY_TYPE,
-  NUM,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   QUERY_ERROR_MSG,
@@ -36,13 +33,13 @@ class SQLQueryEngineProvisionTargetMethods {
   ) {
     if (
       !Number.isInteger(requestedMinimumReplicaCount) ||
-      requestedMinimumReplicaCount <= LOCAL_NUM_ZERO
+      requestedMinimumReplicaCount <= 0
     ) {
       return targetReplicaCount;
     }
 
     return Math.max(
-      LOCAL_NUM_ONE,
+      1,
       Math.min(requestedMinimumReplicaCount, targetReplicaCount),
     );
   }
@@ -70,9 +67,9 @@ class SQLQueryEngineProvisionTargetMethods {
         0;
     if (
       normalizedReplicaCount < LOCAL_NUM_THREE ||
-      normalizedVisibleActiveNodeCount <= LOCAL_NUM_ONE
+      normalizedVisibleActiveNodeCount <= 1
     ) {
-      return LOCAL_NUM_ONE;
+      return 1;
     }
     return this.calculateQuorumReplicaCount(normalizedReplicaCount);
   }
@@ -118,7 +115,7 @@ class SQLQueryEngineProvisionTargetMethods {
         this.tablePartitionProvisioningTimeoutMs;
     const effectiveMaxWaitMs =
       allowAdaptiveAdmissionConvergenceWait &&
-      explicitTargetNodeIds.length === LOCAL_NUM_ZERO &&
+      explicitTargetNodeIds.length === 0 &&
       Number.isInteger(lastDiagnostics?.activeNodeRowCount) &&
       lastDiagnostics.activeNodeRowCount >= requiredReplicaCount ?
         Math.min(
@@ -159,7 +156,7 @@ class SQLQueryEngineProvisionTargetMethods {
         admissionProbe: lastAdmissionProbe,
         timedOut,
         requiredReplicaCount,
-        waitedMs: LOCAL_NUM_ZERO,
+        waitedMs: 0,
       });
     }
 
@@ -262,17 +259,17 @@ class SQLQueryEngineProvisionTargetMethods {
       timedOut,
       requiredReplicaCount:
         Number.isInteger(options.requiredReplicaCount) &&
-        options.requiredReplicaCount > LOCAL_NUM_ZERO ?
+        options.requiredReplicaCount > 0 ?
           options.requiredReplicaCount :
-          LOCAL_NUM_ONE,
+          1,
       waitedMs:
         Number.isFinite(options.waitedMs) &&
-        options.waitedMs > LOCAL_NUM_ZERO ?
+        options.waitedMs > 0 ?
           Math.floor(options.waitedMs) :
-          LOCAL_NUM_ZERO,
+          0,
       retryAfterMs: timedOut ?
-        Math.max(NUM.ONE, this.tablePartitionProvisioningPollIntervalMs) :
-        NUM.ZERO,
+        Math.max(1, this.tablePartitionProvisioningPollIntervalMs) :
+        0,
       reasonCodes: Object.freeze(reasonCodes),
     };
   }
@@ -297,7 +294,7 @@ class SQLQueryEngineProvisionTargetMethods {
       const nodeId = service?.node_id || service?.nodeId || null;
       if (
         typeof serviceReplicaId !== LOCAL_STR_STRING ||
-        serviceReplicaId.length === LOCAL_NUM_ZERO
+        serviceReplicaId.length === 0
       ) {
         continue;
       }
@@ -307,14 +304,14 @@ class SQLQueryEngineProvisionTargetMethods {
       }
       if (
         typeof service?.address === LOCAL_STR_STRING &&
-        service.address.length > LOCAL_NUM_ZERO
+        service.address.length > 0
       ) {
         peerAddresses.push(service.address);
         continue;
       }
       if (
         typeof nodeId === LOCAL_STR_STRING &&
-        nodeId.length > LOCAL_NUM_ZERO
+        nodeId.length > 0
       ) {
         peerAddresses.push(
           addressManager.format(
@@ -331,7 +328,7 @@ class SQLQueryEngineProvisionTargetMethods {
       const nodeId = operation?.targetNodeId || operation?.nodeId || null;
       if (
         typeof replicaId !== LOCAL_STR_STRING ||
-        replicaId.length === LOCAL_NUM_ZERO
+        replicaId.length === 0
       ) {
         continue;
       }
@@ -341,7 +338,7 @@ class SQLQueryEngineProvisionTargetMethods {
       }
       if (
         typeof nodeId === LOCAL_STR_STRING &&
-        nodeId.length > LOCAL_NUM_ZERO
+        nodeId.length > 0
       ) {
         peerAddresses.push(
           addressManager.format(nodeId, ENTITY_TYPE.PARTITION, replicaId),

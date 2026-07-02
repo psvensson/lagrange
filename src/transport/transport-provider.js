@@ -1,10 +1,10 @@
-const LOCAL_STR_1USAM = 'Not implemented: getType() must be implemented by subclass';
-const LOCAL_STR_1ZD75 = 'Not implemented: isAvailable() must be implemented by subclass';
-const LOCAL_STR_IYU2S = 'Not implemented: connect() must be implemented by subclass';
-const LOCAL_STR_7MIB3 = 'Not implemented: send() must be implemented by subclass';
-const LOCAL_STR_1DV3N = 'Not implemented: disconnect() must be implemented by subclass';
-const LOCAL_STR_J9281 = 'Not implemented: getHealthStatus() must be implemented by subclass';
-const LOCAL_STR_EV5IX = 'Not implemented: shutdown() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_GETTYPE_MUST_BE_IMPLEMEN = 'Not implemented: getType() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_ISAVAILABLE_MUST_BE_IMPL = 'Not implemented: isAvailable() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_CONNECT_MUST_BE_IMPLEMEN = 'Not implemented: connect() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_SEND_MUST_BE_IMPLEMENTED = 'Not implemented: send() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_DISCONNECT_MUST_BE_IMPLE = 'Not implemented: disconnect() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_GETHEALTHSTATUS_MUST_BE = 'Not implemented: getHealthStatus() must be implemented by subclass';
+const LOCAL_STR_NOT_IMPLEMENTED_SHUTDOWN_MUST_BE_IMPLEME = 'Not implemented: shutdown() must be implemented by subclass';
 
 /**
  * TransportProvider - Base class for transport implementations.
@@ -34,7 +34,7 @@ class TransportProvider {
    * provider.getType(); // Returns 'ws'
    */
   getType() {
-    throw new Error(LOCAL_STR_1USAM);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_GETTYPE_MUST_BE_IMPLEMEN);
   }
 
   /**
@@ -53,7 +53,7 @@ class TransportProvider {
    * }
    */
   isAvailable() {
-    throw new Error(LOCAL_STR_1ZD75);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_ISAVAILABLE_MUST_BE_IMPL);
   }
 
   /**
@@ -86,7 +86,7 @@ class TransportProvider {
    * });
    */
   async connect(_endpoint) {
-    throw new Error(LOCAL_STR_IYU2S);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_CONNECT_MUST_BE_IMPLEMEN);
   }
 
   /**
@@ -114,7 +114,7 @@ class TransportProvider {
    * }
    */
   async send(_connection, _message) {
-    throw new Error(LOCAL_STR_7MIB3);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_SEND_MUST_BE_IMPLEMENTED);
   }
 
   /**
@@ -131,7 +131,7 @@ class TransportProvider {
    * await provider.disconnect(connection);
    */
   async disconnect(_connection) {
-    throw new Error(LOCAL_STR_1DV3N);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_DISCONNECT_MUST_BE_IMPLE);
   }
 
   /**
@@ -155,7 +155,7 @@ class TransportProvider {
    */
   getHealthStatus(_connection) {
     throw new Error(
-      LOCAL_STR_J9281,
+      LOCAL_STR_NOT_IMPLEMENTED_GETHEALTHSTATUS_MUST_BE,
     );
   }
 
@@ -172,7 +172,7 @@ class TransportProvider {
    * await provider.shutdown();
    */
   async shutdown() {
-    throw new Error(LOCAL_STR_EV5IX);
+    throw new Error(LOCAL_STR_NOT_IMPLEMENTED_SHUTDOWN_MUST_BE_IMPLEME);
   }
 }
 

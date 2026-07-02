@@ -1,7 +1,6 @@
 import {EXPECTED_CONTRACT} from './examples-runner-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Flatten heterogeneous callback execution responses to a row array.
@@ -86,8 +85,8 @@ function validateExampleOutput(example, executionResult) {
     };
   }
 
-  if (rows.length > LOCAL_NUM_ZERO && expected.firstRow) {
-    if (!matchesFirstRow(rows[LOCAL_NUM_ZERO], expected.firstRow)) {
+  if (rows.length > 0 && expected.firstRow) {
+    if (!matchesFirstRow(rows[0], expected.firstRow)) {
       return {
         passed: false,
         error: `First-row contract failed for ${example.id}`,

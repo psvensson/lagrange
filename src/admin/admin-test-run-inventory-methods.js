@@ -35,7 +35,6 @@ import {
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
 
 const FILE_ENCODING = 'utf8';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
@@ -218,7 +217,7 @@ const adminTestRunInventoryMethods = Object.freeze({
       } catch {
         tailLines = [];
       }
-      if (tailLines.length === LOCAL_NUM_ZERO) {
+      if (tailLines.length === 0) {
         continue;
       }
 

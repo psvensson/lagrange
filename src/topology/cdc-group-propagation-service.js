@@ -6,7 +6,7 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -65,15 +65,15 @@ class CDCGroupPropagationService extends EventEmitter {
       console;
     this.state = CDC_GROUP_PROPAGATION_STATE.CREATED;
     this.stats = {
-      groupedCount: NUM.ZERO,
-      safeCount: NUM.ZERO,
-      fallbackCount: NUM.ZERO,
-      groupedDeliveryFailureCount: NUM.ZERO,
+      groupedCount: 0,
+      safeCount: 0,
+      fallbackCount: 0,
+      groupedDeliveryFailureCount: 0,
       lastStrategy: null,
       lastMode: null,
       lastFallbackReason: null,
       lastPropagationAt: null,
-      lastTargetGroupCount: NUM.ZERO,
+      lastTargetGroupCount: 0,
     };
     this.deliveryRetryMaxAttempts = this.resolvePositiveInteger(
       options.deliveryRetryMaxAttempts,
@@ -190,7 +190,7 @@ class CDCGroupPropagationService extends EventEmitter {
     const sourceMessageGroupService = options.sourceMessageGroupService;
     assertCritical(
       sourceMessageGroupService &&
-        typeof sourceMessageGroupService.applyCDCEvent === TYPEOF.FUNCTION,
+        typeof sourceMessageGroupService.applyCDCEvent === 'function',
       CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
     );
     assertCritical(
@@ -240,7 +240,7 @@ class CDCGroupPropagationService extends EventEmitter {
     });
     const groupedFailureCount = groupedDeliveryFailures.length;
     const fallbackRecovery =
-      groupedFailureCount > NUM.ZERO ?
+      groupedFailureCount > 0 ?
         await this.recoverGroupedDeliveryFailuresWithSafeFanout({
           tableName,
           operation,
@@ -252,7 +252,7 @@ class CDCGroupPropagationService extends EventEmitter {
     const deliveryFailures = fallbackRecovery.deliveryFailures;
     const fallbackUsed = fallbackRecovery.fallbackUsed === true;
     const timestamp = this.now();
-    this.stats.groupedCount += NUM.ONE;
+    this.stats.groupedCount += 1;
     this.stats.lastStrategy = CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.GROUPED;
     this.stats.lastFallbackReason = fallbackUsed ?
@@ -260,7 +260,7 @@ class CDCGroupPropagationService extends EventEmitter {
       null;
     this.stats.lastPropagationAt = timestamp;
     this.stats.lastTargetGroupCount = groupedContext.targets.length;
-    if (groupedFailureCount > NUM.ZERO) {
+    if (groupedFailureCount > 0) {
       this.stats.groupedDeliveryFailureCount += groupedFailureCount;
       this.setPublicationMode(
         CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
@@ -281,7 +281,7 @@ class CDCGroupPropagationService extends EventEmitter {
       );
     }
     const result = {
-      success: deliveryFailures.length === NUM.ZERO,
+      success: deliveryFailures.length === 0,
       strategy: CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
       mode: CDC_GROUP_PROPAGATION_STATUS.GROUPED,
       status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
@@ -335,7 +335,7 @@ class CDCGroupPropagationService extends EventEmitter {
       return;
     }
     this.lastSkippedFanoutSignature = signature;
-    if (skippedGroupIds.length === NUM.ZERO) {
+    if (skippedGroupIds.length === 0) {
       return;
     }
     this.logger.warn(
@@ -375,7 +375,7 @@ class CDCGroupPropagationService extends EventEmitter {
       targets: safeTargets,
     });
     const timestamp = this.now();
-    this.stats.safeCount += NUM.ONE;
+    this.stats.safeCount += 1;
     this.stats.lastStrategy = CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.SAFE;
     this.stats.lastFallbackReason = options.fallbackReason || null;
@@ -394,7 +394,7 @@ class CDCGroupPropagationService extends EventEmitter {
       strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
     });
     return {
-      success: deliveryFailures.length === NUM.ZERO,
+      success: deliveryFailures.length === 0,
       strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
       mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
       status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
@@ -417,24 +417,24 @@ class CDCGroupPropagationService extends EventEmitter {
       [];
     let deliveryFailures = originalFailures;
     let fallbackUsed = false;
-    if (originalFailures.length > NUM.ZERO) {
+    if (originalFailures.length > 0) {
       const failedGroupIds = new Set();
       const unresolvedFailures = [];
       for (const failure of originalFailures) {
         const groupId = failure?.targetGroupId;
-        if (typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO) {
+        if (typeof groupId === 'string' && groupId.length > 0) {
           failedGroupIds.add(groupId);
           continue;
         }
         unresolvedFailures.push(failure);
       }
-      if (failedGroupIds.size > NUM.ZERO) {
+      if (failedGroupIds.size > 0) {
         const safeTargets = buildSafeTargets({
           sourceGroupId: options.sourceGroupId,
           systemTableCache: this.systemTableCache,
           messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
         }).filter((target) => failedGroupIds.has(target.groupId));
-        if (safeTargets.length > NUM.ZERO) {
+        if (safeTargets.length > 0) {
           this.recordSafeFallback(CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE, {
             tableName: options.tableName,
             operation: options.operation,
@@ -449,7 +449,7 @@ class CDCGroupPropagationService extends EventEmitter {
             allowDeferToExistingRetry: false,
           });
           const failuresByKey = new Map();
-          let unkeyedCounter = NUM.ZERO;
+          let unkeyedCounter = 0;
           const targetedGroupIds = new Set(safeTargets.map((target) => target.groupId));
           for (const failure of unresolvedFailures) {
             failuresByKey.set(`unkeyed-${unkeyedCounter++}`, failure);
@@ -457,8 +457,8 @@ class CDCGroupPropagationService extends EventEmitter {
           for (const failure of originalFailures) {
             const groupId = failure?.targetGroupId;
             if (
-              typeof groupId === TYPEOF.STRING &&
-              groupId.length > NUM.ZERO &&
+              typeof groupId === 'string' &&
+              groupId.length > 0 &&
               !targetedGroupIds.has(groupId)
             ) {
               failuresByKey.set(groupId, failure);
@@ -466,7 +466,7 @@ class CDCGroupPropagationService extends EventEmitter {
           }
           for (const failure of recoveredFailures) {
             const groupId = failure?.targetGroupId;
-            if (typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO) {
+            if (typeof groupId === 'string' && groupId.length > 0) {
               failuresByKey.set(groupId, failure);
             } else {
               failuresByKey.set(`recovered-unkeyed-${unkeyedCounter++}`, failure);
@@ -488,7 +488,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * @param {Object} context
    * @private
    */ recordSafeFallback(reason, context = {}) {
-    this.stats.fallbackCount += NUM.ONE;
+    this.stats.fallbackCount += 1;
     this.emit(CDC_GROUP_PROPAGATION_EVENT.SAFE_FALLBACK, {
       reason,
       tableName: context.tableName,
@@ -501,7 +501,7 @@ class CDCGroupPropagationService extends EventEmitter {
       strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
       reason,
     };
-    if (Number.isInteger(context.failedGroupCount) && context.failedGroupCount > NUM.ZERO) {
+    if (Number.isInteger(context.failedGroupCount) && context.failedGroupCount > 0) {
       fallbackLogContext.failedGroupCount = context.failedGroupCount;
     }
 
@@ -683,7 +683,7 @@ class CDCGroupPropagationService extends EventEmitter {
       return fallback;
     }
     const normalized = Math.floor(value);
-    if (normalized < NUM.ONE) {
+    if (normalized < 1) {
       return fallback;
     }
     return normalized;
@@ -700,7 +700,7 @@ class CDCGroupPropagationService extends EventEmitter {
     if (!Number.isFinite(value)) {
       return fallback;
     }
-    if (value <= NUM.ZERO) {
+    if (value <= 0) {
       return fallback;
     }
     return value;

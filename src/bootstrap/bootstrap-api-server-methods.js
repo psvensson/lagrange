@@ -13,7 +13,7 @@ import {
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
 
-const LOCAL_STR_DHB9T = 'metrics.bootstrap_api.health.initializing';
+const LOCAL_STR_METRICS_BOOTSTRAP_API_HEALTH_INITIALIZIN = 'metrics.bootstrap_api.health.initializing';
 
 const bootstrapApiServerMethods = {
   /**
@@ -93,7 +93,7 @@ const bootstrapApiServerMethods = {
     // Health check endpoint
     this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, reply) => {
       if (!this.getSqlQueryEngine()) {
-        this.logger.debug(LOCAL_STR_DHB9T, {
+        this.logger.debug(LOCAL_STR_METRICS_BOOTSTRAP_API_HEALTH_INITIALIZIN, {
           seedNodeId: this.seedNodeId,
           sqlEngineReady: false,
         });

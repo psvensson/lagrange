@@ -5,7 +5,7 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {NUM, STATE} from '../constants/index.js';
+import {STATE} from '../constants/index.js';
 import {QUERY_ERROR_CODE, QUERY_LOG_MSG} from './query-constants.js';
 import {
   TABLE_CREATION_SERVICE_LITERAL,
@@ -103,7 +103,7 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
         this.calculateQuorumReplicaCount(normalizedReplicaCount) :
         Math.floor(normalizedReplicaCount / 2) + 1;
     return Number.isInteger(minimumRoutableReplicaCount) &&
-      minimumRoutableReplicaCount > NUM.ZERO ?
+      minimumRoutableReplicaCount > 0 ?
       minimumRoutableReplicaCount :
       null;
   },
@@ -128,11 +128,11 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
       partition_key_start: null,
       partition_key_end: null,
       partition_version:
-        Number.isInteger(partitionVersion) && partitionVersion > NUM.ZERO ?
+        Number.isInteger(partitionVersion) && partitionVersion > 0 ?
           partitionVersion :
-          NUM.ONE,
+          1,
       replica_count: this.defaultReplicaCount,
-      size_bytes: NUM.ZERO,
+      size_bytes: 0,
       leader_node_id: null,
       state: STATE.NORMAL,
       created_at: Date.now(),

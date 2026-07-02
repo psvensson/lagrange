@@ -2,13 +2,11 @@ import {UnifiedRebalancerMoveExecution} from './unified-rebalancer-move-executio
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 
 const {
-  NUM,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
   REBALANCER_PRE_EXECUTION_RETURN_STATE,
   REBALANCER_RUNTIME_REASON,
   REBALANCER_SKIP_REASON,
-  TYPEOF,
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
@@ -214,19 +212,19 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         this.getReservedPriorityRecoveryMoveSlots();
 
       availableBudget = Math.max(
-        NUM.ZERO,
+        0,
         effectiveBudget - inFlightCount - reservedPriorityRecoveryMoveSlots,
       );
       if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
         const priorityTopologyCleanupBudgetBypass =
           shouldPrioritizeBudgetedTopologyCleanup;
         if (priorityTopologyCleanupBudgetBypass === true) {
-          availableBudget = NUM.ONE;
+          availableBudget = 1;
         } else {
           const priorityBudgetBypass =
             await this.canBypassGlobalBudgetForPriorityRecovery(moves);
           if (priorityBudgetBypass === true) {
-            availableBudget = NUM.ONE;
+            availableBudget = 1;
           } else {
             return this.buildRebalanceResult(true, {
               skipped: true,
@@ -304,7 +302,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     if (
       !readinessService ||
       typeof readinessService.getCurrentPublishedMembershipEpochSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }

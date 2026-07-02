@@ -15,12 +15,7 @@ import {
 } from '../system-metadata-access-error.js';
 import {runRetryableControlPlaneWrite} from
   '../../bootstrap/shared/retryable-control-plane-write.js';
-import {
-  NUM,
-  TYPEOF,
-} from '../../constants/index.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_UNKNOWN_OWNER = 'unknown-owner';
 const LOCAL_STR_FUNCTION = 'function';
@@ -31,10 +26,10 @@ const LOCAL_STR_DELETE = 'delete';
 
 function unwrapRowReadResult(result) {
   if (Array.isArray(result)) {
-    return result[LOCAL_NUM_ZERO] || null;
+    return result[0] || null;
   }
   if (Array.isArray(result?.rows)) {
-    return result.rows[LOCAL_NUM_ZERO] || null;
+    return result.rows[0] || null;
   }
   if (result && typeof result === LOCAL_STR_OBJECT) {
     return result;
@@ -45,15 +40,15 @@ function unwrapRowReadResult(result) {
 function cloneParticipantFailures(resultOrError) {
   const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
     resultOrError.participantFailures
-      .filter((entry) => entry && typeof entry === TYPEOF.OBJECT)
+      .filter((entry) => entry && typeof entry === 'object')
       .map((entry) => ({...entry})) :
     [];
   const firstFailedParticipant =
     resultOrError?.firstFailedParticipant &&
-    typeof resultOrError.firstFailedParticipant === TYPEOF.OBJECT ?
+    typeof resultOrError.firstFailedParticipant === 'object' ?
       {...resultOrError.firstFailedParticipant} :
-      (participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      (participantFailures.length > 0 ?
+        participantFailures[0] :
         null);
   return {
     participantFailures,
@@ -67,49 +62,49 @@ function applySystemMetadataMutationErrorMetadata(
   metadata = {},
 ) {
   const errorCode = getControlPlaneErrorCode(resultOrError);
-  if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+  if (typeof errorCode === 'string' && errorCode.length > 0) {
     error.errorCode = errorCode;
-    if (typeof error.code !== TYPEOF.STRING || error.code.length === NUM.ZERO) {
+    if (typeof error.code !== 'string' || error.code.length === 0) {
       error.code = errorCode;
     }
   }
   const retryAfterMs = getControlPlaneRetryAfterMs(resultOrError);
-  if (retryAfterMs > NUM.ZERO) {
+  if (retryAfterMs > 0) {
     error.retryAfterMs = retryAfterMs;
   }
-  if (resultOrError?.deferRetry === true || retryAfterMs > NUM.ZERO) {
+  if (resultOrError?.deferRetry === true || retryAfterMs > 0) {
     error.deferRetry = true;
   }
-  if (typeof resultOrError?.pressureAction === TYPEOF.STRING &&
-      resultOrError.pressureAction.length > NUM.ZERO) {
+  if (typeof resultOrError?.pressureAction === 'string' &&
+      resultOrError.pressureAction.length > 0) {
     error.pressureAction = resultOrError.pressureAction;
   }
-  if (typeof resultOrError?.pressureReason === TYPEOF.STRING &&
-      resultOrError.pressureReason.length > NUM.ZERO) {
+  if (typeof resultOrError?.pressureReason === 'string' &&
+      resultOrError.pressureReason.length > 0) {
     error.pressureReason = resultOrError.pressureReason;
   }
   if (resultOrError?.pressureSummary &&
-      typeof resultOrError.pressureSummary === TYPEOF.OBJECT) {
+      typeof resultOrError.pressureSummary === 'object') {
     error.pressureSummary = {...resultOrError.pressureSummary};
   }
-  if (typeof resultOrError?.reasonCode === TYPEOF.STRING &&
-      resultOrError.reasonCode.length > NUM.ZERO) {
+  if (typeof resultOrError?.reasonCode === 'string' &&
+      resultOrError.reasonCode.length > 0) {
     error.reasonCode = resultOrError.reasonCode;
   }
-  if (typeof resultOrError?.participationKind === TYPEOF.STRING &&
-      resultOrError.participationKind.length > NUM.ZERO) {
+  if (typeof resultOrError?.participationKind === 'string' &&
+      resultOrError.participationKind.length > 0) {
     error.participationKind = resultOrError.participationKind;
   }
-  if (typeof resultOrError?.outcome === TYPEOF.STRING &&
-      resultOrError.outcome.length > NUM.ZERO) {
+  if (typeof resultOrError?.outcome === 'string' &&
+      resultOrError.outcome.length > 0) {
     error.outcome = resultOrError.outcome;
   }
-  if (typeof resultOrError?.backpressured === TYPEOF.BOOLEAN) {
+  if (typeof resultOrError?.backpressured === 'boolean') {
     error.backpressured = resultOrError.backpressured;
   }
   const {participantFailures, firstFailedParticipant} =
     cloneParticipantFailures(resultOrError);
-  if (participantFailures.length > NUM.ZERO) {
+  if (participantFailures.length > 0) {
     error.participantFailures = participantFailures;
   }
   if (firstFailedParticipant) {
@@ -118,16 +113,16 @@ function applySystemMetadataMutationErrorMetadata(
   if (resultOrError?.cause) {
     error.cause = resultOrError.cause;
   }
-  if (typeof metadata.tableName === TYPEOF.STRING &&
-      metadata.tableName.length > NUM.ZERO) {
+  if (typeof metadata.tableName === 'string' &&
+      metadata.tableName.length > 0) {
     error.tableName = metadata.tableName;
   }
-  if (typeof metadata.ownerName === TYPEOF.STRING &&
-      metadata.ownerName.length > NUM.ZERO) {
+  if (typeof metadata.ownerName === 'string' &&
+      metadata.ownerName.length > 0) {
     error.ownerName = metadata.ownerName;
   }
-  if (typeof metadata.operation === TYPEOF.STRING &&
-      metadata.operation.length > NUM.ZERO) {
+  if (typeof metadata.operation === 'string' &&
+      metadata.operation.length > 0) {
     error.operation = metadata.operation;
   }
   return error;
@@ -139,12 +134,12 @@ function buildSystemMetadataMutationError(
   fallbackMessage = null,
 ) {
   const message =
-    typeof resultOrError?.error === TYPEOF.STRING &&
-      resultOrError.error.length > NUM.ZERO ?
+    typeof resultOrError?.error === 'string' &&
+      resultOrError.error.length > 0 ?
       resultOrError.error :
       (
-        typeof resultOrError?.message === TYPEOF.STRING &&
-        resultOrError.message.length > NUM.ZERO ?
+        typeof resultOrError?.message === 'string' &&
+        resultOrError.message.length > 0 ?
           resultOrError.message :
           (
             fallbackMessage ||
@@ -156,7 +151,7 @@ function buildSystemMetadataMutationError(
     resultOrError instanceof Error ?
       resultOrError :
       new Error(message);
-  if (!error.message || error.message.length === NUM.ZERO) {
+  if (!error.message || error.message.length === 0) {
     error.message = message;
   }
   return applySystemMetadataMutationErrorMetadata(
@@ -330,7 +325,7 @@ class SystemMetadataOwnerBase {
       (Number.isFinite(this.controlPlaneWriteRetryTimeoutMs) ?
         Math.floor(this.controlPlaneWriteRetryTimeoutMs) :
         null);
-    if (timeoutMs !== null && timeoutMs >= NUM.ZERO) {
+    if (timeoutMs !== null && timeoutMs >= 0) {
       retryOptions.timeoutMs = timeoutMs;
     }
     const baseDelayMs = Number.isFinite(options.controlPlaneWriteRetryBaseDelayMs) ?
@@ -338,7 +333,7 @@ class SystemMetadataOwnerBase {
       (Number.isFinite(this.controlPlaneWriteRetryBaseDelayMs) ?
         Math.floor(this.controlPlaneWriteRetryBaseDelayMs) :
         null);
-    if (baseDelayMs !== null && baseDelayMs > NUM.ZERO) {
+    if (baseDelayMs !== null && baseDelayMs > 0) {
       retryOptions.baseDelayMs = baseDelayMs;
     }
     const maxDelayMs = Number.isFinite(options.controlPlaneWriteRetryMaxDelayMs) ?
@@ -346,24 +341,24 @@ class SystemMetadataOwnerBase {
       (Number.isFinite(this.controlPlaneWriteRetryMaxDelayMs) ?
         Math.floor(this.controlPlaneWriteRetryMaxDelayMs) :
         null);
-    if (maxDelayMs !== null && maxDelayMs > NUM.ZERO) {
+    if (maxDelayMs !== null && maxDelayMs > 0) {
       retryOptions.maxDelayMs = maxDelayMs;
     }
     const now =
-      typeof options.controlPlaneWriteRetryNow === TYPEOF.FUNCTION ?
+      typeof options.controlPlaneWriteRetryNow === 'function' ?
         options.controlPlaneWriteRetryNow :
         this.controlPlaneWriteRetryNow;
-    if (typeof now === TYPEOF.FUNCTION) {
+    if (typeof now === 'function') {
       retryOptions.now = now;
     }
     const sleep =
-      typeof options.controlPlaneWriteRetrySleep === TYPEOF.FUNCTION ?
+      typeof options.controlPlaneWriteRetrySleep === 'function' ?
         options.controlPlaneWriteRetrySleep :
         this.controlPlaneWriteRetrySleep;
-    if (typeof sleep === TYPEOF.FUNCTION) {
+    if (typeof sleep === 'function') {
       retryOptions.sleep = sleep;
     }
-    if (typeof options.controlPlaneWriteRetryOnRetry === TYPEOF.FUNCTION) {
+    if (typeof options.controlPlaneWriteRetryOnRetry === 'function') {
       retryOptions.onRetry = options.controlPlaneWriteRetryOnRetry;
     }
     return retryOptions;
@@ -373,15 +368,15 @@ class SystemMetadataOwnerBase {
     const mutationOptions = {
       ...options,
       owner:
-        typeof options.owner === TYPEOF.STRING && options.owner.length > NUM.ZERO ?
+        typeof options.owner === 'string' && options.owner.length > 0 ?
           options.owner :
           this.getOwnerName(),
     };
     if (operation !== LOCAL_STR_UPSERT) {
       return mutationOptions;
     }
-    if (typeof mutationOptions.coalescingKey === TYPEOF.STRING &&
-        mutationOptions.coalescingKey.length > NUM.ZERO) {
+    if (typeof mutationOptions.coalescingKey === 'string' &&
+        mutationOptions.coalescingKey.length > 0) {
       return mutationOptions;
     }
     if (mutationOptions.mergePolicy &&
@@ -390,14 +385,14 @@ class SystemMetadataOwnerBase {
     }
     const primaryKeyField = this.getPrimaryKeyField();
     const primaryKeyValue = payload?.row?.[primaryKeyField];
-    if (typeof primaryKeyValue === TYPEOF.UNDEFINED || primaryKeyValue === null) {
+    if (typeof primaryKeyValue === 'undefined' || primaryKeyValue === null) {
       return mutationOptions;
     }
     const normalizedPrimaryKey =
-      typeof primaryKeyValue === TYPEOF.STRING ?
+      typeof primaryKeyValue === 'string' ?
         primaryKeyValue.trim() :
         String(primaryKeyValue);
-    if (normalizedPrimaryKey.length === NUM.ZERO) {
+    if (normalizedPrimaryKey.length === 0) {
       return mutationOptions;
     }
     return {

@@ -74,7 +74,7 @@ class MockRaftReplica extends EventEmitter {
       this.nodeId, this.entityType, this.replicaId,
     );
 
-    this.term = options.initialTerm || NUM.ZERO;
+    this.term = options.initialTerm || 0;
     this.state = RAFT_STATE.FOLLOWER;
     this.votedFor = null;
     this.leaderId = null;
@@ -99,7 +99,7 @@ class MockRaftReplica extends EventEmitter {
    */
   startElection() {
     this.electionStartTime = Date.now();
-    this.term += NUM.ONE;
+    this.term += 1;
     this.state = RAFT_STATE.CANDIDATE;
     this.votedFor = this.replicaId;
     this.votesReceived.clear();
@@ -111,7 +111,7 @@ class MockRaftReplica extends EventEmitter {
       address: this.unifiedAddress,
       state: this.state,
       leader: null,
-      last: {index: NUM.ZERO, term: NUM.ZERO},
+      last: {index: 0, term: 0},
       data: null,
     };
   }
@@ -143,7 +143,7 @@ class MockRaftReplica extends EventEmitter {
       address: this.unifiedAddress,
       state: this.state,
       leader: this.leaderId,
-      last: {index: NUM.ZERO, term: NUM.ZERO},
+      last: {index: 0, term: 0},
       data: voteGranted ? [{granted: true}] : null,
     };
   }
@@ -166,13 +166,13 @@ class MockRaftReplica extends EventEmitter {
     }
 
     const voteGranted = voteResponse.data &&
-      voteResponse.data[NUM.ZERO]?.granted === true;
+      voteResponse.data[0]?.granted === true;
 
     if (voteGranted) {
       this.votesReceived.add(voteResponse.address);
     }
 
-    const majority = Math.floor((this.peers.size + NUM.ONE) / NUM.TWO) + NUM.ONE;
+    const majority = Math.floor((this.peers.size + 1) / 2) + 1;
     if (this.votesReceived.size >= majority) {
       this.state = RAFT_STATE.LEADER;
       this.leaderId = this.unifiedAddress;
@@ -284,7 +284,7 @@ function createRaftGroup(options = {}) {
   const router = new MockElectionRouter();
   const replicas = [];
 
-  for (let i = NUM.ZERO; i < replicaCount; i++) {
+  for (let i = 0; i < replicaCount; i++) {
     const replica = new MockRaftReplica({
       replicaId: `replica-${i}`,
       nodeId,
@@ -335,7 +335,7 @@ async function simulateLeaderElection(raftGroup, candidateIndex, timeoutMs) {
   const voteRequest = candidate.startElection();
 
   // For single replica, it becomes leader immediately with its own vote
-  if (candidate.peers.size === NUM.ZERO) {
+  if (candidate.peers.size === 0) {
     // Single replica has majority (1 of 1)
     candidate.state = RAFT_STATE.LEADER;
     candidate.leaderId = candidate.unifiedAddress;
@@ -348,7 +348,7 @@ async function simulateLeaderElection(raftGroup, candidateIndex, timeoutMs) {
       electionDurationMs,
       completedWithinTimeout: electionDurationMs <= timeoutMs,
       term: candidate.term,
-      votesReceived: NUM.ONE,
+      votesReceived: 1,
     };
   }
 
@@ -425,7 +425,7 @@ const entityTypeArb = fc.constantFrom(
  */
 const nodeIdArb = fc.stringOf(
   fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
-  {minLength: NUM.ONE, maxLength: NUM.TEN},
+  {minLength: 1, maxLength: NUM.TEN},
 );
 
 // =============================================================================
@@ -456,7 +456,7 @@ describe('Property 3: Leader Election Completion', () => {
 
             const result = await simulateLeaderElection(
               raftGroup,
-              NUM.ZERO,
+              0,
               timeoutMs,
             );
 
@@ -496,14 +496,14 @@ describe('Property 3: Leader Election Completion', () => {
 
             await simulateLeaderElection(
               raftGroup,
-              NUM.ZERO,
+              0,
               ELECTION_SIM.DEFAULT_TIMEOUT_MS,
             );
 
             const leaderCount = countLeaders(raftGroup.replicas);
 
             // Exactly one leader must exist after election
-            return leaderCount === NUM.ONE;
+            return leaderCount === 1;
           },
         ),
         {numRuns: NUM.TEN},
@@ -530,7 +530,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           const result = await simulateLeaderElection(
             raftGroup,
-            NUM.ZERO,
+            0,
             ELECTION_SIM.DEFAULT_TIMEOUT_MS,
           );
 
@@ -540,7 +540,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           // Must have exactly one leader
           const leaderCount = countLeaders(raftGroup.replicas);
-          const singleLeader = leaderCount === NUM.ONE;
+          const singleLeader = leaderCount === 1;
 
           return completedWithinTimeout && singleLeader;
         },
@@ -569,7 +569,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           const result = await simulateLeaderElection(
             raftGroup,
-            NUM.ZERO,
+            0,
             ELECTION_SIM.DEFAULT_TIMEOUT_MS,
           );
 
@@ -579,7 +579,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           // Must have exactly one leader
           const leaderCount = countLeaders(raftGroup.replicas);
-          const singleLeader = leaderCount === NUM.ONE;
+          const singleLeader = leaderCount === 1;
 
           return completedWithinTimeout && singleLeader;
         },
@@ -609,12 +609,12 @@ describe('Property 3: Leader Election Completion', () => {
 
           const result = await simulateLeaderElection(
             raftGroup,
-            NUM.ZERO,
+            0,
             ELECTION_SIM.DEFAULT_TIMEOUT_MS,
           );
 
           // Calculate required majority
-          const majority = Math.floor(replicaCount / NUM.TWO) + NUM.ONE;
+          const majority = Math.floor(replicaCount / 2) + 1;
 
           // Leader must have received majority votes
           const hasMajority = result.votesReceived >= majority;
@@ -647,12 +647,12 @@ describe('Property 3: Leader Election Completion', () => {
 
           const result = await simulateLeaderElection(
             raftGroup,
-            NUM.ZERO,
+            0,
             ELECTION_SIM.DEFAULT_TIMEOUT_MS,
           );
 
           // Leader's term must be at least 1
-          const validTerm = result.term >= NUM.ONE;
+          const validTerm = result.term >= 1;
 
           return result.becameLeader && validTerm;
         },
@@ -682,7 +682,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           await simulateLeaderElection(
             raftGroup,
-            NUM.ZERO,
+            0,
             ELECTION_SIM.DEFAULT_TIMEOUT_MS,
           );
 
@@ -694,7 +694,7 @@ describe('Property 3: Leader Election Completion', () => {
 
           // Must have exactly one leader
           const leaderCount = countLeaders(raftGroup.replicas);
-          const singleLeader = leaderCount === NUM.ONE;
+          const singleLeader = leaderCount === 1;
 
           return singleLeader && allFollowers;
         },
@@ -725,12 +725,12 @@ describe('Property 3: Leader Election Completion', () => {
 
             const result = await simulateLeaderElection(
               raftGroup,
-              NUM.ZERO,
+              0,
               ELECTION_SIM.DEFAULT_TIMEOUT_MS,
             );
 
             // Election duration must be non-negative
-            const validDuration = result.electionDurationMs >= NUM.ZERO;
+            const validDuration = result.electionDurationMs >= 0;
 
             return result.becameLeader && validDuration;
           },

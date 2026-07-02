@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
@@ -33,7 +29,7 @@ function resolvePriorityRecoveryWitnessPartitionIds(
   ) ?
     semanticStatePartitions.blockedPartitionIds :
     [];
-  if (unresolvedPartitionIds.length > NUM.ZERO) {
+  if (unresolvedPartitionIds.length > 0) {
     return Object.freeze([...unresolvedPartitionIds]);
   }
   const fallbackWitnessPartitionIds = Array.isArray(
@@ -41,7 +37,7 @@ function resolvePriorityRecoveryWitnessPartitionIds(
   ) ?
     blockedClassIds.blockedPartitionIds :
     [];
-  if (fallbackWitnessPartitionIds.length > NUM.ZERO) {
+  if (fallbackWitnessPartitionIds.length > 0) {
     return Object.freeze([...fallbackWitnessPartitionIds]);
   }
   const nonBlockingInFlightWitnessPartitionIds = Array.isArray(
@@ -53,7 +49,7 @@ function resolvePriorityRecoveryWitnessPartitionIds(
       PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT
     ] :
     [];
-  if (nonBlockingInFlightWitnessPartitionIds.length > NUM.ZERO) {
+  if (nonBlockingInFlightWitnessPartitionIds.length > 0) {
     return Object.freeze([...nonBlockingInFlightWitnessPartitionIds]);
   }
   return Object.freeze([]);
@@ -90,11 +86,11 @@ function resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot) {
   ]
     .map((candidate) => normalizeNonNegativeInteger(candidate))
     .filter((candidate) =>
-      Number.isFinite(candidate) && candidate > NUM.ZERO,
+      Number.isFinite(candidate) && candidate > 0,
     );
-  return progressTimestampCandidates.length > NUM.ZERO ?
+  return progressTimestampCandidates.length > 0 ?
     Math.max(...progressTimestampCandidates) :
-    NUM.ZERO;
+    0;
 }
 
 function resolvePriorityRecoverySnapshotSortTimestamp(
@@ -103,13 +99,13 @@ function resolvePriorityRecoverySnapshotSortTimestamp(
 ) {
   const progressTimestamp =
     resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot);
-  if (progressTimestamp > NUM.ZERO) {
+  if (progressTimestamp > 0) {
     return progressTimestamp;
   }
   return Number(
     snapshot?.observation?.provenance?.capturedAt ??
       decisionSnapshots?.capturedAt ??
-      NUM.ZERO,
+      0,
   );
 }
 
@@ -118,8 +114,8 @@ function resolvePriorityRecoverySnapshotEvidenceRank(snapshot) {
     snapshot?.coordinator?.operationCount,
   );
   if (
-    (Number.isFinite(operationCount) && operationCount > NUM.ZERO) ||
-    resolvePriorityRecoverySnapshotOperationIds(snapshot).length > NUM.ZERO
+    (Number.isFinite(operationCount) && operationCount > 0) ||
+    resolvePriorityRecoverySnapshotOperationIds(snapshot).length > 0
   ) {
     return LOCAL_NUM_TWO;
   }
@@ -132,9 +128,9 @@ function resolvePriorityRecoverySnapshotEvidenceRank(snapshot) {
     LOCAL_STR_EMPTY,
   );
   if (
-    (workflowState.length > NUM.ZERO &&
+    (workflowState.length > 0 &&
       workflowState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE) ||
-    (visibilityState.length > NUM.ZERO &&
+    (visibilityState.length > 0 &&
       visibilityState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE)
   ) {
     return LOCAL_NUM_ONE;
@@ -148,7 +144,7 @@ function resolvePriorityRecoverySnapshotSortEpoch(
 ) {
   return normalizeNonNegativeInteger(
     snapshot?.epoch ?? decisionSnapshots?.publicationEpoch,
-  ) ?? NUM.ZERO;
+  ) ?? 0;
 }
 
 function resolvePriorityRecoveryExplicitSemanticStateMatchRank(
@@ -157,14 +153,14 @@ function resolvePriorityRecoveryExplicitSemanticStateMatchRank(
 ) {
   const partitionId = String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim();
   if (
-    partitionId.length === NUM.ZERO ||
+    partitionId.length === 0 ||
     !(explicitSemanticStateByPartitionId instanceof Map)
   ) {
     return LOCAL_NUM_ZERO;
   }
   const explicitSemanticState =
     explicitSemanticStateByPartitionId.get(partitionId) || null;
-  if (typeof explicitSemanticState !== TYPEOF.STRING) {
+  if (typeof explicitSemanticState !== 'string') {
     return LOCAL_NUM_ZERO;
   }
   const snapshotSemanticState = resolvePriorityRecoverySnapshotSemanticState(
@@ -322,7 +318,7 @@ function resolvePriorityRecoveryEligibleNodeIds(latestPartitionSnapshot) {
     [];
   return Object.freeze(
     normalizeDistinctStringArray(
-      effectiveEligibleNodeIds.length > NUM.ZERO ?
+      effectiveEligibleNodeIds.length > 0 ?
         effectiveEligibleNodeIds :
         latestPartitionSnapshot?.admission?.eligibleNodeIds,
     ),

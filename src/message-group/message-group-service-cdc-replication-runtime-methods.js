@@ -21,7 +21,6 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
     METRICS_LOG_TAG,
     NUM,
     TIME_MS,
-    TYPEOF,
     boundCdcForwardErrorDetail,
     buildDeferredCdcForwardError,
     buildLatencyCdcPropagationResult,
@@ -140,9 +139,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
       const skipReplication = options.skipReplication === true;
       const relayDepth =
-        Number.isInteger(options.relayDepth) && options.relayDepth >= NUM.ZERO ?
+        Number.isInteger(options.relayDepth) && options.relayDepth >= 0 ?
           options.relayDepth :
-          NUM.ZERO;
+          0;
       const addressedStrictConvergence =
         options[
           MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE
@@ -154,7 +153,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         ...event,
         causeId: getOrCreateCauseId(event.causeId),
       }));
-      if (normalizedEvents.length === NUM.ZERO) {
+      if (normalizedEvents.length === 0) {
         return;
       }
       const strictEvent = normalizedEvents.find((event) => {
@@ -175,7 +174,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const useCanonicalLocalStrictIngress =
         strictIngressDecision?.localIngress === true;
       const isSingleReplicaGroup =
-        Array.isArray(this.replicaIds) && this.replicaIds.length <= NUM.ONE;
+        Array.isArray(this.replicaIds) && this.replicaIds.length <= 1;
       const requiresRaftReplication =
         !skipReplication &&
         !useCanonicalLocalStrictIngress &&
@@ -213,7 +212,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       }
       if (requiresRaftReplication) {
         const cdcCommand =
-          normalizedEvents.length === NUM.ONE ?
+          normalizedEvents.length === 1 ?
             {
               type: 'CDC',
               tableName: normalizedEvents[0].tableName,
@@ -239,35 +238,35 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
           MESSAGE_GROUP_SERVICE_LITERAL.CDC_EVENT_PROPOSED_FOR_REPLICATION_AWAITING_COMMIT_APPLY,
           {
             tableName:
-              normalizedEvents.length === NUM.ONE ?
-                normalizedEvents[NUM.ZERO].tableName :
+              normalizedEvents.length === 1 ?
+                normalizedEvents[0].tableName :
                 MESSAGE_GROUP_SERVICE_LITERAL.BATCH,
             operation:
-              normalizedEvents.length === NUM.ONE ?
-                normalizedEvents[NUM.ZERO].operation :
+              normalizedEvents.length === 1 ?
+                normalizedEvents[0].operation :
                 `batch:${normalizedEvents.length}`,
             logIndex: entry.index,
             groupId: this.groupId,
             replicaId: this.replicaId,
-            causeId: normalizeCauseId(normalizedEvents[NUM.ZERO].causeId),
+            causeId: normalizeCauseId(normalizedEvents[0].causeId),
             eventCount: normalizedEvents.length,
           },
         );
         if (!shouldApplyLocally) {
           return;
         }
-        if (appliedEvents.length === NUM.ZERO) {
+        if (appliedEvents.length === 0) {
           return;
         }
         this.emitCDCAppliedEvents(appliedEvents, entry.index);
         return;
       }
-      if (appliedEvents.length === NUM.ZERO) {
+      if (appliedEvents.length === 0) {
         return;
       }
       if (!skipReplication) {
         const entry = this.operationLedger.appendEntry({
-          ...(normalizedEvents.length === NUM.ONE ?
+          ...(normalizedEvents.length === 1 ?
             {
               type: 'CDC',
               tableName: normalizedEvents[0].tableName,
@@ -298,9 +297,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
     async proposeCDCCommand(cdcCommand) {
       const configuredRetryBudget =
         Number.isInteger(this.retryMaxAttempts) &&
-        this.retryMaxAttempts > NUM.ZERO ?
+        this.retryMaxAttempts > 0 ?
           this.retryMaxAttempts :
-          NUM.ONE;
+          1;
       const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(
         configuredRetryBudget,
       );
@@ -310,7 +309,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
           'local_raft_propose';
       try {
         if (
-          typeof this.raftProvider.proposeWithLeaderRouting === TYPEOF.FUNCTION
+          typeof this.raftProvider.proposeWithLeaderRouting === 'function'
         ) {
           await this.raftProvider.proposeWithLeaderRouting(
             this.raft,
@@ -322,9 +321,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               forwardToLeader: async (command, routeContext = {}) => {
                 const relayDepth =
                   Number.isInteger(routeContext?.attempt) &&
-                  routeContext.attempt >= NUM.ONE ?
+                  routeContext.attempt >= 1 ?
                     routeContext.attempt :
-                    NUM.ONE;
+                    1;
                 if (command?.type === CDC_BATCH_COMMAND_TYPE) {
                   await this.forwardCDCBatchToLeader(
                     Array.isArray(command?.events) ? command.events : [],
@@ -410,36 +409,36 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
     computeCdcForwardRetryDelayMs(attempt) {
       const retryInitialDelayMs =
         Number.isFinite(this.retryInitialDelayMs) &&
-        this.retryInitialDelayMs > NUM.ZERO ?
+        this.retryInitialDelayMs > 0 ?
           this.retryInitialDelayMs :
           NUM.HUNDRED;
       const retryBackoffMultiplier =
         Number.isFinite(this.retryBackoffMultiplier) &&
-        this.retryBackoffMultiplier >= NUM.ONE ?
+        this.retryBackoffMultiplier >= 1 ?
           this.retryBackoffMultiplier :
-          NUM.TWO;
+          2;
       const retryMaxDelayMs =
-        Number.isFinite(this.retryMaxDelayMs) && this.retryMaxDelayMs > NUM.ZERO ?
+        Number.isFinite(this.retryMaxDelayMs) && this.retryMaxDelayMs > 0 ?
           this.retryMaxDelayMs :
           TIME_MS.SECOND * NUM.TEN;
       return Math.min(
         retryMaxDelayMs,
         Math.floor(
           retryInitialDelayMs *
-            retryBackoffMultiplier ** Math.max(NUM.ZERO, attempt - NUM.TWO),
+            retryBackoffMultiplier ** Math.max(0, attempt - 2),
         ),
       );
     }
     resolveStrictCdcForwardRetryAfterMs() {
       return Math.max(
-        NUM.ONE,
-        this.computeCdcForwardRetryDelayMs(NUM.ONE),
+        1,
+        this.computeCdcForwardRetryDelayMs(1),
         Number.isFinite(this.forwardTargetSuppressionMs) ?
           this.forwardTargetSuppressionMs :
-          NUM.ZERO,
+          0,
         Number.isFinite(this.forwardTopologyRepairCooldownMs) ?
           this.forwardTopologyRepairCooldownMs :
-          NUM.ZERO,
+          0,
       );
     }
     /**
@@ -451,15 +450,15 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      */
     computeCdcProposeTimeoutMs(attemptBudget) {
       const retryBudget =
-        Number.isInteger(attemptBudget) && attemptBudget > NUM.ZERO ?
+        Number.isInteger(attemptBudget) && attemptBudget > 0 ?
           attemptBudget :
-          NUM.ONE;
+          1;
       const deliveryTimeoutMs =
         Number.isFinite(this.deliveryTimeoutMs) &&
-        this.deliveryTimeoutMs > NUM.ZERO ?
+        this.deliveryTimeoutMs > 0 ?
           Math.floor(this.deliveryTimeoutMs) :
           TIME_MS.SECOND * NUM.FIVE;
-      const safetyBufferMs = NUM.TWO * NUM.HUNDRED;
+      const safetyBufferMs = 2 * NUM.HUNDRED;
       const perAttemptBudgetMs = Math.floor(
         Math.max(NUM.HUNDRED, deliveryTimeoutMs - safetyBufferMs) / retryBudget,
       );
@@ -467,7 +466,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         TIME_MS.SECOND + NUM.FIVE * NUM.HUNDRED,
         perAttemptBudgetMs,
       );
-      return Math.max(NUM.TWO * NUM.HUNDRED, cappedBudgetMs);
+      return Math.max(2 * NUM.HUNDRED, cappedBudgetMs);
     }
   }
 

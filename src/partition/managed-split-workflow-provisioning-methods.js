@@ -20,9 +20,6 @@ import {
   applyManagedSplitWorkflowPersistenceMethods,
 } from './managed-split-workflow-persistence-methods.js';
 
-const LOCAL_NUM_TWO = 2;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_DESCRIPTOR_EPOCH_REJECTED =
@@ -50,9 +47,9 @@ class ManagedSplitWorkflowProvisioningMethods {
       null;
     if (!splitKey ||
         !targetPartitionIds ||
-        targetPartitionIds.length !== LOCAL_NUM_TWO ||
-        !targetPartitionIds[LOCAL_NUM_ZERO] ||
-        !targetPartitionIds[LOCAL_NUM_ONE]) {
+        targetPartitionIds.length !== 2 ||
+        !targetPartitionIds[0] ||
+        !targetPartitionIds[1]) {
       return null;
     }
 
@@ -261,7 +258,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       attemptCount,
       lastAttemptAt: new Date(this.now()).toISOString(),
       nextAttemptAt: null,
-      backoffMs: LOCAL_NUM_ZERO,
+      backoffMs: 0,
     };
   }
 
@@ -414,7 +411,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     const childPartitionIds = this.normalizeNodeIdList(
       options.childPartitionIds,
     );
-    if (childPartitionIds.length === LOCAL_NUM_ZERO) {
+    if (childPartitionIds.length === 0) {
       return {};
     }
 
@@ -440,16 +437,16 @@ class ManagedSplitWorkflowProvisioningMethods {
     const sourceNodeIdSet = new Set(sourceRoutableNodeIds);
     const candidateOrderByNodeId = new Map();
     for (
-      let index = LOCAL_NUM_ZERO;
+      let index = 0;
       index < candidateTargetNodeIds.length;
-      index += LOCAL_NUM_ONE
+      index += 1
     ) {
       candidateOrderByNodeId.set(candidateTargetNodeIds[index], index);
     }
 
     const usageByNodeId = new Map();
     for (const nodeId of sourceRoutableNodeIds) {
-      usageByNodeId.set(nodeId, (usageByNodeId.get(nodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE);
+      usageByNodeId.set(nodeId, (usageByNodeId.get(nodeId) || 0) + 1);
     }
 
     const childTargetNodeIdsByPartitionId = {};
@@ -459,7 +456,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         targetNodeIds.push(anchorNodeId);
         usageByNodeId.set(
           anchorNodeId,
-          (usageByNodeId.get(anchorNodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
+          (usageByNodeId.get(anchorNodeId) || 0) + 1,
         );
       }
 
@@ -467,7 +464,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         const remainingNodeIds = candidateTargetNodeIds.filter((nodeId) =>
           !targetNodeIds.includes(nodeId),
         );
-        if (remainingNodeIds.length === LOCAL_NUM_ZERO) {
+        if (remainingNodeIds.length === 0) {
           break;
         }
 
@@ -483,8 +480,8 @@ class ManagedSplitWorkflowProvisioningMethods {
             return leftSourcePenalty - rightSourcePenalty;
           }
           return (
-            (candidateOrderByNodeId.get(leftNodeId) || LOCAL_NUM_ZERO) -
-            (candidateOrderByNodeId.get(rightNodeId) || LOCAL_NUM_ZERO)
+            (candidateOrderByNodeId.get(leftNodeId) || 0) -
+            (candidateOrderByNodeId.get(rightNodeId) || 0)
           );
         });
 
@@ -492,7 +489,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         targetNodeIds.push(selectedNodeId);
         usageByNodeId.set(
           selectedNodeId,
-          (usageByNodeId.get(selectedNodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
+          (usageByNodeId.get(selectedNodeId) || 0) + 1,
         );
       }
 
@@ -511,8 +508,8 @@ class ManagedSplitWorkflowProvisioningMethods {
           return leftSourcePenalty - rightSourcePenalty;
         }
         return (
-          (candidateOrderByNodeId.get(leftNodeId) || LOCAL_NUM_ZERO) -
-          (candidateOrderByNodeId.get(rightNodeId) || LOCAL_NUM_ZERO)
+          (candidateOrderByNodeId.get(leftNodeId) || 0) -
+          (candidateOrderByNodeId.get(rightNodeId) || 0)
         );
       });
 
@@ -553,7 +550,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       }
     }
 
-    return candidateTargetNodeIds[LOCAL_NUM_ZERO] || null;
+    return candidateTargetNodeIds[0] || null;
   }
 
   /**
@@ -569,12 +566,12 @@ class ManagedSplitWorkflowProvisioningMethods {
         PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
       ],
     );
-    if (Number.isInteger(persistedVersion) && persistedVersion > LOCAL_NUM_ZERO) {
+    if (Number.isInteger(persistedVersion) && persistedVersion > 0) {
       this.assertSplitTargetDescriptorEpoch(tableInfo, persistedVersion);
       return persistedVersion;
     }
     const targetVersion =
-      this.resolveActivePartitionVersion(tableInfo) + LOCAL_NUM_ONE;
+      this.resolveActivePartitionVersion(tableInfo) + 1;
     this.assertSplitTargetDescriptorEpoch(tableInfo, targetVersion);
     return targetVersion;
   }
@@ -657,10 +654,10 @@ class ManagedSplitWorkflowProvisioningMethods {
     const sizeBytes = Number(
       partitionInfo?.size_bytes ?? partitionInfo?.sizeBytes,
     );
-    if (Number.isFinite(sizeBytes) && sizeBytes > LOCAL_NUM_ZERO) {
+    if (Number.isFinite(sizeBytes) && sizeBytes > 0) {
       return Math.ceil(sizeBytes);
     }
-    return LOCAL_NUM_ONE;
+    return 1;
   }
 
   /**

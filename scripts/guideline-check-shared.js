@@ -20,9 +20,7 @@ const LOCAL_STR_CONSTANTS = 'constants';
 const LOCAL_STR_MODULE = 'module';
 const LOCAL_STR_SCRIPT = 'script';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_TOP_FILES = 'Top files:';
-const LOCAL_NUM_TWO = 2;
 
 const FILE_EXTENSION = Object.freeze({
   CJS: '.cjs',
@@ -202,17 +200,17 @@ function formatGuidelineHumanSummary(report, violationLabel) {
     `Scanned ${report.scannedFileCount} JavaScript files`,
     `Found ${report.totalViolationCount} ${violationLabel} violations`,
   ];
-  if (report.filesWithViolations.length === LOCAL_NUM_ZERO) {
+  if (report.filesWithViolations.length === 0) {
     return lines.join(SCRIPT_TEXT.NEWLINE);
   }
   lines.push(LOCAL_STR_TOP_FILES);
-  for (const entry of report.filesWithViolations.slice(LOCAL_NUM_ZERO, DEFAULT_OUTPUT_LIMIT)) {
+  for (const entry of report.filesWithViolations.slice(0, DEFAULT_OUTPUT_LIMIT)) {
     lines.push(`- ${entry.filePath}: ${entry.violationCount}`);
   }
   return lines.join(SCRIPT_TEXT.NEWLINE);
 }
 
-function parseGuidelineCliArgs(argv = process.argv.slice(LOCAL_NUM_TWO)) {
+function parseGuidelineCliArgs(argv = process.argv.slice(2)) {
   return {
     includeTests: argv.includes(OUTPUT_FORMAT.INCLUDE_TESTS),
     jsonOutput: argv.includes(OUTPUT_FORMAT.JSON),
@@ -230,11 +228,11 @@ async function runGuidelineCheck(argv, collectReport, formatHumanSummary) {
   } = parseGuidelineCliArgs(argv);
   const report = await collectReport(pathsToScan, {includeTests});
   if (jsonOutput) {
-    process.stdout.write(JSON.stringify(report, null, LOCAL_NUM_TWO) + SCRIPT_TEXT.NEWLINE);
+    process.stdout.write(JSON.stringify(report, null, 2) + SCRIPT_TEXT.NEWLINE);
     return EXIT_CODE.SUCCESS;
   }
   process.stdout.write(formatHumanSummary(report) + SCRIPT_TEXT.NEWLINE);
-  return report.totalViolationCount > LOCAL_NUM_ZERO ?
+  return report.totalViolationCount > 0 ?
     EXIT_CODE.FAILURE :
     EXIT_CODE.SUCCESS;
 }

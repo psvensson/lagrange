@@ -19,7 +19,6 @@ import {
   WORKER_EVENT,
   WORKER_HEALTH_STATUS,
 } from '../worker/worker-constants.js';
-import {NUM, TYPEOF} from '../constants/index.js';
 
 /**
  * Error messages for SystemCacheProxy.
@@ -274,7 +273,7 @@ class SystemCacheProxy extends EventEmitter {
     if (!tableName) {
       throw new Error(PROXY_ERROR_MSG.INVALID_TABLE_NAME);
     }
-    if (typeof predicate !== TYPEOF.FUNCTION) {
+    if (typeof predicate !== 'function') {
       throw new Error(PROXY_ERROR_MSG.INVALID_PREDICATE);
     }
 
@@ -317,7 +316,7 @@ class SystemCacheProxy extends EventEmitter {
    */
   async find(tableName, predicate) {
     const results = await this.filter(tableName, predicate);
-    return results.length > NUM.ZERO ? results[NUM.ZERO] : undefined;
+    return results.length > 0 ? results[0] : undefined;
   }
 
   /**
@@ -398,7 +397,7 @@ class SystemCacheProxy extends EventEmitter {
     }
 
     const replicaIds = Array.from(this.localReplicaIds);
-    if (replicaIds.length === NUM.ZERO) {
+    if (replicaIds.length === 0) {
       this.selectedReplicaId = null;
       this.logger.warn(PROXY_LOG_MSG.NO_REPLICA_AVAILABLE);
       return;
@@ -412,7 +411,7 @@ class SystemCacheProxy extends EventEmitter {
     });
 
     // Fall back to any available if all unhealthy
-    this.selectedReplicaId = healthyId || replicaIds[NUM.ZERO];
+    this.selectedReplicaId = healthyId || replicaIds[0];
     this.logger.info(PROXY_LOG_MSG.REPLICA_SELECTED, {
       replicaId: this.selectedReplicaId,
     });

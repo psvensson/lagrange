@@ -69,13 +69,13 @@ class MockRaftWorkerReplica extends EventEmitter {
       this.nodeId, this.entityType, this.replicaId,
     );
 
-    this.term = options.initialTerm || NUM.ZERO;
+    this.term = options.initialTerm || 0;
     this.state = RAFT_STATE.FOLLOWER;
     this.votedFor = null;
     this.leaderId = null;
     this.log = [];
-    this.commitIndex = NUM.ZERO;
-    this.lastApplied = NUM.ZERO;
+    this.commitIndex = 0;
+    this.lastApplied = 0;
 
     this.votesReceived = new Set();
     this.peers = new Map();
@@ -94,10 +94,10 @@ class MockRaftWorkerReplica extends EventEmitter {
    * @return {{index: number, term: number}} Last log entry info.
    */
   getLastLogInfo() {
-    if (this.log.length === NUM.ZERO) {
-      return {index: NUM.ZERO, term: NUM.ZERO};
+    if (this.log.length === 0) {
+      return {index: 0, term: 0};
     }
-    const lastEntry = this.log[this.log.length - NUM.ONE];
+    const lastEntry = this.log[this.log.length - 1];
     return {index: lastEntry.index, term: lastEntry.term};
   }
 
@@ -106,7 +106,7 @@ class MockRaftWorkerReplica extends EventEmitter {
    * @return {Object} Vote request packet.
    */
   startElection() {
-    this.term += NUM.ONE;
+    this.term += 1;
     this.state = RAFT_STATE.CANDIDATE;
     this.votedFor = this.replicaId;
     this.votesReceived.clear();
@@ -182,13 +182,13 @@ class MockRaftWorkerReplica extends EventEmitter {
     }
 
     const voteGranted = voteResponse.data &&
-      voteResponse.data[NUM.ZERO]?.granted === true;
+      voteResponse.data[0]?.granted === true;
 
     if (voteGranted) {
       this.votesReceived.add(voteResponse.address);
     }
 
-    const majority = Math.floor((this.peers.size + NUM.ONE) / NUM.TWO) + NUM.ONE;
+    const majority = Math.floor((this.peers.size + 1) / 2) + 1;
     if (this.votesReceived.size >= majority) {
       this.state = RAFT_STATE.LEADER;
       this.leaderId = this.unifiedAddress;
@@ -246,9 +246,9 @@ class MockRaftWorkerReplica extends EventEmitter {
     if (appendRequest.data && Array.isArray(appendRequest.data)) {
       for (const entry of appendRequest.data) {
         const existingIndex = this.log.findIndex((e) => e.index === entry.index);
-        if (existingIndex >= NUM.ZERO) {
+        if (existingIndex >= 0) {
           if (this.log[existingIndex].term !== entry.term) {
-            this.log = this.log.slice(NUM.ZERO, existingIndex);
+            this.log = this.log.slice(0, existingIndex);
             this.log.push(entry);
           }
         } else {
@@ -277,7 +277,7 @@ class MockRaftWorkerReplica extends EventEmitter {
     const lastLog = this.getLastLogInfo();
     const entry = {
       command,
-      index: lastLog.index + NUM.ONE,
+      index: lastLog.index + 1,
       term: this.term,
     };
     this.log.push(entry);
@@ -402,13 +402,13 @@ function createRaftGroup(options = {}) {
     nodeId = 'test-node',
     entityType = WORKER_ENTITY_TYPE.PARTITION,
     replicaCount = RAFT_SIM.MIN_REPLICAS,
-    initialTerm = NUM.ZERO,
+    initialTerm = 0,
   } = options;
 
   const router = new MockCrossWorkerRouter();
   const replicas = [];
 
-  for (let i = NUM.ZERO; i < replicaCount; i++) {
+  for (let i = 0; i < replicaCount; i++) {
     const replica = new MockRaftWorkerReplica({
       replicaId: `replica-${i}`,
       nodeId,
@@ -519,7 +519,7 @@ async function simulateLogReplication(raftGroup, leader, entries) {
 
   const responses = await Promise.all(replicationPromises);
 
-  let successCount = NUM.ONE;
+  let successCount = 1;
   for (const {response} of responses) {
     if (response.status === WORKER_RESPONSE_STATUS.OK &&
         response.payload?.type === RAFT_PACKET_TYPE.APPENDED) {
@@ -531,7 +531,7 @@ async function simulateLogReplication(raftGroup, leader, entries) {
     leader,
     entriesReplicated: entries.length,
     successfulReplications: successCount,
-    totalReplicas: leader.peers.size + NUM.ONE,
+    totalReplicas: leader.peers.size + 1,
   };
 }
 
@@ -555,7 +555,7 @@ const termArb = fc.integer({min: RAFT_SIM.MIN_TERM, max: RAFT_SIM.MAX_TERM});
 /**
  * Generator for log entry commands.
  */
-const commandArb = fc.string({minLength: NUM.ONE, maxLength: NUM.THIRTY});
+const commandArb = fc.string({minLength: 1, maxLength: NUM.THIRTY});
 
 /**
  * Generator for log entries.
@@ -568,7 +568,7 @@ const logEntryArb = fc.record({
  * Generator for arrays of log entries.
  */
 const logEntriesArb = fc.array(logEntryArb, {
-  minLength: NUM.ONE,
+  minLength: 1,
   maxLength: NUM.FIVE,
 });
 
@@ -585,7 +585,7 @@ const entityTypeArb = fc.constantFrom(
  */
 const nodeIdArb = fc.stringOf(
   fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
-  {minLength: NUM.ONE, maxLength: NUM.TEN},
+  {minLength: 1, maxLength: NUM.TEN},
 );
 
 
@@ -620,15 +620,15 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          const result = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const result = await simulateLeaderElection(raftGroup, 0);
 
           const electionCompleted = result.becameLeader;
           const hasMajority = result.votesReceived >
-            Math.floor(replicaCount / NUM.TWO);
-          const termIncremented = result.term >= NUM.ONE;
+            Math.floor(replicaCount / 2);
+          const termIncremented = result.term >= 1;
 
           const leaderCount = raftGroup.replicas.filter((r) => r.isLeader()).length;
-          const singleLeader = leaderCount === NUM.ONE;
+          const singleLeader = leaderCount === 1;
 
           return electionCompleted && hasMajority && termIncremented && singleLeader;
         },
@@ -655,7 +655,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          await simulateLeaderElection(raftGroup, NUM.ZERO);
+          await simulateLeaderElection(raftGroup, 0);
 
           const routedMessages = raftGroup.router.getRoutedMessages();
 
@@ -663,7 +663,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             (m) => m.payload.type === RAFT_PACKET_TYPE.VOTE,
           );
 
-          const expectedVoteRequests = replicaCount - NUM.ONE;
+          const expectedVoteRequests = replicaCount - 1;
           const allPeersReceived = voteRequests.length === expectedVoteRequests;
 
           const allAreRaftPackets = voteRequests.every(
@@ -697,7 +697,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          const electionResult = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const electionResult = await simulateLeaderElection(raftGroup, 0);
           assert.ok(electionResult.becameLeader, 'Leader election should succeed');
 
           const leader = electionResult.candidate;
@@ -742,7 +742,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          const electionResult = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const electionResult = await simulateLeaderElection(raftGroup, 0);
           assert.ok(electionResult.becameLeader, 'Leader election should succeed');
 
           const leader = electionResult.candidate;
@@ -756,7 +756,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             (m) => m.payload.type === RAFT_PACKET_TYPE.APPEND,
           );
 
-          const expectedAppendRequests = replicaCount - NUM.ONE;
+          const expectedAppendRequests = replicaCount - 1;
           const allFollowersReceived = appendRequests.length === expectedAppendRequests;
 
           const allFromLeader = appendRequests.every(
@@ -790,7 +790,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          const electionResult = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const electionResult = await simulateLeaderElection(raftGroup, 0);
           assert.ok(electionResult.becameLeader, 'Leader election should succeed');
 
           const leader = electionResult.candidate;
@@ -842,10 +842,10 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             });
 
             const partitionResult = await simulateLeaderElection(
-              partitionGroup, NUM.ZERO,
+              partitionGroup, 0,
             );
             const messageGroupResult = await simulateLeaderElection(
-              messageGroupGroup, NUM.ZERO,
+              messageGroupGroup, 0,
             );
 
             const partitionElected = partitionResult.becameLeader;
@@ -884,7 +884,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          const electionResult = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const electionResult = await simulateLeaderElection(raftGroup, 0);
           assert.ok(electionResult.becameLeader, 'Leader election should succeed');
 
           const leader = electionResult.candidate;
@@ -898,7 +898,7 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
               if (follower.log.length !== leaderLog.length) {
                 return false;
               }
-              for (let i = NUM.ZERO; i < leaderLog.length; i++) {
+              for (let i = 0; i < leaderLog.length; i++) {
                 if (follower.log[i].command !== leaderLog[i].command ||
                     follower.log[i].index !== leaderLog[i].index ||
                     follower.log[i].term !== leaderLog[i].term) {
@@ -933,16 +933,16 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             replicaCount,
           });
 
-          await simulateLeaderElection(raftGroup, NUM.ZERO);
+          await simulateLeaderElection(raftGroup, 0);
 
           const routedMessages = raftGroup.router.getRoutedMessages();
 
           const allHaveSourceAddress = routedMessages.every(
-            (m) => typeof m.sourceAddress === 'string' && m.sourceAddress.length > NUM.ZERO,
+            (m) => typeof m.sourceAddress === 'string' && m.sourceAddress.length > 0,
           );
 
           const allHaveTargetAddress = routedMessages.every(
-            (m) => typeof m.targetAddress === 'string' && m.targetAddress.length > NUM.ZERO,
+            (m) => typeof m.targetAddress === 'string' && m.targetAddress.length > 0,
           );
 
           const allHaveTimestamp = routedMessages.every(
@@ -981,10 +981,10 @@ describe('Property 27: Cross-Worker Raft Consensus', () => {
             initialTerm,
           });
 
-          const result = await simulateLeaderElection(raftGroup, NUM.ZERO);
+          const result = await simulateLeaderElection(raftGroup, 0);
 
           const electionCompleted = result.becameLeader;
-          const termIncremented = result.term === initialTerm + NUM.ONE;
+          const termIncremented = result.term === initialTerm + 1;
 
           return electionCompleted && termIncremented;
         },

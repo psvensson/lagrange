@@ -364,8 +364,8 @@ const SAFETY_DEFERRED_RETRY_DELAY_MS = TIME_MS.SECOND;
 const OBSERVED_PROGRESS_RETRY_DELAY_MS = TIME_MS.SECOND / 4;
 const DISPATCH_RETRY_DELAY_MS = TIME_MS.SECOND / 4;
 const DISPATCH_RETRY_MAX_DELAY_MS = TIME_MS.SECOND * NUM.EIGHT;
-const DISPATCH_RETRY_BACKOFF_MULTIPLIER = NUM.TWO;
-const DISPATCH_RETRY_JITTER_RATIO = NUM.ONE / NUM.FIVE;
+const DISPATCH_RETRY_BACKOFF_MULTIPLIER = 2;
+const DISPATCH_RETRY_JITTER_RATIO = 1 / NUM.FIVE;
 const COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET =
   NUM.FOUR;
 const REPLICA_OPERATION_DISPATCH_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
@@ -459,11 +459,11 @@ function normalizeNodeIdList(nodeIds) {
     ...new Set(
       (Array.isArray(nodeIds) ? nodeIds : [])
         .map((nodeId) =>
-          typeof nodeId === TYPEOF.STRING ?
+          typeof nodeId === 'string' ?
             nodeId.trim() :
             OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
         )
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
+        .filter((nodeId) => nodeId.length > 0),
     ),
   ];
 }
@@ -471,7 +471,7 @@ function normalizeNodeIdList(nodeIds) {
 function normalizeReplicaRowNodeIds(rows = []) {
   return normalizeNodeIdList(
     (Array.isArray(rows) ? rows : []).map((row) => {
-      return typeof row?.node_id === TYPEOF.STRING ?
+      return typeof row?.node_id === 'string' ?
         row.node_id.trim() :
         OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
     }),
@@ -490,7 +490,7 @@ function isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep) {
 }
 
 function isPriorityRecoveryPreSyncReplaceTargetStatusMissing(status) {
-  return status === null || typeof status === TYPEOF.UNDEFINED;
+  return status === null || typeof status === 'undefined';
 }
 
 function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
@@ -533,8 +533,8 @@ function buildHandoffDeferralTransportDiagnostics(
   errorLike = null,
 ) {
   const diagnostics = {};
-  if (errorLike && typeof errorLike === TYPEOF.OBJECT) {
-    if (typeof errorLike.deliveryState === TYPEOF.STRING) {
+  if (errorLike && typeof errorLike === 'object') {
+    if (typeof errorLike.deliveryState === 'string') {
       diagnostics.transportDeliveryState = errorLike.deliveryState;
     }
     const reasonCode =
@@ -548,7 +548,7 @@ function buildHandoffDeferralTransportDiagnostics(
   if (
     targetNodeId &&
     router &&
-    typeof router.getConnectionHandoffDiagnostics === TYPEOF.FUNCTION
+    typeof router.getConnectionHandoffDiagnostics === 'function'
   ) {
     const connection = router.getConnectionHandoffDiagnostics(targetNodeId);
     diagnostics.targetConnectionPresent = connection?.present === true;

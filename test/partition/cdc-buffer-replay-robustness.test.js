@@ -89,11 +89,11 @@ test('partial catchup schedules follow-up replay at initial delay',
     const scheduledTimers = [];
     globalThis.setTimeout = (fn, delay) => {
       scheduledTimers.push({fn, delay});
-      return originalSetTimeout(fn, NUM.ZERO);
+      return originalSetTimeout(fn, 0);
     };
 
     try {
-      for (let i = NUM.ZERO; i < TOTAL_BUFFERED_EVENTS; i++) {
+      for (let i = 0; i < TOTAL_BUFFERED_EVENTS; i++) {
         const event = buildNodeCdcEvent(`node-robust-${i}`, i);
         partition.cdcEventBuffer.buffer(event);
       }
@@ -103,7 +103,7 @@ test('partial catchup schedules follow-up replay at initial delay',
         'buffer should hold all events before subscriber registration',
       );
 
-      let deliveryCount = NUM.ZERO;
+      let deliveryCount = 0;
       let failureTriggered = false;
       const deliveredEvents = [];
       const failingSubscriber = async (cdcEvent) => {
@@ -156,7 +156,7 @@ test('partial catchup schedules follow-up replay at initial delay',
       );
       t.equal(
         partition.getStats().cdcReplay.replayRetryDepth,
-        NUM.ONE,
+        1,
         'partition stats should expose replay retry depth after handshake failure',
       );
 
@@ -165,7 +165,7 @@ test('partial catchup schedules follow-up replay at initial delay',
           PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
       );
       t.ok(
-        replayTimers.length > NUM.ZERO,
+        replayTimers.length > 0,
         'scheduleBufferedCDCReplay should be called with initial delay',
       );
 
@@ -177,7 +177,7 @@ test('partial catchup schedules follow-up replay at initial delay',
         'all remaining events should be delivered via follow-up replay',
       );
 
-      for (let i = NUM.ZERO; i < TOTAL_BUFFERED_EVENTS; i++) {
+      for (let i = 0; i < TOTAL_BUFFERED_EVENTS; i++) {
         t.equal(
           deliveredEvents[i].data.node_id, `node-robust-${i}`,
           `event ${i} should be delivered in original buffer order`,
@@ -198,23 +198,23 @@ test('buffered replay growth is exposed via partition stats', async (t) => {
 
   try {
     partition.bufferCDCEventForRetry(
-      buildNodeCdcEvent('node-buffer-growth-1', NUM.ONE),
+      buildNodeCdcEvent('node-buffer-growth-1', 1),
       'test-buffer-growth',
     );
     partition.bufferCDCEventForRetry(
-      buildNodeCdcEvent('node-buffer-growth-2', NUM.TWO),
+      buildNodeCdcEvent('node-buffer-growth-2', 2),
       'test-buffer-growth',
     );
 
     const stats = partition.getStats().cdcReplay;
     t.equal(
       stats.replayBufferGrowthCount,
-      NUM.TWO,
+      2,
       'partition stats should expose buffered replay growth count',
     );
     t.equal(
       stats.bufferedEvents,
-      NUM.TWO,
+      2,
       'partition stats should expose current buffered replay depth',
     );
   } finally {
@@ -230,7 +230,7 @@ test('buffered replay marks replay-only delivery on replayed events',
 
     try {
       partition.cdcEventBuffer.buffer(
-        buildNodeCdcEvent('node-replay-only', NUM.ONE),
+        buildNodeCdcEvent('node-replay-only', 1),
       );
 
       const deliveredEvents = [];
@@ -248,7 +248,7 @@ test('buffered replay marks replay-only delivery on replayed events',
       );
       t.equal(
         deliveredEvents.length,
-        NUM.ONE,
+        1,
         'subscriber should receive the replayed buffered event',
       );
       t.equal(
@@ -269,7 +269,7 @@ test('replay delay is not escalated after subscriber handshake',
     try {
       const escalatedDelay =
         PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS *
-        NUM.TWO;
+        2;
       partition.cdcBufferReplayDelayMs = escalatedDelay;
 
       t.equal(
@@ -277,7 +277,7 @@ test('replay delay is not escalated after subscriber handshake',
         'delay should start at escalated value for this test',
       );
 
-      for (let i = NUM.ZERO; i < NUM.THREE; i++) {
+      for (let i = 0; i < NUM.THREE; i++) {
         const event = buildNodeCdcEvent(`node-escalate-${i}`, i);
         partition.cdcEventBuffer.buffer(event);
       }
@@ -318,11 +318,11 @@ test('buffer replay honors subscriber retryAfter readiness hints',
     const scheduledTimers = [];
     globalThis.setTimeout = (fn, delay) => {
       scheduledTimers.push({fn, delay});
-      return originalSetTimeout(fn, NUM.ZERO);
+      return originalSetTimeout(fn, 0);
     };
 
     try {
-      partition.cdcEventBuffer.buffer(buildNodeCdcEvent('node-ready-hint', NUM.ZERO));
+      partition.cdcEventBuffer.buffer(buildNodeCdcEvent('node-ready-hint', 0));
 
       let ready = false;
       const deliveredEvents = [];

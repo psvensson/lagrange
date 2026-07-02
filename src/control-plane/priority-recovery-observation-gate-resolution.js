@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
 import {LOCAL_EMPTY_LIST, LOCAL_STR_EMPTY, PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD, PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityPartitionSummary} from './priority-recovery-observation-normalization.js';
 
@@ -14,7 +13,7 @@ function resolveProjectionDiagnostics(publicationConvergence = null) {
   }
   return Object.freeze({
     readinessDecisionMode:
-      typeof projectionDiagnostics.readinessDecisionMode === TYPEOF.STRING ?
+      typeof projectionDiagnostics.readinessDecisionMode === 'string' ?
         projectionDiagnostics.readinessDecisionMode :
         null,
     readinessDecisionDimensions: Object.freeze(
@@ -48,11 +47,11 @@ function resolveProjectionDiagnostics(publicationConvergence = null) {
         [])
         .filter((entry) =>
           isRecord(entry) &&
-          typeof entry.nodeId === TYPEOF.STRING &&
-          entry.nodeId.length > NUM.ZERO)
+          typeof entry.nodeId === 'string' &&
+          entry.nodeId.length > 0)
         .map((entry) => Object.freeze({
           nodeId: entry.nodeId,
-          reason: typeof entry.reason === TYPEOF.STRING ?
+          reason: typeof entry.reason === 'string' ?
             entry.reason :
             LOCAL_STR_EMPTY,
         })),
@@ -108,7 +107,7 @@ function resolveObservationPublicationConvergenceGate(
   const providedGateIsCanonical =
     typeof providedPublicationConvergenceGate?.[
       PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD.PRIORITY_SPREAD_DECISION_SOURCE
-    ] === TYPEOF.STRING;
+    ] === 'string';
   if (providedPublicationConvergenceGate && providedGateIsCanonical) {
     return providedPublicationConvergenceGate;
   }
@@ -226,7 +225,7 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
   const decisionBlockedPartitionIds = normalizeDistinctStringArray(
     decisionSnapshotSummary?.blockedPartitionIds,
   );
-  if (decisionBlockedPartitionIds.length > NUM.ZERO) {
+  if (decisionBlockedPartitionIds.length > 0) {
     return decisionBlockedPartitionIds;
   }
   const convergenceBlockedPartitionIds = Object.freeze(
@@ -239,7 +238,7 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
         []),
     ]),
   );
-  return convergenceBlockedPartitionIds.length > NUM.ZERO ?
+  return convergenceBlockedPartitionIds.length > 0 ?
     convergenceBlockedPartitionIds :
     decisionBlockedPartitionIds;
 }
@@ -307,11 +306,11 @@ function resolveSelectedMissingPublishedEvidence(progress = null) {
         PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
           .SELECTED_PUBLISHED_ACTIVE_COUNT
       ],
-    ) ?? NUM.ZERO,
+    ) ?? 0,
     selectedPublishedActiveNodeIds.length,
   );
   return expectedNodeCount !== null &&
-    expectedNodeCount > NUM.ZERO &&
+    expectedNodeCount > 0 &&
     selectedPublishedActiveCount === expectedNodeCount ?
     buildSelectedMissingPublishedEvidence(
       PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.FULL_SELECTED_COVERAGE,
@@ -331,7 +330,7 @@ function resolveObservationClosureField(
   priorityRecoveryClosureWitness = null,
   activeGateContext = {},
 ) {
-  return typeof options[fieldName] === TYPEOF.STRING ?
+  return typeof options[fieldName] === 'string' ?
     options[fieldName] :
     priorityRecoveryClosureWitness?.[fieldName] ||
       activeGateContext.activeGateProgress?.[fieldName] ||

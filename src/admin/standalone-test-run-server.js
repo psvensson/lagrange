@@ -9,7 +9,6 @@ import {AdminWebSocketAPI} from './admin-websocket-api.js';
 import {AdminTestRunService} from './admin-test-run-service.js';
 import {ADMIN_STANDALONE_DEFAULT} from './admin-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const URL_PROTOCOL = 'http://';
 
@@ -21,7 +20,7 @@ const URL_PROTOCOL = 'http://';
  */
 function parsePort(value, fallback) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= LOCAL_NUM_ZERO) {
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     return fallback;
   }
   return parsed;

@@ -11,7 +11,6 @@ import {
 } from './operation-workflow-transition-retry.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
-  NUM,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -20,7 +19,6 @@ const {
   ReplicaStatus,
   SAFETY_DEFERRED_RETRY_DELAY_MS,
   TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   getControlPlaneRetryAfterMs,
@@ -197,7 +195,7 @@ function buildDispatchRearmFromProgressReconcileEvidence(
 ) {
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   const normalizedActualStatus =
-    typeof actualStatus === TYPEOF.STRING ?
+    typeof actualStatus === 'string' ?
       actualStatus.toLowerCase() :
       actualStatus;
   const createRearmPhase = owner.isCreateRearmDispatchPhase(operation);
@@ -603,7 +601,7 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   );
 }
 function cloneOperationSnapshot(operation) {
-  if (!operation || typeof operation !== TYPEOF.OBJECT) {
+  if (!operation || typeof operation !== 'object') {
     return null;
   }
   return {
@@ -616,7 +614,7 @@ function cloneOperationSnapshot(operation) {
 function resolveCoordinatorCreatedOperationOwnerNodeId(owner, operation) {
   if (
     !operation ||
-    typeof owner.repository?.resolveOperationOwnerNodeId !== TYPEOF.FUNCTION
+    typeof owner.repository?.resolveOperationOwnerNodeId !== 'function'
   ) {
     return null;
   }
@@ -626,21 +624,21 @@ function isCoordinatorCreatedOperationLocallyOwned(owner, operation) {
   const ownerNodeId =
     owner.resolveCoordinatorCreatedOperationOwnerNodeId(operation);
   return (
-    typeof ownerNodeId === TYPEOF.STRING &&
-    ownerNodeId.length > NUM.ZERO &&
+    typeof ownerNodeId === 'string' &&
+    ownerNodeId.length > 0 &&
     ownerNodeId === owner.nodeId
   );
 }
 function buildCoordinatorCreatedDispatchIngress(nodeId) {
   const normalizedNodeId = String(nodeId || '').trim();
-  if (normalizedNodeId.length === NUM.ZERO) {
+  if (normalizedNodeId.length === 0) {
     return null;
   }
   return `${normalizedNodeId}/service/replica-dispatch`;
 }
 function buildCoordinatorCreatedDispatchRow(operation) {
   let stepsHistory = operation?.stepsHistory;
-  if (typeof stepsHistory !== TYPEOF.STRING) {
+  if (typeof stepsHistory !== 'string') {
     stepsHistory = Array.isArray(stepsHistory) ?
       JSON.stringify(stepsHistory) :
       OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_JSON_ARRAY;

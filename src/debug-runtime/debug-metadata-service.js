@@ -3,7 +3,7 @@
  */
 
 import crypto from 'node:crypto';
-import {NUM, SQL, TYPEOF} from '../constants/index.js';
+import {SQL} from '../constants/index.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {
   authorizeAction,
@@ -44,12 +44,12 @@ import {
   toResolvedFlag,
 } from './debug-metadata-service-value-helpers.js';
 
-const LOCAL_STR_I8FSF = 'lineNumber is required for each breakpoint';
-const LOCAL_STR_1XM6O = 'moduleRef is required for breakpoints';
-const LOCAL_STR_1A3OA = 'sourceFileUrl is required for breakpoints';
-const LOCAL_STR_J82AO = 'moduleRef is required for snapshot metadata';
-const LOCAL_STR_D1ZDM = 'moduleDigest is required for snapshot metadata';
-const LOCAL_STR_YWKFO = 'snapshotId is required';
+const LOCAL_STR_LINENUMBER_IS_REQUIRED_FOR_EACH_BREAKPOI = 'lineNumber is required for each breakpoint';
+const LOCAL_STR_MODULEREF_IS_REQUIRED_FOR_BREAKPOINTS = 'moduleRef is required for breakpoints';
+const LOCAL_STR_SOURCEFILEURL_IS_REQUIRED_FOR_BREAKPOINT = 'sourceFileUrl is required for breakpoints';
+const LOCAL_STR_MODULEREF_IS_REQUIRED_FOR_SNAPSHOT_METAD = 'moduleRef is required for snapshot metadata';
+const LOCAL_STR_MODULEDIGEST_IS_REQUIRED_FOR_SNAPSHOT_ME = 'moduleDigest is required for snapshot metadata';
+const LOCAL_STR_SNAPSHOTID_IS_REQUIRED = 'snapshotId is required';
 const LOCAL_STR_SQL_REQUEST_FAILED = 'SQL request failed';
 
 const SESSION_COLUMNS = Object.freeze([
@@ -363,13 +363,13 @@ class DebugMetadataStore {
 
     const now = this.now();
     const rows = [];
-    for (let index = NUM.ZERO; index < request.breakpoints.length; index++) {
+    for (let index = 0; index < request.breakpoints.length; index++) {
       const breakpoint = request.breakpoints[index] || {};
       const lineNumber = toNullableInteger(breakpoint.lineNumber);
       if (lineNumber === null) {
         throw createDebugMetadataError(
           CODE.INVALID_REQUEST,
-          LOCAL_STR_I8FSF,
+          LOCAL_STR_LINENUMBER_IS_REQUIRED_FOR_EACH_BREAKPOI,
         );
       }
       const columnNumber = toNullableInteger(breakpoint.columnNumber) ??
@@ -379,12 +379,12 @@ class DebugMetadataStore {
         request.sourceFileUrl || breakpoint.sourceFileUrl;
       assertNonEmptyString(
         moduleRef,
-        LOCAL_STR_1XM6O,
+        LOCAL_STR_MODULEREF_IS_REQUIRED_FOR_BREAKPOINTS,
         CODE.INVALID_REQUEST,
       );
       assertNonEmptyString(
         sourceFileUrl,
-        LOCAL_STR_1A3OA,
+        LOCAL_STR_SOURCEFILEURL_IS_REQUIRED_FOR_BREAKPOINT,
         CODE.INVALID_REQUEST,
       );
 
@@ -452,7 +452,7 @@ class DebugMetadataStore {
     assertRequestObject(request);
     assertNonEmptyString(request.sessionId, ERR.SESSION_ID_REQUIRED, CODE.INVALID_REQUEST);
     if (!request.snapshotArtifact ||
-      typeof request.snapshotArtifact !== TYPEOF.OBJECT) {
+      typeof request.snapshotArtifact !== 'object') {
       throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.SNAPSHOT_REQUIRED);
     }
 
@@ -509,24 +509,24 @@ class DebugMetadataStore {
         request.frameCount ||
         manifest.frameCount ||
         snapshot.inputFrames?.length,
-      ) || NUM.ZERO,
+      ) || 0,
       [DPF.HOST_CALL_COUNT]: toNullableInteger(
         request.hostCallCount ||
         manifest.hostCallCount ||
         snapshot.hostCallLedger?.length,
-      ) || NUM.ZERO,
+      ) || 0,
       [DPF.CREATED_AT]: now,
       [DPF.UPDATED_AT]: now,
     };
 
     assertNonEmptyString(
       row[DPF.MODULE_REF],
-      LOCAL_STR_J82AO,
+      LOCAL_STR_MODULEREF_IS_REQUIRED_FOR_SNAPSHOT_METAD,
       CODE.INVALID_REQUEST,
     );
     assertNonEmptyString(
       row[DPF.MODULE_DIGEST],
-      LOCAL_STR_D1ZDM,
+      LOCAL_STR_MODULEDIGEST_IS_REQUIRED_FOR_SNAPSHOT_ME,
       CODE.INVALID_REQUEST,
     );
 
@@ -548,7 +548,11 @@ class DebugMetadataStore {
    */
   async getSnapshot(request) {
     assertRequestObject(request);
-    assertNonEmptyString(request.snapshotId, LOCAL_STR_YWKFO, CODE.INVALID_REQUEST);
+    assertNonEmptyString(
+      request.snapshotId,
+      LOCAL_STR_SNAPSHOTID_IS_REQUIRED,
+      CODE.INVALID_REQUEST,
+    );
 
     const auth = this.authorizeRequest(request.securityContext, ACTION.READ_SNAPSHOT);
     const sql = `${SQL.SELECT} * FROM ${DT.SNAPSHOTS}` +
@@ -563,7 +567,7 @@ class DebugMetadataStore {
     });
 
     const row = Array.isArray(result.rows) ?
-      result.rows[NUM.ZERO] || null :
+      result.rows[0] || null :
       null;
     if (!row) {
       return null;
@@ -638,7 +642,7 @@ class DebugMetadataStore {
    */
   async executeSql(request) {
     if (!this.sqlQueryEngine ||
-      typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
+      typeof this.sqlQueryEngine.executeRequest !== 'function') {
       throw createDebugMetadataError(
         CODE.ENGINE_REQUIRED,
         ERR.ENGINE_REQUIRED,
@@ -705,7 +709,7 @@ class DebugMetadataStore {
     });
 
     const rows = Array.isArray(result.rows) ? result.rows : [];
-    return rows[NUM.ZERO] || null;
+    return rows[0] || null;
   }
 }
 

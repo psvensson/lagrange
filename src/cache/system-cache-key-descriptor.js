@@ -9,7 +9,6 @@ import {
   SYSTEM_TABLE_SCHEMAS,
 } from '../bootstrap/system-table-schemas-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG = Object.freeze({
   missingDescriptor: (tableName) =>
@@ -27,8 +26,8 @@ const SYSTEM_CACHE_KEY_FALLBACK = 'id';
  */
 function resolveSchemaPrimaryKeyField(schema) {
   if (schema?.primaryKey && Array.isArray(schema.primaryKey) &&
-      schema.primaryKey.length > LOCAL_NUM_ZERO) {
-    return schema.primaryKey[LOCAL_NUM_ZERO];
+      schema.primaryKey.length > 0) {
+    return schema.primaryKey[0];
   }
 
   if (!Array.isArray(schema?.columns)) {

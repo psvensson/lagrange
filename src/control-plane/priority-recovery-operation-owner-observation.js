@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,
   OPERATION_WORKFLOW_OWNER,
@@ -277,7 +273,7 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
 ]);
 
 function isPriorityRecoveryOperationOwnerObservationObject(value) {
-  return Boolean(value && typeof value === TYPEOF.OBJECT);
+  return Boolean(value && typeof value === 'object');
 }
 
 function normalizePriorityRecoveryOperationOwnerString(
@@ -285,10 +281,10 @@ function normalizePriorityRecoveryOperationOwnerString(
   fallback,
 ) {
   const normalizedValue =
-    typeof value === TYPEOF.STRING ?
+    typeof value === 'string' ?
       value.trim() :
       PRIORITY_RECOVERY_OPERATION_OWNER_TEXT.EMPTY;
-  return normalizedValue.length > NUM.ZERO ? normalizedValue : fallback;
+  return normalizedValue.length > 0 ? normalizedValue : fallback;
 }
 
 function normalizePriorityRecoveryOperationOwnerReasons(reasons) {
@@ -300,7 +296,7 @@ function normalizePriorityRecoveryOperationOwnerReasons(reasons) {
           PRIORITY_RECOVERY_OPERATION_OWNER_TEXT.EMPTY,
         ),
       )
-      .filter((reason) => reason.length > NUM.ZERO),
+      .filter((reason) => reason.length > 0),
   );
 }
 
@@ -309,8 +305,8 @@ function isPriorityRecoveryOperationOwnerOutcome(value) {
     isPriorityRecoveryOperationOwnerObservationObject(value) &&
     value.owner === OPERATION_WORKFLOW_OWNER &&
     value.boundary === OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL &&
-    typeof value.outcome === TYPEOF.STRING &&
-    value.outcome.length > NUM.ZERO
+    typeof value.outcome === 'string' &&
+    value.outcome.length > 0
   );
 }
 

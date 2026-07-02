@@ -15,7 +15,6 @@ const {
   LeaderActivationScheduler,
   LiferaftProvider,
   LoggingService,
-  NUM,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
@@ -36,7 +35,6 @@ const {
   SYSTEM_TABLE_NAME,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
   assertRaftProviderContract,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
@@ -78,8 +76,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     assertRaftProviderContract(this.raftProvider);
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
     this.leaderAddressHint =
-      typeof options.leaderAddress === TYPEOF.STRING &&
-      options.leaderAddress.length > NUM.ZERO ?
+      typeof options.leaderAddress === 'string' &&
+      options.leaderAddress.length > 0 ?
         options.leaderAddress :
         null;
     const addressManager = AddressManager.getInstance();
@@ -100,13 +98,13 @@ class PartitionServiceCoreBase extends EventEmitter {
       PARTITION_SERVICE_DEFAULT.SIZE_UPDATE_INTERVAL_MS;
     this.leaderActivationStabilizationMs =
       Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+      options.leaderActivationStabilizationMs >= 0 ?
         Math.floor(options.leaderActivationStabilizationMs) :
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
           PARTITION_SERVICE_LITERAL.VALUE_250);
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+      options.leaderActivationNodeSpacingMs >= 0 ?
         Math.floor(options.leaderActivationNodeSpacingMs) :
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           PARTITION_SERVICE_LITERAL.VALUE_25);
@@ -123,25 +121,25 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
     this.state = PartitionState.NORMAL;
-    this.sizeBytes = NUM.ZERO;
+    this.sizeBytes = 0;
     this.sizeUpdatePending = false;
-    this.lastSizeUpdate = NUM.ZERO;
+    this.lastSizeUpdate = 0;
     this.sizeUpdateTimer = null;
     this.managedSplitWriteActivityDebounceMs =
       PARTITION_SERVICE_DEFAULT.MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS;
-    this.lastManagedSplitWriteActivityAtMs = NUM.ZERO;
+    this.lastManagedSplitWriteActivityAtMs = 0;
     this.cdcSubscribers = /* @__PURE__ */ new Set();
     this.cdcSubscriberWrappers = /* @__PURE__ */ new Map();
     this.cdcSubscriberStates = /* @__PURE__ */ new Map();
-    this.cdcSubscriptionEpoch = NUM.ZERO;
-    this.cdcEventSequenceNumber = NUM.ZERO;
+    this.cdcSubscriptionEpoch = 0;
+    this.cdcEventSequenceNumber = 0;
     this.cdcEventBuffer = new CDCEventBuffer({logger: this.logger});
     this.cdcBufferReplayTimer = null;
     this.cdcBufferReplayInFlight = false;
     this.cdcBufferReplayDelayMs =
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    this.cdcReplayBufferGrowthCount = NUM.ZERO;
-    this.cdcReplayRetryDepth = NUM.ZERO;
+    this.cdcReplayBufferGrowthCount = 0;
+    this.cdcReplayRetryDepth = 0;
     this.cdcPipelineMetrics =
       options.cdcPipelineMetrics || new CDCPipelineMetrics();
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
@@ -161,17 +159,17 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.rowCommitEpoch = /* @__PURE__ */ new Map();
     this.maxCommittedWriteLogEntries =
       Number.isFinite(options.maxCommittedWriteLogEntries) &&
-      options.maxCommittedWriteLogEntries > NUM.ZERO ?
+      options.maxCommittedWriteLogEntries > 0 ?
         Math.floor(options.maxCommittedWriteLogEntries) :
         PARTITION_SERVICE_DEFAULT.MAX_COMMITTED_WRITE_LOG_ENTRIES;
     this.preparedStateHoldTimeoutMs =
       Number.isFinite(options.preparedStateHoldTimeoutMs) &&
-      options.preparedStateHoldTimeoutMs > NUM.ZERO ?
+      options.preparedStateHoldTimeoutMs > 0 ?
         Math.floor(options.preparedStateHoldTimeoutMs) :
         TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
     this.preparedStateHoldSweepIntervalMs =
       Number.isFinite(options.preparedStateHoldSweepIntervalMs) &&
-      options.preparedStateHoldSweepIntervalMs > NUM.ZERO ?
+      options.preparedStateHoldSweepIntervalMs > 0 ?
         Math.floor(options.preparedStateHoldSweepIntervalMs) :
         PARTITION_SERVICE_DEFAULT.PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS;
     this.preparedStateHoldTimer = null;
@@ -548,7 +546,7 @@ class PartitionServiceCoreBase extends EventEmitter {
         });
       },
       {
-        immediate: this.replicaIds.length === NUM.ONE,
+        immediate: this.replicaIds.length === 1,
         shouldActivate: () => !this.isShutdown && this.isLeader,
       },
     );
@@ -560,8 +558,8 @@ class PartitionServiceCoreBase extends EventEmitter {
         const whereClause = {service_id: this.replicaId};
         const cachedRow = context.cachedRow;
         if (
-          typeof cachedRow?.raft_role === TYPEOF.STRING &&
-          cachedRow.raft_role.length > NUM.ZERO
+          typeof cachedRow?.raft_role === 'string' &&
+          cachedRow.raft_role.length > 0
         ) {
           whereClause.raft_role = cachedRow.raft_role;
         }
@@ -613,8 +611,8 @@ class PartitionServiceCoreBase extends EventEmitter {
         const whereClause = {[COLUMN.PARTITION_ID]: this.partitionId};
         const cachedRow = context.cachedRow;
         if (
-          typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === TYPEOF.STRING &&
-          cachedRow[COLUMN.LEADER_NODE_ID].length > NUM.ZERO
+          typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+          cachedRow[COLUMN.LEADER_NODE_ID].length > 0
         ) {
           whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
         }
@@ -703,7 +701,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       });
       throw new Error(`Peer address must be unified: ${peerId}`);
     }
-    if (this.peerAddresses && this.peerAddresses.length > NUM.ZERO) {
+    if (this.peerAddresses && this.peerAddresses.length > 0) {
       const separator = PARTITION_SERVICE_ADDRESS.SEPARATOR;
       const partitionPeerSuffix =
         `${separator}${ENTITY_TYPE.PARTITION}${separator}${peerId}`;
@@ -761,7 +759,7 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @private
    */
   normalizeLeaderReplicaId(candidate) {
-    if (typeof candidate !== TYPEOF.STRING || candidate.length === NUM.ZERO) {
+    if (typeof candidate !== 'string' || candidate.length === 0) {
       return null;
     }
     if (!candidate.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
@@ -771,8 +769,8 @@ class PartitionServiceCoreBase extends EventEmitter {
       const parsed = AddressManager.getInstance().parse(candidate);
       if (
         parsed?.serviceType === ENTITY_TYPE.PARTITION &&
-        typeof parsed?.serviceId === TYPEOF.STRING &&
-        parsed.serviceId.length > NUM.ZERO
+        typeof parsed?.serviceId === 'string' &&
+        parsed.serviceId.length > 0
       ) {
         return parsed.serviceId;
       }

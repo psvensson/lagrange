@@ -62,7 +62,7 @@ class MockParentPort extends EventEmitter {
   }
 
   getLastMessage() {
-    return this.messages[this.messages.length - NUM.ONE];
+    return this.messages[this.messages.length - 1];
   }
 
   getAllMessages() {

@@ -71,14 +71,12 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     ADMIN_OPERATIONAL_DIAGNOSTICS,
     CDC_TELEMETRY_MODE,
     COLUMN,
-    NUM,
     PARTITION_STATE_UNKNOWN,
     SERVICE_TYPE_PARTITION,
     SQL_DIAGNOSTICS_REPLICA_COUNT,
     STATUS_ACTIVE,
     TABLES,
     TIME_MS,
-    TYPEOF,
     firstStringField,
     toNonNegativeInteger,
     uniqueSorted,
@@ -88,29 +86,29 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const partitionServices = this.resolveLocalPartitionServices ?
         this.resolveLocalPartitionServices() :
         null;
-      let subscriberCount = NUM.ZERO;
-      let bufferedEvents = NUM.ZERO;
-      let catchupLagEvents = NUM.ZERO;
-      const catchupThroughputEventsPerSec = NUM.ZERO;
+      let subscriberCount = 0;
+      let bufferedEvents = 0;
+      let catchupLagEvents = 0;
+      const catchupThroughputEventsPerSec = 0;
       let catchupDetected = false;
       if (partitionServices instanceof Map) {
         for (const partitionService of partitionServices.values()) {
           if (
             !partitionService ||
             typeof partitionService.getCDCSubscriptionDiagnostics !==
-              TYPEOF.FUNCTION
+              'function'
           ) {
             continue;
           }
           const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-          if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+          if (!diagnostics || typeof diagnostics !== 'object') {
             continue;
           }
           const partitionSubscriberCount = Number(
-            diagnostics.subscriberCount || NUM.ZERO,
+            diagnostics.subscriberCount || 0,
           );
           const partitionBufferedEvents = Number(
-            diagnostics.bufferedEvents || NUM.ZERO,
+            diagnostics.bufferedEvents || 0,
           );
           subscriberCount += partitionSubscriberCount;
           bufferedEvents += partitionBufferedEvents;
@@ -119,7 +117,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
             partitionBufferedEvents,
           );
           if (
-            partitionBufferedEvents > NUM.ZERO ||
+            partitionBufferedEvents > 0 ||
             diagnostics.bufferReplayInFlight === true
           ) {
             catchupDetected = true;
@@ -128,37 +126,37 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       }
       const authoritativeFallback =
         typeof this.cdcIntegrationService
-          ?.getAuthoritativeFallbackDiagnostics === TYPEOF.FUNCTION ?
+          ?.getAuthoritativeFallbackDiagnostics === 'function' ?
           this.cdcIntegrationService.getAuthoritativeFallbackDiagnostics() :
           {
-            schemaVersion: NUM.ONE,
+            schemaVersion: 1,
             nodeId: this.nodeId,
             windowMs: TIME_MS.MINUTE,
-            totalCount: NUM.ZERO,
-            windowCount: NUM.ZERO,
-            windowRatePerMinute: NUM.ZERO,
+            totalCount: 0,
+            windowCount: 0,
+            windowRatePerMinute: 0,
             phases: {
               bootstrap: {
-                windowCount: NUM.ZERO,
-                totalCount: NUM.ZERO,
+                windowCount: 0,
+                totalCount: 0,
               },
               recovery: {
-                windowCount: NUM.ZERO,
-                totalCount: NUM.ZERO,
+                windowCount: 0,
+                totalCount: 0,
               },
               steady_state: {
-                windowCount: NUM.ZERO,
-                totalCount: NUM.ZERO,
+                windowCount: 0,
+                totalCount: 0,
               },
             },
             outcomes: {
               recovered: {
-                windowCount: NUM.ZERO,
-                totalCount: NUM.ZERO,
+                windowCount: 0,
+                totalCount: 0,
               },
               failed: {
-                windowCount: NUM.ZERO,
-                totalCount: NUM.ZERO,
+                windowCount: 0,
+                totalCount: 0,
               },
             },
             byTable: {},
@@ -182,7 +180,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     buildLocalCdcDiagnostics() {
       if (
         !this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+        typeof this.systemTableCache.getAll !== 'function'
       ) {
         throw new Error(ADMIN_ERROR_MESSAGE.CDC_DIAGNOSTICS_UNAVAILABLE);
       }
@@ -220,25 +218,25 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           if (
             !partitionService ||
             typeof partitionService.getCDCSubscriptionDiagnostics !==
-              TYPEOF.FUNCTION
+              'function'
           ) {
             partitionDiagnosticsById[partitionId] = {
               diagnosticsAvailable: false,
               ready: false,
-              subscriberCount: NUM.ZERO,
-              bufferedEvents: NUM.ZERO,
+              subscriberCount: 0,
+              bufferedEvents: 0,
               bufferReplayInFlight: false,
             };
             missingDiagnosticsPartitionIds.push(partitionId);
             continue;
           }
           const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-          if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+          if (!diagnostics || typeof diagnostics !== 'object') {
             partitionDiagnosticsById[partitionId] = {
               diagnosticsAvailable: false,
               ready: false,
-              subscriberCount: NUM.ZERO,
-              bufferedEvents: NUM.ZERO,
+              subscriberCount: 0,
+              bufferedEvents: 0,
               bufferReplayInFlight: false,
             };
             missingDiagnosticsPartitionIds.push(partitionId);
@@ -253,8 +251,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           const bufferReplayInFlight =
             diagnostics.bufferReplayInFlight === true;
           const ready =
-            subscriberCount > NUM.ZERO &&
-            bufferedEvents === NUM.ZERO &&
+            subscriberCount > 0 &&
+            bufferedEvents === 0 &&
             bufferReplayInFlight !== true;
           partitionDiagnosticsById[partitionId] = {
             diagnosticsAvailable: true,
@@ -264,10 +262,10 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
             bufferReplayInFlight,
             diagnostics,
           };
-          if (subscriberCount <= NUM.ZERO) {
+          if (subscriberCount <= 0) {
             noSubscriberPartitionIds.push(partitionId);
           }
-          if (bufferedEvents > NUM.ZERO || bufferReplayInFlight === true) {
+          if (bufferedEvents > 0 || bufferReplayInFlight === true) {
             bufferedPartitionIds.push(partitionId);
           }
         }
@@ -307,7 +305,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     buildLocalPartitionDiagnostics() {
       if (
         !this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+        typeof this.systemTableCache.getAll !== 'function'
       ) {
         throw new Error(ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_UNAVAILABLE);
       }
@@ -459,7 +457,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     buildLocalSqlDiagnostics() {
       if (
         !this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
+        typeof this.systemTableCache.getAll !== 'function'
       ) {
         throw new Error(ADMIN_ERROR_MESSAGE.SQL_DIAGNOSTICS_UNAVAILABLE);
       }
@@ -470,19 +468,19 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const sqlQueryEngine = this.sqlQueryEngine;
       const queryEngineAvailable = Boolean(
         sqlQueryEngine &&
-        typeof sqlQueryEngine.executeRequest === TYPEOF.FUNCTION,
+        typeof sqlQueryEngine.executeRequest === 'function',
       );
       const queryExecutor = sqlQueryEngine?.queryExecutor || null;
       const lastCoordinatorMetrics =
         queryExecutor &&
-        typeof queryExecutor.getLastCoordinatorMetrics === TYPEOF.FUNCTION ?
+        typeof queryExecutor.getLastCoordinatorMetrics === 'function' ?
           queryExecutor.getLastCoordinatorMetrics() :
           null;
       let provisionTargetDiagnostics = null;
       if (
         sqlQueryEngine &&
         typeof sqlQueryEngine.resolveProvisionTargetNodeIdsWithDiagnostics ===
-          TYPEOF.FUNCTION
+          'function'
       ) {
         const diagnosticsResult =
           sqlQueryEngine.resolveProvisionTargetNodeIdsWithDiagnostics(
@@ -490,14 +488,14 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           );
         if (
           diagnosticsResult?.diagnostics &&
-          typeof diagnosticsResult.diagnostics === TYPEOF.OBJECT
+          typeof diagnosticsResult.diagnostics === 'object'
         ) {
           provisionTargetDiagnostics = diagnosticsResult.diagnostics;
         }
       } else if (
         sqlQueryEngine &&
         typeof sqlQueryEngine.resolveProvisionTargetNodeDiagnostics ===
-          TYPEOF.FUNCTION
+          'function'
       ) {
         provisionTargetDiagnostics =
           sqlQueryEngine.resolveProvisionTargetNodeDiagnostics(
@@ -531,13 +529,13 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           transactionRecovery:
             sqlQueryEngine?.lastTransactionRecoveryReplayResult &&
             typeof sqlQueryEngine.lastTransactionRecoveryReplayResult ===
-              TYPEOF.OBJECT ?
+              'object' ?
               sqlQueryEngine.lastTransactionRecoveryReplayResult :
               null,
           trackedWriteSplitEvaluations:
             sqlQueryEngine?.lastWriteSplitEvaluationByTable instanceof Map ?
               sqlQueryEngine.lastWriteSplitEvaluationByTable.size :
-              NUM.ZERO,
+              0,
         },
         splitEvaluation: this.resolveSplitEvaluationDiagnostics(),
       };
@@ -555,7 +553,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       return {
         success: true,
         rows: [snapshot],
-        count: NUM.ONE,
+        count: 1,
         partitions: ADMIN_CACHE_DUMP.EMPTY,
         tableName: ADMIN_CONTROL_SNAPSHOT.TABLE_NAME,
       };
@@ -568,7 +566,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const deadlineMs = resolveBoundedSnapshotProbeDeadlineMs(
         resolveOptions.queryTimeoutMs,
       );
-      if (deadlineMs <= NUM.ZERO) {
+      if (deadlineMs <= 0) {
         return this.resolveLocalControlSnapshot(resolveOptions);
       }
       let deadlineTimer = null;

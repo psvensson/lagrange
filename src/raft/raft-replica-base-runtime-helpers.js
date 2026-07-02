@@ -1,6 +1,6 @@
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STRING, TABLES} from '../constants/index.js';
+import {STRING, TABLES} from '../constants/index.js';
 import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
 import {
   deliverRaftPacketWithBackpressureMute,
@@ -28,7 +28,7 @@ function buildPeerAddressForReplica(replica, peerId) {
     throw new Error(RAFT_REPLICA_BASE_ERROR_MSG.peerAddressNotUnified(peerId));
   }
 
-  if (replica.peerAddresses && replica.peerAddresses.length > NUM.ZERO) {
+  if (replica.peerAddresses && replica.peerAddresses.length > 0) {
     for (const addr of replica.peerAddresses) {
       const validation = replica.addressManager.validate(addr);
       if (!validation.valid) {
@@ -91,9 +91,9 @@ function createRaftInstanceForReplica(replica, logAdapter) {
   ) || RAFT_REPLICA_BASE_DEFAULT.ELECTION_MAX_DEFAULT_MS;
 
   let replicaIndex = replica.replicaIds.indexOf(replica.replicaId);
-  if (replicaIndex < NUM.ZERO) {
+  if (replicaIndex < 0) {
     const hashCode = replica.replicaId.split(STRING.EMPTY).reduce(
-      (acc, char) => acc + char.charCodeAt(NUM.ZERO), NUM.ZERO,
+      (acc, char) => acc + char.charCodeAt(0), 0,
     );
     replicaIndex = replica.replicaIds.length +
       (hashCode % RAFT_REPLICA_BASE_VALUE.HASH_MODULO);

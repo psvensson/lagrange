@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {buildActiveMembershipSnapshot as buildPriorityRecoveryPublicationContext} from './active-node-projection.js';
 import {
@@ -99,8 +95,8 @@ function buildPriorityRecoveryDefaultLearnerPromotion() {
   return {
     activeLearnerNodeIds: [],
     promotableLearnerNodeIds: [],
-    activeLearnerNodeCount: NUM.ZERO,
-    promotableLearnerNodeCount: NUM.ZERO,
+    activeLearnerNodeCount: 0,
+    promotableLearnerNodeCount: 0,
     learnerHoldByNodeId: {},
   };
 }
@@ -171,8 +167,8 @@ function resolvePriorityRecoveryDecisionObservation(options = {}) {
 }
 
 function resolvePriorityRecoveryDecisionOperationId(options = {}) {
-  return typeof options.operationId === TYPEOF.STRING &&
-    options.operationId.length > NUM.ZERO ?
+  return typeof options.operationId === 'string' &&
+    options.operationId.length > 0 ?
     options.operationId :
     null;
 }
@@ -219,7 +215,7 @@ function buildPriorityRecoveryDecisionPublicationSnapshot(options = {}) {
 function isPriorityRecoveryReadinessRecoveryEligibleOnly(readinessEntry) {
   const dimensions =
     readinessEntry?.dimensions &&
-    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    typeof readinessEntry.dimensions === 'object' ?
       readinessEntry.dimensions :
       {};
   return (
@@ -271,7 +267,7 @@ function attachPriorityRecoveryTopologyOperatorWitness(snapshot = {}) {
 
 function buildPriorityRecoveryDecisionSnapshot(options = {}) {
   const partitionId = String(options.partitionId || '').trim();
-  if (partitionId.length === NUM.ZERO) {
+  if (partitionId.length === 0) {
     return null;
   }
   const publicationConvergence =
@@ -636,7 +632,7 @@ function appendPriorityRecoveryPartitionSnapshots(
 ) {
   const appendedSnapshots = [];
   const operationIds =
-    operationContexts.length > NUM.ZERO ?
+    operationContexts.length > 0 ?
       operationContexts.map((context) => context.operationId) :
       [null];
   for (const operationId of operationIds) {

@@ -13,7 +13,6 @@ import {
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
   PRESSURE_WORK_CLASS,
-  TYPEOF,
   buildControlPlaneWorkloadProfile,
   PressureGovernor,
   REBALANCER_LOG_MSG,
@@ -62,7 +61,7 @@ const REBALANCER_TRANSPORT_PRESSURE_METHODS = {
       null;
     const currentPriorityRecoveryPartitionBlocked =
       typeof priorityRecoveryAdmissionPlan?.hasBlockedPartition ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       priorityRecoveryAdmissionPlan.hasBlockedPartition(this.entityId) === true;
     const operationCreationGate = isPriorityPartition ?
       this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(

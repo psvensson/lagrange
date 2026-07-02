@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_DECISION,
   PARTITION_DESCRIPTOR_EPOCH_REASON,
@@ -23,7 +22,7 @@ const DESCRIPTOR_EPOCH_EMPTY_LIST = Object.freeze([]);
 
 function normalizeDescriptorEpochVersion(value) {
   const numericValue = Number(value);
-  return Number.isInteger(numericValue) && numericValue > NUM.ZERO ?
+  return Number.isInteger(numericValue) && numericValue > 0 ?
     numericValue :
     null;
 }
@@ -158,7 +157,7 @@ function buildRouteTargetDescriptorEpochRules(snapshot, routeTargetVersion) {
     ),
     buildExpectedDescriptorEpochRule(
       snapshot.allowNextActivePartitionVersion === true &&
-        snapshot.activePartitionVersion + NUM.ONE === routeTargetVersion,
+        snapshot.activePartitionVersion + 1 === routeTargetVersion,
       routeTargetVersion,
       PARTITION_DESCRIPTOR_EPOCH_STATE.SPLIT_TARGET_MATCH,
       PARTITION_DESCRIPTOR_EPOCH_REASON.SPLIT_TARGET_VERSION_MATCH,
@@ -244,7 +243,7 @@ function buildPartitionDescriptorEpochDecision(options = {}) {
   }
   if (
     snapshot.requireTargetDescriptors === true &&
-    snapshot.targetPartitionDescriptors.length === NUM.ZERO
+    snapshot.targetPartitionDescriptors.length === 0
   ) {
     return rejectDescriptorEpoch(
       snapshot,

@@ -24,7 +24,6 @@ import {
   JOINING_LOG_MSG,
   CDC_REESTABLISHMENT,
 } from '../../src/bootstrap/node-joining-constants.js';
-import {NUM} from '../../src/constants/index.js';
 
 const TEST_NODE_ID = 'test-node-diag';
 const TEST_NODE_ADDRESS = 'ws://localhost:9090';
@@ -118,7 +117,7 @@ function createMockMessageGroupService(options = {}) {
  */
 function createDelayedSuccessCDC(failCount) {
   const emitter = new EventEmitter();
-  let fullAttempts = NUM.ZERO;
+  let fullAttempts = 0;
   const firstEventType = 'insert';
 
   const originalOn = emitter.on.bind(emitter);
@@ -175,11 +174,11 @@ test('diagnostic timer cleared after successful CDC ' +
     // The diagnostic interval must have been created and
     // then cleared in the finally block.
     t.ok(
-      intervalIds.length > NUM.ZERO,
+      intervalIds.length > 0,
       'at least one interval was created',
     );
     t.ok(
-      clearedIds.length > NUM.ZERO,
+      clearedIds.length > 0,
       'at least one interval was cleared',
     );
 
@@ -219,7 +218,7 @@ test('diagnostic timer cleared after timeout — no ' +
   try {
     // Time advances past timeout on every call
     const STEP_MS = 10000;
-    let clockMs = NUM.ZERO;
+    let clockMs = 0;
     const advancingNow = () => {
       const current = clockMs;
       clockMs += STEP_MS;
@@ -232,7 +231,7 @@ test('diagnostic timer cleared after timeout — no ' +
       throw new Error('Persistent failure');
     };
     alwaysFailCDC.removeListener = () => alwaysFailCDC;
-    alwaysFailCDC.listenerCount = () => NUM.ZERO;
+    alwaysFailCDC.listenerCount = () => 0;
 
     const {service} = createServiceWithCapturingLogger({
       now: advancingNow,
@@ -264,7 +263,7 @@ test('diagnostic emission includes subscription status ' +
   const intervalCallbacks = [];
   const originalSetInterval = globalThis.setInterval;
   const originalClearInterval = globalThis.clearInterval;
-  let nextId = NUM.ONE;
+  let nextId = 1;
 
   globalThis.setInterval = (fn, ms) => {
     const id = nextId++;
@@ -311,11 +310,11 @@ test('diagnostic emission includes subscription status ' +
     );
 
     t.ok(
-      diagLogs.length > NUM.ZERO,
+      diagLogs.length > 0,
       'at least one diagnostic log emitted',
     );
 
-    const payload = diagLogs[NUM.ZERO].payload;
+    const payload = diagLogs[0].payload;
 
     // Verify required fields per Requirement 8.1, 8.2
     t.equal(
@@ -363,11 +362,11 @@ test('diagnostic emission includes subscription status ' +
 
     // Verify interval was registered with correct period
     t.ok(
-      intervalCallbacks.length > NUM.ZERO,
+      intervalCallbacks.length > 0,
       'setInterval was called',
     );
     t.equal(
-      intervalCallbacks[NUM.ZERO].ms,
+      intervalCallbacks[0].ms,
       CDC_REESTABLISHMENT.DIAGNOSTIC_INTERVAL_MS,
       'interval uses CDC_REESTABLISHMENT.DIAGNOSTIC_INTERVAL_MS',
     );
@@ -384,7 +383,7 @@ test('diagnostic emission shows null leader when no ' +
   const intervalCallbacks = [];
   const originalSetInterval = globalThis.setInterval;
   const originalClearInterval = globalThis.clearInterval;
-  let nextId = NUM.ONE;
+  let nextId = 1;
 
   globalThis.setInterval = (fn, ms) => {
     const id = nextId++;
@@ -418,11 +417,11 @@ test('diagnostic emission shows null leader when no ' +
     );
 
     t.ok(
-      diagLogs.length > NUM.ZERO,
+      diagLogs.length > 0,
       'diagnostic log emitted even without leader',
     );
 
-    const payload = diagLogs[NUM.ZERO].payload;
+    const payload = diagLogs[0].payload;
     t.equal(
       payload.messageGroupLeader,
       null,

@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_CORRELATION_KEY,
   PRIORITY_RECOVERY_PRESSURE_STATE,
@@ -31,40 +30,40 @@ function normalizePriorityRecoveryStringList(values = []) {
     ...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) => String(value || PRIORITY_RECOVERY_HELPER_LITERAL.VALUE).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
 
 function inferPriorityRecoveryTableNameFromPartitionId(partitionId) {
   const normalizedPartitionId = String(partitionId || PRIORITY_RECOVERY_HELPER_LITERAL.VALUE);
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return null;
   }
   const partitionSuffixIndex = normalizedPartitionId.lastIndexOf(
     PRIORITY_RECOVERY_HELPER_LITERAL.PARTITION_SUFFIX,
   );
-  if (partitionSuffixIndex <= NUM.ZERO) {
+  if (partitionSuffixIndex <= 0) {
     return normalizedPartitionId;
   }
   const suffix = normalizedPartitionId.slice(partitionSuffixIndex + 2);
   if (!PRIORITY_RECOVERY_TABLE_SUFFIX_PATTERN.test(suffix)) {
     return normalizedPartitionId;
   }
-  return normalizedPartitionId.slice(NUM.ZERO, partitionSuffixIndex);
+  return normalizedPartitionId.slice(0, partitionSuffixIndex);
 }
 
 function buildPriorityRecoveryCorrelationKey(partitionId, epoch, operationId) {
   const normalizedPartitionId = String(partitionId || PRIORITY_RECOVERY_HELPER_LITERAL.VALUE)
     .trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return null;
   }
   const normalizedEpoch = Number.isInteger(epoch) ?
     String(epoch) :
     PRIORITY_RECOVERY_CORRELATION_KEY.EPOCH_UNKNOWN;
   const normalizedOperationId =
-    typeof operationId === TYPEOF.STRING && operationId.length > NUM.ZERO ?
+    typeof operationId === 'string' && operationId.length > 0 ?
       operationId :
       PRIORITY_RECOVERY_CORRELATION_KEY.OPERATION_UNKNOWN;
   return [normalizedPartitionId, normalizedEpoch, normalizedOperationId].join(
@@ -74,7 +73,7 @@ function buildPriorityRecoveryCorrelationKey(partitionId, epoch, operationId) {
 
 function normalizePriorityRecoveryNonNegativeInteger(value) {
   const normalizedValue = normalizePriorityRecoveryInteger(value);
-  if (!Number.isFinite(normalizedValue) || normalizedValue < NUM.ZERO) {
+  if (!Number.isFinite(normalizedValue) || normalizedValue < 0) {
     return null;
   }
   return normalizedValue;
@@ -82,7 +81,7 @@ function normalizePriorityRecoveryNonNegativeInteger(value) {
 
 function buildPriorityRecoveryPressureConditions(logsTable = null) {
   const normalizedLogsTable =
-    logsTable && typeof logsTable === TYPEOF.OBJECT ?
+    logsTable && typeof logsTable === 'object' ?
       logsTable :
       null;
   const pendingWrites = normalizePriorityRecoveryNonNegativeInteger(
@@ -128,19 +127,19 @@ function buildPriorityRecoveryPressureConditions(logsTable = null) {
 
   const pressureEvidence = Object.freeze({
     hasPendingWrites:
-      Number.isFinite(pendingWrites) && pendingWrites > NUM.ZERO,
+      Number.isFinite(pendingWrites) && pendingWrites > 0,
     hasPendingWriteGrowth:
       Number.isFinite(pendingWriteGrowthCount) &&
-      pendingWriteGrowthCount > NUM.ZERO,
+      pendingWriteGrowthCount > 0,
     hasRetainedBacklogGrowth:
       Number.isFinite(retainedBacklogGrowthCount) &&
-      retainedBacklogGrowthCount > NUM.ZERO,
+      retainedBacklogGrowthCount > 0,
     isBackpressuredBySharedSignals:
       sharedPressureBackpressured === true ||
       transportPressureBackpressured === true ||
       queryPressureBackpressured === true ||
       (Number.isFinite(consecutiveDeferredWriteFailures) &&
-        consecutiveDeferredWriteFailures > NUM.ZERO),
+        consecutiveDeferredWriteFailures > 0),
   });
 
   let pressureState = PRIORITY_RECOVERY_PRESSURE_STATE.NONE;

@@ -2,7 +2,6 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
-  NUM,
   OPERATION_HANDLER,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -21,7 +20,6 @@ const {
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TRANSPORT_ERROR_MSG,
-  TYPEOF,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifyTransportDeliveryOutcome,
@@ -39,18 +37,18 @@ const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
   new Set([ReplicaStatus.SYNCING]),
 );
 function resolveDispatchDeliveryErrorLike(response) {
-  if (!response || typeof response !== TYPEOF.OBJECT) {
+  if (!response || typeof response !== 'object') {
     return response;
   }
   const nestedError = response.error;
-  if (!nestedError || typeof nestedError !== TYPEOF.OBJECT) {
+  if (!nestedError || typeof nestedError !== 'object') {
     return response;
   }
   return {
     ...response,
     ...nestedError,
     error:
-      typeof nestedError.message === TYPEOF.STRING ?
+      typeof nestedError.message === 'string' ?
         nestedError.message :
         response.error,
     cause: nestedError,
@@ -367,14 +365,14 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (
       Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&
-      operation[ReplicaOperationField.REPLICA_IDS].length > NUM.ZERO
+      operation[ReplicaOperationField.REPLICA_IDS].length > 0
     ) {
       request[ReplicaOperationField.REPLICA_IDS] =
         operation[ReplicaOperationField.REPLICA_IDS];
     }
     if (
       Array.isArray(operation[ReplicaOperationField.PEER_ADDRESSES]) &&
-      operation[ReplicaOperationField.PEER_ADDRESSES].length > NUM.ZERO
+      operation[ReplicaOperationField.PEER_ADDRESSES].length > 0
     ) {
       request[ReplicaOperationField.PEER_ADDRESSES] =
         operation[ReplicaOperationField.PEER_ADDRESSES];
@@ -730,8 +728,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (
       typeof this.getObservedOperationRowTargetProgressStatus !==
-        TYPEOF.FUNCTION ||
-      typeof this.applyReconciledReplicaStatus !== TYPEOF.FUNCTION
+        'function' ||
+      typeof this.applyReconciledReplicaStatus !== 'function'
     ) {
       return false;
     }

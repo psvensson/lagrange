@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from './control-plane-readiness-constants.js';
@@ -31,8 +30,6 @@ import {
   buildPublicationProjectionBoundaryOutcome,
 } from './recovery-protocol-publication-boundary.js';
 
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_ONE = 1;
 
 const PARTICIPATION_REASON = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
@@ -49,7 +46,7 @@ const PARTICIPATION_REASON = Object.freeze({
 });
 
 function normalizeOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
 }
@@ -57,27 +54,27 @@ function normalizeOptionalString(value) {
 function normalizeNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0),
   )].sort();
 }
 
 function normalizeStringList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-      .filter((value) => value.length > NUM.ZERO),
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0),
   )];
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
+  return Number.isFinite(value) && value >= 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeStringMap(values = {}) {
-  if (!values || typeof values !== TYPEOF.OBJECT) {
+  if (!values || typeof values !== 'object') {
     return {};
   }
   return Object.keys(values)
@@ -92,13 +89,13 @@ function normalizeStringMap(values = {}) {
 }
 
 function freezeRecord(record) {
-  return record && typeof record === TYPEOF.OBJECT ?
+  return record && typeof record === 'object' ?
     Object.freeze({...record}) :
     null;
 }
 
 function normalizeClusterIncarnationFence(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   return Object.freeze({
@@ -110,16 +107,16 @@ function normalizeClusterIncarnationFence(value) {
 function buildContext(options = {}) {
   const membershipLifecycleSummary =
     options.membershipLifecycleSummary &&
-      typeof options.membershipLifecycleSummary === TYPEOF.OBJECT ?
+      typeof options.membershipLifecycleSummary === 'object' ?
       options.membershipLifecycleSummary :
       null;
   const projectionDiagnostics =
     options.projectionDiagnostics &&
-      typeof options.projectionDiagnostics === TYPEOF.OBJECT ?
+      typeof options.projectionDiagnostics === 'object' ?
       options.projectionDiagnostics :
       membershipLifecycleSummary?.projectionDiagnostics &&
         typeof membershipLifecycleSummary.projectionDiagnostics ===
-          TYPEOF.OBJECT ?
+          'object' ?
         membershipLifecycleSummary.projectionDiagnostics :
         null;
   const publishedActiveNodeIds = normalizeNodeIdList(
@@ -136,7 +133,7 @@ function buildContext(options = {}) {
     options.publishedActiveNodeIdsPresent === true ||
     (options.publishedActiveNodeIdsPresent !== false &&
       Array.isArray(options.publishedActiveNodeIds) &&
-      options.publishedActiveNodeIds.length > NUM.ZERO);
+      options.publishedActiveNodeIds.length > 0);
   const durablePublishedActiveNodeIds = normalizeNodeIdList(
     options.durablePublishedActiveNodeIds ??
       (publicationStatusNormalized === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
@@ -164,10 +161,10 @@ function buildContext(options = {}) {
     options.recoveryActiveNodeIds ??
       membershipLifecycleSummary?.recoveryActiveNodeIds,
   );
-  const recoveryActiveNodeIds = explicitRecoveryActiveNodeIds.length > NUM.ZERO ?
+  const recoveryActiveNodeIds = explicitRecoveryActiveNodeIds.length > 0 ?
     explicitRecoveryActiveNodeIds :
     normalizeNodeIdList(
-      locallyEligibleNodeIds.length > NUM.ZERO ?
+      locallyEligibleNodeIds.length > 0 ?
         locallyEligibleNodeIds :
         projectedServingNodeIds,
     );
@@ -176,7 +173,7 @@ function buildContext(options = {}) {
       options.recoveryActiveNodeSource ??
         membershipLifecycleSummary?.recoveryActiveNodeSource,
     ) ||
-    (recoveryActiveNodeIds.length > NUM.ZERO &&
+    (recoveryActiveNodeIds.length > 0 &&
     recoveryActiveNodeIds.every((nodeId) =>
       durablePublishedActiveNodeIds.includes(nodeId),
     ) ?
@@ -194,10 +191,10 @@ function buildContext(options = {}) {
       membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
   );
   const memberStatesByNodeId = membershipLifecycleSummary?.memberStatesByNodeId &&
-    typeof membershipLifecycleSummary.memberStatesByNodeId === TYPEOF.OBJECT ?
+    typeof membershipLifecycleSummary.memberStatesByNodeId === 'object' ?
     membershipLifecycleSummary.memberStatesByNodeId :
     options.memberStatesByNodeId &&
-      typeof options.memberStatesByNodeId === TYPEOF.OBJECT ?
+      typeof options.memberStatesByNodeId === 'object' ?
       options.memberStatesByNodeId :
       {};
   const recoveryEpochByNodeId = normalizeStringMap(
@@ -206,24 +203,24 @@ function buildContext(options = {}) {
   );
   const membershipFreeze =
     membershipLifecycleSummary?.membershipFreeze &&
-      typeof membershipLifecycleSummary.membershipFreeze === TYPEOF.OBJECT ?
+      typeof membershipLifecycleSummary.membershipFreeze === 'object' ?
       membershipLifecycleSummary.membershipFreeze :
       options.membershipFreeze &&
-        typeof options.membershipFreeze === TYPEOF.OBJECT ?
+        typeof options.membershipFreeze === 'object' ?
         options.membershipFreeze :
         null;
   const participationByNodeId =
     membershipLifecycleSummary?.participationByNodeId &&
-      typeof membershipLifecycleSummary.participationByNodeId === TYPEOF.OBJECT ?
+      typeof membershipLifecycleSummary.participationByNodeId === 'object' ?
       membershipLifecycleSummary.participationByNodeId :
       options.participationByNodeId &&
-        typeof options.participationByNodeId === TYPEOF.OBJECT ?
+        typeof options.participationByNodeId === 'object' ?
         options.participationByNodeId :
         {};
   const targetNodeId = normalizeOptionalString(options.targetNodeId);
   const targetParticipation =
     targetNodeId && participationByNodeId[targetNodeId] &&
-      typeof participationByNodeId[targetNodeId] === TYPEOF.OBJECT ?
+      typeof participationByNodeId[targetNodeId] === 'object' ?
       participationByNodeId[targetNodeId] :
       null;
   const admissionState = normalizeNodeParticipationAdmissionState(
@@ -237,7 +234,7 @@ function buildContext(options = {}) {
   );
   const priorityRecoveryClosureWitness =
     options.priorityRecoveryClosureWitness &&
-      typeof options.priorityRecoveryClosureWitness === TYPEOF.OBJECT ?
+      typeof options.priorityRecoveryClosureWitness === 'object' ?
       options.priorityRecoveryClosureWitness :
       buildPriorityRecoveryClosureWitness({
         decisionSnapshots: options.priorityRecoveryDecisionSnapshots,
@@ -263,7 +260,7 @@ function buildContext(options = {}) {
     pendingAckCount: normalizeNonNegativeInteger(options.pendingAckCount),
     priorityPartitionSummary:
       options.priorityPartitionSummary &&
-        typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
+        typeof options.priorityPartitionSummary === 'object' ?
         options.priorityPartitionSummary :
         null,
     priorityRecoveryClosureWitness,
@@ -291,7 +288,7 @@ function buildContext(options = {}) {
 function resolvePriorityRecoverySpreadPending(context) {
   if (
     typeof context?.priorityRecoveryClosureWitness?.prioritySpreadPending ===
-    TYPEOF.BOOLEAN
+    'boolean'
   ) {
     return context.priorityRecoveryClosureWitness.prioritySpreadPending;
   }
@@ -312,7 +309,7 @@ function resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context = {}) {
       context.missingPublishedRecoveryActiveNodeIds :
       []),
     ...(isTargetNodeExcludedFromPublishedMembership(context) &&
-      typeof context.targetNodeId === TYPEOF.STRING ?
+      typeof context.targetNodeId === 'string' ?
       [context.targetNodeId] :
       []),
   ]);
@@ -322,15 +319,15 @@ function buildPriorityRecoveryReasonCodes(context) {
   const publicationExcludesTargetNode =
     isTargetNodeExcludedFromPublishedMembership(context);
   const unpublishedObservation =
-    context.publicationStatusNormalized.length === NUM.ZERO &&
+    context.publicationStatusNormalized.length === 0 &&
     (
       context.targetNodeId !== null ||
-      context.recoveryActiveNodeIds.length > NUM.ZERO ||
-      context.projectedServingNodeIds.length > NUM.ZERO ||
-      context.locallyEligibleNodeIds.length > NUM.ZERO
+      context.recoveryActiveNodeIds.length > 0 ||
+      context.projectedServingNodeIds.length > 0 ||
+      context.locallyEligibleNodeIds.length > 0
     );
   const reasonCodes = [];
-  const publicationPending = context.publicationStatusNormalized.length > NUM.ZERO &&
+  const publicationPending = context.publicationStatusNormalized.length > 0 &&
     context.publicationStatusNormalized !==
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
   if (publicationPending || publicationExcludesTargetNode ||
@@ -348,26 +345,26 @@ function buildPriorityRecoveryReasonCodes(context) {
 }
 
 function resolveRecoveryProtocolState(context) {
-  if (context.publicationStatusNormalized.length === NUM.ZERO &&
+  if (context.publicationStatusNormalized.length === 0 &&
       context.publishedActiveNodeIdsPresent !== true &&
-      context.publishedActiveNodeIds.length === NUM.ZERO) {
+      context.publishedActiveNodeIds.length === 0) {
     return RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
   }
   if (isTargetNodeExcludedFromPublishedMembership(context)) {
     return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
   }
-  if (context.publicationStatusNormalized.length > NUM.ZERO &&
+  if (context.publicationStatusNormalized.length > 0 &&
       context.publicationStatusNormalized !==
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
     return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
   }
   if (resolvePriorityRecoverySpreadPending(context) ||
       resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context).length >
-        NUM.ZERO) {
+        0) {
     return RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING;
   }
   if (context.publishedActiveNodeIdsPresent === true ||
-      context.publishedActiveNodeIds.length > NUM.ZERO) {
+      context.publishedActiveNodeIds.length > 0) {
     return RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED;
   }
   return RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
@@ -376,7 +373,7 @@ function resolveRecoveryProtocolState(context) {
 function buildParticipationAdmission(context, nodeId) {
   const existingParticipation =
     context.participationByNodeId?.[nodeId] &&
-      typeof context.participationByNodeId[nodeId] === TYPEOF.OBJECT ?
+      typeof context.participationByNodeId[nodeId] === 'object' ?
       context.participationByNodeId[nodeId] :
       null;
   const explicitAdmissionBlocked =
@@ -555,10 +552,10 @@ function buildParticipationStateCounts(participationByNodeId = {}) {
     Object.values(participationByNodeId)
       .reduce((accumulator, participation) => {
         const state = participation?.state;
-        if (typeof state !== TYPEOF.STRING || state.length === NUM.ZERO) {
+        if (typeof state !== 'string' || state.length === 0) {
           return accumulator;
         }
-        accumulator[state] = (accumulator[state] || NUM.ZERO) + LOCAL_NUM_ONE;
+        accumulator[state] = (accumulator[state] || 0) + 1;
         return accumulator;
       }, {}),
   );
@@ -573,7 +570,7 @@ function buildRecoveryProtocolSnapshot(options = {}) {
   const effectiveMissingPublishedRecoveryActiveNodeIds =
     resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context);
   const publicationObservationState =
-    context.publicationStatusNormalized.length === NUM.ZERO ?
+    context.publicationStatusNormalized.length === 0 ?
       PUBLICATION_OBSERVATION_STATE.UNPUBLISHED :
       context.publicationStatusNormalized ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?

@@ -30,7 +30,6 @@ const {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
   QUERY_ERROR_MSG,
-  TYPEOF,
   VALID_SYSTEM_TABLES,
   WRITE_ROUTER_MODE,
   annotateSystemTableMutationError,
@@ -56,7 +55,7 @@ const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 
 class CDCRoutedMutationReadiness {
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       return {
         handled: false,
       };
@@ -85,13 +84,13 @@ class CDCRoutedMutationReadiness {
     const localServices = this.resolveLocalSystemTableServices(tableName, {
       consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
     });
-    if (localServices.length === NUM.ZERO) {
+    if (localServices.length === 0) {
       return {
         handled: false,
       };
     }
     for (const partitionService of localServices) {
-      if (typeof partitionService?.executeQuery !== TYPEOF.FUNCTION) {
+      if (typeof partitionService?.executeQuery !== 'function') {
         continue;
       }
       try {
@@ -134,7 +133,7 @@ class CDCRoutedMutationReadiness {
   }
 
   validateData(data, operation) {
-    if (!data || typeof data !== TYPEOF.OBJECT) {
+    if (!data || typeof data !== 'object') {
       throw new Error(`${operation}${CDC_ERROR_MSG.DATA_REQUIRED_SUFFIX}`);
     }
   }
@@ -170,8 +169,8 @@ class CDCRoutedMutationReadiness {
     }
 
     const initializedCandidates =
-      candidates.length > NUM.ZERO ? candidates : [];
-    if (initializedCandidates.length === NUM.ZERO) {
+      candidates.length > 0 ? candidates : [];
+    if (initializedCandidates.length === 0) {
       const partitionIds = candidates
         .map((service) => service?.partitionId)
         .filter(Boolean)
@@ -185,7 +184,7 @@ class CDCRoutedMutationReadiness {
       (service) => service.isLeader,
     );
     const partitionService =
-      leaderService || initializedCandidates[NUM.ZERO] || null;
+      leaderService || initializedCandidates[0] || null;
     if (!partitionService) {
       const availablePartitions = Array.from(
         this.localPartitionServices.values(),
@@ -203,7 +202,7 @@ class CDCRoutedMutationReadiness {
         nodeId: this.nodeId,
         tableName,
         partitionId: partitionService.partitionId,
-        sql: sql.substring(NUM.ZERO, Math.min(sql.length, NUM.HUNDRED)),
+        sql: sql.substring(0, Math.min(sql.length, NUM.HUNDRED)),
       },
     );
     const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
@@ -230,11 +229,11 @@ class CDCRoutedMutationReadiness {
         );
       }
     }
-    return results[NUM.ZERO];
+    return results[0];
   }
 
   extractTableNameFromSQL(sql) {
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       return Object.freeze({
         state:
           CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_INVALID_INPUT,
@@ -246,7 +245,7 @@ class CDCRoutedMutationReadiness {
       return Object.freeze({
         state:
           CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -255,7 +254,7 @@ class CDCRoutedMutationReadiness {
       return Object.freeze({
         state:
           CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -264,7 +263,7 @@ class CDCRoutedMutationReadiness {
       return Object.freeze({
         state:
           CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -273,7 +272,7 @@ class CDCRoutedMutationReadiness {
       return Object.freeze({
         state:
           CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
     return Object.freeze({
@@ -287,8 +286,8 @@ class CDCRoutedMutationReadiness {
       return null;
     }
     if (
-      typeof options.sessionId === TYPEOF.STRING &&
-      options.sessionId.length > NUM.ZERO
+      typeof options.sessionId === 'string' &&
+      options.sessionId.length > 0
     ) {
       return options.sessionId;
     }
@@ -316,7 +315,7 @@ class CDCRoutedMutationReadiness {
           `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_DETAIL}`,
       );
       error.deferRetry = true;
-      error.retryAfterMs = Math.max(NUM.ONE, this.retryDelayMs || NUM.ONE);
+      error.retryAfterMs = Math.max(1, this.retryDelayMs || 1);
       return error;
     };
     const maxAttempts = Math.max(
@@ -358,7 +357,7 @@ class CDCRoutedMutationReadiness {
     });
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
     const queryExecutionBudgetMs =
-      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > 0 ?
         Math.floor(queryTimeoutMs) :
         null;
     const queryExecutionDeadlineMs =
@@ -369,7 +368,7 @@ class CDCRoutedMutationReadiness {
       if (queryExecutionDeadlineMs === null) {
         return null;
       }
-      return Math.max(NUM.ZERO, queryExecutionDeadlineMs - Date.now());
+      return Math.max(0, queryExecutionDeadlineMs - Date.now());
     };
     const waitForRetryBudget = async (delayMs) => {
       // Teardown stop: once the service is shutting down, abandon the retry
@@ -380,27 +379,27 @@ class CDCRoutedMutationReadiness {
         return false;
       }
       const normalizedDelayMs =
-        Number.isFinite(delayMs) && delayMs > NUM.ZERO ?
+        Number.isFinite(delayMs) && delayMs > 0 ?
           Math.floor(delayMs) :
-          NUM.ZERO;
+          0;
       const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       if (remainingBudgetMs === null) {
-        if (normalizedDelayMs > NUM.ZERO) {
+        if (normalizedDelayMs > 0) {
           await delay(normalizedDelayMs);
         }
         return true;
       }
-      if (remainingBudgetMs <= NUM.ZERO) {
+      if (remainingBudgetMs <= 0) {
         return false;
       }
       if (normalizedDelayMs > remainingBudgetMs) {
         return false;
       }
-      if (normalizedDelayMs > NUM.ZERO) {
+      if (normalizedDelayMs > 0) {
         await delay(normalizedDelayMs);
       }
       const nextRemainingBudgetMs = getRemainingQueryExecutionBudgetMs();
-      return nextRemainingBudgetMs === null || nextRemainingBudgetMs > NUM.ZERO;
+      return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;
     };
     if (
       pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
@@ -449,16 +448,16 @@ class CDCRoutedMutationReadiness {
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     };
-    if (typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO) {
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
       baseQueryOptions.sessionId = sessionId;
     }
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }
-    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
-        if (remainingBudgetMs !== null && remainingBudgetMs <= NUM.ZERO) {
+        if (remainingBudgetMs !== null && remainingBudgetMs <= 0) {
           throw buildSystemTableMutationError(
             {
               success: false,
@@ -479,7 +478,7 @@ class CDCRoutedMutationReadiness {
           // retry budget (witnessed: a 23s seed freeze ate all 6 attempts in
           // a single 15s-timeout call). Divide the remaining budget across
           // the remaining attempts, floored at 1s and capped at the budget.
-          const remainingAttempts = maxAttempts - attempt + NUM.ONE;
+          const remainingAttempts = maxAttempts - attempt + 1;
           queryOptions.timeoutMs = Math.min(
             remainingBudgetMs,
             Math.max(
@@ -489,7 +488,7 @@ class CDCRoutedMutationReadiness {
           );
         } else if (
           Number.isFinite(queryTimeoutMs) &&
-          queryTimeoutMs > NUM.ZERO
+          queryTimeoutMs > 0
         ) {
           queryOptions.timeoutMs = Math.floor(queryTimeoutMs);
         }
@@ -503,7 +502,7 @@ class CDCRoutedMutationReadiness {
           }
         }
         const sqlQueryEngine = this.sqlQueryEngine;
-        if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+        if (typeof sqlQueryEngine?.executeQuery !== 'function') {
           throw buildMissingSqlQueryEngineError();
         }
         const result = await sqlQueryEngine.executeQuery(
@@ -603,7 +602,7 @@ class CDCRoutedMutationReadiness {
   async executeSQL(sql, params = [], options = {}) {
     if (
       !this.writeRouter ||
-      typeof this.writeRouter.execute !== TYPEOF.FUNCTION
+      typeof this.writeRouter.execute !== 'function'
     ) {
       throw new Error(
         CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
@@ -614,7 +613,7 @@ class CDCRoutedMutationReadiness {
 
   isTransientCdcError(errorLike) {
     const message =
-      typeof errorLike === TYPEOF.STRING ?
+      typeof errorLike === 'string' ?
         errorLike :
         errorLike?.message || errorLike?.error || '';
     return (
@@ -642,9 +641,9 @@ class CDCRoutedMutationReadiness {
       return false;
     }
     const errorText =
-      typeof result?.error === TYPEOF.STRING ?
+      typeof result?.error === 'string' ?
         result.error :
-        typeof result?.message === TYPEOF.STRING ?
+        typeof result?.message === 'string' ?
           result.message :
           '';
     return !(
@@ -656,7 +655,7 @@ class CDCRoutedMutationReadiness {
   computeRetryDelayMs(baseDelayMs, attempt) {
     const exp = Math.min(
       CDC_RETRY.MAX_EXPONENT,
-      Math.max(NUM.ZERO, attempt - NUM.ONE),
+      Math.max(0, attempt - 1),
     );
     return Math.min(
       CDC_RETRY.MAX_DELAY_MS,
@@ -666,7 +665,7 @@ class CDCRoutedMutationReadiness {
 
   resolveTransientCdcRetryDelayMs(baseDelayMs, attempt, errorLike) {
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    if (retryAfterMs > NUM.ZERO) {
+    if (retryAfterMs > 0) {
       return retryAfterMs;
     }
     return this.computeRetryDelayMs(baseDelayMs, attempt);
@@ -677,8 +676,8 @@ class CDCRoutedMutationReadiness {
     options = {},
   ) {
     if (
-      typeof options?.workloadClass !== TYPEOF.STRING ||
-      options.workloadClass.length === NUM.ZERO
+      typeof options?.workloadClass !== 'string' ||
+      options.workloadClass.length === 0
     ) {
       return null;
     }

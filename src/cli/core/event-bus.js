@@ -1,12 +1,10 @@
-const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_ONE_THOUSAND = 1000;
 const LOCAL_STR_SUBSCRIBE = 'subscribe';
 const LOCAL_STR_SUBSCRIBE_ONCE = 'subscribe-once';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_UNSUBSCRIBE = 'unsubscribe';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_EMIT = 'emit';
 const LOCAL_STR_ERROR = 'error';
-const LOCAL_STR_11QPC = ':*';
+const LOCAL_STR_COLON_STAR = ':*';
 const LOCAL_STR_ASTERISK = '*';
 const LOCAL_STR_CLEAR = 'clear';
 
@@ -30,7 +28,7 @@ export class EventBus {
     this.handlers = new Map();
     this.debugMode = options.debugMode || false;
     this.eventLog = [];
-    this.maxLogSize = options.maxLogSize || LOCAL_NUM_1000;
+    this.maxLogSize = options.maxLogSize || LOCAL_NUM_ONE_THOUSAND;
   }
 
   /**
@@ -98,15 +96,15 @@ export class EventBus {
     if (!handlers) return;
 
     const index = handlers.findIndex((h) => h.callback === callback);
-    if (index !== -LOCAL_NUM_ONE) {
-      handlers.splice(index, LOCAL_NUM_ONE);
+    if (index !== -1) {
+      handlers.splice(index, 1);
       if (this.debugMode) {
         this.log(LOCAL_STR_UNSUBSCRIBE, {event});
       }
     }
 
     // Clean up empty handler arrays
-    if (handlers.length === LOCAL_NUM_ZERO) {
+    if (handlers.length === 0) {
       this.handlers.delete(event);
     }
   }
@@ -175,7 +173,7 @@ export class EventBus {
     if (pattern === event) return true;
 
     // Handle wildcard patterns
-    if (pattern.endsWith(LOCAL_STR_11QPC)) {
+    if (pattern.endsWith(LOCAL_STR_COLON_STAR)) {
       const prefix = pattern.slice(0, -1); // Remove '*'
       return event.startsWith(prefix);
     }
@@ -240,7 +238,7 @@ export class EventBus {
    */
   listenerCount(event) {
     const handlers = this.handlers.get(event);
-    return handlers ? handlers.length : LOCAL_NUM_ZERO;
+    return handlers ? handlers.length : 0;
   }
 
   /**

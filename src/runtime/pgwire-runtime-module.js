@@ -19,7 +19,6 @@
  */
 
 import net from 'node:net';
-import {TYPEOF} from '../constants/types.js';
 import {WASM_SERVICE_PROTOCOL} from
   '../wasm-service/wasm-service-constants.js';
 import {
@@ -119,9 +118,9 @@ function resolveConfig(definition, overrides) {
   const raw = definition.runtimeConfig ??
     definition.runtime_config;
   let parsed = {};
-  if (raw && typeof raw === TYPEOF.STRING) {
+  if (raw && typeof raw === 'string') {
     parsed = JSON.parse(raw);
-  } else if (raw && typeof raw === TYPEOF.OBJECT) {
+  } else if (raw && typeof raw === 'object') {
     parsed = raw;
   }
   return {
@@ -162,7 +161,7 @@ class PostgresWireRuntimeModule {
    */
   async prepare(definition, _context) {
     let result;
-    if (!definition || typeof definition !== TYPEOF.OBJECT) {
+    if (!definition || typeof definition !== 'object') {
       result = buildStatusResult(
         PREPARE_STATUS.FAILED,
         PGWIRE_RESULT_FIELD.ERROR,
@@ -206,7 +205,7 @@ class PostgresWireRuntimeModule {
    */
   async start(replicaContext) {
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       return buildStatusResult(
         START_STATUS.FAILED,
         PGWIRE_RESULT_FIELD.ERROR,
@@ -308,7 +307,7 @@ class PostgresWireRuntimeModule {
    */
   async stop(replicaContext) {
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       return;
     }
 
@@ -351,7 +350,7 @@ class PostgresWireRuntimeModule {
   async health(replicaContext) {
     let result;
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       result = buildStatusResult(
         HEALTH_STATUS.UNKNOWN,
         PGWIRE_RESULT_FIELD.DETAIL,

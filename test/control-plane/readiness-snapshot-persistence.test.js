@@ -61,8 +61,8 @@ function initializeConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageSoftPressurePercent:
         STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
       storageHardPressurePercent:
@@ -347,7 +347,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         if (typeof _sql === 'string' &&
             _sql.includes('FROM replica_operations') &&
             Array.isArray(params) &&
-            params.length === NUM.ONE &&
+            params.length === 1 &&
             params[0] === persistedOperationRow?.operation_id) {
           return {
             success: true,
@@ -412,7 +412,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
           if (typeof _sql === 'string' &&
               _sql.includes('FROM replica_operations') &&
               Array.isArray(params) &&
-              params.length === NUM.ONE &&
+              params.length === 1 &&
               params[0] === persistedOperationRow?.operation_id) {
             return {
               success: true,
@@ -464,11 +464,11 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       t.ok(operation, 'operation created');
       t.ok(persistedStepsHistory, 'stepsHistory was persisted');
       t.ok(
-        persistedStepsHistory.length > NUM.ZERO,
+        persistedStepsHistory.length > 0,
         'stepsHistory has entries',
       );
 
-      const initialStep = persistedStepsHistory[NUM.ZERO];
+      const initialStep = persistedStepsHistory[0];
       t.ok(
         initialStep[OPERATION_METADATA_KEY.READINESS_SNAPSHOT],
         'initial step has readinessSnapshot',

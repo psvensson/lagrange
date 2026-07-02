@@ -1,7 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineTransactionRecoveryMethods} from './sql-query-engine-transaction-recovery-methods.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const {
   QUERY_AST_TYPE,
@@ -34,7 +33,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -188,7 +187,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || LOCAL_NUM_ZERO,
+        retryCount: result.retryCount || 0,
       },
     };
   }
@@ -215,7 +214,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -374,7 +373,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || LOCAL_NUM_ZERO,
+        retryCount: result.retryCount || 0,
       },
     };
   }
@@ -401,7 +400,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
+    if (!tablePlan || tablePlan.partitions.length === 0) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -560,7 +559,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || LOCAL_NUM_ZERO,
+        retryCount: result.retryCount || 0,
       },
     };
   }

@@ -42,7 +42,6 @@ const {
   StartupRuntimeHandoffOwner,
   StartupRuntimeSurfaceOwner,
   StartupServiceLifecycleOwner,
-  TYPEOF,
   TablePolicyService,
   WaitForLeadershipPhase,
   WorkClassScheduler,
@@ -83,7 +82,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.config.replicaStaggerDelayMs = Number.isFinite(
       this.config.replicaStaggerDelayMs,
     ) ?
-      Math.max(NUM.ZERO, this.config.replicaStaggerDelayMs) :
+      Math.max(0, this.config.replicaStaggerDelayMs) :
       JOINING_DEFAULT.replicaStaggerDelayMs;
     this.config.heartbeatIntervalMs = Number.isFinite(
       this.config.heartbeatIntervalMs,
@@ -94,23 +93,23 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       this.config.leadershipWaitJitterRatio,
     ) ?
       Math.min(
-        NUM.ONE,
-        Math.max(NUM.ZERO, this.config.leadershipWaitJitterRatio),
+        1,
+        Math.max(0, this.config.leadershipWaitJitterRatio),
       ) :
       JOINING_DEFAULT.leadershipWaitJitterRatio;
     this.workClassScheduler =
       options.workClassScheduler || new WorkClassScheduler();
     this.random =
-      typeof options.random === TYPEOF.FUNCTION ? options.random : Math.random;
+      typeof options.random === 'function' ? options.random : Math.random;
     this.now =
-      typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+      typeof options.now === 'function' ? options.now : () => Date.now();
     this.sleep =
-      typeof options.sleep === TYPEOF.FUNCTION ?
+      typeof options.sleep === 'function' ?
         options.sleep :
         (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
     this.joinSessionIdProvided =
-      typeof options.joinSessionId === TYPEOF.STRING &&
-      options.joinSessionId.length > NUM.ZERO;
+      typeof options.joinSessionId === 'string' &&
+      options.joinSessionId.length > 0;
     this.joinSessionId = this.joinSessionIdProvided ?
       options.joinSessionId :
       uuidv4();
@@ -126,19 +125,19 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         options.joinCoordinator :
         new JoinCoordinator({joinSessionStore: defaultJoinSessionStore});
     this.onLocalAdminRuntimeReady =
-      typeof options.onLocalAdminRuntimeReady === TYPEOF.FUNCTION ?
+      typeof options.onLocalAdminRuntimeReady === 'function' ?
         options.onLocalAdminRuntimeReady :
         null;
     this.localAdminRuntimeReadyNotified = false;
     this.joinSessionStore = this.joinCoordinator.joinSessionStore;
     this.joinReadinessSnapshotProvider =
-      typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION ?
+      typeof options.joinReadinessSnapshotProvider === 'function' ?
         options.joinReadinessSnapshotProvider :
         null;
     this.bootstrapReadinessState = options.readinessState || null;
     this.startupMode =
-      typeof options.startupMode === TYPEOF.STRING &&
-      options.startupMode.length > NUM.ZERO ?
+      typeof options.startupMode === 'string' &&
+      options.startupMode.length > 0 ?
         options.startupMode :
         STARTUP_JOIN_MODE.FRESH_JOIN;
     this.membershipOwnerOutcome = buildMembershipOwnerOutcome({
@@ -147,13 +146,13 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     });
     this.clusterIncarnationFence =
       options.clusterIncarnationFence &&
-      typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
+      typeof options.clusterIncarnationFence === 'object' ?
         options.clusterIncarnationFence :
         null;
     this.membershipLifecycleController =
       options.membershipLifecycleController &&
       typeof options.membershipLifecycleController.submitJoinIntent ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         options.membershipLifecycleController :
         new MembershipLifecycleController({
           nodeId: this.nodeId,
@@ -162,7 +161,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
           now: this.now,
         }); // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl =
-      typeof options.httpPost === TYPEOF.FUNCTION ?
+      typeof options.httpPost === 'function' ?
         options.httpPost :
         this.httpPost.bind(this); // Services created during joining
     this.messageGroupServices = new Map();
@@ -257,7 +256,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
           const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine;
           if (
             typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
-            TYPEOF.FUNCTION
+            'function'
           ) {
             return;
           }
@@ -266,7 +265,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         flushDeferredCreateSelfHostedMetadata: () => {
           if (
             typeof this.createMessageGroupPhase
-              ?.flushDeferredCreateSelfHostedMetadata !== TYPEOF.FUNCTION
+              ?.flushDeferredCreateSelfHostedMetadata !== 'function'
           ) {
             return;
           }
@@ -478,7 +477,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getBootstrapResponse: () => this.bootstrapResponse,
         setBootstrapTopologySnapshotMeta: (value) => {
           this.bootstrapTopologySnapshotMeta =
-            value && typeof value === TYPEOF.OBJECT ? value : null;
+            value && typeof value === 'object' ? value : null;
         },
         setBootstrapTopologySnapshotHydratedAtMs: (value) => {
           this.bootstrapTopologySnapshotHydratedAtMs = Number.isFinite(value) ?

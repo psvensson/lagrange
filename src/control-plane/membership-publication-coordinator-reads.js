@@ -1,7 +1,5 @@
 import {
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
@@ -83,7 +81,7 @@ class MembershipPublicationCoordinatorReads {
     // write-leader predicate (see shouldDeferMembershipReconcileToWriteLeader).
     this.resolveIsControlPlanePublicationsWriteLeader =
       typeof options.resolveIsControlPlanePublicationsWriteLeader ===
-      TYPEOF.FUNCTION ?
+      'function' ?
         options.resolveIsControlPlanePublicationsWriteLeader :
         null;
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
@@ -96,7 +94,7 @@ class MembershipPublicationCoordinatorReads {
     this.membershipSwimRuntime = options.membershipSwimRuntime || null;
     this._membershipSwimDivergenceLastState = null;
     this._membershipSwimDivergenceLastSnapshotMs = null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.workflowCoordinator =
       options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
@@ -143,7 +141,7 @@ class MembershipPublicationCoordinatorReads {
     const preloadedRows = options.preloadedRows;
     if (
       Array.isArray(preloadedRows) &&
-      (preloadedRows.length > NUM.ZERO || options.allowEmptyPreloadedRows === true)
+      (preloadedRows.length > 0 || options.allowEmptyPreloadedRows === true)
     ) {
       return preloadedRows;
     }
@@ -153,14 +151,14 @@ class MembershipPublicationCoordinatorReads {
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
       preferAuthoritativeRead !== true &&
       this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.listPublicationsFromCache === TYPEOF.FUNCTION
+      typeof this.controlPlanePublicationsOwner.listPublicationsFromCache === 'function'
     ) {
       const cachedPublicationRows = normalizeTableRowsResult(
         await this.controlPlanePublicationsOwner.listPublicationsFromCache(options),
       );
       if (
-        cachedPublicationRows.length > NUM.ZERO ||
-        typeof this.controlPlanePublicationsOwner.listPublications !== TYPEOF.FUNCTION
+        cachedPublicationRows.length > 0 ||
+        typeof this.controlPlanePublicationsOwner.listPublications !== 'function'
       ) {
         return cachedPublicationRows;
       }
@@ -168,7 +166,7 @@ class MembershipPublicationCoordinatorReads {
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
       this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.listPublications === TYPEOF.FUNCTION
+      typeof this.controlPlanePublicationsOwner.listPublications === 'function'
     ) {
       const publicationReadOptions = buildPublicationListReadOptions(options);
       return normalizeTableRowsResult(
@@ -176,7 +174,7 @@ class MembershipPublicationCoordinatorReads {
       );
     }
     const view = this.getAuthoritativeControlPlaneView();
-    if (view && typeof view.readRows === TYPEOF.FUNCTION && view.canRead()) {
+    if (view && typeof view.readRows === 'function' && view.canRead()) {
       const result = await view.readRows(
         tableName,
         `SELECT * FROM ${tableName}`,
@@ -190,7 +188,7 @@ class MembershipPublicationCoordinatorReads {
         const authoritativeRows = normalizeTableRowsResult(result);
         if (
           shouldMergePlanningEvidenceRows(tableName, options) &&
-          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
+          typeof this.systemTableCache?.getAll === 'function'
         ) {
           return mergePlanningEvidenceRows(
             tableName,
@@ -201,7 +199,7 @@ class MembershipPublicationCoordinatorReads {
         return authoritativeRows;
       }
     }
-    if (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
+    if (typeof this.systemTableCache?.getAll === 'function') {
       return this.systemTableCache.getAll(tableName) || [];
     }
     return [];
@@ -216,21 +214,21 @@ class MembershipPublicationCoordinatorReads {
       .map((row) => normalizeControlPlanePublicationRow(row))
       .filter((row) => row.publicationKind === MEMBERSHIP_PUBLICATION_KIND)
       .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[NUM.ZERO] || null;
+    return normalizedRows[0] || null;
   }
 
   getLatestPublicationRowSync(options = {}) {
     const preloadedRows = Array.isArray(options.publicationRows) ? options.publicationRows : null;
     const publicationRows =
       preloadedRows ||
-      (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
     const normalizedRows = publicationRows
       .map((row) => normalizeControlPlanePublicationRow(row))
       .filter((row) => row.publicationKind === MEMBERSHIP_PUBLICATION_KIND)
       .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[NUM.ZERO] || null;
+    return normalizedRows[0] || null;
   }
 
   async getLatestClusterPublication(options = {}) {
@@ -254,14 +252,14 @@ class MembershipPublicationCoordinatorReads {
           row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
       )
       .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[NUM.ZERO] || null;
+    return normalizedRows[0] || null;
   }
 
   getLatestPublishedPublicationRowSync(options = {}) {
     const preloadedRows = Array.isArray(options.publicationRows) ? options.publicationRows : null;
     const publicationRows =
       preloadedRows ||
-      (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
     const normalizedRows = publicationRows
@@ -272,7 +270,7 @@ class MembershipPublicationCoordinatorReads {
           row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
       )
       .sort((left, right) => (right.publicationEpoch || 0) - (left.publicationEpoch || 0));
-    return normalizedRows[NUM.ZERO] || null;
+    return normalizedRows[0] || null;
   }
 
   async getLatestPublishedClusterPublication(options = {}) {
@@ -310,7 +308,7 @@ class MembershipPublicationCoordinatorReads {
     const preloadedRows = Array.isArray(options.publicationRows) ? options.publicationRows : null;
     const publicationRows =
       preloadedRows ||
-      (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      (typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [] :
         []);
     let winningRow = null;
@@ -324,7 +322,7 @@ class MembershipPublicationCoordinatorReads {
         continue;
       }
       const epochSortValue =
-        readInteger(row?.publication_epoch, row?.publicationEpoch) || NUM.ZERO;
+        readInteger(row?.publication_epoch, row?.publicationEpoch) || 0;
       if (epochSortValue > winningEpochSortValue) {
         winningEpochSortValue = epochSortValue;
         winningRow = row;
@@ -364,7 +362,7 @@ class MembershipPublicationCoordinatorReads {
         this,
         acknowledgementReadOptions,
       ));
-    if (!initialPublicationRow || typeof initialPublicationRow !== TYPEOF.OBJECT) {
+    if (!initialPublicationRow || typeof initialPublicationRow !== 'object') {
       return null;
     }
     const initialPublication = normalizeControlPlanePublicationRow(initialPublicationRow);
@@ -383,7 +381,7 @@ class MembershipPublicationCoordinatorReads {
       ) :
       null;
     const candidatePublicationRow =
-      refreshedPublicationRow && typeof refreshedPublicationRow === TYPEOF.OBJECT ?
+      refreshedPublicationRow && typeof refreshedPublicationRow === 'object' ?
         refreshedPublicationRow :
         initialPublicationRow;
     const normalizedPublication = normalizeControlPlanePublicationRow(candidatePublicationRow);
@@ -415,7 +413,7 @@ class MembershipPublicationCoordinatorReads {
     }
     if (
       this.replicaOperationRepository &&
-      typeof this.replicaOperationRepository.isOperationLocallyOwned === TYPEOF.FUNCTION
+      typeof this.replicaOperationRepository.isOperationLocallyOwned === 'function'
     ) {
       return this.replicaOperationRepository.isOperationLocallyOwned(normalizedOperation);
     }
@@ -442,7 +440,7 @@ class MembershipPublicationCoordinatorReads {
       );
     });
     const readinessService = this.controlPlaneReadinessService;
-    if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+    if (!readinessService || typeof readinessService !== 'object') {
       return dispatchRows;
     }
     let publicationConvergence = null;
@@ -464,14 +462,14 @@ class MembershipPublicationCoordinatorReads {
       return dispatchRows;
     }
     const repository = this.replicaOperationRepository;
-    if (!repository || typeof repository.queryIncompleteOperations !== TYPEOF.FUNCTION) {
+    if (!repository || typeof repository.queryIncompleteOperations !== 'function') {
       return dispatchRows;
     }
     try {
       const operations = await repository.queryIncompleteOperations({
         visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-      if (!Array.isArray(operations) || operations.length === NUM.ZERO) {
+      if (!Array.isArray(operations) || operations.length === 0) {
         return dispatchRows;
       }
       const authoritativeRows = operations
@@ -524,7 +522,7 @@ class MembershipPublicationCoordinatorReads {
 
   isTerminalPublicationStatus(publicationStatus) {
     const normalizedPublicationStatus =
-      typeof publicationStatus === TYPEOF.STRING ? publicationStatus.toUpperCase() : null;
+      typeof publicationStatus === 'string' ? publicationStatus.toUpperCase() : null;
     return (
       normalizedPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
       normalizedPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
@@ -541,11 +539,11 @@ class MembershipPublicationCoordinatorReads {
       normalizedNodeId,
       options,
     );
-    if (!acknowledgementCandidate || typeof acknowledgementCandidate !== TYPEOF.OBJECT) {
+    if (!acknowledgementCandidate || typeof acknowledgementCandidate !== 'object') {
       return null;
     }
     const candidatePublicationRow = acknowledgementCandidate.publicationRow;
-    if (!candidatePublicationRow || typeof candidatePublicationRow !== TYPEOF.OBJECT) {
+    if (!candidatePublicationRow || typeof candidatePublicationRow !== 'object') {
       return null;
     }
     if (
@@ -572,7 +570,7 @@ class MembershipPublicationCoordinatorReads {
 
   async deriveClusterMembershipCandidate(options = {}) {
     const planningSnapshot =
-      options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
+      options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
         options.planningSnapshot :
         await this.readPublicationPlanningSnapshot(options);
     // Increment 4: feed the SWIM verdict into the projection whenever a runtime
@@ -582,7 +580,7 @@ class MembershipPublicationCoordinatorReads {
     const membershipSwimConsumeEnabled = this.membershipSwimRuntime !== null;
     const swimVerdictByNodeId =
       membershipSwimConsumeEnabled &&
-      typeof this.membershipSwimRuntime.verdictByNodeId === TYPEOF.FUNCTION ?
+      typeof this.membershipSwimRuntime.verdictByNodeId === 'function' ?
         this.membershipSwimRuntime.verdictByNodeId() :
         null;
     const candidate = deriveMembershipPublicationCandidate({

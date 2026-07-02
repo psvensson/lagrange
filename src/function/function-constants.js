@@ -1,5 +1,5 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STRING, TYPEOF} from '../constants/index.js';
+import {NUM, STRING} from '../constants/index.js';
 
 const FUNCTION_SUBSYSTEM = Object.freeze({
   QUERY_EXECUTOR: 'function-query-executor',
@@ -148,5 +148,4 @@ export {
   FUNCTION_PREDICATE,
   FUNCTION_SEPARATOR,
   FUNCTION_SUBSCRIPTION_TYPE,
-  TYPEOF,
 };

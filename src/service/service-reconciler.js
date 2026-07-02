@@ -7,7 +7,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   SERVICE_DESCRIPTOR_FIELD,
   SUBSYSTEM,
-  TYPEOF,
 } from '../constants/index.js';
 import {ServiceLifecycleManager} from './service-lifecycle-manager.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
@@ -56,10 +55,10 @@ class ServiceReconciler extends EventEmitter {
     if (!(options.lifecycleManager instanceof ServiceLifecycleManager)) {
       throw new TypeError(RECONCILER_ERROR.LIFECYCLE_MANAGER_REQUIRED);
     }
-    if (typeof options.desiredStateReader !== TYPEOF.FUNCTION) {
+    if (typeof options.desiredStateReader !== 'function') {
       throw new TypeError(RECONCILER_ERROR.DESIRED_STATE_READER_REQUIRED);
     }
-    if (typeof options.actualStateReader !== TYPEOF.FUNCTION) {
+    if (typeof options.actualStateReader !== 'function') {
       throw new TypeError(RECONCILER_ERROR.ACTUAL_STATE_READER_REQUIRED);
     }
 
@@ -78,18 +77,18 @@ class ServiceReconciler extends EventEmitter {
 
     if (options.telemetrySink !== undefined &&
       options.telemetrySink !== null &&
-      typeof options.telemetrySink !== TYPEOF.FUNCTION) {
+      typeof options.telemetrySink !== 'function') {
       throw new TypeError(RECONCILER_ERROR.TELEMETRY_SINK_REQUIRED);
     }
 
     if (options.eventSource) {
-      if (typeof options.eventSource.on !== TYPEOF.FUNCTION ||
-        typeof options.eventSource.off !== TYPEOF.FUNCTION) {
+      if (typeof options.eventSource.on !== 'function' ||
+        typeof options.eventSource.off !== 'function') {
         throw new TypeError(RECONCILER_ERROR.EVENT_SOURCE_REQUIRED);
       }
     }
     if (options.placementPolicyCheck !== undefined &&
-      typeof options.placementPolicyCheck !== TYPEOF.FUNCTION) {
+      typeof options.placementPolicyCheck !== 'function') {
       throw new TypeError(RECONCILER_ERROR.PLACEMENT_POLICY_CHECK_REQUIRED);
     }
 
@@ -114,7 +113,7 @@ class ServiceReconciler extends EventEmitter {
     /** @type {string[]} */
     this._eventNames = options.eventNames || [];
     for (const eventName of this._eventNames) {
-      if (typeof eventName !== TYPEOF.STRING || eventName.length === LOCAL_NUM_ZERO) {
+      if (typeof eventName !== 'string' || eventName.length === LOCAL_NUM_ZERO) {
         throw new TypeError(RECONCILER_ERROR.EVENT_NAME_REQUIRED);
       }
     }

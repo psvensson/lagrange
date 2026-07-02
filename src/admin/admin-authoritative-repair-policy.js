@@ -1,4 +1,4 @@
-import {NUM, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
 
@@ -59,13 +59,13 @@ const AUTHORITATIVE_REPAIR_TABLE_GROUP = Object.freeze({
 
 function normalizeNonNegativeInteger(value) {
   if (!Number.isFinite(value)) {
-    return NUM.ZERO;
+    return 0;
   }
-  return Math.max(NUM.ZERO, Math.floor(value));
+  return Math.max(0, Math.floor(value));
 }
 
 function isCacheStalenessOverThreshold(stalenessMs, staleThresholdMs) {
-  if (!Number.isFinite(staleThresholdMs) || staleThresholdMs <= NUM.ZERO) {
+  if (!Number.isFinite(staleThresholdMs) || staleThresholdMs <= 0) {
     return false;
   }
   const normalizedStalenessMs = Number(stalenessMs);
@@ -80,8 +80,8 @@ function hasDiscoverySelectionGap(selectedNodeCount, serviceEndpointsCount) {
     normalizeNonNegativeInteger(selectedNodeCount);
   const normalizedServiceEndpointsCount =
     normalizeNonNegativeInteger(serviceEndpointsCount);
-  return normalizedSelectedNodeCount === NUM.ZERO &&
-    normalizedServiceEndpointsCount > NUM.ZERO;
+  return normalizedSelectedNodeCount === 0 &&
+    normalizedServiceEndpointsCount > 0;
 }
 
 function addRepairTables(targetTableNames, tableNames) {
@@ -94,7 +94,7 @@ function addRepairTables(targetTableNames, tableNames) {
     DEFAULT_AUTHORITATIVE_REPAIR_TABLES;
   for (const tableName of normalizedTableNames) {
     if (typeof tableName === LOCAL_STR_STRING &&
-        tableName.length > NUM.ZERO) {
+        tableName.length > 0) {
       normalizedTargetTableNames.add(tableName);
     }
   }
@@ -121,10 +121,10 @@ function deriveAuthoritativeRepairTables(options = {}) {
   }
   const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
     triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
-  const effectiveTriggerCodes = narrowedTriggerCodes.length > NUM.ZERO ?
+  const effectiveTriggerCodes = narrowedTriggerCodes.length > 0 ?
     narrowedTriggerCodes :
     uniqueTriggerCodes;
-  if (effectiveTriggerCodes.length === NUM.ZERO) {
+  if (effectiveTriggerCodes.length === 0) {
     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
   }
 
@@ -173,7 +173,7 @@ function deriveAuthoritativeRepairTables(options = {}) {
     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
   }
 
-  if (repairTables.size === NUM.ZERO) {
+  if (repairTables.size === 0) {
     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
   }
   return DEFAULT_AUTHORITATIVE_REPAIR_TABLES
@@ -223,7 +223,7 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
 
   if (normalizeNonNegativeInteger(
     options.staleReplicaOpsInFlightCount,
-  ) > NUM.ZERO) {
+  ) > 0) {
     triggerCodes.push(
       AUTHORITATIVE_REPAIR_TRIGGER
         .STALE_REPLICA_OPERATIONS_IN_FLIGHT,
@@ -233,7 +233,7 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
   const serviceCount = normalizeNonNegativeInteger(options.serviceCount);
   const replicaCount = normalizeNonNegativeInteger(options.replicaCount);
   if (scopedQuery &&
-      (serviceCount === NUM.ZERO || replicaCount === NUM.ZERO)) {
+      (serviceCount === 0 || replicaCount === 0)) {
     triggerCodes.push(
       AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_ZERO_SCOPED_REPLICAS,
     );
@@ -251,14 +251,14 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
     normalizeNonNegativeInteger(options.readyReplicaCount);
   if (!scopedQuery &&
       options.cacheRepairEligible === true &&
-      readyReplicaCount === NUM.ZERO) {
+      readyReplicaCount === 0) {
     triggerCodes.push(
       AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NO_READY_REPLICAS,
     );
   }
 
   return Object.freeze({
-    shouldRepair: triggerCodes.length > NUM.ZERO,
+    shouldRepair: triggerCodes.length > 0,
     triggerCodes: Object.freeze(triggerCodes),
   });
 }

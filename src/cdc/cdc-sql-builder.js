@@ -9,7 +9,6 @@
  * @module cdc/cdc-sql-builder
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
@@ -18,8 +17,8 @@ import {
   CDC_SQL,
 } from './cdc-constants.js';
 
-const LOCAL_STR_9G3T8 = '\'';
-const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_SQUOTE = '\'';
+const LOCAL_STR_DQUOTE = '"';
 const LOCAL_STR_NULL = 'null';
 
 const DEFAULT_VALUE_NORMALIZATION_STATE = Object.freeze({
@@ -81,7 +80,7 @@ class CDCSqlBuilder {
     const values = columns.map((col) => {
       const val = data[col];
       // Serialize objects/arrays to JSON
-      if (val !== null && typeof val === TYPEOF.OBJECT) {
+      if (val !== null && typeof val === 'object') {
         return JSON.stringify(val);
       }
       return val;
@@ -101,7 +100,7 @@ class CDCSqlBuilder {
       .join(CDC_SQL.COMMA_SPACE);
     const values = columns.map((col) => {
       const val = data[col];
-      if (val !== null && typeof val === TYPEOF.OBJECT) {
+      if (val !== null && typeof val === 'object') {
         return JSON.stringify(val);
       }
       return val;
@@ -168,18 +167,18 @@ class CDCSqlBuilder {
         state: DEFAULT_VALUE_NORMALIZATION_STATE.NULL,
       });
     }
-    if (typeof value !== TYPEOF.STRING) {
+    if (typeof value !== 'string') {
       return Object.freeze({
         state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
         value,
       });
     }
     const trimmed = value.trim();
-    if ((trimmed.startsWith(LOCAL_STR_9G3T8) && trimmed.endsWith(LOCAL_STR_9G3T8)) ||
-        (trimmed.startsWith(LOCAL_STR_AU1TP) && trimmed.endsWith(LOCAL_STR_AU1TP))) {
+    if ((trimmed.startsWith(LOCAL_STR_SQUOTE) && trimmed.endsWith(LOCAL_STR_SQUOTE)) ||
+        (trimmed.startsWith(LOCAL_STR_DQUOTE) && trimmed.endsWith(LOCAL_STR_DQUOTE))) {
       return Object.freeze({
         state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
-        value: trimmed.slice(NUM.ONE, NUM.NEGATIVE_ONE),
+        value: trimmed.slice(1, -1),
       });
     }
     if (trimmed.toLowerCase() === LOCAL_STR_NULL) {
@@ -241,7 +240,7 @@ class CDCSqlBuilder {
    * @return {Object}
    */
   extractTableNameResult(sql) {
-    if (!sql || typeof sql !== TYPEOF.STRING) {
+    if (!sql || typeof sql !== 'string') {
       return Object.freeze({
         state: TABLE_NAME_EXTRACTION_STATE.INVALID_INPUT,
       });
@@ -252,7 +251,7 @@ class CDCSqlBuilder {
     if (match) {
       return Object.freeze({
         state: TABLE_NAME_EXTRACTION_STATE.FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -261,7 +260,7 @@ class CDCSqlBuilder {
     if (match) {
       return Object.freeze({
         state: TABLE_NAME_EXTRACTION_STATE.FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -270,7 +269,7 @@ class CDCSqlBuilder {
     if (match) {
       return Object.freeze({
         state: TABLE_NAME_EXTRACTION_STATE.FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 
@@ -279,7 +278,7 @@ class CDCSqlBuilder {
     if (match) {
       return Object.freeze({
         state: TABLE_NAME_EXTRACTION_STATE.FOUND,
-        tableName: match[NUM.ONE],
+        tableName: match[1],
       });
     }
 

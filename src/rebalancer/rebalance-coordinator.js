@@ -12,7 +12,7 @@ import {applyRebalanceCoordinatorReservationLifecycleMethods} from './rebalance-
 import {applyRebalanceCoordinatorRecoveryBudgetBindingMethods} from './rebalance-coordinator-recovery-budget-bindings.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1I9PK = 'Skipping in-flight operation count during coordinator shutdown';
+const LOCAL_STR_SKIPPING_IN_FLIGHT_OPERATION_COUNT_DURIN = 'Skipping in-flight operation count during coordinator shutdown';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -43,7 +43,7 @@ class RebalanceCoordinator extends EventEmitter {
   getLocalRouterPressureDecision(options = {}) {
     const partitionId = String(options.partitionId || '').trim();
     const criticalPressureBypass =
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       this.isPriorityControlPlanePartition(partitionId);
     const workloadProfile = buildControlPlaneWorkloadProfile(
       criticalPressureBypass ?
@@ -75,15 +75,15 @@ class RebalanceCoordinator extends EventEmitter {
     const participantFailures = Array.isArray(error?.participantFailures) ?
       error.participantFailures
         .filter((entry) => entry && typeof entry === 'object')
-        .slice(NUM.ZERO, NUM.THREE) :
+        .slice(0, NUM.THREE) :
       [];
     const firstFailedParticipant =
       error?.firstFailedParticipant &&
       typeof error.firstFailedParticipant === 'object' ?
         error.firstFailedParticipant :
-        (participantFailures.length > NUM.ZERO ? participantFailures[NUM.ZERO] : null);
+        (participantFailures.length > 0 ? participantFailures[0] : null);
     const tableName = typeof error?.tableName === 'string' &&
-      error.tableName.length > NUM.ZERO ?
+      error.tableName.length > 0 ?
       error.tableName :
       (typeof firstFailedParticipant?.failedTable === 'string' ?
         firstFailedParticipant.failedTable :
@@ -91,10 +91,10 @@ class RebalanceCoordinator extends EventEmitter {
     const payload = {
       ...context,
       queryDurationMs: Number.isFinite(context?.queryDurationMs) ?
-        Math.max(NUM.ZERO, Math.floor(context.queryDurationMs)) :
+        Math.max(0, Math.floor(context.queryDurationMs)) :
         null,
       rowCount: Number.isFinite(context?.rowCount) ?
-        Math.max(NUM.ZERO, Math.floor(context.rowCount)) :
+        Math.max(0, Math.floor(context.rowCount)) :
         null,
       backpressured:
         typeof context?.backpressured === 'boolean' ?
@@ -183,13 +183,13 @@ class RebalanceCoordinator extends EventEmitter {
       this._boundTerminalOperationIntentPruner = null;
     }
 
-    let inFlightOperationCount = NUM.ZERO;
+    let inFlightOperationCount = 0;
     try {
       const inFlightOps = await this.queryShutdownIncompleteOperations();
       inFlightOperationCount = inFlightOps.length;
     } catch (error) {
       this.logger.debug(
-        LOCAL_STR_1I9PK,
+        LOCAL_STR_SKIPPING_IN_FLIGHT_OPERATION_COUNT_DURIN,
         {
           nodeId: this.nodeId,
           error: error.message,

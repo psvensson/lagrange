@@ -103,7 +103,7 @@ class SQLiteStore {
     }
 
     this.logger.debug(SQLITE_STORE_LOG_MSG.EXECUTING_QUERY, {
-      sql: sql.substring(NUM.ZERO, SQL_LOG_TRUNCATE_LENGTH),
+      sql: sql.substring(0, SQL_LOG_TRUNCATE_LENGTH),
     });
 
     const trimmedUpper = sql.trim().toUpperCase();
@@ -179,7 +179,7 @@ class SQLiteStore {
       };
     } catch (error) {
       this.logger.error(SQLITE_STORE_ERROR_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(NUM.ZERO, SQL_LOG_TRUNCATE_LENGTH),
+        sql: sql.substring(0, SQL_LOG_TRUNCATE_LENGTH),
         error: error.message,
       });
       throw error;
@@ -204,7 +204,7 @@ class SQLiteStore {
       };
     } catch (error) {
       this.logger.error(SQLITE_STORE_ERROR_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(NUM.ZERO, SQL_LOG_TRUNCATE_LENGTH),
+        sql: sql.substring(0, SQL_LOG_TRUNCATE_LENGTH),
         error: error.message,
       });
       throw error;

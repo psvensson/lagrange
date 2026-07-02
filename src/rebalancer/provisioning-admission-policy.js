@@ -5,7 +5,7 @@
  * mutations. Extracted from RebalanceCoordinator per D7.1 / D7.2.
  */
 
-import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
@@ -156,11 +156,11 @@ class ProvisioningAdmissionPolicy {
    */
   buildLocalControlPlaneMutationAdmissionResult(blocker) {
     const reasonCodes = Array.isArray(blocker?.reasonCodes) &&
-        blocker.reasonCodes.length > NUM.ZERO ?
+        blocker.reasonCodes.length > 0 ?
       blocker.reasonCodes :
       [STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY];
     const firstReason = String(
-      reasonCodes[NUM.ZERO] ||
+      reasonCodes[0] ||
       STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
     );
     const nodeSummary = blocker?.readiness &&
@@ -316,8 +316,8 @@ class ProvisioningAdmissionPolicy {
     }
 
     const firstIneligibleNode = Array.isArray(admissionResult.ineligibleNodes) &&
-      admissionResult.ineligibleNodes.length > NUM.ZERO ?
-      admissionResult.ineligibleNodes[NUM.ZERO] :
+      admissionResult.ineligibleNodes.length > 0 ?
+      admissionResult.ineligibleNodes[0] :
       null;
     this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.PROVISIONING_ADMISSION_DENIED, {
       moveType,
@@ -382,7 +382,7 @@ class ProvisioningAdmissionPolicy {
         moveType: evaluation.moveType,
         state: evaluation.state,
         admissionResult: null,
-        estimatedBytes: NUM.ZERO,
+        estimatedBytes: 0,
       };
     }
 
@@ -422,7 +422,7 @@ class ProvisioningAdmissionPolicy {
       sourceNodeId: context?.sourceNodeId || null,
       estimatedBytes: state ===
           PROVISIONING_ADMISSION_EVALUATION_STATE.NO_ADMISSION_REQUIRED ?
-        NUM.ZERO :
+        0 :
         this.estimateProvisioningAdmissionBytes(context?.entityType),
       isCritical: this.resolveAdmissionCriticality(context),
     });
@@ -481,11 +481,11 @@ class ProvisioningAdmissionPolicy {
     const storageAccountingService = this.getStorageAccountingService();
     if (!storageAccountingService ||
         typeof storageAccountingService.estimateReplicaBytes !== LOCAL_STR_FUNCTION) {
-      return NUM.ZERO;
+      return 0;
     }
     return storageAccountingService.estimateReplicaBytes({
       entityType: entityType || SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
   }
 
@@ -536,38 +536,38 @@ class ProvisioningAdmissionPolicy {
         reason?.reason ||
         reason ||
         '',
-      )).filter((reason) => reason.length > NUM.ZERO) :
+      )).filter((reason) => reason.length > 0) :
       [];
-    const primaryReason = blockingReasons.length > NUM.ZERO ?
+    const primaryReason = blockingReasons.length > 0 ?
       String(
-        blockingReasons[NUM.ZERO] ||
+        blockingReasons[0] ||
         '',
       ) :
       String(admissionResult?.reason || admissionResult?.decisionType || '');
     const secondaryReasons = blockingReasons
-      .slice(NUM.ONE)
+      .slice(1)
       .filter((reason) => reason !== primaryReason)
       .slice(0, 3);
     const firstIneligibleReasonCodes = Array.isArray(
-      admissionResult?.ineligibleNodes?.[NUM.ZERO]?.reasonCodes,
+      admissionResult?.ineligibleNodes?.[0]?.reasonCodes,
     ) ?
-      admissionResult.ineligibleNodes[NUM.ZERO].reasonCodes
+      admissionResult.ineligibleNodes[0].reasonCodes
         .map((reason) => String(reason || ''))
-        .filter((reason) => reason.length > NUM.ZERO)
+        .filter((reason) => reason.length > 0)
         .slice(0, 4) :
       [];
     const diagnosticsSuffixParts = [];
-    if (secondaryReasons.length > NUM.ZERO) {
+    if (secondaryReasons.length > 0) {
       diagnosticsSuffixParts.push(
         LOCAL_STR_SECONDARY + secondaryReasons.join(LOCAL_STR_COMMA),
       );
     }
-    if (firstIneligibleReasonCodes.length > NUM.ZERO) {
+    if (firstIneligibleReasonCodes.length > 0) {
       diagnosticsSuffixParts.push(
         LOCAL_STR_NODE_REASON_CODES + firstIneligibleReasonCodes.join(LOCAL_STR_COMMA),
       );
     }
-    const diagnosticsSuffix = diagnosticsSuffixParts.length > NUM.ZERO ?
+    const diagnosticsSuffix = diagnosticsSuffixParts.length > 0 ?
       ` (${diagnosticsSuffixParts.join('; ')})` :
       '';
     const error = new Error(

@@ -31,9 +31,9 @@ const RETRY_AFTER_MS = 125;
 const FALLBACK_DELAY_MS = 500;
 const CURRENT_TIME_MS = 1000;
 const NEXT_RETRY_AT_MS = 1125;
-const RETRY_ATTEMPT = NUM.TWO;
+const RETRY_ATTEMPT = 2;
 const RETRY_MAX_ATTEMPTS = NUM.THREE;
-const TARGET_REPLICA_COUNT = NUM.TWO;
+const TARGET_REPLICA_COUNT = 2;
 
 function createPlacementNodes() {
   return [
@@ -96,7 +96,7 @@ test('MovePlanner emits the canonical placement owner outcome with target state'
   async (t) => {
     const planner = createMovePlanner();
     planner.buildTopologyTransitionSnapshot = () => ({
-      pendingCount: NUM.ONE,
+      pendingCount: 1,
       nodesWithEntityAddTransitional: new Set([NODE_B]),
       nodesWithGlobalSystemAddTransitional: new Set([NODE_A]),
       replicasInRemoving: new Set(),
@@ -107,7 +107,7 @@ test('MovePlanner emits the canonical placement owner outcome with target state'
       createPlacementNodes(),
       TARGET_REPLICA_COUNT,
       {
-        minReplicaCount: NUM.ONE,
+        minReplicaCount: 1,
         maxReplicaCount: NUM.THREE,
         placementConstraints: {
           spreadAcrossNodes: true,
@@ -116,7 +116,7 @@ test('MovePlanner emits the canonical placement owner outcome with target state'
       {
         totalCandidates: NUM.THREE,
         feasibleCount: NUM.THREE,
-        rejectedCount: NUM.ZERO,
+        rejectedCount: 0,
         rejectionsByReason: {},
         capacityFilterApplied: false,
       },

@@ -22,7 +22,6 @@ import {
   SERVICE_TYPE,
   SERVICE_STATUS,
   TABLES,
-  NUM,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
@@ -151,7 +150,7 @@ test('Property 2 Preservation D: successful first-attempt CDC ' +
 
         try {
           const payload = {};
-          for (let i = NUM.ZERO; i < fieldCount; i++) {
+          for (let i = 0; i < fieldCount; i++) {
             payload[`field_${i}`] = `value_${i}`;
           }
 
@@ -165,13 +164,13 @@ test('Property 2 Preservation D: successful first-attempt CDC ' +
               coordinatorNodeId: TEST_COORDINATOR_NODE_ID,
               address: TEST_ADDRESS,
             }],
-            attempt: NUM.ONE,
+            attempt: 1,
           });
 
           // One timer is scheduled for the retry attempt.
           assert.equal(
             service.backgroundRetryTimers.size,
-            NUM.ONE,
+            1,
             'One timer should be scheduled for the retry attempt',
           );
 
@@ -184,7 +183,7 @@ test('Property 2 Preservation D: successful first-attempt CDC ' +
           // and no new timer is scheduled on success.
           assert.equal(
             service.backgroundRetryTimers.size,
-            NUM.ZERO,
+            0,
             'No background retry timers should remain after ' +
             'successful delivery',
           );
@@ -210,7 +209,7 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
         setupConfig();
         const cache = createTopologyCache();
         const deliveredPayloads = [];
-        let deliverCallCount = NUM.ZERO;
+        let deliverCallCount = 0;
         const service = new CDCGroupPropagationService({
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
@@ -219,7 +218,7 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
               deliverCallCount++;
               deliveredPayloads.push(payload);
               // Fail first attempt, succeed on second.
-              if (deliverCallCount <= NUM.ONE) {
+              if (deliverCallCount <= 1) {
                 return {acknowledged: false, error: 'unreachable'};
               }
               return {acknowledged: true};
@@ -243,7 +242,7 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
 
         try {
           const payload = {};
-          for (let i = NUM.ZERO; i < fieldCount; i++) {
+          for (let i = 0; i < fieldCount; i++) {
             payload[`field_${i}`] = `value_${i}`;
           }
 
@@ -257,7 +256,7 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
               coordinatorNodeId: TEST_COORDINATOR_NODE_ID,
               address: TEST_ADDRESS,
             }],
-            attempt: NUM.ONE,
+            attempt: 1,
           });
 
           // Wait for first retry (fails) and second retry
@@ -268,7 +267,7 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
           // Preservation: the full payload must be delivered to
           // deliverToTargets on the successful retry.
           assert.ok(
-            deliveredPayloads.length >= NUM.ONE,
+            deliveredPayloads.length >= 1,
             'deliverToTargets should have been called at least ' +
             `once, but was called ${deliveredPayloads.length} ` +
             'time(s)',
@@ -277,13 +276,13 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
           // Verify the last successful delivery carried the
           // full payload data.
           const lastDelivery =
-            deliveredPayloads[deliveredPayloads.length - NUM.ONE];
+            deliveredPayloads[deliveredPayloads.length - 1];
           assert.ok(
             lastDelivery.data !== null &&
             lastDelivery.data !== undefined,
             'Delivered payload should contain the data field',
           );
-          for (let i = NUM.ZERO; i < fieldCount; i++) {
+          for (let i = 0; i < fieldCount; i++) {
             assert.equal(
               lastDelivery.data[`field_${i}`],
               `value_${i}`,

@@ -177,7 +177,7 @@ test('storage capacity constants', async (t) => {
   await t.test('STORAGE_PLACEMENT_DEFAULT has safe defaults', () => {
     assert.equal(
       STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
-      NUM.ZERO,
+      0,
     );
     assert.equal(
       STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,

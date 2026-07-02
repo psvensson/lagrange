@@ -12,7 +12,6 @@ import {
   REGISTRY_OVERRIDE_COL,
   DEPENDENCY_LOCK_COL,
 } from '../wasm-service/wasm-meta-models-constants.js';
-import {NUM} from '../constants/numbers.js';
 
 const SELECT_ALL_FROM = `${SQL.SELECT} * FROM`;
 
@@ -60,7 +59,7 @@ function buildOverrideAuditQuery(namespace, name) {
     );
   }
 
-  if (conditions.length > NUM.ZERO) {
+  if (conditions.length > 0) {
     sql += ` ${SQL.WHERE} ${conditions.join(` ${SQL.AND} `)}`;
   }
 
@@ -104,7 +103,7 @@ function buildLockAuditQuery(
     );
   }
 
-  if (conditions.length > NUM.ZERO) {
+  if (conditions.length > 0) {
     sql += ` ${SQL.WHERE} ${conditions.join(` ${SQL.AND} `)}`;
   }
 

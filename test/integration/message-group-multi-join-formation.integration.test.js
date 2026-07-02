@@ -14,7 +14,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {COLUMN, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES, TYPEOF}
+import {COLUMN, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES}
   from '../../src/constants/index.js';
 import {
   initializeTestEnvironment,
@@ -31,7 +31,7 @@ const TEST_TIMEOUT_MS = 180000;
 const READY_WAIT_TIMEOUT_MS = 15000;
 const MESSAGE_GROUP_WAIT_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 100;
-const MIN_LOCAL_MESSAGE_GROUPS = NUM.ONE;
+const MIN_LOCAL_MESSAGE_GROUPS = 1;
 const ADMIN_HEALTH_WAIT_TIMEOUT_MS = 10000;
 const ADMIN_QUERY_TIMEOUT_MS = NUM.FIVE_THOUSAND;
 
@@ -83,12 +83,12 @@ function getNodeMessageGroupRowsAnyStatus(systemTableCache, nodeId) {
 }
 
 function hasHealthyLocalMessageGroup(service) {
-  if (!service || typeof service.getStatus !== TYPEOF.FUNCTION) {
+  if (!service || typeof service.getStatus !== 'function') {
     return false;
   }
   const status = service.getStatus();
-  const hasAddress = typeof service.unifiedAddress === TYPEOF.STRING &&
-    service.unifiedAddress.length > NUM.ZERO;
+  const hasAddress = typeof service.unifiedAddress === 'string' &&
+    service.unifiedAddress.length > 0;
   return Boolean(status?.initialized) && hasAddress;
 }
 
@@ -99,11 +99,11 @@ function createQueryId() {
 function resolveAdminApiPort(adminApi) {
   const listenerAddress = adminApi?.getFastify?.()?.server?.address?.();
   if (!listenerAddress || typeof listenerAddress !== 'object') {
-    return NUM.ZERO;
+    return 0;
   }
-  return Number.isInteger(listenerAddress.port) && listenerAddress.port > NUM.ZERO ?
+  return Number.isInteger(listenerAddress.port) && listenerAddress.port > 0 ?
     listenerAddress.port :
-    NUM.ZERO;
+    0;
 }
 
 async function probeAdminHealth(port) {
@@ -134,7 +134,7 @@ async function probeAdminHealth(port) {
       });
       response.on('end', () => {
         let parsedBody = null;
-        if (rawBody.length > NUM.ZERO) {
+        if (rawBody.length > 0) {
           try {
             parsedBody = JSON.parse(rawBody);
           } catch {
@@ -233,7 +233,7 @@ async function queryAdminWebSocket(port, sql) {
       if (payload.queryId !== queryId) {
         return;
       }
-      if (typeof payload.error === 'string' && payload.error.length > NUM.ZERO) {
+      if (typeof payload.error === 'string' && payload.error.length > 0) {
         finalize(new Error(payload.error));
         return;
       }
@@ -255,7 +255,7 @@ async function queryAdminWebSocket(port, sql) {
 }
 
 function extractPostgresWireReplicas(discoveryRows) {
-  const snapshot = discoveryRows[NUM.ZERO];
+  const snapshot = discoveryRows[0];
   const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
   const service = services.find((entry) => {
     if (!entry || typeof entry !== 'object') {
@@ -322,7 +322,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
     seedApi.setSqlQueryEngine(seedQueryEngine);
 
     const httpPost = createInProcHttpPost(seedApi);
-    const expectedReadyNodeCount = JOINING_NODE_IDS.length + NUM.ONE;
+    const expectedReadyNodeCount = JOINING_NODE_IDS.length + 1;
 
     for (const joiningNodeId of JOINING_NODE_IDS) {
       const joiningWsPort = getUniquePort();
@@ -356,8 +356,8 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       const assignmentStrategy = joinResult.bootstrapResponse?.
         messageGroupAssignment?.
         strategy;
-      const hasAssignmentStrategy = typeof assignmentStrategy === TYPEOF.STRING &&
-        assignmentStrategy.length > NUM.ZERO;
+      const hasAssignmentStrategy = typeof assignmentStrategy === 'string' &&
+        assignmentStrategy.length > 0;
       t.equal(
         hasAssignmentStrategy,
         true,
@@ -433,8 +433,8 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
 
       const rows = getNodeMessageGroupRows(systemTableCache, joiningNodeId);
       const allRowsAddressable = rows.every((row) =>
-        typeof row[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        row[COLUMN.ADDRESS].length > NUM.ZERO,
+        typeof row[COLUMN.ADDRESS] === 'string' &&
+        row[COLUMN.ADDRESS].length > 0,
       );
       t.equal(
         allRowsAddressable,
@@ -445,9 +445,9 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
 
     const totalLocalMessageGroups = JOINING_NODE_IDS.reduce((count, nodeId) => {
       const joinResult = joinResultsByNode.get(nodeId);
-      const localCount = joinResult?.messageGroupServices?.size || NUM.ZERO;
+      const localCount = joinResult?.messageGroupServices?.size || 0;
       return count + localCount;
-    }, NUM.ZERO);
+    }, 0);
     t.ok(
       totalLocalMessageGroups >= JOINING_NODE_IDS.length,
       'multi-join run should create at least one local message-group replica per joiner',
@@ -504,10 +504,10 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       const adminNodeId = adminEntry.nodeId;
       const adminPort = resolveAdminApiPort(adminEntry.adminApi);
       t.ok(
-        adminPort > NUM.ZERO,
+        adminPort > 0,
         `${adminNodeId} admin API should bind a network port`,
       );
-      if (!(adminPort > NUM.ZERO)) {
+      if (!(adminPort > 0)) {
         continue;
       }
 
@@ -539,7 +539,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       );
       if (!queryError) {
         t.ok(
-          queryRows.length >= NUM.ONE,
+          queryRows.length >= 1,
           `${adminNodeId} admin websocket should return node rows`,
         );
       }
@@ -594,10 +594,10 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       }
     }
   } finally {
-    for (let index = adminApis.length - NUM.ONE; index >= NUM.ZERO; index -= NUM.ONE) {
+    for (let index = adminApis.length - 1; index >= 0; index -= 1) {
       await adminApis[index].adminApi.shutdown().catch(() => {});
     }
-    for (let index = joiningServices.length - NUM.ONE; index >= NUM.ZERO; index -= NUM.ONE) {
+    for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
       await gracefulJoiningShutdown(joiningServices[index]);
     }
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);

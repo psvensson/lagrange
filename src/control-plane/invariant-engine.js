@@ -34,9 +34,6 @@ import {
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_WORKFLOWID = 'workflowId';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_PARTICIPANTS = 'participants';
@@ -71,7 +68,7 @@ function toFiniteTimestamp(value) {
   if (Number.isFinite(value)) {
     return Math.floor(value);
   }
-  if (typeof value === LOCAL_STR_STRING && value.length > LOCAL_NUM_ZERO) {
+  if (typeof value === LOCAL_STR_STRING && value.length > 0) {
     const parsed = Date.parse(value);
     if (Number.isFinite(parsed)) {
       return parsed;
@@ -101,10 +98,10 @@ function checkLeaderUniqueness(state) {
   for (const row of rows) {
     const entityId = row?.entityId;
     const nodeId = row?.nodeId;
-    if (typeof entityId !== LOCAL_STR_STRING || entityId.length === LOCAL_NUM_ZERO) {
+    if (typeof entityId !== LOCAL_STR_STRING || entityId.length === 0) {
       continue;
     }
-    if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === LOCAL_NUM_ZERO) {
+    if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === 0) {
       continue;
     }
     if (!leadersByEntity.has(entityId)) {
@@ -115,12 +112,12 @@ function checkLeaderUniqueness(state) {
 
   const duplicates = [];
   for (const [entityId, nodes] of leadersByEntity) {
-    if (nodes.length > LOCAL_NUM_ONE) {
+    if (nodes.length > 1) {
       duplicates.push({entityId, nodes: Object.freeze([...nodes])});
     }
   }
 
-  if (duplicates.length > LOCAL_NUM_ZERO) {
+  if (duplicates.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.LEADER_UNIQUENESS,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -189,7 +186,7 @@ function checkMonotonicSteps(state) {
     }
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.MONOTONIC_STEPS,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -245,21 +242,21 @@ function checkClaimExclusivity(state) {
   for (const claim of claims) {
     const opId = claim?.operationId;
     const ownerKey = claim?.ownerKey;
-    if (typeof opId !== LOCAL_STR_STRING || opId.length === LOCAL_NUM_ZERO) {
+    if (typeof opId !== LOCAL_STR_STRING || opId.length === 0) {
       continue;
     }
-    if (typeof ownerKey !== LOCAL_STR_STRING || ownerKey.length === LOCAL_NUM_ZERO) {
+    if (typeof ownerKey !== LOCAL_STR_STRING || ownerKey.length === 0) {
       continue;
     }
     const compositeKey = `${opId}:${ownerKey}`;
     const count = (seen.get(compositeKey) || 0) + 1;
     seen.set(compositeKey, count);
-    if (count === LOCAL_NUM_TWO) {
+    if (count === 2) {
       duplicates.push(Object.freeze({operationId: opId, ownerKey}));
     }
   }
 
-  if (duplicates.length > LOCAL_NUM_ZERO) {
+  if (duplicates.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.CLAIM_EXCLUSIVITY,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -303,7 +300,7 @@ function checkOrphanInFlight(state) {
   for (const op of operations) {
     const opId = op?.operationId;
     const ownerKey = op?.ownerKey;
-    if (typeof opId !== LOCAL_STR_STRING || opId.length === LOCAL_NUM_ZERO) {
+    if (typeof opId !== LOCAL_STR_STRING || opId.length === 0) {
       continue;
     }
     const hasOwner = typeof ownerKey === 'string' &&
@@ -317,7 +314,7 @@ function checkOrphanInFlight(state) {
     }
   }
 
-  if (orphans.length > LOCAL_NUM_ZERO) {
+  if (orphans.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.ORPHAN_IN_FLIGHT,
       severity: INVARIANT_OUTCOME_SEVERITY.SOFT,
@@ -356,16 +353,16 @@ function checkReplicaOperationSingleWriter(state) {
     const operationId = write?.operationId;
     const writer = write?.writer;
     const fields = Array.isArray(write?.fields) ? write.fields : [];
-    if (typeof operationId !== LOCAL_STR_STRING || operationId.length === LOCAL_NUM_ZERO) {
+    if (typeof operationId !== LOCAL_STR_STRING || operationId.length === 0) {
       continue;
     }
-    if (typeof writer !== LOCAL_STR_STRING || writer.length === LOCAL_NUM_ZERO) {
+    if (typeof writer !== LOCAL_STR_STRING || writer.length === 0) {
       continue;
     }
     const ownerFields = fields.filter((field) =>
       REPLICA_OPERATION_OWNER_FIELDS.has(field),
     );
-    if (ownerFields.length === LOCAL_NUM_ZERO) {
+    if (ownerFields.length === 0) {
       continue;
     }
     if (!writesByOperation.has(operationId)) {
@@ -384,8 +381,8 @@ function checkReplicaOperationSingleWriter(state) {
   const violations = [];
   for (const [operationId, entry] of writesByOperation.entries()) {
     const writers = [...entry.writers].sort();
-    if (writers.length === LOCAL_NUM_ONE &&
-        writers[LOCAL_NUM_ZERO] === REPLICA_OPERATION_CANONICAL_OWNER) {
+    if (writers.length === 1 &&
+        writers[0] === REPLICA_OPERATION_CANONICAL_OWNER) {
       continue;
     }
     violations.push(Object.freeze({
@@ -396,7 +393,7 @@ function checkReplicaOperationSingleWriter(state) {
     }));
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId:
         INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER,
@@ -452,7 +449,7 @@ function checkAckBeforeAdvance(state) {
     }));
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,
@@ -504,20 +501,20 @@ function checkSplitResumeCompleteness(state) {
       (isRecord(metadata.sourceCheckpoint) ? metadata.sourceCheckpoint : null);
     const missingFields = [];
 
-    if (typeof workflowId !== LOCAL_STR_STRING || workflowId.length === LOCAL_NUM_ZERO) {
+    if (typeof workflowId !== LOCAL_STR_STRING || workflowId.length === 0) {
       missingFields.push(LOCAL_STR_WORKFLOWID);
     }
-    if (typeof entry?.status !== LOCAL_STR_STRING || entry.status.length === LOCAL_NUM_ZERO) {
+    if (typeof entry?.status !== LOCAL_STR_STRING || entry.status.length === 0) {
       missingFields.push(LOCAL_STR_STATUS);
     }
-    if (!participants || Object.keys(participants).length === LOCAL_NUM_ZERO) {
+    if (!participants || Object.keys(participants).length === 0) {
       missingFields.push(LOCAL_STR_PARTICIPANTS);
     }
     if (entry?.requiresSourceCheckpoint === true && !sourceCheckpoint) {
       missingFields.push(LOCAL_STR_SOURCECHECKPOINT);
     }
 
-    if (missingFields.length > LOCAL_NUM_ZERO) {
+    if (missingFields.length > 0) {
       violations.push(Object.freeze({
         workflowId: typeof workflowId === LOCAL_STR_STRING ? workflowId : null,
         status: typeof entry?.status === LOCAL_STR_STRING ? entry.status : null,
@@ -526,7 +523,7 @@ function checkSplitResumeCompleteness(state) {
     }
   }
 
-  if (violations.length > LOCAL_NUM_ZERO) {
+  if (violations.length > 0) {
     return buildInvariantResult({
       invariantId: INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS,
       severity: INVARIANT_OUTCOME_SEVERITY.HARD,

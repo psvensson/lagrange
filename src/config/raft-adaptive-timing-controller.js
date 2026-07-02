@@ -5,7 +5,6 @@
  * idle profiles using hysteresis to avoid flapping.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {ResourceDiagnosticsSampler} from
   '../diagnostics/resource-diagnostics-sampler.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -17,7 +16,7 @@ import {
   RAFT_ADAPTIVE_TIMING_VALUE,
 } from './raft-adaptive-timing-controller-constants.js';
 
-const LOCAL_STR_1VWEM = 'RaftAdaptiveTimingController requires dynamicConfigService';
+const LOCAL_STR_RAFTADAPTIVETIMINGCONTROLLER_REQUIRES_DY = 'RaftAdaptiveTimingController requires dynamicConfigService';
 
 const ADAPTIVE_TIMING_PROFILE_FIELDS = Object.freeze({
   HEARTBEAT_INTERVAL_MS: 'heartbeatIntervalMs',
@@ -168,7 +167,7 @@ class RaftAdaptiveTimingController {
    */
   constructor(options = {}) {
     if (!options.dynamicConfigService) {
-      throw new Error(LOCAL_STR_1VWEM);
+      throw new Error(LOCAL_STR_RAFTADAPTIVETIMINGCONTROLLER_REQUIRES_DY);
     }
 
     this.dynamicConfigService = options.dynamicConfigService;
@@ -198,9 +197,9 @@ class RaftAdaptiveTimingController {
     };
 
     this.currentProfile = RAFT_ADAPTIVE_TIMING_VALUE.DEFAULT_PROFILE;
-    this.highLoadStreak = NUM.ZERO;
-    this.lowLoadStreak = NUM.ZERO;
-    this.switchCount = NUM.ZERO;
+    this.highLoadStreak = 0;
+    this.lowLoadStreak = 0;
+    this.switchCount = 0;
     this.lastSignals = null;
     this.intervalHandle = null;
     this.watchUnsubscribers = [];
@@ -290,14 +289,14 @@ class RaftAdaptiveTimingController {
       const isLow = this.isLowLoad(signals);
 
       if (isHigh) {
-        this.highLoadStreak += NUM.ONE;
-        this.lowLoadStreak = NUM.ZERO;
+        this.highLoadStreak += 1;
+        this.lowLoadStreak = 0;
       } else if (isLow) {
-        this.lowLoadStreak += NUM.ONE;
-        this.highLoadStreak = NUM.ZERO;
+        this.lowLoadStreak += 1;
+        this.highLoadStreak = 0;
       } else {
-        this.highLoadStreak = NUM.ZERO;
-        this.lowLoadStreak = NUM.ZERO;
+        this.highLoadStreak = 0;
+        this.lowLoadStreak = 0;
       }
 
       if (this.currentProfile === RAFT_ADAPTIVE_TIMING_PROFILE.IDLE &&
@@ -509,7 +508,7 @@ class RaftAdaptiveTimingController {
       );
     }
 
-    if (checks.length === NUM.ZERO) {
+    if (checks.length === 0) {
       return false;
     }
     return checks.every((check) => check);
@@ -531,9 +530,9 @@ class RaftAdaptiveTimingController {
     try {
       const writeCount = await this.persistRaftTiming(target);
       this.currentProfile = profile;
-      this.highLoadStreak = NUM.ZERO;
-      this.lowLoadStreak = NUM.ZERO;
-      this.switchCount += NUM.ONE;
+      this.highLoadStreak = 0;
+      this.lowLoadStreak = 0;
+      this.switchCount += 1;
       this.logger.info(RAFT_ADAPTIVE_TIMING_LOG_MSG.PROFILE_SWITCHED, {
         nodeId: this.nodeId,
         profile,
@@ -563,7 +562,7 @@ class RaftAdaptiveTimingController {
    * @private
    */
   async persistRaftTiming(timing) {
-    let writeCount = NUM.ZERO;
+    let writeCount = 0;
     const writes = [
       {
         key: CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
@@ -589,7 +588,7 @@ class RaftAdaptiveTimingController {
         write.value,
         RAFT_ADAPTIVE_TIMING_VALUE.UPDATED_BY,
       );
-      writeCount += NUM.ONE;
+      writeCount += 1;
     }
 
     return writeCount;
@@ -603,7 +602,7 @@ class RaftAdaptiveTimingController {
    */
   applySettingUpdate(field, value) {
     if (field === ADAPTIVE_TIMING_KEY_FIELDS.ENABLED) {
-      if (typeof value === TYPEOF.BOOLEAN) {
+      if (typeof value === 'boolean') {
         this.settings[field] = value;
         if (!this.suspendLoopControl) {
           if (value) {
@@ -620,7 +619,7 @@ class RaftAdaptiveTimingController {
       this.settings[field] = normalizeInteger(
         value,
         ADAPTIVE_TIMING_SETTINGS_DEFAULT[field],
-        NUM.ONE,
+        1,
       );
       if (!this.suspendLoopControl && this.intervalHandle) {
         this.startLoop();
@@ -633,7 +632,7 @@ class RaftAdaptiveTimingController {
       this.settings[field] = normalizeInteger(
         value,
         ADAPTIVE_TIMING_SETTINGS_DEFAULT[field],
-        NUM.ONE,
+        1,
       );
       return;
     }

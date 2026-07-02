@@ -7,7 +7,6 @@
  * @module query/budget-enforcer
  */
 
-import {NUM} from '../constants/index.js';
 import {
   QUERY_CPU_TIME_LIMIT_MS,
   QUERY_MEMORY_LIMIT_BYTES,
@@ -78,18 +77,18 @@ class BudgetEnforcer {
     };
 
     this._usage = {
-      cpuTimeMs: NUM.ZERO,
-      memoryBytes: NUM.ZERO,
+      cpuTimeMs: 0,
+      memoryBytes: 0,
       wallStart: Date.now(),
-      lookupKeys: NUM.ZERO,
-      lookupBytes: NUM.ZERO,
-      emitBytes: NUM.ZERO,
-      broadcastBytes: NUM.ZERO,
-      outBytes: NUM.ZERO,
-      nestedCalls: NUM.ZERO,
-      nestedKeys: NUM.ZERO,
-      nestedBytes: NUM.ZERO,
-      inflight: NUM.ZERO,
+      lookupKeys: 0,
+      lookupBytes: 0,
+      emitBytes: 0,
+      broadcastBytes: 0,
+      outBytes: 0,
+      nestedCalls: 0,
+      nestedKeys: 0,
+      nestedBytes: 0,
+      inflight: 0,
     };
 
     this._terminated = false;
@@ -255,7 +254,7 @@ class BudgetEnforcer {
    */
   recordNestedCall() {
     this._guardTerminated();
-    this._usage.nestedCalls += NUM.ONE;
+    this._usage.nestedCalls += 1;
     if (this._usage.nestedCalls > this._limits.nestedCalls) {
       this._terminate();
       throw new BudgetLimitError(
@@ -319,16 +318,16 @@ class BudgetEnforcer {
    */
   incrementInflight() {
     this._guardTerminated();
-    this._usage.inflight += NUM.ONE;
+    this._usage.inflight += 1;
     if (this._usage.inflight > this._limits.inflight) {
-      this._usage.inflight -= NUM.ONE;
+      this._usage.inflight -= 1;
       this._terminate();
       throw new BudgetLimitError(
         ERR.INFLIGHT_EXCEEDED,
         {
           category: BUDGET_CATEGORY.INFLIGHT,
           limit: this._limits.inflight,
-          usage: this._usage.inflight + NUM.ONE,
+          usage: this._usage.inflight + 1,
         },
       );
     }
@@ -339,8 +338,8 @@ class BudgetEnforcer {
    * Does not throw; safe to call in finally blocks.
    */
   decrementInflight() {
-    if (this._usage.inflight > NUM.ZERO) {
-      this._usage.inflight -= NUM.ONE;
+    if (this._usage.inflight > 0) {
+      this._usage.inflight -= 1;
     }
   }
 
@@ -404,8 +403,8 @@ class BudgetEnforcer {
         ERR.OPERATION_TERMINATED,
         {
           category: LOCAL_STR_TERMINATED,
-          limit: NUM.ZERO,
-          usage: NUM.ZERO,
+          limit: 0,
+          usage: 0,
         },
       );
     }

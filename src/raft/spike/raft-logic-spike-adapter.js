@@ -21,12 +21,10 @@ import {
 } from './raft-logic-spike-constants.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_SQLITE = 'sqlite';
 const LOCAL_STR_INMEMORY = 'inmemory';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_EMPTY = '';
 
 const ROLE_EVENT_MAP = Object.freeze({
   [RAFT_LOGIC_SPIKE_ROLE.LEADER]: RAFT_LOGIC_SPIKE_EVENT.LEADER,
@@ -74,7 +72,7 @@ function decodeCommittedCommand(rawData) {
   if (typeof rawData === LOCAL_STR_STRING) {
     try {
       const decoded = Buffer.from(rawData, 'base64').toString('utf8');
-      if (decoded.length > LOCAL_NUM_ZERO) {
+      if (decoded.length > 0) {
         return parseMaybeJson(decoded);
       }
     } catch (_error) {
@@ -154,7 +152,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
     if (!options.replicaId || typeof options.replicaId !== LOCAL_STR_STRING) {
       throw new Error(RAFT_LOGIC_SPIKE_ERROR.MISSING_REPLICA_ID);
     }
-    if (!Array.isArray(options.replicaIds) || options.replicaIds.length === LOCAL_NUM_ZERO) {
+    if (!Array.isArray(options.replicaIds) || options.replicaIds.length === 0) {
       throw new Error(RAFT_LOGIC_SPIKE_ERROR.INVALID_REPLICA_IDS);
     }
 
@@ -198,7 +196,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
 
     this._role = RAFT_LOGIC_SPIKE_ROLE.FOLLOWER;
     this._leaderReplicaId = null;
-    this._term = LOCAL_NUM_ZERO;
+    this._term = 0;
   }
 
   /**
@@ -272,7 +270,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
       this._started = false;
       this._role = RAFT_LOGIC_SPIKE_ROLE.FOLLOWER;
       this._leaderReplicaId = null;
-      this._term = LOCAL_NUM_ZERO;
+      this._term = 0;
     }
 
     this.logger.info(RAFT_LOGIC_SPIKE_LOG_MSG.STOPPED, {
@@ -462,7 +460,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
     }
 
     const nextTerm = Number(snapshot.term);
-    if (Number.isFinite(nextTerm) && nextTerm >= LOCAL_NUM_ZERO && nextTerm !== this._term) {
+    if (Number.isFinite(nextTerm) && nextTerm >= 0 && nextTerm !== this._term) {
       this._term = nextTerm;
       this.emit(RAFT_LOGIC_SPIKE_EVENT.TERM_CHANGE, this._term);
     }
@@ -473,7 +471,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
 
     if (snapshot.lead !== undefined &&
         snapshot.lead !== null &&
-        snapshot.lead !== LOCAL_STR_EMPTY) {
+        snapshot.lead !== '') {
       this._setLeaderFromInternalId(snapshot.lead);
     }
   }
@@ -505,7 +503,7 @@ class RaftLogicSpikeAdapter extends EventEmitter {
    * @private
    */
   _setLeaderFromInternalId(internalId) {
-    if (internalId === null || internalId === undefined || internalId === LOCAL_STR_EMPTY) {
+    if (internalId === null || internalId === undefined || internalId === '') {
       return;
     }
 

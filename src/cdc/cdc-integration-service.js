@@ -27,9 +27,7 @@ const {
   HLCClockService,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   LoggingService,
-  NUM,
   STRING,
-  TYPEOF,
   VALID_SYSTEM_TABLES,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
@@ -52,7 +50,7 @@ class CDCIntegrationService extends EventEmitter {
     this.cacheMutationTarget =
       options.cacheMutationTarget ||
       (typeof options.systemTableCache?.applySystemTableChange ===
-      TYPEOF.FUNCTION ?
+      'function' ?
         options.systemTableCache :
         null);
 
@@ -63,7 +61,7 @@ class CDCIntegrationService extends EventEmitter {
     this.partitionServicesProvider =
       options.partitionServicesProvider instanceof Map ?
         () => options.partitionServicesProvider :
-        typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+        typeof options.partitionServicesProvider === 'function' ?
           options.partitionServicesProvider :
           null;
     this.writeRouter = this.createSqlWriteRouter();
@@ -107,12 +105,12 @@ class CDCIntegrationService extends EventEmitter {
     this.authoritativeFallbackWindowMs = AUTHORITATIVE_FALLBACK_WINDOW_MS;
     this.authoritativeFallbackRepairBudgetMs =
       Number.isFinite(options.authoritativeFallbackRepairBudgetMs) &&
-      options.authoritativeFallbackRepairBudgetMs > NUM.ZERO ?
+      options.authoritativeFallbackRepairBudgetMs > 0 ?
         Math.floor(options.authoritativeFallbackRepairBudgetMs) :
         AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS;
     this.authoritativeFallbackRetryDelayMs =
       Number.isFinite(options.authoritativeFallbackRetryDelayMs) &&
-      options.authoritativeFallbackRetryDelayMs >= NUM.ZERO ?
+      options.authoritativeFallbackRetryDelayMs >= 0 ?
         Math.floor(options.authoritativeFallbackRetryDelayMs) :
         AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS;
     this.inFlightMutationsByKey = new Map();

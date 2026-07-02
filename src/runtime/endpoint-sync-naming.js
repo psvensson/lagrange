@@ -8,14 +8,12 @@
  */
 
 import crypto from 'node:crypto';
-import {TYPEOF} from '../constants/index.js';
 import {
   ENDPOINT_SYNC_LIST_SEPARATOR,
   ENDPOINT_SYNC_NAME,
   ENDPOINT_SYNC_REGEX,
 } from './endpoint-sync-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Normalize an input segment into DNS-1123 label-safe text.
@@ -24,7 +22,7 @@ const LOCAL_NUM_ZERO = 0;
  * @return {string} Normalized segment.
  */
 function normalizeDns1123Segment(input) {
-  if (typeof input !== TYPEOF.STRING) {
+  if (typeof input !== 'string') {
     return ENDPOINT_SYNC_NAME.FALLBACK_SEGMENT;
   }
 
@@ -37,7 +35,7 @@ function normalizeDns1123Segment(input) {
       ENDPOINT_SYNC_NAME.CONCAT_SEPARATOR)
     .replace(ENDPOINT_SYNC_REGEX.EDGE_DASH, '');
 
-  if (normalized.length === LOCAL_NUM_ZERO) {
+  if (normalized.length === 0) {
     return ENDPOINT_SYNC_NAME.FALLBACK_SEGMENT;
   }
   return normalized;

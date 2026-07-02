@@ -17,13 +17,11 @@ import {
   resolveServiceType,
 } from './remote-cache-service-rows.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_UPDATE = 'UPDATE';
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_DELETE = 'DELETE';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_5000 = 5000;
+const LOCAL_NUM_FIVE_THOUSAND = 5000;
 
 /**
  * Remote Cache - Maintains a local copy of system tables synchronized via CDC
@@ -76,7 +74,7 @@ export class RemoteCache {
       replica_operations: new Map(),
     };
     this.lastUpdate = null;
-    this.cdcLag = LOCAL_NUM_ZERO;
+    this.cdcLag = 0;
     // Track tables affected by CDC events for selective invalidation
     this.affectedTableIds = new Set();
   }
@@ -474,7 +472,7 @@ export class RemoteCache {
     }
     if (filter.messagePattern) {
       const pattern = new RegExp(filter.messagePattern, 'i');
-      logs = logs.filter((l) => pattern.test(l.message || LOCAL_STR_EMPTY));
+      logs = logs.filter((l) => pattern.test(l.message || ''));
     }
     return logs;
   }
@@ -510,7 +508,7 @@ export class RemoteCache {
     }
     if (filter.namePattern) {
       const pattern = new RegExp(filter.namePattern, 'i');
-      contexts = contexts.filter((c) => pattern.test(c.name || LOCAL_STR_EMPTY));
+      contexts = contexts.filter((c) => pattern.test(c.name || ''));
     }
     return contexts;
   }
@@ -551,7 +549,7 @@ export class RemoteCache {
     }
 
     // Sort by updated_at descending (most recent first)
-    operations.sort((a, b) => (b.updated_at || LOCAL_NUM_ZERO) - (a.updated_at || LOCAL_NUM_ZERO));
+    operations.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
 
     return operations;
   }
@@ -597,7 +595,7 @@ export class RemoteCache {
       map.clear();
     }
     this.lastUpdate = null;
-    this.cdcLag = LOCAL_NUM_ZERO;
+    this.cdcLag = 0;
     this.affectedTableIds.clear();
   }
 
@@ -631,7 +629,7 @@ export class RemoteCache {
    * @param {number} threshold - Staleness threshold in milliseconds
    * @return {boolean} True if cache is stale
    */
-  isStale(threshold = LOCAL_NUM_5000) {
+  isStale(threshold = LOCAL_NUM_FIVE_THOUSAND) {
     return this.cdcLag > threshold;
   }
 }

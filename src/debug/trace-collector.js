@@ -3,13 +3,11 @@
  * JSON-serialized events with optional scope filters.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DEBUG_DEFAULT,
   DEBUG_ERROR_MSG,
 } from './debug-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 
 /**
  * Node-local collector for Trace_Event forwarding.
@@ -22,7 +20,7 @@ class TraceCollector {
   constructor(options = {}) {
     this.serialize = options.serialize || JSON.stringify;
     this.subscribers = new Map();
-    this.nextSubscriberId = NUM.ONE;
+    this.nextSubscriberId = 1;
   }
 
   /**
@@ -68,12 +66,12 @@ class TraceCollector {
    * @return {{delivered: number, dropped: boolean}}
    */
   emit(event) {
-    if (this.subscribers.size === NUM.ZERO) {
-      return {delivered: NUM.ZERO, dropped: true};
+    if (this.subscribers.size === 0) {
+      return {delivered: 0, dropped: true};
     }
 
     let serialized;
-    let delivered = NUM.ZERO;
+    let delivered = 0;
     for (const subscription of this.subscribers.values()) {
       if (!matchesFilter(event, subscription.filter)) {
         continue;
@@ -91,7 +89,7 @@ class TraceCollector {
 
     return {
       delivered,
-      dropped: delivered === NUM.ZERO,
+      dropped: delivered === 0,
     };
   }
 
@@ -108,11 +106,11 @@ class TraceCollector {
  * @return {Function}
  */
 function normalizeSender(subscriber) {
-  if (typeof subscriber === TYPEOF.FUNCTION) {
+  if (typeof subscriber === 'function') {
     return subscriber;
   }
   if (subscriber &&
-    typeof subscriber.send === TYPEOF.FUNCTION) {
+    typeof subscriber.send === 'function') {
     return (payload) => subscriber.send(payload);
   }
   throw new Error(DEBUG_ERROR_MSG.TRACE_COLLECTOR_REQUIRED);
@@ -124,29 +122,29 @@ function normalizeSender(subscriber) {
  */
 function normalizeFilter(filter) {
   const normalized = {};
-  if (typeof filter.lineagePrefix === TYPEOF.STRING &&
-    filter.lineagePrefix.length > NUM.ZERO) {
+  if (typeof filter.lineagePrefix === 'string' &&
+    filter.lineagePrefix.length > 0) {
     normalized.lineagePrefix = filter.lineagePrefix;
   }
-  if (typeof filter.level === TYPEOF.STRING &&
-    filter.level.length > NUM.ZERO) {
+  if (typeof filter.level === 'string' &&
+    filter.level.length > 0) {
     normalized.level = filter.level;
   }
   if (Array.isArray(filter.levels)) {
     const levels = filter.levels.filter((value) =>
-      typeof value === TYPEOF.STRING &&
-      value.length > NUM.ZERO,
+      typeof value === 'string' &&
+      value.length > 0,
     );
-    if (levels.length > NUM.ZERO) {
+    if (levels.length > 0) {
       normalized.levels = new Set(levels);
     }
   }
-  if (typeof filter.nodeId === TYPEOF.STRING &&
-    filter.nodeId.length > NUM.ZERO) {
+  if (typeof filter.nodeId === 'string' &&
+    filter.nodeId.length > 0) {
     normalized.nodeId = filter.nodeId;
   }
-  if (typeof filter.source === TYPEOF.STRING &&
-    filter.source.length > NUM.ZERO) {
+  if (typeof filter.source === 'string' &&
+    filter.source.length > 0) {
     normalized.source = filter.source;
   }
   return normalized;
@@ -158,14 +156,14 @@ function normalizeFilter(filter) {
  * @return {boolean}
  */
 function matchesFilter(event, filter) {
-  if (!event || typeof event !== TYPEOF.OBJECT) {
+  if (!event || typeof event !== 'object') {
     return false;
   }
-  if (!filter || typeof filter !== TYPEOF.OBJECT) {
+  if (!filter || typeof filter !== 'object') {
     return true;
   }
   if (filter.lineagePrefix &&
-    !String(event.lineageId || LOCAL_STR_EMPTY).startsWith(filter.lineagePrefix)) {
+    !String(event.lineageId || '').startsWith(filter.lineagePrefix)) {
     return false;
   }
   if (filter.level &&

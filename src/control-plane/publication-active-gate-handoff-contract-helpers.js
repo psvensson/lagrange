@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_ABSENT_INTEGER,
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
@@ -11,7 +10,7 @@ import {
 
 function isPublicationActiveGateHandoffRecord(value) {
   return Boolean(value) &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value);
 }
 
@@ -19,14 +18,14 @@ function normalizePublicationActiveGateHandoffNodeId(value) {
   const normalizedValue = String(
     value || PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
   ).trim();
-  return normalizedValue.length > NUM.ZERO ? normalizedValue : null;
+  return normalizedValue.length > 0 ? normalizedValue : null;
 }
 
 function coercePublicationActiveGateHandoffNodeIdValues(values) {
   if (Array.isArray(values)) {
     return values;
   }
-  if (typeof values !== TYPEOF.STRING) {
+  if (typeof values !== 'string') {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   }
   return PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS.reduce(
@@ -56,7 +55,7 @@ function normalizePublicationActiveGateHandoffText(value) {
   const normalizedValue = String(
     value || PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
   ).trim();
-  return normalizedValue.length > NUM.ZERO ?
+  return normalizedValue.length > 0 ?
     normalizedValue :
     PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT;
 }
@@ -72,8 +71,8 @@ function normalizePublicationActiveGateHandoffDebtCount(
 ) {
   const normalizedValue = normalizePublicationActiveGateHandoffInteger(value);
   return Math.max(
-    NUM.ZERO,
-    normalizedValue === null ? NUM.ZERO : normalizedValue,
+    0,
+    normalizedValue === null ? 0 : normalizedValue,
     normalizePublicationActiveGateHandoffNodeIdList(nodeIds).length,
   );
 }
@@ -159,10 +158,10 @@ function resolvePublicationActiveGateHandoffPublicationStatus(
 }
 
 function resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds = []) {
-  if (targetNodeIds.length === NUM.ZERO) {
-    return NUM.ZERO;
+  if (targetNodeIds.length === 0) {
+    return 0;
   }
-  return Math.floor(targetNodeIds.length / NUM.TWO) + NUM.ONE;
+  return Math.floor(targetNodeIds.length / 2) + 1;
 }
 
 export {

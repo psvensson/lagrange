@@ -12,10 +12,9 @@ import {
   SPLIT_OWNER_MANAGED_PHASES,
 } from './partition-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_12R5E = 'partition:split:workflow';
-const LOCAL_STR_10NUJ = 'control-plane:write';
-const LOCAL_STR_WR5H7 = 'control_plane_backpressure';
+const LOCAL_STR_PARTITION_SPLIT_WORKFLOW = 'partition:split:workflow';
+const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
+const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
@@ -54,8 +53,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
     return this.getPressureGovernor().evaluate({
       workClass: executionContext.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: [
-        LOCAL_STR_12R5E,
-        LOCAL_STR_10NUJ,
+        LOCAL_STR_PARTITION_SPLIT_WORKFLOW,
+        LOCAL_STR_CONTROL_PLANE_WRITE,
       ],
       allowDegrade: false,
       allowDefer: executionContext.allowPressureDefer !== false,
@@ -83,12 +82,12 @@ class ManagedSplitWorkflowExecutionGateMethods {
       workflowId: options.workflowId || null,
       targetVersion: options.targetVersion || null,
       state: PARTITION_TRANSITION_STATE.DEFERRED,
-      error: LOCAL_STR_WR5H7,
+      error: LOCAL_STR_CONTROL_PLANE_BACKPRESSURE,
       retryScheduled: true,
       nextAttemptAt,
       retry: {
         attemptCount:
-          options.retryMetadata?.attemptCount || LOCAL_NUM_ONE,
+          options.retryMetadata?.attemptCount || 1,
         lastAttemptAt:
           options.retryMetadata?.lastAttemptAt ||
           new Date(this.now()).toISOString(),

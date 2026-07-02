@@ -87,7 +87,7 @@ function denyResult(reason) {
     reason: reason || ADMISSION_REASON.BUDGET_EXCEEDED,
     projectedUtilization: {
       projectedUtilizationPercent: 95,
-      projectedAvailableBytes: NUM.ZERO,
+      projectedAvailableBytes: 0,
     },
   };
 }
@@ -130,7 +130,7 @@ test('MovePlanner capacity gating', async (t) => {
 
       const result = await planner.calculateTargetState([], policy);
 
-      t.equal(result.targetNodes.length, NUM.TWO,
+      t.equal(result.targetNodes.length, 2,
         'should only place on feasible nodes');
       t.ok(result.targetNodes.includes('n1'), 'n1 should be included');
       t.ok(result.targetNodes.includes('n3'), 'n3 should be included');
@@ -298,18 +298,18 @@ test('MovePlanner capacity gating', async (t) => {
         'filter should be marked as applied');
       t.equal(diag.totalCandidates, NUM.FOUR,
         'total candidates should be 4');
-      t.equal(diag.feasibleCount, NUM.ONE,
+      t.equal(diag.feasibleCount, 1,
         'feasible count should be 1');
       t.equal(diag.rejectedCount, NUM.THREE,
         'rejected count should be 3');
       t.equal(
         diag.rejectionsByReason[ADMISSION_REASON.BUDGET_EXCEEDED],
-        NUM.TWO,
+        2,
         'budget_exceeded rejections should be 2');
       t.equal(
         diag.rejectionsByReason[
           ADMISSION_REASON.HARD_PRESSURE_EXCEEDED],
-        NUM.ONE,
+        1,
         'hard_pressure_exceeded rejections should be 1');
     });
 
@@ -327,7 +327,7 @@ test('MovePlanner capacity gating', async (t) => {
       storageAdmissionService: makeAdmissionService({}),
     });
 
-    const policy = {targetReplicaCount: NUM.ONE};
+    const policy = {targetReplicaCount: 1};
 
     await t.rejects(
       planner.calculateTargetState([], policy),
@@ -425,19 +425,19 @@ test('MovePlanner capacity gating', async (t) => {
         accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
       });
 
-      const policy = {targetReplicaCount: NUM.TWO};
+      const policy = {targetReplicaCount: 2};
 
       const result = await planner.calculateTargetState([], policy);
 
-      t.equal(result.targetNodes.length, NUM.ONE,
+      t.equal(result.targetNodes.length, 1,
         'node with admission error should be excluded');
-      t.equal(result.targetNodes[NUM.ZERO], 'n1',
+      t.equal(result.targetNodes[0], 'n1',
         'only successful admission target should remain');
       t.equal(result.degraded, true,
         'should degrade when capacity checks fail');
       t.equal(
         result.capacityDiagnostics.rejectionsByReason.admission_error,
-        NUM.ONE,
+        1,
         'diagnostics should include admission_error rejection count',
       );
     });
@@ -462,14 +462,14 @@ test('MovePlanner capacity gating', async (t) => {
     });
 
     const result = await planner.calculateTargetState([], {
-      targetReplicaCount: NUM.TWO,
+      targetReplicaCount: 2,
     });
 
     t.equal(
       result.capacityDiagnostics.rejectionsByReason[
         ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE
       ],
-      NUM.TWO,
+      2,
       'diagnostics should count accounting-unavailable rejections',
     );
     t.equal(
@@ -502,7 +502,7 @@ test('MovePlanner capacity gating', async (t) => {
       });
 
       await planner.calculateTargetState([], {
-        targetReplicaCount: NUM.ONE,
+        targetReplicaCount: 1,
         placementConstraints: {considerCpuLoad: true},
       });
 
@@ -538,7 +538,7 @@ test('MovePlanner capacity gating', async (t) => {
       planner.isControlPlanePriorityPartition = () => true;
 
       await planner.calculateTargetState([], {
-        targetReplicaCount: NUM.ONE,
+        targetReplicaCount: 1,
         placementConstraints: {considerCpuLoad: true},
       });
 
@@ -581,7 +581,7 @@ test('MovePlanner capacity gating', async (t) => {
 
       const result = await planner.calculateTargetState([], policy);
 
-      t.equal(result.targetNodes.length, NUM.TWO,
+      t.equal(result.targetNodes.length, 2,
         'should only place on feasible nodes');
       t.equal(result.degraded, true, 'should be degraded');
       t.equal(result.degradedReason,
@@ -607,7 +607,7 @@ test('MovePlanner capacity gating', async (t) => {
       });
 
       const policy = {
-        targetReplicaCount: NUM.TWO,
+        targetReplicaCount: 2,
         placementConstraints: {preferSameLatencyGroup: true},
       };
 
@@ -635,13 +635,13 @@ test('MovePlanner capacity gating', async (t) => {
       });
 
       const policy = {
-        targetReplicaCount: NUM.TWO,
+        targetReplicaCount: 2,
         placementConstraints: {preferLatencyGroupDiversity: true},
       };
 
       const result = await planner.calculateTargetState(currentReplicas, policy);
 
-      t.equal(result.targetNodes.length, NUM.TWO, 'should place two replicas');
+      t.equal(result.targetNodes.length, 2, 'should place two replicas');
       t.ok(result.targetNodes.includes('n3'),
         'placement should include a node from a new latency group');
     });
@@ -672,7 +672,7 @@ test('MovePlanner capacity gating', async (t) => {
 
     const result = await planner.calculateTargetState([], policy);
 
-    t.equal(result.targetNodes.length, NUM.ZERO,
+    t.equal(result.targetNodes.length, 0,
       'no nodes should be placed');
     t.equal(result.degraded, true, 'should be degraded');
     t.equal(result.degradedReason,

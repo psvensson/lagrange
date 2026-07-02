@@ -1,8 +1,6 @@
 import {
   COLUMN,
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   isReplicaOperationInFlight,
@@ -15,7 +13,6 @@ import {
   OperationType,
 } from '../rebalancer/replica-status.js';
 
-const LOCAL_STR_EMPTY = '';
 const JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE = Object.freeze({
   PARTITION: 'partition',
 });
@@ -34,17 +31,17 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
     collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
       if (
         !systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION
+        typeof systemTableCache.getAll !== 'function'
       ) {
         return {
           inFlightOperations: [],
-          excludedSelfTargetedCount: NUM.ZERO,
-          excludedNonParticipatingCount: NUM.ZERO,
-          excludedWarmingTargetCount: NUM.ZERO,
-          excludedNonDiscoveryPartitionCount: NUM.ZERO,
-          excludedRemotePriorityControlPlaneCount: NUM.ZERO,
+          excludedSelfTargetedCount: 0,
+          excludedNonParticipatingCount: 0,
+          excludedWarmingTargetCount: 0,
+          excludedNonDiscoveryPartitionCount: 0,
+          excludedRemotePriorityControlPlaneCount: 0,
           excludedRemotePriorityControlPlaneOperationDetails: [],
-          excludedSelfSourcePriorityControlPlaneCount: NUM.ZERO,
+          excludedSelfSourcePriorityControlPlaneCount: 0,
           excludedSelfSourcePriorityControlPlaneOperationDetails: [],
         };
       }
@@ -71,10 +68,10 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
             .SELF_SOURCE_ACTIVE_TARGET_REPLACEMENT]:
             excludedSelfSourcePriorityControlPlaneOperationDetails,
         });
-      let excludedSelfTargetedCount = NUM.ZERO;
-      let excludedNonParticipatingCount = NUM.ZERO;
-      let excludedWarmingTargetCount = NUM.ZERO;
-      let excludedNonDiscoveryPartitionCount = NUM.ZERO;
+      let excludedSelfTargetedCount = 0;
+      let excludedNonParticipatingCount = 0;
+      let excludedWarmingTargetCount = 0;
+      let excludedNonDiscoveryPartitionCount = 0;
       for (const row of rows) {
         const normalizedOperation = normalizeReplicaOperationRecord(row);
         if (isReplicaOperationInFlight(normalizedOperation, {serviceRows})) {
@@ -89,8 +86,8 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
           if (
             normalizedOperation.entityType ===
               JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
-            discoveryCriticalPartitionIds.size > NUM.ZERO &&
-            normalizedOperation.partitionGroupId.length > NUM.ZERO &&
+            discoveryCriticalPartitionIds.size > 0 &&
+            normalizedOperation.partitionGroupId.length > 0 &&
             !discoveryCriticalPartitionIds.has(
               normalizedOperation.partitionGroupId,
             )
@@ -189,10 +186,10 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
         sourceNodeId,
         targetNodeId,
         discoveryCriticalPartition:
-          partitionId.length > NUM.ZERO &&
+          partitionId.length > 0 &&
           discoveryCriticalPartitionIds.has(partitionId),
         priorityControlPlanePartition:
-          partitionId.length > NUM.ZERO &&
+          partitionId.length > 0 &&
           isPriorityControlPlanePartition({partitionId}),
         sourceIsSelf: sourceNodeId === this.nodeId,
         targetIsSelf: targetNodeId === this.nodeId,
@@ -286,7 +283,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
         type: normalizedOperation.type,
         partitionId: normalizedOperation.partitionGroupId,
         replicaId: String(
-          row?.replica_id || row?.replicaId || LOCAL_STR_EMPTY,
+          row?.replica_id || row?.replicaId || '',
         ),
         sourceNodeId: normalizedOperation.sourceNodeId,
         targetNodeId: normalizedOperation.targetNodeId,
@@ -310,7 +307,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
       }
       if (
         !systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION
+        typeof systemTableCache.getAll !== 'function'
       ) {
         return partitionIds;
       }
@@ -332,7 +329,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
           row?.partitionId ||
           '',
         ).trim();
-        if (partitionId.length === NUM.ZERO) {
+        if (partitionId.length === 0) {
           continue;
         }
         partitionIds.add(partitionId);

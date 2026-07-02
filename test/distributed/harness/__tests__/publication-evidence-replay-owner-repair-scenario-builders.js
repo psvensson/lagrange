@@ -175,9 +175,9 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_114859Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_114859Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,
@@ -319,12 +319,12 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
           [REPLAY_TEST_114859Z_NODE_ID.SELECTED_STALE]: [
             build114859ZRepairLogLine({
               nodeId: REPLAY_TEST_114859Z_NODE_ID.SELECTED_STALE,
-              failureCount: NUM.ONE,
+              failureCount: 1,
               retryAfterMs: REPLAY_TEST_114859Z_FIRST_REPAIR_RETRY_AFTER_MS,
             }),
             build114859ZRepairLogLine({
               nodeId: REPLAY_TEST_114859Z_NODE_ID.SELECTED_STALE,
-              failureCount: NUM.TWO,
+              failureCount: 2,
               retryAfterMs: REPLAY_TEST_114859Z_SELECTED_REPAIR_RETRY_AFTER_MS,
             }),
           ],
@@ -368,9 +368,9 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_123850Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_123850Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,
@@ -504,7 +504,7 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
         pendingAckNodeIds: REPLAY_TEST_123850Z_PENDING_ACK_NODE_IDS,
         pendingAckCount: REPLAY_TEST_123850Z_PENDING_ACK_COUNT,
         missingPublishedNodeIds: [],
-        missingPublishedCount: NUM.ZERO,
+        missingPublishedCount: 0,
         prioritySpreadPending: true,
         priorityPartitionSummary: {
           satisfied: false,
@@ -595,9 +595,9 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
     for (
       let index = partitionRows.length;
       index < REPLAY_TEST_132033Z_PARTITION_ROW_COUNT;
-      index += NUM.ONE
+      index += 1
     ) {
-      const ordinal = index + NUM.ONE;
+      const ordinal = index + 1;
       const tableId = `${REPLAY_TEST_132033Z_FILLER_TABLE_PREFIX}${ordinal}`;
       partitionRows.push({
         table_id: tableId,

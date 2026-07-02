@@ -12,7 +12,6 @@
  */
 
 import {createHash} from 'node:crypto';
-import {NUM} from '../constants/index.js';
 import {TABLES} from '../constants/tables.js';
 import {
   DEPENDENCY_LOCK_FIELD as DL,
@@ -192,7 +191,7 @@ function validateLockConsistency(
     }
   }
 
-  if (errors.length > NUM.ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors, driftedDependencies};
   }
 

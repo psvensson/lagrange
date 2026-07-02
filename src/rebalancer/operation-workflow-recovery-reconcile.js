@@ -17,7 +17,6 @@ import {
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
 
 const {
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REBALANCE_COORDINATOR_DEFER_REASON,
@@ -25,7 +24,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  TYPEOF,
   WORKFLOW_STEP,
 } = SHARED;
 
@@ -46,7 +44,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       );
     const normalizedSnapshot =
       typeof this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
           snapshot,
           operation,
@@ -194,9 +192,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     });
 
     const result = {
-      totalIncomplete: NUM.ZERO,
-      markedFailed: NUM.ZERO,
-      reconciled: NUM.ZERO,
+      totalIncomplete: 0,
+      markedFailed: 0,
+      reconciled: 0,
       errors: [],
     };
 
@@ -382,7 +380,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   clearDeferredSafetyBlockState(operationId) {
     if (
       typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === NUM.ZERO
+      operationId.length === 0
     ) {
       return;
     }
@@ -398,7 +396,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const operationId = operation?.operationId;
     if (
       typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === NUM.ZERO
+      operationId.length === 0
     ) {
       return;
     }

@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 import {normalizePriorityRecoveryInteger} from './priority-recovery-helpers.js';
 import {
   LOCAL_STR_EMPTY,
@@ -18,7 +14,7 @@ import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-sn
 function resolvePriorityRecoveryDecisionSnapshotSummarySortTimestamp(snapshot) {
   const progressFreshnessMs =
     resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs(snapshot);
-  return progressFreshnessMs > NUM.ZERO ?
+  return progressFreshnessMs > 0 ?
     progressFreshnessMs :
     resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot);
 }
@@ -28,7 +24,7 @@ function resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(snapshot) {
     isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) === true &&
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true
   ) {
-    return NUM.TWO;
+    return 2;
   }
   const coordinatorOperation =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
@@ -36,14 +32,14 @@ function resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(snapshot) {
     ];
   const terminalOperationEvidence =
     coordinatorOperation &&
-    typeof coordinatorOperation === TYPEOF.OBJECT &&
+    typeof coordinatorOperation === 'object' &&
     isPriorityRecoveryOperationContextTerminal(coordinatorOperation) === true;
   return (
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true &&
     terminalOperationEvidence !== true
   ) ?
-    NUM.ONE :
-    NUM.ZERO;
+    1 :
+    0;
 }
 
 function comparePriorityRecoveryDecisionSnapshotSummarySnapshots(
@@ -52,9 +48,9 @@ function comparePriorityRecoveryDecisionSnapshotSummarySnapshots(
   options = {},
 ) {
   const leftEpoch = normalizePriorityRecoveryInteger(left?.epoch) ??
-    NUM.NEGATIVE_ONE;
+    -1;
   const rightEpoch = normalizePriorityRecoveryInteger(right?.epoch) ??
-    NUM.NEGATIVE_ONE;
+    -1;
   if (leftEpoch !== rightEpoch) {
     return leftEpoch - rightEpoch;
   }
@@ -89,7 +85,7 @@ function selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
         LOCAL_STR_EMPTY,
     ).trim();
-    if (partitionId.length === NUM.ZERO) {
+    if (partitionId.length === 0) {
       continue;
     }
     const currentSnapshot = latestSnapshotByPartitionId.get(partitionId);
@@ -99,7 +95,7 @@ function selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
         currentSnapshot,
         snapshot,
         options,
-      ) < NUM.ZERO
+      ) < 0
     ) {
       latestSnapshotByPartitionId.set(partitionId, snapshot);
     }
@@ -130,8 +126,8 @@ function buildPriorityRecoveryDecisionSnapshotOperationSnapshotsByPartitionId(
       snapshot?.operationId || LOCAL_STR_EMPTY,
     ).trim();
     if (
-      partitionId.length === NUM.ZERO ||
-      operationId.length === NUM.ZERO
+      partitionId.length === 0 ||
+      operationId.length === 0
     ) {
       continue;
     }
@@ -143,7 +139,7 @@ function buildPriorityRecoveryDecisionSnapshotOperationSnapshotsByPartitionId(
       comparePriorityRecoveryDecisionSnapshotSummarySnapshots(
         currentSnapshot,
         snapshot,
-      ) < NUM.ZERO
+      ) < 0
     ) {
       snapshotByOperationId.set(operationId, snapshot);
     }

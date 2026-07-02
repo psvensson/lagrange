@@ -2,9 +2,7 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
-  NUM,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INSERT_COLUMN_LIST_PATTERN =
@@ -25,43 +23,43 @@ function normalizeMutationSelectionColumnName(columnName) {
 }
 
 function resolveInsertMutationColumnNames(sql) {
-  if (typeof sql !== TYPEOF.STRING) {
+  if (typeof sql !== 'string') {
     return [];
   }
   const match = sql.match(CDC_INSERT_COLUMN_LIST_PATTERN);
-  if (!match || typeof match[NUM.ONE] !== TYPEOF.STRING) {
+  if (!match || typeof match[1] !== 'string') {
     return [];
   }
-  return match[NUM.ONE]
+  return match[1]
     .split(CDC_SQL_COLUMN_SEPARATOR)
     .map((columnName) => normalizeMutationSelectionColumnName(columnName));
 }
 
 function resolveWhereMutationColumnNames(sql) {
-  if (typeof sql !== TYPEOF.STRING) {
+  if (typeof sql !== 'string') {
     return [];
   }
   const match = sql.match(CDC_WHERE_CLAUSE_PATTERN);
-  if (!match || typeof match[NUM.ONE] !== TYPEOF.STRING) {
+  if (!match || typeof match[1] !== 'string') {
     return [];
   }
-  const whereClause = match[NUM.ONE];
+  const whereClause = match[1];
   const columnNames = [];
   let equalityMatch = CDC_WHERE_EQUALITY_COLUMN_PATTERN.exec(whereClause);
   while (equalityMatch) {
-    if (typeof equalityMatch[NUM.ONE] === TYPEOF.STRING) {
+    if (typeof equalityMatch[1] === 'string') {
       columnNames.push(
-        normalizeMutationSelectionColumnName(equalityMatch[NUM.ONE]),
+        normalizeMutationSelectionColumnName(equalityMatch[1]),
       );
     }
     equalityMatch = CDC_WHERE_EQUALITY_COLUMN_PATTERN.exec(whereClause);
   }
-  CDC_WHERE_EQUALITY_COLUMN_PATTERN.lastIndex = NUM.ZERO;
+  CDC_WHERE_EQUALITY_COLUMN_PATTERN.lastIndex = 0;
   return columnNames;
 }
 
 function normalizeReplicaOperationMutationId(operationId) {
-  return typeof operationId === TYPEOF.STRING && operationId.length > NUM.ZERO ?
+  return typeof operationId === 'string' && operationId.length > 0 ?
     operationId :
     null;
 }
@@ -81,7 +79,7 @@ function resolveReplicaOperationIdFromInsert(sql, params) {
   const columnNames = resolveInsertMutationColumnNames(sql);
   const operationIdColumnIndex =
     columnNames.indexOf(CDC_REPLICA_OPERATION_ID_COLUMN);
-  if (operationIdColumnIndex < NUM.ZERO) {
+  if (operationIdColumnIndex < 0) {
     return null;
   }
   return normalizeReplicaOperationMutationId(params[operationIdColumnIndex]);
@@ -91,11 +89,11 @@ function resolveReplicaOperationIdFromWhere(sql, params) {
   const columnNames = resolveWhereMutationColumnNames(sql);
   const operationIdColumnIndex =
     columnNames.indexOf(CDC_REPLICA_OPERATION_ID_COLUMN);
-  if (operationIdColumnIndex < NUM.ZERO) {
+  if (operationIdColumnIndex < 0) {
     return null;
   }
   const whereValueStartIndex = params.length - columnNames.length;
-  if (whereValueStartIndex < NUM.ZERO) {
+  if (whereValueStartIndex < 0) {
     return null;
   }
   return normalizeReplicaOperationMutationId(
@@ -107,7 +105,7 @@ function resolveReplicaOperationMutationCoalescingKey(tableName, sql, params) {
   if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
     return null;
   }
-  if (!Array.isArray(params) || params.length === NUM.ZERO) {
+  if (!Array.isArray(params) || params.length === 0) {
     return null;
   }
   return buildReplicaOperationMutationCoalescingKey(

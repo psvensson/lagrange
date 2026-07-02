@@ -42,9 +42,9 @@ const TABLE_CREATION_VISIBILITY_STATE = Object.freeze({
   DEFERRED_BY_PRESSURE: 'deferred_by_pressure',
 });
 const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
-  [OWNER_CONTRACT_STATE.READY]: NUM.ZERO,
-  [OWNER_CONTRACT_STATE.PENDING]: NUM.ONE,
-  [OWNER_CONTRACT_STATE.DEFERRED]: NUM.TWO,
+  [OWNER_CONTRACT_STATE.READY]: 0,
+  [OWNER_CONTRACT_STATE.PENDING]: 1,
+  [OWNER_CONTRACT_STATE.DEFERRED]: 2,
   [OWNER_CONTRACT_STATE.BLOCKED]: NUM.THREE,
   [OWNER_CONTRACT_STATE.FAILED]: NUM.FOUR,
 });
@@ -72,7 +72,7 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
     Number.isInteger(minimumRoutableReplicaCount) &&
     minimumRoutableReplicaCount > 0 ?
       minimumRoutableReplicaCount :
-      NUM.ZERO;
+      0;
   const routableReplicaCount =
     Number.isInteger(normalized?.routableReplicaCount) &&
     normalized.routableReplicaCount >= 0 ?
@@ -83,7 +83,7 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
     TABLE_CREATION_SERVICE_LITERAL.BOOLEAN ?
       normalized.fullReplicaCountConverged :
       !Number.isInteger(requestedReplicaCount) ||
-        requestedReplicaCount <= NUM.ZERO ||
+        requestedReplicaCount <= 0 ||
         routableReplicaCount >= requestedReplicaCount;
   const defaultProvisioningContractOutcome = buildOwnerContractOutcome({
     contractState: fullReplicaCountConverged ?
@@ -113,7 +113,7 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
     resolvedReplicaCount,
     minimumRoutableReplicaCount:
       Number.isInteger(normalized?.minimumRoutableReplicaCount) &&
-      normalized.minimumRoutableReplicaCount > NUM.ZERO ?
+      normalized.minimumRoutableReplicaCount > 0 ?
         normalized.minimumRoutableReplicaCount :
         minimumRoutableReplicaCount,
     routableReplicaCount,
@@ -125,9 +125,9 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
       [],
     retryAfterMs:
       Number.isFinite(normalized?.retryAfterMs) &&
-      normalized.retryAfterMs > NUM.ZERO ?
+      normalized.retryAfterMs > 0 ?
         Math.floor(normalized.retryAfterMs) :
-        NUM.ZERO,
+        0,
   };
 }
 
@@ -184,7 +184,7 @@ function resolveTableCreationMutationContractOutcome(
     const mutationOutcome =
       typeof mutationResult.contractState ===
         TABLE_CREATION_SERVICE_LITERAL.STRING &&
-      mutationResult.contractState.length > NUM.ZERO ?
+      mutationResult.contractState.length > 0 ?
         buildOwnerContractOutcome({
           contractState: mutationResult.contractState,
           nextAction: mutationResult.nextAction,

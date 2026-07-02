@@ -11,7 +11,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NUM} from '../../src/constants/index.js';
 import {
   ADMISSION_DECISION,
   PRESSURE_STATE,
@@ -138,15 +137,15 @@ test('StorageCapacityMetrics', async (t) => {
 
       const results = await metrics.collectAllNodeMetrics();
 
-      t.equal(results.length, NUM.TWO);
-      t.equal(results[NUM.ZERO].nodeId, 'n1');
+      t.equal(results.length, 2);
+      t.equal(results[0].nodeId, 'n1');
       t.equal(
-        results[NUM.ZERO][STORAGE_METRIC.PRESSURE_STATE],
+        results[0][STORAGE_METRIC.PRESSURE_STATE],
         PRESSURE_STATE.NORMAL,
       );
-      t.equal(results[NUM.ONE].nodeId, 'n2');
+      t.equal(results[1].nodeId, 'n2');
       t.equal(
-        results[NUM.ONE][STORAGE_METRIC.PRESSURE_STATE],
+        results[1][STORAGE_METRIC.PRESSURE_STATE],
         PRESSURE_STATE.SOFT,
       );
     });
@@ -155,7 +154,7 @@ test('StorageCapacityMetrics', async (t) => {
     async (t) => {
       const metrics = new StorageCapacityMetrics({});
       const results = await metrics.collectAllNodeMetrics();
-      t.equal(results.length, NUM.ZERO);
+      t.equal(results.length, 0);
     });
 
   await t.test('collectAllNodeMetrics returns empty when no nodes',
@@ -164,7 +163,7 @@ test('StorageCapacityMetrics', async (t) => {
         accountingService: makeAccountingService([]),
       });
       const results = await metrics.collectAllNodeMetrics();
-      t.equal(results.length, NUM.ZERO);
+      t.equal(results.length, 0);
     });
 
   // --- Req 10.2: admission metric tracking ---
@@ -177,10 +176,10 @@ test('StorageCapacityMetrics', async (t) => {
 
     const counters = metrics.getAdmissionMetrics();
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], NUM.TWO,
+      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], 2,
     );
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], NUM.ZERO,
+      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], 0,
     );
   });
 
@@ -191,10 +190,10 @@ test('StorageCapacityMetrics', async (t) => {
 
     const counters = metrics.getAdmissionMetrics();
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], NUM.ZERO,
+      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], 0,
     );
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], NUM.ONE,
+      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], 1,
     );
   });
 
@@ -206,10 +205,10 @@ test('StorageCapacityMetrics', async (t) => {
 
     const counters = metrics.getAdmissionMetrics();
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], NUM.ZERO,
+      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], 0,
     );
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], NUM.ZERO,
+      counters[STORAGE_METRIC.ADMISSION_DENY_COUNT], 0,
     );
   });
 
@@ -224,7 +223,7 @@ test('StorageCapacityMetrics', async (t) => {
 
     const counters = metrics.getAdmissionMetrics();
     t.equal(
-      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], NUM.TWO,
+      counters[STORAGE_METRIC.ADMISSION_ALLOW_COUNT], 2,
     );
     const expectedDenies = 3;
     t.equal(
@@ -256,7 +255,7 @@ test('Admin storage diagnostics', async (t) => {
         result.command,
         STORAGE_ADMIN_COMMAND.GET_STORAGE_CAPACITY,
       );
-      t.equal(result.snapshots.length, NUM.TWO);
+      t.equal(result.snapshots.length, 2);
     });
 
   await t.test('handleGetStorageCapacity filters by nodeId',
@@ -271,8 +270,8 @@ test('Admin storage diagnostics', async (t) => {
       );
 
       t.equal(result.success, true);
-      t.equal(result.snapshots.length, NUM.ONE);
-      t.equal(result.snapshots[NUM.ZERO].nodeId, 'n1');
+      t.equal(result.snapshots.length, 1);
+      t.equal(result.snapshots[0].nodeId, 'n1');
     });
 
   await t.test('handleGetStorageCapacity returns empty for unknown node',
@@ -286,7 +285,7 @@ test('Admin storage diagnostics', async (t) => {
       );
 
       t.equal(result.success, true);
-      t.equal(result.snapshots.length, NUM.ZERO);
+      t.equal(result.snapshots.length, 0);
     });
 
   await t.test('handleGetStorageCapacity fails without service',
@@ -294,7 +293,7 @@ test('Admin storage diagnostics', async (t) => {
       const result = await handleGetStorageCapacity({}, {});
 
       t.equal(result.success, false);
-      t.ok(result.errors.length > NUM.ZERO);
+      t.ok(result.errors.length > 0);
     });
 
   await t.test('handleGetStorageReservations returns SQL with defaults',
@@ -308,8 +307,8 @@ test('Admin storage diagnostics', async (t) => {
       );
       t.ok(result.sql.includes('storage_reservations'));
       t.ok(result.sql.includes('status'));
-      t.equal(result.params.length, NUM.ONE);
-      t.equal(result.params[NUM.ZERO], 'active');
+      t.equal(result.params.length, 1);
+      t.equal(result.params[0], 'active');
     });
 
   await t.test('handleGetStorageReservations filters by nodeId',
@@ -318,8 +317,8 @@ test('Admin storage diagnostics', async (t) => {
 
       t.equal(result.success, true);
       t.ok(result.sql.includes('target_node_id'));
-      t.equal(result.params.length, NUM.TWO);
-      t.equal(result.params[NUM.ZERO], 'n1');
+      t.equal(result.params.length, 2);
+      t.equal(result.params[0], 'n1');
     });
 
   await t.test('handleGetStorageReservations filters by status',
@@ -328,7 +327,7 @@ test('Admin storage diagnostics', async (t) => {
 
       t.equal(result.success, true);
       t.ok(result.sql.includes('status'));
-      t.equal(result.params.length, NUM.ONE);
-      t.equal(result.params[NUM.ZERO], 'released');
+      t.equal(result.params.length, 1);
+      t.equal(result.params[0], 'released');
     });
 });

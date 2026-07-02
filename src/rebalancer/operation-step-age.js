@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 
 /**
  * Resolve the newest steps-history entry for an operation's CURRENT workflow
@@ -24,10 +23,10 @@ function resolveOperationCurrentStepEntry(operation) {
     operation.stepsHistory :
     null;
   const workflowStep = operation?.workflowStep;
-  if (!stepsHistory || stepsHistory.length === NUM.ZERO || !workflowStep) {
+  if (!stepsHistory || stepsHistory.length === 0 || !workflowStep) {
     return null;
   }
-  for (let index = stepsHistory.length - NUM.ONE; index >= NUM.ZERO; index--) {
+  for (let index = stepsHistory.length - 1; index >= 0; index--) {
     const entry = stepsHistory[index];
     if (entry && entry.step === workflowStep) {
       return entry;

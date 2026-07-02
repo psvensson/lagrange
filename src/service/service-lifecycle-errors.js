@@ -11,12 +11,12 @@ import {
 const LOCAL_STR_SERVICELIFECYCLE = 'ServiceLifecycle';
 const LOCAL_STR_RESOLVEADAPTER = 'resolveAdapter';
 const LOCAL_STR_SERVICETYPEADAPTER = 'ServiceTypeAdapter';
-const LOCAL_STR_LPC4T = 'ServiceMessageContract';
+const LOCAL_STR_SERVICEMESSAGECONTRACT = 'ServiceMessageContract';
 const LOCAL_STR_VALIDATEENVELOPE = 'validateEnvelope';
-const LOCAL_STR_1ABKS = 'ServiceLifecycleManager';
+const LOCAL_STR_SERVICELIFECYCLEMANAGER = 'ServiceLifecycleManager';
 const LOCAL_STR_OPERATIONJOURNAL = 'operationJournal';
 const LOCAL_STR_IDEMPOTENCYCHECK = 'idempotencyCheck';
-const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_SERVICEDESCRIPTOR = 'ServiceDescriptor';
 const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
 const LOCAL_STR_SERVICEPOLICY = 'ServicePolicy';
@@ -79,7 +79,7 @@ class InvalidServiceMessageError extends BaseError {
       `Invalid service message envelope: ${reason}`,
       {
         context: {
-          component: LOCAL_STR_LPC4T,
+          component: LOCAL_STR_SERVICEMESSAGECONTRACT,
           operation: LOCAL_STR_VALIDATEENVELOPE,
           metadata,
         },
@@ -103,7 +103,7 @@ class ServiceLifecycleTransitionError extends BaseError {
       ` ${operation} cannot move ${fromState} -> ${toState}`,
       {
         context: {
-          component: LOCAL_STR_1ABKS,
+          component: LOCAL_STR_SERVICELIFECYCLEMANAGER,
           operation,
           metadata: {serviceId, fromState, toState},
         },
@@ -131,7 +131,7 @@ class ServiceOperationJournalError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: LOCAL_STR_1ABKS,
+          component: LOCAL_STR_SERVICELIFECYCLEMANAGER,
           operation: LOCAL_STR_OPERATIONJOURNAL,
           metadata: {serviceId, lifecycleOperation: operation},
         },
@@ -158,7 +158,7 @@ class ServiceIdempotencyCheckError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: LOCAL_STR_1ABKS,
+          component: LOCAL_STR_SERVICELIFECYCLEMANAGER,
           operation: LOCAL_STR_IDEMPOTENCYCHECK,
           metadata: {serviceId, lifecycleOperation: operation},
         },
@@ -178,7 +178,7 @@ class ServiceDescriptorValidationError extends BaseError {
    */
   constructor(errors, metadata = {}) {
     super(
-      `Invalid service descriptor: ${errors.join(LOCAL_STR_1AM9G)}`,
+      `Invalid service descriptor: ${errors.join(LOCAL_STR_SEMI_SPACE)}`,
       {
         context: {
           component: LOCAL_STR_SERVICEDESCRIPTOR,

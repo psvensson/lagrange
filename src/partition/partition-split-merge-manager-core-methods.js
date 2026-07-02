@@ -1,4 +1,4 @@
-import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
 import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
 import {
@@ -14,8 +14,8 @@ import {
   SPLIT_MERGE_SQL,
 } from './partition-constants.js';
 
-const LOCAL_STR_1EJ8C = 'partition:split:evaluation';
-const LOCAL_STR_10NUJ = 'control-plane:write';
+const LOCAL_STR_PARTITION_SPLIT_EVALUATION = 'partition:split:evaluation';
+const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -68,8 +68,8 @@ class PartitionSplitMergeManagerCoreMethods {
     return this.getPressureGovernor().evaluate({
       workClass: options.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: [
-        LOCAL_STR_1EJ8C,
-        LOCAL_STR_10NUJ,
+        LOCAL_STR_PARTITION_SPLIT_EVALUATION,
+        LOCAL_STR_CONTROL_PLANE_WRITE,
       ],
       allowDegrade: false,
       allowDefer: true,
@@ -120,8 +120,8 @@ class PartitionSplitMergeManagerCoreMethods {
   buildPressureDeferredExecution(partitionId, decision) {
     const retryAfterMs = Number.isFinite(decision?.retryAfterMs) ?
       decision.retryAfterMs :
-      NUM.ZERO;
-    const nextAttemptAt = retryAfterMs > NUM.ZERO ?
+      0;
+    const nextAttemptAt = retryAfterMs > 0 ?
       new Date(Date.now() + retryAfterMs).toISOString() :
       null;
     return {
@@ -250,21 +250,21 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   comparePartitionKeys(left, right) {
     if (left === right) {
-      return NUM.ZERO;
+      return 0;
     }
     if (left === null || left === undefined) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (right === null || right === undefined) {
-      return NUM.ONE;
+      return 1;
     }
     if (left < right) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     if (left > right) {
-      return NUM.ONE;
+      return 1;
     }
-    return NUM.ZERO;
+    return 0;
   }
 
   /**
@@ -298,7 +298,7 @@ class PartitionSplitMergeManagerCoreMethods {
           this.getPartitionTableId(left),
           this.getPartitionTableId(right),
         );
-        if (tableOrder !== NUM.ZERO) {
+        if (tableOrder !== 0) {
           return tableOrder;
         }
         return this.comparePartitionKeys(
@@ -327,14 +327,14 @@ class PartitionSplitMergeManagerCoreMethods {
         partition &&
         typeof partition === LOCAL_STR_OBJECT) {
       const sizeBytes = Number(
-        partition.size_bytes ?? partition.sizeBytes ?? NUM.ZERO,
+        partition.size_bytes ?? partition.sizeBytes ?? 0,
       );
-      metrics.sizeBytes = Number.isFinite(sizeBytes) ? sizeBytes : NUM.ZERO;
+      metrics.sizeBytes = Number.isFinite(sizeBytes) ? sizeBytes : 0;
     }
 
     if (metrics.queriesPerMinute === undefined ||
         metrics.queriesPerMinute === null) {
-      metrics.queriesPerMinute = NUM.ZERO;
+      metrics.queriesPerMinute = 0;
     }
 
     return metrics;
@@ -368,7 +368,7 @@ class PartitionSplitMergeManagerCoreMethods {
       );
     }
 
-    const sizeBytes = metrics.sizeBytes || NUM.ZERO;
+    const sizeBytes = metrics.sizeBytes || 0;
     const estimatedBytes =
       this.storageAccountingService.estimateReplicaBytes({
         entityType: SERVICE_TYPE.PARTITION,
@@ -428,12 +428,12 @@ class PartitionSplitMergeManagerCoreMethods {
       SPLIT_MERGE_SQL.countRows(tableName),
     );
 
-    const totalRows = countResult.rows[NUM.ZERO]?.total || NUM.ZERO;
-    if (totalRows < NUM.TWO) {
+    const totalRows = countResult.rows[0]?.total || 0;
+    if (totalRows < 2) {
       throw new Error(SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT);
     }
 
-    const medianOffset = Math.floor(totalRows / NUM.TWO);
+    const medianOffset = Math.floor(totalRows / 2);
 
     // Get median value using OFFSET
     const medianResult = await partitionService.executeQuery(
@@ -441,11 +441,11 @@ class PartitionSplitMergeManagerCoreMethods {
       [medianOffset],
     );
 
-    if (!medianResult.rows || medianResult.rows.length === NUM.ZERO) {
+    if (!medianResult.rows || medianResult.rows.length === 0) {
       throw new Error(SPLIT_MERGE_LOG_MSG.FAILED_MEDIAN_CALC);
     }
 
-    const medianKey = medianResult.rows[NUM.ZERO][primaryKeyColumn];
+    const medianKey = medianResult.rows[0][primaryKeyColumn];
 
     this.logger.debug(SPLIT_MERGE_LOG_MSG.CALCULATED_MEDIAN_KEY, {
       partitionId,
@@ -478,8 +478,8 @@ class PartitionSplitMergeManagerCoreMethods {
     const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
     const trafficThreshold = policy.splitTrafficThreshold || this.splitTrafficThreshold;
 
-    const sizeBytes = metrics.sizeBytes || NUM.ZERO;
-    const queriesPerMinute = metrics.queriesPerMinute || NUM.ZERO;
+    const sizeBytes = metrics.sizeBytes || 0;
+    const queriesPerMinute = metrics.queriesPerMinute || 0;
 
     // Split if EITHER threshold is exceeded
     const shouldSplit = sizeBytes >= storageThreshold ||
@@ -512,10 +512,10 @@ class PartitionSplitMergeManagerCoreMethods {
     const storageThreshold = policy.mergeStorageThreshold || this.mergeStorageThreshold;
     const trafficThreshold = policy.mergeTrafficThreshold || this.mergeTrafficThreshold;
 
-    const combinedStorage = (leftMetrics.sizeBytes || NUM.ZERO) +
-      (rightMetrics.sizeBytes || NUM.ZERO);
-    const combinedTraffic = (leftMetrics.queriesPerMinute || NUM.ZERO) +
-      (rightMetrics.queriesPerMinute || NUM.ZERO);
+    const combinedStorage = (leftMetrics.sizeBytes || 0) +
+      (rightMetrics.sizeBytes || 0);
+    const combinedTraffic = (leftMetrics.queriesPerMinute || 0) +
+      (rightMetrics.queriesPerMinute || 0);
 
     // Merge if BOTH thresholds are satisfied
     const shouldMerge = combinedStorage <= storageThreshold &&

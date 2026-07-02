@@ -6,7 +6,6 @@
  */
 
 import {URL} from 'node:url';
-import {TYPEOF} from '../../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../system-table-schemas-constants.js';
 import {
   createAdminMetaDefinition,
@@ -22,10 +21,8 @@ import {buildEndpointRecord} from '../../wasm-service/service-endpoint-builder.j
 import {resolveAdvertisedEndpointHost} from
   '../../transport/node-address-resolution.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_37AKI = '://';
-const LOCAL_STR_1PLYW = '[';
+const LOCAL_STR_COLON_SLASH_SLASH = '://';
+const LOCAL_STR_LBRACKET = '[';
 const LOCAL_STR_COLON = ':';
 
 const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
@@ -38,10 +35,10 @@ const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
 const POSTGRES_WIRE_DEFAULT_PORT = 5432;
 
 function assertEndpointRegistrationOptions(options = {}) {
-  if (typeof options.upsertRow !== TYPEOF.FUNCTION) {
+  if (typeof options.upsertRow !== 'function') {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.UPSERT_REQUIRED);
   }
-  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === LOCAL_NUM_ZERO) {
+  if (typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.NODE_ID_REQUIRED);
   }
 }
@@ -52,14 +49,14 @@ function resolveValidatedEndpointBinding(options = {}) {
     advertisedNodeWsAddress: options.advertisedNodeWsAddress,
     nodeId: options.nodeId,
   });
-  if (typeof endpointAddress !== TYPEOF.STRING || endpointAddress.length === LOCAL_NUM_ZERO) {
+  if (typeof endpointAddress !== 'string' || endpointAddress.length === 0) {
     throw new Error(
       META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_ADDRESS_REQUIRED,
     );
   }
 
   const endpointPort = resolveEndpointPort(options.wsPort, options.nodeAddress);
-  if (!Number.isInteger(endpointPort) || endpointPort <= LOCAL_NUM_ZERO) {
+  if (!Number.isInteger(endpointPort) || endpointPort <= 0) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_PORT_REQUIRED);
   }
 
@@ -67,23 +64,23 @@ function resolveValidatedEndpointBinding(options = {}) {
 }
 
 function resolvePostgresEndpointPort(postgresPort) {
-  return Number.isInteger(postgresPort) && postgresPort > LOCAL_NUM_ZERO ?
+  return Number.isInteger(postgresPort) && postgresPort > 0 ?
     postgresPort :
     POSTGRES_WIRE_DEFAULT_PORT;
 }
 
 function resolvePositiveIntegerPort(portValue) {
   const parsedPort = Number(portValue);
-  return Number.isInteger(parsedPort) && parsedPort > LOCAL_NUM_ZERO ? parsedPort : LOCAL_NUM_ZERO;
+  return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
 }
 
 function resolveBracketedEndpointPort(address) {
   const bracketClose = address.indexOf(']');
   const colonAfterBracket = address.lastIndexOf(':');
-  if (bracketClose <= LOCAL_NUM_ONE || colonAfterBracket <= bracketClose) {
-    return LOCAL_NUM_ZERO;
+  if (bracketClose <= 1 || colonAfterBracket <= bracketClose) {
+    return 0;
   }
-  return resolvePositiveIntegerPort(address.substring(colonAfterBracket + LOCAL_NUM_ONE));
+  return resolvePositiveIntegerPort(address.substring(colonAfterBracket + 1));
 }
 
 function buildBuiltInMetaEndpoints(options = {}) {
@@ -111,7 +108,7 @@ function buildBuiltInMetaEndpoints(options = {}) {
  */
 async function registerBuiltInMetaServiceDefinitions(options = {}) {
   const {upsertRow} = options;
-  if (typeof upsertRow !== TYPEOF.FUNCTION) {
+  if (typeof upsertRow !== 'function') {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.UPSERT_REQUIRED);
   }
 
@@ -169,22 +166,22 @@ function resolveEndpointAddress(options = {}) {
     nodeAddress: options.nodeAddress,
     wsPort: null,
   });
-  if (typeof advertisedHost === TYPEOF.STRING &&
-      advertisedHost.length > LOCAL_NUM_ZERO) {
+  if (typeof advertisedHost === 'string' &&
+      advertisedHost.length > 0) {
     return advertisedHost;
   }
 
   const nodeAddress = options.nodeAddress;
-  if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === LOCAL_NUM_ZERO) {
+  if (typeof nodeAddress !== 'string' || nodeAddress.length === 0) {
     return null;
   }
 
   const trimmed = nodeAddress.trim();
-  if (trimmed.length === LOCAL_NUM_ZERO) {
+  if (trimmed.length === 0) {
     return null;
   }
 
-  if (trimmed.includes(LOCAL_STR_37AKI)) {
+  if (trimmed.includes(LOCAL_STR_COLON_SLASH_SLASH)) {
     try {
       const parsed = new URL(trimmed);
       if (parsed.hostname) {
@@ -195,16 +192,16 @@ function resolveEndpointAddress(options = {}) {
     }
   }
 
-  if (trimmed.startsWith(LOCAL_STR_1PLYW)) {
+  if (trimmed.startsWith(LOCAL_STR_LBRACKET)) {
     const bracketClose = trimmed.indexOf(']');
-    if (bracketClose > LOCAL_NUM_ONE) {
-      return trimmed.substring(LOCAL_NUM_ONE, bracketClose);
+    if (bracketClose > 1) {
+      return trimmed.substring(1, bracketClose);
     }
   }
 
   const lastColon = trimmed.lastIndexOf(':');
-  if (lastColon > LOCAL_NUM_ZERO && trimmed.indexOf(LOCAL_STR_COLON) === lastColon) {
-    return trimmed.substring(LOCAL_NUM_ZERO, lastColon);
+  if (lastColon > 0 && trimmed.indexOf(LOCAL_STR_COLON) === lastColon) {
+    return trimmed.substring(0, lastColon);
   }
 
   return trimmed;
@@ -217,20 +214,20 @@ function resolveEndpointAddress(options = {}) {
  * @return {number}
  */
 function resolveEndpointPort(wsPort, nodeAddress) {
-  if (Number.isInteger(wsPort) && wsPort > LOCAL_NUM_ZERO) {
+  if (Number.isInteger(wsPort) && wsPort > 0) {
     return wsPort;
   }
 
-  if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === LOCAL_NUM_ZERO) {
-    return LOCAL_NUM_ZERO;
+  if (typeof nodeAddress !== 'string' || nodeAddress.length === 0) {
+    return 0;
   }
 
   const trimmed = nodeAddress.trim();
-  if (trimmed.length === LOCAL_NUM_ZERO) {
-    return LOCAL_NUM_ZERO;
+  if (trimmed.length === 0) {
+    return 0;
   }
 
-  if (trimmed.includes(LOCAL_STR_37AKI)) {
+  if (trimmed.includes(LOCAL_STR_COLON_SLASH_SLASH)) {
     try {
       const parsed = new URL(trimmed);
       return resolvePositiveIntegerPort(parsed.port);
@@ -239,15 +236,15 @@ function resolveEndpointPort(wsPort, nodeAddress) {
     }
   }
 
-  if (trimmed.startsWith(LOCAL_STR_1PLYW)) {
+  if (trimmed.startsWith(LOCAL_STR_LBRACKET)) {
     return resolveBracketedEndpointPort(trimmed);
   }
 
   const lastColon = trimmed.lastIndexOf(':');
-  if (lastColon <= LOCAL_NUM_ZERO || trimmed.indexOf(LOCAL_STR_COLON) !== lastColon) {
-    return LOCAL_NUM_ZERO;
+  if (lastColon <= 0 || trimmed.indexOf(LOCAL_STR_COLON) !== lastColon) {
+    return 0;
   }
-  return resolvePositiveIntegerPort(trimmed.substring(lastColon + LOCAL_NUM_ONE));
+  return resolvePositiveIntegerPort(trimmed.substring(lastColon + 1));
 }
 
 export {

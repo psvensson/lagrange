@@ -4,12 +4,9 @@ import {spawn} from 'node:child_process';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_HYPHEN = '-';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_UTF8 = 'utf8';
 
 const SCRIPT_DEFAULT = Object.freeze({
@@ -35,8 +32,8 @@ const ARG_PROVIDER = '--provider';
 
 function parseArgs(argv) {
   let raftProvider = SCRIPT_DEFAULT.raftProvider;
-  for (let i = LOCAL_NUM_ZERO; i < argv.length; i++) {
-    if (argv[i] === ARG_PROVIDER && i + LOCAL_NUM_ONE < argv.length) {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === ARG_PROVIDER && i + 1 < argv.length) {
       raftProvider = String(argv[++i] || SCRIPT_DEFAULT.raftProvider)
         .trim()
         .toLowerCase();
@@ -66,7 +63,7 @@ function runCommand(command, args, env) {
       rejectRun(error);
     });
     child.once(LOCAL_STR_CLOSE, (code) => {
-      resolveRun(Number(code || LOCAL_NUM_ZERO));
+      resolveRun(Number(code || 0));
     });
   });
 }
@@ -95,9 +92,9 @@ async function runDrillProfile(options) {
     configPath: options.configPath,
     outputPath: options.outputPath,
     exitCode,
-    passed: scenario?.passed === true && exitCode === LOCAL_NUM_ZERO,
+    passed: scenario?.passed === true && exitCode === 0,
     scenario: scenario?.scenario || null,
-    recoveryTimingMs: Number(scenario?.duration || LOCAL_NUM_ZERO),
+    recoveryTimingMs: Number(scenario?.duration || 0),
     error: scenario?.error || null,
   };
 }
@@ -114,9 +111,9 @@ function buildSummary(runTag, raftProvider, results, reportDir) {
     overall: {
       profileCount: results.length,
       failedProfileCount: failedProfiles.length,
-      passed: failedProfiles.length === LOCAL_NUM_ZERO,
+      passed: failedProfiles.length === 0,
       maxRecoveryTimingMs: results.reduce((max, result) =>
-        Math.max(max, Number(result.recoveryTimingMs || LOCAL_NUM_ZERO)), LOCAL_NUM_ZERO),
+        Math.max(max, Number(result.recoveryTimingMs || 0)), 0),
     },
   };
 }
@@ -146,12 +143,12 @@ async function main() {
   const summaryPath = join(runDir, 'rollback-summary.json');
   const latestPath = resolve(join(SCRIPT_DEFAULT.reportRoot, 'latest-summary.json'));
 
-  await writeFile(summaryPath, JSON.stringify(summary, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(summaryPath, JSON.stringify(summary, null, 2), LOCAL_STR_UTF8);
   await mkdir(resolve(SCRIPT_DEFAULT.reportRoot), {recursive: true});
-  await writeFile(latestPath, JSON.stringify(summary, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(latestPath, JSON.stringify(summary, null, 2), LOCAL_STR_UTF8);
 
   if (!summary.overall.passed) {
-    process.exitCode = LOCAL_NUM_ONE;
+    process.exitCode = 1;
   }
 }
 
@@ -159,5 +156,5 @@ main().catch((error) => {
   process.stderr.write(
     `raft migration rollback drill failed: ${error.message}\n`,
   );
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

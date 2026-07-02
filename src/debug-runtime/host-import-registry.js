@@ -3,7 +3,6 @@
  * declared capabilities, policy allowlist, and debug-session state.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   DEBUG_CAPABILITY,
   HOST_IMPORT_NAMESPACE,
@@ -21,8 +20,8 @@ function asCapabilitySet(capabilities) {
     return new Set();
   }
   return new Set(capabilities.filter(
-    (cap) => typeof cap === TYPEOF.STRING &&
-      cap.length > NUM.ZERO,
+    (cap) => typeof cap === 'string' &&
+      cap.length > 0,
   ));
 }
 
@@ -69,11 +68,11 @@ class HostImportRegistry {
    */
   registerBaseImport(namespace, moduleImpl) {
     if (!namespace ||
-      typeof namespace !== TYPEOF.STRING) {
+      typeof namespace !== 'string') {
       throw new Error(ERR.IMPORT_NAMESPACE_REQUIRED);
     }
     if (!moduleImpl ||
-      typeof moduleImpl !== TYPEOF.OBJECT) {
+      typeof moduleImpl !== 'object') {
       throw new Error(ERR.IMPORT_MODULE_REQUIRED);
     }
     this.baseImports[namespace] = moduleImpl;
@@ -88,15 +87,15 @@ class HostImportRegistry {
    */
   registerCapabilityImport(capability, namespace, moduleImpl) {
     if (!capability ||
-      typeof capability !== TYPEOF.STRING) {
+      typeof capability !== 'string') {
       throw new Error(ERR.CAPABILITY_REQUIRED);
     }
     if (!namespace ||
-      typeof namespace !== TYPEOF.STRING) {
+      typeof namespace !== 'string') {
       throw new Error(ERR.IMPORT_NAMESPACE_REQUIRED);
     }
     if (!moduleImpl ||
-      typeof moduleImpl !== TYPEOF.OBJECT) {
+      typeof moduleImpl !== 'object') {
       throw new Error(ERR.IMPORT_MODULE_REQUIRED);
     }
     this.capabilityImports.set(capability, {

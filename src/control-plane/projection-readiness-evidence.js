@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
@@ -24,7 +23,7 @@ const PROJECTION_READINESS_EMPTY = Object.freeze({
 });
 
 function freezeProjectionReadinessRecord(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value) ?
+  return value && typeof value === 'object' && !Array.isArray(value) ?
     Object.freeze({...value}) :
     null;
 }
@@ -34,7 +33,7 @@ function normalizeProjectionReadinessNodeIds(values = []) {
     ...new Set(
       (Array.isArray(values) ? values : PROJECTION_READINESS_EMPTY.LIST)
         .map((value) => String(value || PROJECTION_READINESS_EMPTY.TEXT).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort());
 }
@@ -45,52 +44,52 @@ function normalizeProjectionReadinessReasonCodes(values = []) {
 
 function normalizeProjectionReadinessNonNegativeInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue >= 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeProjectionReadinessRevision(value) {
   const numericValue = Number(value);
-  const available = Number.isFinite(numericValue) && numericValue >= NUM.ONE;
+  const available = Number.isFinite(numericValue) && numericValue >= 1;
   return Object.freeze({
     available,
-    value: available ? Math.floor(numericValue) : NUM.ZERO,
+    value: available ? Math.floor(numericValue) : 0,
   });
 }
 
 function normalizeProjectionReadinessDimensions(dimensions = null) {
-  return dimensions && typeof dimensions === TYPEOF.OBJECT ?
+  return dimensions && typeof dimensions === 'object' ?
     Object.freeze({...dimensions}) :
     PROJECTION_READINESS_EMPTY.RECORD;
 }
 
 function normalizeProjectionReadinessRuntimeAuthority(runtimeAuthority = null) {
-  return runtimeAuthority && typeof runtimeAuthority === TYPEOF.OBJECT ?
+  return runtimeAuthority && typeof runtimeAuthority === 'object' ?
     Object.freeze({...runtimeAuthority}) :
     null;
 }
 
 function readProjectionReadinessDimension(dimensions, dimension) {
-  return typeof dimensions?.[dimension] === TYPEOF.BOOLEAN ?
+  return typeof dimensions?.[dimension] === 'boolean' ?
     dimensions[dimension] :
     null;
 }
 
 function readProjectionReadinessBoolean(values = []) {
-  const resolved = values.find((value) => typeof value === TYPEOF.BOOLEAN);
-  return typeof resolved === TYPEOF.BOOLEAN ? resolved : false;
+  const resolved = values.find((value) => typeof value === 'boolean');
+  return typeof resolved === 'boolean' ? resolved : false;
 }
 
 function readProjectionReadinessOptionalBoolean(values = []) {
-  const resolved = values.find((value) => typeof value === TYPEOF.BOOLEAN);
-  return typeof resolved === TYPEOF.BOOLEAN ? resolved : null;
+  const resolved = values.find((value) => typeof value === 'boolean');
+  return typeof resolved === 'boolean' ? resolved : null;
 }
 
 function resolveProjectionReadinessPublicationBoundaryOutcome(source = {}) {
   const explicitOutcome =
     source.publicationBoundaryOutcome &&
-      typeof source.publicationBoundaryOutcome === TYPEOF.OBJECT ?
+      typeof source.publicationBoundaryOutcome === 'object' ?
       source.publicationBoundaryOutcome :
       null;
   if (explicitOutcome) {
@@ -99,7 +98,7 @@ function resolveProjectionReadinessPublicationBoundaryOutcome(source = {}) {
   const membershipOutcome =
     source.membershipPublication?.publicationBoundaryOutcome &&
       typeof source.membershipPublication.publicationBoundaryOutcome ===
-        TYPEOF.OBJECT ?
+        'object' ?
       source.membershipPublication.publicationBoundaryOutcome :
       null;
   if (membershipOutcome) {
@@ -108,7 +107,7 @@ function resolveProjectionReadinessPublicationBoundaryOutcome(source = {}) {
   const contractOutcome =
     source.projectionReadinessContract?.publication?.boundaryOutcome &&
       typeof source.projectionReadinessContract.publication.boundaryOutcome ===
-        TYPEOF.OBJECT ?
+        'object' ?
       source.projectionReadinessContract.publication.boundaryOutcome :
       null;
   return contractOutcome ? Object.freeze({...contractOutcome}) : null;
@@ -121,7 +120,7 @@ function resolveProjectionReadinessPublicationSource(source = {}) {
     source.publicationRecoveryGate,
   ];
   return candidates.find((candidate) =>
-    candidate && typeof candidate === TYPEOF.OBJECT,
+    candidate && typeof candidate === 'object',
   ) || null;
 }
 
@@ -133,17 +132,17 @@ function resolveProjectionReadinessPublicationOwnerStreamCandidate(source = {}) 
     source.projectionReadinessContract?.publication?.ownerStream,
   ];
   return candidates.find((candidate) =>
-    candidate && typeof candidate === TYPEOF.OBJECT,
+    candidate && typeof candidate === 'object',
   ) || null;
 }
 
 function buildProjectionPublicationOwnerStreamFromSource(source = null) {
-  if (!source || typeof source !== TYPEOF.OBJECT) {
+  if (!source || typeof source !== 'object') {
     return null;
   }
   const publicationRecoveryGate =
     source.publicationRecoveryGate &&
-      typeof source.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof source.publicationRecoveryGate === 'object' ?
       source.publicationRecoveryGate :
       source;
   const publicationEpoch =
@@ -181,7 +180,7 @@ function buildProjectionPublicationOwnerStreamFromSource(source = null) {
     pendingAckCount:
       source.pendingAckCount ??
       publicationRecoveryGate.pendingAckCount ??
-      NUM.ZERO,
+      0,
     pendingAckEvidenceState:
       source.pendingAckEvidenceState ??
       publicationRecoveryGate.pendingAckEvidenceState,
@@ -220,7 +219,7 @@ function resolveProjectionReadinessPublicationReady({
   if (publicationOwnerStream) {
     return isPublicationOwnerStreamReady(publicationOwnerStream);
   }
-  if (typeof publicationBoundaryOutcome?.ready === TYPEOF.BOOLEAN) {
+  if (typeof publicationBoundaryOutcome?.ready === 'boolean') {
     return publicationBoundaryOutcome.ready;
   }
   return dimensions[
@@ -245,38 +244,38 @@ function resolveProjectionReadinessPublicationReasonCodes({
 function resolveProjectionReadinessPriorityRecovery(source = {}) {
   const priorityRecovery =
     source.priorityControlPlaneRecovery &&
-      typeof source.priorityControlPlaneRecovery === TYPEOF.OBJECT ?
+      typeof source.priorityControlPlaneRecovery === 'object' ?
       source.priorityControlPlaneRecovery :
       source.projectionReadinessContract?.priorityRecovery &&
         typeof source.projectionReadinessContract.priorityRecovery ===
-          TYPEOF.OBJECT ?
+          'object' ?
         source.projectionReadinessContract.priorityRecovery :
         null;
   return priorityRecovery ? Object.freeze({...priorityRecovery}) : null;
 }
 
 function hasProjectionReadinessStringEvidence(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+  return typeof value === 'string' && value.length > 0;
 }
 
 function hasProjectionReadinessListEvidence(value) {
-  return Array.isArray(value) && value.length > NUM.ZERO;
+  return Array.isArray(value) && value.length > 0;
 }
 
 function hasProjectionReadinessCountEvidence(value) {
-  return normalizeProjectionReadinessNonNegativeInteger(value) > NUM.ZERO;
+  return normalizeProjectionReadinessNonNegativeInteger(value) > 0;
 }
 
 function hasProjectionReadinessFiniteNumberEvidence(value) {
   return value !== null &&
-    typeof value !== TYPEOF.UNDEFINED &&
+    typeof value !== 'undefined' &&
     Number.isFinite(Number(value));
 }
 
 function hasProjectionReadinessPriorityRecoveryGateEvidence(
   publicationRecoveryGate = null,
 ) {
-  if (!publicationRecoveryGate || typeof publicationRecoveryGate !== TYPEOF.OBJECT) {
+  if (!publicationRecoveryGate || typeof publicationRecoveryGate !== 'object') {
     return false;
   }
   return Boolean(
@@ -319,7 +318,7 @@ function hasProjectionReadinessPriorityRecoveryGateEvidence(
 function hasProjectionReadinessPriorityRecoveryEvidence(
   priorityRecovery = null,
 ) {
-  if (!priorityRecovery || typeof priorityRecovery !== TYPEOF.OBJECT) {
+  if (!priorityRecovery || typeof priorityRecovery !== 'object') {
     return false;
   }
   return Boolean(
@@ -385,7 +384,7 @@ function buildProjectionReadinessEvidence(source = {}) {
     source,
     publicationOwnerStream,
   );
-  const hasDimensionEvidence = Object.keys(dimensions).length > NUM.ZERO;
+  const hasDimensionEvidence = Object.keys(dimensions).length > 0;
   const ownerEvidenceAvailable = Boolean(
     hasDimensionEvidence ||
     runtimeAuthority ||
@@ -439,12 +438,12 @@ function buildProjectionReadinessEvidence(source = {}) {
       [PROJECTION_READINESS_INPUT_CLASS.PLACEMENT_INTENT]:
         typeof dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
-        ] === TYPEOF.BOOLEAN,
+        ] === 'boolean',
       [PROJECTION_READINESS_INPUT_CLASS.LOCAL_LIVENESS]:
         typeof dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-        ] === TYPEOF.BOOLEAN ||
-        typeof runtimeAuthority?.clusterMemberHealthy === TYPEOF.BOOLEAN,
+        ] === 'boolean' ||
+        typeof runtimeAuthority?.clusterMemberHealthy === 'boolean',
       [PROJECTION_READINESS_INPUT_CLASS.DELETION]:
         source.deleted === true || source.deletionOutcome === true,
     }),

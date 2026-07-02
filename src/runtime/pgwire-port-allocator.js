@@ -20,7 +20,6 @@
  */
 
 import {MIN_PORT, MAX_PORT} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {BaseError} from '../utils/base-error.js';
 import {PGWIRE_CONFIG_FIELD} from './pgwire-descriptor.js';
 import {
@@ -31,10 +30,9 @@ import {
   BIND_CONFLICT_CODE,
 } from './pgwire-port-constants.js';
 
-const LOCAL_STR_M7SXD = 'PgwirePortAllocator';
+const LOCAL_STR_PGWIREPORTALLOCATOR = 'PgwirePortAllocator';
 const LOCAL_STR_VALIDATE = 'validate';
 const LOCAL_STR_BIND = 'bind';
-const LOCAL_NUM_ZERO = 0;
 
 // --- Typed errors ---
 
@@ -51,7 +49,7 @@ class PortValidationError extends BaseError {
   constructor(reason, metadata = {}) {
     super(reason, {
       context: {
-        component: LOCAL_STR_M7SXD,
+        component: LOCAL_STR_PGWIREPORTALLOCATOR,
         operation: LOCAL_STR_VALIDATE,
         metadata,
       },
@@ -77,7 +75,7 @@ class PortBindConflictError extends BaseError {
       `${PGWIRE_PORT_ERROR.BIND_CONFLICT}: port ${port}`;
     super(msg, {
       context: {
-        component: LOCAL_STR_M7SXD,
+        component: LOCAL_STR_PGWIREPORTALLOCATOR,
         operation: LOCAL_STR_BIND,
         metadata: {port},
       },
@@ -96,7 +94,7 @@ class PortBindConflictError extends BaseError {
  * @return {boolean}
  */
 function isValidPort(val) {
-  return typeof val === TYPEOF.NUMBER &&
+  return typeof val === 'number' &&
     Number.isInteger(val) &&
     val >= MIN_PORT &&
     val <= MAX_PORT;
@@ -109,8 +107,8 @@ function isValidPort(val) {
  * @throws {PortValidationError}
  */
 function validatePort(port) {
-  if (typeof port !== TYPEOF.NUMBER ||
-      !Number.isInteger(port) || port <= LOCAL_NUM_ZERO) {
+  if (typeof port !== 'number' ||
+      !Number.isInteger(port) || port <= 0) {
     throw new PortValidationError(
       PGWIRE_PORT_ERROR.PORT_NOT_INTEGER, {port},
     );
@@ -212,7 +210,7 @@ class PgwirePortAllocator {
    * @throws {PortValidationError} When no ports available.
    */
   allocate(serviceId, config = {}) {
-    if (!serviceId || typeof serviceId !== TYPEOF.STRING) {
+    if (!serviceId || typeof serviceId !== 'string') {
       throw new PortValidationError(
         PGWIRE_PORT_ERROR.SERVICE_ID_REQUIRED,
       );

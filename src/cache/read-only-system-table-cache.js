@@ -6,7 +6,6 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {TYPEOF} from '../constants/index.js';
 import {
   CACHE_ERROR_MSG,
   CACHE_LOG_MSG,
@@ -187,7 +186,7 @@ function createReadOnlyCache(underlyingCache) {
 
       // Allow access to allowed methods and standard properties
       const value = target[prop];
-      if (typeof value === TYPEOF.FUNCTION) {
+      if (typeof value === 'function') {
         return value.bind(target);
       }
       return value;

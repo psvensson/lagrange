@@ -1,11 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const {
   LifeRaft,
-  NUM,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
@@ -23,7 +21,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     const reconstructedPreparedTransactions = /* @__PURE__ */ new Map();
     const terminalSessions = /* @__PURE__ */ new Set();
     const prepareLostSessions = /* @__PURE__ */ new Set();
-    const logEntries = this.storage?.getEntriesFrom(NUM.ONE) || [];
+    const logEntries = this.storage?.getEntriesFrom(1) || [];
     for (const logEntry of logEntries) {
       const data = logEntry?.data || null;
       if (!data || typeof data !== PARTITION_SERVICE_LITERAL.OBJECT) {
@@ -132,7 +130,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     try {
       const routingKey = this.extractSplitRoutingKey(entry, primaryKeyColumn);
-      if (routingKey === void LOCAL_NUM_ZERO || routingKey === null) {
+      if (routingKey === void 0 || routingKey === null) {
         return null;
       }
       return `${tableName}:${routingKey}`;
@@ -160,7 +158,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @return {Object} Conflict check result.
    */
   checkWriteConflicts(writeSet, transactionEpoch) {
-    if (!(writeSet instanceof Set) || writeSet.size === NUM.ZERO) {
+    if (!(writeSet instanceof Set) || writeSet.size === 0) {
       return {hasConflict: false, conflicts: []};
     }
     if (!Number.isFinite(transactionEpoch)) {
@@ -181,7 +179,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         conflicts.push({key, conflictingEpoch: commitRecord.epoch});
       }
     }
-    return {hasConflict: conflicts.length > NUM.ZERO, conflicts};
+    return {hasConflict: conflicts.length > 0, conflicts};
   }
   /**
    * Resolve oldest retained commit epoch from the write log.
@@ -287,8 +285,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         preparedAt: state.preparedAt,
       });
     }
-    if (expiredPreparedSessions.length === NUM.ZERO) {
-      return NUM.ZERO;
+    if (expiredPreparedSessions.length === 0) {
+      return 0;
     }
     try {
       this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
@@ -385,8 +383,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
     }
     if (
-      this.activeTransactions.size > NUM.ZERO ||
-      this.preparedTransactions.size > NUM.ZERO
+      this.activeTransactions.size > 0 ||
+      this.preparedTransactions.size > 0
     ) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
     }
@@ -531,7 +529,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       for (const op of transactionState.operations) {
         await this.generateCDCEvent(op);
       }
-      if (transactionState.writeSet.size > NUM.ZERO) {
+      if (transactionState.writeSet.size > 0) {
         const committedAt = Date.now();
         for (const writeSetKey of transactionState.writeSet) {
           this.rowCommitEpoch.set(
@@ -658,8 +656,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    */
   isInTransaction() {
     return (
-      this.activeTransactions.size > NUM.ZERO ||
-      this.preparedTransactions.size > NUM.ZERO
+      this.activeTransactions.size > 0 ||
+      this.preparedTransactions.size > 0
     );
   }
   /**

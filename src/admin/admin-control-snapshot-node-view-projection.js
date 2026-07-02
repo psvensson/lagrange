@@ -10,7 +10,7 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {evaluateAuthoritativeRepairPolicy} from './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
@@ -91,20 +91,20 @@ function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
       .map((value) =>
         String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).trim(),
       )
-      .filter((value) => value.length > NUM.ZERO),
+      .filter((value) => value.length > 0),
   );
 }
 function normalizeControlSnapshotNodeId(value) {
   const normalizedValue = String(
     value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
   ).trim();
-  return normalizedValue.length > NUM.ZERO ? normalizedValue : null;
+  return normalizedValue.length > 0 ? normalizedValue : null;
 }
 function isControlSnapshotRecord(value) {
-  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value);
+  return value && typeof value === 'object' && !Array.isArray(value);
 }
 function normalizeControlSnapshotOptionalString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
 }
@@ -227,9 +227,9 @@ function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
     (
-      progressPendingReconcileNodeIds.length > NUM.ZERO ||
+      progressPendingReconcileNodeIds.length > 0 ||
       Number.isFinite(progressPendingReconcileCount) &&
-        progressPendingReconcileCount > NUM.ZERO
+        progressPendingReconcileCount > 0
     );
   const computedPendingReconcileNodeIds = Array.isArray(
     computedHandoff?.pendingReconcileNodeIds,
@@ -243,9 +243,9 @@ function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
     computedHandoff?.nextAction ===
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
-    computedPendingReconcileNodeIds.length > NUM.ZERO ||
+    computedPendingReconcileNodeIds.length > 0 ||
     Number.isFinite(computedPendingReconcileCount) &&
-      computedPendingReconcileCount > NUM.ZERO;
+      computedPendingReconcileCount > 0;
   if (
     hasProgressOwnerReconcileDebt &&
     hasComputedOwnerReconcileDebt !== true
@@ -276,7 +276,7 @@ function hasDurablePublishedMembershipObservation(
 ) {
   if (
     !publicationDiagnostics ||
-    typeof publicationDiagnostics !== TYPEOF.OBJECT
+    typeof publicationDiagnostics !== 'object'
   ) {
     return false;
   }
@@ -313,7 +313,7 @@ function buildControlSnapshotPublicationOwnerTruthEvidence(
 ) {
   if (
     !publicationConvergence ||
-    typeof publicationConvergence !== TYPEOF.OBJECT
+    typeof publicationConvergence !== 'object'
   ) {
     return {
       published: false,
@@ -329,7 +329,7 @@ function buildControlSnapshotPublicationOwnerTruthEvidence(
   ).toUpperCase();
   const priorityPartitionSummary =
     publicationConvergence.priorityPartitionSummary &&
-    typeof publicationConvergence.priorityPartitionSummary === TYPEOF.OBJECT ?
+    typeof publicationConvergence.priorityPartitionSummary === 'object' ?
       publicationConvergence.priorityPartitionSummary :
       null;
   const blockedPriorityPartitions = Array.isArray(
@@ -346,8 +346,8 @@ function buildControlSnapshotPublicationOwnerTruthEvidence(
     priorityPartitionSummary === null ||
     (
       priorityPartitionSummary.satisfied === true &&
-      blockedPriorityPartitions.length === NUM.ZERO &&
-      missingPriorityPartitionIds.length === NUM.ZERO
+      blockedPriorityPartitions.length === 0 &&
+      missingPriorityPartitionIds.length === 0
     );
   return {
     published:
@@ -355,7 +355,7 @@ function buildControlSnapshotPublicationOwnerTruthEvidence(
     ackComplete:
       normalizeControlSnapshotNodeIdList(
         publicationConvergence.pendingAckNodeIds,
-      ).length === NUM.ZERO,
+      ).length === 0,
     prioritySpreadSatisfied:
       prioritySpreadSatisfied &&
       publicationConvergence.recoveryProtocolState !==
@@ -393,7 +393,7 @@ function mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth(
     ...activeMembershipSnapshot.concreteEligibleNodeIds,
     ...activeMembershipSnapshot.recoveryActiveNodeIds,
   ]);
-  if (ownerTruthNodeIds.length === NUM.ZERO) {
+  if (ownerTruthNodeIds.length === 0) {
     return activeNodeViews;
   }
   const effectiveActiveNodeIds = normalizeControlSnapshotNodeIdList([
@@ -484,14 +484,14 @@ function resolveControlSnapshotUnavailableActiveCandidateNodeIds(
     controlPlaneDiagnostics?.activeGateOwnerCohortPendingRecoveryNodeIds;
   if (
     commaSeparatedRecovery &&
-    typeof commaSeparatedRecovery === TYPEOF.STRING
+    typeof commaSeparatedRecovery === 'string'
   ) {
     pendingRecoveryNodeIds.push(
       ...normalizeCandidateDebtNodeIds(
         commaSeparatedRecovery
           .split(ADMIN_CONTROL_SNAPSHOT_LITERAL.COMMA)
           .map((nodeId) => nodeId.trim())
-          .filter((nodeId) => nodeId.length > NUM.ZERO),
+          .filter((nodeId) => nodeId.length > 0),
       ),
     );
   }
@@ -536,7 +536,7 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
     });
     const connectedNodeIds =
       this.messageRouter &&
-      typeof this.messageRouter.getConnectedNodes === TYPEOF.FUNCTION ?
+      typeof this.messageRouter.getConnectedNodes === 'function' ?
         this.messageRouter.getConnectedNodes() :
         ADMIN_CACHE_DUMP.EMPTY;
     const activeNodeViews = resolveActiveNodeViews({
@@ -669,10 +669,10 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
   canRunAuthoritativeControlSnapshotRepair() {
     return Boolean(
       this.systemTableCache &&
-      typeof this.systemTableCache.getAll === TYPEOF.FUNCTION &&
+      typeof this.systemTableCache.getAll === 'function' &&
       this.cacheMutationTarget &&
       typeof this.cacheMutationTarget.applySystemTableChange ===
-        TYPEOF.FUNCTION &&
+        'function' &&
       this.ensureAuthoritativeDiscoveryCacheRepair,
     );
   }

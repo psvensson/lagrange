@@ -10,23 +10,21 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {ERRORS} from '../constants/index.js';
 
-const LOCAL_NUM_30000 = 30000;
+const LOCAL_NUM_THIRTY_THOUSAND = 30000;
 const LOCAL_STR_CACHE_QUERY = 'cache-query';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_64888 = 'Registered message group for queries';
-const LOCAL_STR_14BJU = 'Unregistered message group from queries';
-const LOCAL_STR_22W3J = 'No active local message group replica available';
-const LOCAL_STR_14VZS = 'Routing query to message group';
+const LOCAL_STR_REGISTERED_MESSAGE_GROUP_FOR_QUERIES = 'Registered message group for queries';
+const LOCAL_STR_UNREGISTERED_MESSAGE_GROUP_FROM_QUERIES = 'Unregistered message group from queries';
+const LOCAL_STR_NO_ACTIVE_LOCAL_MESSAGE_GROUP_REPLICA_AV = 'No active local message group replica available';
+const LOCAL_STR_ROUTING_QUERY_TO_MESSAGE_GROUP = 'Routing query to message group';
 const LOCAL_STR_NODES = 'nodes';
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_TABLES = 'tables';
 const LOCAL_STR_SERVICES = 'services';
 const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
 const LOCAL_STR_INDICES = 'indices';
-const LOCAL_NUM_100 = 100;
-const LOCAL_NUM_TWO = 2;
+const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_PERCENT = '%';
-const LOCAL_STR_0 = '0%';
+const LOCAL_STR_0_PERCENT = '0%';
 
 /**
  * Query types supported by the service.
@@ -58,7 +56,9 @@ class SystemCacheQueryService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs = config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) || LOCAL_NUM_30000;
+    this.queryTimeoutMs =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) ||
+      LOCAL_NUM_THIRTY_THOUSAND;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -66,9 +66,9 @@ class SystemCacheQueryService extends EventEmitter {
       loggingService.forSubsystem(LOCAL_STR_CACHE_QUERY) : console;
 
     // Statistics
-    this.queryCount = LOCAL_NUM_ZERO;
-    this.cacheHits = LOCAL_NUM_ZERO;
-    this.cacheMisses = LOCAL_NUM_ZERO;
+    this.queryCount = 0;
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
   }
 
   /**
@@ -78,7 +78,7 @@ class SystemCacheQueryService extends EventEmitter {
    */
   registerMessageGroup(serviceId, service) {
     this.messageGroupServices.set(serviceId, service);
-    this.logger.debug(LOCAL_STR_64888, {serviceId});
+    this.logger.debug(LOCAL_STR_REGISTERED_MESSAGE_GROUP_FOR_QUERIES, {serviceId});
   }
 
   /**
@@ -87,7 +87,7 @@ class SystemCacheQueryService extends EventEmitter {
    */
   unregisterMessageGroup(serviceId) {
     this.messageGroupServices.delete(serviceId);
-    this.logger.debug(LOCAL_STR_14BJU, {serviceId});
+    this.logger.debug(LOCAL_STR_UNREGISTERED_MESSAGE_GROUP_FROM_QUERIES, {serviceId});
   }
 
   /**
@@ -124,10 +124,10 @@ class SystemCacheQueryService extends EventEmitter {
     const replica = this.getActiveReplica();
     if (!replica) {
       this.cacheMisses++;
-      throw new Error(LOCAL_STR_22W3J);
+      throw new Error(LOCAL_STR_NO_ACTIVE_LOCAL_MESSAGE_GROUP_REPLICA_AV);
     }
 
-    this.logger.debug(LOCAL_STR_14VZS, {
+    this.logger.debug(LOCAL_STR_ROUTING_QUERY_TO_MESSAGE_GROUP, {
       tableName,
       queryType: this.getQueryType(query),
       replicaId: replica.replicaId,
@@ -325,10 +325,10 @@ class SystemCacheQueryService extends EventEmitter {
       queryCount: this.queryCount,
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
-      hitRate: this.queryCount > LOCAL_NUM_ZERO ?
-        (this.cacheHits / this.queryCount * LOCAL_NUM_100).toFixed(LOCAL_NUM_TWO) +
+      hitRate: this.queryCount > 0 ?
+        (this.cacheHits / this.queryCount * LOCAL_NUM_ONE_HUNDRED).toFixed(2) +
           LOCAL_STR_PERCENT :
-        LOCAL_STR_0,
+        LOCAL_STR_0_PERCENT,
       registeredReplicas: this.messageGroupServices.size,
     };
   }
@@ -337,9 +337,9 @@ class SystemCacheQueryService extends EventEmitter {
    * Reset statistics.
    */
   resetStats() {
-    this.queryCount = LOCAL_NUM_ZERO;
-    this.cacheHits = LOCAL_NUM_ZERO;
-    this.cacheMisses = LOCAL_NUM_ZERO;
+    this.queryCount = 0;
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
   }
 }
 

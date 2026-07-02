@@ -4,9 +4,7 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   ENTITY_TYPE,
-  NUM,
   SERVICE_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   ReplicaOperationField,
@@ -16,7 +14,7 @@ import {
 } from './message-group-service-handler-constants.js';
 
 function isNonEmptyString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+  return typeof value === 'string' && value.length > 0;
 }
 
 function collectRequestedStrings(request, field) {
@@ -123,9 +121,9 @@ function buildMessageGroupReplicaOptions({
   const addressManager = AddressManager.getInstance();
   const services = listMessageGroupServices(systemTableCache, groupId);
   const topologyMustBeComplete =
-    requestedReplicaIds.length > NUM.ZERO ||
-    requestedPeerAddresses.length > NUM.ZERO ||
-    services.length > NUM.ZERO;
+    requestedReplicaIds.length > 0 ||
+    requestedPeerAddresses.length > 0 ||
+    services.length > 0;
 
   const replicaIds = [];
   const peerAddresses = [];
@@ -173,7 +171,7 @@ function buildMessageGroupReplicaOptions({
     replicaIds,
     peerAddresses,
     deferElection: false,
-    createDelayMs: NUM.ZERO,
+    createDelayMs: 0,
   };
 }
 

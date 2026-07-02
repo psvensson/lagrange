@@ -3,10 +3,8 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 const {
   ControlPlaneField,
   ControlPlaneMessageType,
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  TYPEOF,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
@@ -39,7 +37,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
    */
   buildDirectDispatchServiceAddress(nodeId) {
     const normalizedNodeId = String(nodeId || '').trim();
-    if (normalizedNodeId.length === NUM.ZERO) {
+    if (normalizedNodeId.length === 0) {
       return null;
     }
     return `${normalizedNodeId}/service/replica-dispatch`;
@@ -55,7 +53,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
     if (
       this.rebalanceCoordinator &&
       typeof this.rebalanceCoordinator.resolveOperationOwnerNodeId ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return this.rebalanceCoordinator.resolveOperationOwnerNodeId(operation);
     }
@@ -101,7 +99,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
     if (
       !operation?.operationId ||
       !this.messageRouter ||
-      typeof this.messageRouter.deliver !== TYPEOF.FUNCTION
+      typeof this.messageRouter.deliver !== 'function'
     ) {
       return false;
     }

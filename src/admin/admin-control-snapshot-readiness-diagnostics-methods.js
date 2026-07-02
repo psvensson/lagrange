@@ -45,7 +45,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           readiness?.priorityControlPlaneRecovery;
         if (
           !priorityControlPlaneRecovery ||
-          typeof priorityControlPlaneRecovery !== TYPEOF.OBJECT
+          typeof priorityControlPlaneRecovery !== 'object'
         ) {
           continue;
         }
@@ -53,7 +53,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           priorityControlPlaneRecovery.publicationRecoveryGate;
         if (
           !publicationRecoveryGate ||
-          typeof publicationRecoveryGate !== TYPEOF.OBJECT
+          typeof publicationRecoveryGate !== 'object'
         ) {
           continue;
         }
@@ -63,7 +63,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       }
       const normalizedPublicationConvergence =
         publicationConvergence &&
-        typeof publicationConvergence === TYPEOF.OBJECT ?
+        typeof publicationConvergence === 'object' ?
           publicationConvergence :
           null;
       if (
@@ -154,7 +154,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           readiness?.priorityControlPlaneRecovery;
         if (
           !priorityControlPlaneRecovery ||
-          typeof priorityControlPlaneRecovery !== TYPEOF.OBJECT
+          typeof priorityControlPlaneRecovery !== 'object'
         ) {
           continue;
         }
@@ -176,7 +176,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       const allowAuthoritativeRefresh =
         options.allowAuthoritativeRefresh === true;
       const hasSyncResolution =
-        typeof readinessService.getAllNodeReadinessSync === TYPEOF.FUNCTION;
+        typeof readinessService.getAllNodeReadinessSync === 'function';
       // The control-plane diagnostics snapshot is a read-only observability
       // probe (the harness quiescence/snapshot lane polls it). It must always
       // respond fast: the asynchronous getAllNodeReadiness() resolves each node
@@ -195,7 +195,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         }
       }
       if (
-        typeof readinessService.getAllNodeReadiness !== TYPEOF.FUNCTION
+        typeof readinessService.getAllNodeReadiness !== 'function'
       ) {
         return hasSyncResolution ?
           this.resolveControlPlaneReadinessEntriesSync({
@@ -232,7 +232,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       const readinessService = this.controlPlaneReadinessService || null;
       if (
         !readinessService ||
-        typeof readinessService.getAllNodeReadinessSync !== TYPEOF.FUNCTION
+        typeof readinessService.getAllNodeReadinessSync !== 'function'
       ) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -254,7 +254,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
      */
     buildPlacementEligibilityExplanation(readiness) {
       const dimensions =
-        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+        readiness?.dimensions && typeof readiness.dimensions === 'object' ?
           readiness.dimensions :
           {};
       const reasons = Array.isArray(readiness?.reasons) ?
@@ -293,7 +293,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     resolvePublicationModeDiagnostics(readinessEntries = []) {
       for (const readiness of readinessEntries) {
         const publication = readiness?.publication;
-        if (publication && typeof publication === TYPEOF.OBJECT) {
+        if (publication && typeof publication === 'object') {
           return publication;
         }
       }
@@ -302,7 +302,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         publicationService &&
         typeof publicationService.getPublicationModeDiagnostics ===
-          TYPEOF.FUNCTION
+          'function'
       ) {
         return publicationService.getPublicationModeDiagnostics();
       }
@@ -317,14 +317,14 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService
-          .getReadinessTransitionHistoryByNodeId !== TYPEOF.FUNCTION
+          .getReadinessTransitionHistoryByNodeId !== 'function'
       ) {
         return {};
       }
       try {
         const history =
           this.controlPlaneReadinessService.getReadinessTransitionHistoryByNodeId();
-        return history && typeof history === TYPEOF.OBJECT ? history : {};
+        return history && typeof history === 'object' ? history : {};
       } catch (_error) {
         return {};
       }
@@ -338,7 +338,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService
-          .getParticipationDecisionLedgerEntries !== TYPEOF.FUNCTION
+          .getParticipationDecisionLedgerEntries !== 'function'
       ) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -361,7 +361,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService
-          .getAuthoritativeReadinessRepairLedgerEntries !== TYPEOF.FUNCTION
+          .getAuthoritativeReadinessRepairLedgerEntries !== 'function'
       ) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -384,14 +384,14 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService
-          .getRecoveryEpochHistoryByNodeId !== TYPEOF.FUNCTION
+          .getRecoveryEpochHistoryByNodeId !== 'function'
       ) {
         return {};
       }
       try {
         const history =
           this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId();
-        return history && typeof history === TYPEOF.OBJECT ? history : {};
+        return history && typeof history === 'object' ? history : {};
       } catch (_error) {
         return {};
       }
@@ -405,7 +405,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.controlPlaneSystemTableGateway ||
         typeof this.controlPlaneSystemTableGateway
-          .getControlPlaneOperationLedgerEntries !== TYPEOF.FUNCTION
+          .getControlPlaneOperationLedgerEntries !== 'function'
       ) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -429,7 +429,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         this.controlPlaneReadinessService &&
         typeof this.controlPlaneReadinessService[
           CONTROL_PLANE_PUBLICATION_STORY_SYNC_METHOD
-        ] === TYPEOF.FUNCTION
+        ] === 'function'
       ) {
         try {
           const publicationStory = this.controlPlaneReadinessService[
@@ -441,7 +441,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
             ];
           if (
             nodeStatePublication &&
-            typeof nodeStatePublication === TYPEOF.OBJECT
+            typeof nodeStatePublication === 'object'
           ) {
             return nodeStatePublication;
           }
@@ -452,14 +452,14 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (
         !this.heartbeatService ||
         typeof this.heartbeatService.getHeartbeatPublicationDiagnostics !==
-          TYPEOF.FUNCTION
+          'function'
       ) {
         return null;
       }
       try {
         const diagnostics =
           this.heartbeatService.getHeartbeatPublicationDiagnostics();
-        return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        return diagnostics && typeof diagnostics === 'object' ?
           diagnostics :
           null;
       } catch (_error) {
@@ -475,13 +475,13 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       const splitManager = this.sqlQueryEngine?.partitionSplitMergeManager;
       if (
         !splitManager ||
-        typeof splitManager.getEvaluationDiagnostics !== TYPEOF.FUNCTION
+        typeof splitManager.getEvaluationDiagnostics !== 'function'
       ) {
         return null;
       }
       try {
         const diagnostics = splitManager.getEvaluationDiagnostics();
-        return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        return diagnostics && typeof diagnostics === 'object' ?
           diagnostics :
           null;
       } catch (_error) {
@@ -505,7 +505,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         workflowAdmissionsByWorkflowId[workflow.workflowId] = workflow;
         if (
           workflow.timeoutClassification &&
-          typeof workflow.timeoutClassification === TYPEOF.OBJECT
+          typeof workflow.timeoutClassification === 'object'
         ) {
           timeoutClassifications.push({
             workflowId: workflow.workflowId,
@@ -524,7 +524,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     }
     resolveWorkflowTransitionMetadataObject(metadata, field) {
       const entry = metadata?.[field];
-      if (entry && typeof entry === TYPEOF.OBJECT) {
+      if (entry && typeof entry === 'object') {
         return entry;
       }
       return null;
@@ -659,15 +659,15 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (!rawMetadata) {
         return null;
       }
-      if (rawMetadata && typeof rawMetadata === TYPEOF.OBJECT) {
+      if (rawMetadata && typeof rawMetadata === 'object') {
         return rawMetadata;
       }
-      if (typeof rawMetadata !== TYPEOF.STRING) {
+      if (typeof rawMetadata !== 'string') {
         return null;
       }
       try {
         const parsed = JSON.parse(rawMetadata);
-        return parsed && typeof parsed === TYPEOF.OBJECT ? parsed : null;
+        return parsed && typeof parsed === 'object' ? parsed : null;
       } catch (_error) {
         return null;
       }

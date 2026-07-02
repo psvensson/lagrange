@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate.js';
@@ -91,7 +90,7 @@ function resolvePublicationRecoveryConvergenceAcknowledgedNodeListInput(
 function hasAuthoritativeEmptyPendingAckGate(gate = null) {
   return isRecord(gate) &&
     Array.isArray(gate.pendingAckNodeIds) &&
-    normalizeDistinctStringArray(gate.pendingAckNodeIds).length === NUM.ZERO &&
+    normalizeDistinctStringArray(gate.pendingAckNodeIds).length === 0 &&
     (
       gate.publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS
         .PUBLISHED ||
@@ -103,7 +102,7 @@ function hasAuthoritativeEmptyMissingPublishedGate(gate = null) {
   return isRecord(gate) &&
     Array.isArray(gate.missingPublishedNodeIds) &&
     normalizeDistinctStringArray(gate.missingPublishedNodeIds).length ===
-      NUM.ZERO &&
+      0 &&
     (
       gate.publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS
         .PUBLISHED ||
@@ -140,27 +139,27 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
   const hasClosedPublishedPendingAckList =
     publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.PUBLISHED &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
   const hasOpenCountOnlyPendingAckList =
     openCountOnlyAckIsStale &&
     publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
   const hasCountOnlyDebt =
     options.pendingAckEvidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-    explicitPendingAckNodeIds.length === NUM.ZERO &&
+    explicitPendingAckNodeIds.length === 0 &&
     Math.max(
       normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
-      Number.isFinite(Number(options.pendingAckCount)) ? Number(options.pendingAckCount) : NUM.ZERO,
-    ) > NUM.ZERO;
+      Number.isFinite(Number(options.pendingAckCount)) ? Number(options.pendingAckCount) : 0,
+    ) > 0;
   const evidenceState =
     (
       hasClosedPublishedPendingAckList ||
       isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
         (
-          requiredAckNodeIds.length > NUM.ZERO ||
-          explicitPendingAckNodeIds.length === NUM.ZERO
+          requiredAckNodeIds.length > 0 ||
+          explicitPendingAckNodeIds.length === 0
         )
     ) &&
     !hasCountOnlyDebt ?
@@ -181,13 +180,13 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
       explicitPendingAckNodeIds;
   const countOnlyPendingAckCount =
     hasOpenCountOnlyPendingAckList ?
-      NUM.ZERO :
+      0 :
       Math.max(
         pendingAckNodeIds.length,
         normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
         Number.isFinite(Number(options.pendingAckCount)) ?
           Number(options.pendingAckCount) :
-          NUM.ZERO,
+          0,
       );
   const pendingAckCountByState = Object.freeze({
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
@@ -220,8 +219,8 @@ function resolvePublicationRecoveryPendingAckNodeIds({
   if (
     isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
     (
-      requiredAckNodeIds.length > NUM.ZERO ||
-      normalizedOwnerPendingAckNodeIds.length === NUM.ZERO
+      requiredAckNodeIds.length > 0 ||
+      normalizedOwnerPendingAckNodeIds.length === 0
     )
   ) {
     return PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST;

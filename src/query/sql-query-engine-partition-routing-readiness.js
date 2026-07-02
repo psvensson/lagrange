@@ -4,11 +4,9 @@ import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-rou
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';
-const LOCAL_STR_6ABQV = 'table_partition_metadata_wait';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_164LE = 'partition_routing_wait';
-const LOCAL_STR_GC3QE = 'partition_leader_wait';
+const LOCAL_STR_TABLE_PARTITION_METADATA_WAIT = 'table_partition_metadata_wait';
+const LOCAL_STR_PARTITION_ROUTING_WAIT = 'partition_routing_wait';
+const LOCAL_STR_PARTITION_LEADER_WAIT = 'partition_leader_wait';
 
 const {
   DEFAULT_PARTITION_VERSION,
@@ -277,7 +275,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-        nestedOperation: LOCAL_STR_6ABQV,
+        nestedOperation: LOCAL_STR_TABLE_PARTITION_METADATA_WAIT,
       },
     );
   }
@@ -291,7 +289,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
   async waitForRoutablePartitionService(partitionId, timeoutBudget = null) {
     await this.waitForRoutablePartitionServiceCount(
       partitionId,
-      LOCAL_NUM_ONE,
+      1,
       timeoutBudget,
     );
   }
@@ -384,7 +382,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         ),
       ),
     ];
-    if (uniqueReplicaIds.length === LOCAL_NUM_ZERO) {
+    if (uniqueReplicaIds.length === 0) {
       return;
     }
 
@@ -458,7 +456,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: LOCAL_STR_164LE,
+        nestedOperation: LOCAL_STR_PARTITION_ROUTING_WAIT,
       },
     );
   }
@@ -555,7 +553,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: LOCAL_STR_GC3QE,
+        nestedOperation: LOCAL_STR_PARTITION_LEADER_WAIT,
       },
     );
   }
@@ -584,7 +582,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         TABLES.TABLES,
         (row) => row.table_id === tableId,
       );
-      return Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO;
+      return Array.isArray(matches) && matches.length > 0;
     }
 
     return false;
@@ -647,8 +645,8 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
           partition?.partition_id === partitionId ||
           partition?.partitionId === partitionId,
       );
-      if (Array.isArray(records) && records.length > LOCAL_NUM_ZERO) {
-        return records[LOCAL_NUM_ZERO];
+      if (Array.isArray(records) && records.length > 0) {
+        return records[0];
       }
     }
     if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {

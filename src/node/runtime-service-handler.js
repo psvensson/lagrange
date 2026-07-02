@@ -13,7 +13,6 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  TYPEOF,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP} from
   '../constants/index.js';
@@ -566,7 +565,7 @@ class RuntimeServiceHandler extends EventEmitter {
    */
   resolveServiceDefinition(entityId) {
     if (!this.systemTableCache ||
-    typeof this.systemTableCache.get !== TYPEOF.FUNCTION) {
+    typeof this.systemTableCache.get !== 'function') {
       return null;
     }
     const row = this.systemTableCache.get(
@@ -664,7 +663,7 @@ class RuntimeServiceHandler extends EventEmitter {
     `${RUNTIME_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
     `${RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
 
-    if (typeof messageRouter.unregister === TYPEOF.FUNCTION) {
+    if (typeof messageRouter.unregister === 'function') {
       messageRouter.unregister(handlerAddress);
     }
 

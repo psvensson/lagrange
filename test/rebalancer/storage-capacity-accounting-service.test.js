@@ -32,8 +32,8 @@ function initializeConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       ...overrides,
     },
   });
@@ -56,13 +56,13 @@ test('estimateReplicaBytes - applies minimum, overhead, and amplification',
 
     const estimate = service.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.ONE,
-      amplificationFactor: NUM.TWO,
+      sizeBytes: 1,
+      amplificationFactor: 2,
     });
 
     // min(1, 10) = 10, + overhead 5 = 15, * 2 = 30
     const expected = Math.ceil(
-      (Math.max(NUM.ONE, NUM.TEN) + NUM.FIVE) * NUM.TWO,
+      (Math.max(1, NUM.TEN) + NUM.FIVE) * 2,
     );
     t.equal(estimate, expected);
     t.end();
@@ -90,11 +90,11 @@ test('estimateReplicaBytes - message group overhead',
 
     const estimate = service.estimateReplicaBytes({
       entityType: SERVICE_TYPE.MESSAGE_GROUP,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
 
     // max(0, 10) = 10, + overhead 2 = 12
-    t.equal(estimate, NUM.TEN + NUM.TWO);
+    t.equal(estimate, NUM.TEN + 2);
     t.end();
   });
 
@@ -105,11 +105,11 @@ test('estimateReplicaBytes - wasm service overhead',
 
     const estimate = service.estimateReplicaBytes({
       entityType: SERVICE_TYPE.WASM_SERVICE,
-      sizeBytes: NUM.ZERO,
+      sizeBytes: 0,
     });
 
     // max(0, 10) = 10, + overhead 1 = 11
-    t.equal(estimate, NUM.TEN + NUM.ONE);
+    t.equal(estimate, NUM.TEN + 1);
     t.end();
   });
 
@@ -170,7 +170,7 @@ test('estimateReplicaBytes - negative sizeBytes defaults to zero',
 
     const estimate = service.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
-      sizeBytes: NUM.NEGATIVE_ONE,
+      sizeBytes: -1,
     });
 
     // max(0, 10) = 10, + overhead 5 = 15
@@ -186,7 +186,7 @@ test('estimateReplicaBytes - invalid amplification defaults to 1',
     const estimate = service.estimateReplicaBytes({
       entityType: SERVICE_TYPE.PARTITION,
       sizeBytes: NUM.TEN,
-      amplificationFactor: NUM.NEGATIVE_ONE,
+      amplificationFactor: -1,
     });
 
     // max(10, 10) = 10, + overhead 5 = 15, * 1 = 15
@@ -256,7 +256,7 @@ test('getPressureState - exhausted when budget is zero',
     initializeConfig();
     const service = new StorageCapacityAccountingService();
 
-    const state = service.getPressureState(NUM.ZERO, NUM.ZERO);
+    const state = service.getPressureState(0, 0);
     t.equal(state, PRESSURE_STATE.EXHAUSTED);
     t.end();
   });
@@ -273,7 +273,7 @@ test('getCapacitySnapshots - returns empty for no nodes',
     service.initialize({systemTableCache: cache});
 
     const snapshots = await service.getCapacitySnapshots();
-    t.equal(snapshots.length, NUM.ZERO);
+    t.equal(snapshots.length, 0);
     t.end();
   });
 
@@ -321,20 +321,20 @@ test('getCapacitySnapshots - computes full snapshot with all entity types',
       [COLUMN.RESERVATION_ID]: 'res-1',
       [COLUMN.TARGET_NODE_ID]: nodeId,
       [COLUMN.ESTIMATED_BYTES]: NUM.TEN,
-      [COLUMN.AMPLIFICATION_FACTOR]: NUM.TWO,
+      [COLUMN.AMPLIFICATION_FACTOR]: 2,
       [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
       [COLUMN.EXPIRES_AT]: now + NUM.THOUSAND,
     });
 
     const snapshots = await service.getCapacitySnapshots();
-    t.equal(snapshots.length, NUM.ONE);
+    t.equal(snapshots.length, 1);
 
-    const snapshot = snapshots[NUM.ZERO];
+    const snapshot = snapshots[0];
     // partition: max(40, 10) + 5 = 45
     // message_group: max(0, 10) + 2 = 12
     // wasm_service: max(0, 10) + 1 = 11
     const expectedUsed = 45 + 12 + 11;
-    const expectedReserved = Math.ceil(NUM.TEN * NUM.TWO);
+    const expectedReserved = Math.ceil(NUM.TEN * 2);
     const expectedAvailable = NUM.HUNDRED - (expectedUsed + expectedReserved);
 
     t.equal(snapshot.usedBytes, expectedUsed);
@@ -370,7 +370,7 @@ test('getCapacitySnapshots - excludes removed services from used bytes',
     });
 
     const snapshots = await service.getCapacitySnapshots();
-    t.equal(snapshots[NUM.ZERO].usedBytes, NUM.ZERO);
+    t.equal(snapshots[0].usedBytes, 0);
     t.end();
   });
 
@@ -391,13 +391,13 @@ test('getCapacitySnapshots - excludes expired reservations',
       [COLUMN.RESERVATION_ID]: 'res-expired',
       [COLUMN.TARGET_NODE_ID]: 'node-1',
       [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
-      [COLUMN.AMPLIFICATION_FACTOR]: NUM.ONE,
+      [COLUMN.AMPLIFICATION_FACTOR]: 1,
       [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
-      [COLUMN.EXPIRES_AT]: NUM.ONE,
+      [COLUMN.EXPIRES_AT]: 1,
     });
 
     const snapshots = await service.getCapacitySnapshots();
-    t.equal(snapshots[NUM.ZERO].reservedBytes, NUM.ZERO);
+    t.equal(snapshots[0].reservedBytes, 0);
     t.end();
   });
 
@@ -418,13 +418,13 @@ test('getCapacitySnapshots - excludes released reservations',
       [COLUMN.RESERVATION_ID]: 'res-released',
       [COLUMN.TARGET_NODE_ID]: 'node-1',
       [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
-      [COLUMN.AMPLIFICATION_FACTOR]: NUM.ONE,
+      [COLUMN.AMPLIFICATION_FACTOR]: 1,
       [COLUMN.STATUS]: RESERVATION_STATUS.RELEASED,
       [COLUMN.EXPIRES_AT]: Date.now() + NUM.THOUSAND,
     });
 
     const snapshots = await service.getCapacitySnapshots();
-    t.equal(snapshots[NUM.ZERO].reservedBytes, NUM.ZERO);
+    t.equal(snapshots[0].reservedBytes, 0);
     t.end();
   });
 
@@ -475,8 +475,8 @@ test('getCapacitySnapshotForNode - returns snapshot for known node',
     const snapshot = await service.getCapacitySnapshotForNode('node-1');
     t.equal(snapshot.nodeId, 'node-1');
     t.equal(snapshot.budgetBytes, NUM.THOUSAND);
-    t.equal(snapshot.usedBytes, NUM.ZERO);
-    t.equal(snapshot.reservedBytes, NUM.ZERO);
+    t.equal(snapshot.usedBytes, 0);
+    t.equal(snapshot.reservedBytes, 0);
     t.equal(snapshot.availableBytes, NUM.THOUSAND);
     t.equal(snapshot.pressureState, PRESSURE_STATE.NORMAL);
     t.end();
@@ -498,9 +498,9 @@ test('buildSnapshot - node without budget returns exhausted',
     });
 
     const snapshots = await service.getCapacitySnapshots();
-    const snapshot = snapshots[NUM.ZERO];
+    const snapshot = snapshots[0];
     t.equal(snapshot.budgetBytes, null);
-    t.equal(snapshot.availableBytes, NUM.ZERO);
+    t.equal(snapshot.availableBytes, 0);
     t.equal(snapshot.pressureState, PRESSURE_STATE.EXHAUSTED);
     t.end();
   });
@@ -561,12 +561,12 @@ test('PBT: available = budget - used - reserved (accounting invariant)',
             reserved,
           );
 
-          if (budget <= NUM.ZERO) {
-            return snapshot.availableBytes === NUM.ZERO;
+          if (budget <= 0) {
+            return snapshot.availableBytes === 0;
           }
 
           const expectedAvailable = Math.max(
-            NUM.ZERO,
+            0,
             Math.floor(budget) - (used + reserved),
           );
           return snapshot.availableBytes === expectedAvailable;
@@ -590,9 +590,9 @@ test('PBT: pressure state is monotonic with utilization',
     const service = new StorageCapacityAccountingService();
 
     const stateOrder = {
-      [PRESSURE_STATE.NORMAL]: NUM.ZERO,
-      [PRESSURE_STATE.SOFT]: NUM.ONE,
-      [PRESSURE_STATE.HARD]: NUM.TWO,
+      [PRESSURE_STATE.NORMAL]: 0,
+      [PRESSURE_STATE.SOFT]: 1,
+      [PRESSURE_STATE.HARD]: 2,
       [PRESSURE_STATE.EXHAUSTED]: NUM.THREE,
     };
 
@@ -687,7 +687,7 @@ test('getCapacitySnapshots - SQL fallback uses injected control-plane ' +
 
   const snapshots = await service.getCapacitySnapshots();
 
-  t.equal(snapshots.length, NUM.ONE, 'gateway rows should build a snapshot');
+  t.equal(snapshots.length, 1, 'gateway rows should build a snapshot');
   t.same(
     gatewayCalls.map((call) => call.tableName),
     [

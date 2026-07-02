@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate.js';
@@ -70,7 +69,7 @@ function buildPublicationRecoveryActiveGateHandoffFromProgress(
     !state &&
     !reasonCode &&
     !nextAction &&
-    pendingReconcileCount === NUM.ZERO
+    pendingReconcileCount === 0
   ) {
     return null;
   }
@@ -134,14 +133,14 @@ function hasOwnerReconcilePublicationHandoff(handoff = null) {
 
 function hasNoPendingPublicationAckDebt(pendingAckEvidence = null) {
   return normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) ===
-    NUM.ZERO &&
+    0 &&
     normalizeDistinctStringArray(pendingAckEvidence?.pendingAckNodeIds)
-      .length === NUM.ZERO;
+      .length === 0;
 }
 
 function hasNoPendingPublicationAckNodeDebt(pendingAckEvidence = null) {
   return normalizeDistinctStringArray(pendingAckEvidence?.pendingAckNodeIds)
-    .length === NUM.ZERO;
+    .length === 0;
 }
 
 function hasCountOnlyPendingPublicationAckDebt(pendingAckEvidence = null) {
@@ -149,7 +148,7 @@ function hasCountOnlyPendingPublicationAckDebt(pendingAckEvidence = null) {
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
     hasNoPendingPublicationAckNodeDebt(pendingAckEvidence) &&
     normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) >
-      NUM.ZERO;
+      0;
 }
 
 function pendingAckEvidenceAllowsOwnerReconcileNarrowing(
@@ -199,7 +198,7 @@ function resolvePublicationMissingPublishedCount({
   ownerReconcileNarrowedMissingPublishedNodeIds =
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   publicationMembershipClosed = false,
-  publicationMembershipClosedCount = NUM.ZERO,
+  publicationMembershipClosedCount = 0,
   steadyPublishedSelectedPublicationMembershipOpen = false,
   missingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   authoritativePublicationMembershipAvailable = false,
@@ -236,7 +235,7 @@ function resolvePublicationMissingPublishedCount({
 function activeGateOpenDebtOutrunsPublicationOwnerStream({
   publicationStatus = null,
   pendingAckEvidence = null,
-  missingPublishedCount = NUM.ZERO,
+  missingPublishedCount = 0,
   activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   publicationOwnerStream = null,
 } = {}) {
@@ -306,7 +305,7 @@ function alignPublicationRecoveryGateOwnerStreamWithOpenDebt(gate = null) {
     recoveryProtocolState: gate.recoveryProtocolState,
     requiredAckNodeIds: gate.requiredAckNodeIds,
     acknowledgedNodeIds: gate.acknowledgedNodeIds,
-    ...(pendingAckNodeIds.length > NUM.ZERO ? {pendingAckNodeIds} : {}),
+    ...(pendingAckNodeIds.length > 0 ? {pendingAckNodeIds} : {}),
     pendingAckCount: gate.pendingAckCount,
     pendingAckEvidenceState: gate.pendingAckEvidenceState,
     missingPublishedNodeIds: gate.missingPublishedNodeIds,
@@ -330,7 +329,7 @@ function alignPublicationRecoveryGateOwnerStreamWithOpenDebt(gate = null) {
     recoveryOutcome: publicationOwnerStream.recoveryOutcome,
     publicationPending:
       isPublicationOwnerStreamPublicationPending(publicationOwnerStream),
-    ackPending: publicationOwnerStream.pendingAckCount > NUM.ZERO,
+    ackPending: publicationOwnerStream.pendingAckCount > 0,
   });
 }
 
@@ -412,7 +411,7 @@ function buildPublicationRecoveryActiveGateHandoffEmissionSnapshot({
   recoveryProtocolState = null,
   pendingAckEvidence = null,
   missingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
-  missingPublishedCount = NUM.ZERO,
+  missingPublishedCount = 0,
   prioritySpreadPending = false,
 } = {}) {
   const normalizedMissingPublishedNodeIds = normalizeDistinctStringArray(
@@ -430,14 +429,14 @@ function buildPublicationRecoveryActiveGateHandoffEmissionSnapshot({
     normalizedMissingPublishedNodeIds.length,
   ]);
   const nodeDebtState =
-    pendingAckCount > NUM.ZERO ||
-    normalizedMissingPublishedCount > NUM.ZERO ?
+    pendingAckCount > 0 ||
+    normalizedMissingPublishedCount > 0 ?
       PUBLICATION_RECOVERY_NODE_DEBT_STATE.PRESENT :
       PUBLICATION_RECOVERY_NODE_DEBT_STATE.ABSENT;
   return Object.freeze({
     existingHandoffAvailable: isRecord(publicationActiveGateHandoff),
     activeGateProgressAvailable:
-      activeGateProgressRecords.length > NUM.ZERO,
+      activeGateProgressRecords.length > 0,
     publicationPending,
     recoveryProtocolState: normalizeOptionalString(recoveryProtocolState),
     nodeDebtState,
@@ -462,7 +461,7 @@ function resolvePublicationRecoveryEmittedActiveGateHandoff({
   publicationPending = false,
   pendingAckEvidence = null,
   missingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
-  missingPublishedCount = NUM.ZERO,
+  missingPublishedCount = 0,
   publishedActiveNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   prioritySpreadPending = false,
 } = {}) {
@@ -505,7 +504,7 @@ function resolvePublicationRecoveryEmittedActiveGateHandoff({
         publishedActiveNodeIds,
         prioritySpreadPending,
       },
-      activeGateProgress: activeGateProgressRecords[NUM.ZERO],
+      activeGateProgress: activeGateProgressRecords[0],
     }),
     publicationConvergence,
     priorityRecoveryObservation,

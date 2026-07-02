@@ -1,4 +1,4 @@
-import {ADDRESS, ENTITY_TYPE, NUM, TYPEOF} from '../constants/index.js';
+import {ADDRESS, ENTITY_TYPE} from '../constants/index.js';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
 import {
   INITIAL_MESSAGE_GROUP_ID,
@@ -50,15 +50,15 @@ const INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID = new Map(
 );
 
 function normalizeNonEmptyString(value) {
-  if (typeof value !== TYPEOF.STRING) {
+  if (typeof value !== 'string') {
     return null;
   }
   const normalized = value.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function getPartitionIdFromPartitionRow(partitionRow = null) {
-  if (!partitionRow || typeof partitionRow !== TYPEOF.OBJECT) {
+  if (!partitionRow || typeof partitionRow !== 'object') {
     return null;
   }
   return normalizeNonEmptyString(
@@ -67,7 +67,7 @@ function getPartitionIdFromPartitionRow(partitionRow = null) {
 }
 
 function getTableIdFromPartitionRow(partitionRow = null) {
-  if (!partitionRow || typeof partitionRow !== TYPEOF.OBJECT) {
+  if (!partitionRow || typeof partitionRow !== 'object') {
     return null;
   }
   return normalizeNonEmptyString(
@@ -88,15 +88,15 @@ function resolvePartitionTableIdFromPartitionId(partitionId) {
   const canonicalMatch = normalizedPartitionId.match(
     PARTITION_ID_CANONICAL_PATTERN,
   );
-  if (canonicalMatch && canonicalMatch[NUM.ONE]) {
-    return canonicalMatch[NUM.ONE];
+  if (canonicalMatch && canonicalMatch[1]) {
+    return canonicalMatch[1];
   }
 
   const splitSeparatorIndex = normalizedPartitionId.indexOf(
     PARTITION_ID_SPLIT_SEPARATOR,
   );
-  if (splitSeparatorIndex > NUM.ZERO) {
-    return normalizedPartitionId.slice(NUM.ZERO, splitSeparatorIndex);
+  if (splitSeparatorIndex > 0) {
+    return normalizedPartitionId.slice(0, splitSeparatorIndex);
   }
 
   return null;
@@ -260,16 +260,16 @@ function getPartitionRowFromCache(systemTableCache, partitionId) {
   if (!normalizedPartitionId || !systemTableCache) {
     return null;
   }
-  if (typeof systemTableCache.get === TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.get === 'function') {
     const directRow = systemTableCache.get(
       SYSTEM_TABLE_NAME.PARTITIONS,
       normalizedPartitionId,
     );
-    if (directRow && typeof directRow === TYPEOF.OBJECT) {
+    if (directRow && typeof directRow === 'object') {
       return directRow;
     }
   }
-  if (typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
+  if (typeof systemTableCache.filter !== 'function') {
     return null;
   }
   const matchingRows = systemTableCache.filter(
@@ -280,7 +280,7 @@ function getPartitionRowFromCache(systemTableCache, partitionId) {
     },
   );
   return Array.isArray(matchingRows) ?
-    matchingRows[NUM.ZERO] || null :
+    matchingRows[0] || null :
     null;
 }
 
@@ -332,7 +332,7 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
   }
 
   for (const serviceRow of serviceRows) {
-    if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
       continue;
     }
     const partitionId = normalizeNonEmptyString(

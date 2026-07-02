@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {DEFAULT_SAFETY_INTERVAL_MS} from './wasm-service-constants.js';
 
 /**
@@ -18,9 +17,9 @@ class SafetyInterval {
    */
   constructor(intervalMs) {
     this.intervalMs = intervalMs ?? DEFAULT_SAFETY_INTERVAL_MS;
-    this.lastLeaderIndex = NUM.ZERO;
-    this.lastLeaderTimestamp = NUM.ZERO;
-    this.localAppliedIndex = NUM.ZERO;
+    this.lastLeaderIndex = 0;
+    this.lastLeaderTimestamp = 0;
+    this.localAppliedIndex = 0;
   }
 
   /**

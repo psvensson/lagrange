@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 
 const TOPOLOGY_CONTROL_PLANE_OWNER = 'topology_control_plane';
 const TOPOLOGY_OWNER_EMPTY_STRING = '';
@@ -91,9 +90,9 @@ const PLACEMENT_OWNER_REASON_BY_STATE = Object.freeze(
 );
 
 function normalizePositiveInteger(value) {
-  return Number.isFinite(value) && value > NUM.ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
-    NUM.ZERO;
+    0;
 }
 
 function normalizeNodeIdArray(values) {
@@ -102,7 +101,7 @@ function normalizeNodeIdArray(values) {
   }
   return values
     .map((value) => String(value || TOPOLOGY_OWNER_EMPTY_STRING).trim())
-    .filter((value) => value.length > NUM.ZERO);
+    .filter((value) => value.length > 0);
 }
 
 function normalizeRankedNodeIds(sortedNodes) {
@@ -152,7 +151,7 @@ function selectPlacementOwnerTargetNodeIds(evidence) {
   const selectedNodeIdSet = new Set(selectedNodeIds);
   return evidence.rankedNodeIds
     .filter((nodeId) => selectedNodeIdSet.has(nodeId))
-    .slice(NUM.ZERO, evidence.targetCount);
+    .slice(0, evidence.targetCount);
 }
 
 function buildPlacementOwnerTargetEvidence(options = {}) {
@@ -171,7 +170,7 @@ function buildPlacementOwnerTargetEvidence(options = {}) {
       new Set();
   const reservedNodeIds = rankedNodeIds
     .filter((nodeId) => reservedTransitionNodeSet.has(nodeId))
-    .slice(NUM.ZERO, targetCount);
+    .slice(0, targetCount);
   const reservedNodeIdSet = new Set(reservedNodeIds);
   const deferredNodeIds = rankedNodeIds
     .filter(
@@ -179,7 +178,7 @@ function buildPlacementOwnerTargetEvidence(options = {}) {
         globalSystemTransitionNodeSet.has(nodeId) &&
         !reservedNodeIdSet.has(nodeId),
     )
-    .slice(NUM.ZERO, targetCount);
+    .slice(0, targetCount);
   const deferredNodeIdSet = new Set(deferredNodeIds);
   return Object.freeze({
     owner: TOPOLOGY_CONTROL_PLANE_OWNER,
@@ -191,8 +190,8 @@ function buildPlacementOwnerTargetEvidence(options = {}) {
     deferredNodeIds,
     reservedNodeIdSet,
     deferredNodeIdSet,
-    targetCountAvailable: targetCount > NUM.ZERO,
-    candidateNodesAvailable: rankedNodeIds.length > NUM.ZERO,
+    targetCountAvailable: targetCount > 0,
+    candidateNodesAvailable: rankedNodeIds.length > 0,
     forbiddenReinterpretations: PLACEMENT_OWNER_REINTERPRETATION,
   });
 }

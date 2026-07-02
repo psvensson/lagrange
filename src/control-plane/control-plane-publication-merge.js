@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   normalizeControlPlanePublicationRow,
   serializeControlPlanePublicationRow,
@@ -10,20 +9,18 @@ import {
   resolvePublicationOwnerMergedPublicationStatus,
 } from './publication-owner-decision.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_PUBLICATION_EPOCH = 'publication_epoch';
 const LOCAL_STR_PUBLICATIONEPOCH = 'publicationEpoch';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_PUBLISHER_NODE_ID = 'publisher_node_id';
 const LOCAL_STR_PUBLISHERNODEID = 'publisherNodeId';
-const LOCAL_STR_1YKL7 = 'source_topology_epoch';
-const LOCAL_STR_10FMC = 'sourceTopologyEpoch';
-const LOCAL_STR_1P9NT = 'source_snapshot_version';
-const LOCAL_STR_AUVHV = 'sourceSnapshotVersion';
-const LOCAL_STR_1W110 = 'priority_partition_summary';
-const LOCAL_STR_1GZ5U = 'priorityPartitionSummary';
-const LOCAL_STR_1S0NF = 'membership_lifecycle_summary';
-const LOCAL_STR_N7ZDE = 'membershipLifecycleSummary';
+const LOCAL_STR_SOURCE_TOPOLOGY_EPOCH = 'source_topology_epoch';
+const LOCAL_STR_SOURCETOPOLOGYEPOCH = 'sourceTopologyEpoch';
+const LOCAL_STR_SOURCE_SNAPSHOT_VERSION = 'source_snapshot_version';
+const LOCAL_STR_SOURCESNAPSHOTVERSION = 'sourceSnapshotVersion';
+const LOCAL_STR_PRIORITY_PARTITION_SUMMARY = 'priority_partition_summary';
+const LOCAL_STR_PRIORITYPARTITIONSUMMARY = 'priorityPartitionSummary';
+const LOCAL_STR_MEMBERSHIP_LIFECYCLE_SUMMARY = 'membership_lifecycle_summary';
+const LOCAL_STR_MEMBERSHIPLIFECYCLESUMMARY = 'membershipLifecycleSummary';
 const LOCAL_STR_REASON_CODE = 'reason_code';
 const LOCAL_STR_REASONCODE = 'reasonCode';
 const LOCAL_STR_TRANSITION_HISTORY = 'transition_history';
@@ -57,15 +54,15 @@ function normalizePublicationNodeIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .map((value) => String(value || '').trim())
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
 
 function normalizePublicationPositiveInteger(value, fallback = null) {
   const normalized = Number(value);
-  if (Number.isFinite(normalized) && normalized >= NUM.ZERO) {
+  if (Number.isFinite(normalized) && normalized >= 0) {
     return Math.trunc(normalized);
   }
   return fallback;
@@ -149,7 +146,7 @@ function readPreferredPublicationField(
   camelField,
 ) {
   const latestValue = latestRow?.[snakeField] ?? latestRow?.[camelField];
-  if (latestValue !== null && typeof latestValue !== TYPEOF.UNDEFINED) {
+  if (latestValue !== null && typeof latestValue !== 'undefined') {
     return latestValue;
   }
   return fallbackRow?.[snakeField] ?? fallbackRow?.[camelField] ?? null;
@@ -177,9 +174,9 @@ function resolvePublicationMergeMode(
   const fallbackEpoch = normalizedFallback.publicationEpoch;
   if (
     Number.isFinite(latestEpoch) &&
-    latestEpoch > NUM.ZERO &&
+    latestEpoch > 0 &&
     Number.isFinite(fallbackEpoch) &&
-    fallbackEpoch > NUM.ZERO &&
+    fallbackEpoch > 0 &&
     latestEpoch !== fallbackEpoch
   ) {
     return PUBLICATION_ROW_MERGE_MODE.NEW_REVISION;
@@ -292,7 +289,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     ),
   ].filter((value) => Number.isFinite(value));
   const updatedAt =
-    updatedAtCandidates.length > NUM.ZERO ?
+    updatedAtCandidates.length > 0 ?
       Math.max(...updatedAtCandidates) :
       null;
   const createdAtCandidates = [
@@ -306,7 +303,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     ),
   ].filter((value) => Number.isFinite(value));
   const createdAt =
-    createdAtCandidates.length > NUM.ZERO ?
+    createdAtCandidates.length > 0 ?
       Math.min(...createdAtCandidates) :
       null;
   const publishedAtCandidates = [
@@ -331,7 +328,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   ].filter((value) => Number.isFinite(value));
   const publishedAt =
     status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
-      publishedAtCandidates.length > NUM.ZERO ?
+      publishedAtCandidates.length > 0 ?
         Math.max(...publishedAtCandidates) :
         updatedAt :
       null;
@@ -339,7 +336,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
     status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
     status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ?
-      closedAtCandidates.length > NUM.ZERO ?
+      closedAtCandidates.length > 0 ?
         Math.max(...closedAtCandidates) :
         publishedAt || updatedAt :
       null;
@@ -365,7 +362,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
           LOCAL_STR_PUBLICATION_EPOCH,
           LOCAL_STR_PUBLICATIONEPOCH,
         ),
-        LOCAL_NUM_ONE,
+        1,
       ),
     publisher_node_id: readPreferredPublicationField(
       latestRow,
@@ -376,14 +373,14 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     source_topology_epoch: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      LOCAL_STR_1YKL7,
-      LOCAL_STR_10FMC,
+      LOCAL_STR_SOURCE_TOPOLOGY_EPOCH,
+      LOCAL_STR_SOURCETOPOLOGYEPOCH,
     ),
     source_snapshot_version: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      LOCAL_STR_1P9NT,
-      LOCAL_STR_AUVHV,
+      LOCAL_STR_SOURCE_SNAPSHOT_VERSION,
+      LOCAL_STR_SOURCESNAPSHOTVERSION,
     ),
     published_active_node_ids: publishedActiveNodeIds,
     required_ack_node_ids: requiredAckNodeIds,
@@ -391,14 +388,14 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     priority_partition_summary: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      LOCAL_STR_1W110,
-      LOCAL_STR_1GZ5U,
+      LOCAL_STR_PRIORITY_PARTITION_SUMMARY,
+      LOCAL_STR_PRIORITYPARTITIONSUMMARY,
     ),
     membership_lifecycle_summary: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      LOCAL_STR_1S0NF,
-      LOCAL_STR_N7ZDE,
+      LOCAL_STR_MEMBERSHIP_LIFECYCLE_SUMMARY,
+      LOCAL_STR_MEMBERSHIPLIFECYCLESUMMARY,
     ),
     status,
     reason_code:
@@ -407,7 +404,7 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
         fallbackRow,
         LOCAL_STR_REASON_CODE,
         LOCAL_STR_REASONCODE,
-      ) || LOCAL_STR_EMPTY,
+      ) || '',
     created_at: createdAt,
     updated_at: updatedAt,
     published_at: publishedAt,

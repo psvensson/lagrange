@@ -1,12 +1,10 @@
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_STATE_CHANGED = 'state:changed';
-const LOCAL_STR_1YZ5I = 'viewModel:computedChanged';
+const LOCAL_STR_VIEWMODEL_COMPUTEDCHANGED = 'viewModel:computedChanged';
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_0_B = '0 B';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_T = 'T';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_19 = 19;
+const LOCAL_NUM_NINETEEN = 19;
 
 /**
  * BaseViewModel - Base class for view models separating business logic from UI
@@ -39,7 +37,7 @@ export class BaseViewModel {
     this.computedCache = new Map();
 
     // Cache version for invalidation
-    this.cacheVersion = LOCAL_NUM_ZERO;
+    this.cacheVersion = 0;
 
     // Computed property definitions
     /** @type {Map<string, {compute: Function, dependencies: string[]}>} */
@@ -183,7 +181,7 @@ export class BaseViewModel {
     }
 
     for (const name of this.computedDefinitions.keys()) {
-      this.eventBus.emit(LOCAL_STR_1YZ5I, {
+      this.eventBus.emit(LOCAL_STR_VIEWMODEL_COMPUTEDCHANGED, {
         property: name,
         viewModel: this,
       });
@@ -241,7 +239,7 @@ export class BaseViewModel {
     if (bytes === null || bytes === undefined) {
       return LOCAL_STR_N_A;
     }
-    if (bytes === LOCAL_NUM_ZERO) {
+    if (bytes === 0) {
       return LOCAL_STR_0_B;
     }
 
@@ -249,7 +247,7 @@ export class BaseViewModel {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(LOCAL_NUM_ONE)} ${units[i]}`;
+    return `${value.toFixed(1)} ${units[i]}`;
   }
 
   /**
@@ -258,7 +256,7 @@ export class BaseViewModel {
    * @param {number} [decimals=1] - Decimal places
    * @return {string} Formatted percentage
    */
-  formatPercent(value, decimals = LOCAL_NUM_ONE) {
+  formatPercent(value, decimals = 1) {
     if (value === null || value === undefined) {
       return LOCAL_STR_N_A;
     }
@@ -277,7 +275,7 @@ export class BaseViewModel {
 
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
     return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
-      .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      .substring(0, LOCAL_NUM_NINETEEN);
   }
 
   /**
@@ -314,7 +312,7 @@ export class BaseViewModel {
    * @return {boolean}
    */
   isEmpty() {
-    return this.data.length === LOCAL_NUM_ZERO;
+    return this.data.length === 0;
   }
 
   /**

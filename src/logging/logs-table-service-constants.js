@@ -17,9 +17,9 @@ const LOCAL_STR_MESSAGE_TIMEOUT = 'Message timeout';
 const LOCAL_STR_1Y4H5 = 'Query routing failed';
 const LOCAL_STR_10811 = 'Failed to forward write to leader';
 const LOCAL_STR_10NUJ = 'control-plane:write';
-const LOCAL_STR_1KX9P = 'control-plane:read';
+const LOCAL_STR_CONTROL_PLANE_READ = 'control-plane:read';
 const LOCAL_STR_121M5 = 'control-plane:table:logs';
-const LOCAL_STR_1SYL3 = 'transport:logs-writer';
+const LOCAL_STR_TRANSPORT_LOGS_WRITER = 'transport:logs-writer';
 const LOGS_TABLE_BACKGROUND_WRITE_PRESSURE_RESOURCE_KEY =
   'control-plane:logs-table:background-write';
 const LOCAL_STR_STRING = 'string';
@@ -34,14 +34,14 @@ const LOG_RETENTION_METRIC_PREFIX = 'metrics.log_retention.';
 const LOG_QUERY_METRIC_PREFIX = 'metrics.log_query.';
 const LOG_PRESSURE_METRIC_PREFIX = 'metrics.pressure.';
 const LOGS_TABLE_TRANSPORT_PRESSURE_RESOURCE_KEYS = Object.freeze([
-  LOCAL_STR_1SYL3,
+  LOCAL_STR_TRANSPORT_LOGS_WRITER,
 ]);
 const LOGS_TABLE_CONTROL_PLANE_WRITE_PRESSURE_RESOURCE_KEYS = Object.freeze([
   LOGS_TABLE_BACKGROUND_WRITE_PRESSURE_RESOURCE_KEY,
   LOCAL_STR_121M5,
 ]);
 const LOGS_TABLE_CONTROL_PLANE_QUERY_PRESSURE_RESOURCE_KEYS = Object.freeze([
-  LOCAL_STR_1KX9P,
+  LOCAL_STR_CONTROL_PLANE_READ,
   LOCAL_STR_121M5,
 ]);
 const LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS = Object.freeze([

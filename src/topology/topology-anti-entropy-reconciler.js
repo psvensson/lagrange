@@ -4,7 +4,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
   TOPOLOGY_ANTI_ENTROPY_DEFAULT,
@@ -26,12 +26,11 @@ import {
   TOPOLOGY_ANTI_ENTROPY_TRIGGER,
 } from './topology-anti-entropy-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_ENQUEUE = 'enqueue';
 const LOCAL_STR_SET_TIMEOUT = 'setTimeout';
 const LOCAL_STR_CLEAR_TIMEOUT = 'clearTimeout';
 const LOCAL_STR_COLON = ':';
-const LOCAL_NUM_NEVER = NUM.NEGATIVE_ONE;
+const LOCAL_NUM_NEVER = -1;
 const LOCAL_TIMER_HANDLE_NONE = Object.freeze({
   [TOPOLOGY_ANTI_ENTROPY_FIELD.STATUS]: 'none',
 });
@@ -85,11 +84,11 @@ class TopologyAntiEntropyReconciler {
   constructor(options = {}) {
     this.durableTruthReader = options.durableTruthReader || options.reader;
     this.enqueueOwnerRepair = this.resolveEnqueueFunction(options);
-    this.nowFn = typeof options.nowFn === TYPEOF.FUNCTION ?
+    this.nowFn = typeof options.nowFn === 'function' ?
       options.nowFn : Date.now;
-    this.setTimer = typeof options.setTimer === TYPEOF.FUNCTION ?
+    this.setTimer = typeof options.setTimer === 'function' ?
       options.setTimer : globalThis[LOCAL_STR_SET_TIMEOUT].bind(globalThis);
-    this.clearTimer = typeof options.clearTimer === TYPEOF.FUNCTION ?
+    this.clearTimer = typeof options.clearTimer === 'function' ?
       options.clearTimer :
       globalThis[LOCAL_STR_CLEAR_TIMEOUT].bind(globalThis);
     this.scanIntervalMs = this.resolvePositiveNumber(
@@ -99,7 +98,7 @@ class TopologyAntiEntropyReconciler {
     this.inFlight = false;
     this.started = false;
     this.timerHandle = LOCAL_TIMER_HANDLE_NONE;
-    this.scanSequence = NUM.ZERO;
+    this.scanSequence = 0;
     this.lastScanStartedAt = LOCAL_NUM_NEVER;
     this.lastScanFinishedAt = LOCAL_NUM_NEVER;
     this.lastScanOutcome = this.buildInitialOutcome();
@@ -188,7 +187,7 @@ class TopologyAntiEntropyReconciler {
 
   async runDurableTruthScan(scanRequest) {
     this.inFlight = true;
-    this.scanSequence += NUM.ONE;
+    this.scanSequence += 1;
     this.lastScanStartedAt =
       scanRequest[TOPOLOGY_ANTI_ENTROPY_FIELD.STARTED_AT];
     const scanId = this.buildScanId(this.scanSequence);
@@ -237,7 +236,7 @@ class TopologyAntiEntropyReconciler {
         methodName,
         read: this.durableTruthReader?.[methodName],
       }))
-      .find((entry) => typeof entry.read === TYPEOF.FUNCTION);
+      .find((entry) => typeof entry.read === 'function');
 
     if (!candidate) {
       throw new Error(TOPOLOGY_ANTI_ENTROPY_ERROR_MSG.READER_REQUIRED);
@@ -270,7 +269,7 @@ class TopologyAntiEntropyReconciler {
     const targets = eligibleRows
       .map((row) => this.buildTarget(surface, row, scanContext))
       .filter((target) =>
-        target[TOPOLOGY_ANTI_ENTROPY_FIELD.OWNER_KEY] !== LOCAL_STR_EMPTY);
+        target[TOPOLOGY_ANTI_ENTROPY_FIELD.OWNER_KEY] !== '');
     return {
       [TOPOLOGY_ANTI_ENTROPY_FIELD.SURFACE]: surface,
       [TOPOLOGY_ANTI_ENTROPY_FIELD.TABLE_NAME]:
@@ -339,8 +338,8 @@ class TopologyAntiEntropyReconciler {
     );
     const identity = this.resolveEvidenceIdentity(surface, row);
     const prefix = TOPOLOGY_ANTI_ENTROPY_OWNER_KEY_PREFIX[surface];
-    const derivedOwnerKey = identity === LOCAL_STR_EMPTY ?
-      LOCAL_STR_EMPTY :
+    const derivedOwnerKey = identity === '' ?
+      '' :
       `${prefix}${LOCAL_STR_COLON}${identity}`;
     return explicitOwnerKey || derivedOwnerKey;
   }
@@ -356,7 +355,7 @@ class TopologyAntiEntropyReconciler {
     ];
     return identityFields
       .map((identityField) => this.normalizeText(row?.[identityField]))
-      .find((identity) => identity.length > NUM.ZERO) || LOCAL_STR_EMPTY;
+      .find((identity) => identity.length > 0) || '';
   }
 
   enqueueSnapshot(snapshot) {
@@ -448,7 +447,7 @@ class TopologyAntiEntropyReconciler {
         TOPOLOGY_ANTI_ENTROPY_SCAN_STATUS.SKIPPED,
       [TOPOLOGY_ANTI_ENTROPY_FIELD.REASON]:
         TOPOLOGY_ANTI_ENTROPY_SCAN_REASON.COOLDOWN_ACTIVE,
-      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: NUM.ZERO,
+      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: 0,
     };
   }
 
@@ -486,7 +485,7 @@ class TopologyAntiEntropyReconciler {
         context[TOPOLOGY_ANTI_ENTROPY_FIELD.STARTED_AT],
       [TOPOLOGY_ANTI_ENTROPY_FIELD.TRIGGER]:
         context[TOPOLOGY_ANTI_ENTROPY_FIELD.TRIGGER],
-      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: NUM.ZERO,
+      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: 0,
     };
   }
 
@@ -505,7 +504,7 @@ class TopologyAntiEntropyReconciler {
       [TOPOLOGY_ANTI_ENTROPY_FIELD.ERROR_MESSAGE]:
         this.normalizeText(error?.message) ||
           TOPOLOGY_ANTI_ENTROPY_ERROR_MSG.READER_REQUIRED,
-      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: NUM.ZERO,
+      [TOPOLOGY_ANTI_ENTROPY_FIELD.ENQUEUE_COUNT]: 0,
     };
   }
 
@@ -529,7 +528,7 @@ class TopologyAntiEntropyReconciler {
       },
     ];
     const candidate = enqueueCandidates.find((entry) =>
-      typeof entry.enqueue === TYPEOF.FUNCTION);
+      typeof entry.enqueue === 'function');
 
     if (!candidate) {
       throw new Error(
@@ -542,7 +541,7 @@ class TopologyAntiEntropyReconciler {
   }
 
   resolvePositiveNumber(candidate, fallback) {
-    return typeof candidate === TYPEOF.NUMBER && candidate > NUM.ZERO ?
+    return typeof candidate === 'number' && candidate > 0 ?
       candidate :
       fallback;
   }
@@ -552,7 +551,7 @@ class TopologyAntiEntropyReconciler {
   }
 
   normalizeText(value) {
-    return typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY;
+    return typeof value === 'string' ? value.trim() : '';
   }
 
   now() {

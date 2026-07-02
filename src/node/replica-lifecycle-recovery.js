@@ -3,7 +3,7 @@ import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {SERVICE_TYPE, TYPEOF} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   REPLICA_LIFECYCLE_ERROR_MSG,
@@ -33,11 +33,11 @@ function buildObservedReplicaWhereClause(service) {
   const whereClause = {
     service_id: service.service_id,
   };
-  if (typeof service?.node_id === TYPEOF.STRING &&
+  if (typeof service?.node_id === 'string' &&
     service.node_id.length > REPLICA_LIFECYCLE_NUM.ZERO) {
     whereClause.node_id = service.node_id;
   }
-  if (typeof service?.status === TYPEOF.STRING &&
+  if (typeof service?.status === 'string' &&
     service.status.length > REPLICA_LIFECYCLE_NUM.ZERO) {
     whereClause.status = service.status;
   }

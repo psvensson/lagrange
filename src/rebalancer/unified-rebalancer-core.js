@@ -8,7 +8,6 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as FOLLOW_UP_SHARED} from './unified
 
 const {REBALANCER_LOG_MSG} = UNIFIED_REBALANCER_SHARED;
 const {
-  NUM,
   UNIFIED_REBALANCER_LITERAL,
 } = FOLLOW_UP_SHARED;
 
@@ -49,7 +48,7 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
     ).trim();
     const normalizedMoves = Array.isArray(moves) ? moves : [];
     const currentFollowUpAlreadyPlanned =
-      followUpPartitionId.length > NUM.ZERO &&
+      followUpPartitionId.length > 0 &&
       normalizedMoves.some((move) =>
         this.isPriorityRecoveryCurrentFollowUpMove(
           move,
@@ -61,7 +60,7 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
       ...baseEvidence,
       hasAddLikeCalculatedMove: currentFollowUpAlreadyPlanned,
       followUpTargetsCurrentEntity:
-        followUpPartitionId.length > NUM.ZERO &&
+        followUpPartitionId.length > 0 &&
         followUpPartitionId === this.entityId,
     });
   }

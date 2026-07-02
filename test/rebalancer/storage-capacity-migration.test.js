@@ -38,8 +38,8 @@ function initializeConfig(overrides = {}) {
     rebalancer: {
       minimumReplicaBytes: NUM.TEN,
       partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: NUM.TWO,
-      serviceReplicaOverheadBytes: NUM.ONE,
+      messageGroupReplicaOverheadBytes: 2,
+      serviceReplicaOverheadBytes: 1,
       storageSoftPressurePercent:
         STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
       storageHardPressurePercent:
@@ -116,7 +116,7 @@ test('getBackfillBudget - returns null for zero disk_gb', (t) => {
   const migration = new StorageCapacityMigration({});
 
   const result = migration.getBackfillBudget({
-    [COLUMN.DISK_GB]: NUM.ZERO,
+    [COLUMN.DISK_GB]: 0,
   });
 
   t.equal(result, null);
@@ -127,7 +127,7 @@ test('getBackfillBudget - returns null for negative disk_gb', (t) => {
   const migration = new StorageCapacityMigration({});
 
   const result = migration.getBackfillBudget({
-    [COLUMN.DISK_GB]: NUM.NEGATIVE_ONE,
+    [COLUMN.DISK_GB]: -1,
   });
 
   t.equal(result, null);
@@ -160,11 +160,11 @@ test('backfillNodeBudgets - backfills nodes missing budget',
 
     const summary = await migration.backfillNodeBudgets(nodeRows);
 
-    t.equal(summary.backfilled, NUM.TWO);
-    t.equal(summary.skipped, NUM.ZERO);
-    t.equal(cdc.upserted.length, NUM.TWO);
+    t.equal(summary.backfilled, 2);
+    t.equal(summary.skipped, 0);
+    t.equal(cdc.upserted.length, 2);
 
-    const row1 = cdc.upserted[NUM.ZERO].row;
+    const row1 = cdc.upserted[0].row;
     t.equal(row1[COLUMN.NODE_ID], 'node-1');
     t.equal(
       row1[COLUMN.STORAGE_BUDGET_BYTES],
@@ -195,9 +195,9 @@ test('backfillNodeBudgets - skips nodes that already have budget',
 
     const summary = await migration.backfillNodeBudgets(nodeRows);
 
-    t.equal(summary.backfilled, NUM.ZERO);
-    t.equal(summary.skipped, NUM.ONE);
-    t.equal(cdc.upserted.length, NUM.ZERO);
+    t.equal(summary.backfilled, 0);
+    t.equal(summary.skipped, 1);
+    t.equal(cdc.upserted.length, 0);
     t.end();
   });
 
@@ -215,9 +215,9 @@ test('backfillNodeBudgets - skips nodes with null disk_gb',
 
     const summary = await migration.backfillNodeBudgets(nodeRows);
 
-    t.equal(summary.backfilled, NUM.ZERO);
-    t.equal(summary.skipped, NUM.ONE);
-    t.equal(cdc.upserted.length, NUM.ZERO);
+    t.equal(summary.backfilled, 0);
+    t.equal(summary.skipped, 1);
+    t.equal(cdc.upserted.length, 0);
     t.end();
   });
 
@@ -230,13 +230,13 @@ test('backfillNodeBudgets - skips nodes with zero disk_gb',
     });
 
     const nodeRows = [
-      {[COLUMN.NODE_ID]: 'node-1', [COLUMN.DISK_GB]: NUM.ZERO},
+      {[COLUMN.NODE_ID]: 'node-1', [COLUMN.DISK_GB]: 0},
     ];
 
     const summary = await migration.backfillNodeBudgets(nodeRows);
 
-    t.equal(summary.backfilled, NUM.ZERO);
-    t.equal(summary.skipped, NUM.ONE);
+    t.equal(summary.backfilled, 0);
+    t.equal(summary.skipped, 1);
     t.end();
   });
 
@@ -260,10 +260,10 @@ test('backfillNodeBudgets - mixed: backfills some, skips others',
 
     const summary = await migration.backfillNodeBudgets(nodeRows);
 
-    t.equal(summary.backfilled, NUM.ONE);
-    t.equal(summary.skipped, NUM.TWO);
-    t.equal(cdc.upserted.length, NUM.ONE);
-    t.equal(cdc.upserted[NUM.ZERO].row[COLUMN.NODE_ID], 'n-1');
+    t.equal(summary.backfilled, 1);
+    t.equal(summary.skipped, 2);
+    t.equal(cdc.upserted.length, 1);
+    t.equal(cdc.upserted[0].row[COLUMN.NODE_ID], 'n-1');
     t.end();
   });
 
@@ -310,7 +310,7 @@ test('observe mode - overrides deny to allow', async (t) => {
   // Request exceeds budget -> would be denied in enforce mode
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: NUM.HUNDRED + NUM.ONE,
+    estimatedBytes: NUM.HUNDRED + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.ALLOW);
@@ -362,7 +362,7 @@ test('enforce mode - default mode is enforce', async (t) => {
   // Default mode is enforce, so deny should be preserved.
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: NUM.HUNDRED + NUM.ONE,
+    estimatedBytes: NUM.HUNDRED + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
@@ -388,7 +388,7 @@ test('enforce mode - returns actual deny decisions', async (t) => {
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
-    estimatedBytes: NUM.HUNDRED + NUM.ONE,
+    estimatedBytes: NUM.HUNDRED + 1,
   });
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
@@ -442,7 +442,7 @@ test('mode transition - observe to enforce via refreshConfig',
     // In observe mode: deny overridden to allow
     const r1 = await admission.checkAdd({
       targetNodeId: 'node-1',
-      estimatedBytes: NUM.HUNDRED + NUM.ONE,
+      estimatedBytes: NUM.HUNDRED + 1,
     });
     t.equal(r1.decision, ADMISSION_DECISION.ALLOW);
 
@@ -453,8 +453,8 @@ test('mode transition - observe to enforce via refreshConfig',
       rebalancer: {
         minimumReplicaBytes: NUM.TEN,
         partitionReplicaOverheadBytes: NUM.FIVE,
-        messageGroupReplicaOverheadBytes: NUM.TWO,
-        serviceReplicaOverheadBytes: NUM.ONE,
+        messageGroupReplicaOverheadBytes: 2,
+        serviceReplicaOverheadBytes: 1,
         storageSoftPressurePercent:
           STORAGE_CAPACITY_DEFAULT.SOFT_PRESSURE_PERCENT,
         storageHardPressurePercent:
@@ -469,7 +469,7 @@ test('mode transition - observe to enforce via refreshConfig',
     // In enforce mode: deny is real
     const r2 = await admission.checkAdd({
       targetNodeId: 'node-1',
-      estimatedBytes: NUM.HUNDRED + NUM.ONE,
+      estimatedBytes: NUM.HUNDRED + 1,
     });
     t.equal(r2.decision, ADMISSION_DECISION.DENY);
     t.end();

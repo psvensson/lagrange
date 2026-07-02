@@ -7,7 +7,7 @@ import {
 } from './parallel-query-partition-outcomes.js';
 
 const RESULT_ESTIMATE = Object.freeze({
-  UTF16_BYTES_PER_CHAR: NUM.TWO,
+  UTF16_BYTES_PER_CHAR: 2,
   FALLBACK_ROW_BYTES: NUM.HUNDRED,
 });
 
@@ -24,8 +24,8 @@ class PartitionQueryMetrics {
     this.startTime = null;
     this.endTime = null;
     this.latencyMs = null;
-    this.rowCount = NUM.ZERO;
-    this.bytesRead = NUM.ZERO;
+    this.rowCount = 0;
+    this.bytesRead = 0;
     this.status = QUERY_STATUS.PENDING; // pending, running, completed, failed, timeout
     this.error = null;
     this.isSpeculative = false;
@@ -51,7 +51,7 @@ class PartitionQueryMetrics {
    * @param {number} rowCount - Number of rows returned.
    * @param {number} bytesRead - Estimated bytes read.
    */
-  complete(rowCount, bytesRead = NUM.ZERO) {
+  complete(rowCount, bytesRead = 0) {
     this.endTime = Date.now();
     this.latencyMs = this.endTime - this.startTime;
     this.rowCount = rowCount;
@@ -106,10 +106,10 @@ class QueryExecutionMetrics {
     this.endTime = null;
     this.totalLatencyMs = null;
     this.partitionMetrics = new Map();
-    this.totalRows = NUM.ZERO;
-    this.totalBytes = NUM.ZERO;
+    this.totalRows = 0;
+    this.totalBytes = 0;
     this.stragglers = [];
-    this.speculativeExecutions = NUM.ZERO;
+    this.speculativeExecutions = 0;
   }
 
   /**
@@ -134,11 +134,11 @@ class QueryExecutionMetrics {
       .map((m) => m.latencyMs)
       .sort((a, b) => a - b);
 
-    if (latencies.length === NUM.ZERO) return NUM.ZERO;
+    if (latencies.length === 0) return 0;
 
-    const mid = Math.floor(latencies.length / NUM.TWO);
-    return latencies.length % NUM.TWO === NUM.ZERO ?
-      (latencies[mid - NUM.ONE] + latencies[mid]) / NUM.TWO :
+    const mid = Math.floor(latencies.length / 2);
+    return latencies.length % 2 === 0 ?
+      (latencies[mid - 1] + latencies[mid]) / 2 :
       latencies[mid];
   }
 
@@ -157,7 +157,7 @@ class QueryExecutionMetrics {
  * @return {number} Estimated bytes.
  */
 function estimateResultBytes(rows) {
-  if (!rows || rows.length === NUM.ZERO) return NUM.ZERO;
+  if (!rows || rows.length === 0) return 0;
   try {
     return JSON.stringify(rows).length * RESULT_ESTIMATE.UTF16_BYTES_PER_CHAR;
   } catch (_estimateErr) {
@@ -196,8 +196,8 @@ function formatQueryExecutionMetrics(metrics) {
     speculativeExecutions: metrics.speculativeExecutions,
     participantFailures,
     firstFailedParticipant:
-      participantFailures.length > NUM.ZERO ?
-        participantFailures[NUM.ZERO] :
+      participantFailures.length > 0 ?
+        participantFailures[0] :
         null,
     partitionLatencies: Array.from(metrics.partitionMetrics.values()).map((m) => ({
       partitionId: m.partitionId,

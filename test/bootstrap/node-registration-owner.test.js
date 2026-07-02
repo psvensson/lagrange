@@ -106,9 +106,9 @@ test(
     const serviceEndpointCalls = publicationCalls.filter((call) =>
       call.kind === 'service_endpoint',
     );
-    t.equal(nodeCalls.length, NUM.ONE,
+    t.equal(nodeCalls.length, 1,
       'should publish exactly one nodes row via the membership owner');
-    t.equal(endpointCalls.length, NUM.ONE,
+    t.equal(endpointCalls.length, 1,
       'should publish exactly one node_endpoints row via the membership owner');
     t.equal(serviceEndpointCalls.length, NUM.THREE,
       'should publish all built-in meta service endpoints via the membership owner');
@@ -195,12 +195,12 @@ test(
     );
     t.equal(
       nodeCalls.length,
-      NUM.ZERO,
+      0,
       'should not rewrite the canonical nodes row when authoritative progress exists',
     );
     t.equal(
       endpointCalls.length,
-      NUM.ONE,
+      1,
       'should continue with missing node endpoint publication',
     );
     t.equal(
@@ -278,7 +278,7 @@ test(
     const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
     t.equal(
       nodeCalls.length,
-      NUM.ONE,
+      1,
       'blocked incarnation fence should force fresh join admission publication',
     );
     t.notOk(
@@ -306,7 +306,7 @@ test(
     owner.getJoinAdmissionControlPlaneSystemTableGateway = () => ({
       updateSystemTableRow: async (tableName, whereClause, data, options) => {
         updateCalls.push({tableName, whereClause, data, options});
-        return {partitionResult: {affectedRows: NUM.ONE}};
+        return {partitionResult: {affectedRows: 1}};
       },
     });
     owner.readAuthoritativeMetaEndpointRows = async () => ([{
@@ -321,7 +321,7 @@ test(
     t.equal(result.success, true, 'withdrawal should report success');
     t.equal(updateCalls.length, NUM.THREE,
       'withdrawal should update node, node endpoint, and service endpoint');
-    t.match(updateCalls[NUM.ZERO], {
+    t.match(updateCalls[0], {
       tableName: TABLES.NODES,
       whereClause: {[COLUMN.NODE_ID]: TEST_NODE_ID},
       data: {
@@ -330,14 +330,14 @@ test(
         [COLUMN.READY_LEASE_EXPIRES_AT]: null,
       },
     });
-    t.match(updateCalls[NUM.ONE], {
+    t.match(updateCalls[1], {
       tableName: TABLES.NODE_ENDPOINTS,
       whereClause: {[COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-ws`},
       data: {
         [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
       },
     });
-    t.match(updateCalls[NUM.TWO], {
+    t.match(updateCalls[2], {
       tableName: TABLES.SERVICE_ENDPOINTS,
       whereClause: {[COLUMN.ENDPOINT_ID]: 'meta-endpoint-1'},
       data: {
@@ -363,7 +363,7 @@ test(
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: createDelegates(),
     });
-    owner.getJoinAdmissionWriteRetryTimeoutMs = () => NUM.ZERO;
+    owner.getJoinAdmissionWriteRetryTimeoutMs = () => 0;
     owner.getJoinAdmissionControlPlaneSystemTableGateway = () => ({
       updateSystemTableRow: async (tableName, whereClause, data, options) => {
         updateCalls.push({tableName, whereClause, data, options});
@@ -395,7 +395,7 @@ test(
     t.equal(result.nextAction, 'retry');
     t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY);
     t.equal(result.retryAfterMs, TIME_MS.SECOND);
-    t.equal(updateCalls.length, NUM.TWO,
+    t.equal(updateCalls.length, 2,
       'best-effort endpoint withdrawal can still run after deferred node write');
   },
 );

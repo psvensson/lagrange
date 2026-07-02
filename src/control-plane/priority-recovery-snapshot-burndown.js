@@ -1,7 +1,3 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -236,7 +232,7 @@ function buildPriorityRecoveryPartitionObservation(options = {}) {
   const capturedAt = normalizePriorityRecoveryInteger(options.capturedAt);
   const hasTimelineEvidence = operationContexts.some(
     (operationContext) =>
-      Number(operationContext?.timelineLength || NUM.ZERO) > NUM.ZERO,
+      Number(operationContext?.timelineLength || 0) > 0,
   );
   return {
     workflowState: resolvePriorityRecoveryWorkflowState(operationContexts),
@@ -252,7 +248,7 @@ function buildPriorityRecoveryPartitionObservation(options = {}) {
     provenance: {
       capturedAt,
       workflowSource:
-        operationContexts.length > NUM.ZERO ?
+        operationContexts.length > 0 ?
           PRIORITY_RECOVERY_PROVENANCE_SOURCE.SYSTEM_TABLE_CACHE :
           PRIORITY_RECOVERY_PROVENANCE_SOURCE.NONE,
       timelineSource:
@@ -270,15 +266,15 @@ function buildPriorityRecoveryAdmissionByPartitionId(
 ) {
   const admissionByPartitionId = {};
   for (const workflow of Object.values(workflowAdmissionsByWorkflowId || {})) {
-    if (!workflow || typeof workflow !== TYPEOF.OBJECT) {
+    if (!workflow || typeof workflow !== 'object') {
       continue;
     }
     const workflowId = String(workflow.workflowId || '').trim();
-    if (workflowId.length === NUM.ZERO) {
+    if (workflowId.length === 0) {
       continue;
     }
     const admission =
-      workflow.admission && typeof workflow.admission === TYPEOF.OBJECT ?
+      workflow.admission && typeof workflow.admission === 'object' ?
         workflow.admission :
         null;
     const partitionIds = normalizePriorityRecoveryStringList([
@@ -308,7 +304,7 @@ function buildPriorityRecoveryAdmissionByPartitionId(
                 entry?.reasonCodes,
               ),
             }))
-            .filter((entry) => entry.nodeId.length > NUM.ZERO) :
+            .filter((entry) => entry.nodeId.length > 0) :
           [],
         blockingReasons: normalizePriorityRecoveryStringList(
           workflow.blockingReasons,
@@ -389,7 +385,7 @@ function buildPriorityRecoveryLearnerPromotion(options = {}) {
   );
   const normalizedReadinessByNodeId =
     options.readinessByNodeId &&
-    typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+    typeof options.readinessByNodeId === 'object' ?
       options.readinessByNodeId :
       {};
   const recoveryActiveNodeIdSet = new Set(
@@ -401,7 +397,7 @@ function buildPriorityRecoveryLearnerPromotion(options = {}) {
   for (const nodeId of activeLearnerNodeIds) {
     const readiness = normalizedReadinessByNodeId[nodeId] || null;
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
         readiness.dimensions :
         {};
     const repairEligible =
@@ -439,12 +435,12 @@ function buildPriorityRecoveryLearnerPromotion(options = {}) {
 function buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence) {
   const projectionDiagnostics =
     publicationConvergence?.projectionDiagnostics &&
-    typeof publicationConvergence.projectionDiagnostics === TYPEOF.OBJECT ?
+    typeof publicationConvergence.projectionDiagnostics === 'object' ?
       publicationConvergence.projectionDiagnostics :
       publicationConvergence?.membershipLifecycleSummary
         ?.projectionDiagnostics &&
           typeof publicationConvergence.membershipLifecycleSummary
-            .projectionDiagnostics === TYPEOF.OBJECT ?
+            .projectionDiagnostics === 'object' ?
         publicationConvergence.membershipLifecycleSummary
           .projectionDiagnostics :
         null;
@@ -494,7 +490,7 @@ function normalizePriorityRecoveryFallbackEligibleNodeIds(
 
 function buildEffectivePriorityRecoveryAdmission(admission, options = {}) {
   const normalizedAdmission =
-    admission && typeof admission === TYPEOF.OBJECT ? admission : {};
+    admission && typeof admission === 'object' ? admission : {};
   const publicationExcludedNodeIds = normalizePriorityRecoveryStringList(
     options.publicationExcludedNodeIds,
   );
@@ -512,30 +508,30 @@ function buildEffectivePriorityRecoveryAdmission(admission, options = {}) {
       publicationExcludedNodeIds,
     );
   const readyEligibleNodeCount = Math.max(
-    NUM.ZERO,
+    0,
     normalizePriorityRecoveryInteger(
       options.prioritySummaryReadyEligibleNodeCount,
-    ) || NUM.ZERO,
+    ) || 0,
   );
 
   let effectiveEligibleNodeIds = explicitEligibleNodeIds;
   let effectiveEligibleNodeCount = explicitEligibleNodeIds.length;
   let eligibilityEvidenceSource =
     PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE.UNKNOWN;
-  if (effectiveEligibleNodeCount > NUM.ZERO) {
+  if (effectiveEligibleNodeCount > 0) {
     eligibilityEvidenceSource =
       PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE.WORKFLOW_ADMISSION;
-  } else if (publicationEligibleNodeIds.length > NUM.ZERO) {
+  } else if (publicationEligibleNodeIds.length > 0) {
     effectiveEligibleNodeIds = publicationEligibleNodeIds;
     effectiveEligibleNodeCount = publicationEligibleNodeIds.length;
     eligibilityEvidenceSource =
       PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE.PUBLICATION_MEMBERSHIP;
-  } else if (projectionEligibleNodeIds.length > NUM.ZERO) {
+  } else if (projectionEligibleNodeIds.length > 0) {
     effectiveEligibleNodeIds = projectionEligibleNodeIds;
     effectiveEligibleNodeCount = projectionEligibleNodeIds.length;
     eligibilityEvidenceSource =
       PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE.PUBLICATION_RECOVERY_PROJECTION;
-  } else if (readyEligibleNodeCount > NUM.ZERO) {
+  } else if (readyEligibleNodeCount > 0) {
     effectiveEligibleNodeCount = readyEligibleNodeCount;
     eligibilityEvidenceSource =
       PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE.PRIORITY_SUMMARY_READY_ELIGIBLE;
@@ -563,16 +559,16 @@ function buildEffectivePriorityRecoveryAdmission(admission, options = {}) {
     decisionMissing:
       normalizedAdmission.decisionType === null &&
       normalizedAdmission.decisionDimension === null &&
-      explicitEligibleNodeIds.length === NUM.ZERO &&
+      explicitEligibleNodeIds.length === 0 &&
       (!Array.isArray(normalizedAdmission.ineligibleNodes) ||
-        normalizedAdmission.ineligibleNodes.length === NUM.ZERO) &&
+        normalizedAdmission.ineligibleNodes.length === 0) &&
       (!Array.isArray(normalizedAdmission.blockingReasons) ||
-        normalizedAdmission.blockingReasons.length === NUM.ZERO),
+        normalizedAdmission.blockingReasons.length === 0),
   };
 }
 
 function isPriorityRecoverySnapshotObject(value) {
-  return value && typeof value === TYPEOF.OBJECT;
+  return value && typeof value === 'object';
 }
 
 function resolvePriorityRecoveryDecisionPublicationConvergence(options = {}) {

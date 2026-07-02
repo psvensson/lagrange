@@ -1,6 +1,5 @@
-import {NUM, TYPEOF} from '../../constants/index.js';
 
-const LOCAL_STR_1XIO2 = 'Operational message-group ingress not ready ';
+const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
 
 const CDC_PROPAGATION_SUBSCRIBER_REASON = Object.freeze({
   OWNER_NOT_READY: 'operational message-group ingress not ready',
@@ -12,7 +11,7 @@ const CDC_PROPAGATION_SUBSCRIBER_MESSAGE = Object.freeze({
 
 const CDC_PROPAGATION_SUBSCRIBER_READINESS = Object.freeze({
   READY: true,
-  RETRY_AFTER_MS: NUM.ZERO,
+  RETRY_AFTER_MS: 0,
   REASON: null,
 });
 
@@ -22,7 +21,7 @@ const CDC_PROPAGATION_SUBSCRIBER_SELECTION = Object.freeze({
 
 function buildPropagationSubscriberReadiness(
   ready,
-  retryAfterMs = NUM.ZERO,
+  retryAfterMs = 0,
   reason = null,
 ) {
   return {
@@ -43,10 +42,10 @@ function normalizePropagationSubscriberReadiness(
       CDC_PROPAGATION_SUBSCRIBER_READINESS.REASON,
     );
   }
-  if (readiness === false || !readiness || typeof readiness !== TYPEOF.OBJECT) {
+  if (readiness === false || !readiness || typeof readiness !== 'object') {
     return buildPropagationSubscriberReadiness(
       false,
-      NUM.ZERO,
+      0,
       fallbackReason,
     );
   }
@@ -54,13 +53,13 @@ function normalizePropagationSubscriberReadiness(
   const ready = readiness.ready === true;
   return buildPropagationSubscriberReadiness(
     ready,
-    Number.isFinite(readiness.retryAfterMs) && readiness.retryAfterMs > NUM.ZERO ?
+    Number.isFinite(readiness.retryAfterMs) && readiness.retryAfterMs > 0 ?
       Math.floor(readiness.retryAfterMs) :
-      NUM.ZERO,
+      0,
     ready ?
       null :
-      (typeof readiness.reason === TYPEOF.STRING &&
-      readiness.reason.length > NUM.ZERO ?
+      (typeof readiness.reason === 'string' &&
+      readiness.reason.length > 0 ?
         readiness.reason :
         fallbackReason),
   );
@@ -74,7 +73,7 @@ function mergeDeferredReadinessSummary(summary, readiness) {
     false,
     Math.max(
       summary.retryAfterMs,
-      Number.isFinite(readiness.retryAfterMs) ? readiness.retryAfterMs : NUM.ZERO,
+      Number.isFinite(readiness.retryAfterMs) ? readiness.retryAfterMs : 0,
     ),
     readiness.reason || summary.reason,
   );
@@ -88,24 +87,24 @@ function resolvePropagationServiceReadiness(
   if (!service) {
     return buildPropagationSubscriberReadiness(
       false,
-      NUM.ZERO,
+      0,
       CDC_PROPAGATION_SUBSCRIBER_REASON.OWNER_NOT_READY,
     );
   }
 
-  if (typeof service.canAcceptCDCEvent === TYPEOF.FUNCTION) {
+  if (typeof service.canAcceptCDCEvent === 'function') {
     return normalizePropagationSubscriberReadiness(
       service.canAcceptCDCEvent(cdcEvent),
     );
   }
 
-  if (typeof service.getMetadataIngressReadiness === TYPEOF.FUNCTION) {
+  if (typeof service.getMetadataIngressReadiness === 'function') {
     return normalizePropagationSubscriberReadiness(
       service.getMetadataIngressReadiness({requiredTables}),
     );
   }
 
-  if (typeof service.isMetadataIngressReady === TYPEOF.FUNCTION) {
+  if (typeof service.isMetadataIngressReady === 'function') {
     return normalizePropagationSubscriberReadiness(
       service.isMetadataIngressReady({requiredTables}),
     );
@@ -113,7 +112,7 @@ function resolvePropagationServiceReadiness(
 
   return buildPropagationSubscriberReadiness(
     service.initialized !== false,
-    NUM.ZERO,
+    0,
     service.initialized !== false ?
       null :
       CDC_PROPAGATION_SUBSCRIBER_REASON.OWNER_NOT_READY,
@@ -126,7 +125,7 @@ function resolveSelectionBackedServiceReadiness(
   cdcEvent,
   requiredTables,
 ) {
-  if (service && typeof service.canAcceptCDCEvent === TYPEOF.FUNCTION) {
+  if (service && typeof service.canAcceptCDCEvent === 'function') {
     return resolvePropagationServiceReadiness(service, cdcEvent, requiredTables);
   }
 
@@ -150,7 +149,7 @@ function buildPropagationSelectionOptions(
 }
 
 function buildPropagationOwnerNotReadyMessage(tableName) {
-  return LOCAL_STR_1XIO2 +
+  return LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE +
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 
@@ -187,7 +186,7 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
       return;
     }
 
-    if (logger && typeof logger.debug === TYPEOF.FUNCTION && eventLogMessage) {
+    if (logger && typeof logger.debug === 'function' && eventLogMessage) {
       logger.debug(eventLogMessage, {
         tableName: cdcEvent.tableName,
         operation: cdcEvent.operation,
@@ -196,7 +195,7 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
       });
     }
 
-    if (typeof beforePropagation === TYPEOF.FUNCTION) {
+    if (typeof beforePropagation === 'function') {
       await beforePropagation(cdcEvent);
     }
 
@@ -223,7 +222,7 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
       cdcEvent,
     );
 
-    if (typeof afterPropagation === TYPEOF.FUNCTION) {
+    if (typeof afterPropagation === 'function') {
       await afterPropagation(cdcEvent);
     }
   };
@@ -239,7 +238,7 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
 
     let deferredSummary = buildPropagationSubscriberReadiness(
       false,
-      NUM.ZERO,
+      0,
       CDC_PROPAGATION_SUBSCRIBER_REASON.OWNER_NOT_READY,
     );
 
@@ -257,7 +256,7 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
       );
     }
 
-    if (typeof resolveOperationalMessageGroupSelection !== TYPEOF.FUNCTION) {
+    if (typeof resolveOperationalMessageGroupSelection !== 'function') {
       return deferredSummary;
     }
 

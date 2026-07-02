@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from './control-plane-publication-merge.js';
@@ -268,14 +267,14 @@ const PUBLICATION_RECOVERY_MACHINE_SPEC = Object.freeze({
 });
 
 function normalizePublicationRecoveryString(value) {
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim() :
     PUBLICATION_RECOVERY_TEXT.EMPTY;
 }
 
 function normalizePublicationRecoveryStatus(value) {
   const status = normalizePublicationRecoveryString(value).toUpperCase();
-  return status.length > NUM.ZERO ?
+  return status.length > 0 ?
     status :
     PUBLICATION_RECOVERY_TEXT.UNKNOWN;
 }
@@ -286,7 +285,7 @@ function normalizePublicationRecoveryNodeIdList(values = []) {
       ...new Set(
         (Array.isArray(values) ? values : [])
           .map((value) => normalizePublicationRecoveryString(value))
-          .filter((value) => value.length > NUM.ZERO),
+          .filter((value) => value.length > 0),
       ),
     ].sort(),
   );
@@ -294,9 +293,9 @@ function normalizePublicationRecoveryNodeIdList(values = []) {
 
 function normalizePublicationRecoveryCount(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue >= 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function countPendingRequiredAckNodeIds(requiredAckNodeIds, acknowledgedNodeIds) {
@@ -333,7 +332,7 @@ function resolvePublicationRecoveryPendingAckEvidence(options = {}) {
       ) :
       Object.freeze([]);
   const pendingAckNodeIds =
-    explicitPendingAckNodeIds.length > NUM.ZERO ?
+    explicitPendingAckNodeIds.length > 0 ?
       explicitPendingAckNodeIds :
       derivedPendingAckNodeIds;
   const pendingAckCountByState = Object.freeze({
@@ -420,16 +419,16 @@ function collectPublicationRecoveryEvidenceFlagIds(evidence) {
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
           .REQUIRED_ACK_NODE_LIST,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_PENDING]:
-      evidence.pendingAckCount > NUM.ZERO,
+      evidence.pendingAckCount > 0,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_COMPLETE]:
       evidence.pendingAckEvidenceState ===
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
           .REQUIRED_ACK_NODE_LIST &&
-      evidence.pendingAckCount === NUM.ZERO,
+      evidence.pendingAckCount === 0,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACK_CHANGED]:
       evidence.acknowledgementChanged === true,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.MISSING_PUBLISHED_MEMBERS]:
-      evidence.missingPublishedCount > NUM.ZERO,
+      evidence.missingPublishedCount > 0,
   });
   for (const [flagId, matched] of Object.entries(flagEvidence)) {
     if (matched === true) {
@@ -473,7 +472,7 @@ function resolvePublicationRecoveryTransition(context, satisfiedFlagIds) {
     transitionMatchesPublicationRecoveryContext(transition, context) &&
     transitionMatchesPublicationRecoveryEvidence(transition, satisfiedFlagIds),
   ) || PUBLICATION_RECOVERY_MACHINE_SPEC.transitions[
-    PUBLICATION_RECOVERY_MACHINE_SPEC.transitions.length - NUM.ONE
+    PUBLICATION_RECOVERY_MACHINE_SPEC.transitions.length - 1
   ];
 }
 

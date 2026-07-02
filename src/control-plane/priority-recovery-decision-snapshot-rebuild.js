@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
 } from './priority-recovery-diagnostics-constants.js';
 import {buildPriorityRecoveryCompletion} from './priority-recovery-completion.js';
@@ -25,7 +21,7 @@ function resolvePriorityRecoveryDecisionSnapshotCoordinator(
   return {
     ...(snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR] ||
       {}),
-    ...(options.coordinator && typeof options.coordinator === TYPEOF.OBJECT ?
+    ...(options.coordinator && typeof options.coordinator === 'object' ?
       options.coordinator :
       {}),
   };
@@ -111,7 +107,7 @@ function releasePriorityRecoverySerialWaitSnapshot(snapshot) {
     buildReleasedPriorityRecoverySerialWaitAssessment(snapshot);
   return rebuildPriorityRecoveryDecisionSnapshot(snapshot, assessment, {
     coordinator: {
-      serialWaitOperationCount: NUM.ZERO,
+      serialWaitOperationCount: 0,
       serialWaitOperationIds: LOCAL_EMPTY_LIST,
       serialWaitPartitionIds: LOCAL_EMPTY_LIST,
     },
@@ -125,14 +121,14 @@ function buildPriorityRecoverySyntheticSerialWaitAssessment(
   const planner =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] &&
     typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] ===
-      TYPEOF.OBJECT ?
+      'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PLANNER] :
       {};
   const spreadCompletion =
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION] &&
     typeof snapshot[
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION
-    ] === TYPEOF.OBJECT ?
+    ] === 'object' ?
       snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION] :
       {};
   const blockerReasons = Object.freeze([

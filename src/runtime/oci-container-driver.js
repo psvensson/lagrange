@@ -18,7 +18,6 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {
   RuntimeDriver,
   PREPARE_STATUS,
@@ -30,7 +29,6 @@ import {
   DriverLifecycleError,
 } from './runtime-driver-errors.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_PREPARE = 'prepare';
 const LOCAL_STR_START = 'start';
 const LOCAL_STR_STOP = 'stop';
@@ -137,7 +135,7 @@ class OciContainerDriver extends RuntimeDriver {
   validateDescriptor(definition) {
     const errors = [];
 
-    if (!definition || typeof definition !== TYPEOF.OBJECT) {
+    if (!definition || typeof definition !== 'object') {
       errors.push(OCI_DRIVER_ERROR.DEFINITION_REQUIRED);
       return {valid: false, errors};
     }
@@ -147,15 +145,15 @@ class OciContainerDriver extends RuntimeDriver {
 
     if (ref === undefined || ref === null) {
       errors.push(OCI_DRIVER_ERROR.REF_REQUIRED);
-    } else if (typeof ref !== TYPEOF.STRING) {
+    } else if (typeof ref !== 'string') {
       errors.push(OCI_DRIVER_ERROR.REF_MUST_BE_STRING);
-    } else if (ref.trim().length === LOCAL_NUM_ZERO) {
+    } else if (ref.trim().length === 0) {
       errors.push(OCI_DRIVER_ERROR.REF_EMPTY);
     } else if (!ref.includes(OCI_DIGEST_MARKER)) {
       errors.push(OCI_DRIVER_ERROR.DIGEST_REQUIRED);
     }
 
-    if (errors.length > LOCAL_NUM_ZERO) {
+    if (errors.length > 0) {
       return {valid: false, errors};
     }
     return {valid: true};
@@ -218,7 +216,7 @@ class OciContainerDriver extends RuntimeDriver {
     }
 
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind, LOCAL_STR_START,
         OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
@@ -269,7 +267,7 @@ class OciContainerDriver extends RuntimeDriver {
     }
 
     if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
+        typeof replicaContext !== 'object') {
       throw new DriverLifecycleError(
         this.kind, LOCAL_STR_STOP,
         OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
@@ -309,7 +307,7 @@ class OciContainerDriver extends RuntimeDriver {
         detail: OCI_DRIVER_ERROR.FEATURE_GATE_DISABLED,
       } :
       !replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT ?
+        typeof replicaContext !== 'object' ?
         {
           status: HEALTH_STATUS.UNKNOWN,
           detail: OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,

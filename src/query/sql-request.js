@@ -6,7 +6,6 @@
  * before delegation to SqlCore (SQLQueryEngine).
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {DEFAULT_QUERY_BUDGET} from '../wasm-service/query-budget-constants.js';
 import {
   EXECUTION_MODE,
@@ -36,7 +35,7 @@ function createSqlRequest(fields) {
   if (!fields.statement) {
     throw new Error(ADAPTER_ERROR_MSG.STATEMENT_REQUIRED);
   }
-  if (typeof fields.statement !== TYPEOF.STRING) {
+  if (typeof fields.statement !== 'string') {
     throw new Error(ADAPTER_ERROR_MSG.STATEMENT_MUST_BE_STRING);
   }
 
@@ -55,7 +54,7 @@ function createSqlRequest(fields) {
       throw new Error(ADAPTER_ERROR_MSG.CALLBACK_EXPORT_REQUIRED);
     }
     if (!fields.runtimeKind ||
-        typeof fields.runtimeKind !== TYPEOF.STRING) {
+        typeof fields.runtimeKind !== 'string') {
       throw new Error(
         ADAPTER_ERROR_MSG.PARTITION_CALLBACK_RUNTIME_KIND_REQUIRED,
       );
@@ -85,24 +84,24 @@ function createSqlRequest(fields) {
  * @return {boolean} True when obj has the required SqlRequest shape.
  */
 function isSqlRequest(obj) {
-  if (!obj || typeof obj !== TYPEOF.OBJECT) return false;
-  if (typeof obj.statement !== TYPEOF.STRING) return false;
+  if (!obj || typeof obj !== 'object') return false;
+  if (typeof obj.statement !== 'string') return false;
   if (!Array.isArray(obj.parameters)) return false;
-  if (typeof obj.tenantId !== TYPEOF.STRING) return false;
-  if (typeof obj.sessionId !== TYPEOF.STRING) return false;
-  if (typeof obj.executionMode !== TYPEOF.STRING) return false;
+  if (typeof obj.tenantId !== 'string') return false;
+  if (typeof obj.sessionId !== 'string') return false;
+  if (typeof obj.executionMode !== 'string') return false;
   if (obj.executionMode === EXECUTION_MODE.PARTITION_CALLBACK &&
-      typeof obj.runtimeKind !== TYPEOF.STRING) {
+      typeof obj.runtimeKind !== 'string') {
     return false;
   }
   if (obj.runtimeKind !== undefined &&
       obj.runtimeKind !== null &&
-      typeof obj.runtimeKind !== TYPEOF.STRING) {
+      typeof obj.runtimeKind !== 'string') {
     return false;
   }
   if (obj.dialect !== undefined &&
       obj.dialect !== null &&
-      typeof obj.dialect !== TYPEOF.STRING) {
+      typeof obj.dialect !== 'string') {
     return false;
   }
   return true;

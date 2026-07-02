@@ -4,11 +4,9 @@ const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
   EntityType,
-  NUM,
   PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   getPartitionRowFromCache,
   isPriorityControlPlanePartition,
@@ -62,7 +60,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
         readiness.dimensions :
         null;
     if (!dimensions) {
@@ -137,19 +135,19 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    */
   resolveCriticalSystemRequiredHealthyNodeCount(activeNodeCount) {
     const normalizedActiveNodeCount =
-      Number.isInteger(activeNodeCount) && activeNodeCount > NUM.ZERO ?
+      Number.isInteger(activeNodeCount) && activeNodeCount > 0 ?
         activeNodeCount :
-        NUM.ZERO;
-    if (normalizedActiveNodeCount === NUM.ZERO) {
-      return NUM.ZERO;
+        0;
+    if (normalizedActiveNodeCount === 0) {
+      return 0;
     }
     if (!this.isControlPlanePriorityPartition()) {
       return normalizedActiveNodeCount;
     }
     const targetReplicaCount = this.getPriorityControlPlaneTargetReplicaCount();
     const quorumTarget = Math.max(
-      NUM.ONE,
-      Math.floor(targetReplicaCount / NUM.TWO) + NUM.ONE,
+      1,
+      Math.floor(targetReplicaCount / 2) + 1,
     );
     return Math.min(quorumTarget, normalizedActiveNodeCount);
   }
@@ -166,17 +164,17 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    */
   resolvePriorityControlPlaneQuorumDistinctNodeCount(readyNodeCount) {
     const normalizedReadyNodeCount =
-      Number.isInteger(readyNodeCount) && readyNodeCount > NUM.ZERO ?
+      Number.isInteger(readyNodeCount) && readyNodeCount > 0 ?
         readyNodeCount :
-        NUM.ZERO;
-    if (normalizedReadyNodeCount === NUM.ZERO) {
-      return NUM.ZERO;
+        0;
+    if (normalizedReadyNodeCount === 0) {
+      return 0;
     }
     const quorumTarget = Math.max(
-      NUM.ONE,
+      1,
       Math.floor(
-        PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT / NUM.TWO,
-      ) + NUM.ONE,
+        PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT / 2,
+      ) + 1,
     );
     return Math.min(quorumTarget, normalizedReadyNodeCount);
   }
@@ -201,7 +199,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     );
     if (
       Number.isFinite(configuredReplicaCount) &&
-      configuredReplicaCount > NUM.ZERO
+      configuredReplicaCount > 0
     ) {
       return Math.floor(configuredReplicaCount);
     }
@@ -227,7 +225,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       this.entityId,
     );
     const tableId =
-      typeof partitionRow?.table_id === TYPEOF.STRING ?
+      typeof partitionRow?.table_id === 'string' ?
         partitionRow.table_id :
         partitionRow?.tableId;
     return tableId === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
@@ -249,12 +247,12 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     const targetReplicaCount = this.getPriorityControlPlaneTargetReplicaCount();
     if (
       !Number.isFinite(targetReplicaCount) ||
-      targetReplicaCount <= NUM.ZERO
+      targetReplicaCount <= 0
     ) {
       return false;
     }
     const currentReplicas =
-      typeof this.getCurrentReplicas === TYPEOF.FUNCTION ?
+      typeof this.getCurrentReplicas === 'function' ?
         this.getCurrentReplicas() :
         [];
     const activeVoterReplicaCount = (Array.isArray(currentReplicas) ?
@@ -288,18 +286,18 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
   getCriticalSystemEndpointVisibilityPolicy(activeNodeIds = []) {
     const activeNodeCount = Array.isArray(activeNodeIds) ?
       activeNodeIds.filter(
-        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ).length :
-      NUM.ZERO;
+      0;
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const requireEveryActiveNode =
       this.shouldRequireFullControlPlanePublicationEndpointVisibility();
     const requiredReadyNodeCount =
       isPriorityPartition &&
       !requireEveryActiveNode &&
-      activeNodeCount > NUM.ZERO ?
+      activeNodeCount > 0 ?
         Math.max(
-          NUM.ONE,
+          1,
           Math.min(
             activeNodeCount,
             this.getPriorityControlPlaneTargetReplicaCount(),
@@ -356,16 +354,16 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     if (
       publicationService &&
       typeof publicationService.getLatestClusterPublicationSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       publicationRow = publicationService.getLatestClusterPublicationSync();
     } else if (
       publicationService &&
-      typeof publicationService.getLatestPublicationRowSync === TYPEOF.FUNCTION
+      typeof publicationService.getLatestPublicationRowSync === 'function'
     ) {
       publicationRow = publicationService.getLatestPublicationRowSync();
     }
-    return publicationRow && typeof publicationRow === TYPEOF.OBJECT ?
+    return publicationRow && typeof publicationRow === 'object' ?
       publicationRow :
       null;
   }
@@ -397,14 +395,14 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     if (
       publicationService &&
       typeof publicationService.getLatestPublishedClusterPublicationSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return publicationService.getLatestPublishedClusterPublicationSync();
     }
     if (
       publicationService &&
       typeof publicationService.getLatestPublishedPublicationRowSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return publicationService.getLatestPublishedPublicationRowSync();
     }

@@ -184,33 +184,33 @@ const ADMIN_ERROR_DETAIL_KEY = Object.freeze({
 });
 
 function buildLoadLaneRuntimeAuthoritySummary(runtimeAuthority) {
-  if (!runtimeAuthority || typeof runtimeAuthority !== TYPEOF.OBJECT) {
+  if (!runtimeAuthority || typeof runtimeAuthority !== 'object') {
     return null;
   }
   return Object.freeze({
     state:
-      typeof runtimeAuthority.state === TYPEOF.STRING ?
+      typeof runtimeAuthority.state === 'string' ?
         runtimeAuthority.state :
         null,
     ready: runtimeAuthority.ready === true,
     authorityAvailable: runtimeAuthority.authorityAvailable === true,
     visibilityState:
-      typeof runtimeAuthority.visibility?.state === TYPEOF.STRING ?
+      typeof runtimeAuthority.visibility?.state === 'string' ?
         runtimeAuthority.visibility.state :
         null,
     provisioningState:
-      typeof runtimeAuthority.provisioning?.state === TYPEOF.STRING ?
+      typeof runtimeAuthority.provisioning?.state === 'string' ?
         runtimeAuthority.provisioning.state :
         null,
     failureReason:
-      typeof runtimeAuthority.failure?.reason === TYPEOF.STRING ?
+      typeof runtimeAuthority.failure?.reason === 'string' ?
         runtimeAuthority.failure.reason :
         null,
     reasonCodes: Array.isArray(runtimeAuthority.reasonCodes) ?
       Object.freeze(
         runtimeAuthority.reasonCodes
           .map((value) => String(value || EMPTY_STRING).trim())
-          .filter((value) => value.length > NUM.ZERO),
+          .filter((value) => value.length > 0),
       ) :
       Object.freeze([]),
   });
@@ -219,14 +219,14 @@ function buildLoadLaneRuntimeAuthoritySummary(runtimeAuthority) {
 function buildLoadLaneQueryAdmissionSnapshot(readiness) {
   const hasDimensions = Boolean(
     readiness &&
-    typeof readiness === TYPEOF.OBJECT &&
+    typeof readiness === 'object' &&
     readiness.dimensions &&
-    typeof readiness.dimensions === TYPEOF.OBJECT,
+    typeof readiness.dimensions === 'object',
   );
   const reasonCodes = Array.isArray(readiness?.reasons) ?
     readiness.reasons
       .map((reason) => String(reason?.code || EMPTY_STRING).trim())
-      .filter((code) => code.length > NUM.ZERO) :
+      .filter((code) => code.length > 0) :
     [];
   return Object.freeze({
     serveEligible:
@@ -265,7 +265,7 @@ function buildLoadLaneQueryAdmissionResult(snapshot, state) {
 }
 
 function buildLoadLaneAdmissionErrorDetails(admission) {
-  if (!admission || typeof admission !== TYPEOF.OBJECT) {
+  if (!admission || typeof admission !== 'object') {
     return null;
   }
   return Object.freeze({
@@ -367,10 +367,10 @@ function createRetryableAdminOperationError(errorCode, message, options = {}) {
   );
   error.deferRetry = true;
   error.retryAfterMs =
-    Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > NUM.ZERO ?
+    Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > 0 ?
       Math.floor(options.retryAfterMs) :
       LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
-  if (options?.details && typeof options.details === TYPEOF.OBJECT) {
+  if (options?.details && typeof options.details === 'object') {
     error.adminDetails = options.details;
   }
   return error;
@@ -389,7 +389,7 @@ function resolveRequestedQueryTimeoutMs(value) {
     return null;
   }
   const normalizedValue = Math.floor(parsedValue);
-  if (normalizedValue <= NUM.ZERO) {
+  if (normalizedValue <= 0) {
     return null;
   }
   return normalizedValue;
@@ -397,39 +397,39 @@ function resolveRequestedQueryTimeoutMs(value) {
 
 function resolveSqlRequestTimeoutBudgetMs(timeoutMs) {
   const normalizedTimeoutMs =
-    Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO ?
+    Number.isFinite(timeoutMs) && timeoutMs > 0 ?
       Math.floor(timeoutMs) :
       ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
   const trimmedTimeoutMs =
     normalizedTimeoutMs - SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS;
-  return trimmedTimeoutMs > NUM.ZERO ? trimmedTimeoutMs : normalizedTimeoutMs;
+  return trimmedTimeoutMs > 0 ? trimmedTimeoutMs : normalizedTimeoutMs;
 }
 
 function appendStructuredQueryMetadata(message, value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
+  if (!value || typeof value !== 'object') {
     return;
   }
   if (
-    typeof value.outcome === TYPEOF.STRING &&
-    value.outcome.length > NUM.ZERO
+    typeof value.outcome === 'string' &&
+    value.outcome.length > 0
   ) {
     message.outcome = value.outcome;
   }
   if (
-    typeof value.visibilityState === TYPEOF.STRING &&
-    value.visibilityState.length > NUM.ZERO
+    typeof value.visibilityState === 'string' &&
+    value.visibilityState.length > 0
   ) {
     message.visibilityState = value.visibilityState;
   }
   if (
-    typeof value.contractState === TYPEOF.STRING &&
-    value.contractState.length > NUM.ZERO
+    typeof value.contractState === 'string' &&
+    value.contractState.length > 0
   ) {
     message.contractState = value.contractState;
   }
   if (
-    typeof value.nextAction === TYPEOF.STRING &&
-    value.nextAction.length > NUM.ZERO
+    typeof value.nextAction === 'string' &&
+    value.nextAction.length > 0
   ) {
     message.nextAction = value.nextAction;
   }
@@ -437,8 +437,8 @@ function appendStructuredQueryMetadata(message, value) {
     message.authoritativeVisibilityConfirmed = true;
   }
   if (
-    typeof value.reasonCode === TYPEOF.STRING &&
-    value.reasonCode.length > NUM.ZERO
+    typeof value.reasonCode === 'string' &&
+    value.reasonCode.length > 0
   ) {
     message.reasonCode = value.reasonCode;
   }
@@ -450,7 +450,7 @@ function appendStructuredQueryMetadata(message, value) {
   }
   if (
     value.runtimeAuthority &&
-    typeof value.runtimeAuthority === TYPEOF.OBJECT
+    typeof value.runtimeAuthority === 'object'
   ) {
     message.runtimeAuthority = value.runtimeAuthority;
   }

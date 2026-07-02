@@ -2,8 +2,6 @@ import {
   CONTROL_PLANE_GATEWAY_LIMIT,
   CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
   ControlPlaneDiagnosticsLedger,
-  NUM,
-  TYPEOF,
   buildAuthoritativeControlPlaneReadIntent,
   buildProjectionControlPlaneReadIntent,
   normalizePositiveInteger,
@@ -51,29 +49,29 @@ class ControlPlaneSystemTableGateway {
     this._controlPlaneReadinessService =
       options.controlPlaneReadinessService || null;
     this.sqlQueryEngineProvider =
-      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
+      typeof options.getSqlQueryEngine === 'function' ?
         options.getSqlQueryEngine :
         null;
     this.cdcIntegrationServiceProvider =
-      typeof options.getCdcIntegrationService === TYPEOF.FUNCTION ?
+      typeof options.getCdcIntegrationService === 'function' ?
         options.getCdcIntegrationService :
         null;
     this.systemTableCacheProvider =
-      typeof options.getSystemTableCache === TYPEOF.FUNCTION ?
+      typeof options.getSystemTableCache === 'function' ?
         options.getSystemTableCache :
         null;
     this.messageRouterProvider =
-      typeof options.getMessageRouter === TYPEOF.FUNCTION ?
+      typeof options.getMessageRouter === 'function' ?
         options.getMessageRouter :
         null;
     this.controlPlaneReadinessServiceProvider =
-      typeof options.getControlPlaneReadinessService === TYPEOF.FUNCTION ?
+      typeof options.getControlPlaneReadinessService === 'function' ?
         options.getControlPlaneReadinessService :
         null;
     this.pressureGovernor = options.pressureGovernor || null;
     this.logger = options.logger || null;
     this.now =
-      typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+      typeof options.now === 'function' ? options.now : () => Date.now();
     this.controlPlaneOperationLedger =
       options.controlPlaneOperationLedger ||
       new ControlPlaneDiagnosticsLedger({
@@ -106,26 +104,26 @@ class ControlPlaneSystemTableGateway {
       ),
     });
     this.gatewayMetrics = {
-      readSingleFlightJoinCount: NUM.ZERO,
-      querySingleFlightJoinCount: NUM.ZERO,
-      mutationSingleFlightJoinCount: NUM.ZERO,
-      readTrackingBypassCount: NUM.ZERO,
-      queryTrackingBypassCount: NUM.ZERO,
-      mutationReplacePendingQueuedCount: NUM.ZERO,
-      mutationReplacePendingSupersededCount: NUM.ZERO,
-      mutationTrackingRejectedCount: NUM.ZERO,
-      authoritativeRowSourceUnavailableCount: NUM.ZERO,
-      distributedParticipantFailureCount: NUM.ZERO,
-      reconnectDeliveryFailureCount: NUM.ZERO,
-      maxObservedInFlightReadRequests: NUM.ZERO,
-      maxObservedInFlightQueryRequests: NUM.ZERO,
-      maxObservedInFlightMutationRequests: NUM.ZERO,
-      maxObservedPendingReplaceMutationRequests: NUM.ZERO,
-      maxObservedRetainedRequestCount: NUM.ZERO,
-      maxObservedReadLatencyMs: NUM.ZERO,
-      maxObservedMutationLatencyMs: NUM.ZERO,
-      maxObservedMutationQueueWaitMs: NUM.ZERO,
-      maxObservedTransportPendingNodeConnectionCount: NUM.ZERO,
+      readSingleFlightJoinCount: 0,
+      querySingleFlightJoinCount: 0,
+      mutationSingleFlightJoinCount: 0,
+      readTrackingBypassCount: 0,
+      queryTrackingBypassCount: 0,
+      mutationReplacePendingQueuedCount: 0,
+      mutationReplacePendingSupersededCount: 0,
+      mutationTrackingRejectedCount: 0,
+      authoritativeRowSourceUnavailableCount: 0,
+      distributedParticipantFailureCount: 0,
+      reconnectDeliveryFailureCount: 0,
+      maxObservedInFlightReadRequests: 0,
+      maxObservedInFlightQueryRequests: 0,
+      maxObservedInFlightMutationRequests: 0,
+      maxObservedPendingReplaceMutationRequests: 0,
+      maxObservedRetainedRequestCount: 0,
+      maxObservedReadLatencyMs: 0,
+      maxObservedMutationLatencyMs: 0,
+      maxObservedMutationQueueWaitMs: 0,
+      maxObservedTransportPendingNodeConnectionCount: 0,
       readOutcomeCounts: Object.create(null),
       mutationOutcomeCounts: Object.create(null),
       mutationFailureReasonCounts: Object.create(null),
@@ -189,10 +187,10 @@ async function readAuthoritativeControlPlaneRows(
   params = [],
   options = {},
 ) {
-  if (gateway && typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
+  if (gateway && typeof gateway.readAuthoritativeRows === 'function') {
     return gateway.readAuthoritativeRows(tableName, sql, params, options);
   }
-  if (gateway && typeof gateway.executeRead === TYPEOF.FUNCTION) {
+  if (gateway && typeof gateway.executeRead === 'function') {
     return gateway.executeRead(
       buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
       options,
@@ -206,10 +204,10 @@ async function readProjectionControlPlaneRows(
   tableName,
   options = {},
 ) {
-  if (gateway && typeof gateway.readProjectionRows === TYPEOF.FUNCTION) {
+  if (gateway && typeof gateway.readProjectionRows === 'function') {
     return gateway.readProjectionRows(tableName, options);
   }
-  if (gateway && typeof gateway.executeRead === TYPEOF.FUNCTION) {
+  if (gateway && typeof gateway.executeRead === 'function') {
     return gateway.executeRead(
       buildProjectionControlPlaneReadIntent(tableName, options),
       options,

@@ -1,9 +1,6 @@
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
-const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_NONE = 'none';
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_UNKNOWN = 'unknown';
 
 const LOGICAL_SERVICE_STATUS = Object.freeze({
@@ -109,7 +106,7 @@ export function getLogicalServiceRows(tables, filter = {}) {
       healthy_replica_count: healthyReplicaCount,
       node_count: nodes.length,
       nodes,
-      nodes_summary: nodes.length > LOCAL_NUM_ZERO ? nodes.join(LOCAL_STR_128KJ) : LOCAL_STR_NONE,
+      nodes_summary: nodes.length > 0 ? nodes.join(LOCAL_STR_COMMA_SPACE) : LOCAL_STR_NONE,
       status: resolveLogicalServiceStatus(
         desiredReplicaCount,
         observedReplicaCount,
@@ -197,9 +194,9 @@ export function formatEndpointAddress(endpoint) {
  */
 export function resolveServiceId(row) {
   if (!row) {
-    return LOCAL_STR_EMPTY;
+    return '';
   }
-  return row.service_id || row.serviceId || row.id || LOCAL_STR_EMPTY;
+  return row.service_id || row.serviceId || row.id || '';
 }
 
 /**
@@ -293,8 +290,8 @@ export function getEndpointsByServiceId(tables) {
 export function resolveReplicaCount(definition) {
   const raw = definition?.replica_count ?? definition?.replicaCount ?? 0;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ZERO) {
-    return LOCAL_NUM_ZERO;
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
   }
   return Math.floor(parsed);
 }
@@ -324,9 +321,9 @@ export function countHealthyEndpoints(endpoints) {
   return endpoints.reduce((count, endpoint) => {
     const status = resolveRuntimeStatus(null, endpoint);
     return HEALTHY_RUNTIME_STATUS.has(String(status).toLowerCase()) ?
-      count + LOCAL_NUM_ONE :
+      count + 1 :
       count;
-  }, LOCAL_NUM_ZERO);
+  }, 0);
 }
 
 /**
@@ -341,15 +338,15 @@ export function resolveLogicalServiceStatus(
   observedReplicaCount,
   healthyReplicaCount,
 ) {
-  if (desiredReplicaCount <= LOCAL_NUM_ZERO) {
-    return observedReplicaCount === LOCAL_NUM_ZERO ?
+  if (desiredReplicaCount <= 0) {
+    return observedReplicaCount === 0 ?
       LOGICAL_SERVICE_STATUS.UNKNOWN :
       LOGICAL_SERVICE_STATUS.HEALTHY;
   }
   if (healthyReplicaCount >= desiredReplicaCount) {
     return LOGICAL_SERVICE_STATUS.HEALTHY;
   }
-  if (healthyReplicaCount === LOCAL_NUM_ZERO) {
+  if (healthyReplicaCount === 0) {
     return LOGICAL_SERVICE_STATUS.DEGRADED;
   }
   return LOGICAL_SERVICE_STATUS.PARTIAL;

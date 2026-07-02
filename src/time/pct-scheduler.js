@@ -41,7 +41,6 @@
  * VirtualTimeSource built without one keeps its byte-identical (dueAt, seq) ordering.
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {resolveRandomSource} from '../random/random-source.js';
 
 // Default schedule-step ceiling used to place change points when the caller gives none.
@@ -74,23 +73,23 @@ class PctScheduler {
     this._random = resolveRandomSource(options);
 
     const depth = Math.floor(Number(options.depth));
-    this._depth = Number.isFinite(depth) && depth >= NUM.ONE ? depth : NUM.ONE;
+    this._depth = Number.isFinite(depth) && depth >= 1 ? depth : 1;
 
     const budget = Math.floor(Number(options.stepBudget));
-    this._stepBudget = Number.isFinite(budget) && budget >= NUM.ONE ?
+    this._stepBudget = Number.isFinite(budget) && budget >= 1 ?
       budget :
       DEFAULT_STEP_BUDGET;
 
-    this._keyOf = typeof options.keyOf === TYPEOF.FUNCTION ?
+    this._keyOf = typeof options.keyOf === 'function' ?
       options.keyOf :
       defaultKeyOf;
 
-    this._changePointCount = Math.max(NUM.ZERO, this._depth - NUM.ONE);
+    this._changePointCount = Math.max(0, this._depth - 1);
     // taskKey -> current priority (higher fires first). Initial priorities live strictly
     // above the low band [1, changePointCount] so an un-demoted task always beats a
     // demoted one.
     this._priorities = new Map();
-    this._step = NUM.ZERO;
+    this._step = 0;
     // step -> distinct low priority in [1, changePointCount].
     this._changePoints = this._chooseChangePoints();
   }
@@ -108,20 +107,20 @@ class PctScheduler {
     // Bounded attempts: with the seeded source this terminates deterministically; the
     // cap guards a pathological stepBudget < changePointCount (just yields fewer points).
     const maxAttempts =
-      this._stepBudget * 4 + this._changePointCount * 8 + NUM.ONE;
-    let attempts = NUM.ZERO;
+      this._stepBudget * 4 + this._changePointCount * 8 + 1;
+    let attempts = 0;
     while (
       points.size < this._changePointCount &&
       attempts < maxAttempts
     ) {
-      attempts += NUM.ONE;
-      const step = NUM.ONE +
+      attempts += 1;
+      const step = 1 +
         Math.floor(this._random.random() * this._stepBudget);
       if (chosen.has(step)) {
         continue;
       }
       chosen.add(step);
-      points.set(step, points.size + NUM.ONE);
+      points.set(step, points.size + 1);
     }
     return points;
   }
@@ -139,7 +138,7 @@ class PctScheduler {
     }
     // High band: strictly above the integer low band [1, changePointCount].
     const priority =
-      this._changePointCount + NUM.ONE + this._random.random();
+      this._changePointCount + 1 + this._random.random();
     this._priorities.set(key, priority);
     return priority;
   }
@@ -152,12 +151,12 @@ class PctScheduler {
    * @return {Object|null} the timer to fire, or null if none.
    */
   pick(timers) {
-    if (!Array.isArray(timers) || timers.length === NUM.ZERO) {
+    if (!Array.isArray(timers) || timers.length === 0) {
       return null;
     }
     let best = null;
     let bestKey = null;
-    let bestPriority = NUM.ZERO;
+    let bestPriority = 0;
     for (const timer of timers) {
       const key = this._keyOf(timer);
       const priority = this._priorityOf(key);
@@ -172,7 +171,7 @@ class PctScheduler {
       }
     }
 
-    this._step += NUM.ONE;
+    this._step += 1;
     const lowPriority = this._changePoints.get(this._step);
     if (lowPriority !== undefined) {
       this._priorities.set(bestKey, lowPriority);

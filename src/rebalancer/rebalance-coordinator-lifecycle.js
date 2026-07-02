@@ -3,17 +3,17 @@ import {resolveTimeSource} from '../time/time-source.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
-const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
 const LOCAL_STR_TABLEPOLICYSERVICE = 'tablePolicyService';
 const LOCAL_STR_SQLQUERYENGINE = 'sqlQueryEngine';
-const LOCAL_STR_1506A = 'storageAccountingService';
-const LOCAL_STR_NXU1D = 'storageAdmissionService';
-const LOCAL_STR_1UD6S = 'cdcGroupPropagationService';
-const LOCAL_STR_V9KQS = 'bootstrapReadinessState';
-const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
-const LOCAL_STR_1WEH4 = 'controlPlaneReadinessService';
-const LOCAL_STR_1HYTQ = 'transactionCoordinator';
+const LOCAL_STR_STORAGEACCOUNTINGSERVICE = 'storageAccountingService';
+const LOCAL_STR_STORAGEADMISSIONSERVICE = 'storageAdmissionService';
+const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
+const LOCAL_STR_BOOTSTRAPREADINESSSTATE = 'bootstrapReadinessState';
+const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
+const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
+const LOCAL_STR_TRANSACTIONCOORDINATOR = 'transactionCoordinator';
 
 const {
   ConfigurationManager,
@@ -23,7 +23,6 @@ const {
   ExecutorOutcomeEmitter,
   INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
   LoggingService,
-  NUM,
   OUTCOME_EVENT_NAME,
   OperationLane,
   OperationWorkflowOwner,
@@ -192,7 +191,7 @@ class RebalanceCoordinatorLifecycle {
       typeof options.clearIntervalFn === LOCAL_STR_FUNCTION ?
         options.clearIntervalFn :
         (handle) => this.timeSource.clearInterval(handle);
-    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.lastEmptyIncompleteOperationQueryAtMs = 0;
     this.incompleteOperationQueryEmptyBackoffMs =
       INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS;
 
@@ -204,13 +203,13 @@ class RebalanceCoordinatorLifecycle {
 
     // Statistics (local counters only, not cached state)
     this.stats = {
-      operationsCreated: NUM.ZERO,
-      operationsCompleted: NUM.ZERO,
-      operationsFailed: NUM.ZERO,
-      operationsTimedOut: NUM.ZERO,
-      reservationsCreated: NUM.ZERO,
-      reservationsReleased: NUM.ZERO,
-      reservationsReconciled: NUM.ZERO,
+      operationsCreated: 0,
+      operationsCompleted: 0,
+      operationsFailed: 0,
+      operationsTimedOut: 0,
+      reservationsCreated: 0,
+      reservationsReleased: 0,
+      reservationsReconciled: 0,
     };
 
     this.operationWorkflowCoordinator = assertCritical(
@@ -244,7 +243,7 @@ class RebalanceCoordinatorLifecycle {
       options.priorityRecoveryActivityStaleGraceMs,
     ) ?
       Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(options.priorityRecoveryActivityStaleGraceMs),
       ) :
       DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
@@ -347,7 +346,7 @@ class RebalanceCoordinatorLifecycle {
     if (Object.hasOwn(options, LOCAL_STR_SYSTEMTABLECACHE)) {
       this.systemTableCache = options.systemTableCache || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
+    if (Object.hasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
     if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
@@ -359,17 +358,17 @@ class RebalanceCoordinatorLifecycle {
     if (Object.hasOwn(options, LOCAL_STR_SQLQUERYENGINE)) {
       this.sqlQueryEngine = options.sqlQueryEngine || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1506A)) {
+    if (Object.hasOwn(options, LOCAL_STR_STORAGEACCOUNTINGSERVICE)) {
       this.storageAccountingService = options.storageAccountingService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_NXU1D)) {
+    if (Object.hasOwn(options, LOCAL_STR_STORAGEADMISSIONSERVICE)) {
       this.storageAdmissionService = options.storageAdmissionService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1UD6S)) {
+    if (Object.hasOwn(options, LOCAL_STR_CDCGROUPPROPAGATIONSERVICE)) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_V9KQS)) {
+    if (Object.hasOwn(options, LOCAL_STR_BOOTSTRAPREADINESSSTATE)) {
       this.bootstrapReadinessState = options.bootstrapReadinessState || null;
       if (
         this.startupRecoveryCoordinator &&
@@ -381,15 +380,15 @@ class RebalanceCoordinatorLifecycle {
         });
       }
     }
-    if (Object.hasOwn(options, LOCAL_STR_1KAZK)) {
+    if (Object.hasOwn(options, LOCAL_STR_STARTUPRECOVERYCOORDINATOR)) {
       this.startupRecoveryCoordinator =
         options.startupRecoveryCoordinator || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1WEH4)) {
+    if (Object.hasOwn(options, LOCAL_STR_CONTROLPLANEREADINESSSERVICE)) {
       this.controlPlaneReadinessService =
         options.controlPlaneReadinessService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_1HYTQ)) {
+    if (Object.hasOwn(options, LOCAL_STR_TRANSACTIONCOORDINATOR)) {
       this.transactionCoordinator = options.transactionCoordinator || null;
     }
 

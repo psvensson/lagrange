@@ -28,7 +28,6 @@ const LOCAL_STR_FOLLOW = 'follow';
 const LOCAL_STR_1 = '1';
 const LOCAL_STR_AUTOPLAY = 'autoplay';
 const LOCAL_STR_RUNID = 'runId';
-const LOCAL_NUM_ZERO = 0;
 
 const PATH_SEPARATOR_WEB = '/';
 const EMPTY_STRING = '';
@@ -180,7 +179,7 @@ function buildLivePlaybackViewerUrl(payload, options = {}) {
     params.set(LOCAL_STR_RUNID, options.runId);
   }
   if (Number.isFinite(Number(options.runStartMs)) &&
-    Number(options.runStartMs) > LOCAL_NUM_ZERO) {
+    Number(options.runStartMs) > 0) {
     params.set(
       PLAYBACK_RUN_START_QUERY_KEY,
       String(Math.floor(Number(options.runStartMs))),

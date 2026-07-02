@@ -11,10 +11,8 @@ const {
   EXECUTION_MODE,
   ErrorCode,
   MessageType,
-  NUM,
   QUERY_RESULT_MESSAGE_KIND,
   QUERY_RESULT_WRITE_OPERATIONS,
-  TYPEOF,
   appendStructuredQueryMetadata,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
@@ -28,7 +26,7 @@ function createAdminQueryResultBaseEnvelope(queryId) {
 
 function resolveAdminQueryResultPayloadContext(result) {
   const operation =
-    typeof result?.operation === TYPEOF.STRING ?
+    typeof result?.operation === 'string' ?
       result.operation.trim().toLowerCase() :
       EMPTY_STRING;
   const hasAffectedRows = Number.isFinite(Number(result?.affectedRows));
@@ -82,7 +80,7 @@ function applyAdminErrorQueryResultMessagePayload(message, result) {
   if (result.hint) {
     message.hint = result.hint;
   }
-  if (result.details && typeof result.details === TYPEOF.OBJECT) {
+  if (result.details && typeof result.details === 'object') {
     message.details = result.details;
   }
   if (result.deferRetry === true) {
@@ -90,7 +88,7 @@ function applyAdminErrorQueryResultMessagePayload(message, result) {
   }
   if (Number.isFinite(result.retryAfterMs)) {
     message.retryAfterMs = Math.max(
-      NUM.ZERO,
+      0,
       Math.floor(result.retryAfterMs),
     );
   }

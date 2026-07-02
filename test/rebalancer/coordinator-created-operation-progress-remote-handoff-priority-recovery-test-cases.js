@@ -1,4 +1,4 @@
-import {NUM, SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -74,7 +74,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ZERO,
+          operationCount: 0,
           operations: [],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -239,7 +239,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [dispatchPendingOperation],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -304,7 +304,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
         const planning = buildRemotePriorityDispatchPendingPlanningSnapshot();
         const snapshot =
-          planning.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+          planning.priorityRecoveryDecisionSnapshots.snapshots[0];
         return Object.freeze({
           ...planning,
           priorityRecoveryDecisionSnapshots: Object.freeze({
@@ -325,7 +325,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [dispatchPendingOperation],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -411,7 +411,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
         const planning = buildRemotePriorityTimeoutPlanningSnapshot();
         const snapshot =
-          planning.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+          planning.priorityRecoveryDecisionSnapshots.snapshots[0];
         return Object.freeze({
           ...planning,
           priorityRecoveryDecisionSnapshots: Object.freeze({
@@ -452,7 +452,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [targetProgressOperation],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -538,7 +538,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [staleDispatchPendingOperation],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -621,7 +621,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
         authoritativeObservationCalls.push({entityType, entityId});
         return Object.freeze({
           state: 'present',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [buildRemotePriorityVisibilityOperation()],
           deferredOutcome: null,
           retryAfterMs: null,
@@ -667,7 +667,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'deferred',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [buildRemotePriorityVisibilityOperation()],
           deferredOutcome: Object.freeze({
             completionState:
@@ -724,7 +724,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
       async () => {
         return Object.freeze({
           state: 'deferred',
-          operationCount: NUM.ZERO,
+          operationCount: 0,
           operations: [],
           deferredOutcome: Object.freeze({
             completionState:
@@ -792,7 +792,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
         authoritativeObservationCalls.push({entityType, entityId});
         return Object.freeze({
           state: 'deferred',
-          operationCount: NUM.ONE,
+          operationCount: 1,
           operations: [staleCacheVisibleOperation],
           deferredOutcome: Object.freeze({
             completionState:
@@ -879,7 +879,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
         authoritativeObservationCalls.push({entityType, entityId});
         return Object.freeze({
           state: REMOTE_PRIORITY_EMPTY_OBSERVATION_STATE,
-          operationCount: NUM.ZERO,
+          operationCount: 0,
           operations: [],
           deferredOutcome: null,
           retryAfterMs: null,

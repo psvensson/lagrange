@@ -2,7 +2,6 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
   DISTRIBUTED_JOIN_STRATEGY,
-  NUM,
   QUERY_AST_NODE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -44,7 +43,7 @@ const queryExecutorJoinExecutionMethods = {
           partitionIds = planned.partitions;
         }
       }
-      if (partitionIds.length > NUM.ZERO) {
+      if (partitionIds.length > 0) {
         joinPartitions.set(joinTableName, partitionIds);
       }
     }
@@ -97,7 +96,7 @@ const queryExecutorJoinExecutionMethods = {
     );
     fanoutMetrics.push(this.getLastCoordinatorMetrics());
     const mainFailures = mainResults.filter((result) => !result.success);
-    if (mainFailures.length > NUM.ZERO) {
+    if (mainFailures.length > 0) {
       const failureSummary = buildDistributedFailureSummary(mainFailures);
       return {
         success: false,
@@ -106,7 +105,7 @@ const queryExecutorJoinExecutionMethods = {
         ...failureSummary,
         distributedMetrics: {
           fanout: fanoutMetrics,
-          mergeDurationMs: NUM.ZERO,
+          mergeDurationMs: 0,
           failedPartitionCount: mainFailures.length,
         },
       };
@@ -123,7 +122,7 @@ const queryExecutorJoinExecutionMethods = {
     for (const join of ast.joins) {
       const joinTableName = join.table.name;
       const joinTablePartitions = joinPartitions.get(joinTableName) || [];
-      if (joinTablePartitions.length > NUM.ZERO) {
+      if (joinTablePartitions.length > 0) {
         const joinSql = `${QUERY_SQL.SELECT_ALL_FROM_PREFIX}${joinTableName}`;
         const joinResults = await this.executeOnPartitions(
           joinTablePartitions,
@@ -143,7 +142,7 @@ const queryExecutorJoinExecutionMethods = {
         );
         fanoutMetrics.push(this.getLastCoordinatorMetrics());
         const joinFailures = joinResults.filter((result) => !result.success);
-        if (joinFailures.length > NUM.ZERO) {
+        if (joinFailures.length > 0) {
           const failureSummary = buildDistributedFailureSummary(joinFailures);
           return {
             success: false,
@@ -152,7 +151,7 @@ const queryExecutorJoinExecutionMethods = {
             ...failureSummary,
             distributedMetrics: {
               fanout: fanoutMetrics,
-              mergeDurationMs: NUM.ZERO,
+              mergeDurationMs: 0,
               failedPartitionCount: joinFailures.length,
             },
           };
@@ -214,7 +213,7 @@ const queryExecutorJoinExecutionMethods = {
       distributedMetrics: {
         fanout: fanoutMetrics,
         mergeDurationMs,
-        failedPartitionCount: NUM.ZERO,
+        failedPartitionCount: 0,
       },
     };
   },
@@ -262,7 +261,7 @@ const queryExecutorJoinExecutionMethods = {
     for (const leftRow of leftRows) {
       const key = leftRow[leftColumn];
       const matches = rightIndex.get(key) || [];
-      if (matches.length > NUM.ZERO) {
+      if (matches.length > 0) {
         for (const rightRow of matches) {
           result.push(
             this.combineJoinRows(
@@ -279,8 +278,8 @@ const queryExecutorJoinExecutionMethods = {
         joinType === QUERY_JOIN_TYPE.LEFT_OUTER
       ) {
         const nullRight = {};
-        if (rightRows.length > NUM.ZERO) {
-          for (const col of Object.keys(rightRows[NUM.ZERO])) {
+        if (rightRows.length > 0) {
+          for (const col of Object.keys(rightRows[0])) {
             nullRight[col] = null;
           }
         }
@@ -302,8 +301,8 @@ const queryExecutorJoinExecutionMethods = {
       for (const rightRow of rightRows) {
         if (!matchedRight.has(rightRow)) {
           const nullLeft = {};
-          if (leftRows.length > NUM.ZERO) {
-            for (const col of Object.keys(leftRows[NUM.ZERO])) {
+          if (leftRows.length > 0) {
+            for (const col of Object.keys(leftRows[0])) {
               nullLeft[col] = null;
             }
           }
@@ -422,8 +421,8 @@ const queryExecutorJoinExecutionMethods = {
           joinType === QUERY_JOIN_TYPE.LEFT_OUTER)
       ) {
         const nullRight = {};
-        if (rightRows.length > NUM.ZERO) {
-          for (const col of Object.keys(rightRows[NUM.ZERO])) {
+        if (rightRows.length > 0) {
+          for (const col of Object.keys(rightRows[0])) {
             nullRight[col] = null;
           }
         }
@@ -439,8 +438,8 @@ const queryExecutorJoinExecutionMethods = {
       for (const rightRow of rightRows) {
         if (!matchedRight.has(rightRow)) {
           const nullLeft = {};
-          if (leftRows.length > NUM.ZERO) {
-            for (const col of Object.keys(leftRows[NUM.ZERO])) {
+          if (leftRows.length > 0) {
+            for (const col of Object.keys(leftRows[0])) {
               nullLeft[col] = null;
             }
           }

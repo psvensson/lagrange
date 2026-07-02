@@ -2,7 +2,6 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   QUERY_MESSAGE_FIELD_MIGRATION_ID,
   QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
@@ -25,7 +24,7 @@ function createDefaultPartitionRequestBuilder({
     if (
       typeof executionOptions.sessionId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      executionOptions.sessionId.length > NUM.ZERO
+      executionOptions.sessionId.length > 0
     ) {
       request[QUERY_MESSAGE_FIELD_SESSION_ID] = executionOptions.sessionId;
     }

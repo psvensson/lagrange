@@ -24,11 +24,10 @@ import {
   LOG_QUERY_LOG_MSG,
 } from './logging-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_LOGQUERYSERVICE = 'LogQueryService';
 const LOCAL_STR_READ = 'read';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_Y2288 = '\'\'';
+const LOCAL_STR_SQUOTE_SQUOTE = '\'\'';
 
 const DEFAULT_RECENT_MINUTES = 60;
 const MINUTES_TO_MS = 60 * 1000;
@@ -370,7 +369,7 @@ class LogQueryService extends EventEmitter {
       startTime,
       endTime,
       limit = this.defaultLimit,
-      offset = LOCAL_NUM_ZERO,
+      offset = 0,
       orderBy = DEFAULT_ORDER_COLUMN,
       orderDir = ORDER_DESC,
     } = options;
@@ -496,7 +495,7 @@ class LogQueryService extends EventEmitter {
     if (typeof str !== LOCAL_STR_STRING) {
       return String(str);
     }
-    return str.replace(/'/g, LOCAL_STR_Y2288);
+    return str.replace(/'/g, LOCAL_STR_SQUOTE_SQUOTE);
   }
 
   /**

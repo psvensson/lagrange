@@ -5,34 +5,32 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   GATEWAY_LOG_MSG,
   METRICS_LOG_TAG,
-  NUM,
-  TYPEOF,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
 
-const LOCAL_STR_1NXSQ = 'maxObservedMutationQueueWaitMs';
-const LOCAL_STR_SLN22 = 'maxObservedTransportPendingNodeConnectionCount';
-const LOCAL_STR_1UYEC = 'mutationFailureReasonCounts';
-const LOCAL_STR_1OW12 = 'authoritativeRowSourceUnavailableCount';
-const LOCAL_STR_1O67A = 'distributedParticipantFailureCount';
-const LOCAL_STR_1K86M = 'reconnectDeliveryFailureCount';
+const LOCAL_STR_MAXOBSERVEDMUTATIONQUEUEWAITMS = 'maxObservedMutationQueueWaitMs';
+const LOCAL_STR_MAXOBSERVEDTRANSPORTPENDINGNODECONNECTIO = 'maxObservedTransportPendingNodeConnectionCount';
+const LOCAL_STR_MUTATIONFAILUREREASONCOUNTS = 'mutationFailureReasonCounts';
+const LOCAL_STR_AUTHORITATIVEROWSOURCEUNAVAILABLECOUNT = 'authoritativeRowSourceUnavailableCount';
+const LOCAL_STR_DISTRIBUTEDPARTICIPANTFAILURECOUNT = 'distributedParticipantFailureCount';
+const LOCAL_STR_RECONNECTDELIVERYFAILURECOUNT = 'reconnectDeliveryFailureCount';
 
 const controlPlaneSystemTableGatewayTelemetryMethods = {
   incrementGatewayOutcomeMetric(bucketName, outcome) {
     const bucket = this.gatewayMetrics?.[bucketName];
-    if (!bucket || typeof bucket !== TYPEOF.OBJECT) {
+    if (!bucket || typeof bucket !== 'object') {
       return;
     }
     const normalizedOutcome =
-      typeof outcome === TYPEOF.STRING && outcome.length > NUM.ZERO ?
+      typeof outcome === 'string' && outcome.length > 0 ?
         outcome :
         'unknown';
     bucket[normalizedOutcome] = Number.isFinite(bucket[normalizedOutcome]) ?
-      bucket[normalizedOutcome] + NUM.ONE :
-      NUM.ONE;
+      bucket[normalizedOutcome] + 1 :
+      1;
   },
 
   /**
@@ -41,7 +39,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
    * @private
    */
   emitGatewayMetric(tag, data) {
-    if (typeof this.logger?.info !== TYPEOF.FUNCTION) {
+    if (typeof this.logger?.info !== 'function') {
       return;
     }
     try {
@@ -57,7 +55,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
    * @private
    */
   emitGatewayWarning(message, data) {
-    if (typeof this.logger?.warn !== TYPEOF.FUNCTION) {
+    if (typeof this.logger?.warn !== 'function') {
       return;
     }
     try {
@@ -90,9 +88,9 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
    */
   resolveLatencyMs(startedAtMs) {
     if (!Number.isFinite(startedAtMs)) {
-      return NUM.ZERO;
+      return 0;
     }
-    return Math.max(NUM.ZERO, Math.floor(this.now() - startedAtMs));
+    return Math.max(0, Math.floor(this.now() - startedAtMs));
   },
 
   /**
@@ -101,18 +99,18 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
    */
   resolveTransportPressureSummary() {
     const messageRouter =
-      typeof this.resolveMessageRouter === TYPEOF.FUNCTION ?
+      typeof this.resolveMessageRouter === 'function' ?
         this.resolveMessageRouter() :
         this.messageRouter;
     if (
       !messageRouter ||
-      typeof messageRouter.getOutboundPressureSummary !== TYPEOF.FUNCTION
+      typeof messageRouter.getOutboundPressureSummary !== 'function'
     ) {
       return null;
     }
     try {
       const summary = messageRouter.getOutboundPressureSummary();
-      return summary && typeof summary === TYPEOF.OBJECT ? summary : null;
+      return summary && typeof summary === 'object' ? summary : null;
     } catch (_error) {
       return null;
     }
@@ -126,7 +124,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
   recordReadTelemetry(context = {}, result = {}) {
     const latencyMs = this.resolveLatencyMs(context.startedAtMs);
     const outcome =
-      typeof result?.outcome === TYPEOF.STRING ?
+      typeof result?.outcome === 'string' ?
         result.outcome :
         CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
     this.incrementGatewayOutcomeMetric(
@@ -153,7 +151,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
         result.rowCount :
         Array.isArray(result?.rows) ?
           result.rows.length :
-          NUM.ZERO,
+          0,
     });
     if (
       outcome === CONTROL_PLANE_READ_OUTCOME.DEFERRED ||
@@ -190,7 +188,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
   recordMutationTelemetry(context = {}, result = {}) {
     const latencyMs = this.resolveLatencyMs(context.startedAtMs);
     const outcome =
-      typeof result?.outcome === TYPEOF.STRING ?
+      typeof result?.outcome === 'string' ?
         result.outcome :
         CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
     const retainedRequests = this.buildRetainedRequestsSnapshot();
@@ -199,26 +197,26 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
     const errorCode = getControlPlaneErrorCode(result) || null;
     const transportPressureSummary = this.resolveTransportPressureSummary();
     const queueWaitMs = Number.isFinite(result?.queueWaitMs) ?
-      Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)) :
-      NUM.ZERO;
+      Math.max(0, Math.floor(result.queueWaitMs)) :
+      0;
     const transportPendingNodeConnectionCount = Number.isFinite(
       transportPressureSummary?.pendingNodeConnectionCount,
     ) ?
       Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(transportPressureSummary.pendingNodeConnectionCount),
       ) :
-      NUM.ZERO;
+      0;
     const transportReconnectBeforeDeliveryFailureCount = Number.isFinite(
       transportPressureSummary?.reconnectBeforeDeliveryFailureCount,
     ) ?
       Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(
           transportPressureSummary.reconnectBeforeDeliveryFailureCount,
         ),
       ) :
-      NUM.ZERO;
+      0;
     this.incrementGatewayOutcomeMetric(
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONOUTCOMECOUNTS,
       outcome,
@@ -227,26 +225,26 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MAXOBSERVEDMUTATIONLATENCYMS,
       latencyMs,
     );
-    this.recordGatewayLatency(LOCAL_STR_1NXSQ, queueWaitMs);
+    this.recordGatewayLatency(LOCAL_STR_MAXOBSERVEDMUTATIONQUEUEWAITMS, queueWaitMs);
     this.recordGatewayLatency(
-      LOCAL_STR_SLN22,
+      LOCAL_STR_MAXOBSERVEDTRANSPORTPENDINGNODECONNECTIO,
       transportPendingNodeConnectionCount,
     );
     if (result?.success === false) {
       this.incrementGatewayOutcomeMetric(
-        LOCAL_STR_1UYEC,
+        LOCAL_STR_MUTATIONFAILUREREASONCOUNTS,
         failureSummary.primaryReason,
       );
       this.addGatewayMetric(
-        LOCAL_STR_1OW12,
+        LOCAL_STR_AUTHORITATIVEROWSOURCEUNAVAILABLECOUNT,
         failureSummary.authoritativeRowSourceUnavailableCount,
       );
       this.addGatewayMetric(
-        LOCAL_STR_1O67A,
+        LOCAL_STR_DISTRIBUTEDPARTICIPANTFAILURECOUNT,
         failureSummary.distributedParticipantFailureCount,
       );
       this.addGatewayMetric(
-        LOCAL_STR_1K86M,
+        LOCAL_STR_RECONNECTDELIVERYFAILURECOUNT,
         failureSummary.reconnectDeliveryFailureCount,
       );
     }
@@ -261,7 +259,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
       mergePolicy: context.mergePolicy || null,
       latencyMs,
       queueState:
-        typeof result?.queueState === TYPEOF.STRING ?
+        typeof result?.queueState === 'string' ?
           result.queueState :
           CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
       queueWaitMs,
@@ -278,7 +276,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
       reconnectDeliveryFailureCount:
         failureSummary.reconnectDeliveryFailureCount,
       linkedFailureCount: failureSummary.linkedFailureCount,
-      retryAfterMs: retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+      retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
       errorCode,
       success: result?.success === true,
     });
@@ -300,7 +298,7 @@ const controlPlaneSystemTableGatewayTelemetryMethods = {
           mergePolicy: context.mergePolicy || null,
           pressureAction: result?.pressureAction || null,
           pressureReason: result?.pressureReason || null,
-          retryAfterMs: retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+          retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
           errorCode,
           canonicalFailureReason: failureSummary.primaryReason,
           queueWaitMs,

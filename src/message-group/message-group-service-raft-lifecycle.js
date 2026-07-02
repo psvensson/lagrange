@@ -7,10 +7,8 @@
 import {
   COLUMN,
   ENTITY_TYPE,
-  NUM,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
@@ -41,7 +39,7 @@ function assignRaftLifecycle(serviceClass) {
       if (
         !this.raft ||
         !this.systemTableCache ||
-        typeof this.systemTableCache.filter !== TYPEOF.FUNCTION
+        typeof this.systemTableCache.filter !== 'function'
       ) {
         return;
       }
@@ -56,7 +54,7 @@ function assignRaftLifecycle(serviceClass) {
           );
         },
       );
-      if (services.length === NUM.ZERO) {
+      if (services.length === 0) {
         return;
       }
       const expectedAddressesByReplicaId = new Map();
@@ -81,11 +79,11 @@ function assignRaftLifecycle(serviceClass) {
         const serviceAddress = service?.[COLUMN.ADDRESS] || service?.address;
         const serviceNodeId = service?.[COLUMN.NODE_ID] || service?.node_id;
         const peerAddress =
-          typeof serviceAddress === TYPEOF.STRING &&
-          serviceAddress.length > NUM.ZERO ?
+          typeof serviceAddress === 'string' &&
+          serviceAddress.length > 0 ?
             serviceAddress :
-            typeof serviceNodeId === TYPEOF.STRING &&
-                serviceNodeId.length > NUM.ZERO ?
+            typeof serviceNodeId === 'string' &&
+                serviceNodeId.length > 0 ?
               this.addressManager.format(
                 serviceNodeId,
                 ENTITY_TYPE.MESSAGE_GROUP,
@@ -108,7 +106,7 @@ function assignRaftLifecycle(serviceClass) {
           .map((node) => node?.address)
           .filter(
             (address) =>
-              typeof address === TYPEOF.STRING && address.length > NUM.ZERO,
+              typeof address === 'string' && address.length > 0,
           ),
       );
       for (const [
@@ -119,8 +117,8 @@ function assignRaftLifecycle(serviceClass) {
           .map((node) => node?.address)
           .filter((address) => {
             if (
-              typeof address !== TYPEOF.STRING ||
-              address.length === NUM.ZERO ||
+              typeof address !== 'string' ||
+              address.length === 0 ||
               address === expectedAddress
             ) {
               return false;
@@ -135,7 +133,7 @@ function assignRaftLifecycle(serviceClass) {
               return false;
             }
           });
-        if (typeof this.raft.leave === TYPEOF.FUNCTION) {
+        if (typeof this.raft.leave === 'function') {
           for (const staleAddress of staleAddresses) {
             this.raft.leave(staleAddress);
             currentAddresses.delete(staleAddress);
@@ -223,7 +221,7 @@ function assignRaftLifecycle(serviceClass) {
         if (Number.isFinite(this.raftTimingConfig.tickIntervalMs)) {
           this.applyRuntimeTickInterval(this.raftTimingConfig.tickIntervalMs);
         }
-        if (this.replicaIds.length === NUM.ONE) {
+        if (this.replicaIds.length === 1) {
           this.raftRuntime.startElection();
           this.electionStarted = true;
         }
@@ -346,8 +344,8 @@ function assignRaftLifecycle(serviceClass) {
         const joinTarget = this.resolveRaftJoinTarget(peerId);
         if (
           joinTarget.shouldJoin !== true ||
-          typeof joinTarget.address !== TYPEOF.STRING ||
-          joinTarget.address.length === NUM.ZERO
+          typeof joinTarget.address !== 'string' ||
+          joinTarget.address.length === 0
         ) {
           continue;
         }
@@ -360,7 +358,7 @@ function assignRaftLifecycle(serviceClass) {
      * @private
      */
     promoteIfSingleReplica() {
-      if (this.replicaIds.length !== NUM.ONE) {
+      if (this.replicaIds.length !== 1) {
         return;
       }
       this.startElection();
@@ -402,7 +400,7 @@ function assignRaftLifecycle(serviceClass) {
         return;
       }
       const originalHeartbeat = this.raft.heartbeat;
-      if (typeof originalHeartbeat !== TYPEOF.FUNCTION) {
+      if (typeof originalHeartbeat !== 'function') {
         return;
       }
       const boundHeartbeat = originalHeartbeat.bind(this.raft);

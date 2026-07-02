@@ -24,7 +24,6 @@ import {
   COLUMN,
   ENDPOINT_STATUS,
   NODE_STATE,
-  NUM,
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
@@ -138,7 +137,7 @@ function createEvaluator(nodeId, activeNodeIds = [ACTIVE_NODE_ID]) {
       getCdcIntegrationService: () => null,
       getControlPlaneReadinessService: () => ({
         getStartupAuthoritySnapshotSync: () => ({
-          authorityAvailable: activeNodeIds.length > NUM.ZERO,
+          authorityAvailable: activeNodeIds.length > 0,
           canonicalStartupNodeIds: activeNodeIds,
         }),
       }),
@@ -160,7 +159,7 @@ async (t) => {
       async (opCount, warmingState) => {
         const evaluator = createEvaluator(JOINING_NODE_ID);
         const rows = [];
-        for (let i = NUM.ZERO; i < opCount; i++) {
+        for (let i = 0; i < opCount; i++) {
           rows.push(buildInFlightRow(
             `op-warm-${i}`, WARMING_NODE_A_ID, ACTIVE_NODE_ID,
           ));
@@ -179,12 +178,12 @@ async (t) => {
         // UNFIXED code FAILS — returns all non-self ops.
         assert.equal(
           result.inFlightOperations.length,
-          NUM.ZERO,
+          0,
           `expected 0 in-flight, got ${result.inFlightOperations.length}` +
           ` for ${opCount} op(s) targeting ${warmingState} node`,
         );
         assert.ok(
-          result.excludedWarmingTargetCount > NUM.ZERO,
+          result.excludedWarmingTargetCount > 0,
           `excludedWarmingTargetCount=${result.excludedWarmingTargetCount}` +
           ` expected > 0 for ${opCount} warming-targeted op(s)`,
         );
@@ -207,7 +206,7 @@ async (t) => {
       async (opCount, warmingState) => {
         const evaluator = createEvaluator(JOINING_NODE_ID);
         const rows = [];
-        for (let i = NUM.ZERO; i < opCount; i++) {
+        for (let i = 0; i < opCount; i++) {
           rows.push(buildInFlightRow(
             `op-topo-${i}`, WARMING_NODE_A_ID, ACTIVE_NODE_ID,
           ));
@@ -224,7 +223,7 @@ async (t) => {
         // UNFIXED code FAILS — warming ops counted as blocking.
         assert.equal(
           result.inFlightReplicaOperations,
-          NUM.ZERO,
+          0,
           `inFlightReplicaOperations=${result.inFlightReplicaOperations}` +
           ` expected 0 for ${opCount} warming-targeted op(s)`,
         );
@@ -277,13 +276,13 @@ async (t) => {
         // UNFIXED code FAILS — circular deadlock.
         assert.equal(
           resultA.inFlightReplicaOperations,
-          NUM.ZERO,
+          0,
           `A: inFlight=${resultA.inFlightReplicaOperations}` +
           ` expected 0 (${stateA} -> ${stateB})`,
         );
         assert.equal(
           resultB.inFlightReplicaOperations,
-          NUM.ZERO,
+          0,
           `B: inFlight=${resultB.inFlightReplicaOperations}` +
           ` expected 0 (${stateB} -> ${stateA})`,
         );

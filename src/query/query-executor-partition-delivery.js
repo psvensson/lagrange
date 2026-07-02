@@ -21,7 +21,6 @@ const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ERRORS,
   LOG_MSG,
-  NUM,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
@@ -115,10 +114,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
       resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
     );
-    for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
-      if (attemptBudgetMs !== null && attemptBudgetMs <= NUM.ZERO) {
+      if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
         return {
           ...buildFailureResult(
             lastError || ERRORS.QUERY_FAILED,
@@ -141,7 +140,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         );
       if (
         !awaitedRoutingRepair &&
-        serviceCandidates.length === NUM.ZERO &&
+        serviceCandidates.length === 0 &&
         (await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot, {
           allowReadinessAuthoritativeRefresh,
         }))
@@ -168,9 +167,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         executionOptions.sessionId,
         partitionId,
       );
-      if (serviceCandidates.length === NUM.ZERO) {
+      if (serviceCandidates.length === 0) {
         const hasRoutableService =
-          routingSnapshot.routableServiceCount > NUM.ZERO;
+          routingSnapshot.routableServiceCount > 0;
         const hasPartitionRecord = this.hasPartitionRecord(partitionId);
         if (!forRead) {
           if (hasRoutableService && attempt < maxAttempts) {
@@ -260,9 +259,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         });
       };
       for (
-        let candidateIndex = NUM.ZERO;
+        let candidateIndex = 0;
         candidateIndex < candidateQueue.length;
-        candidateIndex += NUM.ONE
+        candidateIndex += 1
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
@@ -554,7 +553,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         } catch (error) {
           const errorMessage =
             typeof error?.message === 'string' &&
-            error.message.length > NUM.ZERO ?
+            error.message.length > 0 ?
               error.message :
               ERRORS.QUERY_FAILED;
           if (this.isNoHandlerFailure(errorMessage)) {

@@ -22,7 +22,6 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     CONTROL_PLANE_PARTICIPATION_KIND,
     INITIAL_PARTITION_IDS,
-    NUM,
     REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
@@ -33,7 +32,6 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
     SQL,
     SYSTEM_TABLE_NAME,
-    TYPEOF,
     getControlPlaneRetryAfterMs,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
@@ -73,15 +71,15 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         this.resolveReplicaOperationReadCoalescingKey(sql, params);
       if (
         !queryOptions.coalescingKey &&
-        typeof coalescingKey === TYPEOF.STRING &&
-        coalescingKey.length > NUM.ZERO
+        typeof coalescingKey === 'string' &&
+        coalescingKey.length > 0
       ) {
         queryOptions.coalescingKey = coalescingKey;
       }
       if (
         !queryOptions.deliverySource &&
-        typeof queryOptions.coalescingKey === TYPEOF.STRING &&
-        queryOptions.coalescingKey.length > NUM.ZERO
+        typeof queryOptions.coalescingKey === 'string' &&
+        queryOptions.coalescingKey.length > 0
       ) {
         queryOptions.deliverySource =
           this.buildReplicaOperationReadDeliverySource(
@@ -113,7 +111,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         }
 
         const remainingMs = deadlineAtMs - Date.now();
-        if (remainingMs <= NUM.ZERO) {
+        if (remainingMs <= 0) {
           return result;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting
@@ -138,7 +136,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     buildReplicaOperationReadParticipationFailure() {
       if (
         !this.controlPlaneReadinessService ||
-      typeof this.controlPlaneReadinessService.getControlPlaneParticipationSync !== TYPEOF.FUNCTION
+      typeof this.controlPlaneReadinessService.getControlPlaneParticipationSync !== 'function'
       ) {
         return null;
       }
@@ -190,7 +188,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       if (sql === SQL.SELECT_OPERATION_BY_ID) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX,
-          params[NUM.ZERO],
+          params[0],
         );
       }
       if (sql === SQL.SELECT_INCOMPLETE_OPERATIONS) {
@@ -202,14 +200,14 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       if (sql === SQL.SELECT_OPERATIONS_BY_ENTITY) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX,
-          params[NUM.ONE],
+          params[1],
         );
       }
       if (sql === SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX,
-          params[NUM.ZERO],
-          params[NUM.ONE],
+          params[0],
+          params[1],
         );
       }
       return null;
@@ -223,12 +221,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
    */
     buildReplicaOperationReadCoalescingKey(prefix, ...values) {
       const normalizedValues = values.filter((value) => {
-        return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+        return typeof value === 'string' && value.length > 0;
       });
       if (
-        typeof prefix !== TYPEOF.STRING ||
-        prefix.length === NUM.ZERO ||
-        normalizedValues.length === NUM.ZERO
+        typeof prefix !== 'string' ||
+        prefix.length === 0 ||
+        normalizedValues.length === 0
       ) {
         return null;
       }
@@ -266,11 +264,11 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         SQL.SELECT_OPERATION_BY_ID,
         [operationId],
       );
-      if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
+      if (!result.success || !result.rows || result.rows.length === 0) {
         return null;
       }
 
-      const operation = this.rowToOperation(result.rows[NUM.ZERO]);
+      const operation = this.rowToOperation(result.rows[0]);
       return isCoordinatorOwnedOperationType(operation?.type) ?
         operation :
         null;
@@ -322,9 +320,9 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       );
       const queryDurationMs = Date.now() - queryStartedAtMs;
 
-      if (!result.success || !Array.isArray(result.rows) || result.rows.length === NUM.ZERO) {
+      if (!result.success || !Array.isArray(result.rows) || result.rows.length === 0) {
         const isEmptyRead =
-        result.success === true && Array.isArray(result.rows) && result.rows.length === NUM.ZERO;
+        result.success === true && Array.isArray(result.rows) && result.rows.length === 0;
         const isRetryableAuthoritativeFailure =
           result.success === false && isRetryableControlPlaneError(result);
         let deferredOutcome = null;
@@ -374,7 +372,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       const matchingRow =
       result.rows.find((row) => {
         return row?.operation_id === operationId;
-      }) || result.rows[NUM.ZERO];
+      }) || result.rows[0];
       const operation = this.rowToOperation(matchingRow);
       if (
         allowOwnerPersistedTransitionDeferredVisibility &&
@@ -483,7 +481,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         readOptions,
       );
       if (result.success && Array.isArray(result.rows)) {
-        if (result.rows.length === NUM.ZERO) {
+        if (result.rows.length === 0) {
           return null;
         }
         const operations = result.rows.map((row) => this.rowToOperation(row));

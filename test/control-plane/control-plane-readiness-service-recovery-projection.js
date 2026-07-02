@@ -1,7 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
 } from '../../src/constants/index.js';
 import {
@@ -426,7 +425,7 @@ test('ControlPlaneReadinessService preserves direct count-only ACK debt over pro
           publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
           requiredAckNodeIds: [],
           acknowledgedNodeIds: [],
-          pendingAckCount: NUM.ZERO,
+          pendingAckCount: 0,
           pendingAckEvidenceState:
             PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
               .REQUIRED_ACK_NODE_LIST,

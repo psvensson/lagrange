@@ -10,8 +10,6 @@ import {
 import {
   COLUMN,
   CDC_OPERATION,
-  NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   LOG_SKIPPING_STALE_SNAPSHOT,
@@ -28,7 +26,7 @@ function resolveSnapshotBackfillPlan({
   ) ?
     new Set(
       bootstrapResponse.topologySnapshotMeta.hydrationTables.filter(
-        (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        (value) => typeof value === 'string' && value.length > 0,
       ),
     ) :
     null;
@@ -56,12 +54,12 @@ function applyBootstrapTopologyEpoch({
   nodeId,
 } = {}) {
   if (!systemTableCache ||
-      typeof systemTableCache.updateFromEpoch !== TYPEOF.FUNCTION) {
+      typeof systemTableCache.updateFromEpoch !== 'function') {
     return;
   }
 
   const currentEpoch = bootstrapResponse?.currentEpoch;
-  if (!currentEpoch || typeof currentEpoch !== TYPEOF.OBJECT) {
+  if (!currentEpoch || typeof currentEpoch !== 'object') {
     return;
   }
 
@@ -77,12 +75,12 @@ function recordBootstrapTopologySnapshotMetadata({
   delegates,
 } = {}) {
   const nowMs =
-    typeof delegates?.getNow === TYPEOF.FUNCTION ?
+    typeof delegates?.getNow === 'function' ?
       delegates.getNow() :
       Date.now();
   const topologySnapshotMeta =
     bootstrapResponse?.topologySnapshotMeta &&
-    typeof bootstrapResponse.topologySnapshotMeta === TYPEOF.OBJECT ?
+    typeof bootstrapResponse.topologySnapshotMeta === 'object' ?
       bootstrapResponse.topologySnapshotMeta :
       null;
   const revisionMetadata = resolveControlPlaneSnapshotRevisionMetadata(
@@ -95,7 +93,7 @@ function recordBootstrapTopologySnapshotMetadata({
     },
   );
   if (typeof delegates?.setBootstrapTopologySnapshotMeta ===
-      TYPEOF.FUNCTION) {
+      'function') {
     delegates.setBootstrapTopologySnapshotMeta(
       topologySnapshotMeta ?
         {
@@ -110,7 +108,7 @@ function recordBootstrapTopologySnapshotMetadata({
     );
   }
   if (typeof delegates?.setBootstrapTopologySnapshotHydratedAtMs ===
-      TYPEOF.FUNCTION) {
+      'function') {
     delegates.setBootstrapTopologySnapshotHydratedAtMs(
       nowMs,
     );
@@ -133,7 +131,7 @@ function getSnapshotHydrationOperation({
     record?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
 
   // Let cache validation handle malformed rows with no key.
-  if (typeof key === TYPEOF.UNDEFINED || key === null) {
+  if (typeof key === 'undefined' || key === null) {
     return CDC_OPERATION.INSERT;
   }
 
@@ -148,10 +146,10 @@ function getSnapshotHydrationOperation({
     Number(record?.[COLUMN.UPDATED_AT]);
   const hasExistingUpdatedAt =
     Number.isFinite(existingUpdatedAt) &&
-    existingUpdatedAt > NUM.ZERO;
+    existingUpdatedAt > 0;
   const hasIncomingUpdatedAt =
     Number.isFinite(incomingUpdatedAt) &&
-    incomingUpdatedAt > NUM.ZERO;
+    incomingUpdatedAt > 0;
 
   if (
     hasExistingUpdatedAt &&

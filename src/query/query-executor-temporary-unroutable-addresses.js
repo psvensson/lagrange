@@ -1,7 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
-  NUM,
   QUERY_DEFAULTS,
   QUERY_EXECUTOR_LITERAL,
   SYSTEM_TABLE_NAMES,
@@ -20,9 +19,9 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
   markTemporarilyUnroutableAddress(partitionId, address, service = null) {
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      address.length === NUM.ZERO
+      address.length === 0
     ) {
       return;
     }
@@ -64,9 +63,9 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
   clearTemporarilyUnroutableAddress(partitionId, address) {
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      address.length === NUM.ZERO
+      address.length === 0
     ) {
       return;
     }
@@ -76,7 +75,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
       return;
     }
     existing.delete(address);
-    if (existing.size === NUM.ZERO) {
+    if (existing.size === 0) {
       this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
     }
   },
@@ -92,9 +91,9 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
   isTemporarilyUnroutableAddress(partitionId, address, service = null) {
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO ||
+      partitionId.length === 0 ||
       typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      address.length === NUM.ZERO
+      address.length === 0
     ) {
       return false;
     }
@@ -111,7 +110,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
         null;
     if (!Number.isFinite(expiresAt)) {
       existing.delete(address);
-      if (existing.size === NUM.ZERO) {
+      if (existing.size === 0) {
         this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
       }
       return false;
@@ -119,13 +118,13 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
     const currentFingerprint = buildPartitionServiceWitnessFingerprint(service);
     if (
       typeof entry?.fingerprint === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      entry.fingerprint.length > NUM.ZERO &&
+      entry.fingerprint.length > 0 &&
       typeof currentFingerprint === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      currentFingerprint.length > NUM.ZERO &&
+      currentFingerprint.length > 0 &&
       currentFingerprint !== entry.fingerprint
     ) {
       existing.delete(address);
-      if (existing.size === NUM.ZERO) {
+      if (existing.size === 0) {
         this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
       }
       return false;
@@ -134,7 +133,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
       return true;
     }
     existing.delete(address);
-    if (existing.size === NUM.ZERO) {
+    if (existing.size === 0) {
       this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
     }
     return false;

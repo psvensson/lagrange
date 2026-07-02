@@ -1,8 +1,8 @@
-const LOCAL_NUM_100 = 100;
-const LOCAL_NUM_1000 = 1000;
-const LOCAL_STR_ZFE55 = 'livequery:subscribed';
+const LOCAL_NUM_ONE_HUNDRED = 100;
+const LOCAL_NUM_ONE_HUNDRED0 = 1000;
+const LOCAL_STR_LIVEQUERY_SUBSCRIBED = 'livequery:subscribed';
 const LOCAL_STR_LIVE_QUERY_INITIAL = 'live_query_initial';
-const LOCAL_STR_1RDRD = 'livequery:initialized';
+const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
 const LOCAL_STR_LIVE_QUERY_EVENT = 'live_query_event';
 const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
 const LOCAL_STR_LIVE_QUERY_EXPIRED = 'live_query_expired';
@@ -13,7 +13,7 @@ const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
 const LOCAL_STR_CANCELLED = 'cancelled';
-const LOCAL_STR_3IHRH = 'livequery:cancelled';
+const LOCAL_STR_LIVEQUERY_CANCELLED = 'livequery:cancelled';
 const LOCAL_STR_EXPIRED = 'expired';
 const LOCAL_STR_RENEWING = 'renewing';
 const LOCAL_STR_LIVEQUERY_RENEWING = 'livequery:renewing';
@@ -69,10 +69,10 @@ export class LiveQueryManager {
     this.subscriptions = new Map();
 
     /** @type {number} */
-    this.maxSubscriptions = options.maxSubscriptions || LOCAL_NUM_100;
+    this.maxSubscriptions = options.maxSubscriptions || LOCAL_NUM_ONE_HUNDRED;
 
     /** @type {number} */
-    this.maxEventsPerSubscription = options.maxEventsPerSubscription || LOCAL_NUM_1000;
+    this.maxEventsPerSubscription = options.maxEventsPerSubscription || LOCAL_NUM_ONE_HUNDRED0;
   }
 
 
@@ -116,7 +116,7 @@ export class LiveQueryManager {
       this.connectionManager.subscribeLiveQuery(subscriptionId, sql);
     }
 
-    this.emitEvent(LOCAL_STR_ZFE55, {subscriptionId, sql});
+    this.emitEvent(LOCAL_STR_LIVEQUERY_SUBSCRIBED, {subscriptionId, sql});
 
     return subscriptionId;
   }
@@ -146,7 +146,7 @@ export class LiveQueryManager {
       // Initial results received
       subscription.partitions = partitions || [];
       subscription.initialResults = data;
-      this.emitEvent(LOCAL_STR_1RDRD, {
+      this.emitEvent(LOCAL_STR_LIVEQUERY_INITIALIZED, {
         subscriptionId,
         data,
         partitions,
@@ -272,7 +272,7 @@ export class LiveQueryManager {
 
     subscription.status = LOCAL_STR_CANCELLED;
     this.subscriptions.delete(subscriptionId);
-    this.emitEvent(LOCAL_STR_3IHRH, {subscriptionId});
+    this.emitEvent(LOCAL_STR_LIVEQUERY_CANCELLED, {subscriptionId});
     return true;
   }
 

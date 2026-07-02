@@ -4,12 +4,10 @@ import {
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   PARTITION_ID_REQUIRED: 'PartitionServiceRowOwner requires partitionId',
@@ -41,20 +39,20 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
 );
 
 function assertRequiredString(value, errorMessage) {
-  if (typeof value !== TYPEOF.STRING || value.length === LOCAL_NUM_ZERO) {
+  if (typeof value !== 'string' || value.length === 0) {
     throw new Error(errorMessage);
   }
 }
 
 function resolvePartitionRaftRole(service) {
   const isLeader = service?.isLeader === true ||
-    (typeof service?.isLeaderReplica === TYPEOF.FUNCTION &&
+    (typeof service?.isLeaderReplica === 'function' &&
       service.isLeaderReplica());
   if (isLeader) {
     return RAFT_ROLE.LEADER;
   }
 
-  if (typeof service?.getRole === TYPEOF.FUNCTION) {
+  if (typeof service?.getRole === 'function') {
     return normalizePublishedRaftRole(service.getRole());
   }
 
@@ -64,7 +62,7 @@ function resolvePartitionRaftRole(service) {
 class PartitionServiceRowOwner {
   constructor(options = {}) {
     this.systemTableWriter = options.systemTableWriter || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
   }
@@ -116,7 +114,7 @@ class PartitionServiceRowOwner {
   }
 
   isCriticalSystemPartition(partitionId) {
-    return typeof partitionId === TYPEOF.STRING &&
+    return typeof partitionId === 'string' &&
       CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
   }
 
@@ -144,7 +142,7 @@ class PartitionServiceRowOwner {
         row.status !== SERVICE_STATUS.ACTIVE ||
         row.raft_role !== RAFT_ROLE.LEADER ||
         !this.systemTableWriter ||
-        typeof this.systemTableWriter.updateSystemTableRow !== TYPEOF.FUNCTION) {
+        typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
       return;
     }
 
@@ -162,7 +160,7 @@ class PartitionServiceRowOwner {
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
     ) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
@@ -194,7 +192,7 @@ class PartitionServiceRowOwner {
   async updateReplicaStatus(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
     ) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
@@ -205,7 +203,7 @@ class PartitionServiceRowOwner {
       ...options,
       timestamp: options.timestamp ?? this.now(),
     });
-    if (typeof this.systemTableWriter.updateSystemTableRow !== TYPEOF.FUNCTION) {
+    if (typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
       await this.systemTableWriter.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.SERVICES,
         row,
@@ -234,7 +232,7 @@ class PartitionServiceRowOwner {
   async removeReplica(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.deleteSystemTableRow !== TYPEOF.FUNCTION
+      typeof this.systemTableWriter.deleteSystemTableRow !== 'function'
     ) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.DELETE_REQUIRED,
@@ -251,10 +249,10 @@ class PartitionServiceRowOwner {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
     };
-    if (typeof partitionId === TYPEOF.STRING && partitionId.length > LOCAL_NUM_ZERO) {
+    if (typeof partitionId === 'string' && partitionId.length > 0) {
       whereClause.partition_id = partitionId;
     }
-    if (typeof nodeId === TYPEOF.STRING && nodeId.length > LOCAL_NUM_ZERO) {
+    if (typeof nodeId === 'string' && nodeId.length > 0) {
       whereClause.node_id = nodeId;
     }
 

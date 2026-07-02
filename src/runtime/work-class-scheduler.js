@@ -2,12 +2,11 @@ import {EventEmitter} from 'node:events';
 import {NUM} from '../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_SHED = 'shed';
 const LOCAL_STR_QUEUED = 'queued';
 const LOCAL_STR_STARTED = 'started';
 const LOCAL_STR_COMPLETED = 'completed';
-const LOCAL_STR_13EMY = ': ';
+const LOCAL_STR_COLON_SPACE = ': ';
 
 const WORK_CLASS = Object.freeze({
   A: 'A',
@@ -17,7 +16,7 @@ const WORK_CLASS = Object.freeze({
 
 const WORK_CLASS_SCHEDULER_DEFAULT = Object.freeze({
   MAX_CONCURRENT: NUM.FOUR,
-  RESERVED_CLASS_A_SLOTS: NUM.ONE,
+  RESERVED_CLASS_A_SLOTS: 1,
   MAX_CLASS_C_QUEUE_SIZE: NUM.THOUSAND,
 });
 
@@ -43,12 +42,12 @@ class WorkClassScheduler extends EventEmitter {
       Math.floor(options.maxClassCQueueSize) :
       WORK_CLASS_SCHEDULER_DEFAULT.MAX_CLASS_C_QUEUE_SIZE;
 
-    this.maxConcurrent = Math.max(NUM.ONE, maxConcurrent);
+    this.maxConcurrent = Math.max(1, maxConcurrent);
     this.reservedClassASlots = Math.max(
-      NUM.ZERO,
+      0,
       Math.min(this.maxConcurrent, reservedClassASlots),
     );
-    this.maxClassCQueueSize = Math.max(NUM.ONE, maxClassCQueueSize);
+    this.maxClassCQueueSize = Math.max(1, maxClassCQueueSize);
 
     this._queues = new Map([
       [WORK_CLASS.A, []],
@@ -56,16 +55,16 @@ class WorkClassScheduler extends EventEmitter {
       [WORK_CLASS.C, []],
     ]);
     this._inFlightByClass = new Map([
-      [WORK_CLASS.A, NUM.ZERO],
-      [WORK_CLASS.B, NUM.ZERO],
-      [WORK_CLASS.C, NUM.ZERO],
+      [WORK_CLASS.A, 0],
+      [WORK_CLASS.B, 0],
+      [WORK_CLASS.C, 0],
     ]);
     this._statsByClass = new Map([
       [WORK_CLASS.A, this.createClassStats()],
       [WORK_CLASS.B, this.createClassStats()],
       [WORK_CLASS.C, this.createClassStats()],
     ]);
-    this._inFlightTotal = NUM.ZERO;
+    this._inFlightTotal = 0;
     this._lastDispatchedNonAClass = null;
   }
 
@@ -84,7 +83,7 @@ class WorkClassScheduler extends EventEmitter {
     if (normalizedWorkClass === WORK_CLASS.C &&
         this.getQueueDepth(WORK_CLASS.C) >= this.maxClassCQueueSize) {
       const classCStats = this._statsByClass.get(WORK_CLASS.C);
-      classCStats.shedCount += LOCAL_NUM_ONE;
+      classCStats.shedCount += 1;
       const shedError = new Error(WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED);
       shedError.code = WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED;
       this.emit(LOCAL_STR_SHED, {
@@ -96,7 +95,7 @@ class WorkClassScheduler extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const classStats = this._statsByClass.get(normalizedWorkClass);
-      classStats.enqueuedCount += LOCAL_NUM_ONE;
+      classStats.enqueuedCount += 1;
       this._queues.get(normalizedWorkClass).push({
         workClass: normalizedWorkClass,
         task,
@@ -147,14 +146,14 @@ class WorkClassScheduler extends EventEmitter {
    */
   selectNextQueuedEntry() {
     const classAQueue = this._queues.get(WORK_CLASS.A);
-    if (classAQueue.length > NUM.ZERO) {
+    if (classAQueue.length > 0) {
       return classAQueue.shift();
     }
 
     const nonAInFlight = this.getInFlightCount(WORK_CLASS.B) +
       this.getInFlightCount(WORK_CLASS.C);
     const nonACapacity = Math.max(
-      NUM.ZERO,
+      0,
       this.maxConcurrent - this.reservedClassASlots,
     );
 
@@ -164,8 +163,8 @@ class WorkClassScheduler extends EventEmitter {
 
     const classBQueue = this._queues.get(WORK_CLASS.B);
     const classCQueue = this._queues.get(WORK_CLASS.C);
-    const hasB = classBQueue.length > NUM.ZERO;
-    const hasC = classCQueue.length > NUM.ZERO;
+    const hasB = classBQueue.length > 0;
+    const hasC = classCQueue.length > 0;
     if (!hasB && !hasC) {
       return null;
     }
@@ -189,19 +188,19 @@ class WorkClassScheduler extends EventEmitter {
    */
   dispatchEntry(entry) {
     const workClass = entry.workClass;
-    this._inFlightTotal += LOCAL_NUM_ONE;
+    this._inFlightTotal += 1;
     this._inFlightByClass.set(
       workClass,
-      this.getInFlightCount(workClass) + LOCAL_NUM_ONE,
+      this.getInFlightCount(workClass) + 1,
     );
     if (workClass !== WORK_CLASS.A) {
       this._lastDispatchedNonAClass = workClass;
     }
 
     const classStats = this._statsByClass.get(workClass);
-    classStats.startedCount += LOCAL_NUM_ONE;
+    classStats.startedCount += 1;
     classStats.lastQueueLatencyMs = Math.max(
-      NUM.ZERO,
+      0,
       Date.now() - entry.enqueuedAt,
     );
     this.emit(LOCAL_STR_STARTED, {
@@ -213,18 +212,18 @@ class WorkClassScheduler extends EventEmitter {
     Promise.resolve()
       .then(() => entry.task())
       .then((result) => {
-        classStats.completedCount += LOCAL_NUM_ONE;
+        classStats.completedCount += 1;
         entry.resolve(result);
       })
       .catch((error) => {
-        classStats.failedCount += LOCAL_NUM_ONE;
+        classStats.failedCount += 1;
         entry.reject(error);
       })
       .finally(() => {
-        this._inFlightTotal -= LOCAL_NUM_ONE;
+        this._inFlightTotal -= 1;
         this._inFlightByClass.set(
           workClass,
-          this.getInFlightCount(workClass) - LOCAL_NUM_ONE,
+          this.getInFlightCount(workClass) - 1,
         );
         this.emit(LOCAL_STR_COMPLETED, {
           workClass,
@@ -241,18 +240,18 @@ class WorkClassScheduler extends EventEmitter {
       return workClass;
     }
     throw new Error(
-      WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + LOCAL_STR_13EMY + String(workClass),
+      WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + LOCAL_STR_COLON_SPACE + String(workClass),
     );
   }
 
   createClassStats() {
     return {
-      enqueuedCount: NUM.ZERO,
-      startedCount: NUM.ZERO,
-      completedCount: NUM.ZERO,
-      failedCount: NUM.ZERO,
-      shedCount: NUM.ZERO,
-      lastQueueLatencyMs: NUM.ZERO,
+      enqueuedCount: 0,
+      startedCount: 0,
+      completedCount: 0,
+      failedCount: 0,
+      shedCount: 0,
+      lastQueueLatencyMs: 0,
     };
   }
 
@@ -275,7 +274,7 @@ class WorkClassScheduler extends EventEmitter {
   }
 
   getInFlightCount(workClass) {
-    return this._inFlightByClass.get(workClass) || NUM.ZERO;
+    return this._inFlightByClass.get(workClass) || 0;
   }
 }
 

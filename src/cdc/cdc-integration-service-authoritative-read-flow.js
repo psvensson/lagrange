@@ -20,16 +20,14 @@ const {
   CDC_INTEGRATION_SERVICE_LITERAL,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  TYPEOF,
   SYSTEM_TABLE_NAME,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 function resolveAuthoritativeRowVersion(service, row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
 
@@ -44,7 +42,7 @@ function resolveAuthoritativeRowVersion(service, row) {
       return comparable;
     }
 
-    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+    if (typeof value === 'string' && value.length > 0) {
       return value;
     }
   }
@@ -108,7 +106,7 @@ async function queryLocalAuthoritativeSystemTableRows(
     consistency: options.consistency,
   });
 
-  if (localServices.length === NUM.ZERO) {
+  if (localServices.length === 0) {
     return {
       available: false,
       rows: [],
@@ -158,7 +156,7 @@ async function queryLocalAuthoritativeSystemTableRows(
 
 function buildSystemTableOperationDiagnostics(service, tableName, options = {}) {
   const queryOptions =
-    options?.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+    options?.queryOptions && typeof options.queryOptions === 'object' ?
       options.queryOptions :
       {};
 
@@ -167,7 +165,7 @@ function buildSystemTableOperationDiagnostics(service, tableName, options = {}) 
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 
   const partitionIds = resolveSystemTablePartitionIds(service, tableName);
-  const partitionId = partitionIds[NUM.ZERO] || null;
+  const partitionId = partitionIds[0] || null;
 
   // CL-012: these diagnostics are built on EVERY authoritative read, and a
   // partition routing snapshot evaluates full node readiness per service
@@ -181,7 +179,7 @@ function buildSystemTableOperationDiagnostics(service, tableName, options = {}) 
   let serviceRows = [];
   if (
     service.systemTableCache &&
-    typeof service.systemTableCache.filter === TYPEOF.FUNCTION
+    typeof service.systemTableCache.filter === 'function'
   ) {
     const partitionRows =
       service.systemTableCache.filter(SYSTEM_TABLE_NAME.PARTITIONS, (row) => {
@@ -195,7 +193,7 @@ function buildSystemTableOperationDiagnostics(service, tableName, options = {}) 
         return row?.table_name === tableName || row?.tableName === tableName;
       }) || [];
 
-    partitionRow = partitionRows[NUM.ZERO] || null;
+    partitionRow = partitionRows[0] || null;
 
     if (partitionId) {
       serviceRows =
@@ -226,41 +224,41 @@ function buildSystemTableOperationDiagnostics(service, tableName, options = {}) 
     serviceRows.filter((row) => {
       return (
         row?.status === SERVICE_STATUS.ACTIVE &&
-        typeof row?.address === TYPEOF.STRING &&
-        row.address.length > NUM.ZERO
+        typeof row?.address === 'string' &&
+        row.address.length > 0
       );
     }).length;
 
   return Object.freeze({
     partitionId,
     leaderNodeId:
-      typeof leaderNodeId === TYPEOF.STRING && leaderNodeId.length > NUM.ZERO ?
+      typeof leaderNodeId === 'string' && leaderNodeId.length > 0 ?
         leaderNodeId :
         null,
     serviceRowCount,
     routableServiceCount,
     queryTimeoutMs:
       Number.isFinite(queryOptions.timeoutMs) &&
-      queryOptions.timeoutMs > NUM.ZERO ?
+      queryOptions.timeoutMs > 0 ?
         Math.floor(queryOptions.timeoutMs) :
         null,
     routingReadinessDimension,
     deniedByReadiness:
       routingSnapshot &&
-      typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
-        Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
+      typeof routingSnapshot.deniedByNodeId === 'object' ?
+        Object.keys(routingSnapshot.deniedByNodeId).length > 0 :
         false,
   });
 }
 
 function normalizeLocalSystemTableWriteResult(result) {
-  if (!result || typeof result !== TYPEOF.OBJECT) {
+  if (!result || typeof result !== 'object') {
     return result;
   }
 
   if (
-    typeof result.affectedRows === TYPEOF.NUMBER ||
-    typeof result.changes !== TYPEOF.NUMBER
+    typeof result.affectedRows === 'number' ||
+    typeof result.changes !== 'number'
   ) {
     return result;
   }
@@ -351,7 +349,7 @@ async function executeAuthoritativeSystemTableRead(
     options.confirmEmptyLocalReadWithOwnerRpc === true &&
     allowOwnerRpcFallback &&
     localRead.available &&
-    localRead.rows.length === NUM.ZERO &&
+    localRead.rows.length === 0 &&
     !preferOwnerRpcRead &&
     !requireOwnerRpcRead;
 

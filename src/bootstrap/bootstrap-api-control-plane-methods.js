@@ -1,7 +1,6 @@
 import {
   HTTP_STATUS,
   NUM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -47,18 +46,18 @@ const bootstrapApiControlPlaneMethods = {
   setSqlQueryEngine(sqlQueryEngine) {
     this.sqlQueryEngine = sqlQueryEngine;
     if (typeof this.sqlQueryEngine?.queryExecutor
-      ?.setBootstrapTopologySnapshotOwner === TYPEOF.FUNCTION) {
+      ?.setBootstrapTopologySnapshotOwner === 'function') {
       this.sqlQueryEngine.queryExecutor.setBootstrapTopologySnapshotOwner(
         this.bootstrapTopologySnapshotOwner,
       );
     }
     if (this.partitionServices &&
-        typeof this.partitionServices.values === TYPEOF.FUNCTION) {
+        typeof this.partitionServices.values === 'function') {
       for (const partitionService of this.partitionServices.values()) {
-        if (!partitionService || typeof partitionService !== TYPEOF.OBJECT) {
+        if (!partitionService || typeof partitionService !== 'object') {
           continue;
         }
-        if (typeof partitionService.setSqlQueryEngine === TYPEOF.FUNCTION) {
+        if (typeof partitionService.setSqlQueryEngine === 'function') {
           partitionService.setSqlQueryEngine(sqlQueryEngine);
           continue;
         }
@@ -139,7 +138,7 @@ const bootstrapApiControlPlaneMethods = {
     const controlPlaneSystemTableGateway =
       this.getControlPlaneSystemTableGateway();
     if (!controlPlaneSystemTableGateway ||
-        typeof controlPlaneSystemTableGateway.executeQuery !== TYPEOF.FUNCTION) {
+        typeof controlPlaneSystemTableGateway.executeQuery !== 'function') {
       throw this.buildBootstrapSqlEngineUnavailableError();
     }
     return controlPlaneSystemTableGateway.executeQuery(sql, params, {
@@ -172,7 +171,7 @@ const bootstrapApiControlPlaneMethods = {
     const controlPlaneSystemTableGateway =
       this.getControlPlaneSystemTableGateway();
     if (!controlPlaneSystemTableGateway ||
-        typeof controlPlaneSystemTableGateway.submitMutation !== TYPEOF.FUNCTION) {
+        typeof controlPlaneSystemTableGateway.submitMutation !== 'function') {
       throw this.buildBootstrapSqlEngineUnavailableError();
     }
     const result = await controlPlaneSystemTableGateway.submitMutation(mutation, {
@@ -217,7 +216,7 @@ const bootstrapApiControlPlaneMethods = {
   buildBootstrapSqlEngineUnavailableError() {
     const error = new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
     const retryAfterMs = Number.isFinite(this.bootstrapAdmissionRetryAfterMs) ?
-      Math.max(NUM.ZERO, Math.floor(this.bootstrapAdmissionRetryAfterMs)) :
+      Math.max(0, Math.floor(this.bootstrapAdmissionRetryAfterMs)) :
       BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS;
     error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
     error.code = BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE;
@@ -251,44 +250,44 @@ const bootstrapApiControlPlaneMethods = {
    */
   buildBootstrapControlPlaneQueryError(result, fallbackMessage) {
     const message =
-      typeof result?.error === TYPEOF.STRING && result.error.length > NUM.ZERO ?
+      typeof result?.error === 'string' && result.error.length > 0 ?
         result.error :
         fallbackMessage;
     if (this.isRetryableBootstrapControlPlaneQueryFailure(result)) {
       const error = new Error(message);
       error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
       error.errorCode =
-        typeof result?.errorCode === TYPEOF.STRING &&
-          result.errorCode.length > NUM.ZERO ?
+        typeof result?.errorCode === 'string' &&
+          result.errorCode.length > 0 ?
           result.errorCode :
           BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
       const retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(result.retryAfterMs)) :
+        Math.max(0, Math.floor(result.retryAfterMs)) :
         this.bootstrapAdmissionRetryAfterMs;
       error.retryAfterMs = retryAfterMs;
       const pressure =
-        typeof result?.pressureAction === TYPEOF.STRING &&
-          result.pressureAction.length > NUM.ZERO ||
-          typeof result?.pressureReason === TYPEOF.STRING &&
-          result.pressureReason.length > NUM.ZERO ||
-          typeof result?.pressureSummary === TYPEOF.STRING &&
-          result.pressureSummary.length > NUM.ZERO ?
+        typeof result?.pressureAction === 'string' &&
+          result.pressureAction.length > 0 ||
+          typeof result?.pressureReason === 'string' &&
+          result.pressureReason.length > 0 ||
+          typeof result?.pressureSummary === 'string' &&
+          result.pressureSummary.length > 0 ?
           Object.freeze({
             state: LOCAL_STR_PRESENT,
-            ...(typeof result?.pressureAction === TYPEOF.STRING &&
-              result.pressureAction.length > NUM.ZERO ?
+            ...(typeof result?.pressureAction === 'string' &&
+              result.pressureAction.length > 0 ?
               {
                 action: result.pressureAction,
               } :
               {}),
-            ...(typeof result?.pressureReason === TYPEOF.STRING &&
-              result.pressureReason.length > NUM.ZERO ?
+            ...(typeof result?.pressureReason === 'string' &&
+              result.pressureReason.length > 0 ?
               {
                 reason: result.pressureReason,
               } :
               {}),
-            ...(typeof result?.pressureSummary === TYPEOF.STRING &&
-              result.pressureSummary.length > NUM.ZERO ?
+            ...(typeof result?.pressureSummary === 'string' &&
+              result.pressureSummary.length > 0 ?
               {
                 summary: result.pressureSummary,
               } :
@@ -314,8 +313,8 @@ const bootstrapApiControlPlaneMethods = {
             pressureSummary: pressure.summary,
           } :
           {}),
-        ...(typeof result?.tableName === TYPEOF.STRING &&
-          result.tableName.length > NUM.ZERO ?
+        ...(typeof result?.tableName === 'string' &&
+          result.tableName.length > 0 ?
           {
             tableName: result.tableName,
           } :
@@ -343,28 +342,28 @@ const bootstrapApiControlPlaneMethods = {
       success: false,
       error: error?.message || fallbackMessage,
       errorCode:
-        typeof error?.errorCode === TYPEOF.STRING &&
-          error.errorCode.length > NUM.ZERO ?
+        typeof error?.errorCode === 'string' &&
+          error.errorCode.length > 0 ?
           error.errorCode :
           (
-            typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO ?
+            typeof error?.code === 'string' && error.code.length > 0 ?
               error.code :
               null
           ),
       retryAfterMs:
         Number.isFinite(error?.retryAfterMs) ?
-          Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
+          Math.max(0, Math.floor(error.retryAfterMs)) :
           null,
       pressureAction:
-        typeof error?.pressureAction === TYPEOF.STRING ?
+        typeof error?.pressureAction === 'string' ?
           error.pressureAction :
           null,
       pressureReason:
-        typeof error?.pressureReason === TYPEOF.STRING ?
+        typeof error?.pressureReason === 'string' ?
           error.pressureReason :
           null,
       pressureSummary:
-        error?.pressureSummary && typeof error.pressureSummary === TYPEOF.OBJECT ?
+        error?.pressureSummary && typeof error.pressureSummary === 'object' ?
           error.pressureSummary :
           null,
       tableName,

@@ -5,13 +5,11 @@ import {join, relative, resolve} from 'node:path';
 
 const LOCAL_STR_JS = '.js';
 const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1WK50 = 'Scenario policy SQL guard passed: no forbidden raw table_policies updates found.\n';
-const LOCAL_STR_1W4RY = 'Scenario policy SQL guard failed. Move table policy mutation through the owner helper.\n';
-const LOCAL_STR_9XLXH = '- ';
+const LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_PASSED_NO_FORB = 'Scenario policy SQL guard passed: no forbidden raw table_policies updates found.\n';
+const LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_FAILED_MOVE_TA = 'Scenario policy SQL guard failed. Move table policy mutation through the owner helper.\n';
+const LOCAL_STR_DASH_SPACE = '- ';
 const LOCAL_STR_COLON = ':';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_I7C58 = 'Scenario policy SQL guard crashed: ';
+const LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_CRASHED = 'Scenario policy SQL guard crashed: ';
 
 const SCENARIOS_DIR = resolve('test/distributed/scenarios');
 const UTF8_ENCODING = 'utf8';
@@ -57,7 +55,7 @@ async function findViolations() {
     for (const match of matches) {
       violations.push({
         filePath: workspaceRelativePath,
-        line: toLineNumber(source, match.index || LOCAL_NUM_ZERO),
+        line: toLineNumber(source, match.index || 0),
       });
     }
   }
@@ -66,28 +64,29 @@ async function findViolations() {
 
 async function main() {
   const violations = await findViolations();
-  if (violations.length === LOCAL_NUM_ZERO) {
+  if (violations.length === 0) {
     process.stdout.write(
-      LOCAL_STR_1WK50,
+      LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_PASSED_NO_FORB,
     );
     return;
   }
 
   process.stderr.write(
-    LOCAL_STR_1W4RY,
+    LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_FAILED_MOVE_TA,
   );
   for (const violation of violations) {
     process.stderr.write(
-      LOCAL_STR_9XLXH + violation.filePath + LOCAL_STR_COLON + violation.line + LOCAL_STR_NEWLINE,
+      LOCAL_STR_DASH_SPACE + violation.filePath + LOCAL_STR_COLON +
+        violation.line + LOCAL_STR_NEWLINE,
     );
   }
-  process.exitCode = LOCAL_NUM_ONE;
+  process.exitCode = 1;
 }
 
 main().catch((error) => {
   process.stderr.write(
-    LOCAL_STR_I7C58 +
+    LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_CRASHED +
     String(error?.message || error) + LOCAL_STR_NEWLINE,
   );
-  process.exitCode = LOCAL_NUM_ONE;
+  process.exitCode = 1;
 });

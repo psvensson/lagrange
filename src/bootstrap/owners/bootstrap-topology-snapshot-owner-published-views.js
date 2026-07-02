@@ -3,11 +3,9 @@ import {CONFIG_KEY} from '../../config/config-constants.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
@@ -34,7 +32,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
     return this.readPublishedAuthoritativeSystemTableSnapshotRows(tableName);
   },
   readRetainedAuthoritativeSystemTableSnapshotRows(tableName) {
-    if (typeof tableName !== TYPEOF.STRING || tableName.length === NUM.ZERO) {
+    if (typeof tableName !== 'string' || tableName.length === 0) {
       return null;
     }
     const cachedEntry =
@@ -45,7 +43,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
     return Array.isArray(cachedEntry?.rows) ? cachedEntry.rows : null;
   },
   readPublishedAuthoritativeSystemTableSnapshotEntry(tableName) {
-    if (typeof tableName !== TYPEOF.STRING || tableName.length === NUM.ZERO) {
+    if (typeof tableName !== 'string' || tableName.length === 0) {
       return null;
     }
     const publishedEntry =
@@ -88,7 +86,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
     rows = [],
     options = {},
   ) {
-    if (typeof tableName !== TYPEOF.STRING || tableName.length === NUM.ZERO) {
+    if (typeof tableName !== 'string' || tableName.length === 0) {
       return rows;
     }
     const cachedEntry =
@@ -116,7 +114,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
     return publishedRows;
   },
   invalidateAuthoritativeSystemTableSnapshotRows(tableName = null) {
-    if (typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO) {
+    if (typeof tableName === 'string' && tableName.length > 0) {
       this.authoritativeSnapshotCacheByTableName.delete(tableName);
       return;
     }
@@ -201,7 +199,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
       service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
     );
 
-    if (leaders.length === NUM.ZERO) {
+    if (leaders.length === 0) {
       this.warnBootstrapTopologySnapshot(
         BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY
           .NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE,
@@ -217,7 +215,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
     return envelope;
   },
   resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta = null) {
-    if (topologySnapshotMeta && typeof topologySnapshotMeta === TYPEOF.OBJECT) {
+    if (topologySnapshotMeta && typeof topologySnapshotMeta === 'object') {
       return topologySnapshotMeta;
     }
     return this.buildBootstrapTopologySnapshotEnvelope().topologySnapshotMeta ||
@@ -232,25 +230,25 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
       return [];
     }
     return [...new Set(resolvedMeta.activeNodeIds.filter((nodeId) =>
-      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      typeof nodeId === 'string' && nodeId.length > 0,
     ))];
   },
   resolveBootstrapTopologySnapshotEpoch(topologySnapshotMeta = null) {
     const resolvedMeta =
       this.resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta);
     if (Number.isFinite(resolvedMeta?.topologyEpoch)) {
-      return Math.max(NUM.ZERO, Math.floor(resolvedMeta.topologyEpoch));
+      return Math.max(0, Math.floor(resolvedMeta.topologyEpoch));
     }
     const currentEpoch = this.getCurrentEpoch();
     if (Number.isFinite(currentEpoch?.epoch)) {
-      return Math.max(NUM.ZERO, Math.floor(currentEpoch.epoch));
+      return Math.max(0, Math.floor(currentEpoch.epoch));
     }
     return null;
   },
   getPublishedBootstrapPartitionSnapshotRow(partitionId) {
     if (
-      typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO
+      typeof partitionId !== 'string' ||
+      partitionId.length === 0
     ) {
       return null;
     }
@@ -267,8 +265,8 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
   },
   getLatestObservedBootstrapPartitionSnapshotRow(partitionId) {
     if (
-      typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO
+      typeof partitionId !== 'string' ||
+      partitionId.length === 0
     ) {
       return null;
     }
@@ -298,19 +296,19 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
   },
   getCachedPartitionRow(partitionId) {
     if (
-      typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO
+      typeof partitionId !== 'string' ||
+      partitionId.length === 0
     ) {
       return null;
     }
     const systemTableCache = this.getSystemTableCache();
-    if (typeof systemTableCache?.get === TYPEOF.FUNCTION) {
+    if (typeof systemTableCache?.get === 'function') {
       const row = systemTableCache.get(TABLES.PARTITIONS, partitionId);
       if (row) {
         return row;
       }
     }
-    if (typeof systemTableCache?.filter !== TYPEOF.FUNCTION) {
+    if (typeof systemTableCache?.filter !== 'function') {
       return null;
     }
     return (
@@ -319,12 +317,12 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
           row?.partition_id === partitionId ||
           row?.partitionId === partitionId;
       }) || []
-    )[NUM.ZERO] || null;
+    )[0] || null;
   },
   getRetainedBootstrapPartitionSnapshotRow(partitionId) {
     if (
-      typeof partitionId !== TYPEOF.STRING ||
-      partitionId.length === NUM.ZERO
+      typeof partitionId !== 'string' ||
+      partitionId.length === 0
     ) {
       return null;
     }

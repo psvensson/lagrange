@@ -1,7 +1,7 @@
 /**
  * Repair diagnostics and deferred repair helpers for admin control snapshots.
  */
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {ADMIN_CACHE_DUMP} from './admin-constants.js';
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -111,27 +111,27 @@ const CONTROL_SNAPSHOT_REPAIR_EVALUATION_FIELD = Object.freeze({
   REFERENCED_NODE_IDS: 'referencedNodeIds',
 });
 const CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE = NUM.THREE;
-const CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
+const CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR = 2;
 const CONTROL_SNAPSHOT_ORDINARY_REPAIR_QUERY_TIMEOUT_MIN_MS = NUM.HUNDRED;
 function normalizeControlSnapshotNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
       .map((value) =>
-        typeof value === TYPEOF.STRING ?
+        typeof value === 'string' ?
           value.trim() :
           ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
       )
-      .filter((value) => value.length > NUM.ZERO),
+      .filter((value) => value.length > 0),
   )].sort((left, right) => left.localeCompare(right));
 }
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     ADMIN_CACHE_DUMP.EMPTY;
   return (
-    causeChain.length > NUM.ZERO &&
+    causeChain.length > 0 &&
     causeChain.every(
       (value) => value === AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP,
     )
@@ -140,7 +140,7 @@ function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
 function hasPressureOrTimeoutRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     CONTROL_SNAPSHOT_EMPTY_REPAIR_CAUSE_CHAIN;
   return (
@@ -151,7 +151,7 @@ function hasPressureOrTimeoutRepairCause(repair = null) {
 function hasParticipantFailureRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
-      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      (value) => typeof value === 'string' && value.length > 0,
     ) :
     CONTROL_SNAPSHOT_EMPTY_REPAIR_CAUSE_CHAIN;
   return (
@@ -161,7 +161,7 @@ function hasParticipantFailureRepairCause(repair = null) {
     hasConnectionClosedParticipantRepairCause(repair) ||
     (
       repair?.firstFailedParticipant &&
-      typeof repair.firstFailedParticipant === TYPEOF.OBJECT &&
+      typeof repair.firstFailedParticipant === 'object' &&
       !Array.isArray(repair.firstFailedParticipant)
     )
   );
@@ -176,7 +176,7 @@ function resolveDeferredRepairMinNodeCoverage(
   snapshot = null,
   repairEvaluation = null,
 ) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
   }
   const coverageNodeIds = normalizeControlSnapshotNodeIdList([
@@ -205,11 +205,11 @@ function resolveDeferredRepairMinNodeCoverage(
     ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
   ]);
   const totalKnownNodes = coverageNodeIds.length;
-  if (totalKnownNodes === NUM.ZERO) {
+  if (totalKnownNodes === 0) {
     return CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
   }
-  const quorumCount = Math.floor(totalKnownNodes / NUM.TWO) + NUM.ONE;
-  return Math.max(NUM.TWO, quorumCount);
+  const quorumCount = Math.floor(totalKnownNodes / 2) + 1;
+  return Math.max(2, quorumCount);
 }
 function hasDeferredRepairLocalControlSnapshotCoverage(
   snapshot = null,
@@ -235,7 +235,7 @@ function selectDeferredRepairProjectionNodeIds(repairEvaluation = null) {
 function selectDeferredRepairActiveGateHandoffContracts(snapshot = null) {
   const diagnostics =
     snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
-  if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+  if (!diagnostics || typeof diagnostics !== 'object') {
     return ADMIN_CACHE_DUMP.EMPTY;
   }
   return [
@@ -245,11 +245,11 @@ function selectDeferredRepairActiveGateHandoffContracts(snapshot = null) {
       CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
     ],
   ].filter((handoff) =>
-    handoff && typeof handoff === TYPEOF.OBJECT && !Array.isArray(handoff),
+    handoff && typeof handoff === 'object' && !Array.isArray(handoff),
   );
 }
 function hasDeferredRepairActiveGateRecoveryProjectionSignal(handoff = null) {
-  if (!handoff || typeof handoff !== TYPEOF.OBJECT || Array.isArray(handoff)) {
+  if (!handoff || typeof handoff !== 'object' || Array.isArray(handoff)) {
     return false;
   }
   const pendingRecoveryNodeIds = normalizeControlSnapshotNodeIdList(
@@ -258,12 +258,12 @@ function hasDeferredRepairActiveGateRecoveryProjectionSignal(handoff = null) {
     ],
   );
   return (
-    pendingRecoveryNodeIds.length > NUM.ZERO ||
+    pendingRecoveryNodeIds.length > 0 ||
     Number(
       handoff[
         CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_SIGNAL_FIELD.PENDING_RECOVERY_COUNT
       ],
-    ) > NUM.ZERO ||
+    ) > 0 ||
     handoff[CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_SIGNAL_FIELD.NEXT_ACTION] ===
       CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_RECOVERY_NEXT_ACTION
   );
@@ -297,13 +297,13 @@ function selectDeferredRepairActiveGateHandoffProjectionNodeIds(
 }
 function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
   const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
-  return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
+  return Array.isArray(nodeIds) ? nodeIds.length : 0;
 }
 function projectDeferredRepairCoverageSnapshot(
   snapshot = null,
   repairEvaluation = null,
 ) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return snapshot;
   }
   const coverageNodeIds = normalizeControlSnapshotNodeIdList([
@@ -382,12 +382,12 @@ function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
   const queryTimeoutMs = Number(options.queryTimeoutMs);
   if (
     !Number.isFinite(queryTimeoutMs) ||
-    queryTimeoutMs <= NUM.ONE
+    queryTimeoutMs <= 1
   ) {
     return options.queryTimeoutMs;
   }
   const reservedRepairTimeoutMs = Math.max(
-    NUM.ONE,
+    1,
     Math.floor(
       queryTimeoutMs / CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR,
     ),
@@ -400,8 +400,8 @@ function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
     reservedRepairTimeoutMs,
   );
   const callerResponseReserveMs = Math.max(
-    NUM.ONE,
-    Math.floor(queryTimeoutMs - NUM.ONE),
+    1,
+    Math.floor(queryTimeoutMs - 1),
   );
   return Math.min(callerResponseReserveMs, boundedRepairTimeoutMs);
 }
@@ -421,7 +421,7 @@ function buildRepairFailureLocalSnapshotOptions(options = {}) {
 function isRecoverableControlSnapshotPublicationReadError(error = null) {
   const message = String(error?.message || error || '').toLowerCase();
   return (
-    message.length > NUM.ZERO &&
+    message.length > 0 &&
     CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS.some((fragment) =>
       message.includes(fragment),
     )
@@ -440,14 +440,14 @@ function buildAuthoritativeControlSnapshotRepairFailure(detail, cause = null) {
 function normalizeControlSnapshotRepairDetailList(values = []) {
   return (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
     .map((value) =>
-      typeof value === TYPEOF.STRING ?
+      typeof value === 'string' ?
         value.trim() :
         ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
     )
-    .filter((value) => value.length > NUM.ZERO);
+    .filter((value) => value.length > 0);
 }
 function normalizeControlSnapshotRepairMessageList(repair = null) {
-  const repairValue = typeof repair === TYPEOF.STRING ?
+  const repairValue = typeof repair === 'string' ?
     repair :
     ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
   return normalizeControlSnapshotRepairDetailList([
@@ -460,7 +460,7 @@ function normalizeControlSnapshotRepairMessageList(repair = null) {
 }
 function firstControlSnapshotRepairDetail(...values) {
   for (const value of values) {
-    if (typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO) {
+    if (typeof value === 'string' && value.trim().length > 0) {
       return value.trim();
     }
   }
@@ -474,10 +474,10 @@ function extractControlSnapshotRepairTableNameFromDetail(detail = null) {
   const separatorIndex = normalizedDetail.indexOf(
     CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR,
   );
-  if (separatorIndex <= NUM.ZERO) {
+  if (separatorIndex <= 0) {
     return null;
   }
-  return normalizedDetail.slice(NUM.ZERO, separatorIndex);
+  return normalizedDetail.slice(0, separatorIndex);
 }
 function resolveControlSnapshotRepairFailureTableName(repair = null) {
   const errorDetails = normalizeControlSnapshotRepairDetailList(
@@ -493,8 +493,8 @@ function resolveControlSnapshotRepairFailureTableName(repair = null) {
     repair?.firstFailedParticipant?.[
       CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_TABLE_NAME_FIELD
     ],
-    failedTables[NUM.ZERO],
-    extractControlSnapshotRepairTableNameFromDetail(errorDetails[NUM.ZERO]),
+    failedTables[0],
+    extractControlSnapshotRepairTableNameFromDetail(errorDetails[0]),
   );
 }
 function resolveControlSnapshotRepairParticipantFailureDetail(repair = null) {
@@ -525,7 +525,7 @@ function resolveControlSnapshotRepairFailureDetail(repair = null) {
     repair?.errors,
   );
   return firstControlSnapshotRepairDetail(
-    errorDetails[NUM.ZERO],
+    errorDetails[0],
     repair?.error,
   ) ||
     (
@@ -535,7 +535,7 @@ function resolveControlSnapshotRepairFailureDetail(repair = null) {
     );
 }
 function isReadyLocalQueryTransportDiagnostic(localQueryTransport = null) {
-  if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
+  if (!localQueryTransport || typeof localQueryTransport !== 'object') {
     return false;
   }
   if (localQueryTransport.ready === true) {
@@ -557,7 +557,7 @@ function resolveAuthoritativeRepairTimeoutMs(options = {}) {
   });
 }
 function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+  if (!snapshot || typeof snapshot !== 'object') {
     return snapshot;
   }
   const activeProjection =
@@ -601,9 +601,9 @@ function appendControlSnapshotRepairEvaluationTriggerCode(
 ) {
   if (
     !evaluation ||
-    typeof evaluation !== TYPEOF.OBJECT ||
-    typeof triggerCode !== TYPEOF.STRING ||
-    triggerCode.length === NUM.ZERO
+    typeof evaluation !== 'object' ||
+    typeof triggerCode !== 'string' ||
+    triggerCode.length === 0
   ) {
     return evaluation;
   }

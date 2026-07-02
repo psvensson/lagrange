@@ -4,13 +4,11 @@ import {SQLQueryEngineLifecycleAndCallbackDispatch} from './sql-query-engine-lif
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_WRITE_ACTIVITY = 'write_activity';
-const LOCAL_NUM_100 = 100;
-const LOCAL_STR_1KD8O = 'query_admission_deferred';
-const LOCAL_STR_DDIFL = 'query_admission_rejected';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_G1DFB = 'Maximum call stack size exceeded';
+const LOCAL_NUM_ONE_HUNDRED = 100;
+const LOCAL_STR_QUERY_ADMISSION_DEFERRED = 'query_admission_deferred';
+const LOCAL_STR_QUERY_ADMISSION_REJECTED = 'query_admission_rejected';
+const LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED = 'Maximum call stack size exceeded';
 const LOCAL_STR_QUERY_PLANE_WRITE = 'query-plane:write';
 const LOCAL_STR_QUERY_PLANE_READ = 'query-plane:read';
 const LOCAL_STR_UNKNOWN = 'unknown';
@@ -292,7 +290,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
       localLeaderPartitionIds,
     });
 
-    if (localLeaderPartitionIds.length === LOCAL_NUM_ZERO) {
+    if (localLeaderPartitionIds.length === 0) {
       return;
     }
 
@@ -316,7 +314,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
         .map((partitionId) => String(partitionId || ''))
         .filter(Boolean),
     );
-    if (requestedPartitionIdSet.size === LOCAL_NUM_ZERO) {
+    if (requestedPartitionIdSet.size === 0) {
       return [];
     }
 
@@ -353,7 +351,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
     }
 
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_SQL_QUERY, {
-      sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
+      sql: sql.substring(0, LOCAL_NUM_ONE_HUNDRED),
       paramCount: params.length,
       sessionId,
     });
@@ -372,12 +370,12 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
         ast = this.parseCache.cloneAst(ast);
       }
       // If PG mode produced param mapping, reorder params
-      if (ast._paramMapping && ast._paramMapping.length > LOCAL_NUM_ZERO) {
+      if (ast._paramMapping && ast._paramMapping.length > 0) {
         params = reorderParams(params, ast._paramMapping);
       }
     } catch (parseError) {
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
+        sql: sql.substring(0, LOCAL_NUM_ONE_HUNDRED),
         error: parseError.message,
       });
       return {
@@ -415,8 +413,8 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
         return buildPressureAdmissionFailure(ingressPressureDecision, {
           error:
             ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
-              LOCAL_STR_1KD8O :
-              LOCAL_STR_DDIFL,
+              LOCAL_STR_QUERY_ADMISSION_DEFERRED :
+              LOCAL_STR_QUERY_ADMISSION_REJECTED,
           errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
         });
       }
@@ -477,8 +475,8 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
           parseDurationMs: parseEndMs - queryStartMs,
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
-          partitionCount: result?.partitions?.length ?? LOCAL_NUM_ZERO,
-          rowCount: result?.count ?? result?.changes ?? LOCAL_NUM_ZERO,
+          partitionCount: result?.partitions?.length ?? 0,
+          rowCount: result?.count ?? result?.changes ?? 0,
           success: result?.success ?? false,
         });
       } catch (_metricsErr) {
@@ -496,8 +494,8 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
           parseDurationMs: parseEndMs - queryStartMs,
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
-          partitionCount: LOCAL_NUM_ZERO,
-          rowCount: LOCAL_NUM_ZERO,
+          partitionCount: 0,
+          rowCount: 0,
           success: false,
         });
       } catch (_metricsErr) {
@@ -506,15 +504,15 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
 
       const failureResult = this.buildCaughtQueryExecutionFailure(error);
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
+        sql: sql.substring(0, LOCAL_NUM_ONE_HUNDRED),
         error: failureResult.error,
         errorCode: failureResult.errorCode || null,
         retryAfterMs: Number.isFinite(failureResult.retryAfterMs) ?
           failureResult.retryAfterMs :
           null,
         deferRetry: failureResult.deferRetry === true,
-        stack: String(failureResult.error || LOCAL_STR_EMPTY).includes(
-          LOCAL_STR_G1DFB,
+        stack: String(failureResult.error || '').includes(
+          LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED,
         ) ?
           error?.stack || null :
           null,
@@ -588,7 +586,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
     try {
       const parser = new SQLParser(statement, {dialect: options.dialect});
       ast = parser.parse();
-      if (ast._paramMapping && ast._paramMapping.length > LOCAL_NUM_ZERO) {
+      if (ast._paramMapping && ast._paramMapping.length > 0) {
         normalizedParams = reorderParams(params, ast._paramMapping);
       }
     } catch (error) {

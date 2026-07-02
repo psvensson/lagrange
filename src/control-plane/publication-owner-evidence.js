@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_EVIDENCE_STATE,
@@ -35,19 +34,19 @@ const PUBLICATION_OWNER_PRESSURE_INPUT_FIELD = Object.freeze({
 
 function isPublicationOwnerRecord(value) {
   return Boolean(value) &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     !Array.isArray(value);
 }
 
 function normalizePublicationOwnerString(value) {
-  return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
+  return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     PUBLICATION_OWNER_TEXT.EMPTY;
 }
 
 function normalizePublicationOwnerStatus(value) {
   const normalizedStatus = normalizePublicationOwnerString(value).toUpperCase();
-  return normalizedStatus.length > NUM.ZERO ?
+  return normalizedStatus.length > 0 ?
     normalizedStatus :
     PUBLICATION_OWNER_TEXT.UNKNOWN;
 }
@@ -57,16 +56,16 @@ function normalizePublicationOwnerNodeIds(values = []) {
     [...new Set(
       (Array.isArray(values) ? values : PUBLICATION_OWNER_EVIDENCE_EMPTY_LIST)
         .map((value) => normalizePublicationOwnerString(value))
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     )].sort(),
   );
 }
 
 function normalizePublicationOwnerNonNegativeInteger(value) {
   const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
+  return Number.isFinite(numericValue) && numericValue >= 0 ?
     Math.floor(numericValue) :
-    NUM.ZERO;
+    0;
 }
 
 function isKnownPublicationOwnerPressureState(value) {
@@ -112,7 +111,7 @@ function resolvePublicationOwnerPressureEvidence(options = {}) {
         ] ??
           options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.RETRY_AFTER_MS],
       ) :
-      NUM.ZERO,
+      0,
     reasonCodes: normalizePublicationOwnerNodeIds(
       options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_REASON_CODES],
     ),
@@ -136,7 +135,7 @@ function normalizePublicationOwnerRevision(value) {
 
 function readFirstPublicationOwnerValue(values = []) {
   return values.find((value) =>
-    value !== null && typeof value !== TYPEOF.UNDEFINED,
+    value !== null && typeof value !== 'undefined',
   );
 }
 
@@ -194,7 +193,7 @@ function hasPublishedPublicationOwnerClosedPendingAckList(options = {}) {
   return options.publicationStatus ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
 }
 
 function hasOpenPublicationOwnerCountOnlyPendingAckList(options = {}) {
@@ -203,7 +202,7 @@ function hasOpenPublicationOwnerCountOnlyPendingAckList(options = {}) {
   );
   return options.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
     Array.isArray(options.pendingAckNodeIds) &&
-    explicitPendingAckNodeIds.length === NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0;
 }
 
 function resolvePublicationOwnerAckEvidenceState(options = {}) {
@@ -212,7 +211,7 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   );
   const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
     Number(options.pendingAckCount) :
-    NUM.ZERO;
+    0;
   // Count-only debt only applies when the CALLER explicitly declares the
   // COUNT_ONLY evidence state. An empty pending-ack list with a stale positive
   // count (no declared state) must defer to the authoritative empty list — that
@@ -221,8 +220,8 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   const hasCountOnlyDebt =
     options.pendingAckEvidenceState ===
       PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-    explicitPendingAckNodeIds.length === NUM.ZERO &&
-    pendingAckCount > NUM.ZERO;
+    explicitPendingAckNodeIds.length === 0 &&
+    pendingAckCount > 0;
 
   if (hasPublishedPublicationOwnerClosedPendingAckList(options) && !hasCountOnlyDebt) {
     return PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST;
@@ -244,8 +243,8 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   );
   return Array.isArray(options.requiredAckNodeIds) &&
     (
-      requiredAckNodeIds.length > NUM.ZERO ||
-      explicitPendingAckNodeIds.length === NUM.ZERO
+      requiredAckNodeIds.length > 0 ||
+      explicitPendingAckNodeIds.length === 0
     ) &&
     !hasCountOnlyDebt ?
     PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
@@ -275,12 +274,12 @@ function buildPublicationOwnerAckEvidence(options = {}) {
     evidenceState ===
       PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST ?
       derivedPendingAckNodeIds :
-      explicitPendingAckNodeIds.length > NUM.ZERO ?
+      explicitPendingAckNodeIds.length > 0 ?
         explicitPendingAckNodeIds :
         derivedPendingAckNodeIds;
   const countOnlyPendingAckCount =
     hasOpenPublicationOwnerCountOnlyPendingAckList(options) ?
-      NUM.ZERO :
+      0 :
       Math.max(
         pendingAckNodeIds.length,
         normalizePublicationOwnerNonNegativeInteger(options.pendingAckCount),

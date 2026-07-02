@@ -3,7 +3,7 @@
  * row-mutation helper construction (raft role + leader-node id writes).
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   getTrafficReadinessSnapshot,
@@ -117,8 +117,8 @@ function assignMetadataPublication(serviceClass) {
           const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
           const cachedRow = context.cachedRow;
           if (
-            typeof cachedRow?.raft_role === TYPEOF.STRING &&
-            cachedRow.raft_role.length > NUM.ZERO
+            typeof cachedRow?.raft_role === 'string' &&
+            cachedRow.raft_role.length > 0
           ) {
             whereClause.raft_role = cachedRow.raft_role;
           }
@@ -175,8 +175,8 @@ function assignMetadataPublication(serviceClass) {
           const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
           const cachedRow = context.cachedRow;
           if (
-            typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === TYPEOF.STRING &&
-            cachedRow[COLUMN.LEADER_NODE_ID].length > NUM.ZERO
+            typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+            cachedRow[COLUMN.LEADER_NODE_ID].length > 0
           ) {
             whereClause[COLUMN.LEADER_NODE_ID] =
               cachedRow[COLUMN.LEADER_NODE_ID];

@@ -5,7 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION, METRICS_LOG_TAG, NUM, TYPEOF} from '../constants/index.js';
+import {CDC_OPERATION, METRICS_LOG_TAG} from '../constants/index.js';
 import {
   CACHE_HYDRATION_ERROR_MSG,
   CACHE_HYDRATION_DEFAULT_OPTIONS,
@@ -18,7 +18,6 @@ import {
 } from './cache-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * CacheHydrationService populates the SystemTableCache with existing data
@@ -41,11 +40,11 @@ class CacheHydrationService {
     this.queryEngine = queryEngine;
     this.systemTableCache = systemTableCache;
     this.logger = options.logger || this.initLogger();
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       CACHE_HYDRATION_NOW;
     this.cdcEventApplier = options.cdcEventApplier ?? null;
-    if (typeof this.cdcEventApplier !== TYPEOF.FUNCTION) {
+    if (typeof this.cdcEventApplier !== 'function') {
       throw new Error(CACHE_HYDRATION_ERROR_MSG.MISSING_CDC_EVENT_APPLIER);
     }
   }
@@ -104,7 +103,7 @@ class CacheHydrationService {
   async hydrateCache() {
     this.logger.info(CACHE_HYDRATION_LOG_MSG.STARTING);
     const totalStartMs = this.now();
-    let totalRows = LOCAL_NUM_ZERO;
+    let totalRows = 0;
 
     const results = {
       success: true,
@@ -142,7 +141,7 @@ class CacheHydrationService {
     }
 
     // Mark overall success as false if any table failed
-    if (results.errors.length > LOCAL_NUM_ZERO) {
+    if (results.errors.length > 0) {
       results.success = false;
     }
 
@@ -197,7 +196,7 @@ class CacheHydrationService {
         tableName,
         rowCount,
         durationMs,
-        rowsPerSecond: durationMs > NUM.ZERO ?
+        rowsPerSecond: durationMs > 0 ?
           Math.round(
             rowCount / (durationMs / CACHE_HYDRATION_METRICS.MS_PER_SECOND),
           ) :

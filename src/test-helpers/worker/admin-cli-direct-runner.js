@@ -8,12 +8,9 @@ import {parentPort, workerData} from 'worker_threads';
 import {AdminCLI} from '../../cli/index.js';
 import {ExitError} from './exit-error.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_UTF8 = 'utf8';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 function captureOutput() {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -22,8 +19,8 @@ function captureOutput() {
   const originalConsoleError = console.error;
   const originalExit = process.exit;
 
-  let stdout = LOCAL_STR_EMPTY;
-  let stderr = LOCAL_STR_EMPTY;
+  let stdout = '';
+  let stderr = '';
 
   process.stdout.write = (chunk, encoding, cb) => {
     stdout += Buffer.isBuffer(chunk) ? chunk.toString(LOCAL_STR_UTF8) : String(chunk);
@@ -44,7 +41,7 @@ function captureOutput() {
     stderr += `${args.join(LOCAL_STR_SPACE)}\n`;
   };
 
-  process.exit = (code = LOCAL_NUM_ZERO) => {
+  process.exit = (code = 0) => {
     throw new ExitError(code);
   };
 
@@ -70,14 +67,14 @@ async function run() {
   }
 
   const cap = captureOutput();
-  let exitCode = LOCAL_NUM_ZERO;
+  let exitCode = 0;
 
   try {
     const cli = new AdminCLI();
     await cli.start(args);
   } catch (err) {
     if (err instanceof ExitError) {
-      exitCode = err.code ?? LOCAL_NUM_ZERO;
+      exitCode = err.code ?? 0;
     } else {
       throw err;
     }
@@ -99,9 +96,9 @@ async function run() {
 
 run().catch((err) => {
   parentPort.postMessage({
-    stdout: LOCAL_STR_EMPTY,
+    stdout: '',
     stderr: err?.stack || String(err),
-    exitCode: LOCAL_NUM_ONE,
+    exitCode: 1,
     error: true,
   });
 });

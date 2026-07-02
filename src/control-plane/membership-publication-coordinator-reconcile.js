@@ -1,7 +1,5 @@
 import {
-  NUM,
   TABLES,
-  TYPEOF,
 } from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
@@ -126,7 +124,7 @@ const CONVERGENCE_OUTCOME = Object.freeze({
 function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
   if (
     typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
-    TYPEOF.FUNCTION
+    'function'
   ) {
     return false;
   }
@@ -151,10 +149,10 @@ function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
   const normalizedLatestPublication =
     normalizeControlPlanePublicationRow(latestPublicationRow);
   const candidateStatus =
-    typeof candidate.publicationStatus === TYPEOF.STRING ?
+    typeof candidate.publicationStatus === 'string' ?
       candidate.publicationStatus.toUpperCase() :
       MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
-  return candidateStatus.length > NUM.ZERO &&
+  return candidateStatus.length > 0 &&
     candidateStatus !== normalizedLatestPublication.status;
 }
 
@@ -203,7 +201,7 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
     return [];
   }
   const requiredAckNodeIds = normalizeNodeIdList(latestRow.requiredAckNodeIds);
-  if (requiredAckNodeIds.length === NUM.ZERO) {
+  if (requiredAckNodeIds.length === 0) {
     return [];
   }
   const acknowledgedNodeIds = new Set(
@@ -212,12 +210,12 @@ function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
   const pendingAckNodeIds = requiredAckNodeIds.filter(
     (nodeId) => !acknowledgedNodeIds.has(nodeId),
   );
-  if (pendingAckNodeIds.length === NUM.ZERO) {
+  if (pendingAckNodeIds.length === 0) {
     return [];
   }
   const readinessByNodeId =
     planningSnapshot?.readinessByNodeId &&
-    typeof planningSnapshot.readinessByNodeId === TYPEOF.OBJECT ?
+    typeof planningSnapshot.readinessByNodeId === 'object' ?
       planningSnapshot.readinessByNodeId :
       {};
   const isOwnerAckCompletionEligible = (nodeId) => {
@@ -261,11 +259,11 @@ class MembershipPublicationCoordinatorReconcile extends
     const service = this.cdcIntegrationService;
     if (
       !service ||
-      typeof service.hydrateCdcPropagatedTablesFromAuthority !== TYPEOF.FUNCTION
+      typeof service.hydrateCdcPropagatedTablesFromAuthority !== 'function'
     ) {
       return null;
     }
-    const nowMs = typeof this.now === TYPEOF.FUNCTION ? this.now() : Date.now();
+    const nowMs = typeof this.now === 'function' ? this.now() : Date.now();
     const lastMs = this._lastDeferredPublicationsCatchupAtMs;
     if (
       Number.isFinite(lastMs) &&
@@ -366,13 +364,13 @@ class MembershipPublicationCoordinatorReconcile extends
             const shouldRefreshPriorityMetadata =
               candidate.priorityPartitionSummaryChanged === true &&
               ((candidate.priorityPartitionSummary &&
-                typeof candidate.priorityPartitionSummary === TYPEOF.OBJECT) ||
+                typeof candidate.priorityPartitionSummary === 'object') ||
               (candidate.membershipLifecycleSummary &&
-                typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT));
+                typeof candidate.membershipLifecycleSummary === 'object'));
             const shouldRefreshMembershipLifecycleMetadata =
               candidate.membershipLifecycleSummaryChanged === true &&
               candidate.membershipLifecycleSummary &&
-              typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT;
+              typeof candidate.membershipLifecycleSummary === 'object';
             const shouldRefreshAcknowledgements =
               hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate);
             const shouldRefreshStatus =
@@ -622,7 +620,7 @@ class MembershipPublicationCoordinatorReconcile extends
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
       if (
         missingCount <= 0 &&
-        ownerAckCompletionPendingNodeIds.length === NUM.ZERO
+        ownerAckCompletionPendingNodeIds.length === 0
       ) {
         // CL-001 OWNER FACE (2026-06-19): the follower branches above catch up from
         // authority, but the owner path did NOT — so a rejoined node that re-acquired
@@ -769,17 +767,17 @@ class MembershipPublicationCoordinatorReconcile extends
     // setIntervalFn/clearIntervalFn options keep precedence.
     const timeSource = resolveTimeSource(options);
     const setIntervalFn =
-      typeof options.setIntervalFn === TYPEOF.FUNCTION ?
+      typeof options.setIntervalFn === 'function' ?
         options.setIntervalFn :
         (fn, ms) => timeSource.setInterval(fn, ms);
     this.ownerMembershipDriverClearInterval =
-      typeof options.clearIntervalFn === TYPEOF.FUNCTION ?
+      typeof options.clearIntervalFn === 'function' ?
         options.clearIntervalFn :
         (handle) => timeSource.clearInterval(handle);
     this.ownerMembershipDriverTimer = setIntervalFn(() => {
       this.driveOwnerMembershipReconcile().catch(() => {});
     }, intervalMs);
-    if (typeof this.ownerMembershipDriverTimer?.unref === TYPEOF.FUNCTION) {
+    if (typeof this.ownerMembershipDriverTimer?.unref === 'function') {
       this.ownerMembershipDriverTimer.unref();
     }
   }
@@ -787,7 +785,7 @@ class MembershipPublicationCoordinatorReconcile extends
   stopOwnerMembershipDriver() {
     if (this.ownerMembershipDriverTimer) {
       const clearIntervalFn =
-        typeof this.ownerMembershipDriverClearInterval === TYPEOF.FUNCTION ?
+        typeof this.ownerMembershipDriverClearInterval === 'function' ?
           this.ownerMembershipDriverClearInterval :
           clearInterval;
       clearIntervalFn(this.ownerMembershipDriverTimer);
@@ -795,7 +793,7 @@ class MembershipPublicationCoordinatorReconcile extends
     }
     // Stop the SWIM probe loop alongside the owner driver (inert if no runtime
     // was wired in).
-    if (typeof this.membershipSwimRuntime?.stop === TYPEOF.FUNCTION) {
+    if (typeof this.membershipSwimRuntime?.stop === 'function') {
       this.membershipSwimRuntime.stop();
     }
     // Clearing the 5s interval alone does not stop the reconcile queue: it
@@ -805,7 +803,7 @@ class MembershipPublicationCoordinatorReconcile extends
     // the event loop open long after teardown. Shut the queue down so drain()
     // bails (stopped=true) and pending retry timers are cleared. This method is
     // teardown-only (seed stopAndClearControlPlaneServices + JoinCleanupHandler).
-    if (typeof this.reconcileQueue?.shutdown === TYPEOF.FUNCTION) {
+    if (typeof this.reconcileQueue?.shutdown === 'function') {
       this.reconcileQueue.shutdown();
     }
   }

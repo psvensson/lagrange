@@ -87,8 +87,8 @@ test('subscribeToCDCWithHandshake replays all buffered events', async (t) => {
   await partition.initialize();
 
   try {
-    const event1 = buildNodeCdcEvent('node-buf-1', CDC_OPERATION.INSERT, NUM.ONE);
-    const event2 = buildNodeCdcEvent('node-buf-2', CDC_OPERATION.INSERT, NUM.TWO);
+    const event1 = buildNodeCdcEvent('node-buf-1', CDC_OPERATION.INSERT, 1);
+    const event2 = buildNodeCdcEvent('node-buf-2', CDC_OPERATION.INSERT, 2);
     const event3 = buildNodeCdcEvent(
       'node-buf-3', CDC_OPERATION.INSERT, NUM.THREE,
     );
@@ -136,19 +136,19 @@ test('subscribeToCDCWithHandshake replays all buffered events', async (t) => {
       'subscriber should receive all 3 buffered events during catchup',
     );
     t.equal(
-      deliveredEvents[NUM.ZERO].data.node_id, 'node-buf-1',
+      deliveredEvents[0].data.node_id, 'node-buf-1',
       'first delivered event should be the first buffered event',
     );
     t.equal(
-      deliveredEvents[NUM.ONE].data.node_id, 'node-buf-2',
+      deliveredEvents[1].data.node_id, 'node-buf-2',
       'second delivered event should be the second buffered event',
     );
     t.equal(
-      deliveredEvents[NUM.TWO].data.node_id, 'node-buf-3',
+      deliveredEvents[2].data.node_id, 'node-buf-3',
       'third delivered event should be the third buffered event',
     );
     t.equal(
-      partition.cdcEventBuffer.size(), NUM.ZERO,
+      partition.cdcEventBuffer.size(), 0,
       'buffer should be empty after successful catchup replay',
     );
   } finally {
@@ -163,7 +163,7 @@ test('subscriber receives steady-state events after handshake catchup',
 
     try {
       const bufferedEvent = buildNodeCdcEvent(
-        'node-pre-reg', CDC_OPERATION.INSERT, NUM.ONE,
+        'node-pre-reg', CDC_OPERATION.INSERT, 1,
       );
       partition.cdcEventBuffer.buffer(bufferedEvent);
 
@@ -175,12 +175,12 @@ test('subscriber receives steady-state events after handshake catchup',
       await partition.subscribeToCDCWithHandshake(subscriber);
 
       t.equal(
-        deliveredEvents.length, NUM.ONE,
+        deliveredEvents.length, 1,
         'subscriber should receive the buffered event during catchup',
       );
 
       const steadyStateEvent = buildNodeCdcEvent(
-        'node-steady-1', CDC_OPERATION.UPDATE, NUM.TWO,
+        'node-steady-1', CDC_OPERATION.UPDATE, 2,
       );
       steadyStateEvent.sequenceNumber =
         partition.cdcDelivery.nextCDCEventSequenceNumber();
@@ -193,11 +193,11 @@ test('subscriber receives steady-state events after handshake catchup',
       );
 
       t.equal(
-        deliveredEvents.length, NUM.TWO,
+        deliveredEvents.length, 2,
         'subscriber should receive steady-state event after catchup',
       );
       t.equal(
-        deliveredEvents[NUM.ONE].data.node_id, 'node-steady-1',
+        deliveredEvents[1].data.node_id, 'node-steady-1',
         'steady-state event should be the second delivered event',
       );
     } finally {
@@ -212,7 +212,7 @@ test('subscribeToCDCWithHandshake with empty buffer skips catchup',
 
     try {
       t.equal(
-        partition.cdcEventBuffer.size(), NUM.ZERO,
+        partition.cdcEventBuffer.size(), 0,
         'buffer should be empty before registration',
       );
 
@@ -236,15 +236,15 @@ test('subscribeToCDCWithHandshake with empty buffer skips catchup',
         'catchup mode should be none when buffer is empty',
       );
       t.equal(
-        handshake.catchup.bufferedEventsAtHandshake, NUM.ZERO,
+        handshake.catchup.bufferedEventsAtHandshake, 0,
         'no buffered events at handshake',
       );
       t.equal(
-        handshake.catchup.bufferedEventsReplayed, NUM.ZERO,
+        handshake.catchup.bufferedEventsReplayed, 0,
         'no events replayed',
       );
       t.equal(
-        deliveredEvents.length, NUM.ZERO,
+        deliveredEvents.length, 0,
         'subscriber should receive no events when buffer is empty',
       );
       t.equal(
@@ -263,7 +263,7 @@ test('buffered events preserve order through handshake replay', async (t) => {
 
   try {
     const eventCount = NUM.FIVE;
-    for (let i = NUM.ZERO; i < eventCount; i++) {
+    for (let i = 0; i < eventCount; i++) {
       const event = buildNodeCdcEvent(
         `node-order-${i}`, CDC_OPERATION.INSERT, i,
       );
@@ -282,7 +282,7 @@ test('buffered events preserve order through handshake replay', async (t) => {
       'all buffered events should be delivered',
     );
 
-    for (let i = NUM.ZERO; i < eventCount; i++) {
+    for (let i = 0; i < eventCount; i++) {
       t.equal(
         deliveredNodeIds[i], `node-order-${i}`,
         `event ${i} should be delivered in buffer order`,
@@ -300,7 +300,7 @@ test('CDC_CATCHUP_STARTED and CDC_CATCHUP_COMPLETED events emitted',
 
     try {
       const event = buildNodeCdcEvent(
-        'node-emit-1', CDC_OPERATION.INSERT, NUM.ONE,
+        'node-emit-1', CDC_OPERATION.INSERT, 1,
       );
       partition.cdcEventBuffer.buffer(event);
 
@@ -318,31 +318,31 @@ test('CDC_CATCHUP_STARTED and CDC_CATCHUP_COMPLETED events emitted',
       await partition.subscribeToCDCWithHandshake(subscriber);
 
       t.equal(
-        emittedEvents.length, NUM.TWO,
+        emittedEvents.length, 2,
         'should emit both catchup started and completed events',
       );
       t.equal(
-        emittedEvents[NUM.ZERO].type, 'started',
+        emittedEvents[0].type, 'started',
         'first emitted event should be catchup started',
       );
       t.equal(
-        emittedEvents[NUM.ZERO].data.partitionId, TEST_PARTITION_ID,
+        emittedEvents[0].data.partitionId, TEST_PARTITION_ID,
         'started event should include partition ID',
       );
       t.equal(
-        emittedEvents[NUM.ZERO].data.bufferedEventsAtHandshake, NUM.ONE,
+        emittedEvents[0].data.bufferedEventsAtHandshake, 1,
         'started event should report buffered event count',
       );
       t.equal(
-        emittedEvents[NUM.ONE].type, 'completed',
+        emittedEvents[1].type, 'completed',
         'second emitted event should be catchup completed',
       );
       t.equal(
-        emittedEvents[NUM.ONE].data.bufferedEventsReplayed, NUM.ONE,
+        emittedEvents[1].data.bufferedEventsReplayed, 1,
         'completed event should report replayed count',
       );
       t.equal(
-        emittedEvents[NUM.ONE].data.bufferedEventsRemaining, NUM.ZERO,
+        emittedEvents[1].data.bufferedEventsRemaining, 0,
         'completed event should report zero remaining',
       );
     } finally {

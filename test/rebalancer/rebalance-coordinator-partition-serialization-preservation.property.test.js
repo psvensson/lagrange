@@ -16,7 +16,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import assert from 'node:assert/strict';
-import {NUM} from '../../src/constants/index.js';
 import {
   RebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
@@ -54,7 +53,7 @@ async (t) => {
         const coordinator = createCoordinator();
         const results = [];
 
-        for (let i = NUM.ZERO; i < mutationCount; i++) {
+        for (let i = 0; i < mutationCount; i++) {
           const result = await coordinator
             .runReplicaOperationTransitionExclusive(
               async () => {
@@ -76,7 +75,7 @@ async (t) => {
           `${results.length}`,
         );
 
-        for (let i = NUM.ZERO; i < results.length; i++) {
+        for (let i = 0; i < results.length; i++) {
           assert.equal(
             results[i].success,
             true,
@@ -174,17 +173,17 @@ async (t) => {
     'Second mutation should return its result',
   );
   assert.equal(
-    executionOrder[NUM.ZERO],
+    executionOrder[0],
     'first-start',
     'First mutation should start first',
   );
   assert.equal(
-    executionOrder[NUM.ONE],
+    executionOrder[1],
     'first-end',
     'First mutation should end before second starts',
   );
   assert.equal(
-    executionOrder[NUM.TWO],
+    executionOrder[2],
     'second-start',
     'Second mutation should start after first ends',
   );

@@ -31,7 +31,6 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
-import {NUM} from '../../src/constants/index.js';
 import {
   PARTITION_SERVICE_CDC,
 } from '../../src/partition/partition-service-constants.js';
@@ -194,14 +193,14 @@ test(
               if (replayed.length !== events.length) return false;
 
               // Events must be delivered in insertion order
-              for (let i = NUM.ZERO; i < events.length; i++) {
+              for (let i = 0; i < events.length; i++) {
                 const expectedId = buildEventIdentity(events[i]);
                 const actualId = buildEventIdentity(replayed[i]);
                 if (expectedId !== actualId) return false;
               }
 
               // Buffer must be cleared after replay
-              if (buffer.size() !== NUM.ZERO) return false;
+              if (buffer.size() !== 0) return false;
               if (buffer.hasEvents()) return false;
 
               return true;
@@ -266,14 +265,14 @@ test(
                 if (replayed.length !== events.length) return false;
 
                 // Events must be in insertion order
-                for (let i = NUM.ZERO; i < events.length; i++) {
+                for (let i = 0; i < events.length; i++) {
                   const expectedId = buildEventIdentity(events[i]);
                   const actualId = buildEventIdentity(replayed[i]);
                   if (expectedId !== actualId) return false;
                 }
 
                 // Buffer must be cleared after replay
-                if (partition.cdcEventBuffer.size() !== NUM.ZERO) {
+                if (partition.cdcEventBuffer.size() !== 0) {
                   return false;
                 }
 
@@ -369,11 +368,11 @@ test(
                   return false;
                 }
                 if (secondHandshake.catchup
-                  .bufferedEventsAtHandshake !== NUM.ZERO) {
+                  .bufferedEventsAtHandshake !== 0) {
                   return false;
                 }
                 if (secondHandshake.catchup
-                  .bufferedEventsReplayed !== NUM.ZERO) {
+                  .bufferedEventsReplayed !== 0) {
                   return false;
                 }
 

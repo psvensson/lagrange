@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
@@ -12,8 +11,8 @@ function normalizeIsoTimestamp(nowValue) {
 
 export function buildReadinessTransitionState(context = {}, nowValue = Date.now()) {
   const observedAt =
-    typeof context.observedAt === TYPEOF.STRING &&
-    context.observedAt.length > NUM.ZERO ?
+    typeof context.observedAt === 'string' &&
+    context.observedAt.length > 0 ?
       context.observedAt :
       normalizeIsoTimestamp(nowValue);
   const reasonCodes = Array.isArray(context.reasons) ?
@@ -24,20 +23,20 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
     )].sort() :
     [];
   const nodeEvidence =
-    context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT ?
+    context.nodeEvidence && typeof context.nodeEvidence === 'object' ?
       context.nodeEvidence :
       {};
   const dimensions =
-    context.dimensions && typeof context.dimensions === TYPEOF.OBJECT ?
+    context.dimensions && typeof context.dimensions === 'object' ?
       context.dimensions :
       {};
   const publication =
-    context.publication && typeof context.publication === TYPEOF.OBJECT ?
+    context.publication && typeof context.publication === 'object' ?
       context.publication :
       {};
   const runtimeAuthority =
     context.runtimeAuthority &&
-    typeof context.runtimeAuthority === TYPEOF.OBJECT ?
+    typeof context.runtimeAuthority === 'object' ?
       context.runtimeAuthority :
       {};
   const projectionReadinessContract =
@@ -94,15 +93,15 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
           CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY
         ] === true,
       localQueryTransportState:
-        typeof nodeEvidence.localQueryTransportState === TYPEOF.STRING ?
+        typeof nodeEvidence.localQueryTransportState === 'string' ?
           nodeEvidence.localQueryTransportState :
           null,
       localQueryTransportReady:
-        typeof nodeEvidence.localQueryTransportReady === TYPEOF.BOOLEAN ?
+        typeof nodeEvidence.localQueryTransportReady === 'boolean' ?
           nodeEvidence.localQueryTransportReady :
           null,
       localQueryTransportReason:
-        typeof nodeEvidence.localQueryTransportReason === TYPEOF.STRING ?
+        typeof nodeEvidence.localQueryTransportReason === 'string' ?
           nodeEvidence.localQueryTransportReason :
           null,
       localQueryTransportRetryAfterMs:
@@ -110,15 +109,15 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
           nodeEvidence.localQueryTransportRetryAfterMs :
           null,
       publicationMode:
-        typeof publication.currentMode === TYPEOF.STRING ?
+        typeof publication.currentMode === 'string' ?
           publication.currentMode :
           null,
       publicationReasonCode:
-        typeof publication.reasonCode === TYPEOF.STRING ?
+        typeof publication.reasonCode === 'string' ?
           publication.reasonCode :
           null,
       membershipPublicationStatus:
-        typeof context.membershipPublication?.status === TYPEOF.STRING ?
+        typeof context.membershipPublication?.status === 'string' ?
           context.membershipPublication.status :
           null,
       priorityControlPlaneRecoveryActive:
@@ -131,19 +130,19 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
       projectionPriorityRecoveryActive:
         projectionReadinessContract.priorityRecovery.active === true,
       runtimeAuthorityState:
-        typeof runtimeAuthority.state === TYPEOF.STRING ?
+        typeof runtimeAuthority.state === 'string' ?
           runtimeAuthority.state :
           null,
       runtimeAuthorityVisibilityState:
-        typeof runtimeAuthority.visibility?.state === TYPEOF.STRING ?
+        typeof runtimeAuthority.visibility?.state === 'string' ?
           runtimeAuthority.visibility.state :
           null,
       runtimeAuthorityRepairState:
-        typeof runtimeAuthority.repair?.state === TYPEOF.STRING ?
+        typeof runtimeAuthority.repair?.state === 'string' ?
           runtimeAuthority.repair.state :
           null,
       runtimeAuthorityProvisioningState:
-        typeof runtimeAuthority.provisioning?.state === TYPEOF.STRING ?
+        typeof runtimeAuthority.provisioning?.state === 'string' ?
           runtimeAuthority.provisioning.state :
           null,
     }),

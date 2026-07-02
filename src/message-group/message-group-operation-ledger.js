@@ -1,13 +1,12 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   MESSAGE_GROUP_OPERATION_LEDGER,
   MESSAGE_GROUP_OPERATION_LEDGER_NOW,
 } from './constants.js';
 
 const MESSAGE_GROUP_OPERATION_LEDGER_NUM = Object.freeze({
-  INITIAL_INDEX: NUM.ZERO,
-  INITIAL_TERM: NUM.ZERO,
-  FIRST_INDEX: NUM.ONE,
+  INITIAL_INDEX: 0,
+  INITIAL_TERM: 0,
+  FIRST_INDEX: 1,
 });
 const MESSAGE_GROUP_OPERATION_LEDGER_NO_ENTRY = null;
 
@@ -41,11 +40,11 @@ class MessageGroupOperationLedger {
    * @param {Function} [options.now] - Time source for entry timestamps.
    */
   constructor(options = MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_OPTIONS) {
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       MESSAGE_GROUP_OPERATION_LEDGER_NOW;
     this.maxEntries = Number.isInteger(options.maxEntries) &&
-      options.maxEntries > NUM.ZERO ?
+      options.maxEntries > 0 ?
       options.maxEntries :
       MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_MAX_ENTRIES;
     this.log = [];
@@ -61,8 +60,8 @@ class MessageGroupOperationLedger {
    * @private
    */
   getFirstRetainedIndex() {
-    return this.log.length > NUM.ZERO ?
-      this.log[NUM.ZERO].index :
+    return this.log.length > 0 ?
+      this.log[0].index :
       this.nextIndex;
   }
 
@@ -72,7 +71,7 @@ class MessageGroupOperationLedger {
    * @private
    */
   trimRetainedEntries() {
-    if (!Number.isInteger(this.maxEntries) || this.maxEntries <= NUM.ZERO) {
+    if (!Number.isInteger(this.maxEntries) || this.maxEntries <= 0) {
       return;
     }
     if (this.log.length <= this.maxEntries) {
@@ -94,7 +93,7 @@ class MessageGroupOperationLedger {
       this.now,
     );
     this.log.push(entry);
-    this.nextIndex += NUM.ONE;
+    this.nextIndex += 1;
     this.trimRetainedEntries();
     return entry;
   }
@@ -118,8 +117,8 @@ class MessageGroupOperationLedger {
    * @return {MessageGroupOperationLedgerEntry|null} Last entry or null.
    */
   getLastEntry() {
-    return this.log.length > NUM.ZERO ?
-      this.log[this.log.length - NUM.ONE] :
+    return this.log.length > 0 ?
+      this.log[this.log.length - 1] :
       MESSAGE_GROUP_OPERATION_LEDGER_NO_ENTRY;
   }
 
@@ -148,8 +147,8 @@ class MessageGroupOperationLedger {
       return;
     }
     const firstRetainedIndex = this.getFirstRetainedIndex();
-    const lastRetainedIndex = this.nextIndex - NUM.ONE;
-    if (this.log.length === NUM.ZERO) {
+    const lastRetainedIndex = this.nextIndex - 1;
+    if (this.log.length === 0) {
       this.nextIndex = Math.max(
         MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX,
         fromIndex,
@@ -164,7 +163,7 @@ class MessageGroupOperationLedger {
       );
       return;
     }
-    if (fromIndex <= lastRetainedIndex + NUM.ONE) {
+    if (fromIndex <= lastRetainedIndex + 1) {
       this.log = this.log.slice(
         MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_INDEX,
         fromIndex - firstRetainedIndex,

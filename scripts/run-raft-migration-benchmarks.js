@@ -4,12 +4,9 @@ import {spawn} from 'node:child_process';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_HYPHEN = '-';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_UTF8 = 'utf8';
 
 const SCRIPT_DEFAULT = Object.freeze({
@@ -43,21 +40,21 @@ function parseArgs(argv) {
   let raftProvider = SCRIPT_DEFAULT.raftProvider;
   let mitigationId = null;
 
-  for (let i = LOCAL_NUM_ZERO; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === ARG.SCENARIO && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.SCENARIO && i + 1 < argv.length) {
       scenario = String(argv[++i] || SCRIPT_DEFAULT.scenario);
       continue;
     }
-    if (arg === ARG.PROVIDER && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.PROVIDER && i + 1 < argv.length) {
       raftProvider = String(argv[++i] || SCRIPT_DEFAULT.raftProvider)
         .trim()
         .toLowerCase();
       continue;
     }
-    if (arg === ARG.MITIGATION && i + LOCAL_NUM_ONE < argv.length) {
+    if (arg === ARG.MITIGATION && i + 1 < argv.length) {
       const value = String(argv[++i] || '').trim();
-      mitigationId = value.length > LOCAL_NUM_ZERO ? value : null;
+      mitigationId = value.length > 0 ? value : null;
     }
   }
 
@@ -87,7 +84,7 @@ function runCommand(command, args, env) {
       rejectRun(error);
     });
     child.once(LOCAL_STR_CLOSE, (code) => {
-      resolveRun(Number(code || LOCAL_NUM_ZERO));
+      resolveRun(Number(code || 0));
     });
   });
 }
@@ -138,7 +135,7 @@ function buildRunSummary(runOptions, reportDir, profileResults) {
       profileCount: profileResults.length,
       commandFailureCount: failureCount,
       gateFailureCount,
-      passed: failureCount === LOCAL_NUM_ZERO && gateFailureCount === LOCAL_NUM_ZERO,
+      passed: failureCount === 0 && gateFailureCount === 0,
     },
   };
 }
@@ -167,7 +164,7 @@ async function main() {
       };
       await writeFile(
         overrideConfigPath,
-        JSON.stringify(baseConfig, null, LOCAL_NUM_TWO),
+        JSON.stringify(baseConfig, null, 2),
         LOCAL_STR_UTF8,
       );
       profileResults.push(await runProfile({
@@ -197,18 +194,18 @@ async function main() {
 
   await writeFile(
     timestampedSummaryPath,
-    JSON.stringify(runSummary, null, LOCAL_NUM_TWO),
+    JSON.stringify(runSummary, null, 2),
     LOCAL_STR_UTF8,
   );
   await mkdir(resolve(SCRIPT_DEFAULT.reportRootDir), {recursive: true});
   await writeFile(
     latestSummaryPath,
-    JSON.stringify(runSummary, null, LOCAL_NUM_TWO),
+    JSON.stringify(runSummary, null, 2),
     LOCAL_STR_UTF8,
   );
 
   if (!runSummary.overall.passed) {
-    process.exitCode = LOCAL_NUM_ONE;
+    process.exitCode = 1;
     return;
   }
 }
@@ -217,5 +214,5 @@ main().catch((error) => {
   process.stderr.write(
     `raft migration benchmark pipeline failed: ${error.message}\n`,
   );
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

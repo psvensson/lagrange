@@ -1,15 +1,12 @@
 import {AddressManager} from '../address/address-manager.js';
 import {
   ENTITY_TYPE,
-  NUM,
   SERVICE_TYPE,
-  TYPEOF,
 } from '../constants/index.js';
 
-const LOCAL_STR_EMPTY = '';
 
 function normalizeString(value) {
-  return typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeServiceType(serviceType) {
@@ -31,18 +28,18 @@ function formatReplicatedServiceAddress(
   serviceType,
   nodeId,
   replicaId,
-  explicitAddress = LOCAL_STR_EMPTY,
+  explicitAddress = '',
 ) {
   const normalizedAddress = normalizeString(explicitAddress);
-  if (normalizedAddress.length > NUM.ZERO) {
+  if (normalizedAddress.length > 0) {
     return normalizedAddress;
   }
 
   const normalizedNodeId = normalizeString(nodeId);
   const normalizedReplicaId = normalizeString(replicaId);
   const entityType = resolveEntityTypeForServiceType(serviceType);
-  if (normalizedNodeId.length === NUM.ZERO ||
-      normalizedReplicaId.length === NUM.ZERO ||
+  if (normalizedNodeId.length === 0 ||
+      normalizedReplicaId.length === 0 ||
       entityType === null) {
     return null;
   }
@@ -67,7 +64,7 @@ function buildReplicatedServiceBootstrapTopology(options = {}) {
   const excludeReplicaIds = new Set(
     (Array.isArray(options.excludeReplicaIds) ? options.excludeReplicaIds : [])
       .map((replicaId) => normalizeString(replicaId))
-      .filter((replicaId) => replicaId.length > NUM.ZERO),
+      .filter((replicaId) => replicaId.length > 0),
   );
   const replicaIds = [];
   const peerAddresses = [];
@@ -77,7 +74,7 @@ function buildReplicatedServiceBootstrapTopology(options = {}) {
   const appendReplicaTopology = (replicaId, nodeId, address) => {
     const normalizedReplicaId = normalizeString(replicaId);
     const normalizedNodeId = normalizeString(nodeId);
-    if (normalizedReplicaId.length === NUM.ZERO ||
+    if (normalizedReplicaId.length === 0 ||
         excludeReplicaIds.has(normalizedReplicaId)) {
       return;
     }
@@ -93,8 +90,8 @@ function buildReplicatedServiceBootstrapTopology(options = {}) {
       normalizedReplicaId,
       address,
     );
-    if (typeof resolvedAddress === TYPEOF.STRING &&
-        resolvedAddress.length > NUM.ZERO &&
+    if (typeof resolvedAddress === 'string' &&
+        resolvedAddress.length > 0 &&
         !seenPeerAddresses.has(resolvedAddress)) {
       seenPeerAddresses.add(resolvedAddress);
       peerAddresses.push(resolvedAddress);

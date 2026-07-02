@@ -36,8 +36,8 @@ const NODE_2 = 'node-2';
 const NODE_3 = 'node-3';
 const NODE_4 = 'node-4';
 const TARGET_THREE = NUM.THREE;
-const TARGET_TWO = NUM.TWO;
-const TARGET_ZERO = NUM.ZERO;
+const TARGET_TWO = 2;
+const TARGET_ZERO = 0;
 const ESTIMATED_BYTES = NUM.BYTES_PER_MIB;
 const CPU_MEDIUM = 50;
 const CPU_HIGH = 90;
@@ -46,9 +46,9 @@ function createNode(nodeId, overrides = {}) {
   return {
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-    cpu_usage_percent: overrides.cpu || NUM.ZERO,
-    memory_usage_percent: overrides.memory || NUM.ZERO,
-    disk_usage_percent: overrides.disk || NUM.ZERO,
+    cpu_usage_percent: overrides.cpu || 0,
+    memory_usage_percent: overrides.memory || 0,
+    disk_usage_percent: overrides.disk || 0,
     latency_group_id: overrides.latencyGroupId,
   };
 }
@@ -167,8 +167,8 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
   await t.test('over target placement keeps target cohort and removes extra node',
     async (t) => {
       const nodes = [
-        createNode(NODE_1, {cpu: NUM.ONE}),
-        createNode(NODE_2, {cpu: NUM.TWO}),
+        createNode(NODE_1, {cpu: 1}),
+        createNode(NODE_2, {cpu: 2}),
         createNode(NODE_3, {cpu: NUM.THREE}),
       ];
       const currentReplicas = [
@@ -179,17 +179,17 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
       const planner = createPlanner({nodes, currentReplicas});
       const targetState = await planner.calculateTargetState(currentReplicas, {
         targetReplicaCount: TARGET_TWO,
-        minReplicaCount: NUM.ONE,
+        minReplicaCount: 1,
         maxReplicaCount: TARGET_THREE,
         placementConstraints: {considerCpuLoad: true},
       });
       const moves = planner.calculateMoves(currentReplicas, targetState);
 
       t.same(targetState.targetNodes, [NODE_1, NODE_2]);
-      t.equal(moves.length, NUM.ONE);
-      t.equal(moves[NUM.ZERO].type, REBALANCER_MOVE_TYPE.REMOVE);
-      t.equal(moves[NUM.ZERO].nodeId, NODE_3);
-      t.equal(moves[NUM.ZERO].reason, MOVE_REASON.NODE_NOT_IN_TARGET);
+      t.equal(moves.length, 1);
+      t.equal(moves[0].type, REBALANCER_MOVE_TYPE.REMOVE);
+      t.equal(moves[0].nodeId, NODE_3);
+      t.equal(moves[0].reason, MOVE_REASON.NODE_NOT_IN_TARGET);
     });
 
   await t.test('capacity-denied candidates remain filter diagnostics',
@@ -218,7 +218,7 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
       t.equal(
         result.placementOwnerDecision.filterResult.capacityDiagnostics
           .rejectionsByReason[ADMISSION_REASON.BUDGET_EXCEEDED],
-        NUM.ONE,
+        1,
       );
       t.same(result.targetNodes, [NODE_1, NODE_3]);
     });
@@ -260,8 +260,8 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
     async (t) => {
       const decision = buildPlacementOwnerDecision({
         candidateNodes: [
-          createNode(NODE_1, {cpu: NUM.ONE}),
-          createNode(NODE_2, {cpu: NUM.TWO}),
+          createNode(NODE_1, {cpu: 1}),
+          createNode(NODE_2, {cpu: 2}),
           createNode(NODE_3, {cpu: NUM.THREE}),
           createNode(NODE_4, {cpu: NUM.FOUR}),
         ],
@@ -330,7 +330,7 @@ test('move planner rejects stale partition descriptor epoch evidence',
           active_partition_version: TARGET_TWO,
         },
         partitionDescriptor: {
-          partition_version: NUM.ONE,
+          partition_version: 1,
         },
       },
     });

@@ -7,7 +7,6 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   REPLICA_STATE_MACHINE_DEFAULT,
@@ -122,7 +121,7 @@ class ReplicaStateMachine extends EventEmitter {
       this.cdcIntegrationService || this.controlPlaneSystemTableGateway,
       REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_CDC_SERVICE,
     );
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       REPLICA_STATE_MACHINE_NOW;
     this.systemTableCache = options.systemTableCache || null;

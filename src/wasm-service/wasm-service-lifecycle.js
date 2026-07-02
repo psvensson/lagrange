@@ -11,7 +11,6 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {TYPEOF} from '../constants/index.js';
 import {WasmServiceReplica} from './wasm-service-replica.js';
 import {buildEndpointRecord} from './service-endpoint-builder.js';
 import {
@@ -94,7 +93,7 @@ class WasmServiceLifecycle {
       ) : console;
 
     if (this.moduleMirror &&
-      typeof this.moduleMirror.bindCdcIntegrationService === TYPEOF.FUNCTION &&
+      typeof this.moduleMirror.bindCdcIntegrationService === 'function' &&
       this.cdcIntegrationService) {
       this.moduleMirror.bindCdcIntegrationService(
         this.cdcIntegrationService,
@@ -373,7 +372,7 @@ class WasmServiceLifecycle {
     }
 
     if (this.moduleMirror &&
-      typeof this.moduleMirror.unbindCdcIntegrationService === TYPEOF.FUNCTION) {
+      typeof this.moduleMirror.unbindCdcIntegrationService === 'function') {
       this.moduleMirror.unbindCdcIntegrationService();
     }
   }

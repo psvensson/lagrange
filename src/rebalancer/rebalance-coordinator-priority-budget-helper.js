@@ -8,10 +8,8 @@ import {
   REBALANCE_COORDINATOR_SEGMENT_5_LITERAL,
   REBALANCE_COORDINATOR_TYPE,
 } from './rebalance-coordinator-helper-common.js';
-import {TYPEOF} from '../constants/index.js';
 
 const {
-  NUM,
   OperationType,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -41,26 +39,26 @@ function getAddBudgetOperationPartitionId(coordinator, operation = null) {
 }
 
 function buildConcurrentAddCountByPriorityClass(coordinator, operations = []) {
-  let ordinaryPriorityCount = NUM.ZERO;
-  let emergencyPriorityCount = NUM.ZERO;
-  let nonPriorityCount = NUM.ZERO;
+  let ordinaryPriorityCount = 0;
+  let emergencyPriorityCount = 0;
+  let nonPriorityCount = 0;
   for (const operation of operations) {
     if (!isConcurrentAddBudgetOperation(coordinator, operation)) {
       continue;
     }
     const partitionId = getAddBudgetOperationPartitionId(coordinator, operation);
     if (
-      partitionId.length > NUM.ZERO &&
+      partitionId.length > 0 &&
       coordinator.isPriorityControlPlanePartition(partitionId)
     ) {
       if (coordinator.isEmergencyPriorityControlPlanePartition(partitionId)) {
-        emergencyPriorityCount += NUM.ONE;
+        emergencyPriorityCount += 1;
       } else {
-        ordinaryPriorityCount += NUM.ONE;
+        ordinaryPriorityCount += 1;
       }
       continue;
     }
-    nonPriorityCount += NUM.ONE;
+    nonPriorityCount += 1;
   }
   return {
     priorityCount: ordinaryPriorityCount + emergencyPriorityCount,
@@ -77,7 +75,7 @@ function addConcurrentPriorityBudgetOperation(
 ) {
   const partitionId = getAddBudgetOperationPartitionId(coordinator, operation);
   if (
-    partitionId.length === NUM.ZERO ||
+    partitionId.length === 0 ||
     !coordinator.isPriorityControlPlanePartition(partitionId)
   ) {
     return false;
@@ -170,7 +168,7 @@ async function buildPriorityPartitionAddBudgetAssessment(
   operations = [],
 ) {
   const normalizedPartitionId = String(partitionId || '').trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return null;
   }
   const partitionOperations = Array.isArray(operations) ?
@@ -180,7 +178,7 @@ async function buildPriorityPartitionAddBudgetAssessment(
       return operationPartitionId === normalizedPartitionId;
     }) :
     [];
-  if (partitionOperations.length === NUM.ZERO) {
+  if (partitionOperations.length === 0) {
     return null;
   }
   const representativeOperation = partitionOperations.find(Boolean) || null;
@@ -248,7 +246,7 @@ function shouldIgnorePriorityPartitionAddBudgetByAdmissionPlan(
   options = {},
 ) {
   const normalizedPartitionId = String(partitionId || '').trim();
-  if (normalizedPartitionId.length === NUM.ZERO) {
+  if (normalizedPartitionId.length === 0) {
     return false;
   }
   if (
@@ -276,7 +274,7 @@ function shouldIgnorePriorityPartitionAddBudgetByAdmissionPlan(
   const requestedPartitionId =
     resolveRequestedPriorityAddBudgetPartitionId(coordinator, options);
   const requestedDifferentBlockedPartition =
-    requestedPartitionId.length > NUM.ZERO &&
+    requestedPartitionId.length > 0 &&
     requestedPartitionId !== normalizedPartitionId &&
     admissionPlan[
       PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.HAS_BLOCKED_PARTITION
@@ -306,7 +304,7 @@ function arePriorityPartitionAddBudgetOperationsPastWorkflowTimeout(
   operations = [],
 ) {
   const partitionOperations = Array.isArray(operations) ? operations : [];
-  if (partitionOperations.length === NUM.ZERO) {
+  if (partitionOperations.length === 0) {
     return false;
   }
   return partitionOperations.every((operation) =>
@@ -322,13 +320,13 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
       ] ||
       '',
   ).trim();
-  if (workflowStep.length === NUM.ZERO) {
+  if (workflowStep.length === 0) {
     return false;
   }
   const operationId = operation?.operationId || operation?.operation_id;
   if (
     operationId &&
-    typeof coordinator.workflowOwner?.hasActiveTransitionRetryGrace === TYPEOF.FUNCTION &&
+    typeof coordinator.workflowOwner?.hasActiveTransitionRetryGrace === 'function' &&
     coordinator.workflowOwner.hasActiveTransitionRetryGrace(operationId, coordinator.nowFn())
   ) {
     return false;
@@ -352,7 +350,7 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
     return false;
   }
   const timeoutMs = coordinator.getTimeoutForStep(workflowStep, operation);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return false;
   }
   return coordinator.nowFn() - observedAtMs >= timeoutMs;
@@ -423,7 +421,7 @@ async function canStartAddOperation(coordinator, options = {}) {
     return false;
   }
   const concurrentAddLimit = coordinator.getConcurrentAddBudgetLimit(options);
-  if (concurrentAddLimit <= NUM.ZERO) {
+  if (concurrentAddLimit <= 0) {
     return false;
   }
   // When a priority-recovery slot is reserved, the reservation is already
@@ -432,7 +430,7 @@ async function canStartAddOperation(coordinator, options = {}) {
   // admission against an authoritative owner read (the same discipline already
   // applied to priority-control-plane partition adds). The cached fast-paths
   // below are only safe when no slot is reserved.
-  if (coordinator.getReservedPriorityRecoveryAddSlots(options) > NUM.ZERO) {
+  if (coordinator.getReservedPriorityRecoveryAddSlots(options) > 0) {
     return resolveAuthoritativeAddAdmission(
       coordinator,
       options,
@@ -443,7 +441,7 @@ async function canStartAddOperation(coordinator, options = {}) {
     await coordinator.queryCachedIncompleteOperations();
   const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
     cachedIncompleteOperations.length :
-    NUM.ZERO;
+    0;
   const cachedAddBudgetCandidateCount = (
     Array.isArray(cachedIncompleteOperations) ?
       cachedIncompleteOperations :
@@ -465,10 +463,10 @@ async function canStartAddOperation(coordinator, options = {}) {
       options,
     )
   ).length;
-  if (cachedOperationCount > NUM.ZERO) {
+  if (cachedOperationCount > 0) {
     coordinator.clearEmptyIncompleteOperationQueryDelay();
   }
-  if (cachedCount > NUM.ZERO) {
+  if (cachedCount > 0) {
     if (cachedCount < concurrentAddLimit) {
       return true;
     }
@@ -486,7 +484,7 @@ async function canStartAddOperation(coordinator, options = {}) {
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||
-    cachedOperationCount > NUM.ZERO;
+    cachedOperationCount > 0;
   if (
     !bypassEmptyQueryDelay &&
     coordinator.shouldDelayEmptyIncompleteOperationQuery()
@@ -530,7 +528,7 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
     coordinator.getPriorityRecoveryAdmissionPlan();
   const maximumPriorityConcurrentAddLimit =
     priorityRecoveryAdmissionPlan.emergencyPriorityAddBudgetLimit;
-  if (maximumPriorityConcurrentAddLimit <= NUM.ZERO) {
+  if (maximumPriorityConcurrentAddLimit <= 0) {
     return false;
   }
   const isPriorityCountsAdmitted = (counts = {}) => {
@@ -545,7 +543,7 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
     await coordinator.queryCachedIncompleteOperations();
   const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
     cachedIncompleteOperations.length :
-    NUM.ZERO;
+    0;
   const cachedCounts = buildConcurrentAddCountByPriorityClass(
     coordinator,
     await filterConcurrentAddBudgetOperations(
@@ -556,10 +554,10 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
   );
   const cachedTotalCount =
     cachedCounts.priorityCount + cachedCounts.nonPriorityCount;
-  if (cachedOperationCount > NUM.ZERO) {
+  if (cachedOperationCount > 0) {
     coordinator.clearEmptyIncompleteOperationQueryDelay();
   }
-  if (cachedTotalCount > NUM.ZERO) {
+  if (cachedTotalCount > 0) {
     if (isPriorityCountsAdmitted(cachedCounts)) {
       return true;
     }
@@ -599,7 +597,7 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||
-    cachedOperationCount > NUM.ZERO;
+    cachedOperationCount > 0;
   if (
     !bypassEmptyQueryDelay &&
     coordinator.shouldDelayEmptyIncompleteOperationQuery()
@@ -641,14 +639,14 @@ async function canStartRemoveOperation(coordinator, options = {}) {
     await coordinator.queryCachedIncompleteOperations();
   const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
     cachedIncompleteOperations.length :
-    NUM.ZERO;
+    0;
   const cachedCount = cachedIncompleteOperations.filter(
     (operation) => operation?.type === OperationType.REMOVE,
   ).length;
-  if (cachedOperationCount > NUM.ZERO) {
+  if (cachedOperationCount > 0) {
     coordinator.clearEmptyIncompleteOperationQueryDelay();
   }
-  if (cachedCount > NUM.ZERO) {
+  if (cachedCount > 0) {
     if (cachedCount < coordinator.config.maxConcurrentRemoves) {
       return true;
     }
@@ -678,7 +676,7 @@ async function canStartRemoveOperation(coordinator, options = {}) {
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||
-    cachedOperationCount > NUM.ZERO;
+    cachedOperationCount > 0;
   if (
     !bypassEmptyQueryDelay &&
     coordinator.shouldDelayEmptyIncompleteOperationQuery()
@@ -716,11 +714,11 @@ function shouldDelayEmptyIncompleteOperationQuery(coordinator, now = Date.now())
   const wfOwner = coordinator.workflowOwner;
   if (
     !wfOwner ||
-    wfOwner.incompleteOperationQueryEmptyBackoffMs <= NUM.ZERO
+    wfOwner.incompleteOperationQueryEmptyBackoffMs <= 0
   ) {
     return false;
   }
-  if (wfOwner.lastEmptyIncompleteOperationQueryAtMs <= NUM.ZERO) {
+  if (wfOwner.lastEmptyIncompleteOperationQueryAtMs <= 0) {
     wfOwner.lastEmptyIncompleteOperationQueryAtMs = now;
     return true;
   }
@@ -730,7 +728,7 @@ function shouldDelayEmptyIncompleteOperationQuery(coordinator, now = Date.now())
   ) {
     return true;
   }
-  wfOwner.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+  wfOwner.lastEmptyIncompleteOperationQueryAtMs = 0;
   return false;
 }
 
@@ -742,7 +740,7 @@ function markEmptyIncompleteOperationQueryAt(coordinator, now = Date.now()) {
 
 function clearEmptyIncompleteOperationQueryDelay(coordinator) {
   if (coordinator.workflowOwner) {
-    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = 0;
   }
 }
 

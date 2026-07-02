@@ -18,11 +18,9 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
     DISCOVERY_ROUTING_SNAPSHOT_FIELD,
     EMPTY_STRING,
     ENDPOINT_SYNC_HEALTH,
-    NUM,
     REPLICA_OPERATION_TYPE,
     SERVICE_DISCOVERY_READINESS_REASON,
     SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR,
-    TYPEOF,
     firstStringField,
     isReplicaOperationInFlight,
     isReplicaOperationStale,
@@ -42,22 +40,22 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
      */
     resolveDiscoveryCanonicalLeaderRoutingSnapshot(partitionId) {
       if (
-        typeof partitionId !== TYPEOF.STRING ||
-        partitionId.length === NUM.ZERO
+        typeof partitionId !== 'string' ||
+        partitionId.length === 0
       ) {
         return null;
       }
       const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
       if (
         !queryExecutor ||
-        typeof queryExecutor.getPartitionRoutingSnapshot !== TYPEOF.FUNCTION
+        typeof queryExecutor.getPartitionRoutingSnapshot !== 'function'
       ) {
         return null;
       }
       try {
         const routingSnapshot =
           queryExecutor.getPartitionRoutingSnapshot(partitionId);
-        return routingSnapshot && typeof routingSnapshot === TYPEOF.OBJECT ?
+        return routingSnapshot && typeof routingSnapshot === 'object' ?
           routingSnapshot :
           null;
       } catch (_error) {
@@ -117,11 +115,11 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
           null;
       const localReplicaReady =
         !localTargetReplicaState ||
-        localTargetReplicaState.nonVoterPartitionIds.size === NUM.ZERO;
+        localTargetReplicaState.nonVoterPartitionIds.size === 0;
       const localPartitionCdcState =
         nodeId === this.nodeId &&
         readinessContext.localPartitionCdcState &&
-        typeof readinessContext.localPartitionCdcState === TYPEOF.OBJECT ?
+        typeof readinessContext.localPartitionCdcState === 'object' ?
           readinessContext.localPartitionCdcState :
           null;
       const localCdcReady =
@@ -179,7 +177,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
       }
       if (
         projectionReadinessByNodeId &&
-        typeof projectionReadinessByNodeId === TYPEOF.OBJECT &&
+        typeof projectionReadinessByNodeId === 'object' &&
         projectionReadinessByNodeId[nodeId]
       ) {
         return this.normalizeServiceDiscoveryProjectionReadiness(
@@ -304,7 +302,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
       }
       if (
         localPartitionCdcState.diagnosticsAvailable === false &&
-        localPartitionCdcState.missingDiagnosticsPartitionIds.length > NUM.ZERO
+        localPartitionCdcState.missingDiagnosticsPartitionIds.length > 0
       ) {
         reasons.push({
           code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE,
@@ -313,7 +311,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
           ),
         });
       }
-      if (localPartitionCdcState.noSubscriberPartitionIds.length > NUM.ZERO) {
+      if (localPartitionCdcState.noSubscriberPartitionIds.length > 0) {
         reasons.push({
           code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_SUBSCRIBER_MISSING,
           detail: localPartitionCdcState.noSubscriberPartitionIds.join(
@@ -321,7 +319,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
           ),
         });
       }
-      if (localPartitionCdcState.bufferedPartitionIds.length > NUM.ZERO) {
+      if (localPartitionCdcState.bufferedPartitionIds.length > 0) {
         reasons.push({
           code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_BUFFER_NOT_DRAINED,
           detail: localPartitionCdcState.bufferedPartitionIds.join(
@@ -356,12 +354,12 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
       let localReplicaRole = null;
       if (
         localTargetReplicaState?.replicaRoles instanceof Set &&
-        localTargetReplicaState.replicaRoles.size === NUM.ONE
+        localTargetReplicaState.replicaRoles.size === 1
       ) {
-        localReplicaRole = [...localTargetReplicaState.replicaRoles][NUM.ZERO];
+        localReplicaRole = [...localTargetReplicaState.replicaRoles][0];
       } else if (
         localTargetReplicaState?.replicaRoles instanceof Set &&
-        localTargetReplicaState.replicaRoles.size > NUM.ONE
+        localTargetReplicaState.replicaRoles.size > 1
       ) {
         localReplicaRole = ADMIN_SERVICE_DISCOVERY_LITERAL.MIXED;
       }
@@ -369,8 +367,8 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
         readiness.reasons.map((reason) => ({
           code: String(reason?.code || EMPTY_STRING),
           detail:
-              typeof reason?.detail === TYPEOF.STRING &&
-              reason.detail.length > NUM.ZERO ?
+              typeof reason?.detail === 'string' &&
+              reason.detail.length > 0 ?
                 reason.detail :
                 null,
         })) :
@@ -382,7 +380,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
         [];
       const timelineByOperationId =
         readinessContext.replicaOperationTimelineById &&
-        typeof readinessContext.replicaOperationTimelineById === TYPEOF.OBJECT ?
+        typeof readinessContext.replicaOperationTimelineById === 'object' ?
           readinessContext.replicaOperationTimelineById :
           {};
       const replicaOperationTimeline = [];
@@ -478,7 +476,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
       const operationId = normalizedOperation.operationId;
       const nodeIds =
         this.resolveReplicaOperationDegradedNodeIds(normalizedOperation);
-      if (!operationId || nodeIds.length === NUM.ZERO) {
+      if (!operationId || nodeIds.length === 0) {
         return {
           applies: false,
         };
@@ -592,8 +590,8 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
       };
       if (
         (BENCHMARK_DEGRADATION_PRIORITY[degradationContext.degradationState] ||
-          NUM.ZERO) >
-        (BENCHMARK_DEGRADATION_PRIORITY[existing.degradationState] || NUM.ZERO)
+          0) >
+        (BENCHMARK_DEGRADATION_PRIORITY[existing.degradationState] || 0)
       ) {
         existing.degradationState = degradationContext.degradationState;
       }
@@ -646,7 +644,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
     isReplicaOperationRelevantToDiscoveryScope(row, scopedPartitionIds) {
       if (
         !(scopedPartitionIds instanceof Set) ||
-        scopedPartitionIds.size === NUM.ZERO
+        scopedPartitionIds.size === 0
       ) {
         return true;
       }

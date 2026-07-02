@@ -23,7 +23,6 @@ import {
   INDEX_TYPE,
 } from './index-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_DELETE = 'DELETE';
@@ -164,7 +163,7 @@ class IndexService {
     if (!indexName) {
       throw new Error(INDEX_ERROR_MSG.INDEX_NAME_REQUIRED);
     }
-    if (!columnNames || columnNames.length === LOCAL_NUM_ZERO) {
+    if (!columnNames || columnNames.length === 0) {
       throw new Error(INDEX_ERROR_MSG.COLUMN_NAMES_REQUIRED);
     }
 
@@ -250,7 +249,7 @@ class IndexService {
     // Get all partitions for this table
     const partitions = await this.getPartitionsForTable(tableId);
 
-    if (partitions.length === LOCAL_NUM_ZERO) {
+    if (partitions.length === 0) {
       this.logger.warn(INDEX_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableId, tableName});
       return;
     }
@@ -341,7 +340,7 @@ class IndexService {
         'SELECT * FROM partitions WHERE partition_id = ?',
         [partitionId],
       );
-      return result.rows?.[LOCAL_NUM_ZERO] || null;
+      return result.rows?.[0] || null;
     }
     return null;
   }
@@ -483,7 +482,7 @@ class IndexService {
    * @return {number} Total number of indices.
    */
   getTotalIndexCount() {
-    let count = LOCAL_NUM_ZERO;
+    let count = 0;
     for (const tableIndices of this.indexCache.values()) {
       count += tableIndices.size;
     }
@@ -583,7 +582,7 @@ class IndexService {
     // Get all indices for this table
     const indices = this.getIndicesForTable(tableId);
 
-    if (indices.length === LOCAL_NUM_ZERO) {
+    if (indices.length === 0) {
       return;
     }
 
@@ -651,8 +650,8 @@ class IndexService {
   async ensureIndicesOnPartition(partitionId, tableId) {
     const indices = this.getIndicesForTable(tableId);
 
-    if (indices.length === LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
+    if (indices.length === 0) {
+      return 0;
     }
 
     this.logger.debug(INDEX_LOG_MSG.ENSURING_INDICES, {
@@ -661,7 +660,7 @@ class IndexService {
       indexCount: indices.length,
     });
 
-    let createdCount = LOCAL_NUM_ZERO;
+    let createdCount = 0;
     for (const index of indices) {
       const success = await this.createIndexOnPartition(partitionId, index);
       if (success) {
@@ -693,7 +692,7 @@ class IndexService {
     this.logger.info(INDEX_LOG_MSG.REBUILDING_INDEX, {tableId, indexName});
 
     const partitions = await this.getPartitionsForTable(tableId);
-    let successCount = LOCAL_NUM_ZERO;
+    let successCount = 0;
     const failCount = 0;
 
     for (const partition of partitions) {

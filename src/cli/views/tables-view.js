@@ -15,31 +15,28 @@ const LOCAL_STR_KB = 'KB';
 const LOCAL_STR_MB = 'MB';
 const LOCAL_STR_GB = 'GB';
 const LOCAL_STR_TB = 'TB';
-const LOCAL_NUM_50 = 50;
+const LOCAL_NUM_FIFTY = 50;
 const LOCAL_STR_TABLES = 'tables';
 const LOCAL_STR_TABLE_NAME = 'table_name';
 const LOCAL_STR_TABLE_NAME_2 = 'Table Name';
-const LOCAL_NUM_25 = 25;
+const LOCAL_NUM_TWENTY_FIVE = 25;
 const LOCAL_STR_PARTITION_COUNT = 'partition_count';
 const LOCAL_STR_PARTITIONS = 'Partitions';
-const LOCAL_NUM_12 = 12;
+const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_REPLICA_FACTOR = 'replica_factor';
 const LOCAL_STR_REPLICAS = 'Replicas';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_TOTAL_SIZE = 'total_size';
 const LOCAL_STR_TOTAL_SIZE_2 = 'Total Size';
 const LOCAL_STR_POLICY_SUMMARY = 'policy_summary';
 const LOCAL_STR_POLICY_SUMMARY_2 = 'Policy Summary';
-const LOCAL_NUM_40 = 40;
+const LOCAL_NUM_FORTY = 40;
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_0_B = '0 B';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_DEFAULT = 'Default';
 const LOCAL_NUM_THREE = 3;
-const LOCAL_STR_2ZI04 = '...';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DOT_DOT_DOT = '...';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
 const LOCAL_STR_PARTITIONS_2 = 'partitions';
 const LOCAL_STR_ENTER = 'enter';
@@ -48,7 +45,6 @@ const LOCAL_STR_SCHEMA = 'Schema';
 const LOCAL_STR_DEFINITION = 'Definition';
 const LOCAL_STR_POLICIES = 'Policies';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_POLICY = 'Policy';
 const LOCAL_STR_PLACEMENT = 'Placement';
 const LOCAL_STR_REPLICATION = 'Replication';
@@ -64,7 +60,7 @@ export const SIZE_UNITS = [LOCAL_STR_B, LOCAL_STR_KB, LOCAL_STR_MB, LOCAL_STR_GB
 /**
  * Maximum length for policy summary before truncation
  */
-export const POLICY_SUMMARY_MAX_LENGTH = LOCAL_NUM_50;
+export const POLICY_SUMMARY_MAX_LENGTH = LOCAL_NUM_FIFTY;
 
 /**
  * TablesView displays database tables with metadata
@@ -89,11 +85,11 @@ export class TablesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: LOCAL_STR_TABLE_NAME, label: LOCAL_STR_TABLE_NAME_2, width: LOCAL_NUM_25},
-      {key: LOCAL_STR_PARTITION_COUNT, label: LOCAL_STR_PARTITIONS, width: LOCAL_NUM_12},
-      {key: LOCAL_STR_REPLICA_FACTOR, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
-      {key: LOCAL_STR_TOTAL_SIZE, label: LOCAL_STR_TOTAL_SIZE_2, width: LOCAL_NUM_12},
-      {key: LOCAL_STR_POLICY_SUMMARY, label: LOCAL_STR_POLICY_SUMMARY_2, width: LOCAL_NUM_40},
+      {key: LOCAL_STR_TABLE_NAME, label: LOCAL_STR_TABLE_NAME_2, width: LOCAL_NUM_TWENTY_FIVE},
+      {key: LOCAL_STR_PARTITION_COUNT, label: LOCAL_STR_PARTITIONS, width: LOCAL_NUM_TWELVE},
+      {key: LOCAL_STR_REPLICA_FACTOR, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_TEN},
+      {key: LOCAL_STR_TOTAL_SIZE, label: LOCAL_STR_TOTAL_SIZE_2, width: LOCAL_NUM_TWELVE},
+      {key: LOCAL_STR_POLICY_SUMMARY, label: LOCAL_STR_POLICY_SUMMARY_2, width: LOCAL_NUM_FORTY},
     ];
   }
 
@@ -149,14 +145,14 @@ export class TablesView extends BaseView {
     if (bytes === null || bytes === undefined) {
       return LOCAL_STR_N_A;
     }
-    if (bytes === LOCAL_NUM_ZERO) {
+    if (bytes === 0) {
       return LOCAL_STR_0_B;
     }
 
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(LOCAL_NUM_ONE)} ${SIZE_UNITS[i]}`;
+    return `${value.toFixed(1)} ${SIZE_UNITS[i]}`;
   }
 
   /**
@@ -203,7 +199,7 @@ export class TablesView extends BaseView {
     }
 
     // Requirements: 4.14 - no custom policies
-    if (policies.length === LOCAL_NUM_ZERO) {
+    if (policies.length === 0) {
       return LOCAL_STR_DEFAULT;
     }
 
@@ -211,8 +207,8 @@ export class TablesView extends BaseView {
 
     // Requirements: 4.15 - truncation
     if (summary.length > POLICY_SUMMARY_MAX_LENGTH) {
-      return summary.substring(LOCAL_NUM_ZERO, POLICY_SUMMARY_MAX_LENGTH - LOCAL_NUM_THREE) +
-        LOCAL_STR_2ZI04;
+      return summary.substring(0, POLICY_SUMMARY_MAX_LENGTH - LOCAL_NUM_THREE) +
+        LOCAL_STR_DOT_DOT_DOT;
     }
 
     return summary;
@@ -225,7 +221,7 @@ export class TablesView extends BaseView {
    */
   getRowStatus(table) {
     // Warning if table has no partitions
-    if (table.partition_count === LOCAL_NUM_ZERO) {
+    if (table.partition_count === 0) {
       return ROW_STATUS.WARNING;
     }
 
@@ -238,7 +234,7 @@ export class TablesView extends BaseView {
    * @return {string} Unique key (table_id or table_name)
    */
   getItemKey(table) {
-    return table.table_id || table.table_name || LOCAL_STR_EMPTY;
+    return table.table_id || table.table_name || '';
   }
 
   /**
@@ -330,7 +326,7 @@ export class TablesView extends BaseView {
   formatSchema(schema) {
     if (!schema) return LOCAL_STR_N_A;
     if (typeof schema === LOCAL_STR_STRING) return schema;
-    return JSON.stringify(schema, null, LOCAL_NUM_TWO);
+    return JSON.stringify(schema, null, 2);
   }
 
   /**
@@ -369,7 +365,7 @@ export class TablesView extends BaseView {
       return [{label: LOCAL_STR_POLICY, value: LOCAL_STR_DEFAULT}];
     }
 
-    if (fields.length === LOCAL_NUM_ZERO) {
+    if (fields.length === 0) {
       return [{label: LOCAL_STR_POLICY, value: LOCAL_STR_DEFAULT}];
     }
 

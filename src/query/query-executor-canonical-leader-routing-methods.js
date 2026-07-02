@@ -6,7 +6,6 @@ const {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   QUERY_EXECUTOR_LITERAL,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAMES,
@@ -85,7 +84,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
         partitionId,
       );
     return typeof leaderNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId.length > 0 ?
       leaderNodeId :
       null;
   }
@@ -100,7 +99,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
   hasActiveCanonicalLeaderService(serviceRows = [], leaderNodeId = null) {
     if (
       typeof leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      leaderNodeId.length === NUM.ZERO
+      leaderNodeId.length === 0
     ) {
       return false;
     }
@@ -132,7 +131,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
       this.retainedCanonicalLeaderNodeIdsByPartition.get(partitionId);
     if (
       typeof retainedLeaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      retainedLeaderNodeId.length === NUM.ZERO
+      retainedLeaderNodeId.length === 0
     ) {
       return null;
     }
@@ -158,7 +157,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
     if (
       identity?.state !== CANONICAL_LEADER_IDENTITY_STATE.OWNER_CONFIRMED ||
       typeof identity?.leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      identity.leaderNodeId.length === NUM.ZERO
+      identity.leaderNodeId.length === 0
     ) {
       return;
     }
@@ -179,12 +178,12 @@ class QueryExecutorCanonicalLeaderRoutingMethods
   ) {
     const resolvedPartitionId =
       typeof partitionId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      partitionId.length > NUM.ZERO ?
+      partitionId.length > 0 ?
         partitionId :
         routingSnapshot?.partitionId || null;
     const resolvedRoutingReadinessDimension =
       typeof routingReadinessDimension === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      routingReadinessDimension.length > NUM.ZERO ?
+      routingReadinessDimension.length > 0 ?
         routingReadinessDimension :
         this.defaultRoutingReadinessDimension;
     const resolvedRoutingSnapshot =
@@ -213,7 +212,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
         partitionId: resolvedPartitionId,
         partitionRow,
       }) &&
-      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO;
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > 0;
     const partitionTableName =
       resolvedPartitionId !== null ?
         this.resolvePartitionTableName(resolvedPartitionId) :
@@ -224,11 +223,11 @@ class QueryExecutorCanonicalLeaderRoutingMethods
       SYSTEM_TABLE_NAMES.has(
         String(partitionTableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
       ) &&
-      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO;
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > 0;
     const canonicalLeaderNodeId =
       typeof resolvedRoutingSnapshot?.canonicalLeaderNodeId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      resolvedRoutingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO ?
+      resolvedRoutingSnapshot.canonicalLeaderNodeId.length > 0 ?
         resolvedRoutingSnapshot.canonicalLeaderNodeId :
         null;
     const deniedByNodeId =
@@ -242,17 +241,17 @@ class QueryExecutorCanonicalLeaderRoutingMethods
         resolvedRoutingSnapshot.routableServices :
         [];
     const routableCanonicalLeaderServiceCount = canonicalLeaderNodeId === null ?
-      NUM.ZERO :
+      0 :
       routableServices.filter(
         (service) => service?.node_id === canonicalLeaderNodeId,
       ).length;
     const canonicalLeaderFilteredByReadiness =
       canonicalLeaderNodeId !== null &&
-      Number(resolvedRoutingSnapshot?.canonicalLeaderServiceCount) > NUM.ZERO &&
-      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO &&
+      Number(resolvedRoutingSnapshot?.canonicalLeaderServiceCount) > 0 &&
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > 0 &&
       (
         Boolean(deniedByNodeId[canonicalLeaderNodeId]) ||
-        routableCanonicalLeaderServiceCount === NUM.ZERO
+        routableCanonicalLeaderServiceCount === 0
       );
     const preferDifferentNodeAfterRuntimeWitness = priorityRecoveryRouting;
     const systemTableRecoveryServiceGap =

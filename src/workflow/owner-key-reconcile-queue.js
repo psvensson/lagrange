@@ -27,9 +27,6 @@ import {
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_THOUSAND = 1000;
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
@@ -44,7 +41,7 @@ function defaultRetryableDrainFailureClassifier() {
 
 function defaultRetryableDrainFailureRetryAfterMs(error) {
   return Number.isFinite(error?.retryAfterMs) &&
-    error.retryAfterMs > LOCAL_NUM_ZERO ?
+    error.retryAfterMs > 0 ?
     Math.floor(error.retryAfterMs) :
     LOCAL_NUM_THOUSAND;
 }
@@ -72,7 +69,7 @@ function normalizeReconcileQueueRetryPolicy(policy = {}) {
 }
 
 function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
+  return Number.isFinite(value) && value > 0 ?
     Math.floor(value) :
     LOCAL_NUM_THOUSAND;
 }
@@ -94,7 +91,7 @@ function getRetryableDrainFailureCode(error) {
   if (typeof error?.errorCode === LOCAL_STR_STRING) {
     return error.errorCode;
   }
-  return LOCAL_STR_EMPTY;
+  return '';
 }
 
 function maybeUnrefTimer(timer) {
@@ -144,12 +141,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.stopped = false;
 
     // Aggregate counters for stale-fence diagnostics.
-    this._staleFenceRejectionCount = LOCAL_NUM_ZERO;
-    this._staleInFlightDeferralCount = LOCAL_NUM_ZERO;
+    this._staleFenceRejectionCount = 0;
+    this._staleInFlightDeferralCount = 0;
 
     // Bounded ring buffer for recent stale-fence event samples.
     this._staleFenceSamples = [];
-    this._staleFenceSampleIndex = LOCAL_NUM_ZERO;
+    this._staleFenceSampleIndex = 0;
     this.retryPolicy = normalizeReconcileQueueRetryPolicy(
       options.retryPolicy || options,
     );
@@ -159,9 +156,9 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.retryStates = new Map();
     /** @type {Map<string, NodeJS.Timeout>} */
     this.retryTimers = new Map();
-    this._retryableDrainFailureCount = LOCAL_NUM_ZERO;
+    this._retryableDrainFailureCount = 0;
     this._retryableDrainFailureSamples = [];
-    this._retryableDrainFailureSampleIndex = LOCAL_NUM_ZERO;
+    this._retryableDrainFailureSampleIndex = 0;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -308,7 +305,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   async drain() {
     try {
-      while (this.pending.size > LOCAL_NUM_ZERO && !this.stopped) {
+      while (this.pending.size > 0 && !this.stopped) {
         const entries = Array.from(this.pending.entries());
         this.pending.clear();
 
@@ -368,7 +365,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
                 queue: this.name,
                 ownerKey,
               });
-            if (this.pending.size > LOCAL_NUM_ZERO && !this.stopped) {
+            if (this.pending.size > 0 && !this.stopped) {
               this.scheduleDrain();
             }
           }
@@ -384,7 +381,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       }
     } finally {
       this.draining = false;
-      if (this.pending.size > LOCAL_NUM_ZERO && !this.stopped) {
+      if (this.pending.size > 0 && !this.stopped) {
         let hasNonInFlight = false;
         for (const key of this.pending.keys()) {
           if (!this.inFlight.has(key)) {
@@ -478,7 +475,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
         {ownerKey, queue: this.name},
       );
       return typeof reason === LOCAL_STR_STRING &&
-        reason.length > LOCAL_NUM_ZERO ?
+        reason.length > 0 ?
         reason :
         RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
     } catch (_reasonError) {
@@ -495,8 +492,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     const previousState = this.retryStates.get(ownerKey);
     const failureCount =
       Number.isFinite(previousState?.failureCount) ?
-        previousState.failureCount + LOCAL_NUM_ONE :
-        LOCAL_NUM_ONE;
+        previousState.failureCount + 1 :
+        1;
     const retryAfterMs = baseRetryAfterMs;
     const errorCode = getRetryableDrainFailureCode(error);
     const retryState = {
@@ -510,7 +507,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       nextAttemptAt: timestamp + retryAfterMs,
       failureCount,
       errorMessage: getRetryableDrainFailureMessage(error),
-      ...(errorCode.length > LOCAL_NUM_ZERO ? {errorCode} : {}),
+      ...(errorCode.length > 0 ? {errorCode} : {}),
       timestamp,
     };
     item.retryState = retryState;
@@ -590,7 +587,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       ] = sample;
     }
     this._retryableDrainFailureSampleIndex =
-      (this._retryableDrainFailureSampleIndex + LOCAL_NUM_ONE) %
+      (this._retryableDrainFailureSampleIndex + 1) %
       STALE_FENCE_SAMPLE_CAPACITY;
   }
 
@@ -645,7 +642,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       this._staleFenceSamples[this._staleFenceSampleIndex] = sample;
     }
     this._staleFenceSampleIndex =
-      (this._staleFenceSampleIndex + LOCAL_NUM_ONE) % STALE_FENCE_SAMPLE_CAPACITY;
+      (this._staleFenceSampleIndex + 1) % STALE_FENCE_SAMPLE_CAPACITY;
   }
 
   /**

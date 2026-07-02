@@ -1,22 +1,19 @@
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_DISCONNECTED = 'disconnected';
 const LOCAL_STR_NODES = 'nodes';
 const LOCAL_STR_HOME = 'Home';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_ASC = 'asc';
-const LOCAL_NUM_5000 = 5000;
+const LOCAL_NUM_FIVE_THOUSAND = 5000;
 const LOCAL_STR_DEFAULT = 'default';
 const LOCAL_STR_STATE_CHANGED = 'state:changed';
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_DESC = 'desc';
-const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_THOUSAND = 1000;
 const LOCAL_STR_STATE_SNAPSHOT = 'state:snapshot';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_STATE_RESTORED = 'state:restored';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STATE_RESET = 'state:reset';
-const LOCAL_STR_1CRED = 'EventBus required for subscriptions';
+const LOCAL_STR_EVENTBUS_REQUIRED_FOR_SUBSCRIPTIONS = 'EventBus required for subscriptions';
 
 /**
  * StateManager - Centralized state management with immutable snapshots
@@ -75,7 +72,7 @@ export class StateManager {
 
     /** @type {AppState[]} */
     this.snapshots = [];
-    this.maxSnapshots = options.maxSnapshots || LOCAL_NUM_10;
+    this.maxSnapshots = options.maxSnapshots || LOCAL_NUM_TEN;
   }
 
   /**
@@ -102,11 +99,11 @@ export class StateManager {
         config: [],
         contexts: [],
         lastUpdate: null,
-        cdcLag: LOCAL_NUM_ZERO,
+        cdcLag: 0,
       },
       ui: {
-        selectedIndex: LOCAL_NUM_ZERO,
-        filter: LOCAL_STR_EMPTY,
+        selectedIndex: 0,
+        filter: '',
         sortColumn: null,
         sortDirection: LOCAL_STR_ASC,
         detailPanelVisible: false,
@@ -114,7 +111,7 @@ export class StateManager {
         commandMode: false,
       },
       config: {
-        refreshInterval: LOCAL_NUM_5000,
+        refreshInterval: LOCAL_NUM_FIVE_THOUSAND,
         defaultView: LOCAL_STR_NODES,
         colorScheme: LOCAL_STR_DEFAULT,
         readOnlyMode: false,
@@ -202,7 +199,7 @@ export class StateManager {
 
     // Validate UI state
     if (typeof state.ui.selectedIndex !== LOCAL_STR_NUMBER ||
-        state.ui.selectedIndex < LOCAL_NUM_ZERO) {
+        state.ui.selectedIndex < 0) {
       return `Invalid selected index: ${state.ui.selectedIndex}`;
     }
 
@@ -214,7 +211,7 @@ export class StateManager {
 
     // Validate config
     if (typeof state.config.refreshInterval !== LOCAL_STR_NUMBER ||
-        state.config.refreshInterval < LOCAL_NUM_1000) {
+        state.config.refreshInterval < LOCAL_NUM_THOUSAND) {
       return `Invalid refresh interval: ${state.config.refreshInterval}`;
     }
 
@@ -244,7 +241,7 @@ export class StateManager {
       this.eventBus.emit(LOCAL_STR_STATE_SNAPSHOT, {name: snapshot.name});
     }
 
-    return this.snapshots.length - LOCAL_NUM_ONE;
+    return this.snapshots.length - 1;
   }
 
   /**
@@ -253,7 +250,7 @@ export class StateManager {
    * @throws {Error} If snapshot doesn't exist
    */
   restoreSnapshot(index) {
-    if (index < LOCAL_NUM_ZERO || index >= this.snapshots.length) {
+    if (index < 0 || index >= this.snapshots.length) {
       throw new Error(`Snapshot at index ${index} does not exist`);
     }
 
@@ -353,7 +350,7 @@ export class StateManager {
    */
   subscribe(path, callback) {
     if (!this.eventBus) {
-      throw new Error(LOCAL_STR_1CRED);
+      throw new Error(LOCAL_STR_EVENTBUS_REQUIRED_FOR_SUBSCRIPTIONS);
     }
 
     return this.eventBus.on(LOCAL_STR_STATE_CHANGED, ({oldState, newState}) => {

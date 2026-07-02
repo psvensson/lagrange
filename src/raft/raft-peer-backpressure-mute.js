@@ -42,7 +42,6 @@ const RAFT_PEER_MUTED_ERROR_MSG =
   'Raft send skipped: peer outbound lane backpressure-muted';
 const BACKPRESSURE_SCOPE_NODE = 'node';
 const ADDRESS_SEPARATOR = '/';
-const LOCAL_NUM_ZERO = 0;
 
 class RaftPeerBackpressureMute {
   constructor() {
@@ -57,8 +56,8 @@ class RaftPeerBackpressureMute {
   resolveNodeKey(peerAddress) {
     const address = String(peerAddress || '');
     const separatorIndex = address.indexOf(ADDRESS_SEPARATOR);
-    return separatorIndex > LOCAL_NUM_ZERO ?
-      address.slice(LOCAL_NUM_ZERO, separatorIndex) :
+    return separatorIndex > 0 ?
+      address.slice(0, separatorIndex) :
       null;
   }
 
@@ -70,16 +69,16 @@ class RaftPeerBackpressureMute {
    */
   getKeyRemainingMs(key) {
     if (!key) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
     const mutedUntilMs = this.mutedUntilMsByKey.get(key);
     if (!Number.isFinite(mutedUntilMs)) {
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
     const remainingMs = mutedUntilMs - Date.now();
-    if (remainingMs <= LOCAL_NUM_ZERO) {
+    if (remainingMs <= 0) {
       this.mutedUntilMsByKey.delete(key);
-      return LOCAL_NUM_ZERO;
+      return 0;
     }
     return remainingMs;
   }
@@ -105,7 +104,7 @@ class RaftPeerBackpressureMute {
   recordRejection(peerAddress, error) {
     const retryAfterMs =
       Number.isFinite(error?.retryAfterMs) &&
-      error.retryAfterMs > LOCAL_NUM_ZERO ?
+      error.retryAfterMs > 0 ?
         Math.floor(error.retryAfterMs) :
         TRANSPORT_DEFAULT.OUTBOUND_QUEUE_BACKPRESSURE_RETRY_AFTER_MS;
     const muteKey =
@@ -121,7 +120,7 @@ class RaftPeerBackpressureMute {
    * @return {void}
    */
   clearPeer(peerAddress) {
-    if (this.mutedUntilMsByKey.size === LOCAL_NUM_ZERO) {
+    if (this.mutedUntilMsByKey.size === 0) {
       return;
     }
     this.mutedUntilMsByKey.delete(peerAddress);
@@ -169,7 +168,7 @@ class RaftPeerBackpressureMute {
         OUTBOUND_DELIVERY_PRIORITY.BACKGROUND
     ) {
       const remainingMs = this.getMuteRemainingMs(peerAddress);
-      if (remainingMs > LOCAL_NUM_ZERO) {
+      if (remainingMs > 0) {
         throw this.buildMutedError(remainingMs);
       }
     }

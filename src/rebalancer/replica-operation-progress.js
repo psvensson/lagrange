@@ -1,10 +1,7 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_EMPTY = '';
 
 /**
  * ReplicaStatus - Single source of truth for replica states.
@@ -440,11 +437,11 @@ function isValidWorkflowStep(operationType, step) {
 function getNextWorkflowStep(operationType, currentStep) {
   const steps = getWorkflowSteps(operationType);
   const currentIndex = steps.indexOf(currentStep);
-  if (currentIndex === -LOCAL_NUM_ONE ||
-      currentIndex >= steps.length - LOCAL_NUM_ONE) {
+  if (currentIndex === -1 ||
+      currentIndex >= steps.length - 1) {
     return null;
   }
-  return steps[currentIndex + LOCAL_NUM_ONE];
+  return steps[currentIndex + 1];
 }
 
 /**
@@ -459,22 +456,22 @@ function isTerminalStep(operationType, step) {
     return true;
   }
   const steps = getWorkflowSteps(operationType);
-  if (steps.length === LOCAL_NUM_ZERO) {
+  if (steps.length === 0) {
     return false;
   }
-  return step === steps[steps.length - LOCAL_NUM_ONE];
+  return step === steps[steps.length - 1];
 }
 
 function normalizeWorkflowStepIdentifier(step) {
-  return typeof step === LOCAL_STR_STRING && step.length > LOCAL_NUM_ZERO ?
+  return typeof step === LOCAL_STR_STRING && step.length > 0 ?
     step.toUpperCase() :
-    LOCAL_STR_EMPTY;
+    '';
 }
 
 function normalizeReplicaStatusIdentifier(status) {
-  return typeof status === LOCAL_STR_STRING && status.length > LOCAL_NUM_ZERO ?
+  return typeof status === LOCAL_STR_STRING && status.length > 0 ?
     status.toLowerCase() :
-    LOCAL_STR_EMPTY;
+    '';
 }
 
 function buildReplicaOperationSemanticPhaseRule(
@@ -491,9 +488,9 @@ function buildReplicaOperationSemanticPhaseRule(
 
 function normalizeOperationTypeIdentifier(operationType) {
   return typeof operationType === LOCAL_STR_STRING &&
-    operationType.length > LOCAL_NUM_ZERO ?
+    operationType.length > 0 ?
     operationType.toUpperCase() :
-    LOCAL_STR_EMPTY;
+    '';
 }
 
 function readReplicaOperationRecordType(record) {
@@ -501,7 +498,7 @@ function readReplicaOperationRecordType(record) {
     record?.[REPLICA_OPERATION_RECORD_FIELD.TYPE] ||
     record?.[REPLICA_OPERATION_RECORD_FIELD.OPERATION_TYPE] ||
     record?.[REPLICA_OPERATION_RECORD_FIELD.OPERATION_TYPE_CAMEL] ||
-    LOCAL_STR_EMPTY,
+    '',
   );
 }
 
@@ -509,13 +506,13 @@ function readReplicaOperationRecordWorkflowStep(record) {
   return normalizeWorkflowStepIdentifier(
     record?.[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP] ??
     record?.[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP_SNAKE] ??
-    LOCAL_STR_EMPTY,
+    '',
   );
 }
 
 function readReplicaOperationRecordStatus(record) {
   return normalizeReplicaStatusIdentifier(
-    record?.[REPLICA_OPERATION_RECORD_FIELD.STATUS] || LOCAL_STR_EMPTY,
+    record?.[REPLICA_OPERATION_RECORD_FIELD.STATUS] || '',
   );
 }
 
@@ -615,7 +612,7 @@ function buildReplicaOperationProgressSnapshot(record = {}) {
 function resolveReplicaOperationSemanticPhase(
   operationType,
   workflowStep,
-  status = LOCAL_STR_EMPTY,
+  status = '',
 ) {
   const normalizedType = normalizeOperationTypeIdentifier(operationType);
   const normalizedWorkflowStep = normalizeWorkflowStepIdentifier(workflowStep);
@@ -640,7 +637,7 @@ function resolveReplicaOperationSemanticPhase(
 function buildReplicaOperationSemanticWitnesses(
   operationType,
   workflowStep,
-  status = LOCAL_STR_EMPTY,
+  status = '',
 ) {
   const semanticPhase = resolveReplicaOperationSemanticPhase(
     operationType,

@@ -19,7 +19,7 @@ import {
 } from '../control-plane/eligibility-snapshot.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {buildStorageAdmissionResult} from './storage-admission-result.js';
 import {
   ADMISSION_DECISION,
@@ -54,7 +54,7 @@ class StorageAdmissionService {
     assertCritical(options.accountingService, ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED);
     this.accountingService = options.accountingService;
     this.nodeId = options.nodeId || null;
-    this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
+    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.config = ConfigurationManager.getInstance();
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
@@ -108,7 +108,7 @@ class StorageAdmissionService {
    */
   getNumericConfig(key, fallback) {
     const value = this.config.get(key);
-    if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
     }
     return fallback;
@@ -122,7 +122,7 @@ class StorageAdmissionService {
    */
   getStringConfig(key, fallback) {
     const value = this.config.get(key);
-    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+    if (typeof value === 'string' && value.length > 0) {
       return value;
     }
     return fallback;
@@ -138,7 +138,7 @@ class StorageAdmissionService {
     const configured = Number(
       this.controlPlaneReadinessService?.clusterMemberStaleHeartbeatMaxAgeMs,
     );
-    return Number.isFinite(configured) && configured > NUM.ZERO ?
+    return Number.isFinite(configured) && configured > 0 ?
       Math.floor(configured) :
       STORAGE_ADMISSION_SERVICE_LITERAL.VALUE_10000;
   }
@@ -207,11 +207,11 @@ class StorageAdmissionService {
   async evaluateProvisioning(options = {}) {
     const operationType = this.validateOperationType(options.operationType);
     const candidateNodeIds = this.normalizeCandidateNodeIds(options);
-    assertCritical(candidateNodeIds.length > NUM.ZERO, ADMISSION_ERROR_MSG.TARGET_NODE_REQUIRED);
+    assertCritical(candidateNodeIds.length > 0, ADMISSION_ERROR_MSG.TARGET_NODE_REQUIRED);
 
     const estimatedBytes = Number(options?.estimatedBytes);
     assertCritical(
-      Number.isFinite(estimatedBytes) && estimatedBytes > NUM.ZERO,
+      Number.isFinite(estimatedBytes) && estimatedBytes > 0,
       ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED,
     );
 
@@ -225,7 +225,7 @@ class StorageAdmissionService {
       [];
 
     if (
-      minimumRoutableSourceCount > NUM.ZERO &&
+      minimumRoutableSourceCount > 0 &&
       sourceRoutableNodeIds.length < minimumRoutableSourceCount
     ) {
       return this.applyModeOverride(
@@ -284,7 +284,7 @@ class StorageAdmissionService {
         eligibilityDecision.reasonCodes,
         capacity,
       );
-      const eligible = failedDimensions.length === NUM.ZERO && capacity.allowed === true;
+      const eligible = failedDimensions.length === 0 && capacity.allowed === true;
 
       projectedUtilizationByNodeId[nodeId] = capacity.projectedUtilization;
       const provisioningOutcome = this.resolveProvisioningOutcome({
@@ -330,13 +330,13 @@ class StorageAdmissionService {
         decisionTimestamp,
         projectedUtilizationByNodeId,
         projectedUtilization:
-          candidateNodeIds.length === NUM.ONE ? resolvedProjectedUtilization : null,
+          candidateNodeIds.length === 1 ? resolvedProjectedUtilization : null,
         reason:
-          candidateNodeIds.length === NUM.ONE ?
+          candidateNodeIds.length === 1 ?
             resolvedReason :
             allowed ?
               resolvedReason :
-              finalizedBlockingReasons[NUM.ZERO] || resolvedReason,
+              finalizedBlockingReasons[0] || resolvedReason,
         readinessSnapshots,
       }),
       candidateNodeIds,
@@ -351,15 +351,15 @@ class StorageAdmissionService {
     currentReason,
     currentProjectedUtilization,
   }) {
-    if (candidateNodeCount !== NUM.ONE) {
+    if (candidateNodeCount !== 1) {
       return {
         reason: currentReason,
         projectedUtilization: currentProjectedUtilization,
       };
     }
     const singleNodeReason =
-      !eligible && nodeReasonCodes.length > NUM.ZERO && capacity.allowed === true ?
-        nodeReasonCodes[NUM.ZERO] :
+      !eligible && nodeReasonCodes.length > 0 && capacity.allowed === true ?
+        nodeReasonCodes[0] :
         capacity.reasonCode;
     return {
       reason: singleNodeReason,
@@ -389,8 +389,8 @@ class StorageAdmissionService {
     } catch {
       const projected = this.buildProjectedUtilization(
         null,
-        NUM.ZERO,
-        NUM.ZERO,
+        0,
+        0,
         options.estimatedBytes,
       );
       this.logDenial(
@@ -408,8 +408,8 @@ class StorageAdmissionService {
     if (!snapshot || snapshot.budgetBytes === null) {
       const projected = this.buildProjectedUtilization(
         null,
-        NUM.ZERO,
-        NUM.ZERO,
+        0,
+        0,
         options.estimatedBytes,
       );
       this.logDenial(targetNodeId, ADMISSION_REASON.NO_BUDGET_REGISTERED, projected);
@@ -424,7 +424,7 @@ class StorageAdmissionService {
       options.estimatedBytes,
     );
 
-    if (projected.projectedUtilizationPercent >= PERCENT_DIVISOR && budgetBytes > NUM.ZERO) {
+    if (projected.projectedUtilizationPercent >= PERCENT_DIVISOR && budgetBytes > 0) {
       if (
         options.isCritical &&
         this.passesEmergencyHeadroom(budgetBytes, usedBytes, reservedBytes, options.estimatedBytes)
@@ -518,7 +518,7 @@ class StorageAdmissionService {
    */
   normalizeCandidateNodeIds(options) {
     const rawNodeIds =
-      Array.isArray(options?.targetNodeIds) && options.targetNodeIds.length > NUM.ZERO ?
+      Array.isArray(options?.targetNodeIds) && options.targetNodeIds.length > 0 ?
         options.targetNodeIds :
         [options?.targetNodeId];
     const candidateNodeIds = [];
@@ -526,7 +526,7 @@ class StorageAdmissionService {
 
     for (const nodeId of rawNodeIds) {
       const normalizedNodeId = String(nodeId || '');
-      if (normalizedNodeId.length === NUM.ZERO || seen.has(normalizedNodeId)) {
+      if (normalizedNodeId.length === 0 || seen.has(normalizedNodeId)) {
         continue;
       }
       seen.add(normalizedNodeId);
@@ -543,7 +543,7 @@ class StorageAdmissionService {
    * @private
    */
   normalizeRequiredReplicaCount(requiredReplicaCount) {
-    return Number.isInteger(requiredReplicaCount) && requiredReplicaCount > NUM.ZERO ?
+    return Number.isInteger(requiredReplicaCount) && requiredReplicaCount > 0 ?
       requiredReplicaCount :
       STORAGE_ADMISSION_DEFAULT.REQUIRED_REPLICA_COUNT;
   }
@@ -555,7 +555,7 @@ class StorageAdmissionService {
    * @private
    */
   normalizeSourceQuorumCount(sourceQuorumCount) {
-    return Number.isInteger(sourceQuorumCount) && sourceQuorumCount > NUM.ZERO ?
+    return Number.isInteger(sourceQuorumCount) && sourceQuorumCount > 0 ?
       sourceQuorumCount :
       STORAGE_ADMISSION_DEFAULT.SOURCE_QUORUM_COUNT;
   }
@@ -569,13 +569,13 @@ class StorageAdmissionService {
   summarizeNodeReadinessRow(nodeId) {
     if (
       !this.controlPlaneReadinessService ||
-      typeof this.controlPlaneReadinessService.getNodeRow !== TYPEOF.FUNCTION
+      typeof this.controlPlaneReadinessService.getNodeRow !== 'function'
     ) {
       return null;
     }
 
     const nodeRow = this.controlPlaneReadinessService.getNodeRow(nodeId);
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    if (!nodeRow || typeof nodeRow !== 'object') {
       return null;
     }
 
@@ -602,7 +602,7 @@ class StorageAdmissionService {
 
     for (const reason of reasons) {
       const code = String(reason || '');
-      if (code.length === NUM.ZERO || seen.has(code)) {
+      if (code.length === 0 || seen.has(code)) {
         continue;
       }
       seen.add(code);
@@ -710,7 +710,7 @@ class StorageAdmissionService {
    * @private
    */
   passesEmergencyHeadroom(budgetBytes, usedBytes, reservedBytes, estimatedBytes) {
-    if (!Number.isFinite(budgetBytes) || budgetBytes <= NUM.ZERO) {
+    if (!Number.isFinite(budgetBytes) || budgetBytes <= 0) {
       return false;
     }
     const maxAllowedPercent = PERCENT_DIVISOR - this.emergencyHeadroomPercent;
@@ -729,11 +729,11 @@ class StorageAdmissionService {
    * @private
    */
   buildProjectedUtilization(budgetBytes, usedBytes, reservedBytes, estimatedBytes) {
-    const hasBudget = Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO;
+    const hasBudget = Number.isFinite(budgetBytes) && budgetBytes > 0;
     const projectedAllocated = usedBytes + reservedBytes + estimatedBytes;
     const projectedAvailableBytes = hasBudget ?
-      Math.max(NUM.ZERO, budgetBytes - projectedAllocated) :
-      NUM.ZERO;
+      Math.max(0, budgetBytes - projectedAllocated) :
+      0;
     const projectedUtilizationPercent = hasBudget ?
       (projectedAllocated / budgetBytes) * PERCENT_DIVISOR :
       PERCENT_DIVISOR;

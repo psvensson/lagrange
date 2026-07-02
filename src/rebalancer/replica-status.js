@@ -16,13 +16,12 @@ import {
 } from './replica-operation-progress.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 
 function getOperationMetadataValue(stepsHistory, metadataKey) {
   if (!Array.isArray(stepsHistory) ||
       typeof metadataKey !== LOCAL_STR_STRING ||
-      metadataKey.length === LOCAL_NUM_ZERO) {
+      metadataKey.length === 0) {
     return null;
   }
 
@@ -42,7 +41,7 @@ function getOperationMetadataValue(stepsHistory, metadataKey) {
 
 function getOperationMetadataString(stepsHistory, metadataKey) {
   const value = getOperationMetadataValue(stepsHistory, metadataKey);
-  return typeof value === LOCAL_STR_STRING && value.length > LOCAL_NUM_ZERO ? value : null;
+  return typeof value === LOCAL_STR_STRING && value.length > 0 ? value : null;
 }
 
 function getOperationMetadataStringArray(stepsHistory, metadataKey) {
@@ -55,7 +54,7 @@ function getOperationMetadataStringArray(stepsHistory, metadataKey) {
   const seen = new Set();
   for (const entry of value) {
     if (typeof entry !== LOCAL_STR_STRING ||
-        entry.length === LOCAL_NUM_ZERO ||
+        entry.length === 0 ||
         seen.has(entry)) {
       continue;
     }
@@ -118,7 +117,7 @@ function createOperation(params) {
       params.sourceReplicaId;
   }
   if (Number.isInteger(params.membershipPublicationEpoch) &&
-      params.membershipPublicationEpoch >= LOCAL_NUM_ZERO) {
+      params.membershipPublicationEpoch >= 0) {
     initialHistory[OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH] =
       params.membershipPublicationEpoch;
   }

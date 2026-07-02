@@ -15,14 +15,12 @@ import {
   shouldUsePriorityConcurrentAddLane,
 } from './rebalance-coordinator-concurrent-add-budget.js';
 
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_IN_FLIGHT = 'in flight';
 const LOCAL_STR_OBJECT = 'object';
 
 const {
-  NUM,
   OperationType,
   ReplicaStatus,
   SERVICE_TYPE,
@@ -188,7 +186,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
 
     throw this.createConcurrentOperationBudgetError(
       normalizedMoveType,
-      LOCAL_NUM_ONE,
+      1,
       {
         message:
           LOCAL_STR_CRITICAL_PARTITION +
@@ -227,7 +225,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
         partitionId: context?.partitionId,
         entityType: context?.entityType || SERVICE_TYPE.PARTITION,
       });
-    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= NUM.ZERO) {
+    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= 0) {
       return;
     }
     const serviceRows = await this.getAuthoritativeEntityServiceRows({
@@ -235,10 +233,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       entityType: context?.entityType || SERVICE_TYPE.PARTITION,
       entityId: context?.entityId || context?.partitionId,
     });
-    if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
+    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
       return;
     }
-    let occupiedAliveCount = NUM.ZERO;
+    let occupiedAliveCount = 0;
     for (const row of serviceRows) {
       const status = String(row?.status || ReplicaStatus.ACTIVE).toLowerCase();
       if (!LANE_OCCUPANCY_STATUSES.has(status)) {
@@ -248,7 +246,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       if (!nodeId || !this.isNodeReadyForRouting(nodeId)) {
         continue;
       }
-      occupiedAliveCount += NUM.ONE;
+      occupiedAliveCount += 1;
     }
     if (occupiedAliveCount <= targetReplicaCount) {
       return;
@@ -261,7 +259,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     });
     throw this.createConcurrentOperationBudgetError(
       context?.normalizedMoveType,
-      LOCAL_NUM_ONE,
+      1,
       {
         message:
           LOCAL_STR_CRITICAL_PARTITION +
@@ -352,7 +350,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
         if (cacheVisibleAddLikeConflict) {
           throw this.createConcurrentOperationBudgetError(
             normalizedMoveType,
-            NUM.ONE,
+            1,
             {
               message:
                 LOCAL_STR_CRITICAL_PARTITION +
@@ -463,7 +461,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       return;
     }
     const replicaId = String(context?.move?.replicaId || '').trim();
-    if (replicaId.length === NUM.ZERO) {
+    if (replicaId.length === 0) {
       return;
     }
 
@@ -621,7 +619,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
 
     throw this.createConcurrentOperationBudgetError(
       normalizedMoveType,
-      NUM.ONE,
+      1,
       {
         message:
           PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_PREFIX +

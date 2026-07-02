@@ -1,4 +1,3 @@
-import {TYPEOF} from '../constants/index.js';
 import {ADMISSION_DECISION} from './storage-capacity-constants.js';
 
 function freezeStrings(values) {
@@ -6,7 +5,7 @@ function freezeStrings(values) {
 }
 
 function freezeProjectedUtilizationMap(entries) {
-  if (!entries || typeof entries !== TYPEOF.OBJECT) {
+  if (!entries || typeof entries !== 'object') {
     return Object.freeze({});
   }
   return Object.freeze({...entries});
@@ -22,7 +21,7 @@ function buildStorageAdmissionResult(options) {
         failedDimensions: freezeStrings(entry.failedDimensions),
         reasonCodes: freezeStrings(entry.reasonCodes),
         nodeSummary:
-            entry?.nodeSummary && typeof entry.nodeSummary === TYPEOF.OBJECT ?
+            entry?.nodeSummary && typeof entry.nodeSummary === 'object' ?
               Object.freeze({...entry.nodeSummary}) :
               null,
       });

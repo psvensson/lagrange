@@ -3,7 +3,6 @@
  */
 
 import crypto from 'node:crypto';
-import {NUM, TYPEOF} from '../constants/index.js';
 import {
   SNAPSHOT_RECORDER_DEFAULT as DEF,
   SNAPSHOT_RECORDER_ERROR_MSG as ERR,
@@ -87,7 +86,7 @@ class SnapshotRecorder {
         memoryBoundaries: [],
         capturedAt: startedAt,
         updatedAt: startedAt,
-        totalBytes: NUM.ZERO,
+        totalBytes: 0,
         formatVersion: DEF.FORMAT_VERSION,
       };
 
@@ -108,7 +107,7 @@ class SnapshotRecorder {
     return await this._runWithTimeout(async () => {
       assertRequest(request);
       assertSessionId(request.sessionId);
-      if (!request.frame || typeof request.frame !== TYPEOF.OBJECT) {
+      if (!request.frame || typeof request.frame !== 'object') {
         throw new Error(ERR.FRAME_REQUIRED);
       }
 
@@ -138,7 +137,7 @@ class SnapshotRecorder {
     return await this._runWithTimeout(async () => {
       assertRequest(request);
       assertSessionId(request.sessionId);
-      if (!request.hostCall || typeof request.hostCall !== TYPEOF.OBJECT) {
+      if (!request.hostCall || typeof request.hostCall !== 'object') {
         throw new Error(ERR.HOST_CALL_REQUIRED);
       }
 
@@ -180,7 +179,7 @@ class SnapshotRecorder {
       const bytes = normalizeMemoryBytes(request.memoryBytes);
       const offset = isNonNegativeInteger(request.offset) ?
         request.offset :
-        NUM.ZERO;
+        0;
       const length = isNonNegativeInteger(request.length) ?
         request.length :
         bytes.byteLength;
@@ -325,7 +324,7 @@ function serializeSnapshotEnvelope(snapshot, manifest) {
   const payloadBytes = Buffer.from(payloadJson, 'utf8');
 
   const header = Buffer.alloc(DEF.HEADER_SIZE_BYTES);
-  header.write(DEF.FORMAT_MAGIC, NUM.ZERO, LOCAL_NUM_FOUR, LOCAL_STR_ASCII);
+  header.write(DEF.FORMAT_MAGIC, 0, LOCAL_NUM_FOUR, LOCAL_STR_ASCII);
   header.writeUInt8(DEF.FORMAT_VERSION, LOCAL_NUM_FOUR);
   header.writeUInt32BE(manifestBytes.length, LOCAL_NUM_FIVE);
   header.writeUInt32BE(payloadBytes.length, LOCAL_NUM_NINE);
@@ -348,7 +347,7 @@ function deserializeSnapshotEnvelope(buffer) {
     throw new Error(ERR.SNAPSHOT_BUFFER_TRUNCATED);
   }
 
-  const magic = bytes.toString('ascii', NUM.ZERO, 4);
+  const magic = bytes.toString('ascii', 0, 4);
   if (magic !== DEF.FORMAT_MAGIC) {
     throw new Error(ERR.SNAPSHOT_FORMAT_MAGIC_INVALID);
   }
@@ -418,7 +417,7 @@ function serializeSnapshotPayload(snapshot) {
  * @return {Object}
  */
 function deserializeSnapshotPayload(payload) {
-  if (!payload || typeof payload !== TYPEOF.OBJECT) {
+  if (!payload || typeof payload !== 'object') {
     throw new Error(ERR.SNAPSHOT_PAYLOAD_INVALID);
   }
   return {
@@ -433,7 +432,7 @@ function deserializeSnapshotPayload(payload) {
     formatVersion: payload.formatVersion || DEF.FORMAT_VERSION,
     capturedAt: payload.capturedAt,
     updatedAt: payload.updatedAt,
-    totalBytes: payload.totalBytes || NUM.ZERO,
+    totalBytes: payload.totalBytes || 0,
     inputFrames: Array.isArray(payload.inputFrames) ? payload.inputFrames : [],
     hostCallLedger:
       Array.isArray(payload.hostCallLedger) ? payload.hostCallLedger : [],
@@ -532,14 +531,14 @@ function normalizeMemoryBytes(value) {
       value.byteOffset + value.byteLength,
     ));
   }
-  return new Uint8Array(value.slice(NUM.ZERO));
+  return new Uint8Array(value.slice(0));
 }
 
 /**
  * @param {Object} request
  */
 function assertRequest(request) {
-  if (!request || typeof request !== TYPEOF.OBJECT) {
+  if (!request || typeof request !== 'object') {
     throw new Error(ERR.REQUEST_REQUIRED);
   }
 }
@@ -556,8 +555,8 @@ function assertSessionId(sessionId) {
  * @param {string} errorMessage
  */
 function assertNonEmptyString(value, errorMessage) {
-  if (typeof value !== TYPEOF.STRING ||
-    value.trim().length === NUM.ZERO) {
+  if (typeof value !== 'string' ||
+    value.trim().length === 0) {
     throw new Error(errorMessage);
   }
 }
@@ -567,7 +566,7 @@ function assertNonEmptyString(value, errorMessage) {
  * @return {boolean}
  */
 function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= NUM.ZERO;
+  return Number.isInteger(value) && value >= 0;
 }
 
 /**

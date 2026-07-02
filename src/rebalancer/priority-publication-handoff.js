@@ -2,7 +2,6 @@ import {PriorityPublicationLeaderSafety} from './priority-publication-leader-saf
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 
 const {
-  NUM,
   OPERATION_HANDLER,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -19,7 +18,6 @@ const {
   ReplicaOperationReason,
   ReplicaOperationResponseStatus,
   SERVICE_TYPE,
-  TYPEOF,
   isPriorityControlPlanePartition,
 } = SHARED;
 
@@ -197,11 +195,11 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     if (
       !operation ||
       !handoffRequest ||
-      typeof handoffRequest !== TYPEOF.OBJECT ||
-      typeof handoffRequest.dispatchNodeId !== TYPEOF.STRING ||
-      handoffRequest.dispatchNodeId.length === NUM.ZERO ||
-      typeof handoffRequest.requestReplicaId !== TYPEOF.STRING ||
-      handoffRequest.requestReplicaId.length === NUM.ZERO
+      typeof handoffRequest !== 'object' ||
+      typeof handoffRequest.dispatchNodeId !== 'string' ||
+      handoffRequest.dispatchNodeId.length === 0 ||
+      typeof handoffRequest.requestReplicaId !== 'string' ||
+      handoffRequest.requestReplicaId.length === 0
     ) {
       return null;
     }
@@ -290,14 +288,14 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     const handoffCompleted =
       response?.status === ReplicaOperationResponseStatus.COMPLETED;
     const dispatchNodeId =
-      typeof handoffRequest?.dispatchNodeId === TYPEOF.STRING ?
+      typeof handoffRequest?.dispatchNodeId === 'string' ?
         handoffRequest.dispatchNodeId.trim() :
         OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
     const continuationApplicable =
       priorityReplaceSourceRemoval &&
       replacementLeaderElectionHandoff &&
       handoffCompleted &&
-      dispatchNodeId.length > NUM.ZERO;
+      dispatchNodeId.length > 0;
     const priorityRecoveryCompletionSafe =
       continuationApplicable ?
         await this.isRemoveSafetyHandoffPriorityRecoveryCompletionSafe(
@@ -374,7 +372,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
   async resolveRemoveSafetyHandoffRetargetCandidateAvailability(operation) {
     if (
       typeof this.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound !==
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return false;
     }
@@ -394,8 +392,8 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       this.repository.getReplaceSourceReplicaId(operation);
     const replacementReplicaId =
       this.repository.getReplaceTargetReplicaId(operation) ||
-      (typeof operation?.replicaId === TYPEOF.STRING &&
-      operation.replicaId.length > NUM.ZERO ?
+      (typeof operation?.replicaId === 'string' &&
+      operation.replicaId.length > 0 ?
         operation.replicaId :
         OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING);
     const replacementReplicaRow =
@@ -416,9 +414,9 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
   resolveRemoveSafetyHandoffTargetReadiness(operation, dispatchNodeId) {
     const readinessService = this.controlPlaneReadinessService;
     const hasReadinessSource =
-      typeof readinessService?.getNodeReadinessSync === TYPEOF.FUNCTION ||
+      typeof readinessService?.getNodeReadinessSync === 'function' ||
       typeof readinessService?.getControlPlaneParticipationSync ===
-        TYPEOF.FUNCTION;
+        'function';
     if (!hasReadinessSource) {
       return true;
     }
@@ -444,19 +442,19 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     if (
       !this.repository ||
       typeof this.repository.resolveIncompleteOperationObservation !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return (
-        fallbackObservation && typeof fallbackObservation === TYPEOF.OBJECT ?
+        fallbackObservation && typeof fallbackObservation === 'object' ?
           fallbackObservation :
           null
       );
     }
     const normalizedOperations = (Array.isArray(operations) ? operations : [])
-      .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
-    if (normalizedOperations.length === NUM.ZERO) {
+      .filter((operation) => operation && typeof operation === 'object');
+    if (normalizedOperations.length === 0) {
       return (
-        fallbackObservation && typeof fallbackObservation === TYPEOF.OBJECT ?
+        fallbackObservation && typeof fallbackObservation === 'object' ?
           fallbackObservation :
           null
       );
@@ -474,7 +472,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
 
   addPriorityRecoveryOperationId(operationIds, value) {
     const operationId = this.normalizePriorityRecoveryOperationId(value);
-    if (operationId.length === NUM.ZERO) {
+    if (operationId.length === 0) {
       return;
     }
     operationIds.add(operationId);
@@ -502,7 +500,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
 
   collectPriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
     const operationIds = new Set();
-    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    if (!snapshot || typeof snapshot !== 'object') {
       return operationIds;
     }
     this.addPriorityRecoveryOperationId(operationIds, snapshot.operationId);
@@ -535,7 +533,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     snapshot,
     operationIds,
   ) {
-    if (!(operationIds instanceof Set) || operationIds.size === NUM.ZERO) {
+    if (!(operationIds instanceof Set) || operationIds.size === 0) {
       return false;
     }
     const snapshotOperationIds =
@@ -558,7 +556,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
           value || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
         ).trim(),
       )
-      .filter((value) => value.length > NUM.ZERO);
+      .filter((value) => value.length > 0);
   }
 
   hasPriorityRecoveryDecisionSnapshotPlanningOnlyWorkflowProgressMatch(
@@ -581,7 +579,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       });
     const evidence = Object.freeze({
       operationIdsAvailable:
-        operationIds instanceof Set && operationIds.size > NUM.ZERO,
+        operationIds instanceof Set && operationIds.size > 0,
       currentOwner:
         snapshot?.progress?.currentOwner ||
         OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
@@ -592,8 +590,8 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
         snapshot?.progress?.blockingBoundary ||
         OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
       serialWaitSourceAvailable:
-        serialWaitOperationIds.size > NUM.ZERO ||
-        serialWaitPartitionIds.length > NUM.ZERO,
+        serialWaitOperationIds.size > 0 ||
+        serialWaitPartitionIds.length > 0,
       serialWaitProgressClass:
         blockerReasons.includes(
           PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL.SERIAL_OPERATION_WAIT,

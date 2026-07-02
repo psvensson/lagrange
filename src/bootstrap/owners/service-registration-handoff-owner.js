@@ -1,8 +1,6 @@
 import {
   COLUMN,
   HTTP_STATUS,
-  NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   OWNER_OUTCOME_FRESHNESS,
@@ -27,10 +25,10 @@ import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
 const LOCAL_STR_UPSERT = 'upsert';
-const LOCAL_STR_1ANOQ = 'retryable register-service metadata write failure';
+const LOCAL_STR_RETRYABLE_REGISTER_SERVICE_METADATA_WRIT = 'retryable register-service metadata write failure';
 const LOCAL_STR_SYNCING = 'syncing';
 const LOCAL_STR_STOPPING = 'stopping';
-const LOCAL_STR_1TLI7 = 'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure';
+const LOCAL_STR_PRESERVING_MOVE_REPLICA_HANDOFF_RESERVAT = 'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure';
 
 const REGISTER_SERVICE_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS =
   BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
@@ -105,18 +103,18 @@ const SERVICE_REGISTRATION_HANDOFF_OUTCOME_RULES = Object.freeze([
 ]);
 
 function isServiceRegistrationHandoffRecord(value) {
-  return typeof value === TYPEOF.OBJECT && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function normalizeServiceRegistrationHandoffText(value, fallback) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     fallback;
 }
 
 function normalizeServiceRegistrationRetryAfterMs(value) {
-  return Number.isFinite(value) ? Math.max(NUM.ZERO, Math.floor(value)) :
-    NUM.ZERO;
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) :
+    0;
 }
 
 function selectServiceRegistrationHandoffOutcome(evidence) {
@@ -217,7 +215,7 @@ function buildServiceRegistrationHandoffContract(options = {}) {
     isServiceRegistrationHandoffRecord(options.handoffContext) ?
       options.handoffContext :
       {};
-  const handoffRequired = Object.keys(handoffContext).length > NUM.ZERO;
+  const handoffRequired = Object.keys(handoffContext).length > 0;
   const retryAfterMs = normalizeServiceRegistrationRetryAfterMs(
     options.retryAfterMs,
   );
@@ -225,7 +223,7 @@ function buildServiceRegistrationHandoffContract(options = {}) {
     completed: options.completed === true,
     retryable:
       options.retryable === true ||
-      retryAfterMs > NUM.ZERO,
+      retryAfterMs > 0,
   });
   const selectedOutcome = selectServiceRegistrationHandoffOutcome(evidence);
   const reasonCode = resolveServiceRegistrationHandoffReasonCode({
@@ -341,7 +339,7 @@ class ServiceRegistrationHandoffOwner {
 
   async sleep(delayMs) {
     const sleepImpl = this.delegates.getSleep?.();
-    if (typeof sleepImpl === TYPEOF.FUNCTION) {
+    if (typeof sleepImpl === 'function') {
       await sleepImpl(delayMs);
       return;
     }
@@ -382,7 +380,7 @@ class ServiceRegistrationHandoffOwner {
               error:
                 resultOrError?.error ||
                 resultOrError?.message ||
-                LOCAL_STR_1ANOQ,
+                LOCAL_STR_RETRYABLE_REGISTER_SERVICE_METADATA_WRIT,
             },
           );
         },
@@ -590,7 +588,7 @@ class ServiceRegistrationHandoffOwner {
           );
         if (shouldPreserveRetryableHandoff) {
           this.getLogger().warn(
-            LOCAL_STR_1TLI7,
+            LOCAL_STR_PRESERVING_MOVE_REPLICA_HANDOFF_RESERVAT,
             {
               operationId: handoffContext.operationId,
               serviceId: handoffContext.replicaId,
@@ -605,7 +603,7 @@ class ServiceRegistrationHandoffOwner {
         }
       }
       if (Number.isFinite(error?.statusCode) &&
-          typeof error?.errorCode === TYPEOF.STRING) {
+          typeof error?.errorCode === 'string') {
         const typedErrorLogMessage =
           this.resolveTypedRegisterServiceErrorLogMessage(error);
         this.getLogger().warn(typedErrorLogMessage, {
@@ -638,7 +636,7 @@ class ServiceRegistrationHandoffOwner {
           ...(Number.isFinite(error.retryAfterMs) ?
             {retryAfterMs: Math.floor(error.retryAfterMs)} :
             {}),
-          ...(error.details && typeof error.details === TYPEOF.OBJECT ?
+          ...(error.details && typeof error.details === 'object' ?
             {details: error.details} :
             {}),
         };

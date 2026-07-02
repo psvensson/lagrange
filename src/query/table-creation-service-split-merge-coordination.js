@@ -6,7 +6,7 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {NUM, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {QUERY_LOG_MSG} from './query-constants.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 
@@ -20,7 +20,7 @@ import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completio
 function resolveTableId(row) {
   const tableId = row?.table_id ?? row?.tableId ?? null;
   return typeof tableId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
-    tableId.length > NUM.ZERO ?
+    tableId.length > 0 ?
     tableId :
     null;
 }
@@ -55,7 +55,7 @@ function resolveTablePolicyValue(row) {
 function resolvePartitionId(row) {
   const partitionId = row?.partition_id ?? row?.partitionId ?? null;
   return typeof partitionId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
-    partitionId.length > NUM.ZERO ?
+    partitionId.length > 0 ?
     partitionId :
     null;
 }
@@ -68,7 +68,7 @@ function resolvePartitionId(row) {
  */
 function resolvePartitionSizeValue(row) {
   const sizeBytes = Number(row?.size_bytes ?? row?.sizeBytes);
-  return Number.isFinite(sizeBytes) && sizeBytes >= NUM.ZERO ?
+  return Number.isFinite(sizeBytes) && sizeBytes >= 0 ?
     sizeBytes :
     null;
 }

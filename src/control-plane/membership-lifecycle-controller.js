@@ -5,7 +5,6 @@ import {
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../bootstrap/rejoin-hints-constants.js';
-import {TYPEOF} from '../constants/index.js';
 import {
   buildMembershipLifecycleSummary,
   isValidMembershipLifecycleTransition,
@@ -17,10 +16,9 @@ const LOCAL_STR_JOIN_ADMISSION = 'join_admission';
 const LOCAL_STR_RESTART_REENTRY = 'restart_reentry';
 const LOCAL_STR_DRAIN = 'drain';
 const LOCAL_STR_REMOVAL = 'removal';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_1IZGR = 'restart_reentry_requested';
-const LOCAL_STR_1J4BI = 'join_admission_requested';
-const LOCAL_STR_U0NVB = 'membership_removal_requested';
+const LOCAL_STR_RESTART_REENTRY_REQUESTED = 'restart_reentry_requested';
+const LOCAL_STR_JOIN_ADMISSION_REQUESTED = 'join_admission_requested';
+const LOCAL_STR_MEMBERSHIP_REMOVAL_REQUESTED = 'membership_removal_requested';
 const MEMBERSHIP_OWNER_STARTUP_MODE_OUTCOME_RULES = Object.freeze([
   Object.freeze({
     startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -74,8 +72,8 @@ const MEMBERSHIP_TRANSITION_OUTCOME = Object.freeze({
   UNKNOWN_INTENT: 'unknown_intent',
 });
 
-function normalizeString(value, fallback = LOCAL_STR_EMPTY) {
-  return typeof value === TYPEOF.STRING ? value.trim() || fallback : fallback;
+function normalizeString(value, fallback = '') {
+  return typeof value === 'string' ? value.trim() || fallback : fallback;
 }
 
 function normalizeTimestamp(value, fallback) {
@@ -93,7 +91,7 @@ function normalizeMembershipOwnerOutcomeType(value) {
   const normalized = normalizeString(value);
   return Object.values(MEMBERSHIP_OWNER_OUTCOME_TYPE).includes(normalized) ?
     normalized :
-    LOCAL_STR_EMPTY;
+    '';
 }
 
 function resolveMembershipOwnerStartupModeRule(startupMode) {
@@ -105,16 +103,16 @@ function resolveMembershipOwnerStartupModeRule(startupMode) {
 
 export function isBootJoinRejoinMembershipOwnerOutcome(value) {
   return value &&
-    typeof value === TYPEOF.OBJECT &&
+    typeof value === 'object' &&
     value.semanticOwner ===
       TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER &&
     value.boundary === TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY &&
     normalizeMembershipOwnerOutcomeType(value.outcomeType) !==
-      LOCAL_STR_EMPTY;
+      '';
 }
 
 export function buildMembershipOwnerOutcome(options = {}) {
-  const normalizedOptions = options && typeof options === TYPEOF.OBJECT ?
+  const normalizedOptions = options && typeof options === 'object' ?
     options :
     {};
   const suppliedOutcome = isBootJoinRejoinMembershipOwnerOutcome(
@@ -148,9 +146,9 @@ export function buildMembershipOwnerOutcome(options = {}) {
 }
 
 export function resolveMembershipOwnerOutcomeType(options = {}) {
-  const outcomeOptions = typeof options === TYPEOF.STRING ?
+  const outcomeOptions = typeof options === 'string' ?
     {startupMode: options} :
-    options && typeof options === TYPEOF.OBJECT ?
+    options && typeof options === 'object' ?
       options :
       {};
   return buildMembershipOwnerOutcome(outcomeOptions).outcomeType;
@@ -189,8 +187,8 @@ function buildJoinIntent(options = {}) {
     reasonCode: normalizeString(
       options.reasonCode,
       intentType === MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
-        LOCAL_STR_1IZGR :
-        LOCAL_STR_1J4BI,
+        LOCAL_STR_RESTART_REENTRY_REQUESTED :
+        LOCAL_STR_JOIN_ADMISSION_REQUESTED,
     ),
     membershipLifecycleSummary: buildMembershipLifecycleSummary({
       lifecycleState:
@@ -238,7 +236,7 @@ function buildRemovalIntent(options = {}) {
     intentType: MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL,
     nodeId: normalizeString(options.nodeId),
     requestedAt: normalizeTimestamp(options.requestedAt, Date.now()),
-    reasonCode: normalizeString(options.reasonCode, LOCAL_STR_U0NVB),
+    reasonCode: normalizeString(options.reasonCode, LOCAL_STR_MEMBERSHIP_REMOVAL_REQUESTED),
     membershipLifecycleSummary: buildMembershipLifecycleSummary({
       lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.REMOVED,
       publishedActiveNodeIds: options.publishedActiveNodeIds,
@@ -257,18 +255,18 @@ export class MembershipLifecycleController {
       membershipOwnerOutcome: options.membershipOwnerOutcome,
       startupMode: this.startupMode,
     });
-    this.now = typeof options.now === TYPEOF.FUNCTION ?
+    this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
     this.delegates = {
-      onJoinIntent: typeof options.delegates?.onJoinIntent === TYPEOF.FUNCTION ?
+      onJoinIntent: typeof options.delegates?.onJoinIntent === 'function' ?
         options.delegates.onJoinIntent :
         null,
-      onDrainIntent: typeof options.delegates?.onDrainIntent === TYPEOF.FUNCTION ?
+      onDrainIntent: typeof options.delegates?.onDrainIntent === 'function' ?
         options.delegates.onDrainIntent :
         null,
       onRemovalIntent:
-        typeof options.delegates?.onRemovalIntent === TYPEOF.FUNCTION ?
+        typeof options.delegates?.onRemovalIntent === 'function' ?
           options.delegates.onRemovalIntent :
           null,
     };

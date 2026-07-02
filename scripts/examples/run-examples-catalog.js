@@ -16,10 +16,7 @@ import {
 import {packageExamples} from './package-examples.js';
 import {validateExampleOutput} from './validate-output.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_19GGI = '..';
-const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DOT_DOT = '..';
 const LOCAL_STR_FUNCTION = 'function';
 
 /**
@@ -29,19 +26,19 @@ const LOCAL_STR_FUNCTION = 'function';
  * @return {{total: number, passed: number, failed: number, requiredFailed: number}}
  */
 function summarizeExamples(results) {
-  let passed = LOCAL_NUM_ZERO;
-  let failed = LOCAL_NUM_ZERO;
-  let requiredFailed = LOCAL_NUM_ZERO;
+  let passed = 0;
+  let failed = 0;
+  let requiredFailed = 0;
 
   for (const result of results) {
     if (result.passed) {
-      passed += LOCAL_NUM_ONE;
+      passed += 1;
       continue;
     }
 
-    failed += LOCAL_NUM_ONE;
+    failed += 1;
     if (result.required) {
-      requiredFailed += LOCAL_NUM_ONE;
+      requiredFailed += 1;
     }
   }
 
@@ -72,7 +69,7 @@ function buildDefaultOutputPath(runId) {
  */
 async function writeArtifact(outputPath, artifact) {
   const absolutePath = resolve(outputPath);
-  await mkdir(resolve(absolutePath, LOCAL_STR_19GGI), {recursive: true});
+  await mkdir(resolve(absolutePath, LOCAL_STR_DOT_DOT), {recursive: true});
   await writeFile(
     absolutePath,
     JSON.stringify(artifact, null, JSON_SPACES),
@@ -90,8 +87,8 @@ async function writeArtifact(outputPath, artifact) {
 function buildRunId(startedAt) {
   return `examples-${startedAt.toISOString().replace(
     RUN_ID_TIMESTAMP_SANITIZE_REGEX,
-    LOCAL_STR_EMPTY,
-  )}-${randomUUID().slice(LOCAL_NUM_ZERO, RUN_ID_RANDOM_SLICE_LENGTH)}`;
+    '',
+  )}-${randomUUID().slice(0, RUN_ID_RANDOM_SLICE_LENGTH)}`;
 }
 
 /**
@@ -195,7 +192,7 @@ async function runExamplesCatalog(options = {}) {
     artifactPath: absoluteOutputPath,
   };
 
-  if (options.failOnRequired !== false && summary.requiredFailed > LOCAL_NUM_ZERO) {
+  if (options.failOnRequired !== false && summary.requiredFailed > 0) {
     throw new Error(
       `Required examples failed: ${summary.requiredFailed} (artifact: ${absoluteOutputPath})`,
     );

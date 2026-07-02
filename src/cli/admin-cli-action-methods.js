@@ -1,7 +1,6 @@
 import {CLI_VIEW} from './cli-constants.js';
 
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_1FR1D = '{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n';
+const LOCAL_STR_BOLD_CYAN_FG_STATE_TRANSITION_HISTORY_CY = '{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n';
 
 const ADMIN_CLI_ACTION_METHODS = {
   /**
@@ -145,7 +144,7 @@ const ADMIN_CLI_ACTION_METHODS = {
       return;
     }
 
-    let content = `{bold}{cyan-fg}Row ${this.sqlSelectedIndex + LOCAL_NUM_ONE} of ` +
+    let content = `{bold}{cyan-fg}Row ${this.sqlSelectedIndex + 1} of ` +
       `${this.sqlResultsData.length}{/cyan-fg}{/bold}\n\n`;
 
     for (const col of this.sqlResultsColumns) {
@@ -613,7 +612,7 @@ const ADMIN_CLI_ACTION_METHODS = {
       };
     });
 
-    let content = LOCAL_STR_1FR1D;
+    let content = LOCAL_STR_BOLD_CYAN_FG_STATE_TRANSITION_HISTORY_CY;
     content += `{cyan-fg}Replica:{/cyan-fg} ${replicaId}\n`;
     content += `{cyan-fg}Entries:{/cyan-fg} ${historyEntries.length}\n\n`;
     content += '{cyan-fg}─────────────────────────────────────────────────{/cyan-fg}\n\n';

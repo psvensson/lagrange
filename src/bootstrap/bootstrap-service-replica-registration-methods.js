@@ -348,18 +348,18 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
       if (!replicaHandler) {
         this.logger.warn(BootstrapLog.REPLICA_HANDLER_MISSING);
         return {
-          attemptedCount: NUM.ZERO,
-          registeredCount: NUM.ZERO,
-          skippedCount: partitions?.size || NUM.ZERO,
-          totalPartitions: partitions?.size || NUM.ZERO,
+          attemptedCount: 0,
+          registeredCount: 0,
+          skippedCount: partitions?.size || 0,
+          totalPartitions: partitions?.size || 0,
         };
       }
 
       const startedAt = Date.now();
       const totalPartitions = partitions.size;
-      let registeredCount = NUM.ZERO;
-      let attemptedCount = NUM.ZERO;
-      let skippedCount = NUM.ZERO;
+      let registeredCount = 0;
+      let attemptedCount = 0;
+      let skippedCount = 0;
       const writeRegistrationTrace = (event, details = {}) => {
         this.writeBootstrapReplicaRegistrationTrace(
           BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_PARTITION,
@@ -447,7 +447,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
 
         if (
           attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
-          NUM.ZERO
+          0
         ) {
           this.logger.info(BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG
             .PARTITION_REGISTRATION_PROGRESS, {
@@ -518,10 +518,10 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
       const totalPartitions = partitions.size;
       const supportsSnapshotRegistration =
         typeof stateMachine.registerReplicaSnapshot === TYPEOF_FUNCTION;
-      let registeredCount = NUM.ZERO;
-      let attemptedCount = NUM.ZERO;
-      let skippedCount = NUM.ZERO;
-      let persistErrorCount = NUM.ZERO;
+      let registeredCount = 0;
+      let attemptedCount = 0;
+      let skippedCount = 0;
+      let persistErrorCount = 0;
       const persistSettles = [];
       const writeStateTrace = (event, details = {}) => {
         this.writeBootstrapReplicaRegistrationTrace(
@@ -735,7 +735,7 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
 
         if (
           attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
-          NUM.ZERO
+          0
         ) {
           this.logger.info(BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG
             .STATE_MACHINE_REGISTRATION_PROGRESS, {
@@ -754,7 +754,7 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
 
       const expectedPersistCount =
         supportsSnapshotRegistration ?
-          NUM.ZERO :
+          0 :
           registeredCount * BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA;
       this.logger.debug(BootstrapLog.STATE_MACHINE_REGISTERED, {
         registeredCount,
@@ -789,7 +789,7 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
         durationMs: Date.now() - startedAt,
       });
 
-      if (persistSettles.length > NUM.ZERO) {
+      if (persistSettles.length > 0) {
         void Promise.all(persistSettles).then(() => {
           this.logger.info(
             BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG

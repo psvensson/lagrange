@@ -18,7 +18,6 @@
  * Requirements: 4.1, 5.1, 9.3
  */
 
-import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   STAGE_STATE,
   STAGE_RESULT_FIELD as SF,
@@ -89,7 +88,7 @@ function validateBatches(batches) {
     }
   }
 
-  return {valid: errors.length === NUM.ZERO, errors};
+  return {valid: errors.length === 0, errors};
 }
 
 const nowMs = () => Date.now();
@@ -122,13 +121,13 @@ class CallbackStageExecutor {
    */
   constructor(options = {}) {
     if (!options.callback ||
-        typeof options.callback !== TYPEOF.FUNCTION) {
+        typeof options.callback !== 'function') {
       throw new Error(STAGE_ERROR_MSG.CALLBACK_REQUIRED);
     }
     this.callback = options.callback;
     this.contextFactory = options.contextFactory || null;
     this.lineageTracker = options.lineageTracker || null;
-    this.stageIndex = options.stageIndex ?? NUM.ZERO;
+    this.stageIndex = options.stageIndex ?? 0;
     this.dedupeRegistry = options.dedupeRegistry || null;
     this.cancellationToken = options.cancellationToken || null;
     this.state = STAGE_STATE.PENDING;
@@ -161,7 +160,7 @@ class CallbackStageExecutor {
 
     const batchValidation = validateBatches(batches);
     if (!batchValidation.valid) {
-      throw new Error(batchValidation.errors[NUM.ZERO]);
+      throw new Error(batchValidation.errors[0]);
     }
 
     if (this.cancellationToken &&
@@ -175,7 +174,7 @@ class CallbackStageExecutor {
     let hasFailure = false;
     let wasCancelled = false;
 
-    for (let i = NUM.ZERO; i < batches.length; i++) {
+    for (let i = 0; i < batches.length; i++) {
       if (this.cancellationToken &&
           this.cancellationToken.isCancelled()) {
         wasCancelled = true;
@@ -218,7 +217,7 @@ class CallbackStageExecutor {
 
     if (this.lineageTracker) {
       this.lineageTracker.attachLineage(
-        stageResult, this.stageIndex, STAGE_ARTIFACT_TYPE, NUM.ZERO,
+        stageResult, this.stageIndex, STAGE_ARTIFACT_TYPE, 0,
       );
     }
 
@@ -280,7 +279,7 @@ class CallbackStageExecutor {
         [SF.PARTITION_ID]: partitionId,
         [SF.ROWS]: Array.isArray(rows) ? rows : [],
         [SF.ROW_COUNT]: Array.isArray(rows) ?
-          rows.length : NUM.ZERO,
+          rows.length : 0,
         [SF.STATE]: STAGE_STATE.COMPLETED,
         [SF.ERROR]: null,
         [SF.DURATION_MS]: duration,
@@ -310,7 +309,7 @@ class CallbackStageExecutor {
       const result = {
         [SF.PARTITION_ID]: partitionId,
         [SF.ROWS]: [],
-        [SF.ROW_COUNT]: NUM.ZERO,
+        [SF.ROW_COUNT]: 0,
         [SF.STATE]: STAGE_STATE.FAILED,
         [SF.ERROR]: err.message,
         [SF.DURATION_MS]: duration,
@@ -343,7 +342,7 @@ class CallbackStageExecutor {
       partitionResults: [],
       [SF.STATE]: STAGE_STATE.CANCELLED,
       totalPartitions: batches.length,
-      failedPartitions: NUM.ZERO,
+      failedPartitions: 0,
       cancelReason: reason,
     };
   }
@@ -363,7 +362,7 @@ class CallbackStageExecutor {
     return {
       [SF.PARTITION_ID]: partitionId,
       [SF.ROWS]: [],
-      [SF.ROW_COUNT]: NUM.ZERO,
+      [SF.ROW_COUNT]: 0,
       [SF.STATE]: STAGE_STATE.CANCELLED,
       [SF.ERROR]: reason,
       [SF.DURATION_MS]: duration,

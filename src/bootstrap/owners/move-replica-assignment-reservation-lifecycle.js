@@ -11,10 +11,10 @@ import {
   MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON,
 } from '../bootstrap-api-constants.js';
 
-const LOCAL_STR_1GQG6 = 'Failed to persist MOVE_REPLICA assignment reservation';
+const LOCAL_STR_FAILED_TO_PERSIST_MOVE_REPLICA_ASSIGNMEN = 'Failed to persist MOVE_REPLICA assignment reservation';
 const LOCAL_STR_6LKDQ = 'failed to persist MOVE_REPLICA assignment reservation';
-const LOCAL_STR_GVGHU = 'failed to persist reservation terminal status';
-const LOCAL_STR_MC3LT = 'failed to reconcile MOVE_REPLICA assignment to committed state';
+const LOCAL_STR_FAILED_TO_PERSIST_RESERVATION_TERMINAL_S = 'failed to persist reservation terminal status';
+const LOCAL_STR_FAILED_TO_RECONCILE_MOVE_REPLICA_ASSIGNM = 'failed to reconcile MOVE_REPLICA assignment to committed state';
 
 const moveReplicaAssignmentReservationLifecycleMethods = {
   async expireMoveReplicaAssignmentReservations(options = {}) {
@@ -192,7 +192,7 @@ const moveReplicaAssignmentReservationLifecycleMethods = {
             reservations?.delete(assignmentId);
             throw this.buildBootstrapControlPlaneQueryError(
               persistResult,
-              LOCAL_STR_1GQG6,
+              LOCAL_STR_FAILED_TO_PERSIST_MOVE_REPLICA_ASSIGNMEN,
             );
           }
           this.getLogger().warn(
@@ -286,7 +286,7 @@ const moveReplicaAssignmentReservationLifecycleMethods = {
             status,
             error:
               updateResult.error ||
-              LOCAL_STR_GVGHU,
+              LOCAL_STR_FAILED_TO_PERSIST_RESERVATION_TERMINAL_S,
           },
         );
       }
@@ -359,7 +359,7 @@ const moveReplicaAssignmentReservationLifecycleMethods = {
             status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
             error:
               updateResult.error ||
-              LOCAL_STR_MC3LT,
+              LOCAL_STR_FAILED_TO_RECONCILE_MOVE_REPLICA_ASSIGNM,
           },
         );
         return;

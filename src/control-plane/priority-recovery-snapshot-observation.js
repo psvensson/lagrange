@@ -1,4 +1,4 @@
-import {NUM, TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKER_REASON,
@@ -55,10 +55,10 @@ function resolvePriorityRecoveryWorkflowState(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
       (operationContext) =>
-        operationContext && typeof operationContext === TYPEOF.OBJECT,
+        operationContext && typeof operationContext === 'object',
     ) :
     [];
-  if (normalizedContexts.length === NUM.ZERO) {
+  if (normalizedContexts.length === 0) {
     return PRIORITY_RECOVERY_WORKFLOW_STATE.NONE;
   }
   if (
@@ -80,7 +80,7 @@ function resolvePriorityRecoveryWorkflowState(operationContexts = []) {
 
 function resolvePriorityRecoveryVisibilityState(options = {}) {
   const completion =
-    options.completion && typeof options.completion === TYPEOF.OBJECT ?
+    options.completion && typeof options.completion === 'object' ?
       options.completion :
       null;
   const operationContexts = Array.isArray(options.operationContexts) ?
@@ -93,7 +93,7 @@ function resolvePriorityRecoveryVisibilityState(options = {}) {
   ) {
     return PRIORITY_RECOVERY_VISIBILITY_STATE.DEFERRED;
   }
-  if (operationContexts.length > NUM.ZERO) {
+  if (operationContexts.length > 0) {
     return PRIORITY_RECOVERY_VISIBILITY_STATE.CACHE_VISIBLE;
   }
   if (
@@ -106,7 +106,7 @@ function resolvePriorityRecoveryVisibilityState(options = {}) {
 }
 
 function resolvePriorityRecoveryConvergenceState(assessment = null) {
-  if (!assessment || typeof assessment !== TYPEOF.OBJECT) {
+  if (!assessment || typeof assessment !== 'object') {
     return PRIORITY_RECOVERY_CONVERGENCE_STATE.SPREAD_GAP;
   }
   if (assessment?.planner?.ready === true) {
@@ -119,8 +119,8 @@ function resolvePriorityRecoveryConvergenceState(assessment = null) {
 }
 
 function resolvePriorityRecoveryOperationProgressTimestampMs(operationContext) {
-  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
-    return NUM.ZERO;
+  if (!operationContext || typeof operationContext !== 'object') {
+    return 0;
   }
   const progressTimestampCandidates = [
     normalizePriorityRecoveryInteger(operationContext.completedAtMs),
@@ -128,11 +128,11 @@ function resolvePriorityRecoveryOperationProgressTimestampMs(operationContext) {
     normalizePriorityRecoveryInteger(operationContext.targetServiceProgressAtMs),
     normalizePriorityRecoveryInteger(operationContext.createdAtMs),
   ].filter((timestampMs) =>
-    Number.isFinite(timestampMs) && timestampMs > NUM.ZERO,
+    Number.isFinite(timestampMs) && timestampMs > 0,
   );
-  return progressTimestampCandidates.length > NUM.ZERO ?
+  return progressTimestampCandidates.length > 0 ?
     Math.max(...progressTimestampCandidates) :
-    NUM.ZERO;
+    0;
 }
 
 function resolvePriorityRecoverySourceRemovalProgressPhase(operationContext) {
@@ -142,7 +142,7 @@ function resolvePriorityRecoverySourceRemovalProgressPhase(operationContext) {
 }
 
 function resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) {
-  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+  if (!operationContext || typeof operationContext !== 'object') {
     return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.NONE;
   }
   const workflowStep = String(
@@ -173,7 +173,7 @@ function resolvePriorityRecoveryAgeSinceMs(referenceNowMs, progressAtMs) {
   ) {
     return null;
   }
-  return Math.max(NUM.ZERO, referenceNowMs - progressAtMs);
+  return Math.max(0, referenceNowMs - progressAtMs);
 }
 
 function resolvePriorityRecoveryWorkflowStepAgeMs(
@@ -188,7 +188,7 @@ function resolvePriorityRecoveryWorkflowStepAgeMs(
     resolvePriorityRecoveryOperationProgressTimestampMs(operationContext);
   if (
     Number.isFinite(targetServiceProgressAtMs) &&
-    targetServiceProgressAtMs > NUM.ZERO
+    targetServiceProgressAtMs > 0
   ) {
     const targetProgressAgeMs = resolvePriorityRecoveryAgeSinceMs(
       referenceNowMs,
@@ -199,7 +199,7 @@ function resolvePriorityRecoveryWorkflowStepAgeMs(
     }
   }
   const ageMs = normalizePriorityRecoveryInteger(operationContext?.ageMs);
-  if (Number.isFinite(ageMs) && ageMs >= NUM.ZERO) {
+  if (Number.isFinite(ageMs) && ageMs >= 0) {
     return ageMs;
   }
   return resolvePriorityRecoveryAgeSinceMs(referenceNowMs, progressAtMs);
@@ -212,16 +212,16 @@ function resolvePriorityRecoveryWorkflowStepTimeoutMs(
   const stepTimeoutMs = normalizePriorityRecoveryInteger(
     operationContext?.stepTimeoutMs,
   );
-  if (Number.isFinite(stepTimeoutMs) && stepTimeoutMs > NUM.ZERO) {
+  if (Number.isFinite(stepTimeoutMs) && stepTimeoutMs > 0) {
     return stepTimeoutMs;
   }
   const stepTimeoutMsByWorkflowStep =
     options.stepTimeoutMsByWorkflowStep &&
-    typeof options.stepTimeoutMsByWorkflowStep === TYPEOF.OBJECT ?
+    typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
       options.stepTimeoutMsByWorkflowStep :
       null;
   const workflowStep = String(operationContext?.workflowStep || '').trim();
-  if (workflowStep.length === NUM.ZERO) {
+  if (workflowStep.length === 0) {
     return null;
   }
   return normalizePriorityRecoveryInteger(
@@ -234,13 +234,13 @@ function resolvePriorityRecoveryWorkflowStepTimeoutMs(
 function buildPriorityRecoveryWorkflowProgressMetrics(options = {}) {
   const latestOperationContext =
     options.latestOperationContext &&
-    typeof options.latestOperationContext === TYPEOF.OBJECT ?
+    typeof options.latestOperationContext === 'object' ?
       options.latestOperationContext :
       null;
   const nowMs = normalizePriorityRecoveryInteger(options.nowMs);
   const stepTimeoutMsByWorkflowStep =
     options.stepTimeoutMsByWorkflowStep &&
-    typeof options.stepTimeoutMsByWorkflowStep === TYPEOF.OBJECT ?
+    typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
       options.stepTimeoutMsByWorkflowStep :
       null;
   const workflowProgressPhaseId =
@@ -260,7 +260,7 @@ function buildPriorityRecoveryWorkflowProgressMetrics(options = {}) {
     timeoutReconcileDue:
       Number.isFinite(stepAgeMs) &&
       Number.isFinite(stepTimeoutMs) &&
-      stepTimeoutMs > NUM.ZERO &&
+      stepTimeoutMs > 0 &&
       stepAgeMs >= stepTimeoutMs,
   });
 }
@@ -279,19 +279,19 @@ function buildPriorityRecoveryOperationTransitionEvidence(
       stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
     });
   const timelineStepCount = Math.max(
-    NUM.ZERO,
+    0,
     normalizePriorityRecoveryInteger(operationContext?.timelineStepCount) ||
-      NUM.ZERO,
+      0,
   );
   const timeoutReconcileDue =
     Number.isFinite(stepAgeMs) &&
     Number.isFinite(stepTimeoutMs) &&
-    stepTimeoutMs > NUM.ZERO &&
+    stepTimeoutMs > 0 &&
     stepAgeMs >= stepTimeoutMs;
   const ownerWaitWindowOpen =
     Number.isFinite(stepAgeMs) &&
     Number.isFinite(stepTimeoutMs) &&
-    stepTimeoutMs > NUM.ZERO &&
+    stepTimeoutMs > 0 &&
     stepAgeMs < stepTimeoutMs;
   return Object.freeze({
     timelineStepCount,
@@ -330,11 +330,11 @@ function arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions(
   const normalizedOperationContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
       (operationContext) =>
-        operationContext && typeof operationContext === TYPEOF.OBJECT,
+        operationContext && typeof operationContext === 'object',
     ) :
     [];
   return (
-    normalizedOperationContexts.length > NUM.ZERO &&
+    normalizedOperationContexts.length > 0 &&
     normalizedOperationContexts.every((operationContext) =>
       isPriorityRecoveryNoTransitionBlocker(operationContext, options),
     )
@@ -345,7 +345,7 @@ function comparePriorityRecoveryOperationContextProgress(left, right) {
   const timestampDifference =
     resolvePriorityRecoveryOperationProgressTimestampMs(right) -
     resolvePriorityRecoveryOperationProgressTimestampMs(left);
-  if (timestampDifference !== NUM.ZERO) {
+  if (timestampDifference !== 0) {
     return timestampDifference;
   }
   return String(left?.operationId || LOCAL_STR_EMPTY).localeCompare(
@@ -357,7 +357,7 @@ function selectNewestPriorityRecoveryOperationContext(operationContexts = []) {
   return (
     operationContexts.slice().sort(
       comparePriorityRecoveryOperationContextProgress,
-    )[NUM.ZERO] || null
+    )[0] || null
   );
 }
 
@@ -379,10 +379,10 @@ function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
       (operationContext) =>
-        operationContext && typeof operationContext === TYPEOF.OBJECT,
+        operationContext && typeof operationContext === 'object',
     ) :
     [];
-  if (normalizedContexts.length === NUM.ZERO) {
+  if (normalizedContexts.length === 0) {
     return null;
   }
   const newestContext =
@@ -398,22 +398,22 @@ function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
 }
 
 function hasPriorityRecoveryScheduledRetry(retryAfterMs) {
-  return Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO;
+  return Number.isFinite(retryAfterMs) && retryAfterMs > 0;
 }
 
 function buildPriorityRecoveryProgressEvidenceSourceIds(options = {}) {
   const evidenceSourceIds = [];
   if (
-    typeof options.completionState === TYPEOF.STRING &&
-    options.completionState.length > NUM.ZERO
+    typeof options.completionState === 'string' &&
+    options.completionState.length > 0
   ) {
     evidenceSourceIds.push(
       PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE.COMPLETION_STATE,
     );
   }
   if (
-    typeof options.workflowState === TYPEOF.STRING &&
-    options.workflowState.length > NUM.ZERO
+    typeof options.workflowState === 'string' &&
+    options.workflowState.length > 0
   ) {
     evidenceSourceIds.push(
       PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE.WORKFLOW_STATE,
@@ -434,7 +434,7 @@ function buildPriorityRecoveryProgressEvidenceSourceIds(options = {}) {
   }
   if (
     Number.isFinite(options.lastProgressAtMs) &&
-    options.lastProgressAtMs > NUM.ZERO
+    options.lastProgressAtMs > 0
   ) {
     evidenceSourceIds.push(
       PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE.LAST_PROGRESS_TIMESTAMP,
@@ -444,7 +444,7 @@ function buildPriorityRecoveryProgressEvidenceSourceIds(options = {}) {
 }
 
 function resolvePriorityRecoveryObjectOption(value) {
-  return value && typeof value === TYPEOF.OBJECT ? value : null;
+  return value && typeof value === 'object' ? value : null;
 }
 
 function resolvePriorityRecoveryLatestOperationValue(
@@ -452,7 +452,7 @@ function resolvePriorityRecoveryLatestOperationValue(
   fieldName,
 ) {
   const value = latestOperationContext?.[fieldName];
-  return typeof value === TYPEOF.STRING ?
+  return typeof value === 'string' ?
     value.trim() :
     PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE;
 }
@@ -471,10 +471,10 @@ function buildPriorityRecoveryLatestOperationConditions(
       PRIORITY_RECOVERY_SNAPSHOT_LITERAL.STATUS,
     );
   return Object.freeze({
-    ...(latestOperationWorkflowStep.length > NUM.ZERO ?
+    ...(latestOperationWorkflowStep.length > 0 ?
       {latestOperationWorkflowStep} :
       {}),
-    ...(latestOperationStatus.length > NUM.ZERO ? {latestOperationStatus} : {}),
+    ...(latestOperationStatus.length > 0 ? {latestOperationStatus} : {}),
   });
 }
 

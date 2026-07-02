@@ -1,8 +1,4 @@
 import {
-  NUM,
-  TYPEOF,
-} from '../../constants/index.js';
-import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {LIFECYCLE_REASON} from '../lifecycle-controller-constants.js';
@@ -27,11 +23,11 @@ const BOOTSTRAP_REQUEST_REQUIRED_STALE_STARTUP_COMPLETE_REASON_CODES =
   ]);
 
 function normalizeBootstrapRequestAdmissionReason(reason) {
-  if (typeof reason !== TYPEOF.STRING) {
+  if (typeof reason !== 'string') {
     return null;
   }
   const normalized = reason.trim();
-  return normalized.length > NUM.ZERO ? normalized : null;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeBootstrapRequestAdmissionReasons(snapshot) {
@@ -56,7 +52,7 @@ function hasStartupCompleteStaleAdmissionReasons(snapshot) {
   const hasOnlyStaleReasons = reasons.every((reason) =>
     BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.includes(reason),
   );
-  return reasons.length > NUM.ZERO && hasRequiredReasons && hasOnlyStaleReasons;
+  return reasons.length > 0 && hasRequiredReasons && hasOnlyStaleReasons;
 }
 
 function canAdmitStartupCompleteStaleAdmissionSnapshot(

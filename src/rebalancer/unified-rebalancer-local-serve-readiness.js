@@ -3,8 +3,6 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
-  NUM,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -48,13 +46,13 @@ const UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS = {
       readiness.reasons :
       []) {
       const rawCode =
-        typeof reason === TYPEOF.STRING ?
+        typeof reason === 'string' ?
           reason :
           reason?.code || reason?.reason ||
             UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
       const reasonCode = String(rawCode).trim();
       if (
-        reasonCode.length === NUM.ZERO ||
+        reasonCode.length === 0 ||
         seenReasonCodes.has(reasonCode)
       ) {
         continue;
@@ -83,7 +81,7 @@ const UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS = {
     if (
       !this.isControlPlanePriorityPartition() ||
       !Array.isArray(reasonCodes) ||
-      reasonCodes.length === NUM.ZERO
+      reasonCodes.length === 0
     ) {
       return LOCAL_SERVE_READINESS_REASON_STATE.BLOCKING_REASON_PRESENT;
     }
@@ -131,7 +129,7 @@ const UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS = {
       !this.isSystemPartitionEntity() ||
       !this.controlPlaneReadinessService ||
       typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }

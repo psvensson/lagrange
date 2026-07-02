@@ -18,7 +18,6 @@ const {
   EventEmitter,
   LoggingService,
   MovePlanner,
-  NUM,
   OwnerKeyReconcileQueue,
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
@@ -29,7 +28,6 @@ const {
   RECONCILE_REASON,
   StartupRecoveryCoordinator,
   StoragePressureBehavior,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   assertCritical,
   createControlPlaneRuntimeBundle,
@@ -137,7 +135,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       options.priorityRecoveryActivityStaleGraceMs,
     ) ?
       Math.max(
-        NUM.ZERO,
+        0,
         Math.floor(options.priorityRecoveryActivityStaleGraceMs),
       ) :
       DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
@@ -351,7 +349,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       if (
         this.startupRecoveryCoordinator &&
         typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
-          TYPEOF.FUNCTION
+          'function'
       ) {
         this.startupRecoveryCoordinator.syncOwnerDependencies({
           readinessState: this.bootstrapReadinessState,
@@ -371,7 +369,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     if (
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.syncOwnerDependencies ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       this.controlPlaneReadinessService.syncOwnerDependencies({
         systemTableCache: this.systemTableCache,
@@ -417,7 +415,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
    * @private
    */
   syncOwnerDependenciesFromCoordinator(coordinator) {
-    if (!coordinator || typeof coordinator !== TYPEOF.OBJECT) {
+    if (!coordinator || typeof coordinator !== 'object') {
       return;
     }
     if (coordinator.storageAdmissionService) {
@@ -437,7 +435,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     } else if (
       this.startupRecoveryCoordinator &&
       typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       this.startupRecoveryCoordinator.syncOwnerDependencies({
         readinessState: this.bootstrapReadinessState,

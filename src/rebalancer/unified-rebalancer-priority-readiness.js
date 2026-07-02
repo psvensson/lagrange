@@ -6,7 +6,6 @@ const {
   NUM,
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryBlockedPartitions,
   buildPriorityRecoveryOperationContextFromRecord,
@@ -30,7 +29,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         operation?.partitionId || operation?.partition_id || '',
       ).trim();
       if (
-        partitionId.length === NUM.ZERO ||
+        partitionId.length === 0 ||
         !isPriorityControlPlanePartition({partitionId})
       ) {
         continue;
@@ -46,7 +45,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       partitionOperations,
     ] of operationsByPartitionId.entries()) {
       const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot(
-        partitionOperations[NUM.ZERO],
+        partitionOperations[0],
       );
       if (!planningSnapshot) {
         continue;
@@ -75,7 +74,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         const operationId = String(
           operation?.operationId || operation?.operation_id || '',
         ).trim();
-        if (operationId.length > NUM.ZERO) {
+        if (operationId.length > 0) {
           nonBlockingOperationIds.add(operationId);
         }
       }
@@ -99,7 +98,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         operation?.partitionId || operation?.partition_id || '',
       ).trim();
       if (
-        partitionId.length === NUM.ZERO ||
+        partitionId.length === 0 ||
         !isPriorityControlPlanePartition({partitionId})
       ) {
         continue;
@@ -115,7 +114,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       partitionOperations,
     ] of operationsByPartitionId.entries()) {
       const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
-        partitionOperations[NUM.ZERO],
+        partitionOperations[0],
         options,
       );
       if (!planningSnapshot) {
@@ -145,7 +144,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         const operationId = String(
           operation?.operationId || operation?.operation_id || '',
         ).trim();
-        if (operationId.length > NUM.ZERO) {
+        if (operationId.length > 0) {
           nonBlockingOperationIds.add(operationId);
         }
       }
@@ -177,7 +176,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     }
     if (
       typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         readinessService.getMembershipPublicationPlanningAnswerSync(
@@ -187,7 +186,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     } else if (
       readinessService &&
       typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-        TYPEOF.FUNCTION
+        'function'
     ) {
       planningSnapshot =
         readinessService.getMembershipPublicationPlanningSnapshotSync(
@@ -200,7 +199,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
 
     const providedPublicationRecoveryGate =
       planningSnapshot?.publicationRecoveryGate &&
-      typeof planningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT ?
+      typeof planningSnapshot.publicationRecoveryGate === 'object' ?
         planningSnapshot.publicationRecoveryGate :
         null;
     const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
@@ -210,22 +209,22 @@ class UnifiedRebalancerPriorityReadinessMethods {
           planningSnapshot.publicationEpoch :
           providedPublicationRecoveryGate?.publicationEpoch ?? null,
       publicationStatus:
-        typeof planningSnapshot?.publicationStatus === TYPEOF.STRING &&
-        planningSnapshot.publicationStatus.length > NUM.ZERO ?
+        typeof planningSnapshot?.publicationStatus === 'string' &&
+        planningSnapshot.publicationStatus.length > 0 ?
           planningSnapshot.publicationStatus :
-          typeof planningSnapshot?.status === TYPEOF.STRING &&
-              planningSnapshot.status.length > NUM.ZERO ?
+          typeof planningSnapshot?.status === 'string' &&
+              planningSnapshot.status.length > 0 ?
             planningSnapshot.status :
             providedPublicationRecoveryGate?.publicationStatus ?? null,
       publicationObservationState:
-        typeof planningSnapshot?.publicationObservationState === TYPEOF.STRING &&
-        planningSnapshot.publicationObservationState.length > NUM.ZERO ?
+        typeof planningSnapshot?.publicationObservationState === 'string' &&
+        planningSnapshot.publicationObservationState.length > 0 ?
           planningSnapshot.publicationObservationState :
           providedPublicationRecoveryGate?.publicationObservationState ??
             null,
       recoveryProtocolState:
-        typeof planningSnapshot?.recoveryProtocolState === TYPEOF.STRING &&
-        planningSnapshot.recoveryProtocolState.length > NUM.ZERO ?
+        typeof planningSnapshot?.recoveryProtocolState === 'string' &&
+        planningSnapshot.recoveryProtocolState.length > 0 ?
           planningSnapshot.recoveryProtocolState :
           providedPublicationRecoveryGate?.recoveryProtocolState ?? null,
       priorityRecoveryReasonCodes:
@@ -234,13 +233,13 @@ class UnifiedRebalancerPriorityReadinessMethods {
           providedPublicationRecoveryGate?.reasonCodes,
       priorityPartitionSummary:
         planningSnapshot?.priorityPartitionSummary &&
-        typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+        typeof planningSnapshot.priorityPartitionSummary === 'object' ?
           planningSnapshot.priorityPartitionSummary :
           providedPublicationRecoveryGate?.priorityPartitionSummary ?? null,
       priorityRecoveryClosureWitness:
         planningSnapshot?.priorityRecoveryClosureWitness &&
         typeof planningSnapshot.priorityRecoveryClosureWitness ===
-          TYPEOF.OBJECT ?
+          'object' ?
           planningSnapshot.priorityRecoveryClosureWitness :
           providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
             null,
@@ -273,11 +272,11 @@ class UnifiedRebalancerPriorityReadinessMethods {
           planningSnapshot.published_active_node_ids :
           []
       ).filter(
-        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ),
     );
     const readyNodes =
-      planningPublishedActiveNodeIds.size > NUM.ZERO ?
+      planningPublishedActiveNodeIds.size > 0 ?
         this.getAvailableNodesConstrainedToNodeIds(
           planningPublishedActiveNodeIds,
         ) :
@@ -302,14 +301,14 @@ class UnifiedRebalancerPriorityReadinessMethods {
       resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
     const cohortNodeIds = new Set(
       (Array.isArray(cohortActiveNodeIds) ? cohortActiveNodeIds : []).filter(
-        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ),
     );
     const requiredDistinctNodeCount = Math.min(
       NUM.THREE,
       Math.max(readyNodeIds.size, cohortNodeIds.size),
     );
-    if (requiredDistinctNodeCount <= NUM.ONE) {
+    if (requiredDistinctNodeCount <= 1) {
       return null;
     }
     const requiredQuorumDistinctNodeCount =
@@ -338,12 +337,12 @@ class UnifiedRebalancerPriorityReadinessMethods {
           // summary (raft_role_missing etc.), when the source carried it.
           exclusionReasonCounts:
             partition?.exclusionReasonCounts &&
-            typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
+            typeof partition.exclusionReasonCounts === 'object' ?
               Object.freeze({...partition.exclusionReasonCounts}) :
               null,
         }),
       )
-      .filter((partition) => partition.partitionId.length > NUM.ZERO);
+      .filter((partition) => partition.partitionId.length > 0);
 
     const quorumBlockedPartitions = blockedPartitions.filter((partition) => {
       return (
@@ -351,7 +350,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         partition.readyDistinctNodeCount < requiredQuorumDistinctNodeCount
       );
     });
-    if (quorumBlockedPartitions.length === NUM.ZERO) {
+    if (quorumBlockedPartitions.length === 0) {
       return null;
     }
 
@@ -373,18 +372,18 @@ class UnifiedRebalancerPriorityReadinessMethods {
   resolveConnectedClusterNodeIds() {
     const connectedNodeIds = new Set();
     if (
-      typeof this.nodeId === TYPEOF.STRING &&
+      typeof this.nodeId === 'string' &&
       this.nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO
     ) {
       connectedNodeIds.add(this.nodeId);
     }
     const peers =
-      typeof this.messageRouter?.getConnectedNodes === TYPEOF.FUNCTION ?
+      typeof this.messageRouter?.getConnectedNodes === 'function' ?
         this.messageRouter.getConnectedNodes() :
         [];
     for (const peerNodeId of peers) {
       if (
-        typeof peerNodeId === TYPEOF.STRING &&
+        typeof peerNodeId === 'string' &&
         peerNodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO
       ) {
         connectedNodeIds.add(peerNodeId);
@@ -411,11 +410,11 @@ class UnifiedRebalancerPriorityReadinessMethods {
    */
   evaluateCriticalSystemEndpointVisibility(activeNodeIds = [], options = {}) {
     const nodeEndpointRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) :
         [];
     const serviceEndpointRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) :
         [];
     return this.summarizeCriticalSystemEndpointVisibility(
@@ -475,16 +474,16 @@ class UnifiedRebalancerPriorityReadinessMethods {
   ) {
     const requiredNodeIds = new Set(
       (Array.isArray(activeNodeIds) ? activeNodeIds : []).filter(
-        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > 0,
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ),
     );
     const scopeToEntity = options.scopeToEntity === true;
     if (
-      requiredNodeIds.size === NUM.ZERO ||
-      typeof this.systemTableCache?.getAll !== TYPEOF.FUNCTION
+      requiredNodeIds.size === 0 ||
+      typeof this.systemTableCache?.getAll !== 'function'
     ) {
       return Object.freeze({
-        count: NUM.ZERO,
+        count: 0,
         details: Object.freeze([]),
         source: null,
       });
@@ -511,7 +510,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         row?.operationId || row?.operation_id || '',
       ).trim();
       if (
-        operationId.length > NUM.ZERO &&
+        operationId.length > 0 &&
         nonBlockingPriorityOperationIds.has(operationId)
       ) {
         continue;
@@ -573,16 +572,16 @@ class UnifiedRebalancerPriorityReadinessMethods {
   getBootstrapReadinessSnapshot() {
     if (
       this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.getSnapshot === TYPEOF.FUNCTION
+      typeof this.startupRecoveryCoordinator.getSnapshot === 'function'
     ) {
       return this.startupRecoveryCoordinator.getSnapshot();
     }
     if (!this.bootstrapReadinessState) {
       return null;
     }
-    return typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION ?
+    return typeof this.bootstrapReadinessState.evaluate === 'function' ?
       this.bootstrapReadinessState.evaluate() :
-      typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION ?
+      typeof this.bootstrapReadinessState.getSnapshot === 'function' ?
         this.bootstrapReadinessState.getSnapshot() :
         null;
   }
@@ -598,7 +597,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     const startupAuthority = this.getStartupAuthoritySnapshot();
     if (
       this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION
+      typeof this.startupRecoveryCoordinator.evaluate === 'function'
     ) {
       return (
         this.startupRecoveryCoordinator.evaluate({
@@ -625,7 +624,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     const startupAuthority = this.getStartupAuthoritySnapshot();
     if (
       this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION
+      typeof this.startupRecoveryCoordinator.evaluate === 'function'
     ) {
       return (
         this.startupRecoveryCoordinator.evaluate({
@@ -652,7 +651,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     if (
       !readinessService ||
       typeof readinessService.getStartupAuthoritySnapshotSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
@@ -685,7 +684,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     }
 
     const snapshot = this.getBootstrapReadinessSnapshot();
-    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    if (!snapshot || typeof snapshot !== 'object') {
       return null;
     }
     if (this.isBootstrapReadinessOpenForBackgroundWork(snapshot)) {

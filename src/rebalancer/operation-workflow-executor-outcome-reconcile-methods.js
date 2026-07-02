@@ -14,7 +14,6 @@ const {
   OperationType,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  TYPEOF,
   WORKFLOW_STEP,
   isRetryableControlPlaneError,
 } = SHARED;
@@ -121,8 +120,8 @@ const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE = Object.freeze([
 ]);
 
 const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
-  [WORKFLOW_STEP.PENDING, NUM.ONE],
-  [WORKFLOW_STEP.SENDING, NUM.TWO],
+  [WORKFLOW_STEP.PENDING, 1],
+  [WORKFLOW_STEP.SENDING, 2],
   [WORKFLOW_STEP.CREATING, NUM.THREE],
   [WORKFLOW_STEP.SYNCING, NUM.FOUR],
   [WORKFLOW_STEP.ACTIVE, NUM.FIVE],
@@ -187,7 +186,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     this.executorOutcomeRedriveInFlightByOperationId.add(operationId);
     try {
       for (
-        let laneWait = NUM.ZERO;
+        let laneWait = 0;
         laneWait < EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS;
         laneWait++
       ) {
@@ -256,12 +255,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] || fallbackMessage;
     const error = new Error(errorMessage);
     const errorCode = outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_CODE];
-    if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+    if (typeof errorCode === 'string' && errorCode.length > 0) {
       error.code = errorCode;
       error.errorCode = errorCode;
     }
     const retryAfterMs = outcome?.[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS];
-    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
       error.retryAfterMs = Math.floor(retryAfterMs);
     }
     if (outcome?.[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY] === true) {
@@ -306,7 +305,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
     const outcomeAgeMs = Date.now() - timestamp;
     return (
-      outcomeAgeMs >= NUM.ZERO &&
+      outcomeAgeMs >= 0 &&
       outcomeAgeMs <= EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS
     );
   }
@@ -321,7 +320,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         visibilityObservation?.state ===
         INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       emptyVisibilityReplicaOutcome:
-        typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO,
+        typeof replicaId === 'string' && replicaId.length > 0,
       emptyVisibilityRetryableOutcome:
         EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES.has(
           outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
@@ -338,19 +337,19 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 
   getExecutorOutcomeStringField(source, field) {
     const value = source?.[field];
-    return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+    return typeof value === 'string' && value.length > 0 ?
       value :
       null;
   }
 
   buildExecutorOutcomeRetryContext(outcome, visibilityObservation = null) {
     const operation = visibilityObservation?.operation &&
-      typeof visibilityObservation.operation === TYPEOF.OBJECT ?
+      typeof visibilityObservation.operation === 'object' ?
       visibilityObservation.operation :
       null;
     const deferredOutcome =
       visibilityObservation?.deferredOutcome &&
-      typeof visibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+      typeof visibilityObservation.deferredOutcome === 'object' ?
         visibilityObservation.deferredOutcome :
         null;
     const partitionId =
@@ -385,12 +384,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     priorVisibilityObservation = null,
   ) {
     const retryAfterMs = Number.isFinite(error?.retryAfterMs) &&
-      error.retryAfterMs > NUM.ZERO ?
+      error.retryAfterMs > 0 ?
       Math.floor(error.retryAfterMs) :
       OBSERVED_PROGRESS_RETRY_DELAY_MS;
     const priorDeferredOutcome =
       priorVisibilityObservation?.deferredOutcome &&
-      typeof priorVisibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+      typeof priorVisibilityObservation.deferredOutcome === 'object' ?
         priorVisibilityObservation.deferredOutcome :
         null;
     const deferredOutcome = {
@@ -399,13 +398,13 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     };
     if (
       !deferredOutcome.completionState &&
-      typeof error?.completionState === TYPEOF.STRING
+      typeof error?.completionState === 'string'
     ) {
       deferredOutcome.completionState = error.completionState;
     }
     if (
       !deferredOutcome.reasonCode &&
-      typeof error?.reasonCode === TYPEOF.STRING
+      typeof error?.reasonCode === 'string'
     ) {
       deferredOutcome.reasonCode = error.reasonCode;
     }
@@ -413,7 +412,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
       operation:
         priorVisibilityObservation?.operation &&
-        typeof priorVisibilityObservation.operation === TYPEOF.OBJECT ?
+        typeof priorVisibilityObservation.operation === 'object' ?
           priorVisibilityObservation.operation :
           null,
       deferredOutcome,
@@ -450,7 +449,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK.get(
         outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP],
       ) ||
-      NUM.NEGATIVE_ONE
+      -1
     );
   }
 
@@ -530,12 +529,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 
   buildExecutorOutcomeVisibilityRetryError(visibilityObservation) {
     const retryAfterMs = Number.isFinite(visibilityObservation?.retryAfterMs) &&
-      visibilityObservation.retryAfterMs > NUM.ZERO ?
+      visibilityObservation.retryAfterMs > 0 ?
       Math.floor(visibilityObservation.retryAfterMs) :
       OBSERVED_PROGRESS_RETRY_DELAY_MS;
     const deferredOutcome =
       visibilityObservation?.deferredOutcome &&
-      typeof visibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+      typeof visibilityObservation.deferredOutcome === 'object' ?
         visibilityObservation.deferredOutcome :
         EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.DEFERRED_OUTCOME;
     const error = new Error(EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE);
@@ -615,7 +614,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       this.executorOutcomeRetryDelayMsByOperationId.get(operationId);
     const delayMs = Number.isFinite(previousDelayMs) ?
       Math.min(
-        previousDelayMs * NUM.TWO,
+        previousDelayMs * 2,
         EXECUTOR_OUTCOME_RETRY_MAX_DELAY_MS,
       ) :
       retryError.retryAfterMs;
@@ -699,7 +698,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
 
     const operation = visibilityObservation?.operation &&
-      typeof visibilityObservation.operation === TYPEOF.OBJECT ?
+      typeof visibilityObservation.operation === 'object' ?
       visibilityObservation.operation :
       EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.OPERATION;
     if (
@@ -854,8 +853,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       workflowStep,
     });
     return (
-      operationStepRank !== NUM.NEGATIVE_ONE &&
-      outcomeStepRank !== NUM.NEGATIVE_ONE &&
+      operationStepRank !== -1 &&
+      outcomeStepRank !== -1 &&
       outcomeStepRank < operationStepRank
     );
   }

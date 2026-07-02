@@ -1,5 +1,5 @@
 import {v4 as uuidv4} from 'uuid';
-import {NUM, STATE, TABLES} from '../constants/index.js';
+import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -29,7 +29,7 @@ const tableCreationCreateTableMethods = {
     });
 
     // Validate PRIMARY KEY requirement (Requirement 20.2)
-    if (!primaryKey || primaryKey.length === NUM.ZERO) {
+    if (!primaryKey || primaryKey.length === 0) {
       const error = new Error(
         `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
         `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +

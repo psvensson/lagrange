@@ -37,9 +37,9 @@ function buildNodeRow(overrides = {}) {
     [COLUMN.CPU_CORES]: 4,
     [COLUMN.MEMORY_MB]: 8192,
     [COLUMN.DISK_GB]: NUM.HUNDRED,
-    [COLUMN.CPU_USAGE_PERCENT]: NUM.ZERO,
-    [COLUMN.MEMORY_USAGE_PERCENT]: NUM.ZERO,
-    [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
+    [COLUMN.CPU_USAGE_PERCENT]: 0,
+    [COLUMN.MEMORY_USAGE_PERCENT]: 0,
+    [COLUMN.DISK_USAGE_PERCENT]: 0,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: Date.now(),
     [COLUMN.CREATED_AT]: Date.now(),
@@ -153,7 +153,7 @@ describe('NodeStorageBudgetSetup', () => {
         });
 
       assert.strictEqual(outcome.resolution.isValid, true);
-      assert.ok(outcome.resolution.budgetBytes > NUM.ZERO);
+      assert.ok(outcome.resolution.budgetBytes > 0);
       assert.strictEqual(
         outcome.resolution.source,
         STORAGE_BUDGET_SOURCE.BACKFILL,
@@ -164,7 +164,7 @@ describe('NodeStorageBudgetSetup', () => {
       );
       assert.ok(
         upsertCalls[0].rowData[COLUMN.STORAGE_BUDGET_BYTES] >
-          NUM.ZERO,
+          0,
       );
       assert.strictEqual(
         upsertCalls[0].rowData[COLUMN.STORAGE_BUDGET_SOURCE],
@@ -227,7 +227,7 @@ describe('Bootstrap pipeline budget integration', () => {
       });
 
     assert.strictEqual(outcome.resolution.isValid, true);
-    assert.ok(outcome.resolution.budgetBytes > NUM.ZERO);
+    assert.ok(outcome.resolution.budgetBytes > 0);
     assert.strictEqual(upsertCalls.length, 1);
     assert.strictEqual(
       upsertCalls[0].tableName, TABLES.NODES,
@@ -237,7 +237,7 @@ describe('Bootstrap pipeline budget integration', () => {
       row[COLUMN.NODE_ID], 'seed-node',
     );
     assert.ok(
-      row[COLUMN.STORAGE_BUDGET_BYTES] > NUM.ZERO,
+      row[COLUMN.STORAGE_BUDGET_BYTES] > 0,
     );
   });
 
@@ -266,7 +266,7 @@ describe('Bootstrap pipeline budget integration', () => {
       });
 
     assert.strictEqual(outcome.resolution.isValid, true);
-    assert.ok(outcome.resolution.budgetBytes > NUM.ZERO);
+    assert.ok(outcome.resolution.budgetBytes > 0);
     assert.strictEqual(upsertCalls.length, 1);
     assert.strictEqual(
       upsertCalls[0].tableName, TABLES.NODES,
@@ -276,7 +276,7 @@ describe('Bootstrap pipeline budget integration', () => {
       row[COLUMN.NODE_ID], 'joining-node',
     );
     assert.ok(
-      row[COLUMN.STORAGE_BUDGET_BYTES] > NUM.ZERO,
+      row[COLUMN.STORAGE_BUDGET_BYTES] > 0,
     );
   });
 });
@@ -289,9 +289,9 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
       cpu_cores: 4,
       memory_mb: 8192,
       disk_gb: NUM.HUNDRED,
-      cpu_usage_percent: NUM.ZERO,
-      memory_usage_percent: NUM.ZERO,
-      disk_usage_percent: NUM.ZERO,
+      cpu_usage_percent: 0,
+      memory_usage_percent: 0,
+      disk_usage_percent: 0,
       status: SERVICE_STATUS.ACTIVE,
       connection_state: 'ready',
       capabilities: '[]',

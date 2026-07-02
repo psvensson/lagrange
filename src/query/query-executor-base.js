@@ -10,7 +10,6 @@ const {
   HLCClockService,
   LoggingService,
   METRICS_LOG_TAG,
-  NUM,
   ParallelQueryCoordinator,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -83,7 +82,7 @@ class QueryExecutorBase {
     this.noServiceWarnThrottleMs = QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS;
     this.noHandlerAddressQuarantineMsExplicit =
       Number.isFinite(options.noHandlerAddressQuarantineMs) &&
-      options.noHandlerAddressQuarantineMs > NUM.ZERO;
+      options.noHandlerAddressQuarantineMs > 0;
     this.noHandlerAddressQuarantineMs = this
       .noHandlerAddressQuarantineMsExplicit ?
       Math.floor(options.noHandlerAddressQuarantineMs) :
@@ -139,9 +138,9 @@ class QueryExecutorBase {
   buildSessionPartitionAddressKey(sessionId, partitionId) {
     if (
       typeof sessionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      sessionId.length === NUM.ZERO ||
+      sessionId.length === 0 ||
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      partitionId.length === NUM.ZERO
+      partitionId.length === 0
     ) {
       return null;
     }
@@ -182,7 +181,7 @@ class QueryExecutorBase {
     const address = this.sessionPartitionAddresses.get(key);
     if (
       typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      address.length === NUM.ZERO
+      address.length === 0
     ) {
       return Object.freeze({
         state: QUERY_EXECUTOR_LITERAL.STRING_UNPINNED,
@@ -207,7 +206,7 @@ class QueryExecutorBase {
     if (
       !key ||
       typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      address.length === NUM.ZERO
+      address.length === 0
     ) {
       return;
     }
@@ -257,8 +256,8 @@ class QueryExecutorBase {
     const preferredCandidateIndex = candidates.findIndex(
       (candidate) => candidate?.address === preferredAddress,
     );
-    if (preferredCandidateIndex <= NUM.ZERO) {
-      if (preferredCandidateIndex === NUM.ZERO) {
+    if (preferredCandidateIndex <= 0) {
+      if (preferredCandidateIndex === 0) {
         return candidates;
       }
       const preferredService = Array.isArray(routingSnapshot?.routableServices) ?
@@ -287,8 +286,8 @@ class QueryExecutorBase {
     }
     return [
       candidates[preferredCandidateIndex],
-      ...candidates.slice(NUM.ZERO, preferredCandidateIndex),
-      ...candidates.slice(preferredCandidateIndex + NUM.ONE),
+      ...candidates.slice(0, preferredCandidateIndex),
+      ...candidates.slice(preferredCandidateIndex + 1),
     ];
   }
 
@@ -338,11 +337,11 @@ class QueryExecutorBase {
    * @return {Promise<Object>} Query result.
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
-    if (partitionIds.length === NUM.ZERO) {
+    if (partitionIds.length === 0) {
       return {
         success: true,
         rows: [],
-        count: NUM.ZERO,
+        count: 0,
         partitions: [],
       };
     }
@@ -352,14 +351,14 @@ class QueryExecutorBase {
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_DISTRIBUTED_SELECT, {
       partitionCount: partitionIds.length,
       timestamp: queryTimestamp.toString(),
-      hasJoins: (ast.joins && ast.joins.length > NUM.ZERO) || false,
+      hasJoins: (ast.joins && ast.joins.length > 0) || false,
       hasAggregates: this.hasAggregates(ast),
     });
 
     // Check if this is a cross-partition JOIN query
-    if (ast.joins && ast.joins.length > NUM.ZERO) {
+    if (ast.joins && ast.joins.length > 0) {
       const joinPartitions = this.resolveJoinPartitions(ast, options);
-      if (joinPartitions.size > NUM.ZERO) {
+      if (joinPartitions.size > 0) {
         return this.executeCrossPartitionJoin(
           ast,
           partitionIds,
@@ -411,7 +410,7 @@ class QueryExecutorBase {
     const failedPartitions = results
       .filter((result) => !result.success)
       .map((result) => result.partitionId);
-    if (failedPartitions.length > NUM.ZERO) {
+    if (failedPartitions.length > 0) {
       const failureSummary = buildDistributedFailureSummary(
         results.filter((result) => !result.success),
       );
@@ -423,7 +422,7 @@ class QueryExecutorBase {
         partitions: partitionIds,
         distributedMetrics: {
           fanout: fanoutMetrics,
-          mergeDurationMs: NUM.ZERO,
+          mergeDurationMs: 0,
           failedPartitionCount: failedPartitions.length,
         },
       };
@@ -444,8 +443,8 @@ class QueryExecutorBase {
         fanoutMedianLatencyMs: fanoutMetrics?.medianLatencyMs,
         mergeDurationMs,
         totalRows: aggregated.rows.length,
-        stragglerCount: fanoutMetrics?.stragglers?.length ?? NUM.ZERO,
-        speculativeExecutions: fanoutMetrics?.speculativeExecutions ?? NUM.ZERO,
+        stragglerCount: fanoutMetrics?.stragglers?.length ?? 0,
+        speculativeExecutions: fanoutMetrics?.speculativeExecutions ?? 0,
       });
     } catch (_metricsErr) {
       // Metrics logging must not propagate to callers
@@ -459,7 +458,7 @@ class QueryExecutorBase {
       distributedMetrics: {
         fanout: fanoutMetrics,
         mergeDurationMs,
-        failedPartitionCount: NUM.ZERO,
+        failedPartitionCount: 0,
       },
     };
   }

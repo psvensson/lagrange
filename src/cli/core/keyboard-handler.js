@@ -11,8 +11,7 @@ const LOCAL_STR_LOGS = 'logs';
 const LOCAL_STR_CONFIG = 'config';
 const LOCAL_STR_CONTEXTS = 'contexts';
 const LOCAL_STR_SERVICES = 'services';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_HELP_DISMISS = 'help:dismiss';
 const LOCAL_STR_C = 'c';
 const LOCAL_STR_APP_FORCE_QUIT = 'app:force-quit';
@@ -21,8 +20,6 @@ const LOCAL_STR_FILTER_CANCEL = 'filter:cancel';
 const LOCAL_STR_ENTER = 'enter';
 const LOCAL_STR_FILTER_APPLY = 'filter:apply';
 const LOCAL_STR_BACKSPACE = 'backspace';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_FILTER_INPUT = 'filter:input';
 const LOCAL_STR_COMMAND_INPUT = 'command:input';
 const LOCAL_STR_VIEW_SWITCH = 'view:switch';
@@ -39,8 +36,8 @@ const LOCAL_STR_DOWN = 'down';
 const LOCAL_STR_COMMAND_HISTORY = 'command:history';
 const LOCAL_STR_COMMAND_ERROR = 'command:error';
 const LOCAL_STR_COMMAND_EXECUTE = 'command:execute';
-const LOCAL_STR_12RO8 = 'command:autocomplete';
-const LOCAL_STR_1Y3VE = 'command:completions';
+const LOCAL_STR_COMMAND_AUTOCOMPLETE = 'command:autocomplete';
+const LOCAL_STR_COMMAND_COMPLETIONS = 'command:completions';
 const LOCAL_STR_KEYBOARD_MODE = 'keyboard:mode';
 const LOCAL_STR_KEYBOARD_INPUT = 'keyboard:input';
 const LOCAL_STR_ENTER_2 = 'Enter';
@@ -158,10 +155,10 @@ export class KeyboardHandler {
     this.mode = INPUT_MODE.NORMAL;
 
     // Input buffer for filter/command modes
-    this.inputBuffer = LOCAL_STR_EMPTY;
+    this.inputBuffer = '';
 
     // Page size for Page Up/Down
-    this.pageSize = options.pageSize || LOCAL_NUM_10;
+    this.pageSize = options.pageSize || LOCAL_NUM_TEN;
 
     // Callbacks for mode changes
     this.onModeChange = options.onModeChange || null;
@@ -251,15 +248,15 @@ export class KeyboardHandler {
 
     // Backspace removes character
     if (keyName === LOCAL_STR_BACKSPACE) {
-      if (this.inputBuffer.length > LOCAL_NUM_ZERO) {
-        this.inputBuffer = this.inputBuffer.slice(LOCAL_NUM_ZERO, -LOCAL_NUM_ONE);
+      if (this.inputBuffer.length > 0) {
+        this.inputBuffer = this.inputBuffer.slice(0, -1);
         this.notifyInputChange();
       }
       return {type: LOCAL_STR_FILTER_INPUT, value: this.inputBuffer};
     }
 
     // Add printable characters
-    if (key.ch && key.ch.length === LOCAL_NUM_ONE) {
+    if (key.ch && key.ch.length === 1) {
       this.inputBuffer += key.ch;
       this.notifyInputChange();
       return {type: LOCAL_STR_FILTER_INPUT, value: this.inputBuffer};
@@ -369,18 +366,18 @@ export class KeyboardHandler {
 
   autocompleteCommandInput() {
     if (!this.commandParser) {
-      return {type: LOCAL_STR_12RO8, value: this.inputBuffer};
+      return {type: LOCAL_STR_COMMAND_AUTOCOMPLETE, value: this.inputBuffer};
     }
 
     const completions = this.commandParser.getCompletions(this.inputBuffer);
-    if (completions.length === LOCAL_NUM_ONE) {
-      this.inputBuffer = completions[LOCAL_NUM_ZERO];
+    if (completions.length === 1) {
+      this.inputBuffer = completions[0];
       this.notifyInputChange();
-    } else if (completions.length > LOCAL_NUM_ONE) {
-      return {type: LOCAL_STR_1Y3VE, completions};
+    } else if (completions.length > 1) {
+      return {type: LOCAL_STR_COMMAND_COMPLETIONS, completions};
     }
 
-    return {type: LOCAL_STR_12RO8, value: this.inputBuffer};
+    return {type: LOCAL_STR_COMMAND_AUTOCOMPLETE, value: this.inputBuffer};
   }
 
   recallCommandHistory() {
@@ -389,23 +386,23 @@ export class KeyboardHandler {
     }
 
     const history = this.commandParser.getHistory();
-    if (history.length > LOCAL_NUM_ZERO) {
-      this.inputBuffer = history[LOCAL_NUM_ZERO] || LOCAL_STR_EMPTY;
+    if (history.length > 0) {
+      this.inputBuffer = history[0] || '';
       this.notifyInputChange();
     }
     return {type: LOCAL_STR_COMMAND_HISTORY, direction: LOCAL_STR_UP};
   }
 
   removeBufferedCharacter(actionType) {
-    if (this.inputBuffer.length > LOCAL_NUM_ZERO) {
-      this.inputBuffer = this.inputBuffer.slice(LOCAL_NUM_ZERO, -LOCAL_NUM_ONE);
+    if (this.inputBuffer.length > 0) {
+      this.inputBuffer = this.inputBuffer.slice(0, -1);
       this.notifyInputChange();
     }
     return {type: actionType, value: this.inputBuffer};
   }
 
   handleBufferedCharacterInput(ch, actionType) {
-    if (!ch || ch.length !== LOCAL_NUM_ONE) {
+    if (!ch || ch.length !== 1) {
       return null;
     }
 
@@ -419,7 +416,7 @@ export class KeyboardHandler {
    */
   enterFilterMode() {
     this.mode = INPUT_MODE.FILTER;
-    this.inputBuffer = LOCAL_STR_EMPTY;
+    this.inputBuffer = '';
     this.notifyModeChange();
   }
 
@@ -428,7 +425,7 @@ export class KeyboardHandler {
    */
   enterCommandMode() {
     this.mode = INPUT_MODE.COMMAND;
-    this.inputBuffer = LOCAL_STR_EMPTY;
+    this.inputBuffer = '';
     this.notifyModeChange();
   }
 
@@ -437,7 +434,7 @@ export class KeyboardHandler {
    */
   exitInputMode() {
     this.mode = INPUT_MODE.NORMAL;
-    this.inputBuffer = LOCAL_STR_EMPTY;
+    this.inputBuffer = '';
     this.notifyModeChange();
   }
 
@@ -564,7 +561,7 @@ export class KeyboardHandler {
     if (this.mode === INPUT_MODE.COMMAND) {
       return `:${this.inputBuffer}_`;
     }
-    return LOCAL_STR_EMPTY;
+    return '';
   }
 
   /**
@@ -574,7 +571,7 @@ export class KeyboardHandler {
    */
   isNavigationKey(key) {
     const navKeys = ['up', 'down', 'pageup', 'pagedown', 'home', 'end'];
-    return navKeys.includes(key.name || key.full || LOCAL_STR_EMPTY);
+    return navKeys.includes(key.name || key.full || '');
   }
 
   /**
@@ -583,7 +580,7 @@ export class KeyboardHandler {
    * @returns {boolean}
    */
   isViewSwitchKey(key) {
-    return Object.prototype.hasOwnProperty.call(VIEW_KEYS, key.ch || LOCAL_STR_EMPTY);
+    return Object.prototype.hasOwnProperty.call(VIEW_KEYS, key.ch || '');
   }
 
   /**
@@ -592,6 +589,6 @@ export class KeyboardHandler {
    * @returns {string|null}
    */
   getViewForKey(key) {
-    return VIEW_KEYS[key.ch || LOCAL_STR_EMPTY] || null;
+    return VIEW_KEYS[key.ch || ''] || null;
   }
 }

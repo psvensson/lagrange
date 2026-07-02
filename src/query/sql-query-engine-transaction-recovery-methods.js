@@ -6,7 +6,6 @@ import {
 } from '../control-plane/control-plane-workload-profile.js';
 
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_BOOLEAN = 'boolean';
 
@@ -41,7 +40,7 @@ class SQLQueryEngineTransactionRecoveryMethods
     }
 
     const transactions = this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS);
-    if (transactions.length === LOCAL_NUM_ZERO) {
+    if (transactions.length === 0) {
       return;
     }
 
@@ -184,7 +183,7 @@ class SQLQueryEngineTransactionRecoveryMethods
       options?.workClass || PRESSURE_WORK_CLASS.CRITICAL;
     const workloadClass =
       typeof options?.workloadClass === LOCAL_STR_STRING &&
-      options.workloadClass.length > LOCAL_NUM_ZERO ?
+      options.workloadClass.length > 0 ?
         options.workloadClass :
         TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES.has(tableName) ?
           CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION :
@@ -216,7 +215,7 @@ class SQLQueryEngineTransactionRecoveryMethods
       typeof options?.coalescingKey === LOCAL_STR_STRING ?
         options.coalescingKey :
         '';
-    if (coalescingKey.length > LOCAL_NUM_ZERO) {
+    if (coalescingKey.length > 0) {
       mutationOptions.coalescingKey = coalescingKey;
     }
     return mutationOptions;

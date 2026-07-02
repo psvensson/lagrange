@@ -11,11 +11,9 @@
  * @module runtime/pgwire-descriptor
  */
 
-import {TYPEOF} from '../constants/types.js';
 import {MIN_PORT, MAX_PORT} from '../constants/runtime.js';
 import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 // --- PG wire runtime config field names ---
 
@@ -97,8 +95,8 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
  * @return {string|null} Error message or null if valid.
  */
 function validatePort(val, notIntError, rangeError) {
-  if (typeof val !== TYPEOF.NUMBER ||
-      !Number.isInteger(val) || val <= LOCAL_NUM_ZERO) {
+  if (typeof val !== 'number' ||
+      !Number.isInteger(val) || val <= 0) {
     return notIntError;
   }
   if (val < MIN_PORT || val > MAX_PORT) {
@@ -120,7 +118,7 @@ function validatePgwireRuntimeConfig(configStr) {
   if (configStr === undefined || configStr === null) {
     return {valid: true};
   }
-  if (typeof configStr !== TYPEOF.STRING) {
+  if (typeof configStr !== 'string') {
     return {
       valid: false,
       errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_NOT_STRING],
@@ -140,9 +138,9 @@ function validatePgwireRuntimeConfig(configStr) {
   // --- host ---
   if (PGWIRE_CONFIG_FIELD.HOST in parsed) {
     const val = parsed[PGWIRE_CONFIG_FIELD.HOST];
-    if (typeof val !== TYPEOF.STRING) {
+    if (typeof val !== 'string') {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_NOT_STRING);
-    } else if (val.trim().length === LOCAL_NUM_ZERO) {
+    } else if (val.trim().length === 0) {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY);
     }
   }
@@ -195,8 +193,8 @@ function validatePgwireRuntimeConfig(configStr) {
   // --- maxSessions ---
   if (PGWIRE_CONFIG_FIELD.MAX_SESSIONS in parsed) {
     const val = parsed[PGWIRE_CONFIG_FIELD.MAX_SESSIONS];
-    if (typeof val !== TYPEOF.NUMBER ||
-        !Number.isInteger(val) || val <= LOCAL_NUM_ZERO) {
+    if (typeof val !== 'number' ||
+        !Number.isInteger(val) || val <= 0) {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.MAX_SESSIONS_NOT_INTEGER);
     }
   }
@@ -215,7 +213,7 @@ function validatePgwireRuntimeConfig(configStr) {
     }
   }
 
-  if (errors.length > LOCAL_NUM_ZERO) {
+  if (errors.length > 0) {
     return {valid: false, errors};
   }
   return {valid: true, config: parsed};

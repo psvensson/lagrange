@@ -1,14 +1,13 @@
 const LOCAL_STR_CACHE_UPDATE = 'cache:update';
 const LOCAL_STR_NAVIGATION = 'navigation:*';
-const LOCAL_STR_1EO2G = 'viewManager:viewRegistered';
-const LOCAL_STR_21V4A = 'viewManager:viewUnregistered';
-const LOCAL_STR_6YESZ = 'viewManager:viewSwitched';
-const LOCAL_STR_39DJ7 = 'viewManager:refresh';
+const LOCAL_STR_VIEWMANAGER_VIEWREGISTERED = 'viewManager:viewRegistered';
+const LOCAL_STR_VIEWMANAGER_VIEWUNREGISTERED = 'viewManager:viewUnregistered';
+const LOCAL_STR_VIEWMANAGER_VIEWSWITCHED = 'viewManager:viewSwitched';
+const LOCAL_STR_VIEWMANAGER_REFRESH = 'viewManager:refresh';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_2000 = 2000;
-const LOCAL_STR_1264G = 'viewManager:cdcUpdate';
-const LOCAL_STR_C61VD = 'viewManager:destroyed';
+const LOCAL_NUM_TWO_THOUSAND = 2000;
+const LOCAL_STR_VIEWMANAGER_CDCUPDATE = 'viewManager:cdcUpdate';
+const LOCAL_STR_VIEWMANAGER_DESTROYED = 'viewManager:destroyed';
 
 /**
  * ViewManager - Coordinates view rendering and updates
@@ -78,7 +77,7 @@ export class ViewManager {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1EO2G, {name, view});
+      this.eventBus.emit(LOCAL_STR_VIEWMANAGER_VIEWREGISTERED, {name, view});
     }
   }
 
@@ -99,7 +98,7 @@ export class ViewManager {
       }
 
       if (this.eventBus) {
-        this.eventBus.emit(LOCAL_STR_21V4A, {name});
+        this.eventBus.emit(LOCAL_STR_VIEWMANAGER_VIEWUNREGISTERED, {name});
       }
     }
   }
@@ -146,7 +145,7 @@ export class ViewManager {
     this.refresh();
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_6YESZ, {
+      this.eventBus.emit(LOCAL_STR_VIEWMANAGER_VIEWSWITCHED, {
         viewName,
         view: newView,
       });
@@ -201,7 +200,7 @@ export class ViewManager {
     const renderData = this.currentView.render(state);
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_39DJ7, {
+      this.eventBus.emit(LOCAL_STR_VIEWMANAGER_REFRESH, {
         viewName: this.currentViewName,
         renderData,
       });
@@ -237,7 +236,7 @@ export class ViewManager {
     };
 
     const affectedViews = tableViewMap[table];
-    if (!affectedViews || affectedViews.length === LOCAL_NUM_ZERO) {
+    if (!affectedViews || affectedViews.length === 0) {
       return;
     }
 
@@ -255,12 +254,12 @@ export class ViewManager {
         // Clear highlight after delay.
         setTimeout(() => {
           this.clearChangedRow(viewName, key);
-        }, LOCAL_NUM_2000);
+        }, LOCAL_NUM_TWO_THOUSAND);
       }
     }
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_1264G, {
+      this.eventBus.emit(LOCAL_STR_VIEWMANAGER_CDCUPDATE, {
         table,
         key,
         operation,
@@ -373,7 +372,7 @@ export class ViewManager {
     this.currentViewName = null;
 
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_C61VD, {});
+      this.eventBus.emit(LOCAL_STR_VIEWMANAGER_DESTROYED, {});
     }
   }
 }

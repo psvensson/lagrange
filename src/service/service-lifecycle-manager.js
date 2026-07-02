@@ -4,13 +4,11 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {
-  NUM,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_LIFECYCLE_TRANSITIONS,
   SERVICE_OPERATION_STATE,
   SUBSYSTEM,
-  TYPEOF,
 } from '../constants/index.js';
 import {
   buildIdempotencyCheckSQL,
@@ -58,12 +56,12 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     /** @type {Map<string, number>} */ this._adapterSelectionCountByType = new Map();
     /** @type {Object[]} */ this._recentOperations = [];
     /** @type {Object} */ this._metrics = {
-      operationTotal: NUM.ZERO,
-      operationSuccess: NUM.ZERO,
-      operationFailure: NUM.ZERO,
-      operationLatencyMsTotal: NUM.ZERO,
-      operationLatencyMsMax: NUM.ZERO,
-      lastOperationDurationMs: NUM.ZERO,
+      operationTotal: 0,
+      operationSuccess: 0,
+      operationFailure: 0,
+      operationLatencyMsTotal: 0,
+      operationLatencyMsMax: 0,
+      lastOperationDurationMs: 0,
       lastError: null,
       byOperation: {},
     };
@@ -107,7 +105,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @param {Function} writer
    * @return {void}
    */ setOperationWriter(writer) {
-    if (typeof writer !== TYPEOF.FUNCTION) {
+    if (typeof writer !== 'function') {
       throw new TypeError(LIFECYCLE_MGR_MSG.OPERATION_WRITER_REQUIRED);
     }
     this._operationWriter = writer;
@@ -118,7 +116,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @param {Function} reader
    * @return {void}
    */ setIdempotencyReader(reader) {
-    if (typeof reader !== TYPEOF.FUNCTION) {
+    if (typeof reader !== 'function') {
       throw new TypeError(LIFECYCLE_MGR_MSG.IDEMPOTENCY_READER_REQUIRED);
     }
     this._idempotencyReader = reader;
@@ -129,7 +127,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @param {Function} reader
    * @return {void}
    */ setRecoveryReader(reader) {
-    if (typeof reader !== TYPEOF.FUNCTION) {
+    if (typeof reader !== 'function') {
       throw new TypeError(LIFECYCLE_MGR_MSG.RECOVERY_READER_REQUIRED);
     }
     this._recoveryReader = reader;
@@ -140,7 +138,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @param {Function} check
    * @return {void}
    */ setRuntimePolicyCheck(check) {
-    if (typeof check !== TYPEOF.FUNCTION) {
+    if (typeof check !== 'function') {
       throw new TypeError(LIFECYCLE_MGR_MSG.RUNTIME_POLICY_CHECK_REQUIRED);
     }
     this._runtimePolicyCheck = check;
@@ -158,7 +156,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     }
     this._adapterSelectionCountByType.set(
       serviceType,
-      (this._adapterSelectionCountByType.get(serviceType) || NUM.ZERO) + NUM.ONE,
+      (this._adapterSelectionCountByType.get(serviceType) || 0) + 1,
     );
     return adapter;
   }
@@ -200,7 +198,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
       adapters.push({
         serviceType,
         adapterClass: adapter.constructor?.name || SERVICE_LIFECYCLE_MANAGER_LITERAL.UNKNOWNADAPTER,
-        selectionCount: this._adapterSelectionCountByType.get(serviceType) || NUM.ZERO,
+        selectionCount: this._adapterSelectionCountByType.get(serviceType) || 0,
       });
     }
     return {adapters};
@@ -262,7 +260,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     const logContext = this._buildLifecycleLogContext(lifecycleOperation, serviceContext, context, {
       operationId,
     });
-    this._metrics.operationTotal += NUM.ONE;
+    this._metrics.operationTotal += 1;
     this._metrics.lastOperationDurationMs = durationMs;
     this._metrics.operationLatencyMsTotal += durationMs;
     this._metrics.operationLatencyMsMax = Math.max(this._metrics.operationLatencyMsMax, durationMs);
@@ -274,21 +272,21 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
       latencyMsMax: 0,
       lastDurationMs: 0,
     };
-    opMetrics.total += NUM.ONE;
+    opMetrics.total += 1;
     opMetrics.lastDurationMs = durationMs;
     opMetrics.latencyMsTotal += durationMs;
     opMetrics.latencyMsMax = Math.max(opMetrics.latencyMsMax, durationMs);
     if (status === SERVICE_LIFECYCLE_METRIC_STATUS.SUCCESS) {
-      this._metrics.operationSuccess += NUM.ONE;
-      opMetrics.success += NUM.ONE;
+      this._metrics.operationSuccess += 1;
+      opMetrics.success += 1;
       this._metrics.lastError = null;
       this._logger.info(
         recovery ? SERVICE_LIFECYCLE_LOG.RECOVERY_SUCCESS : SERVICE_LIFECYCLE_LOG.OPERATION_SUCCESS,
         {...logContext, durationMs},
       );
     } else {
-      this._metrics.operationFailure += NUM.ONE;
-      opMetrics.failure += NUM.ONE;
+      this._metrics.operationFailure += 1;
+      opMetrics.failure += 1;
       this._metrics.lastError = error ? error.message : null;
       this._logger.error(
         recovery ? SERVICE_LIFECYCLE_LOG.RECOVERY_FAILURE : SERVICE_LIFECYCLE_LOG.OPERATION_FAILURE,
@@ -337,7 +335,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @return {Promise<void>}
    * @private
    */ async _enforceRuntimePolicy(lifecycleOperation, serviceContext, context) {
-    if (typeof this._runtimePolicyCheck !== TYPEOF.FUNCTION) {
+    if (typeof this._runtimePolicyCheck !== 'function') {
       throw new TypeError(LIFECYCLE_MGR_MSG.RUNTIME_POLICY_CHECK_REQUIRED);
     }
     const {serviceId, serviceType, tenantId, replicaId} = resolveServiceFields(serviceContext);
@@ -384,10 +382,10 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     }
     try {
       const rows = await this._idempotencyReader(check.sql, check.params);
-      if (!rows || rows.length === NUM.ZERO) {
+      if (!rows || rows.length === 0) {
         return null;
       }
-      return rows[NUM.ZERO];
+      return rows[0];
     } catch (error) {
       throw new ServiceIdempotencyCheckError(
         serviceId,

@@ -1,13 +1,12 @@
-const LOCAL_STR_6O8SF = 'startup workflow requires a durable session store';
+const LOCAL_STR_STARTUP_WORKFLOW_REQUIRES_A_DURABLE_SESS = 'startup workflow requires a durable session store';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_1JUYB = 'startup workflow sessionId is required';
+const LOCAL_STR_STARTUP_WORKFLOW_SESSIONID_IS_REQUIRED = 'startup workflow sessionId is required';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_R8QIF = 'startup workflow step must be an object';
-const LOCAL_STR_16C99 = 'startup workflow step run must be a function';
-const LOCAL_STR_1DD7X = 'startup workflow step shouldRerun must be a function';
-const LOCAL_STR_19U5T = 'startup workflow step checkpoint must be a string';
+const LOCAL_STR_STARTUP_WORKFLOW_STEP_MUST_BE_AN_OBJECT = 'startup workflow step must be an object';
+const LOCAL_STR_STARTUP_WORKFLOW_STEP_RUN_MUST_BE_A_FUNC = 'startup workflow step run must be a function';
+const LOCAL_STR_STARTUP_WORKFLOW_STEP_SHOULDRERUN_MUST_B = 'startup workflow step shouldRerun must be a function';
+const LOCAL_STR_STARTUP_WORKFLOW_STEP_CHECKPOINT_MUST_BE = 'startup workflow step checkpoint must be a string';
 
 /**
  * Shared startup pipeline runner for seed bootstrap and node join.
@@ -37,15 +36,15 @@ function validateWorkflowSessionStore(sessionStore) {
     typeof sessionStore.advanceCheckpoint === 'function' &&
     typeof sessionStore.recordFailure === 'function';
   if (!hasSessionStore) {
-    throw new Error(LOCAL_STR_6O8SF);
+    throw new Error(LOCAL_STR_STARTUP_WORKFLOW_REQUIRES_A_DURABLE_SESS);
   }
 }
 
 function defaultExtractErrorCode(error) {
-  if (typeof error?.code === LOCAL_STR_STRING && error.code.length > LOCAL_NUM_ZERO) {
+  if (typeof error?.code === LOCAL_STR_STRING && error.code.length > 0) {
     return error.code;
   }
-  if (typeof error?.message === LOCAL_STR_STRING && error.message.length > LOCAL_NUM_ZERO) {
+  if (typeof error?.message === LOCAL_STR_STRING && error.message.length > 0) {
     return error.message;
   }
   return STARTUP_WORKFLOW_DEFAULT_ERROR_CODE;
@@ -224,8 +223,8 @@ class StartupPipelineRunner {
       allowResumeLatest: options.allowResumeLatest === true,
     });
     if (typeof resolvedSessionId !== LOCAL_STR_STRING ||
-      resolvedSessionId.length === LOCAL_NUM_ZERO) {
-      throw new Error(LOCAL_STR_1JUYB);
+      resolvedSessionId.length === 0) {
+      throw new Error(LOCAL_STR_STARTUP_WORKFLOW_SESSIONID_IS_REQUIRED);
     }
     return resolvedSessionId;
   }
@@ -261,7 +260,7 @@ class StartupPipelineRunner {
       phase: options.phase,
       errorCode: extractErrorCode(error),
       failureMessage:
-        typeof error?.message === LOCAL_STR_STRING && error.message.length > LOCAL_NUM_ZERO ?
+        typeof error?.message === LOCAL_STR_STRING && error.message.length > 0 ?
           error.message :
           null,
       retryAfterMs: error?.retryAfterMs,
@@ -311,17 +310,17 @@ class StartupPipelineRunner {
    */
   assertValidCheckpointStep(step) {
     if (!step || typeof step !== LOCAL_STR_OBJECT) {
-      throw new Error(LOCAL_STR_R8QIF);
+      throw new Error(LOCAL_STR_STARTUP_WORKFLOW_STEP_MUST_BE_AN_OBJECT);
     }
     if (typeof step.run !== LOCAL_STR_FUNCTION) {
-      throw new Error(LOCAL_STR_16C99);
+      throw new Error(LOCAL_STR_STARTUP_WORKFLOW_STEP_RUN_MUST_BE_A_FUNC);
     }
     if (step.shouldRerun !== undefined &&
         typeof step.shouldRerun !== LOCAL_STR_FUNCTION) {
-      throw new Error(LOCAL_STR_1DD7X);
+      throw new Error(LOCAL_STR_STARTUP_WORKFLOW_STEP_SHOULDRERUN_MUST_B);
     }
-    if (typeof step.checkpoint !== LOCAL_STR_STRING || step.checkpoint.length === LOCAL_NUM_ZERO) {
-      throw new Error(LOCAL_STR_19U5T);
+    if (typeof step.checkpoint !== LOCAL_STR_STRING || step.checkpoint.length === 0) {
+      throw new Error(LOCAL_STR_STARTUP_WORKFLOW_STEP_CHECKPOINT_MUST_BE);
     }
   }
 }

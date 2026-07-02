@@ -4,7 +4,6 @@ import {
 import {PARTITION_SERVICE_INIT_STAGE} from
   '../../partition/partition-service-constants.js';
 import {
-  NUM,
   STRING,
 } from '../../constants/index.js';
 
@@ -24,9 +23,9 @@ function assignSeedPartitionReplicaProgressMethods(SeedPartitionsPhase) {
         ...details,
         stage: PARTITION_SERVICE_INIT_STAGE.STARTING,
         peerTotal: Math.max(
-          NUM.ZERO, details.peerTotal || NUM.ZERO,
+          0, details.peerTotal || 0,
         ),
-        peerJoined: NUM.ZERO,
+        peerJoined: 0,
       });
     }
 
@@ -45,11 +44,11 @@ function assignSeedPartitionReplicaProgressMethods(SeedPartitionsPhase) {
         update.stage = stageEvent.stage;
       }
       if (Number.isFinite(stageEvent.peerTotal)) {
-        update.peerTotal = Math.max(NUM.ZERO, stageEvent.peerTotal);
+        update.peerTotal = Math.max(0, stageEvent.peerTotal);
       }
       if (Number.isFinite(stageEvent.peerJoined)) {
         update.peerJoined = Math.max(
-          NUM.ZERO, stageEvent.peerJoined,
+          0, stageEvent.peerJoined,
         );
       }
       if (stageEvent.peerId) {
@@ -98,11 +97,11 @@ function assignSeedPartitionReplicaProgressMethods(SeedPartitionsPhase) {
       const spinner = progress.spinnerFrame ||
         BOOTSTRAP_REPLICA_PROGRESS.SPINNER_IDLE;
       const peerTotal = Number.isFinite(progress.peerTotal) ?
-        progress.peerTotal : NUM.ZERO;
+        progress.peerTotal : 0;
       const peerJoined = Number.isFinite(progress.peerJoined) ?
-        progress.peerJoined : NUM.ZERO;
+        progress.peerJoined : 0;
       const localReplicas = d.getPartitionServices().size +
-        (status ? NUM.ZERO : NUM.ONE);
+        (status ? 0 : 1);
       const statusText = status ? ` status=${status}` : '';
       const errorText = error ?
         ` error=${this.formatReplicaCreationError(error)}` : '';

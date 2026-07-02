@@ -1,4 +1,3 @@
-import {NUM} from '../constants/index.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
 } from '../control-plane/pressure-governor.js';
@@ -8,7 +7,6 @@ import {
   SPLIT_MERGE_REASON,
 } from './partition-constants.js';
 
-const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
 
@@ -75,7 +73,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER;
       const delayMs = Math.max(
         this.reactiveEvaluationDebounceMs,
-        pressureDeferred ? pressureDecision.retryAfterMs : NUM.ZERO,
+        pressureDeferred ? pressureDecision.retryAfterMs : 0,
       );
       const dueAtMs = Date.now() + delayMs;
       if (
@@ -159,7 +157,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         preflightOptions?.reason ||
         defaultEvaluationTrigger,
       );
-      return trigger.length > NUM.ZERO ? trigger : defaultEvaluationTrigger;
+      return trigger.length > 0 ? trigger : defaultEvaluationTrigger;
     },
 
     /**
@@ -215,27 +213,27 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       const completedAtMs = Date.now();
       this.lastEvaluationCompletedAtMs = completedAtMs;
       this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
-        Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
+        Math.max(0, completedAtMs - startedAtMs) :
         null;
       const normalized = results && typeof results === 'object' ? results : {};
       this.lastEvaluationSummary = {
         evaluated: normalized.evaluated === true,
-        partitionsEvaluated: Number(normalized.partitionsEvaluated || NUM.ZERO),
+        partitionsEvaluated: Number(normalized.partitionsEvaluated || 0),
         splitCandidateCount: Array.isArray(normalized.splitCandidates) ?
           normalized.splitCandidates.length :
-          NUM.ZERO,
+          0,
         executedSplitCount: Array.isArray(normalized.executedSplits) ?
           normalized.executedSplits.length :
-          NUM.ZERO,
+          0,
         splitDeferredCount: Array.isArray(normalized.splitDeferred) ?
           normalized.splitDeferred.length :
-          NUM.ZERO,
+          0,
         splitErrorCount: Array.isArray(normalized.splitErrors) ?
           normalized.splitErrors.length :
-          NUM.ZERO,
+          0,
         mergeCandidateCount: Array.isArray(normalized.mergeCandidates) ?
           normalized.mergeCandidates.length :
-          NUM.ZERO,
+          0,
       };
       this.lastEvaluationError = null;
     },
@@ -250,9 +248,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       const completedAtMs = Date.now();
       this.lastEvaluationCompletedAtMs = completedAtMs;
       this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
-        Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
+        Math.max(0, completedAtMs - startedAtMs) :
         null;
-      this.lastEvaluationError = String(error?.message || error || LOCAL_STR_EMPTY);
+      this.lastEvaluationError = String(error?.message || error || '');
     },
 
     /**
@@ -317,7 +315,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
           retryAfterMs: pressureDecision.retryAfterMs,
           pressureSummary: pressureDecision.summary || null,
-          partitionsEvaluated: NUM.ZERO,
+          partitionsEvaluated: 0,
           splitCandidates: [],
           executedSplits: [],
           splitErrors: [],
@@ -336,7 +334,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       try {
         const results = {
           evaluated: true,
-          partitionsEvaluated: NUM.ZERO,
+          partitionsEvaluated: 0,
           splitCandidates: [],
           executedSplits: [],
           splitErrors: [],
@@ -345,7 +343,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         };
 
         const partitions = await this.loadEvaluationPartitions();
-        if (partitions.length === NUM.ZERO) {
+        if (partitions.length === 0) {
           this.recordEvaluationSuccess(
             results,
             evaluationStartedAtMs,
@@ -403,7 +401,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           }
         }
 
-        let splitExecutionAttempts = NUM.ZERO;
+        let splitExecutionAttempts = 0;
         for (const partitionId of results.splitCandidates) {
           if (
             splitExecutionAttempts >=
@@ -428,7 +426,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
             });
             continue;
           }
-          splitExecutionAttempts += NUM.ONE;
+          splitExecutionAttempts += 1;
           try {
             const execution = await this.executeManagedSplitCandidate(
               partitionId,
@@ -458,12 +456,12 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           this.keyRangeManager.getSortedPartitions() :
           this.sortEvaluationPartitions(partitions);
         for (
-          let i = NUM.ZERO;
-          i < sortedPartitions.length - NUM.ONE;
+          let i = 0;
+          i < sortedPartitions.length - 1;
           i++
         ) {
           const leftPartition = sortedPartitions[i];
-          const rightPartition = sortedPartitions[i + NUM.ONE];
+          const rightPartition = sortedPartitions[i + 1];
           const leftId = this.keyRangeManager ?
             leftPartition.partitionId :
             this.getPartitionId(leftPartition);
@@ -485,7 +483,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
             this.comparePartitionKeys(
               this.getPartitionEndKey(leftPartition),
               this.getPartitionStartKey(rightPartition),
-            ) !== NUM.ZERO
+            ) !== 0
           ) {
             continue;
           }

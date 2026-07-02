@@ -6,12 +6,10 @@
 
 import {AdminCLI} from '../index.js';
 
-const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_FATAL_ERROR = 'Fatal error:';
-const LOCAL_NUM_ONE = 1;
 
 const cli = new AdminCLI();
-cli.start(process.argv.slice(LOCAL_NUM_TWO)).catch((err) => {
+cli.start(process.argv.slice(2)).catch((err) => {
   console.error(LOCAL_STR_FATAL_ERROR, err.message);
-  process.exit(LOCAL_NUM_ONE);
+  process.exit(1);
 });

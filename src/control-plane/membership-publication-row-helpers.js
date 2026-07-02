@@ -1,7 +1,5 @@
 import {
   COLUMN,
-  NUM,
-  TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
@@ -26,7 +24,7 @@ function normalizeNodeIdList(values = []) {
     ...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) => String(value || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
@@ -36,7 +34,7 @@ function normalizeStringList(values = []) {
     ...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) => String(value || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY).trim())
-        .filter((value) => value.length > NUM.ZERO),
+        .filter((value) => value.length > 0),
     ),
   ].sort();
 }
@@ -52,14 +50,14 @@ function listEquals(left = [], right = []) {
 
 function normalizePositiveInteger(value, fallback = null) {
   const normalized = Number(value);
-  if (Number.isFinite(normalized) && normalized >= NUM.ZERO) {
+  if (Number.isFinite(normalized) && normalized >= 0) {
     return Math.trunc(normalized);
   }
   return fallback;
 }
 
 function normalizeMembershipPublicationNodeId(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+  return typeof value === 'string' && value.length > 0 ?
     value :
     MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
 }
@@ -95,7 +93,7 @@ function collectMembershipPublicationEvidenceNodeIds(options = {}) {
 function buildMembershipPublicationTargetNodeDecision(options = {}) {
   const priorityRecoveryPlanningSnapshot =
     options.priorityRecoveryPlanningSnapshot &&
-      typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
+      typeof options.priorityRecoveryPlanningSnapshot === 'object' ?
       options.priorityRecoveryPlanningSnapshot :
       null;
   const explicitTargetNodeId = normalizeMembershipPublicationNodeId(
@@ -108,16 +106,16 @@ function buildMembershipPublicationTargetNodeDecision(options = {}) {
     options.publisherNodeId,
   );
   const publisherInEvidence =
-    publisherNodeId.length > NUM.ZERO &&
+    publisherNodeId.length > 0 &&
     collectMembershipPublicationEvidenceNodeIds(options).includes(publisherNodeId);
   const targetDecision = [
     {
-      matches: explicitTargetNodeId.length > NUM.ZERO,
+      matches: explicitTargetNodeId.length > 0,
       nodeId: explicitTargetNodeId,
       state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.AVAILABLE,
     },
     {
-      matches: planningTargetNodeId.length > NUM.ZERO,
+      matches: planningTargetNodeId.length > 0,
       nodeId: planningTargetNodeId,
       state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.AVAILABLE,
     },
@@ -146,7 +144,7 @@ function resolveDispatchRetryNodeIds(operation) {
     ...evidence.targetNodeIds,
   ];
   return [...new Set(nodeIds)].filter((nodeId) => {
-    return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
+    return typeof nodeId === 'string' && nodeId.length > 0;
   });
 }
 
@@ -209,7 +207,7 @@ function isDispatchRetryCreateTargetRearmOperation(operation) {
 }
 
 function matchesDispatchRetryReadyNode(operation, nodeId) {
-  if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+  if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return false;
   }
   return resolveDispatchRetryNodeIds(operation).includes(nodeId);
@@ -224,8 +222,8 @@ function mergeDispatchRetryRowsByOperationId(
   const appendRow = (row) => {
     const operationId = row?.[COLUMN.OPERATION_ID];
     if (
-      typeof operationId !== TYPEOF.STRING ||
-      operationId.length === NUM.ZERO ||
+      typeof operationId !== 'string' ||
+      operationId.length === 0 ||
       seenOperationIds.has(operationId)
     ) {
       return;
@@ -266,10 +264,10 @@ function buildTransitionHistoryEntry({state, reasonCode, at, metadata} = {}) {
     state: String(state || MEMBERSHIP_PUBLICATION_STATUS.OPEN),
     at: normalizePositiveInteger(at, Date.now()),
   };
-  if (typeof reasonCode === TYPEOF.STRING && reasonCode.length > NUM.ZERO) {
+  if (typeof reasonCode === 'string' && reasonCode.length > 0) {
     entry.reasonCode = reasonCode;
   }
-  if (metadata && typeof metadata === TYPEOF.OBJECT) {
+  if (metadata && typeof metadata === 'object') {
     Object.assign(entry, metadata);
   }
   return entry;
@@ -307,7 +305,7 @@ function abandonMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
   const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
   const reasonCode =
-    typeof options.reasonCode === TYPEOF.STRING && options.reasonCode.length > 0 ?
+    typeof options.reasonCode === 'string' && options.reasonCode.length > 0 ?
       options.reasonCode :
       PUBLICATION_REASON_ACK_TIMEOUT_EXCEEDED;
   const existingHistory = Array.isArray(publicationRow.transition_history) ?
@@ -331,7 +329,7 @@ function abandonMembershipPublication(options = {}) {
 }
 
 function normalizeLatestPublicationRow(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return null;
   }
   return normalizeControlPlanePublicationRow(row);
@@ -356,14 +354,14 @@ function resolveAcknowledgementBaselinePublicationRow(options = {}) {
 
 function resolveCarriedAcknowledgedNodeIds(options = {}) {
   const requiredAckNodeIds = normalizeNodeIdList(options.requiredAckNodeIds);
-  if (requiredAckNodeIds.length === NUM.ZERO) {
+  if (requiredAckNodeIds.length === 0) {
     return [];
   }
   const acknowledgementBaselineRow = resolveAcknowledgementBaselinePublicationRow(options);
   const baselineAcknowledgedNodeIds = normalizeNodeIdList(
     acknowledgementBaselineRow?.acknowledgedNodeIds,
   );
-  if (baselineAcknowledgedNodeIds.length === NUM.ZERO) {
+  if (baselineAcknowledgedNodeIds.length === 0) {
     return [];
   }
   return baselineAcknowledgedNodeIds.filter((nodeId) => requiredAckNodeIds.includes(nodeId));
@@ -407,7 +405,7 @@ function buildMembershipPublicationAckRefreshDecision(options = {}) {
 }
 
 async function safelyGetLatestMembershipPublicationRow(coordinator, options = {}) {
-  if (!coordinator || typeof coordinator.getLatestPublicationRow !== TYPEOF.FUNCTION) {
+  if (!coordinator || typeof coordinator.getLatestPublicationRow !== 'function') {
     return null;
   }
   try {
@@ -418,13 +416,13 @@ async function safelyGetLatestMembershipPublicationRow(coordinator, options = {}
 }
 
 async function readMembershipPublicationConvergence(readinessService, nodeId, observedAt) {
-  if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+  if (!readinessService || typeof readinessService !== 'object') {
     return null;
   }
-  if (typeof readinessService.getMembershipPublicationDiagnosticsSync === TYPEOF.FUNCTION) {
+  if (typeof readinessService.getMembershipPublicationDiagnosticsSync === 'function') {
     return readinessService.getMembershipPublicationDiagnosticsSync(nodeId, observedAt);
   }
-  if (typeof readinessService.getMembershipPublicationDiagnostics === TYPEOF.FUNCTION) {
+  if (typeof readinessService.getMembershipPublicationDiagnostics === 'function') {
     return readinessService.getMembershipPublicationDiagnostics(nodeId, observedAt);
   }
   return null;

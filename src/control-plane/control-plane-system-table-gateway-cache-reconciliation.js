@@ -3,8 +3,6 @@ import {
   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  NUM,
-  TYPEOF,
   areCanonicalSystemTableRowsEqual,
   buildControlPlaneCacheReconcileContract,
   canonicalizeSystemTableRow,
@@ -33,13 +31,13 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
       options?.systemTableCache || defaultCache || writableCache;
     if (
       !writableCache ||
-      typeof writableCache.applySystemTableChange !== TYPEOF.FUNCTION ||
+      typeof writableCache.applySystemTableChange !== 'function' ||
       !readableCache
     ) {
       return {
         success: false,
         tableName,
-        mutationCount: NUM.ZERO,
+        mutationCount: 0,
         outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
         error:
           CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SYSTEM_TABLE_CACHE_UNAVAILABLE,
@@ -56,25 +54,25 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
       [];
     const cachedEntries = Array.isArray(options?.cachedRows) ?
       options.cachedRows :
-      typeof options?.cachedRowFilter === TYPEOF.FUNCTION &&
-          typeof readableCache.filter === TYPEOF.FUNCTION ?
+      typeof options?.cachedRowFilter === 'function' &&
+          typeof readableCache.filter === 'function' ?
         readableCache.filter(tableName, options.cachedRowFilter) || [] :
-        typeof readableCache.getAll === TYPEOF.FUNCTION ?
+        typeof readableCache.getAll === 'function' ?
           readableCache.getAll(tableName) || [] :
           [];
     const rowComparator =
-      typeof options?.areRowsEqual === TYPEOF.FUNCTION ?
+      typeof options?.areRowsEqual === 'function' ?
         options.areRowsEqual :
         (left, right) =>
           areCanonicalSystemTableRowsEqual(tableName, left, right);
     const causeOptions =
-      typeof options?.causeId === TYPEOF.STRING &&
-      options.causeId.length > NUM.ZERO ?
+      typeof options?.causeId === 'string' &&
+      options.causeId.length > 0 ?
         {causeId: options.causeId} :
         undefined;
     const cachedRowsByKey = new Map();
     const authoritativeKeys = new Set();
-    let mutationCount = NUM.ZERO;
+    let mutationCount = 0;
 
     for (const row of cachedEntries) {
       const key = row?.[primaryKeyField] ?? row?.id;
@@ -102,7 +100,7 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
         canonicalRow,
         causeOptions,
       );
-      mutationCount += NUM.ONE;
+      mutationCount += 1;
     }
 
     if (
@@ -123,7 +121,7 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
           cachedRow,
           causeOptions,
         );
-        mutationCount += NUM.ONE;
+        mutationCount += 1;
       }
     }
 
@@ -133,7 +131,7 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
       reconcileIntent,
       mutationCount,
       outcome:
-        mutationCount > NUM.ZERO ?
+        mutationCount > 0 ?
           CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :
           CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
     };

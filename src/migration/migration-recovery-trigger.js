@@ -6,7 +6,6 @@ import {
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_NUM_ZERO = 0;
 
 const MIGRATION_RECOVERY_REASON = Object.freeze({
   NODE_RESTART: 'node_restart',
@@ -36,7 +35,7 @@ async function recoverMigrationsForReason(sqlQueryEngine, logger, reason) {
     const recoveryResult = await migrationCoordinator.recoverMigrations();
     logger.info(MIGRATION_RECOVERY_LOG_MSG.COMPLETE, {
       reason,
-      recoveredCount: recoveryResult?.recovered || LOCAL_NUM_ZERO,
+      recoveredCount: recoveryResult?.recovered || 0,
     });
   } catch (error) {
     logger.error(MIGRATION_RECOVERY_LOG_MSG.FAILED, {

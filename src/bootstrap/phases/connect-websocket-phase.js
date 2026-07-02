@@ -19,7 +19,6 @@ import {
   NUM,
   PROTOCOL,
   STATE,
-  TYPEOF,
 } from '../../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
@@ -64,20 +63,20 @@ const MESH_CONNECTED_OR_CONNECTING_STATES = new Set([
 ]);
 
 function getConnectedPeerNodeIds(messageRouter, localNodeId) {
-  if (!messageRouter || typeof messageRouter !== TYPEOF.OBJECT) {
+  if (!messageRouter || typeof messageRouter !== 'object') {
     return [];
   }
 
   const connectedNodeIds = typeof messageRouter.getConnectedNodes ===
-      TYPEOF.FUNCTION ?
+      'function' ?
     messageRouter.getConnectedNodes() :
     Array.from(messageRouter.nodeConnections?.entries?.() || [])
       .filter(([, connection]) => connection?.state === STATE.CONNECTED)
       .map(([nodeId]) => nodeId);
 
   return connectedNodeIds.filter((nodeId) => {
-    return typeof nodeId === TYPEOF.STRING &&
-      nodeId.length > NUM.ZERO &&
+    return typeof nodeId === 'string' &&
+      nodeId.length > 0 &&
       nodeId !== localNodeId;
   });
 }
@@ -85,21 +84,21 @@ function getConnectedPeerNodeIds(messageRouter, localNodeId) {
 function markRetryableSeedWebSocketTimeout(error, retryAfterMs) {
   if (
     !error ||
-    typeof error !== TYPEOF.OBJECT ||
+    typeof error !== 'object' ||
     error.code !== WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE
   ) {
     return;
   }
   error.deferRetry = true;
-  if (!Number.isFinite(error.retryAfterMs) || error.retryAfterMs <= NUM.ZERO) {
-    error.retryAfterMs = Math.max(NUM.ONE, Math.floor(retryAfterMs));
+  if (!Number.isFinite(error.retryAfterMs) || error.retryAfterMs <= 0) {
+    error.retryAfterMs = Math.max(1, Math.floor(retryAfterMs));
   }
 }
 
 function normalizeBootstrapAddressScopeNodeIds(nodeIds = []) {
   return Array.isArray(nodeIds) ?
     nodeIds.filter((nodeId) =>
-      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      typeof nodeId === 'string' && nodeId.length > 0,
     ) :
     [];
 }
@@ -156,7 +155,7 @@ function resolveBootstrapAddressScope(
 
   if (
     nodeSource === MESH_CONNECTIVITY_NODE_SOURCE.SYSTEM_TABLE_CACHE &&
-    admissionPeerHintNodeIds.length > NUM.ZERO
+    admissionPeerHintNodeIds.length > 0
   ) {
     return buildBootstrapAddressScope(
       MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS,
@@ -255,13 +254,13 @@ class ConnectWebSocketPhase {
     // Use MessageRouter directly for all services
     // MessageRouter handles both local and remote message delivery
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
-        TYPEOF.FUNCTION) {
+        'function') {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
         resolveQueryTransportSelection(
           () =>
             typeof this.delegates
               .resolveQueryTransportMessageGroupSelection ===
-              TYPEOF.FUNCTION ?
+              'function' ?
               this.delegates.resolveQueryTransportMessageGroupSelection() :
               this.delegates.getLeaderMessageGroupService(),
         ),
@@ -273,7 +272,7 @@ class ConnectWebSocketPhase {
       JOINING_UNIFIED_RECONCILE.INFRA_READY_REASON,
     );
     if (typeof this.delegates.ensureBootstrapSnapshotHydrated ===
-        TYPEOF.FUNCTION) {
+        'function') {
       await this.delegates.ensureBootstrapSnapshotHydrated();
     }
 
@@ -318,7 +317,7 @@ class ConnectWebSocketPhase {
       messageRouter,
       this.nodeId,
     );
-    if (seedConnectionError && connectedPeerNodeIds.length === NUM.ZERO) {
+    if (seedConnectionError && connectedPeerNodeIds.length === 0) {
       logger.error(JOINING_LOG_MSG.SEED_WS_CONNECT_FAILED, {
         nodeId: this.nodeId,
         seedWsAddress,
@@ -347,7 +346,7 @@ class ConnectWebSocketPhase {
       const cause = error?.cause || error;
       const shouldDeferConnectedPublication =
         typeof this.delegates.shouldRetryControlPlaneNodeStateUpdate ===
-          TYPEOF.FUNCTION &&
+          'function' &&
         this.delegates.shouldRetryControlPlaneNodeStateUpdate(cause);
       if (!shouldDeferConnectedPublication) {
         throw error;
@@ -392,39 +391,39 @@ class ConnectWebSocketPhase {
    */
   async connectToSeedNode(messageRouter, seedNodeId, seedWsAddress) {
     const logger = this.delegates.getLogger();
-    const now = typeof this.delegates.getNow === TYPEOF.FUNCTION ?
+    const now = typeof this.delegates.getNow === 'function' ?
       this.delegates.getNow() :
       () => Date.now();
-    const sleep = typeof this.delegates.getSleep === TYPEOF.FUNCTION ?
+    const sleep = typeof this.delegates.getSleep === 'function' ?
       this.delegates.getSleep() :
       (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
     const computeRetryDelayMs =
-      typeof this.delegates.computeSeedContactRetryDelayMs === TYPEOF.FUNCTION ?
+      typeof this.delegates.computeSeedContactRetryDelayMs === 'function' ?
         this.delegates.computeSeedContactRetryDelayMs :
         null;
 
-    if (typeof sleep !== TYPEOF.FUNCTION) {
+    if (typeof sleep !== 'function') {
       await messageRouter.connectToNode(seedNodeId, seedWsAddress);
       return;
     }
 
     const retryPolicy = this.resolveSeedWebSocketRetryPolicy();
     const retryTimeoutMs = Number.isFinite(retryPolicy?.retryTimeoutMs) ?
-      Math.max(NUM.ONE, Math.floor(retryPolicy.retryTimeoutMs)) :
-      NUM.ZERO;
+      Math.max(1, Math.floor(retryPolicy.retryTimeoutMs)) :
+      0;
     const initialDelayMs = Number.isFinite(retryPolicy?.initialDelayMs) ?
-      Math.max(NUM.ONE, Math.floor(retryPolicy.initialDelayMs)) :
+      Math.max(1, Math.floor(retryPolicy.initialDelayMs)) :
       NUM.HUNDRED;
     const maxDelayMs = Number.isFinite(retryPolicy?.maxDelayMs) ?
       Math.max(initialDelayMs, Math.floor(retryPolicy.maxDelayMs)) :
       initialDelayMs;
     const backoffMultiplier =
       Number.isFinite(retryPolicy?.backoffMultiplier) &&
-      retryPolicy.backoffMultiplier > NUM.ONE ?
+      retryPolicy.backoffMultiplier > 1 ?
         retryPolicy.backoffMultiplier :
-        NUM.TWO;
+        2;
 
-    if (retryTimeoutMs <= NUM.ZERO) {
+    if (retryTimeoutMs <= 0) {
       await messageRouter.connectToNode(seedNodeId, seedWsAddress);
       return;
     }
@@ -432,27 +431,27 @@ class ConnectWebSocketPhase {
     const startMs = now();
     const deadlineMs = startMs + retryTimeoutMs;
     let baseDelayMs = initialDelayMs;
-    let attempt = NUM.ZERO;
+    let attempt = 0;
     let lastError = null;
 
     while (true) {
-      attempt += NUM.ONE;
+      attempt += 1;
       try {
         await messageRouter.connectToNode(seedNodeId, seedWsAddress);
         return;
       } catch (error) {
         lastError = error;
-        const elapsedMs = Math.max(NUM.ZERO, now() - startMs);
+        const elapsedMs = Math.max(0, now() - startMs);
         const remainingMs = deadlineMs - now();
 
-        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length === NUM.ZERO) {
+        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length === 0) {
           await this.connectToClusterNodes();
         }
-        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length > NUM.ZERO) {
+        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length > 0) {
           break;
         }
 
-        if (remainingMs <= NUM.ZERO) {
+        if (remainingMs <= 0) {
           break;
         }
 
@@ -464,7 +463,7 @@ class ConnectWebSocketPhase {
           }) :
           Math.min(baseDelayMs, maxDelayMs);
         const boundedDelayMs = Math.max(
-          NUM.ONE,
+          1,
           Math.min(remainingMs, nextDelayMs),
         );
 
@@ -480,7 +479,7 @@ class ConnectWebSocketPhase {
 
         await sleep(boundedDelayMs);
         baseDelayMs = Math.min(
-          Math.max(NUM.ONE, Math.floor(baseDelayMs * backoffMultiplier)),
+          Math.max(1, Math.floor(baseDelayMs * backoffMultiplier)),
           maxDelayMs,
         );
       }
@@ -498,13 +497,13 @@ class ConnectWebSocketPhase {
    * @private
    */
   resolveSeedWebSocketRetryPolicy() {
-    const config = typeof this.delegates.getConfig === TYPEOF.FUNCTION ?
+    const config = typeof this.delegates.getConfig === 'function' ?
       this.delegates.getConfig() || {} :
       {};
     const retryTimeoutMs =
       Number.isFinite(config.leadershipWaitTimeoutMs) ?
-        Math.max(NUM.ONE, Math.floor(config.leadershipWaitTimeoutMs)) :
-        NUM.ZERO;
+        Math.max(1, Math.floor(config.leadershipWaitTimeoutMs)) :
+        0;
     const initialDelayMs =
       Number.isFinite(config.leadershipWaitInitialDelayMs) ?
         Math.max(NUM.TEN, Math.floor(config.leadershipWaitInitialDelayMs)) :
@@ -515,9 +514,9 @@ class ConnectWebSocketPhase {
         initialDelayMs;
     const backoffMultiplier =
       Number.isFinite(config.leadershipWaitBackoffMultiplier) &&
-      config.leadershipWaitBackoffMultiplier > NUM.ONE ?
+      config.leadershipWaitBackoffMultiplier > 1 ?
         config.leadershipWaitBackoffMultiplier :
-        NUM.TWO;
+        2;
 
     return {
       retryTimeoutMs,
@@ -560,7 +559,7 @@ class ConnectWebSocketPhase {
       const nodeAddress = node.node_address;
 
       const connectionState =
-        typeof messageRouter.getConnectionState === TYPEOF.FUNCTION ?
+        typeof messageRouter.getConnectionState === 'function' ?
           messageRouter.getConnectionState(targetNodeId) :
           messageRouter.nodeConnections?.get(targetNodeId)?.state ||
             null;
@@ -614,8 +613,8 @@ class ConnectWebSocketPhase {
 
     for (const result of connectionResults) {
       if (result?.missingEndpoint === true &&
-          typeof result.targetNodeId === TYPEOF.STRING &&
-          result.targetNodeId.length > NUM.ZERO) {
+          typeof result.targetNodeId === 'string' &&
+          result.targetNodeId.length > 0) {
         missingEndpointNodeIds.push(result.targetNodeId);
       }
     }
@@ -633,7 +632,7 @@ class ConnectWebSocketPhase {
    */
   async repairMeshConnectivityAuthority(missingEndpointNodeIds) {
     if (typeof this.delegates.repairMeshConnectivityAuthorityIfNeeded !==
-        TYPEOF.FUNCTION) {
+        'function') {
       return false;
     }
     return this.delegates.repairMeshConnectivityAuthorityIfNeeded(
@@ -673,7 +672,7 @@ class ConnectWebSocketPhase {
       );
 
       if (!Array.isArray(nodesSnapshot) ||
-          nodesSnapshot.length === NUM.ZERO) {
+          nodesSnapshot.length === 0) {
         return;
       }
 
@@ -686,7 +685,7 @@ class ConnectWebSocketPhase {
         return nodeId && nodeId !== this.nodeId;
       });
 
-      if (otherNodes.length === NUM.ZERO) {
+      if (otherNodes.length === 0) {
         return;
       }
 
@@ -710,7 +709,7 @@ class ConnectWebSocketPhase {
       });
 
       if (!attemptedAuthorityRepair &&
-          missingEndpointNodeIds.length > NUM.ZERO &&
+          missingEndpointNodeIds.length > 0 &&
           await this.repairMeshConnectivityAuthority(
             missingEndpointNodeIds,
           )) {
@@ -737,7 +736,7 @@ class ConnectWebSocketPhase {
  * @return {string|null} WebSocket address or null if cannot derive.
  */
 function deriveWsAddressFromNodeAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+  if (!nodeAddress || typeof nodeAddress !== 'string') {
     return null;
   }
 
@@ -755,22 +754,22 @@ function deriveWsAddressFromNodeAddress(nodeAddress) {
 
     const colonIndex =
       withoutProtocol.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-    if (colonIndex === NUM.NEGATIVE_ONE ||
-        colonIndex === NUM.ZERO) {
+    if (colonIndex === -1 ||
+        colonIndex === 0) {
       return null;
     }
 
     hostname =
-      withoutProtocol.substring(NUM.ZERO, colonIndex);
+      withoutProtocol.substring(0, colonIndex);
     const portStr =
-      withoutProtocol.substring(colonIndex + NUM.ONE);
+      withoutProtocol.substring(colonIndex + 1);
     restPort = parseInt(portStr, NUM.TEN);
 
-    if (!hostname || hostname.length === NUM.ZERO) {
+    if (!hostname || hostname.length === 0) {
       return null;
     }
 
-    if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+    if (!Number.isFinite(restPort) || restPort <= 0) {
       return null;
     }
 
@@ -781,21 +780,21 @@ function deriveWsAddressFromNodeAddress(nodeAddress) {
   // Parse hostname:port format (REST API address)
   const colonIndex =
     nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex === NUM.NEGATIVE_ONE ||
-      colonIndex === NUM.ZERO) {
+  if (colonIndex === -1 ||
+      colonIndex === 0) {
     // No colon found or colon at start (empty hostname)
     return null;
   }
 
-  hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-  if (!hostname || hostname.length === NUM.ZERO) {
+  hostname = nodeAddress.substring(0, colonIndex);
+  if (!hostname || hostname.length === 0) {
     return null;
   }
 
-  const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+  const portStr = nodeAddress.substring(colonIndex + 1);
   restPort = parseInt(portStr, NUM.TEN);
 
-  if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+  if (!Number.isFinite(restPort) || restPort <= 0) {
     return null;
   }
 

@@ -3,12 +3,10 @@ import {UnifiedRebalancerLifecycleBase} from './unified-rebalancer-lifecycle-bas
 import {
   applyUnifiedRebalancerCriticalTopologyMethods,
 } from './unified-rebalancer-critical-topology-methods.js';
-import {TYPEOF} from '../constants/index.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NUM,
   SERVICE_STATUS,
   STATE,
   SYSTEM_TABLE_NAME,
@@ -77,7 +75,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       !this.isSystemPartitionEntity() ||
       this.isControlPlanePriorityPartition()
     ) {
-      return NUM.ZERO;
+      return 0;
     }
     return this.getPriorityRecoveryAdmissionPlan().getReservedNonPrioritySlots(
       this.entityId,
@@ -114,11 +112,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const priorityPartitionSummary =
       latestPublicationRow?.priorityPartitionSummary &&
         typeof latestPublicationRow.priorityPartitionSummary ===
-          TYPEOF.OBJECT ?
+          'object' ?
         latestPublicationRow.priorityPartitionSummary :
         latestPublicationRow?.priority_partition_summary &&
           typeof latestPublicationRow.priority_partition_summary ===
-            TYPEOF.OBJECT ?
+            'object' ?
           latestPublicationRow.priority_partition_summary :
           null;
     const publicationStatus = String(
@@ -166,7 +164,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     return new Set(
       nodeIds.filter(
         (nodeId) =>
-          typeof nodeId === TYPEOF.STRING &&
+          typeof nodeId === 'string' &&
           nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO,
       ),
     );
@@ -186,7 +184,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
     if (
       startupAuthorityNodeIds instanceof Set &&
-      startupAuthorityNodeIds.size > NUM.ZERO
+      startupAuthorityNodeIds.size > 0
     ) {
       if (effectiveNodeIds instanceof Set) {
         effectiveNodeIds = new Set(
@@ -235,7 +233,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     if (
       !readinessService ||
       typeof readinessService.getStartupAuthoritySnapshotSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return null;
     }
@@ -247,10 +245,10 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       const nodeIds = Array.isArray(startupAuthority?.canonicalStartupNodeIds) ?
         startupAuthority.canonicalStartupNodeIds.filter(
           (nodeId) =>
-            typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            typeof nodeId === 'string' && nodeId.length > 0,
         ) :
         [];
-      return nodeIds.length > NUM.ZERO ? new Set(nodeIds) : null;
+      return nodeIds.length > 0 ? new Set(nodeIds) : null;
     } catch (_error) {
       return null;
     }
@@ -271,12 +269,12 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return false;
     }
     const nodeId =
-      typeof nodeOrId === TYPEOF.STRING ?
+      typeof nodeOrId === 'string' ?
         nodeOrId :
         nodeOrId?.node_id || nodeOrId?.nodeId || null;
     if (
-      typeof nodeId !== TYPEOF.STRING ||
-      nodeId.length === NUM.ZERO ||
+      typeof nodeId !== 'string' ||
+      nodeId.length === 0 ||
       nodeId === this.nodeId
     ) {
       return false;
@@ -289,7 +287,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return false;
     }
     const node =
-      typeof nodeOrId === TYPEOF.STRING ?
+      typeof nodeOrId === 'string' ?
         this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
         nodeOrId;
     if (!node || node.status !== SERVICE_STATUS.ACTIVE) {
@@ -307,7 +305,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     }
     if (
       this.messageRouter &&
-      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION &&
+      typeof this.messageRouter.getConnectionState === 'function' &&
       this.messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED
     ) {
       return false;
@@ -355,7 +353,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const readinessService = this.controlPlaneReadinessService;
     if (
       !readinessService ||
-      typeof readinessService.getNodeReadinessSync !== TYPEOF.FUNCTION
+      typeof readinessService.getNodeReadinessSync !== 'function'
     ) {
       return false;
     }
@@ -391,15 +389,15 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     if (
       !readinessService ||
       (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-        TYPEOF.FUNCTION &&
+        'function' &&
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshot !==
-          TYPEOF.FUNCTION)
+          'function')
     ) {
       return null;
     }
@@ -408,7 +406,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     let planningSnapshot = null;
     if (
       typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
@@ -417,7 +415,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         );
     } else if (
       typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
@@ -431,7 +429,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           observedAt,
         );
     }
-    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT ?
+    return planningSnapshot && typeof planningSnapshot === 'object' ?
       planningSnapshot :
       null;
   }
@@ -483,13 +481,13 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     if (
       !readinessService ||
       (typeof readinessService.getPriorityRecoveryPlanningAnswerSync !==
-        TYPEOF.FUNCTION &&
+        'function' &&
         typeof readinessService.getMembershipPublicationPlanningAnswerSync !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getPriorityRecoveryPlanningSnapshotSync !==
-          TYPEOF.FUNCTION &&
+          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotSync !==
-          TYPEOF.FUNCTION)
+          'function')
     ) {
       return null;
     }
@@ -501,7 +499,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     let planningSnapshot = null;
     if (
       typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot = readinessService.getPriorityRecoveryPlanningAnswerSync(
         publicationNodeId,
@@ -509,7 +507,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       );
     } else if (
       typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         readinessService.getMembershipPublicationPlanningAnswerSync(
@@ -518,7 +516,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         );
     } else if (
       typeof readinessService.getPriorityRecoveryPlanningSnapshotSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         readinessService.getPriorityRecoveryPlanningSnapshotSync(
@@ -527,7 +525,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         );
     } else if (
       typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       planningSnapshot =
         readinessService.getMembershipPublicationPlanningSnapshotSync(
@@ -535,7 +533,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           observedAt,
         );
     }
-    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT ?
+    return planningSnapshot && typeof planningSnapshot === 'object' ?
       planningSnapshot :
       null;
   }

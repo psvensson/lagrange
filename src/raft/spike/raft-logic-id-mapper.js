@@ -10,7 +10,6 @@ import {
   RAFT_LOGIC_SPIKE_ERROR,
 } from './raft-logic-spike-constants.js';
 
-const LOCAL_NUM_ZERO = 0;
 
 /**
  * Build deterministic external<->internal ID maps for a replica set.
@@ -21,7 +20,7 @@ const LOCAL_NUM_ZERO = 0;
  * }}
  */
 function buildRaftLogicIdMaps(replicaIds) {
-  if (!Array.isArray(replicaIds) || replicaIds.length === LOCAL_NUM_ZERO) {
+  if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
     throw new Error(RAFT_LOGIC_SPIKE_ERROR.INVALID_REPLICA_IDS);
   }
   return buildDeterministicRaftIdMaps(replicaIds, {

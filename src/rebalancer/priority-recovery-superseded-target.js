@@ -33,7 +33,6 @@ import {
 } from './operation-workflow-remove-safety-evaluator.js';
 
 const {
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -41,7 +40,6 @@ const {
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  TYPEOF,
   WORKFLOW_STEP,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryOperationAssessment,
@@ -60,14 +58,14 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     if (
       !operation ||
       !planningSnapshot ||
-      typeof planningSnapshot !== TYPEOF.OBJECT
+      typeof planningSnapshot !== 'object'
     ) {
       return null;
     }
 
     const priorityPartitionSummary =
       planningSnapshot.priorityPartitionSummary &&
-      typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+      typeof planningSnapshot.priorityPartitionSummary === 'object' ?
         planningSnapshot.priorityPartitionSummary :
         null;
     const decisionSnapshot =
@@ -183,7 +181,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * @return {boolean}
    */
   isPriorityRecoveryRemoveSafetySatisfied(completion) {
-    if (!completion || typeof completion !== TYPEOF.OBJECT) {
+    if (!completion || typeof completion !== 'object') {
       return false;
     }
     if (
@@ -375,7 +373,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    */
   isReplaceSourceLeaderHandoffRequiredPartition(partitionId) {
     return (
-      typeof partitionId === TYPEOF.STRING &&
+      typeof partitionId === 'string' &&
       REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS.has(partitionId)
     );
   }
@@ -528,10 +526,10 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       operation?.workflowStep ?? operation?.workflow_step ?? null;
     if (
       !Array.isArray(steps) ||
-      steps.length === NUM.ZERO ||
+      steps.length === 0 ||
       typeof workflowStep !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING
     ) {
-      return NUM.NEGATIVE_ONE;
+      return -1;
     }
     return steps.indexOf(workflowStep);
   }

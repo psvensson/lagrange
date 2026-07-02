@@ -2,7 +2,7 @@
  * Constants for LatencyTreeService.
  */
 
-import {NUM, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 
 const LATENCY_TREE_SUBSYSTEM = 'latency-tree';
 
@@ -32,9 +32,9 @@ const LATENCY_TREE_TABLE = Object.freeze({
 });
 
 const LATENCY_TREE_DEFAULT = Object.freeze({
-  EMPTY_COUNT: NUM.ZERO,
-  DISTANCE_SELF: NUM.ZERO,
-  EDGE_MIN_SAMPLE_COUNT: NUM.ONE,
+  EMPTY_COUNT: 0,
+  DISTANCE_SELF: 0,
+  EDGE_MIN_SAMPLE_COUNT: 1,
   DIJKSTRA_UNREACHABLE: Number.POSITIVE_INFINITY,
 });
 

@@ -7,7 +7,6 @@
  * Requirements: 5.5, 10.2, 10.3
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
 import {PRIMITIVE_TYPE} from './distributed/distributed-context-constants.js';
 
 const INITIAL_MIN_DURATION_MS = Infinity;
@@ -55,11 +54,11 @@ const VALID_PRIMITIVES = new Set([
  */
 class PrimitiveCounter {
   constructor() {
-    this.requestCount = NUM.ZERO;
-    this.totalBytes = NUM.ZERO;
-    this.totalDurationMs = NUM.ZERO;
+    this.requestCount = 0;
+    this.totalBytes = 0;
+    this.totalDurationMs = 0;
     this.minDurationMs = INITIAL_MIN_DURATION_MS;
-    this.maxDurationMs = NUM.ZERO;
+    this.maxDurationMs = 0;
   }
 
   /**
@@ -69,7 +68,7 @@ class PrimitiveCounter {
    * @param {number} durationMs - Latency in milliseconds.
    */
   record(bytes, durationMs) {
-    this.requestCount += NUM.ONE;
+    this.requestCount += 1;
     this.totalBytes += bytes;
     this.totalDurationMs += durationMs;
     if (durationMs < this.minDurationMs) {
@@ -90,8 +89,8 @@ class PrimitiveCounter {
       [TELEMETRY_FIELD.REQUEST_COUNT]: this.requestCount,
       [TELEMETRY_FIELD.TOTAL_BYTES]: this.totalBytes,
       [TELEMETRY_FIELD.TOTAL_DURATION_MS]: this.totalDurationMs,
-      [TELEMETRY_FIELD.MIN_DURATION_MS]: this.requestCount > NUM.ZERO ?
-        this.minDurationMs : NUM.ZERO,
+      [TELEMETRY_FIELD.MIN_DURATION_MS]: this.requestCount > 0 ?
+        this.minDurationMs : 0,
       [TELEMETRY_FIELD.MAX_DURATION_MS]: this.maxDurationMs,
     });
   }
@@ -150,7 +149,7 @@ class PrimitiveTelemetry {
 
     this._counters.get(primitive).record(bytes, durationMs);
 
-    if (typeof this.traceHook === TYPEOF.FUNCTION) {
+    if (typeof this.traceHook === 'function') {
       this.traceHook({
         queryId: this.queryId,
         tenantId: this.tenantId,
@@ -202,8 +201,8 @@ class PrimitiveTelemetry {
   createCallback() {
     return (data) => {
       const primitive = data.primitive;
-      const bytes = data.byteCount ?? data.recordBytes ?? NUM.ZERO;
-      const durationMs = data.durationMs ?? NUM.ZERO;
+      const bytes = data.byteCount ?? data.recordBytes ?? 0;
+      const durationMs = data.durationMs ?? 0;
       this.record(primitive, bytes, durationMs);
     };
   }

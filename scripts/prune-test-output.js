@@ -6,7 +6,6 @@ import {pathToFileURL} from 'node:url';
 import {
   ERRNO,
   FILE_TEXT,
-  NUM,
   TEST_OUTPUT_PATH,
   TEST_OUTPUT_SUFFIX,
 } from '../src/constants/index.js';
@@ -38,8 +37,6 @@ import {
   TEST_OUTPUT_PRUNE_VERB,
 } from '../src/constants/test-output-prune-scalars.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const PRUNE_TARGET_SUMMARY_TEXT =
   'reports/report playbacks/legacy playbacks/run-like categories.';
 
@@ -104,7 +101,7 @@ function printUsage() {
 
 function parseInteger(value, flagName) {
   const parsed = Number.parseInt(value, TEST_OUTPUT_PRUNE_PARSE_INT_RADIX);
-  if (!Number.isFinite(parsed) || parsed < NUM.ZERO) {
+  if (!Number.isFinite(parsed) || parsed < 0) {
     throw new Error(
       `${flagName}${TEST_OUTPUT_PRUNE_ERROR_TEXT.INTEGER_ERROR_SUFFIX}`,
     );
@@ -124,7 +121,7 @@ function parseArgs(argv) {
     keepTopLevel: TEST_OUTPUT_PRUNE_DEFAULT_KEEP_TOP_LEVEL,
   };
 
-  for (let index = LOCAL_NUM_ZERO; index < argv.length; index += LOCAL_NUM_ONE) {
+  for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
     case TEST_OUTPUT_PRUNE_FLAG.ROOT:
@@ -238,7 +235,7 @@ async function listRecursiveFileEntries(
 
   const entries = [];
   const stack = [directoryPath];
-  while (stack.length > NUM.ZERO) {
+  while (stack.length > 0) {
     const current = stack.pop();
     const dirents = await fs.readdir(current, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
     for (const dirent of dirents) {
@@ -272,9 +269,9 @@ async function measureEntryBytes(targetPath, isDirectory) {
     return stats.size;
   }
 
-  let total = NUM.ZERO;
+  let total = 0;
   const stack = [targetPath];
-  while (stack.length > NUM.ZERO) {
+  while (stack.length > 0) {
     const current = stack.pop();
     const dirents = await fs.readdir(current, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
     for (const dirent of dirents) {
@@ -299,10 +296,10 @@ function isPinnedName(name) {
 
 function reportBasenameToPlaybackName(name) {
   if (name.endsWith(TEST_OUTPUT_SUFFIX.REPORT)) {
-    return name.slice(NUM.ZERO, -TEST_OUTPUT_SUFFIX.REPORT.length);
+    return name.slice(0, -TEST_OUTPUT_SUFFIX.REPORT.length);
   }
   if (name.endsWith(TEST_OUTPUT_SUFFIX.JSON)) {
-    return name.slice(NUM.ZERO, -TEST_OUTPUT_SUFFIX.JSON.length);
+    return name.slice(0, -TEST_OUTPUT_SUFFIX.JSON.length);
   }
   return name;
 }
@@ -310,7 +307,7 @@ function reportBasenameToPlaybackName(name) {
 function partitionLogNameToKeepKey(name) {
   for (const suffix of TEST_OUTPUT_PRUNE_PARTITION_LOG_SUFFIXES) {
     if (name.endsWith(suffix)) {
-      return name.slice(NUM.ZERO, -suffix.length);
+      return name.slice(0, -suffix.length);
     }
   }
   return name;
@@ -354,7 +351,7 @@ function selectKeepKeys(groups, keepCount, cutoffMs, pinnedNames = new Set()) {
     }
   }
 
-  for (const group of groups.slice(NUM.ZERO, keepCount)) {
+  for (const group of groups.slice(0, keepCount)) {
     keep.add(group.keepKey);
   }
 
@@ -417,7 +414,7 @@ async function deleteEntries(entries) {
 
 function summarizeCategory(entries) {
   const bytes =
-    entries.reduce((sum, entry) => sum + entry.sizeBytes, NUM.ZERO);
+    entries.reduce((sum, entry) => sum + entry.sizeBytes, 0);
   return {
     count: entries.length,
     bytes,
@@ -427,14 +424,14 @@ function summarizeCategory(entries) {
 function formatBytes(bytes) {
   const units = TEST_OUTPUT_PRUNE_BYTE_UNITS;
   let value = bytes;
-  let unitIndex = NUM.ZERO;
+  let unitIndex = 0;
   while (value >= TEST_OUTPUT_PRUNE_BYTE_BASE &&
-    unitIndex < units.length - NUM.ONE) {
+    unitIndex < units.length - 1) {
     value /= TEST_OUTPUT_PRUNE_BYTE_BASE;
-    unitIndex += NUM.ONE;
+    unitIndex += 1;
   }
   return `${value.toFixed(
-    value >= TEST_OUTPUT_PRUNE_BYTE_THRESHOLD || unitIndex === NUM.ZERO ?
+    value >= TEST_OUTPUT_PRUNE_BYTE_THRESHOLD || unitIndex === 0 ?
       TEST_OUTPUT_PRUNE_BYTE_FRACTION_DIGITS.WHOLE :
       TEST_OUTPUT_PRUNE_BYTE_FRACTION_DIGITS.FRACTIONAL,
   )}${units[unitIndex]}`;
@@ -606,14 +603,14 @@ async function main(argv) {
 
   const totalBytes = Object.values(summary.categories).reduce(
     (sum, category) => sum + category.bytes,
-    NUM.ZERO,
+    0,
   );
   const totalEntries = Object.values(summary.categories).reduce(
     (sum, category) => sum + category.count,
-    NUM.ZERO,
+    0,
   );
   const affectedCategories = Object.values(summary.categories).filter((category) =>
-    category.count > NUM.ZERO,
+    category.count > 0,
   ).length;
   const verb =
     options.apply ? TEST_OUTPUT_PRUNE_VERB.APPLY : TEST_OUTPUT_PRUNE_VERB.DRY_RUN;

@@ -14,13 +14,11 @@ const {
   DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
-  NUM,
   OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
   SERVICE_TYPE,
   STRING,
-  TYPEOF,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
@@ -67,7 +65,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildOperationDispatchQueueName(shardIndex) {
-    if (this.operationDispatchQueueShardCount <= NUM.ONE) {
+    if (this.operationDispatchQueueShardCount <= 1) {
       return DISPATCH_QUEUE_NAME.OPERATION;
     }
     return `${DISPATCH_QUEUE_NAME.OPERATION}-${shardIndex}`;
@@ -85,22 +83,22 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   resolveOperationDispatchQueue(ownerKey) {
     if (
       !Array.isArray(this.operationDispatchQueues) ||
-      this.operationDispatchQueues.length <= NUM.ONE
+      this.operationDispatchQueues.length <= 1
     ) {
       return Array.isArray(this.operationDispatchQueues) &&
-        this.operationDispatchQueues.length === NUM.ONE ?
-        this.operationDispatchQueues[NUM.ZERO] :
+        this.operationDispatchQueues.length === 1 ?
+        this.operationDispatchQueues[0] :
         this.operationDispatchQueue;
     }
 
     const normalizedOwnerKey =
-      typeof ownerKey === TYPEOF.STRING ? ownerKey : String(ownerKey || '');
-    let hash = NUM.ZERO;
+      typeof ownerKey === 'string' ? ownerKey : String(ownerKey || '');
+    let hash = 0;
     for (const char of normalizedOwnerKey) {
       hash =
         (hash * REPLICA_DISPATCH_SERVICE_LITERAL.THIRTY_ONE +
-          char.charCodeAt(NUM.ZERO)) >>>
-        NUM.ZERO;
+          char.charCodeAt(0)) >>>
+        0;
     }
     const queueIndex = hash % this.operationDispatchQueues.length;
     return this.operationDispatchQueues[queueIndex];
@@ -133,7 +131,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       get size() {
         return this.operationDispatchQueues.reduce(
           (sum, queue) => sum + queue.size,
-          NUM.ZERO,
+          0,
         );
       },
       get draining() {
@@ -152,7 +150,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildNodeStateUpdateQueueName(shardIndex) {
-    if (this.nodeStateUpdateQueueShardCount <= NUM.ONE) {
+    if (this.nodeStateUpdateQueueShardCount <= 1) {
       return DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE;
     }
     return `${DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE}-${shardIndex}`;
@@ -168,7 +166,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   resolveNodeStateUpdateQueue(nodeId) {
     if (
       !Array.isArray(this.nodeStateUpdateQueues) ||
-      this.nodeStateUpdateQueues.length <= NUM.ONE
+      this.nodeStateUpdateQueues.length <= 1
     ) {
       return this.nodeStateUpdateQueue;
     }
@@ -180,7 +178,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
 
     const queueIndex =
       this.nextNodeStateUpdateQueueIndex % this.nodeStateUpdateQueues.length;
-    this.nextNodeStateUpdateQueueIndex += NUM.ONE;
+    this.nextNodeStateUpdateQueueIndex += 1;
     this.nodeStateUpdateQueueAssignments.set(nodeId, queueIndex);
     return this.nodeStateUpdateQueues[queueIndex];
   }
@@ -215,8 +213,8 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
     );
     if (
-      typeof sourceReplicaId === TYPEOF.STRING &&
-      sourceReplicaId.length > NUM.ZERO
+      typeof sourceReplicaId === 'string' &&
+      sourceReplicaId.length > 0
     ) {
       operation.sourceReplicaId = sourceReplicaId;
     }
@@ -224,14 +222,14 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       stepsHistory,
       OPERATION_METADATA_KEY.REPLICA_IDS,
     );
-    if (replicaIds.length > NUM.ZERO) {
+    if (replicaIds.length > 0) {
       operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
     }
     const peerAddresses = getOperationMetadataStringArray(
       stepsHistory,
       OPERATION_METADATA_KEY.PEER_ADDRESSES,
     );
-    if (peerAddresses.length > NUM.ZERO) {
+    if (peerAddresses.length > 0) {
       operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
     }
     const bootstrapTableMetadata = getOperationMetadataObject(
@@ -261,7 +259,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    */
   buildOperationRowFromCoordinator(operation) {
     let stepsHistory = operation.stepsHistory;
-    if (typeof stepsHistory !== TYPEOF.STRING) {
+    if (typeof stepsHistory !== 'string') {
       stepsHistory = Array.isArray(stepsHistory) ?
         JSON.stringify(stepsHistory) :
         STRING.EMPTY_JSON_ARRAY;
@@ -298,7 +296,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    */
   resolveDispatchReadinessDecisionDimension(operationOrPartitionId = null) {
     const partitionId =
-      typeof operationOrPartitionId === TYPEOF.STRING ?
+      typeof operationOrPartitionId === 'string' ?
         operationOrPartitionId :
         operationOrPartitionId?.partitionId ||
           operationOrPartitionId?.partition_id ||
@@ -319,7 +317,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
         readiness.dimensions :
         null;
     if (!dimensions) {
@@ -379,14 +377,14 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     if (
       !nodeId ||
       typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-        TYPEOF.FUNCTION
+        'function'
     ) {
       return false;
     }
 
     const decisionDimension =
-      typeof options?.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO ?
+      typeof options?.decisionDimension === 'string' &&
+      options.decisionDimension.length > 0 ?
         options.decisionDimension :
         this.resolveDispatchReadinessDecisionDimension();
     const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
@@ -455,7 +453,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     let readiness = null;
     if (
       typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
         nodeId,
@@ -466,7 +464,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     }
     if (
       typeof this.controlPlaneReadinessService.getNodeReadiness ===
-      TYPEOF.FUNCTION
+      'function'
     ) {
       try {
         const authoritativeReadiness = await this.getBoundedDispatchReadiness(
@@ -475,7 +473,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         );
         if (
           authoritativeReadiness &&
-          typeof authoritativeReadiness === TYPEOF.OBJECT
+          typeof authoritativeReadiness === 'object'
         ) {
           readiness = authoritativeReadiness;
         }
@@ -489,7 +487,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         ) {
           const retryAfterMs =
             Number.isFinite(readiness?.retryAfterMs) &&
-            readiness.retryAfterMs > NUM.ZERO ?
+            readiness.retryAfterMs > 0 ?
               Math.floor(readiness.retryAfterMs) :
               null;
           return this.buildDispatchReadinessResult(
@@ -549,7 +547,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    */
   buildReadyRetryDispatchReadiness(operation, decisionDimension, options = {}) {
     const readyNodeId =
-      typeof options?.readyNodeId === TYPEOF.STRING ?
+      typeof options?.readyNodeId === 'string' ?
         options.readyNodeId :
         null;
     const targetNodeId = operation?.targetNodeId || null;
@@ -557,7 +555,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       return null;
     }
     const readyNodeRow =
-      options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT ?
+      options?.readyNodeRow && typeof options.readyNodeRow === 'object' ?
         options.readyNodeRow :
         null;
     if (
@@ -570,7 +568,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     }
     if (
       typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-      TYPEOF.FUNCTION
+      'function'
     ) {
       return null;
     }
@@ -647,7 +645,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     ) ?
       overrides.retryAfterMs :
       Number.isFinite(readiness?.retryAfterMs) &&
-          readiness.retryAfterMs > NUM.ZERO ?
+          readiness.retryAfterMs > 0 ?
         Math.floor(readiness.retryAfterMs) :
         null;
     const result = {
@@ -680,13 +678,13 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         ...new Set(
           options.requiredTables.filter(
             (tableName) =>
-              typeof tableName === TYPEOF.STRING &&
-                tableName.length > NUM.ZERO,
+              typeof tableName === 'string' &&
+                tableName.length > 0,
           ),
         ),
       ] :
       [];
-    if (requiredTables.length > NUM.ZERO) {
+    if (requiredTables.length > 0) {
       const ingressDecision =
         options.ingressDecision ||
         (await this.resolveMessageGroupIngressDecision(
@@ -695,7 +693,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         ));
       if (
         typeof mgService?.forwardMetadataIngressPayloadToLeader !==
-        TYPEOF.FUNCTION
+        'function'
       ) {
         throw this.buildIngressReadinessError(
           ingressDecision,
@@ -750,7 +748,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     const error = new Error(readiness?.reason || fallbackMessage);
     if (
       Number.isFinite(readiness?.retryAfterMs) &&
-      readiness.retryAfterMs > NUM.ZERO
+      readiness.retryAfterMs > 0
     ) {
       error.deferRetry = true;
       error.retryAfterMs = readiness.retryAfterMs;

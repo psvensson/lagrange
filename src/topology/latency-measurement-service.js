@@ -6,7 +6,7 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {COLUMN, NUM, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
@@ -34,7 +34,7 @@ const INTER_GROUP_LATENCY_SQL = Object.freeze({
 });
 
 const LATENCY_MEASUREMENT_CONFIG_MIN = Object.freeze({
-  PING_TIMEOUT_MS: NUM.ONE,
+  PING_TIMEOUT_MS: 1,
   RECALC_INTERVAL_MS: NUM.THOUSAND,
   SMOOTHING_ALPHA: 0.01,
 });
@@ -67,12 +67,12 @@ class LatencyMeasurementService extends EventEmitter {
 
     this.state = LATENCY_MEASUREMENT_STATE.CREATED;
     this.stats = {
-      measurementRequestCount: NUM.ZERO,
-      measurementAttemptCount: NUM.ZERO,
-      measurementSuccessCount: NUM.ZERO,
-      measurementFailureCount: NUM.ZERO,
-      sampleRecordedCount: NUM.ZERO,
-      sampleIgnoredCount: NUM.ZERO,
+      measurementRequestCount: 0,
+      measurementAttemptCount: 0,
+      measurementSuccessCount: 0,
+      measurementFailureCount: 0,
+      sampleRecordedCount: 0,
+      sampleIgnoredCount: 0,
       lastMeasurementAt: null,
       lastSampleRecordedAt: null,
     };
@@ -154,7 +154,7 @@ class LatencyMeasurementService extends EventEmitter {
    */
   async measureNodeLatency(targetNodeId, options = {}) {
     this.ensureInitialized();
-    this.stats.measurementRequestCount += NUM.ONE;
+    this.stats.measurementRequestCount += 1;
 
     if (!targetNodeId) {
       return null;
@@ -163,15 +163,15 @@ class LatencyMeasurementService extends EventEmitter {
     if (targetNodeId === this.nodeId) {
       return {
         rttMs: LATENCY_MEASUREMENT_DEFAULT.MIN_RTT_MS,
-        attempt: NUM.ZERO,
+        attempt: 0,
       };
     }
 
     const timeoutMs = this.resolveTimeoutMs(options.timeoutMs);
     const retryCount = this.resolveRetryCount(options.retryCount);
 
-    for (let attempt = NUM.ZERO; attempt <= retryCount; attempt += NUM.ONE) {
-      this.stats.measurementAttemptCount += NUM.ONE;
+    for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+      this.stats.measurementAttemptCount += 1;
       const startedAt = this.now();
       this.stats.lastMeasurementAt = startedAt;
       try {
@@ -185,7 +185,7 @@ class LatencyMeasurementService extends EventEmitter {
           endedAt - startedAt,
         );
         if (acknowledged) {
-          this.stats.measurementSuccessCount += NUM.ONE;
+          this.stats.measurementSuccessCount += 1;
           return {rttMs, attempt};
         }
       } catch (error) {
@@ -204,7 +204,7 @@ class LatencyMeasurementService extends EventEmitter {
       timeoutMs,
       retryCount,
     });
-    this.stats.measurementFailureCount += NUM.ONE;
+    this.stats.measurementFailureCount += 1;
 
     return null;
   }
@@ -250,7 +250,7 @@ class LatencyMeasurementService extends EventEmitter {
       targetNodeId: targetRepresentativeNodeId,
       rttMs: measurement.rttMs,
       timestamp: this.now(),
-      sampleQuality: measurement.attempt === NUM.ZERO ?
+      sampleQuality: measurement.attempt === 0 ?
         LATENCY_MEASUREMENT_SAMPLE_QUALITY.GOOD :
         LATENCY_MEASUREMENT_SAMPLE_QUALITY.RETRY,
     };
@@ -304,7 +304,7 @@ class LatencyMeasurementService extends EventEmitter {
     );
     const existingSampleCount = Number(existing?.[COLUMN.SAMPLE_COUNT]);
     const normalizedSampleCount = Number.isFinite(existingSampleCount) &&
-      existingSampleCount >= NUM.ONE ? existingSampleCount : NUM.ZERO;
+      existingSampleCount >= 1 ? existingSampleCount : 0;
     const now = sample.timestamp;
 
     const row = {
@@ -345,7 +345,7 @@ class LatencyMeasurementService extends EventEmitter {
       row,
       result,
     });
-    this.stats.sampleRecordedCount += NUM.ONE;
+    this.stats.sampleRecordedCount += 1;
     this.stats.lastSampleRecordedAt = sample.timestamp;
 
     return {
@@ -361,7 +361,7 @@ class LatencyMeasurementService extends EventEmitter {
    * @return {boolean}
    */
   isValidSample(sample) {
-    if (!sample || typeof sample !== TYPEOF.OBJECT) {
+    if (!sample || typeof sample !== 'object') {
       this.emitIgnoredSample(LATENCY_MEASUREMENT_REASON.INVALID_SHAPE, sample);
       return false;
     }
@@ -393,7 +393,7 @@ class LatencyMeasurementService extends EventEmitter {
    * @return {boolean}
    */
   isSampleStale(timestamp) {
-    if (!Number.isFinite(timestamp) || timestamp <= NUM.ZERO) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
       return true;
     }
     const ageMs = this.now() - timestamp;
@@ -407,11 +407,11 @@ class LatencyMeasurementService extends EventEmitter {
    * @return {number}
    */
   smoothLatency(previousLatencyMs, measuredLatencyMs) {
-    if (!Number.isFinite(previousLatencyMs) || previousLatencyMs < NUM.ZERO) {
+    if (!Number.isFinite(previousLatencyMs) || previousLatencyMs < 0) {
       return measuredLatencyMs;
     }
     return (this.smoothingAlpha * measuredLatencyMs) +
-      ((NUM.ONE - this.smoothingAlpha) * previousLatencyMs);
+      ((1 - this.smoothingAlpha) * previousLatencyMs);
   }
 
   /**
@@ -433,12 +433,12 @@ class LatencyMeasurementService extends EventEmitter {
    */
   async getExistingEdgeRow(edgeId) {
     if (this.systemTableCache &&
-      typeof this.systemTableCache.get === TYPEOF.FUNCTION) {
+      typeof this.systemTableCache.get === 'function') {
       return this.systemTableCache.get(TABLES.INTER_GROUP_LATENCIES, edgeId);
     }
 
     const executeQuery = this.cdcIntegrationService?.sqlQueryEngine?.executeQuery;
-    if (typeof executeQuery !== TYPEOF.FUNCTION) {
+    if (typeof executeQuery !== 'function') {
       return null;
     }
 
@@ -446,7 +446,7 @@ class LatencyMeasurementService extends EventEmitter {
       INTER_GROUP_LATENCY_SQL.SELECT_BY_EDGE_ID,
       [edgeId],
     );
-    return result?.rows?.[NUM.ZERO] || null;
+    return result?.rows?.[0] || null;
   }
 
   /**
@@ -487,7 +487,7 @@ class LatencyMeasurementService extends EventEmitter {
    */
   resolveNumericConfig(key, fallback, minValue) {
     const value = this.config.get(key);
-    if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
       return fallback;
     }
     return Math.max(minValue, value);
@@ -503,7 +503,7 @@ class LatencyMeasurementService extends EventEmitter {
    */
   resolveIntegerConfig(key, fallback, minValue) {
     const value = this.config.get(key);
-    if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
       return fallback;
     }
     return Math.max(minValue, Math.floor(value));
@@ -516,7 +516,7 @@ class LatencyMeasurementService extends EventEmitter {
    * @private
    */
   resolveTimeoutMs(timeoutMs) {
-    if (typeof timeoutMs !== TYPEOF.NUMBER || !Number.isFinite(timeoutMs)) {
+    if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs)) {
       return this.pingTimeoutMs;
     }
     return Math.max(LATENCY_MEASUREMENT_DEFAULT.MIN_RTT_MS, timeoutMs);
@@ -529,10 +529,10 @@ class LatencyMeasurementService extends EventEmitter {
    * @private
    */
   resolveRetryCount(retryCount) {
-    if (typeof retryCount !== TYPEOF.NUMBER || !Number.isFinite(retryCount)) {
+    if (typeof retryCount !== 'number' || !Number.isFinite(retryCount)) {
       return this.pingRetryCount;
     }
-    return Math.max(NUM.ZERO, Math.floor(retryCount));
+    return Math.max(0, Math.floor(retryCount));
   }
 
   /**
@@ -551,7 +551,7 @@ class LatencyMeasurementService extends EventEmitter {
       reason,
       sample,
     });
-    this.stats.sampleIgnoredCount += NUM.ONE;
+    this.stats.sampleIgnoredCount += 1;
   }
 
   /**

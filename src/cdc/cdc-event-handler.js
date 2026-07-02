@@ -9,7 +9,7 @@
  * @module cdc/cdc-event-handler
  */
 
-import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE, TYPEOF} from
+import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE} from
   '../constants/index.js';
 import {METRICS_LOG_TAG} from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
@@ -153,7 +153,7 @@ class CDCEventHandler {
     const handlerStartMs = Date.now();
 
     // Validate cdcEvent
-    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
+    if (!cdcEvent || typeof cdcEvent !== 'object') {
       return {
         applied: false,
         error: CDC_ERROR_MSG.INVALID_EVENT,
@@ -185,10 +185,10 @@ class CDCEventHandler {
     let epochData;
     try {
       const configValue = cdcEvent.data?.[COLUMN.CONFIG_VALUE];
-      if (typeof configValue === TYPEOF.STRING) {
+      if (typeof configValue === 'string') {
         epochData = JSON.parse(configValue);
       } else if (
-        typeof configValue === TYPEOF.OBJECT && configValue !== null
+        typeof configValue === 'object' && configValue !== null
       ) {
         epochData = configValue;
       } else {
@@ -297,7 +297,7 @@ class CDCEventHandler {
     const handlerStartMs = Date.now();
 
     // Validate cdcEvent
-    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
+    if (!cdcEvent || typeof cdcEvent !== 'object') {
       return {
         processed: false,
         error: CDC_ERROR_MSG.INVALID_EVENT,
@@ -471,7 +471,7 @@ class CDCEventHandler {
    */
   async handleNodeJoinedCDC(cdcEvent) {
     // Validate cdcEvent
-    if (!cdcEvent || typeof cdcEvent !== TYPEOF.OBJECT) {
+    if (!cdcEvent || typeof cdcEvent !== 'object') {
       return {
         processed: false,
         error: CDC_ERROR_MSG.INVALID_EVENT,
@@ -551,7 +551,7 @@ class CDCEventHandler {
 
     const wsAddressResolution =
       (typeof this.eventContext.resolveNodeWebSocketAddress ===
-        TYPEOF.FUNCTION ?
+        'function' ?
         this.eventContext.resolveNodeWebSocketAddress(
           targetNodeId,
         ) :
@@ -639,20 +639,20 @@ class CDCEventHandler {
       return null;
     }
 
-    if (typeof messageRouter.getConnectionState === TYPEOF.FUNCTION) {
+    if (typeof messageRouter.getConnectionState === 'function') {
       return messageRouter.getConnectionState(targetNodeId);
     }
 
     const connectionEntry = messageRouter.nodeConnections?.get(targetNodeId);
-    if (typeof connectionEntry === TYPEOF.STRING) {
+    if (typeof connectionEntry === 'string') {
       return connectionEntry;
     }
     if (connectionEntry === true) {
       return STATE.CONNECTED;
     }
-    if (connectionEntry && typeof connectionEntry === TYPEOF.OBJECT) {
+    if (connectionEntry && typeof connectionEntry === 'object') {
       const state = connectionEntry.state;
-      if (typeof state === TYPEOF.STRING) {
+      if (typeof state === 'string') {
         return state;
       }
     }
@@ -665,26 +665,26 @@ class CDCEventHandler {
    * @return {string|null} WebSocket address or null if cannot derive.
    */
   deriveWsAddressFromNodeAddress(nodeAddress) {
-    if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+    if (!nodeAddress || typeof nodeAddress !== 'string') {
       return null;
     }
 
     // Parse hostname:port format
     const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-    if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
+    if (colonIndex === -1 || colonIndex === 0) {
       // No colon found or colon at start (empty hostname)
       return null;
     }
 
-    const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-    if (!hostname || hostname.length === NUM.ZERO) {
+    const hostname = nodeAddress.substring(0, colonIndex);
+    if (!hostname || hostname.length === 0) {
       return null;
     }
 
-    const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
+    const portStr = nodeAddress.substring(colonIndex + 1);
     const restPort = parseInt(portStr, NUM.TEN);
 
-    if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+    if (!Number.isFinite(restPort) || restPort <= 0) {
       return null;
     }
 
@@ -717,7 +717,7 @@ class CDCEventHandler {
 
     for (const candidate of candidates) {
       const timestamp = Number(candidate);
-      if (Number.isFinite(timestamp) && timestamp > NUM.ZERO) {
+      if (Number.isFinite(timestamp) && timestamp > 0) {
         return timestamp;
       }
     }
@@ -733,7 +733,7 @@ class CDCEventHandler {
   setNodeState(nodeId, state, updatedAt = null) {
     this._nodeStates.set(nodeId, state);
     const timestamp = Number(updatedAt);
-    if (Number.isFinite(timestamp) && timestamp > NUM.ZERO) {
+    if (Number.isFinite(timestamp) && timestamp > 0) {
       this._nodeStateEventTimestamps.set(nodeId, timestamp);
     }
   }

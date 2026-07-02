@@ -10,7 +10,6 @@
  * @module query/execution-context
  */
 
-import {TYPEOF, NUM} from '../constants/index.js';
 import {createCallIterator} from './call-iterator.js';
 import {executeStage} from './call-stage.js';
 import {executePlan} from './call-plan.js';
@@ -52,7 +51,7 @@ const SQL_IN_PREFIX = ' IN (';
 const SQL_IN_SUFFIX = ')';
 const SQL_PARAM_PLACEHOLDER = '?';
 const SQL_PARAM_SEPARATOR = ', ';
-const LOOKUP_STAGE_INDEX_DEFAULT = NUM.ZERO;
+const LOOKUP_STAGE_INDEX_DEFAULT = 0;
 
 /**
  * Runtime execution context injected into user functions by
@@ -124,14 +123,14 @@ class ExecutionContext {
     this._planDiagnostics = deps.planDiagnostics ?? null;
 
     /** @private */
-    this._emitSequence = NUM.ZERO;
+    this._emitSequence = 0;
 
     /** @private */
     this._outTelemetry = {
-      totalRows: NUM.ZERO,
-      totalBytes: NUM.ZERO,
-      writeCount: NUM.ZERO,
-      budgetExceededCount: NUM.ZERO,
+      totalRows: 0,
+      totalBytes: 0,
+      writeCount: 0,
+      budgetExceededCount: 0,
     };
 
     /** @private */
@@ -145,7 +144,7 @@ class ExecutionContext {
     this._lookupFetch = deps.lookupFetch || null;
 
     /** @private */
-    this._lookupSequence = NUM.ZERO;
+    this._lookupSequence = 0;
 
     /** @private */
     this._broadcastStore = deps.broadcastStore ||
@@ -179,7 +178,7 @@ class ExecutionContext {
     }
 
     // Plan_Mode: query is a plan object (not a string)
-    if (typeof query === TYPEOF.OBJECT) {
+    if (typeof query === 'object') {
       if (!query[PLAN_FIELD.KIND]) {
         throw new Error(PLAN_ERROR_MSG.PLAN_MISSING_KIND);
       }
@@ -189,7 +188,7 @@ class ExecutionContext {
       let planParams = params;
       let planHandler = handler;
       let planOpts = opts;
-      if (typeof params === TYPEOF.FUNCTION) {
+      if (typeof params === 'function') {
         planHandler = params;
         planOpts = handler;
         planParams = [];
@@ -207,7 +206,7 @@ class ExecutionContext {
       });
     }
 
-    if (typeof query !== TYPEOF.STRING) {
+    if (typeof query !== 'string') {
       throw new Error(ERR.CALL_QUERY_REQUIRED);
     }
 
@@ -216,7 +215,7 @@ class ExecutionContext {
     let resolvedParams = params;
     let resolvedHandler = handler;
     let resolvedOpts = opts;
-    if (typeof params === TYPEOF.FUNCTION) {
+    if (typeof params === 'function') {
       resolvedHandler = params;
       resolvedOpts = handler;
       resolvedParams = [];
@@ -228,7 +227,7 @@ class ExecutionContext {
     }
 
     // Stage_Mode: handler is a function
-    if (typeof resolvedHandler === TYPEOF.FUNCTION) {
+    if (typeof resolvedHandler === 'function') {
       return executeStage({
         query,
         params: resolvedParams,
@@ -289,7 +288,7 @@ class ExecutionContext {
   async emit(key, value, meta) {
     this._cancellationToken.throwIfCancelled();
 
-    if (typeof key !== TYPEOF.STRING) {
+    if (typeof key !== 'string') {
       throw new Error(
         EXCHANGE_ERROR_MSG.EMIT_KEY_REQUIRED,
       );
@@ -303,7 +302,7 @@ class ExecutionContext {
 
     const seq = this._emitSequence++;
     const lineageId = this._lineageTracker.generateLineageId(
-      NUM.ZERO, EMIT_PRIMITIVE_TYPE, seq,
+      0, EMIT_PRIMITIVE_TYPE, seq,
     );
 
     const dedupeKey = explicitDedupeKey !== undefined ?
@@ -376,13 +375,13 @@ class ExecutionContext {
     try {
       this._budgetEnforcer.recordOutBytes(byteCount);
     } catch (err) {
-      this._outTelemetry.budgetExceededCount += NUM.ONE;
+      this._outTelemetry.budgetExceededCount += 1;
       throw err;
     }
 
     const result = this._resultStream.push([row]);
     if (result.exceeded) {
-      this._outTelemetry.budgetExceededCount += NUM.ONE;
+      this._outTelemetry.budgetExceededCount += 1;
       throw new BudgetLimitError(
         this._resultStream.budgetError,
         {
@@ -393,8 +392,8 @@ class ExecutionContext {
       );
     }
 
-    this._outTelemetry.writeCount += NUM.ONE;
-    this._outTelemetry.totalRows += NUM.ONE;
+    this._outTelemetry.writeCount += 1;
+    this._outTelemetry.totalRows += 1;
     this._outTelemetry.totalBytes += byteCount;
   }
 
@@ -448,7 +447,7 @@ class ExecutionContext {
   async lookup(_table, _keys) {
     this._cancellationToken.throwIfCancelled();
     const sequenceNum = this._lookupSequence;
-    this._lookupSequence += NUM.ONE;
+    this._lookupSequence += 1;
     return executeLookup({
       table: _table,
       keys: _keys,
@@ -510,7 +509,7 @@ class ExecutionContext {
    * @private
    */
   async _defaultLookupFetch(table, keys) {
-    if (!this._queryExecutor || typeof this._queryExecutor !== TYPEOF.FUNCTION) {
+    if (!this._queryExecutor || typeof this._queryExecutor !== 'function') {
       return [];
     }
     if (!SAFE_SQL_IDENTIFIER.test(table)) {

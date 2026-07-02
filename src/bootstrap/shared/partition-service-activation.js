@@ -6,11 +6,8 @@ import {
 } from '../../control-plane/control-plane-error-classification.js';
 import {
   ENTITY_TYPE,
-  TYPEOF,
 } from '../../constants/index.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 
 const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
   NODE_ID_REQUIRED:
@@ -27,11 +24,11 @@ const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
 });
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
-      typeof service.getUnifiedAddress === TYPEOF.FUNCTION) {
+      typeof service.getUnifiedAddress === 'function') {
     return service.getUnifiedAddress();
   }
-  if (typeof service?.unifiedAddress === TYPEOF.STRING &&
-      service.unifiedAddress.length > LOCAL_NUM_ZERO) {
+  if (typeof service?.unifiedAddress === 'string' &&
+      service.unifiedAddress.length > 0) {
     return service.unifiedAddress;
   }
   return AddressManager.getInstance().format(
@@ -46,17 +43,17 @@ function isTransientActivationError(error) {
 }
 
 async function activatePartitionServiceRows(options = {}) {
-  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === LOCAL_NUM_ZERO) {
+  if (typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
     throw new Error(PARTITION_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
   if (!options.systemTableWriter) {
     throw new Error(PARTITION_SERVICE_ACTIVATION_ERROR.WRITER_REQUIRED);
   }
   const isReplicaHandlerRegistered =
-    typeof options.isReplicaHandlerRegistered === TYPEOF.FUNCTION ?
+    typeof options.isReplicaHandlerRegistered === 'function' ?
       options.isReplicaHandlerRegistered :
       options.messageRouter &&
-        typeof options.messageRouter.isRegistered === TYPEOF.FUNCTION ?
+        typeof options.messageRouter.isRegistered === 'function' ?
         (replicaId, service) => {
           return options.messageRouter.isRegistered(
             resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
@@ -68,7 +65,7 @@ async function activatePartitionServiceRows(options = {}) {
   }
 
   const isPartitionServiceReady =
-    typeof options.isPartitionServiceReady === TYPEOF.FUNCTION ?
+    typeof options.isPartitionServiceReady === 'function' ?
       options.isPartitionServiceReady :
       (_replicaId, service) => service?.initialized !== false;
 
@@ -77,15 +74,15 @@ async function activatePartitionServiceRows(options = {}) {
     new Map();
   const owner = new PartitionServiceRowOwner({
     systemTableWriter: options.systemTableWriter,
-    now: typeof options.now === TYPEOF.FUNCTION ?
+    now: typeof options.now === 'function' ?
       options.now :
       () => Date.now(),
   });
-  let activatedCount = LOCAL_NUM_ZERO;
+  let activatedCount = 0;
 
   for (const [replicaId, service] of partitionServices.entries()) {
     const partitionId = service?.partitionId || null;
-    if (typeof partitionId !== TYPEOF.STRING || partitionId.length === LOCAL_NUM_ZERO) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
       continue;
     }
     const runtimeReady = await Promise.resolve(
@@ -114,11 +111,11 @@ async function activatePartitionServiceRows(options = {}) {
         nodeId: options.nodeId,
         service,
       });
-      activatedCount += LOCAL_NUM_ONE;
+      activatedCount += 1;
     } catch (error) {
       if (options.deferTransientFailures === true &&
           isTransientActivationError(error)) {
-        if (typeof options.onDeferredActivation === TYPEOF.FUNCTION) {
+        if (typeof options.onDeferredActivation === 'function') {
           await Promise.resolve(options.onDeferredActivation({
             partitionId,
             replicaId,

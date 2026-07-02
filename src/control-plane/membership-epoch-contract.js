@@ -1,4 +1,3 @@
-import {NUM, TYPEOF} from '../constants/index.js';
 
 const MEMBERSHIP_EPOCH_OWNER = 'topology_membership_owner';
 const MEMBERSHIP_EPOCH_BOUNDARY = 'membership_epoch';
@@ -52,19 +51,19 @@ const MEMBERSHIP_EPOCH_ROW_FIELD = Object.freeze({
 
 function buildMembershipEpochValue(value) {
   if (
-    typeof value === TYPEOF.UNDEFINED ||
+    typeof value === 'undefined' ||
     value === MEMBERSHIP_EPOCH_EMPTY_TEXT
   ) {
     return Object.freeze({
       state: MEMBERSHIP_EPOCH_VALUE_STATE.UNAVAILABLE,
-      value: NUM.ZERO,
+      value: 0,
     });
   }
   const normalized = Number(value);
-  if (!Number.isFinite(normalized) || normalized < NUM.ZERO) {
+  if (!Number.isFinite(normalized) || normalized < 0) {
     return Object.freeze({
       state: MEMBERSHIP_EPOCH_VALUE_STATE.UNAVAILABLE,
-      value: NUM.ZERO,
+      value: 0,
     });
   }
   return Object.freeze({
@@ -84,7 +83,7 @@ function chooseMembershipEpochValue(primaryEpochValue, fallbackEpochValue) {
 }
 
 function normalizeMembershipPublicationEpochRow(row) {
-  if (!row || typeof row !== TYPEOF.OBJECT) {
+  if (!row || typeof row !== 'object') {
     return {
       publicationEpoch: buildMembershipEpochValue(),
       sourceTopologyEpoch: buildMembershipEpochValue(),
@@ -210,7 +209,7 @@ function buildMembershipEpochSnapshot(options = {}) {
 function buildMembershipEpochFence(options = {}) {
   const membershipEpochSnapshot =
     options.membershipEpochSnapshot &&
-    typeof options.membershipEpochSnapshot === TYPEOF.OBJECT ?
+    typeof options.membershipEpochSnapshot === 'object' ?
       options.membershipEpochSnapshot :
       buildMembershipEpochSnapshot(options);
   const snapshotPublicationEpoch = normalizeMembershipEpochSnapshotValue(
@@ -229,7 +228,7 @@ function buildMembershipEpochFence(options = {}) {
       isMembershipEpochValueAvailable(snapshotPublicationEpoch) &&
       isMembershipEpochValueAvailable(observedPublicationEpoch) ?
         observedPublicationEpoch.value - snapshotPublicationEpoch.value :
-        NUM.ZERO,
+        0,
   });
   const fenceDecision = Object.freeze([
     Object.freeze({
@@ -245,12 +244,12 @@ function buildMembershipEpochFence(options = {}) {
     Object.freeze({
       state: MEMBERSHIP_EPOCH_FENCE_STATE.CURRENT,
       reasonCode: MEMBERSHIP_EPOCH_REASON_CODE.OBSERVED_EPOCH_CURRENT,
-      matches: fenceEvidence.publicationEpochDelta === NUM.ZERO,
+      matches: fenceEvidence.publicationEpochDelta === 0,
     }),
     Object.freeze({
       state: MEMBERSHIP_EPOCH_FENCE_STATE.STALE,
       reasonCode: MEMBERSHIP_EPOCH_REASON_CODE.OBSERVED_EPOCH_STALE,
-      matches: fenceEvidence.publicationEpochDelta < NUM.ZERO,
+      matches: fenceEvidence.publicationEpochDelta < 0,
     }),
     Object.freeze({
       state: MEMBERSHIP_EPOCH_FENCE_STATE.FUTURE,
@@ -275,7 +274,7 @@ function buildMembershipEpochFence(options = {}) {
 function isMembershipEpochFenceCurrent(fence) {
   return Boolean(
     fence &&
-    typeof fence === TYPEOF.OBJECT &&
+    typeof fence === 'object' &&
     fence.state === MEMBERSHIP_EPOCH_FENCE_STATE.CURRENT,
   );
 }
