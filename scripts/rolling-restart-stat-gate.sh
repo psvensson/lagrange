@@ -124,7 +124,11 @@ fi
 # outcome. Progressing (SLOW) runs reset the clock on every improvement and
 # are never cut. Set NO_PROGRESS_MAX_ELAPSED_MS=0 to disable (full budgets,
 # pre-change behavior).
-NO_PROGRESS_MAX_ELAPSED_MS="${NO_PROGRESS_MAX_ELAPSED_MS:-150000}"
+# Default lifted 150s -> 200s (operator decision 2026-07-02): the residual
+# TOPOLOGY_BLOCKED head is the bounded latency of a proven-convergent loop
+# (self-stabilization proof, 37175d73), so the cut was truncating convergent
+# runs, not detecting frozen ones.
+NO_PROGRESS_MAX_ELAPSED_MS="${NO_PROGRESS_MAX_ELAPSED_MS:-200000}"
 # CPUS overlays the per-node container cpu limit (resourceLimits.cpus) for
 # hardware-triangulation runs; empty = use the config's value.
 CPUS="${CPUS:-}"
