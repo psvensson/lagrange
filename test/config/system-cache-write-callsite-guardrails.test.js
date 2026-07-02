@@ -54,13 +54,16 @@ function getSourceFiles(dir) {
 
 /**
  * Find direct applySystemTableChange invocations.
- * Matches only member-call usage (".applySystemTableChange("), not method declarations.
+ * Matches member-call usage (".applySystemTableChange(") and the extracted
+ * form ("applySystemTableChange.call(", introduced by the read-only-cache
+ * tolerant seed in 73ae705b), not method declarations or typeof guards.
  * @return {Array<{file: string, line: number}>}
  */
 function findApplyCallSites() {
   const matches = [];
   const sourceFiles = getSourceFiles(srcRoot);
-  const pattern = /\.applySystemTableChange\s*\(/g;
+  const pattern =
+    /\.applySystemTableChange\s*\(|\bapplySystemTableChange\.call\s*\(/g;
 
   for (const filePath of sourceFiles) {
     const source = fs.readFileSync(filePath, 'utf8');

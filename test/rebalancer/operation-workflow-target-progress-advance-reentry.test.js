@@ -17,6 +17,9 @@ import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot-contract.js';
+import {
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+} from '../../src/rebalancer/operation-workflow-owner-constants.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
@@ -264,8 +267,14 @@ test(
       );
       t.equal(
         snapshot?.progress?.nextRequiredAction,
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
-        'fixture should preserve the owner advance action',
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+        'target progress snapshots normalize to the owner wait contract',
+      );
+      t.equal(
+        snapshot?.operationOwnerObservation?.outcome,
+        OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
+        'owner lane held by the dispatched reentry reports the retry-wait ' +
+          'outcome instead of a double advance',
       );
       t.same(
         observedProgressOperationIds,
