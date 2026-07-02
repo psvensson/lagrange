@@ -144,12 +144,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 326,
-    "dedupedRuleCount": 317,
-    "exportedRuleCount": 317,
+    "candidateCount": 327,
+    "dedupedRuleCount": 318,
+    "exportedRuleCount": 318,
     "aliasRuleCount": 4,
-    "masterRuleCount": 313,
-    "estimatedAllRulesTokens": 12964
+    "masterRuleCount": 314,
+    "estimatedAllRulesTokens": 12994
   },
   "rules": [
     {
@@ -1514,6 +1514,21 @@
       "id": "TEST-0026",
       "domain": "testing",
       "strength": "must_not",
+      "tags": [],
+      "rule": "Do NOT reach for unref() on awaited sleeps — that lets the process exit mid-await and has broken suites before.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "testing-guidelines/harness.md",
+          "line": 68,
+          "section": "Testing — Harness & Execution > Test Duration Hard Limit"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0027",
+      "domain": "testing",
+      "strength": "must_not",
       "tags": [
         "readiness",
         "testing"
@@ -1529,7 +1544,7 @@
       ]
     },
     {
-      "id": "TEST-0027",
+      "id": "TEST-0028",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1556,7 +1571,7 @@
       ]
     },
     {
-      "id": "TEST-0028",
+      "id": "TEST-0029",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1669,7 +1684,7 @@
         }
       ],
       "aliases": [
-        "TEST-0033"
+        "TEST-0034"
       ]
     },
     {
@@ -1708,7 +1723,7 @@
       ]
     },
     {
-      "id": "TEST-0029",
+      "id": "TEST-0030",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1723,7 +1738,7 @@
       ]
     },
     {
-      "id": "TEST-0030",
+      "id": "TEST-0031",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1741,7 +1756,7 @@
       ]
     },
     {
-      "id": "TEST-0031",
+      "id": "TEST-0032",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1758,7 +1773,7 @@
       ]
     },
     {
-      "id": "TEST-0032",
+      "id": "TEST-0033",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1773,7 +1788,7 @@
       ]
     },
     {
-      "id": "TEST-0033",
+      "id": "TEST-0034",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1792,7 +1807,7 @@
       "canonical_of": "STYLE-0008"
     },
     {
-      "id": "TEST-0034",
+      "id": "TEST-0035",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1809,7 +1824,7 @@
       ]
     },
     {
-      "id": "TEST-0035",
+      "id": "TEST-0036",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1826,7 +1841,7 @@
       ]
     },
     {
-      "id": "TEST-0036",
+      "id": "TEST-0037",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1841,7 +1856,7 @@
       ]
     },
     {
-      "id": "TEST-0037",
+      "id": "TEST-0038",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1863,7 +1878,7 @@
       ]
     },
     {
-      "id": "TEST-0038",
+      "id": "TEST-0039",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2364,7 +2379,7 @@
       ]
     },
     {
-      "id": "TEST-0039",
+      "id": "TEST-0040",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2381,7 +2396,7 @@
       ]
     },
     {
-      "id": "TEST-0040",
+      "id": "TEST-0041",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2638,7 +2653,7 @@
       ]
     },
     {
-      "id": "TEST-0041",
+      "id": "TEST-0042",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2655,7 +2670,7 @@
       ]
     },
     {
-      "id": "TEST-0042",
+      "id": "TEST-0043",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2672,7 +2687,7 @@
       ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0044",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2689,7 +2704,7 @@
       ]
     },
     {
-      "id": "TEST-0044",
+      "id": "TEST-0045",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2706,7 +2721,7 @@
       ]
     },
     {
-      "id": "TEST-0045",
+      "id": "TEST-0046",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2718,13 +2733,13 @@
       "sources": [
         {
           "file": "testing-guidelines/harness.md",
-          "line": 95,
+          "line": 105,
           "section": "Testing — Harness & Execution > Timeout Budget and Classification Policy"
         }
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0047",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2739,7 +2754,7 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0048",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2756,7 +2771,7 @@
       ]
     },
     {
-      "id": "TEST-0048",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2771,7 +2786,7 @@
       ]
     },
     {
-      "id": "TEST-0049",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2790,7 +2805,7 @@
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2807,7 +2822,7 @@
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2827,7 +2842,7 @@
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0053",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2846,7 +2861,7 @@
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2864,7 +2879,7 @@
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2881,7 +2896,7 @@
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2898,7 +2913,7 @@
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2913,7 +2928,7 @@
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0058",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2928,7 +2943,7 @@
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0059",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2946,7 +2961,7 @@
       ]
     },
     {
-      "id": "TEST-0059",
+      "id": "TEST-0060",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2963,7 +2978,7 @@
       ]
     },
     {
-      "id": "TEST-0060",
+      "id": "TEST-0061",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3854,7 +3869,7 @@
       ]
     },
     {
-      "id": "TEST-0061",
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3919,7 +3934,7 @@
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4247,7 +4262,7 @@
       ]
     },
     {
-      "id": "TEST-0063",
+      "id": "TEST-0064",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4264,7 +4279,7 @@
       ]
     },
     {
-      "id": "TEST-0064",
+      "id": "TEST-0065",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4281,7 +4296,7 @@
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0066",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4296,7 +4311,7 @@
       ]
     },
     {
-      "id": "TEST-0066",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4313,7 +4328,7 @@
       ]
     },
     {
-      "id": "TEST-0067",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4345,7 +4360,7 @@
       ]
     },
     {
-      "id": "TEST-0068",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4509,7 +4524,7 @@
       ]
     },
     {
-      "id": "TEST-0069",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4573,7 +4588,7 @@
       ]
     },
     {
-      "id": "TEST-0070",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4588,7 +4603,7 @@
       ]
     },
     {
-      "id": "TEST-0071",
+      "id": "TEST-0072",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4606,7 +4621,7 @@
       ]
     },
     {
-      "id": "TEST-0072",
+      "id": "TEST-0073",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4623,7 +4638,7 @@
       ]
     },
     {
-      "id": "TEST-0073",
+      "id": "TEST-0074",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4730,7 +4745,7 @@
       ]
     },
     {
-      "id": "TEST-0074",
+      "id": "TEST-0075",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -4745,7 +4760,7 @@
       ]
     },
     {
-      "id": "TEST-0075",
+      "id": "TEST-0076",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -4781,7 +4796,7 @@
       ]
     },
     {
-      "id": "TEST-0076",
+      "id": "TEST-0077",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4796,7 +4811,7 @@
       ]
     },
     {
-      "id": "TEST-0077",
+      "id": "TEST-0078",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4811,7 +4826,7 @@
       ]
     },
     {
-      "id": "TEST-0078",
+      "id": "TEST-0079",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4965,7 +4980,7 @@
       ]
     },
     {
-      "id": "TEST-0079",
+      "id": "TEST-0080",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -4982,7 +4997,7 @@
       ]
     },
     {
-      "id": "TEST-0080",
+      "id": "TEST-0081",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -4993,13 +5008,13 @@
       "sources": [
         {
           "file": "testing-guidelines/harness.md",
-          "line": 124,
+          "line": 134,
           "section": "Testing — Harness & Execution > When to Run Full Test Suite"
         }
       ]
     },
     {
-      "id": "TEST-0081",
+      "id": "TEST-0082",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5342,5 +5357,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-02T05:57:46.789Z"
+  "generatedAt": "2026-07-02T07:14:17.833Z"
 }

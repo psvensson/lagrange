@@ -65,6 +65,16 @@ This is a powerful multi-core machine running in-memory tests, so there is no va
 
 Identify the root cause by looking for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation. Resolve it by mocking time-based behavior instead of waiting for real time, clearing all timers in `finally` blocks, disabling background features (speculative execution, intervals) in unit tests, and using `Promise.resolve()` or immediate callbacks instead of delays.
 
+When a test genuinely needs a timer, use the teardown-registered helpers in
+`src/test-helpers/managed-timers.js` (`managedTimeout` / `managedInterval` /
+`managedSleep`) instead of bare timer calls — they bind every timer to the
+test's lifetime so a re-armed background loop cannot outlive its test (the
+classic assertions-pass-then-hang-the-full-TAP-timeout class). Do NOT reach
+for `unref()` on awaited sleeps — that lets the process exit mid-await and has
+broken suites before. To hunt a surviving handle, call
+`reportOpenHandlesOnTeardown(t)` first in the test body; it snapshots
+`process.getActiveResourcesInfo()` after all other teardowns ran.
+
 **Common violations:**
 ```javascript
 // ❌ WRONG - Real delay in test

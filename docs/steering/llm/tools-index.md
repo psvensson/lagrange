@@ -27,6 +27,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `start` — `node src/index.js`
 - `test` — `tap`
 - `trace` — Join quests/specs/CLs across planning layers (solve.js trace).
+- `triage` — `node scripts/triage-distributed-failure.js`
 
 ## analyze
 
@@ -65,6 +66,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:owner-boundary-segments` — Print extraction guidance for oversized owner-boundary segment files.
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — Check runtime owner-contract and grammar drift.
+- `audit:shards` — `node scripts/generate-test-shards.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 
 ## build
@@ -136,6 +138,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `quest:context` — Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.
 
+## shards
+
+- `shards:generate` — `node scripts/generate-test-shards.js`
+
 ## solve
 
 - `solve:attempt` — Run a command through the Solver-owned measured-attempt path.
@@ -178,7 +184,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:bootstrap:1` — `tap $(cat test/shards/bootstrap-1.txt)`
 - `test:bootstrap:2` — `tap $(cat test/shards/bootstrap-2.txt)`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
-- `test:ci` — `npm run test:safety-pregate && npm run test && npm run test:quality && npm run test:chart:endpoint-sync && npm run model:check`
+- `test:ci` — `npm run test:safety-pregate && npm run test && npm run test:static && npm run test:chart:endpoint-sync && npm run model:contracts`
 - `test:cli` — `tap test/cli/**/*.test.js`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
@@ -197,6 +203,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
+- `test:gate` — `npm run test:fast && npm run test:static && npm run model:contracts`
 - `test:integration:1` — `tap $(cat test/shards/integration-1.txt)`
 - `test:integration:2` — `tap $(cat test/shards/integration-2.txt)`
 - `test:integration:3` — `tap $(cat test/shards/integration-3.txt)`
@@ -227,6 +234,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test-output:prune` — Delete old test-harness artifacts; keeps pinned names, recent items, and a few per category.
 - `test-output:prune:dry` — Preview which old test-harness artifacts would be pruned, without deleting.
 
+## trends
+
+- `trends:gates` — `node scripts/query-gate-trends.js`
+
 ---
 
-151 scripts indexed; 65 have a curated description, 86 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+156 scripts indexed; 65 have a curated description, 91 fall back to their raw command. Improve coverage in the two sources named in the header comment.

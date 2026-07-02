@@ -14,7 +14,7 @@ Load for test-first workflow, reliability harness work, and regression policy.
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
-> **Priority subset — showing 35 of 80 testing rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 45 lower-priority rules are omitted. For every testing rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain testing`.
+> **Priority subset — showing 35 of 81 testing rules** (capped per `maxRules` in `llm-pack.config.json`). The IDs below are NOT gapless: 46 lower-priority rules are omitted. For every testing rule, see [`rules-index.md`](rules-index.md) or run `npm run rule -- --domain testing`.
 
 ## Rules
 
@@ -29,10 +29,10 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 7. [TEST-0017] A lever that passes its own unit DT but never moves the real observable is NOT proven; do NOT advance it to a gate. Reproduce the observable deterministically in-process first. _(see testing-guidelines/release-gate.md:86)_
 8. [TEST-0019] Do not defer the failure. When the failure is in the touched area, or was surfaced by the runs you chose to perform, you must resolve it before closing the current task. _(see testing-guidelines/regression-policy.md:346)_
 9. [TEST-0020] Do not mark the bug closed just because the baseline rerun happens to pass. Closure requires a stable targeted regression in the normal development loop. _(see testing-guidelines/regression-policy.md:376)_
-10. [TEST-0028] Work must not close while the touched area remains red. _(see testing-guidelines/regression-policy.md:357)_
-11. [TEST-0029] The active Quest must define the required validation surface. _(see testing-guidelines/proof-ladders.md:22)_
-12. [TEST-0032] When residual closure moves to a follow-on Quest or frontier, the original Quest must stop short of SOLVED until the split is explicit in a finding or the current Quest report. _(see testing-guidelines/proof-ladders.md:38)_
-13. [TEST-0036] The next regression in that area must prove the reduced boundary, not only the immediate symptom. _(see testing-guidelines/regression-policy.md:112)_
+10. [TEST-0026] Do NOT reach for unref() on awaited sleeps — that lets the process exit mid-await and has broken suites before. _(see testing-guidelines/harness.md:68)_
+11. [TEST-0029] Work must not close while the touched area remains red. _(see testing-guidelines/regression-policy.md:357)_
+12. [TEST-0030] The active Quest must define the required validation surface. _(see testing-guidelines/proof-ladders.md:22)_
+13. [TEST-0033] When residual closure moves to a follow-on Quest or frontier, the original Quest must stop short of SOLVED until the split is explicit in a finding or the current Quest report. _(see testing-guidelines/proof-ladders.md:38)_
 
 ### Ownership & Authority Policies
 
@@ -41,7 +41,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 
 ### Readiness & Health Contracts
 
-16. [TEST-0026] A gate must never be the iteration loop: do not gate to see whether a change helped, to discover the next blocker, or to re-confirm a mechanism a deterministic test already demonstrates. _(see testing-guidelines/release-gate.md:63)_
+16. [TEST-0027] A gate must never be the iteration loop: do not gate to see whether a change helped, to discover the next blocker, or to re-confirm a mechanism a deterministic test already demonstrates. _(see testing-guidelines/release-gate.md:63)_
 
 ### Timeouts & Budget Management
 
@@ -62,11 +62,11 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 28. [TEST-0023] Production code must never contain alternate code paths, branches, or special-case logic that exist solely to make tests pass. _(see testing-guidelines/fixtures.md:45)_
 29. [TEST-0024] Do not reclassify a slow unit test as "integration" to dodge the hard error — move the file into the integration set only if it genuinely needs the integration harness. _(see testing-guidelines/harness.md:56)_
 30. [TEST-0025] When a test exceeds its duration limit (2 seconds for a unit test, 30 seconds for an integration test) you must not accept it as passing; remediate before proceeding by identifying the root cause and then resolving it. _(see testing-guidelines/harness.md:64)_
-31. [TEST-0027] A test that fails because behavior regressed MUST be fixed (in the code or the test), and MUST NEVER be deleted or skipped to make the suite green; deletion is reserved for behavior that was intentionally removed. _(see testing-guidelines/regression-policy.md:351)_
-32. [TEST-0030] Tests added during the change must match the Quest concern rather than an unrelated umbrella scope. _(see testing-guidelines/proof-ladders.md:23)_
-33. [TEST-0035] The test must fail with the current code _(see testing-guidelines/regression-policy.md:22)_
+31. [TEST-0028] A test that fails because behavior regressed MUST be fixed (in the code or the test), and MUST NEVER be deleted or skipped to make the suite green; deletion is reserved for behavior that was intentionally removed. _(see testing-guidelines/regression-policy.md:351)_
+32. [TEST-0031] Tests added during the change must match the Quest concern rather than an unrelated umbrella scope. _(see testing-guidelines/proof-ladders.md:23)_
+33. [TEST-0036] The test must fail with the current code _(see testing-guidelines/regression-policy.md:22)_
 
 ### Governance & Scope Controls
 
-34. [TEST-0031] After the Quest validation surface is green, perform the required closure deep dive across the affected area before claiming SOLVED (scope and stop condition defined under "Closure deep dive — scope" below). _(see testing-guidelines/proof-ladders.md:28)_
-35. [TEST-0034] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:129)_
+34. [TEST-0032] After the Quest validation surface is green, perform the required closure deep dive across the affected area before claiming SOLVED (scope and stop condition defined under "Closure deep dive — scope" below). _(see testing-guidelines/proof-ladders.md:28)_
+35. [TEST-0035] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:129)_
