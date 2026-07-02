@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
-# Unused-code gate (~7s). Bypass with git push --no-verify (emergencies only).
+# Push gate: unused-code check (~7s) + whole-repo cached lint (~30s cold,
+# seconds warm — cache shared with pre-commit at node_modules/.cache/eslint/).
+# Keeps 'npm run lint' green without waiting for a full test:static run.
+# Bypass with git push --no-verify (emergencies only).
 set -euo pipefail
 npm run -s test:unused
+npx eslint --cache --cache-location node_modules/.cache/eslint/ src/ test/ scripts/ --ignore-pattern 'test/.gitkeep'
