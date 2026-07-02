@@ -22,9 +22,9 @@ echo "  Admin WebSocket Port: $DEFAULT_ADMIN_PORT"
 echo "  Data Directory: $DATA_DIR"
 echo ""
 
-# Set environment variables for the seed node
-# Using a fixed UUID for reproducible testing (seed-node-1)
-export NODE_ID="550e8400-e29b-41d4-a716-446655440001"
+# Set environment variables for the seed node.
+# NODE_ID stays unset: the node mints a UUID on first start and restores it
+# from the data directory on restart.
 export NODE_ADDRESS="$DEFAULT_HOST:$DEFAULT_REST_PORT"
 export REST_API_PORT="$DEFAULT_REST_PORT"
 export DATA_DIR="$DATA_DIR"

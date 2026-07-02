@@ -8,6 +8,11 @@ helm install lagrange charts/lagrange-node \
   --set image.tag=0.1.0 --set joiners.replicas=2
 ```
 
+The default `image.repository` (`codeberg.org/psvensson/lagrange`) is the
+published release image, which exists once a `v*` release has been cut. Until
+then, or for local builds, build and push your own image and pass
+`--set image.repository=<your-registry>/lagrange --set image.tag=<tag>`.
+
 ## Shape and why
 
 - **Two StatefulSets (seed + joiners), not one.** The node entrypoint has

@@ -856,10 +856,10 @@ function debugLog(correlationId, message, data) {
 | `src/query/query-executor.js` | Parallel query execution |
 | `src/transport/message-router.js` | Message delivery and routing |
 | `src/partition/partition-service.js` | Partition query execution |
-| `src/system-cache/system-table-cache.js` | System state cache |
+| `src/cache/system-table-cache.js` | System state cache |
 | `src/query/query-constants.js` | Error messages and defaults |
 
 ## See Also
 
-- [architecture.md](./architecture.md) - System architecture overview
+- [architecture/INDEX.md](./architecture/INDEX.md) - System architecture overview
 - [src/constants/README.md](./src/constants/README.md) - Constants naming conventions

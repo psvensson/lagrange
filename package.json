@@ -2,6 +2,10 @@
   "name": "lagrange",
   "version": "0.1.0",
   "description": "Lagrange experimental distributed SQL database and compute-near-data runtime",
+  "repository": {
+    "type": "git",
+    "url": "https://codeberg.org/psvensson/lagrange.git"
+  },
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -37,7 +41,6 @@
     "test:pgwire:unit": "tap $(cat test/shards/pgwire-unit.txt)",
     "test:pgwire:integration": "tap $(cat test/shards/pgwire-integration.txt)",
     "test:sharded:all": "npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2",
-    "test:coverage": "tap test/ --coverage",
     "test:cli": "tap test/cli/**/*.test.js",
     "test:unused": "knip --exclude exports,duplicates",
     "test:unused:prod": "knip --production",

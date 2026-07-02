@@ -271,12 +271,14 @@ Create `.env` in the directory you start the node from (loaded at startup;
 variables already set in your shell take precedence):
 
 ```env
-NODE_ID=node-1
 REST_API_PORT=8080
 
 LOG_LEVEL=info
 LOG_PRETTY_PRINT=false
 ```
+
+Leave `NODE_ID` unset — the node mints a UUID identity on first start and
+persists it in its data directory, so the same identity survives restarts.
 
 Leave `SEED_NODE_ADDRESS` unset for your first node. A node without a seed
 address starts as the cluster seed; setting one makes the node try to join an
@@ -366,7 +368,11 @@ values and topology details.
 ### Useful Commands
 
 ```bash
-# Run the test suite
+# Quick test pass: unit and non-integration suites (a few minutes)
+npm run test:fast
+
+# Full sharded test suite: thousands of files, takes much longer, and runs
+# a preflight audit gate first
 npm test
 
 # Open the admin CLI entrypoint
@@ -374,7 +380,14 @@ npm run cli -- --help
 
 # Run static analysis and structural checks
 npm run test:static
+
+# Print common local workflows
+npm run commands
 ```
+
+Always run tests through the npm scripts above. Invoking `tap test/` directly
+does not work — the argument list exceeds the OS limit (E2BIG) — so the
+scripts shard and batch the suite for you.
 
 If you are just passing through the repo, the fastest way to get oriented is:
 
@@ -382,8 +395,9 @@ If you are just passing through the repo, the fastest way to get oriented is:
 2. skim the architecture walkthrough at [architecture/INDEX.md](architecture/INDEX.md)
 3. inspect [roadmap.md](roadmap.md)
 4. look at [src/index.js](src/index.js) and the directories under `src/`
-5. run `npm test` if you want to see the project as executable code rather
-   than only as documents
+5. run `npm run test:fast` if you want to see the project as executable code
+   rather than only as documents (`npm test` is the full sharded suite and
+   takes much longer)
 
 If you are an LLM or are handing work to one, start with the compact handoff:
 

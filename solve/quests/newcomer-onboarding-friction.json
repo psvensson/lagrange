@@ -1,0 +1,40 @@
+{
+  "id": "newcomer-onboarding-friction",
+  "statement": "A new developer following the public onboarding surfaces (README quickstart, CLI docs, examples, charts) hits no stale ddb naming, no broken paths, no unstated prerequisites, and a fresh clone contains no bulk legacy artifacts: DEBUGGING.md paths fixed; README minimal .env drops NODE_ID and testing guidance points at test:fast with a bare-tap warning; broken test:coverage script removed; start-node scripts drop hardcoded NODE_IDs; examples/ has an index README and per-family prerequisites; the ddb->lagrange rename is completed atomically (bin, SEA entrypoint and output names, config dir, DDB_* CLI env vars, CLI docs) with git grep clean outside whitelisted internals; _legacy_work slimmed to its live-referenced closure (theory-ledger.md, work-theory-ledger.js, work-package-schema.js, inventory/) with an archive README; tracked .playback, .tmp, .antigravitycli, .codex untracked and ignored; a narrow naming guard wired into test:static; npm run test:gate green at closure.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "newcomer-onboarding-friction",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "newcomer-onboarding-friction-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "newcomer-onboarding-friction",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

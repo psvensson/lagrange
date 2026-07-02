@@ -26,9 +26,9 @@ echo "  Data Directory: $DATA_DIR"
 echo "  Seed Node: $SEED_NODE_ADDRESS"
 echo ""
 
-# Set environment variables for the third node
-# Using a fixed UUID for reproducible testing (node-3)
-export NODE_ID="550e8400-e29b-41d4-a716-446655440003"
+# Set environment variables for the third node.
+# NODE_ID stays unset: the node mints a UUID on first start and restores it
+# from the data directory on restart (join admission requires a UUID id).
 export NODE_ADDRESS="$DEFAULT_HOST:$REST_API_PORT"
 export REST_API_PORT="$REST_API_PORT"
 export ADMIN_WEBSOCKET_PORT="$ADMIN_WEBSOCKET_PORT"

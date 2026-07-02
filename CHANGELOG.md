@@ -10,6 +10,10 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Removed
+- The broken `test:coverage` npm script (`tap test/` exceeds the OS argument
+  limit; use the sharded `test:*` scripts instead).
+
 ## [0.1.0] — 2026-07-02
 
 First tagged release. **Experimental / alpha** — Lagrange is a research-grade

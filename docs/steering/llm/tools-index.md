@@ -18,14 +18,14 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
-- `prepare` — `node scripts/install-git-hooks.js`
+- `prepare` — `test ! -f scripts/install-git-hooks.js || node scripts/install-git-hooks.js`
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
 - `session-worktree` — `node scripts/session-worktree.js`
 - `solve` — `node scripts/solve.js`
 - `start` — `node src/index.js`
-- `test` — `tap`
+- `test` — `npm run test:sharded:all`
 - `trace` — Join quests/specs/CLs across planning layers (solve.js trace).
 - `triage` — `node scripts/triage-distributed-failure.js`
 
@@ -184,7 +184,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:bootstrap:1` — `tap $(cat test/shards/bootstrap-1.txt)`
 - `test:bootstrap:2` — `tap $(cat test/shards/bootstrap-2.txt)`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
-- `test:ci` — `npm run test:safety-pregate && npm run test && npm run test:static && npm run test:chart:endpoint-sync && npm run model:contracts`
+- `test:ci` — `npm run test:safety-pregate && npm run test:sharded:all && npm run test:static && npm run test:chart:endpoint-sync && npm run model:contracts`
 - `test:cli` — `tap test/cli/**/*.test.js`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
@@ -194,7 +194,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:complexity:scoped` — `node scripts/check-complexity.js --scoped`
 - `test:complexity:scoped:strict` — `node scripts/check-complexity.js --scoped --strict`
 - `test:complexity:strict` — `node scripts/check-complexity.js --strict`
-- `test:coverage` — `tap --coverage`
+- `test:convergence-probes` — `tap $(cat test/shards/convergence-probes.txt)`
 - `test:cycles` — `node scripts/check-circular-dependencies.js`
 - `test:cycles:strict` — `node scripts/check-circular-dependencies.js --strict`
 - `test:deps` — `depcruise --config dependency-cruiser.config.cjs src test`
