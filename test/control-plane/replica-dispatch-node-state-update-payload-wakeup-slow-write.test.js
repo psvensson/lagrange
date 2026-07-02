@@ -36,7 +36,6 @@ import {
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 
 
-
 test('ReplicaDispatchService dispatches direct wake-up payload rows before ' +
   'cache visibility converges', async (t) => {
   initEnv();

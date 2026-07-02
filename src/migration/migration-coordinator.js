@@ -614,7 +614,6 @@ class MigrationCoordinator {
   shouldStopForCancellation(migrationId) {
     return this.cancellationRequestedByMigrationId.has(String(migrationId || LOCAL_STR_EMPTY));
   }
-
 }
 
 Object.assign(

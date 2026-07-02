@@ -914,8 +914,9 @@ test('QueryExecutor - consumes canonical participation contract for self ' +
     'routing denial should preserve the canonical participation reason',
   );
   t.equal(
-    warnings[0].context.routingSnapshot.deniedByNodeId[nodeId]
-      [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]?.state,
+    warnings[0].context.routingSnapshot.deniedByNodeId[nodeId][
+      READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY
+    ]?.state,
     RUNTIME_AUTHORITY_STATE.ESTABLISHING,
     'routing denial should preserve runtime authority state',
   );

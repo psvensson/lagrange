@@ -931,7 +931,7 @@ describe('analyze-topology-convergence CLI', () => {
       assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
       assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
       assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
-    assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
+      assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
       assert.deepEqual(output.handoffContract, {
         state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
         reasonCode: OWNER_RECONCILE_PENDING_REASON,

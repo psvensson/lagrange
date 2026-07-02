@@ -189,8 +189,8 @@ function createMockProbeRebalanceCoordinator() {
 
 test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
-    initializeTestEnvironment({ nodeId: SEED_NODE_ID });
-    LoggingService.getInstance().initialize({ level: 'info' });
+    initializeTestEnvironment({nodeId: SEED_NODE_ID});
+    LoggingService.getInstance().initialize({level: 'info'});
   });
 
   t.afterEach(async () => {

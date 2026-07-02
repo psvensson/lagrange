@@ -99,7 +99,7 @@ function hasPressureOrTimeoutError(error) {
   const message = error.message || '';
   const code = error.code || '';
   return RETRYABLE_ERROR_MESSAGE_PARTS.some((messagePart) =>
-    message.includes(messagePart)
+    message.includes(messagePart),
   ) || RETRYABLE_ERROR_CODES.includes(code);
 }
 
@@ -119,7 +119,7 @@ function hasPressureObservation(resultOrError) {
       observation.reasonCodes.some((code) =>
         code.includes(REASON_SUBSTR_PRESSURE) ||
         code.includes(REASON_SUBSTR_TIMEOUT) ||
-        code.includes(REASON_SUBSTR_FAIL)
+        code.includes(REASON_SUBSTR_FAIL),
       ))
   );
 }
@@ -142,7 +142,7 @@ function evaluateControlSnapshotRetryDecision(
   };
 
   const matchedRule = CONTROL_SNAPSHOT_RETRY_RULES.find((rule) =>
-    rule.match(evidence)
+    rule.match(evidence),
   );
   return {
     outcome: matchedRule.outcome,

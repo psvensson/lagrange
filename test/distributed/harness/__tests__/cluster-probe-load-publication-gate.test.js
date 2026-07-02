@@ -176,7 +176,7 @@ test(
         'activity source',
     );
   },
-	);
+);
 
 test(
   'Unit: _probeClusterActiveState projects terminal load-mode readiness noise ' +

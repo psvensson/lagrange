@@ -530,7 +530,6 @@ class BootstrapAPI {
     this.fastify = null;
     this.initialized = false;
   }
-
 }
 
 installBootstrapApiControlPlaneMethods(BootstrapAPI);

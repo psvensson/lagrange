@@ -414,7 +414,7 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
       reservation,
       now,
     ).observedCommitted;
-  }
+  },
 };
 
 export {moveReplicaAssignmentVisibilityPolicyMethods};

@@ -68,7 +68,6 @@ class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
     }
     cancellationToken.throwIfCancelled();
   }
-
 }
 installQueryExecutorTemporaryUnroutableAddressMethods(
   QueryExecutorCancellationRouting,

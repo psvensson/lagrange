@@ -66,7 +66,7 @@ class ControlPlaneReadinessPublicationDiagnostics extends ControlPlaneReadinessD
       resolveMembershipPublicationReadScope(readOptions?.scope) ===
         MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
       typeof this.membershipPublicationService
-          ?.getLatestClusterPublicationSync === TYPEOF.FUNCTION;
+        ?.getLatestClusterPublicationSync === TYPEOF.FUNCTION;
     if (memoizableRead && this.membershipPublicationDiagnosticsMemo) {
       return this.membershipPublicationDiagnosticsMemo.diagnostics;
     }

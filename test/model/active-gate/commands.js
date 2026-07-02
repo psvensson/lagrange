@@ -36,39 +36,75 @@ class GateCommand {
 }
 
 class ReconcileOwner extends GateCommand {
-  constructor(node) {super('ReconcileOwner', node);}
-  check({gate}) {return gate.canReconcileOwner(this.node);}
-  run({gate}) {gate.reconcileOwner(this.node); assertInvariants(gate);}
+  constructor(node) {
+    super('ReconcileOwner', node);
+  }
+  check({gate}) {
+    return gate.canReconcileOwner(this.node);
+  }
+  run({gate}) {
+    gate.reconcileOwner(this.node); assertInvariants(gate);
+  }
 }
 
 class AdvanceSnapshotCoverage extends GateCommand {
-  constructor(node) {super('AdvanceSnapshotCoverage', node);}
-  check({gate}) {return gate.canAdvanceSnapshotCoverage(this.node);}
-  run({gate}) {gate.advanceSnapshotCoverage(this.node); assertInvariants(gate);}
+  constructor(node) {
+    super('AdvanceSnapshotCoverage', node);
+  }
+  check({gate}) {
+    return gate.canAdvanceSnapshotCoverage(this.node);
+  }
+  run({gate}) {
+    gate.advanceSnapshotCoverage(this.node); assertInvariants(gate);
+  }
 }
 
 class PublishNode extends GateCommand {
-  constructor(node) {super('PublishNode', node);}
-  check({gate}) {return gate.canPublishNode(this.node);}
-  run({gate}) {gate.publishNode(this.node); assertInvariants(gate);}
+  constructor(node) {
+    super('PublishNode', node);
+  }
+  check({gate}) {
+    return gate.canPublishNode(this.node);
+  }
+  run({gate}) {
+    gate.publishNode(this.node); assertInvariants(gate);
+  }
 }
 
 class RefreshSnapshot extends GateCommand {
-  constructor() {super('RefreshSnapshot');}
-  check({gate}) {return gate.canRefreshSnapshot();}
-  run({gate}) {gate.refreshSnapshot(); assertInvariants(gate);}
+  constructor() {
+    super('RefreshSnapshot');
+  }
+  check({gate}) {
+    return gate.canRefreshSnapshot();
+  }
+  run({gate}) {
+    gate.refreshSnapshot(); assertInvariants(gate);
+  }
 }
 
 class DeferReentry extends GateCommand {
-  constructor(node) {super('DeferReentry', node);}
-  check({gate}) {return gate.canDeferReentry(this.node);}
-  run({gate}) {gate.deferReentry(this.node); assertInvariants(gate);}
+  constructor(node) {
+    super('DeferReentry', node);
+  }
+  check({gate}) {
+    return gate.canDeferReentry(this.node);
+  }
+  run({gate}) {
+    gate.deferReentry(this.node); assertInvariants(gate);
+  }
 }
 
 class StaleEvent extends GateCommand {
-  constructor() {super('StaleEvent');}
-  check({gate}) {return gate.canStaleEvent();}
-  run({gate}) {gate.staleEvent(); assertInvariants(gate);}
+  constructor() {
+    super('StaleEvent');
+  }
+  check({gate}) {
+    return gate.canStaleEvent();
+  }
+  run({gate}) {
+    gate.staleEvent(); assertInvariants(gate);
+  }
 }
 
 // Returns the fast-check command arbitraries for the given node set. The

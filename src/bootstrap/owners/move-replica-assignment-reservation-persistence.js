@@ -284,7 +284,7 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
       updatedAt,
       stepsHistory,
     };
-  }
+  },
 };
 
 export {moveReplicaAssignmentReservationPersistenceMethods};

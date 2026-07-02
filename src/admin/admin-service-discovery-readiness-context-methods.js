@@ -694,7 +694,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       }
       return stateByNodeId;
     }
-
   }
 
   for (const methodName of Object.getOwnPropertyNames(

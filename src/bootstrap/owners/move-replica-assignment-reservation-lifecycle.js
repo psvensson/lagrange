@@ -372,7 +372,7 @@ const moveReplicaAssignmentReservationLifecycleMethods = {
       targetNodeId: reservation.targetNodeId,
       sourceNodeId: reservation.sourceNodeId || null,
     });
-  }
+  },
 };
 
 export {moveReplicaAssignmentReservationLifecycleMethods};

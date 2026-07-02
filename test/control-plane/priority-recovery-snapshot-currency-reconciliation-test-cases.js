@@ -436,79 +436,79 @@ export function registerPriorityRecoverySnapshotCurrencyReconciliationTests(cont
     'the unresolved set';
 
   test(EXPLICIT_SEMANTIC_STATE_TEST_NAME, async (t) => {
-      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
-        priorityRecoveryDecisionSnapshots: {
-          capturedAt: 2000,
-          publicationEpoch: 9,
-          partitionIdsBySemanticState: {
-            converged: [],
-            spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
-            needs_operation: [],
-            operation_stalled: [],
-            learner_promotion_blocked: [],
-            coordination_mismatch: [],
-            recovering_in_flight: [],
-            blocked_unclassified: [],
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 2000,
+        publicationEpoch: 9,
+        partitionIdsBySemanticState: {
+          converged: [],
+          spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+          needs_operation: [],
+          operation_stalled: [],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: [],
+          blocked_unclassified: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            ready: false,
           },
-          snapshots: [{
-            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-            blockerReasons: [
-              PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
-            ],
-            planner: {
-              ready: false,
-            },
-            spreadCompletion: {
-              satisfied: false,
-            },
-            completion: {
-              state:
+          spreadCompletion: {
+            satisfied: false,
+          },
+          completion: {
+            state:
               PRIORITY_RECOVERY_COMPLETION_STATE
                 .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: 'terminal',
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converging',
+            provenance: {
+              capturedAt: 2000,
             },
-            observation: {
-              workflowState: 'terminal',
-              visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-              convergenceState: 'converging',
-              provenance: {
-                capturedAt: 2000,
-              },
-            },
-            progress: {
-              contractState: 'ready',
-              nextAction: 'proceed',
-              currentOwner: 'none',
-              nextRequiredAction: 'none',
-              blockingBoundary: 'none',
-              waitMode: 'none',
-              evidenceSourceIds: [],
-            },
-            coordinator: {
-              operationCount: 0,
-            },
-          }],
-        },
-      });
-      const partitionSnapshot =
+          },
+          progress: {
+            contractState: 'ready',
+            nextAction: 'proceed',
+            currentOwner: 'none',
+            nextRequiredAction: 'none',
+            blockingBoundary: 'none',
+            waitMode: 'none',
+            evidenceSourceIds: [],
+          },
+          coordinator: {
+            operationCount: 0,
+          },
+        }],
+      },
+    });
+    const partitionSnapshot =
       observationSnapshot.priorityRecoveryPartitionSnapshots[0];
 
-      t.equal(
-        partitionSnapshot.semanticStateId,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        EXPLICIT_SEMANTIC_STATE_OWNER_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
-          .spread_satisfied_in_flight,
-        [PUBLICATION_PRIORITY_PARTITION_ID],
-        EXPLICIT_SEMANTIC_STATE_INDEX_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
-        [],
-        EXPLICIT_SEMANTIC_STATE_UNRESOLVED_MESSAGE,
-      );
-    });
+    t.equal(
+      partitionSnapshot.semanticStateId,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      EXPLICIT_SEMANTIC_STATE_OWNER_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      EXPLICIT_SEMANTIC_STATE_INDEX_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
+      [],
+      EXPLICIT_SEMANTIC_STATE_UNRESOLVED_MESSAGE,
+    );
+  });
 
   const HIGHER_EPOCH_PROGRESS_TEST_NAME =
     'priority recovery observation snapshots prefer higher publication ' +
@@ -696,211 +696,211 @@ export function registerPriorityRecoverySnapshotCurrencyReconciliationTests(cont
     'the synthetic same-epoch blocker should remain history only';
 
   test(SAME_EPOCH_WORKFLOW_TEST_NAME, async (t) => {
-      const sameEpochPublicationValue = 3;
-      const sameEpochWorkflowOperationId = 'op-same-epoch-publication-progress';
-      const sameEpochWorkflowCorrelationKey =
+    const sameEpochPublicationValue = 3;
+    const sameEpochWorkflowOperationId = 'op-same-epoch-publication-progress';
+    const sameEpochWorkflowCorrelationKey =
       `${PUBLICATION_PRIORITY_PARTITION_ID}|` +
       `${sameEpochPublicationValue}|` +
       `${sameEpochWorkflowOperationId}`;
-      const sameEpochSyntheticCorrelationKey =
+    const sameEpochSyntheticCorrelationKey =
       `${PUBLICATION_PRIORITY_PARTITION_ID}|` +
       `${sameEpochPublicationValue}|` +
       'operation_unknown';
-      const sameEpochWorkflowCapturedAtMs = 3400;
-      const sameEpochWorkflowUpdatedAtMs = 3300;
-      const sameEpochSyntheticCapturedAtMs = 3600;
-      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
-        priorityRecoveryDecisionSnapshots: {
-          capturedAt: sameEpochSyntheticCapturedAtMs,
-          publicationEpoch: sameEpochPublicationValue,
-          partitionIdsBySemanticState: {
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
-              PUBLICATION_PRIORITY_PARTITION_ID,
-            ],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
-            [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+    const sameEpochWorkflowCapturedAtMs = 3400;
+    const sameEpochWorkflowUpdatedAtMs = 3300;
+    const sameEpochSyntheticCapturedAtMs = 3600;
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: sameEpochSyntheticCapturedAtMs,
+        publicationEpoch: sameEpochPublicationValue,
+        partitionIdsBySemanticState: {
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+            PUBLICATION_PRIORITY_PARTITION_ID,
+          ],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          epoch: sameEpochPublicationValue,
+          operationId: sameEpochWorkflowOperationId,
+          correlationKey: sameEpochWorkflowCorrelationKey,
+          blockerReasons: [],
+          planner: {
+            ready: true,
+            spreadGap: 0,
+            readyDistinctNodeCount: 3,
+            requiredDistinctNodeCount: 3,
           },
-          snapshots: [{
-            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-            epoch: sameEpochPublicationValue,
-            operationId: sameEpochWorkflowOperationId,
-            correlationKey: sameEpochWorkflowCorrelationKey,
-            blockerReasons: [],
-            planner: {
-              ready: true,
-              spreadGap: 0,
-              readyDistinctNodeCount: 3,
-              requiredDistinctNodeCount: 3,
-            },
-            completion: {
-              state:
+          completion: {
+            state:
               PRIORITY_RECOVERY_COMPLETION_STATE
                 .SPREAD_SATISFIED_IN_FLIGHT,
-            },
-            observation: {
-              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
-              visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-              convergenceState:
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState:
               PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED,
-              provenance: {
-                capturedAt: sameEpochWorkflowCapturedAtMs,
-              },
+            provenance: {
+              capturedAt: sameEpochWorkflowCapturedAtMs,
             },
-            progress: {
-              contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
-              nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
-              currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-              nextRequiredAction: PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
-              blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
-              waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
-              workflowProgressPhaseId:
+          },
+          progress: {
+            contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
+            nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction: PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
+            workflowProgressPhaseId:
               PRIORITY_RECOVERY_PROGRESS_PHASE_SOURCE_REMOVAL,
-              lastProgressAtMs: sameEpochWorkflowUpdatedAtMs,
-              evidenceSourceIds: [
-                PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
-              ],
-            },
-            coordinator: {
-              operationCount: 1,
-              operationIds: [sameEpochWorkflowOperationId],
-              operation: {
-                workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
-                status: PRIORITY_RECOVERY_STATUS_ACTIVE,
-              },
-            },
-          }, {
-            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-            epoch: sameEpochPublicationValue,
-            correlationKey: sameEpochSyntheticCorrelationKey,
-            blockerReasons: [
-              PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+            lastProgressAtMs: sameEpochWorkflowUpdatedAtMs,
+            evidenceSourceIds: [
+              PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
             ],
-            planner: {
-              ready: false,
-              spreadGap: 1,
-              readyDistinctNodeCount: 2,
-              requiredDistinctNodeCount: 3,
+          },
+          coordinator: {
+            operationCount: 1,
+            operationIds: [sameEpochWorkflowOperationId],
+            operation: {
+              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+              status: PRIORITY_RECOVERY_STATUS_ACTIVE,
             },
-            completion: {
-              state: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
-            },
-            observation: {
-              workflowState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
-              visibilityState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
-              convergenceState:
+          },
+        }, {
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          epoch: sameEpochPublicationValue,
+          correlationKey: sameEpochSyntheticCorrelationKey,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+          ],
+          planner: {
+            ready: false,
+            spreadGap: 1,
+            readyDistinctNodeCount: 2,
+            requiredDistinctNodeCount: 3,
+          },
+          completion: {
+            state: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
+            visibilityState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
+            convergenceState:
               PRIORITY_RECOVERY_CONVERGENCE_STATE_SPREAD_GAP,
-              provenance: {
-                capturedAt: sameEpochSyntheticCapturedAtMs,
-              },
+            provenance: {
+              capturedAt: sameEpochSyntheticCapturedAtMs,
             },
-            progress: {
-              contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
-              nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
-              currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
-              nextRequiredAction:
+          },
+          progress: {
+            contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+            nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+            nextRequiredAction:
               PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
-              blockingBoundary:
+            blockingBoundary:
               PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
-              waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
-              workflowProgressPhaseId:
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+            workflowProgressPhaseId:
               PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
-              lastProgressAtMs: sameEpochSyntheticCapturedAtMs,
-              evidenceSourceIds: [
-                PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS,
-              ],
-            },
-            coordinator: {
-              operationCount: 0,
-              operationIds: [],
-              operation: null,
-            },
-          }],
-        },
-      });
-      const partitionWitness =
+            lastProgressAtMs: sameEpochSyntheticCapturedAtMs,
+            evidenceSourceIds: [
+              PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS,
+            ],
+          },
+          coordinator: {
+            operationCount: 0,
+            operationIds: [],
+            operation: null,
+          },
+        }],
+      },
+    });
+    const partitionWitness =
       observationSnapshot.priorityRecoveryPartitionWitnesses[
         PRIORITY_RECOVERY_FIRST_PARTITION_WITNESS_INDEX
       ];
 
-      t.equal(
-        partitionWitness.semanticStateId,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        SAME_EPOCH_WORKFLOW_STATE_MESSAGE,
-      );
-      t.same(
-        partitionWitness.progressClassIds,
-        [],
-        SAME_EPOCH_WORKFLOW_CLASS_MESSAGE,
-      );
-      t.equal(
-        partitionWitness.currentOwner,
-        PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-        SAME_EPOCH_WORKFLOW_OWNER_MESSAGE,
-      );
-      t.equal(
-        partitionWitness.workflowState,
-        PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
-        SAME_EPOCH_WORKFLOW_VISIBILITY_MESSAGE,
-      );
-      t.equal(
-        partitionWitness.correlationKey,
-        sameEpochWorkflowCorrelationKey,
-        SAME_EPOCH_WORKFLOW_CORRELATION_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
-          .spread_satisfied_in_flight,
-        [PUBLICATION_PRIORITY_PARTITION_ID],
-        SAME_EPOCH_WORKFLOW_SUMMARY_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
-          .needs_operation,
-        [],
-        SAME_EPOCH_WORKFLOW_HISTORY_MESSAGE,
-      );
-    });
+    t.equal(
+      partitionWitness.semanticStateId,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      SAME_EPOCH_WORKFLOW_STATE_MESSAGE,
+    );
+    t.same(
+      partitionWitness.progressClassIds,
+      [],
+      SAME_EPOCH_WORKFLOW_CLASS_MESSAGE,
+    );
+    t.equal(
+      partitionWitness.currentOwner,
+      PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+      SAME_EPOCH_WORKFLOW_OWNER_MESSAGE,
+    );
+    t.equal(
+      partitionWitness.workflowState,
+      PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+      SAME_EPOCH_WORKFLOW_VISIBILITY_MESSAGE,
+    );
+    t.equal(
+      partitionWitness.correlationKey,
+      sameEpochWorkflowCorrelationKey,
+      SAME_EPOCH_WORKFLOW_CORRELATION_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      SAME_EPOCH_WORKFLOW_SUMMARY_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .needs_operation,
+      [],
+      SAME_EPOCH_WORKFLOW_HISTORY_MESSAGE,
+    );
+  });
 
   const CURRENT_NEEDS_OPERATION_TEST_NAME =
     'priority recovery observation snapshots prefer explicit same-epoch ' +
     'needs-operation snapshots over stale terminal follow-up rows';
 
   test(CURRENT_NEEDS_OPERATION_TEST_NAME, async (t) => {
-      const STALE_OPERATION_ID = 'op-stale-terminal-followup';
-      const OPERATION_UNKNOWN_CORRELATION_SUFFIX = 'operation_unknown';
-      const STALE_CORRELATION_KEY =
+    const STALE_OPERATION_ID = 'op-stale-terminal-followup';
+    const OPERATION_UNKNOWN_CORRELATION_SUFFIX = 'operation_unknown';
+    const STALE_CORRELATION_KEY =
         `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}|` +
         `${PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH}|` +
         `${STALE_OPERATION_ID}`;
-      const CURRENT_CORRELATION_KEY =
+    const CURRENT_CORRELATION_KEY =
         `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}|` +
         `${PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH}|` +
         `${OPERATION_UNKNOWN_CORRELATION_SUFFIX}`;
-      const STALE_CAPTURE_OFFSET_MS = 100;
-      const STALE_ELIGIBLE_NODE_COUNT = 2;
-      const CURRENT_ELIGIBLE_NODE_COUNT =
+    const STALE_CAPTURE_OFFSET_MS = 100;
+    const STALE_ELIGIBLE_NODE_COUNT = 2;
+    const CURRENT_ELIGIBLE_NODE_COUNT =
         PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT;
-      const STALE_OPERATION_UPDATED_AT_MS = 6100;
-      const CURRENT_CAPTURED_AT_MS = 7100;
-      const CURRENT_PROGRESS_AT_MS = CURRENT_CAPTURED_AT_MS;
-      const WORKFLOW_STATE_TERMINAL = 'terminal';
-      const NEXT_REQUIRED_ACTION_FOLLOWUP =
+    const STALE_OPERATION_UPDATED_AT_MS = 6100;
+    const CURRENT_CAPTURED_AT_MS = 7100;
+    const CURRENT_PROGRESS_AT_MS = CURRENT_CAPTURED_AT_MS;
+    const WORKFLOW_STATE_TERMINAL = 'terminal';
+    const NEXT_REQUIRED_ACTION_FOLLOWUP =
         'schedule_followup_rebalance';
-      const BLOCKING_BOUNDARY_REBALANCER_HANDOFF =
+    const BLOCKING_BOUNDARY_REBALANCER_HANDOFF =
         'rebalancer_handoff';
-      const CURRENT_BLOCKER_MESSAGE =
+    const CURRENT_BLOCKER_MESSAGE =
         'explicit same-epoch needs-operation evidence should displace ' +
         'stale terminal follow-up rows in the current observation summary';
-      const CURRENT_WITNESS_MESSAGE =
+    const CURRENT_WITNESS_MESSAGE =
         'the selected partition witness should come from the current ' +
         'operation-unknown needs-operation snapshot';
-      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
-        priorityRecoveryDecisionSnapshots:
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots:
           buildTrackedPriorityRecoveryDecisionSnapshots({
             publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
             blockerPartitionIdsByReason: {
@@ -1041,56 +1041,56 @@ export function registerPriorityRecoverySnapshotCurrencyReconciliationTests(cont
               },
             }],
           }),
-      });
-      const partitionWitness =
+    });
+    const partitionWitness =
         observationSnapshot.priorityRecoveryPartitionWitnesses[
           PRIORITY_RECOVERY_FIRST_PARTITION_WITNESS_INDEX
         ];
 
-      t.same(
-        observationSnapshot.priorityRecoveryProgressClassIds,
-        [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
-        CURRENT_BLOCKER_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
-          .needs_operation,
-        [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
-        CURRENT_BLOCKER_MESSAGE,
-      );
-      t.same(
-        partitionWitness?.blockerReasonCodes,
-        [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
-        CURRENT_WITNESS_MESSAGE,
-      );
-      t.same(
-        partitionWitness?.eligibleNodeIds,
-        [PRIORITY_RECOVERY_NODE_ID_B],
-        CURRENT_WITNESS_MESSAGE,
-      );
-      t.same(
-        partitionWitness?.recoveryEligibleExcludedNodeIds,
-        [PRIORITY_RECOVERY_NODE_ID_A],
-        CURRENT_WITNESS_MESSAGE,
-      );
-      t.match(
-        partitionWitness,
-        {
-          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
-          nextRequiredAction:
+    t.same(
+      observationSnapshot.priorityRecoveryProgressClassIds,
+      [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+      CURRENT_BLOCKER_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .needs_operation,
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+      CURRENT_BLOCKER_MESSAGE,
+    );
+    t.same(
+      partitionWitness?.blockerReasonCodes,
+      [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+      CURRENT_WITNESS_MESSAGE,
+    );
+    t.same(
+      partitionWitness?.eligibleNodeIds,
+      [PRIORITY_RECOVERY_NODE_ID_B],
+      CURRENT_WITNESS_MESSAGE,
+    );
+    t.same(
+      partitionWitness?.recoveryEligibleExcludedNodeIds,
+      [PRIORITY_RECOVERY_NODE_ID_A],
+      CURRENT_WITNESS_MESSAGE,
+    );
+    t.match(
+      partitionWitness,
+      {
+        currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+        nextRequiredAction:
             PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
-          blockingBoundary:
+        blockingBoundary:
             PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
-          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
-        },
-        CURRENT_WITNESS_MESSAGE,
-      );
-      t.equal(
-        partitionWitness?.correlationKey,
-        CURRENT_CORRELATION_KEY,
-        CURRENT_WITNESS_MESSAGE,
-      );
-    },
+        waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+      },
+      CURRENT_WITNESS_MESSAGE,
+    );
+    t.equal(
+      partitionWitness?.correlationKey,
+      CURRENT_CORRELATION_KEY,
+      CURRENT_WITNESS_MESSAGE,
+    );
+  },
   );
 
   const CURRENT_UNRESOLVED_DECISION_TEST_NAME =
@@ -1104,119 +1104,119 @@ export function registerPriorityRecoverySnapshotCurrencyReconciliationTests(cont
     'semantic evidence';
 
   test(CURRENT_UNRESOLVED_DECISION_TEST_NAME, async (t) => {
-      const stalePriorityPartitionSummary = {
-        satisfied: false,
+    const stalePriorityPartitionSummary = {
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 2,
+      missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+      blockedPartitions: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
         requiredDistinctNodeCount: 3,
-        readyEligibleNodeCount: 3,
-        totalPriorityPartitionCount: 2,
-        missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
-        blockedPartitions: [{
-          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-          requiredDistinctNodeCount: 3,
-          readyDistinctNodeCount: 2,
-          spreadGap: 1,
-        }],
-        blockedPartitionCount: 1,
-        largestSpreadGap: 1,
-        totalSpreadGap: 1,
-      };
-      const partitionIdsBySemanticState = {
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
-          PUBLICATION_PRIORITY_PARTITION_ID,
-        ],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
-          REPLICA_OPERATION_PRIORITY_PARTITION_ID,
-        ],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
-        [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
-      };
-      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
-        publicationConvergence: {
-          publicationEpoch: 9,
-          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
-          recoveryProtocolState:
+        readyDistinctNodeCount: 2,
+        spreadGap: 1,
+      }],
+      blockedPartitionCount: 1,
+      largestSpreadGap: 1,
+      totalSpreadGap: 1,
+    };
+    const partitionIdsBySemanticState = {
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+        PUBLICATION_PRIORITY_PARTITION_ID,
+      ],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
+        REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      ],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+    };
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      publicationConvergence: {
+        publicationEpoch: 9,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        recoveryProtocolState:
           PRIORITY_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING,
-          priorityRecoveryReasonCodes: [
-            PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
-          ],
-          priorityPartitionSummary: stalePriorityPartitionSummary,
-        },
-        priorityRecoveryDecisionSnapshots: {
-          capturedAt: 3000,
-          publicationEpoch: 9,
-          priorityPartitionSummary: stalePriorityPartitionSummary,
-          partitionIdsBySemanticState,
-          snapshots: [{
-            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-            blockerReasons: [],
-            planner: {
-              ready: true,
-              requiredDistinctNodeCount: 3,
-              spreadGap: 0,
-            },
-            completion: {
-              state:
+        priorityRecoveryReasonCodes: [
+          PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        priorityPartitionSummary: stalePriorityPartitionSummary,
+      },
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 3000,
+        publicationEpoch: 9,
+        priorityPartitionSummary: stalePriorityPartitionSummary,
+        partitionIdsBySemanticState,
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [],
+          planner: {
+            ready: true,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 0,
+          },
+          completion: {
+            state:
               PRIORITY_RECOVERY_COMPLETION_STATE
                 .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED,
+            provenance: {
+              capturedAt: 2000,
             },
-            observation: {
-              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
-              visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-              convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED,
-              provenance: {
-                capturedAt: 2000,
-              },
+          },
+        }, {
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+          ],
+          planner: {
+            ready: false,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 1,
+          },
+          completion: {
+            state: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGING,
+            provenance: {
+              capturedAt: 3000,
             },
-          }, {
-            partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
-            blockerReasons: [
-              PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
-            ],
-            planner: {
-              ready: false,
-              requiredDistinctNodeCount: 3,
-              spreadGap: 1,
-            },
-            completion: {
-              state: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
-            },
-            observation: {
-              workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
-              visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-              convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGING,
-              provenance: {
-                capturedAt: 3000,
-              },
-            },
-          }],
-        },
-      });
-
-      t.same(
-        observationSnapshot.priorityRecoveryBlockedPartitionIds,
-        [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
-        CURRENT_UNRESOLVED_BLOCKED_MESSAGE,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
-        [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
-          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
-        ],
-        [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
-          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
-        ],
-        [PUBLICATION_PRIORITY_PARTITION_ID],
-        CURRENT_UNRESOLVED_SPREAD_MESSAGE,
-      );
+          },
+        }],
+      },
     });
+
+    t.same(
+      observationSnapshot.priorityRecoveryBlockedPartitionIds,
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+      CURRENT_UNRESOLVED_BLOCKED_MESSAGE,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
+      ],
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      CURRENT_UNRESOLVED_SPREAD_MESSAGE,
+    );
+  });
 }

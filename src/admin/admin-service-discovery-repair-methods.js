@@ -480,7 +480,6 @@ function assignAdminServiceDiscoveryRepairMethods(
         repairedRowCount: repairState.repairedRowCount,
       });
     }
-
   }
 
   for (const methodName of Object.getOwnPropertyNames(

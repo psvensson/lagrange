@@ -661,7 +661,6 @@ class SQLParser {
     const offset = values.length > NUM.ONE ? values[NUM.ONE]?.value : null;
     return {count, offset};
   }
-
 }
 
 Object.assign(SQLParser.prototype, sqlParserExpressionMethods);

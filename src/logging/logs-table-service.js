@@ -595,7 +595,6 @@ class LogsTableService extends EventEmitter {
     this.removeAllListeners();
     this.logger.log(LOGGING_LOG_MSG.LOGS_TABLE_SERVICE_SHUTDOWN);
   }
-
 }
 
 for (const [methodName, method] of Object.entries({

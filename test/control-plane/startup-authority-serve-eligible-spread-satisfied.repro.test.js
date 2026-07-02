@@ -142,14 +142,14 @@ async (t) => {
 });
 
 test('safety: the weaker INTERNAL_READY active gate is not relaxed',
-async (t) => {
-  const snapshot = buildSnapshot({
-    state: 'internal_ready',
-    reasonCodes: ['priority_recovery_active'],
+  async (t) => {
+    const snapshot = buildSnapshot({
+      state: 'internal_ready',
+      reasonCodes: ['priority_recovery_active'],
+    });
+    t.equal(snapshot.ready, false, 'internal_ready must stay pending');
+    t.end();
   });
-  t.equal(snapshot.ready, false, 'internal_ready must stay pending');
-  t.end();
-});
 
 test('safety: a summarized snapshot (active-gate reasonCodes dropped) stays ' +
   'conservatively RECOVERY_PENDING',

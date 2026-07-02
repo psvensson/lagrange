@@ -86,7 +86,13 @@ function buildCoordinator(nodeId) {
   const noopQuery = async () => ({success: true, rows: [], affectedRows: 0});
   const coordinator = new RebalanceCoordinator({
     nodeId,
-    systemTableCache: {get() { return null; }, getAll() { return []; }, filter() { return []; }},
+    systemTableCache: {get() {
+      return null;
+    }, getAll() {
+      return [];
+    }, filter() {
+      return [];
+    }},
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
@@ -94,17 +100,29 @@ function buildCoordinator(nodeId) {
       },
     },
     controlPlaneSystemTableGateway: {
-      async readRows() { return {success: true, rows: [], affectedRows: 0}; },
-      async readAuthoritativeRows() { return {success: true, rows: [], affectedRows: 0}; },
+      async readRows() {
+        return {success: true, rows: [], affectedRows: 0};
+      },
+      async readAuthoritativeRows() {
+        return {success: true, rows: [], affectedRows: 0};
+      },
       executeQuery: noopQuery,
     },
     sqlQueryEngine: {executeQuery: noopQuery},
-    tablePolicyService: {async getPolicyForPartition() { return {minReplicaCount: 1}; }},
-    storageAccountingService: {estimateReplicaBytes() { return 1024; }},
-    messageRouter: {async deliver() { return {acknowledged: true}; }, on() {}, removeListener() {}},
+    tablePolicyService: {async getPolicyForPartition() {
+      return {minReplicaCount: 1};
+    }},
+    storageAccountingService: {estimateReplicaBytes() {
+      return 1024;
+    }},
+    messageRouter: {async deliver() {
+      return {acknowledged: true};
+    }, on() {}, removeListener() {}},
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     transactionCoordinator: createMockTransactionCoordinator(),
-    setTimeoutFn() { return {}; },
+    setTimeoutFn() {
+      return {};
+    },
     clearTimeoutFn() {},
     enableTimeouts: false,
   });

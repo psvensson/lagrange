@@ -650,7 +650,6 @@ class MembershipPublicationCoordinatorReads {
       // diagnostics-only; never disturb the publication path
     }
   }
-
 }
 
 export {MembershipPublicationCoordinatorReads};

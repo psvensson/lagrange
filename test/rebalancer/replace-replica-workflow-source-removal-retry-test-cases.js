@@ -651,5 +651,4 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       }
     },
   );
-
 }

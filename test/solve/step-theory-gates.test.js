@@ -141,7 +141,7 @@ tap.test('step theory gates', async (t) => {
 
     recordSystemTheory(root, quest);
     recordFrontierTheory(root, quest, 'theory-model', 'model');
-    
+
     // Rung 3 with system theory but without model ref gates (explore), not crash
     runStep(root, quest);
     const needsModel = runStep(root, quest, {

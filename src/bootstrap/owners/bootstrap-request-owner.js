@@ -394,7 +394,7 @@ class BootstrapRequestOwner {
   createBootstrapRequestExecutionBudget(
     startedAtMs,
     clientAttemptDeadline =
-      BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE,
+    BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE,
   ) {
     const configuredBudgetMs = this.getBootstrapRequestExecutionBudgetMs();
     if (!Number.isFinite(configuredBudgetMs) || configuredBudgetMs <= NUM.ZERO) {
@@ -588,7 +588,6 @@ class BootstrapRequestOwner {
     }
     return admissionDecision;
   }
-
 }
 
 defineBootstrapRequestOwnerHandlerMethods(BootstrapRequestOwner);

@@ -161,8 +161,9 @@ test('TopologyAntiEntropyReconciler - durable truth scan enqueues exact ' +
     TEST_NODE_A,
   );
   assert.equal(
-    outcome[TOPOLOGY_ANTI_ENTROPY_FIELD.SURFACES][2]
-      [TOPOLOGY_ANTI_ENTROPY_FIELD.ELIGIBLE_ROW_COUNT],
+    outcome[TOPOLOGY_ANTI_ENTROPY_FIELD.SURFACES][2][
+      TOPOLOGY_ANTI_ENTROPY_FIELD.ELIGIBLE_ROW_COUNT
+    ],
     1,
     'partition service surface excludes non-partition services',
   );

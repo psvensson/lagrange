@@ -64,7 +64,7 @@ test('summarizeTarget folds partitions and sets verdict', async (t) => {
     ['a', {createMs: 0, lastMs: 100, partitionId: 'p1'}],
     ['b', {createMs: 10, lastMs: 110, partitionId: 'p1'}],
     ['c', {createMs: 500, lastMs: 600, partitionId: 'p1'}], // re-rise on p1
-    ['d', {createMs: 0, lastMs: 100, partitionId: 'p2'}],   // clean
+    ['d', {createMs: 0, lastMs: 100, partitionId: 'p2'}], // clean
   ]);
   const s = summarizeTarget('run', 1, lifetimes);
   t.equal(s.totalOps, 4);

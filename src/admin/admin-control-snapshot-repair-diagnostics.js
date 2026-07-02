@@ -247,7 +247,7 @@ function selectDeferredRepairActiveGateHandoffContracts(snapshot = null) {
       CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
     ],
   ].filter((handoff) =>
-      handoff && typeof handoff === TYPEOF.OBJECT && !Array.isArray(handoff),
+    handoff && typeof handoff === TYPEOF.OBJECT && !Array.isArray(handoff),
   );
 }
 function hasDeferredRepairActiveGateRecoveryProjectionSignal(handoff = null) {

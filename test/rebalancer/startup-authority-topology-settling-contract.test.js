@@ -88,7 +88,7 @@ function createCache() {
     get(tableName, key) {
       const values = rows[tableName] || [];
       return values.find((row) =>
-        row.partition_id === key || row.node_id === key
+        row.partition_id === key || row.node_id === key,
       ) || null;
     },
     getAll(tableName) {

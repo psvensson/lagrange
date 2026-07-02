@@ -230,61 +230,61 @@ function buildCriticalDecision() {
 
 test('occupied-slot gate defers an ADD when settled ALIVE learners already fill the target ' +
   '(red-on-revert: counting voter-ready healthy replicas alone re-mints the over-replication storm)',
-  async (t) => {
-    // Critical partition. healthy(voters) = 2, plus ONE settled non-voting
-    // learner on a ready node, target = 3, NO in-flight ADD. getHealthyReplicas
-    // excludes the learner -> pre-fix sees 2 < 3 with 0 in-flight -> emits
-    // ANOTHER ADD (the storm). getReadyNodeOccupiedReplicas counts the alive
-    // learner -> 3 >= 3 -> defer and let the existing learner promote (uncapped
-    // while voters < target).
-    const rebalancer = buildCriticalRebalancer();
-    try {
-      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
-        decision: buildCriticalDecision(),
-        currentReplicas: [
-          critReplica(NODE_A, 'r-a', 'voter'),
-          critReplica(NODE_B, 'r-b', 'voter'),
-          critReplica(NODE_C, 'r-c', 'learner'),
-        ],
-      });
-      t.equal(
-        move.followUpMoveState,
-        'in_flight_add_satisfies_deficit',
-        'a settled alive learner occupies its slot -> defer the redundant follow-up ADD',
-      );
-      t.equal(move.type, undefined, 'deferred follow-up should emit no ADD move');
-    } finally {
-      rebalancer.shutdown();
-    }
-  });
+async (t) => {
+  // Critical partition. healthy(voters) = 2, plus ONE settled non-voting
+  // learner on a ready node, target = 3, NO in-flight ADD. getHealthyReplicas
+  // excludes the learner -> pre-fix sees 2 < 3 with 0 in-flight -> emits
+  // ANOTHER ADD (the storm). getReadyNodeOccupiedReplicas counts the alive
+  // learner -> 3 >= 3 -> defer and let the existing learner promote (uncapped
+  // while voters < target).
+  const rebalancer = buildCriticalRebalancer();
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildCriticalDecision(),
+      currentReplicas: [
+        critReplica(NODE_A, 'r-a', 'voter'),
+        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(NODE_C, 'r-c', 'learner'),
+      ],
+    });
+    t.equal(
+      move.followUpMoveState,
+      'in_flight_add_satisfies_deficit',
+      'a settled alive learner occupies its slot -> defer the redundant follow-up ADD',
+    );
+    t.equal(move.type, undefined, 'deferred follow-up should emit no ADD move');
+  } finally {
+    rebalancer.shutdown();
+  }
+});
 
 test('occupied-slot gate STILL creates an ADD when a learner is on a NOT-ready (dead) node ' +
   '(alive-guard: a dead replica must be re-placed, never suppressed)',
-  async (t) => {
-    // Critical partition. healthy(voters) = 2, plus a learner on DEAD_NODE which
-    // is NOT in the ready node set, target = 3, no in-flight ADD. The dead-node
-    // learner is excluded by the readyNodeIds liveness filter -> occupied = 2 <
-    // 3 -> ADD still fires (the dead replica must be re-placed).
-    const DEAD_NODE = 'node-e-dead';
-    const rebalancer = buildCriticalRebalancer();
-    try {
-      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
-        decision: buildCriticalDecision(),
-        currentReplicas: [
-          critReplica(NODE_A, 'r-a', 'voter'),
-          critReplica(NODE_B, 'r-b', 'voter'),
-          critReplica(DEAD_NODE, 'r-e', 'learner'),
-        ],
-      });
-      t.equal(
-        move.type,
-        MoveType.ADD,
-        'a learner on a dead node does not occupy a live slot -> re-placement ADD must still fire',
-      );
-    } finally {
-      rebalancer.shutdown();
-    }
-  });
+async (t) => {
+  // Critical partition. healthy(voters) = 2, plus a learner on DEAD_NODE which
+  // is NOT in the ready node set, target = 3, no in-flight ADD. The dead-node
+  // learner is excluded by the readyNodeIds liveness filter -> occupied = 2 <
+  // 3 -> ADD still fires (the dead replica must be re-placed).
+  const DEAD_NODE = 'node-e-dead';
+  const rebalancer = buildCriticalRebalancer();
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildCriticalDecision(),
+      currentReplicas: [
+        critReplica(NODE_A, 'r-a', 'voter'),
+        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(DEAD_NODE, 'r-e', 'learner'),
+      ],
+    });
+    t.equal(
+      move.type,
+      MoveType.ADD,
+      'a learner on a dead node does not occupy a live slot -> re-placement ADD must still fire',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
 
 test('count-aware gate counts only replica-count-increasing ADD operations',
   async (t) => {
@@ -308,44 +308,44 @@ test('count-aware gate counts only replica-count-increasing ADD operations',
 
 test('occupied-slot gate defers an ADD for a member on a PROCESS-ALIVE not-yet-ready (restarting) node ' +
   '(red-on-revert: the ready-only liveness filter treated a restarting rejoiner like a dead node)',
-  async (t) => {
-    // The over-replication residual that survives the count-aware gate: a member
-    // that just materialized (ACTIVE) on a rejoiner whose PROCESS is alive but is
-    // not yet serve-ready is invisible to BOTH the transitional in-flight-ADD count
-    // AND the ready-occupied count, so the deficit gate re-mints an ADD every ~1s
-    // tick (3 -> 4 -> 5 over-replication -> surplus drain -> raft leader churn).
-    // The fix widens the occupied liveness guard from serve-READY nodes to nodes
-    // that are serve-ready OR PROCESS-ALIVE (up, reporting runtime authority). A
-    // genuinely dead node is NOT process-alive (incl. a membership-freeze-retained
-    // one — processAlive reflects live runtime evidence, not membership retention),
-    // so it is still re-placed (the dead-node test above stays green).
-    const RESTARTING = 'node-r-restarting';
-    const rebalancer = buildCriticalRebalancer();
-    // RESTARTING is process-alive (up) but not serve-ready (absent from the cache,
-    // hence absent from getAvailableNodes). Report processAlive only for it.
-    const readinessService = rebalancer.controlPlaneReadinessService;
-    const originalGetNodeReadinessSync =
+async (t) => {
+  // The over-replication residual that survives the count-aware gate: a member
+  // that just materialized (ACTIVE) on a rejoiner whose PROCESS is alive but is
+  // not yet serve-ready is invisible to BOTH the transitional in-flight-ADD count
+  // AND the ready-occupied count, so the deficit gate re-mints an ADD every ~1s
+  // tick (3 -> 4 -> 5 over-replication -> surplus drain -> raft leader churn).
+  // The fix widens the occupied liveness guard from serve-READY nodes to nodes
+  // that are serve-ready OR PROCESS-ALIVE (up, reporting runtime authority). A
+  // genuinely dead node is NOT process-alive (incl. a membership-freeze-retained
+  // one — processAlive reflects live runtime evidence, not membership retention),
+  // so it is still re-placed (the dead-node test above stays green).
+  const RESTARTING = 'node-r-restarting';
+  const rebalancer = buildCriticalRebalancer();
+  // RESTARTING is process-alive (up) but not serve-ready (absent from the cache,
+  // hence absent from getAvailableNodes). Report processAlive only for it.
+  const readinessService = rebalancer.controlPlaneReadinessService;
+  const originalGetNodeReadinessSync =
       readinessService.getNodeReadinessSync.bind(readinessService);
-    readinessService.getNodeReadinessSync = (nodeId, opts) =>
-      nodeId === RESTARTING ?
-        {nodeId, dimensions: {processAlive: true}} :
-        originalGetNodeReadinessSync(nodeId, opts);
-    try {
-      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
-        decision: buildCriticalDecision(),
-        currentReplicas: [
-          critReplica(NODE_A, 'r-a', 'voter'),
-          critReplica(NODE_B, 'r-b', 'voter'),
-          critReplica(RESTARTING, 'r-r', 'learner'),
-        ],
-      });
-      t.equal(
-        move.followUpMoveState,
-        'in_flight_add_satisfies_deficit',
-        'a member on a process-alive restarting node occupies its slot -> defer the over-replicating ADD',
-      );
-      t.equal(move.type, undefined, 'deferred follow-up should emit no ADD move');
-    } finally {
-      rebalancer.shutdown();
-    }
-  });
+  readinessService.getNodeReadinessSync = (nodeId, opts) =>
+    nodeId === RESTARTING ?
+      {nodeId, dimensions: {processAlive: true}} :
+      originalGetNodeReadinessSync(nodeId, opts);
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildCriticalDecision(),
+      currentReplicas: [
+        critReplica(NODE_A, 'r-a', 'voter'),
+        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(RESTARTING, 'r-r', 'learner'),
+      ],
+    });
+    t.equal(
+      move.followUpMoveState,
+      'in_flight_add_satisfies_deficit',
+      'a member on a process-alive restarting node occupies its slot -> defer the over-replicating ADD',
+    );
+    t.equal(move.type, undefined, 'deferred follow-up should emit no ADD move');
+  } finally {
+    rebalancer.shutdown();
+  }
+});

@@ -41,10 +41,10 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
         return Object.freeze({
           ...result,
           reasonCode: PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
-          ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+          ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
           details: {
             ...result.details,
-            ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+            ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
           },
         });
       };

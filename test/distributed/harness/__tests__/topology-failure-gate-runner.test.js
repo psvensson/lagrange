@@ -10,10 +10,10 @@ import {
 
 test('topology-failure-gate-runner executes and validates all matrix gates', async (t) => {
   const matrixResult = await runTopologyFailureGateMatrix();
-  
+
   assert.equal(matrixResult.gateCount, TOPOLOGY_FAILURE_GATE_MATRIX.length);
   assert.equal(matrixResult.passedCount, TOPOLOGY_FAILURE_GATE_MATRIX.length);
-  
+
   for (const result of matrixResult.results) {
     assert.equal(result.passed, true);
     assert.ok(result.gateId);
@@ -26,7 +26,7 @@ test('topology-failure-gate-runner executes and validates all matrix gates', asy
     assert.ok(result.invariantState);
     assert.ok(Array.isArray(result.eventLog));
   }
-  
+
   t.end();
 });
 
@@ -41,7 +41,7 @@ test('topology-failure-gate-runner validates each gate entry individually', asyn
 
 test('topology-failure-gate-runner contract validation engine rejects mismatching expectations', async (t) => {
   const originalEntry = TOPOLOGY_FAILURE_GATE_MATRIX[0];
-  
+
   // Test 1: Mismatched/unknown expected owner reasons
   const invalidReasonsEntry = {
     ...originalEntry,
@@ -51,7 +51,7 @@ test('topology-failure-gate-runner contract validation engine rejects mismatchin
     async () => {
       await runTopologyFailureGate(invalidReasonsEntry);
     },
-    /Unknown expected owner reason: non_existent_reason/
+    /Unknown expected owner reason: non_existent_reason/,
   );
 
   // Test 2: Unwitnessed owner reason
@@ -63,7 +63,7 @@ test('topology-failure-gate-runner contract validation engine rejects mismatchin
     async () => {
       await runTopologyFailureGate(unwitnessedReasonEntry);
     },
-    /Expected owner reason "remote_coordinator_lost" was not witnessed/
+    /Expected owner reason "remote_coordinator_lost" was not witnessed/,
   );
 
   // Test 3: Mismatched fencing requirement
@@ -75,7 +75,7 @@ test('topology-failure-gate-runner contract validation engine rejects mismatchin
     async () => {
       await runTopologyFailureGate(invalidFencingEntry);
     },
-    /Unknown fencing requirement: invalid_fencing/
+    /Unknown fencing requirement: invalid_fencing/,
   );
 
   // Test 4: Mismatched progress mechanism
@@ -87,7 +87,7 @@ test('topology-failure-gate-runner contract validation engine rejects mismatchin
     async () => {
       await runTopologyFailureGate(unwitnessedMechanismEntry);
     },
-    /Unknown progress mechanism: non_existent_mechanism/
+    /Unknown progress mechanism: non_existent_mechanism/,
   );
 
   // Test 5: Mismatched durable assertion
@@ -99,7 +99,7 @@ test('topology-failure-gate-runner contract validation engine rejects mismatchin
     async () => {
       await runTopologyFailureGate(invalidAssertionEntry);
     },
-    /Unknown durable assertion: non_existent_assertion/
+    /Unknown durable assertion: non_existent_assertion/,
   );
 
   t.end();

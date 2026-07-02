@@ -157,7 +157,6 @@ async function waitForOperationDispatchQueueDrain(service = null) {
 }
 
 
-
 test('ReplicaDispatchService ready-node retry prefers membership publication owner dispatch rows when available',
   async (t) => {
     initEnv();
@@ -756,14 +755,14 @@ async (t) => {
     status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.READY,
     last_heartbeat: now,
-      ready_lease_expires_at: now + 60000,
+    ready_lease_expires_at: now + 60000,
   };
   const remoteOwnedPendingRow = {
     operation_id: 'op-ready-retry-remote',
     source_node_id: 'node-remote-owner',
     target_node_id: 'node-2',
-      workflow_step: WORKFLOW_STEP.PENDING,
-      type: 'ADD',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: 'ADD',
   };
   const deliveries = [];
   const enqueueCalls = [];

@@ -574,11 +574,11 @@ class NodeReintegrationService extends EventEmitter {
           data: {
             status: NodeStatus.FAILED,
             updated_at: Date.now(),
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: LOCAL_STR_CRITICAL,
-      });
+          },
+        }, {
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: LOCAL_STR_CRITICAL,
+        });
         if (!guardedUpdateApplied(result)) {
           this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_FAILURE_UPDATE, {
             nodeId,

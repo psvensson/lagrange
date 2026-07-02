@@ -563,7 +563,7 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
         ],
         nextContext[
           MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .SKIP_PUBLICATION_WRITE_READBACK
+            .SKIP_PUBLICATION_WRITE_READBACK
         ],
       ),
   };

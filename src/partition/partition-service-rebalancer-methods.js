@@ -1,4 +1,4 @@
-import {PARTITION_SERVICE_SHARED} from "./partition-service-shared.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const {
   ACTIVE_VOTER_ROLES,
@@ -276,7 +276,7 @@ class PartitionServiceRebalancerMethods {
 function createPartitionServiceRebalancerMethods() {
   const methods = {};
   for (const name of Object.getOwnPropertyNames(PartitionServiceRebalancerMethods.prototype)) {
-    if (name !== "constructor") {
+    if (name !== 'constructor') {
       methods[name] = PartitionServiceRebalancerMethods.prototype[name];
     }
   }

@@ -598,7 +598,7 @@ async function handleBootstrapRequest(request, reply) {
           requestExecutionBudgetExhausted ?
             BOOTSTRAP_API_PROBE_REASON
               .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED :
-          BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE;
+            BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE;
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
         nodeId,
         nodeAddress,

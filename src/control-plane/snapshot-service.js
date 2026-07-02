@@ -1,4 +1,4 @@
-import { OwnerQueue } from './owner-queue.js';
+import {OwnerQueue} from './owner-queue.js';
 
 const LOCAL_NUM_ZERO = 0;
 
@@ -27,4 +27,4 @@ class SnapshotService {
   }
 }
 
-export { SnapshotService };
+export {SnapshotService};

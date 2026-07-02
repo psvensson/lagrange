@@ -607,7 +607,7 @@ const queryExecutorJoinExecutionMethods = {
   filterWhereForTable(where, _tableName) {
     if (!where) return null;
     return where;
-  }
+  },
 };
 
 function installQueryExecutorJoinExecutionHelpers(target) {

@@ -393,7 +393,7 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
 
 test('buildLocalQueryTransportNotReadyError attaches progressContract with 10 strict keys',
   async (t) => {
-    const { buildLocalQueryTransportNotReadyError } = await import('../../src/bootstrap/shared/local-query-transport-readiness.js');
+    const {buildLocalQueryTransportNotReadyError} = await import('../../src/bootstrap/shared/local-query-transport-readiness.js');
     const readiness = {
       ready: false,
       state: 'deferred',
@@ -420,7 +420,7 @@ test('buildLocalQueryTransportNotReadyError attaches progressContract with 10 st
 
 test('buildLifecycleReadinessNotReadyError attaches progressContract with 10 strict keys',
   async (t) => {
-    const { buildLifecycleReadinessNotReadyError } = await import('../../src/bootstrap/traffic-readiness-utils.js');
+    const {buildLifecycleReadinessNotReadyError} = await import('../../src/bootstrap/traffic-readiness-utils.js');
     const snapshot = {
       ready: false,
       phase: 'CONTROL_READY',
@@ -449,7 +449,7 @@ test('buildLifecycleReadinessNotReadyError attaches progressContract with 10 str
 
 test('BootstrapReadinessOwner buildBootstrapNotReadyResponse attaches progressContract',
   async (t) => {
-    const { BootstrapReadinessOwner } = await import('../../src/bootstrap/owners/bootstrap-readiness-owner.js');
+    const {BootstrapReadinessOwner} = await import('../../src/bootstrap/owners/bootstrap-readiness-owner.js');
     const owner = new BootstrapReadinessOwner({
       delegates: {
         getReadinessState: () => ({

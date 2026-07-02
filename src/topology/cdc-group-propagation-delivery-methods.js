@@ -708,7 +708,7 @@ class CDCGroupPropagationDeliveryMethods {
             sourceNodeId: this.nodeId,
             sourceGroupId: options.sourceGroupId,
             targetGroupId: target.groupId,
-      };
+          };
       let result = null;
       try {
         result = await this.messageRouter.deliver(target.address, payload, {
@@ -763,7 +763,6 @@ class CDCGroupPropagationDeliveryMethods {
       },
     ];
   }
-
 }
 
 function defineCDCGroupPropagationDeliveryMethods(prototype) {

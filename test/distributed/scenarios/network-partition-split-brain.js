@@ -223,7 +223,7 @@ async function queryNode(node, sql, params = []) {
   if (sql.includes(LOG_TABLE)) {
     const logId = String(params[LOG_ID_PARAMETER_INDEX] || '');
     if (logId.startsWith(MAJORITY_WRITE_ID_PREFIX)) {
-      return [{ log_id: logId }];
+      return [{log_id: logId}];
     }
     return [];
   }

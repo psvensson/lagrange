@@ -271,7 +271,7 @@ const moveReplicaAssignmentLeaseValidationMethods = {
       leaseExpiresAt,
     });
     return renewedReservation;
-  }
+  },
 };
 
 export {moveReplicaAssignmentLeaseValidationMethods};

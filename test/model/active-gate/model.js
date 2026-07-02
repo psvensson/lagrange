@@ -187,7 +187,9 @@ export function greedyDriveToConvergence(gate, maxSteps = 64) {
   while (!gate.convergedAbstract() && steps < maxSteps) {
     let acted = false;
     for (const n of gate.nodes) {
-      if (gate.canReconcileOwner(n)) {gate.reconcileOwner(n); acted = true;}
+      if (gate.canReconcileOwner(n)) {
+        gate.reconcileOwner(n); acted = true;
+      }
     }
     for (const n of gate.nodes) {
       if (gate.canAdvanceSnapshotCoverage(n)) {
@@ -195,9 +197,13 @@ export function greedyDriveToConvergence(gate, maxSteps = 64) {
       }
     }
     for (const n of gate.nodes) {
-      if (gate.canPublishNode(n)) {gate.publishNode(n); acted = true;}
+      if (gate.canPublishNode(n)) {
+        gate.publishNode(n); acted = true;
+      }
     }
-    if (gate.canRefreshSnapshot()) {gate.refreshSnapshot(); acted = true;}
+    if (gate.canRefreshSnapshot()) {
+      gate.refreshSnapshot(); acted = true;
+    }
     steps += 1;
     trajectory.push(gate.residual());
     if (!acted) break;

@@ -663,5 +663,4 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
       }
     },
   );
-
 }

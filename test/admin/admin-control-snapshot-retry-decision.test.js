@@ -351,30 +351,38 @@ test('closeStaleSnapshotLaneSockets protects active client and open sockets', (t
       {
         id: 'client-active',
         lane: 'snapshot',
-        socket: { readyState: 1, close() { closedIds.push('client-active'); } }
+        socket: {readyState: 1, close() {
+          closedIds.push('client-active');
+        }},
       },
       {
         id: 'client-stale-open',
         lane: 'snapshot',
-        socket: { readyState: 1, close() { closedIds.push('client-stale-open'); } }
+        socket: {readyState: 1, close() {
+          closedIds.push('client-stale-open');
+        }},
       },
       {
         id: 'client-stale-closed',
         lane: 'snapshot',
-        socket: { readyState: 3, close() { closedIds.push('client-stale-closed'); } }
+        socket: {readyState: 3, close() {
+          closedIds.push('client-stale-closed');
+        }},
       },
       {
         id: 'client-other-lane',
         lane: 'load',
-        socket: { readyState: 3, close() { closedIds.push('client-other-lane'); } }
-      }
+        socket: {readyState: 3, close() {
+          closedIds.push('client-other-lane');
+        }},
+      },
     ]),
     logger: {
-      info() {}
+      info() {},
     },
     handleDisconnection(client) {
       disconnectedClients.push(client.id);
-    }
+    },
   };
 
   const methods = AdminWebSocketAPI.prototype;

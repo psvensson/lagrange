@@ -668,16 +668,16 @@ function advanceOperationLifecycle(currentProgressOrState, eventInput) {
   const event = resolveOperationLifecycleEvent(eventInput);
   const currentProgress = typeof currentProgressOrState ===
       OPERATION_PROGRESS_TYPEOF_STRING ?
-      createInitialOperationProgress({
-        ...event,
-        evidence: event.evidence,
-        operationId: event.operationId,
-      }) :
-      normalizeOperationProgressRecord(currentProgressOrState, event.evidence);
+    createInitialOperationProgress({
+      ...event,
+      evidence: event.evidence,
+      operationId: event.operationId,
+    }) :
+    normalizeOperationProgressRecord(currentProgressOrState, event.evidence);
   const currentState = typeof currentProgressOrState ===
       OPERATION_PROGRESS_TYPEOF_STRING ?
-      currentProgressOrState :
-      currentProgress.state;
+    currentProgressOrState :
+    currentProgress.state;
   const transition =
     findOperationLifecycleTransition(currentState, event.type) ||
     buildInvalidOperationLifecycleTransition(currentState, event);

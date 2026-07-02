@@ -521,7 +521,7 @@ const queryExecutorSelectAggregationMethods = {
     }
     const count = Math.max(limit.count, NUM.ZERO);
     return rows.slice(offset, offset + count);
-  }
+  },
 };
 
 function installQueryExecutorSelectAggregationHelpers(target) {

@@ -1,5 +1,5 @@
-import {PARTITION_SERVICE_SHARED} from "./partition-service-shared.js";
-import {filterSharedRows} from "../cache/shared-row-read.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {filterSharedRows} from '../cache/shared-row-read.js';
 
 const {
   ACTIVE_VOTER_ROLES,
@@ -671,7 +671,7 @@ class PartitionServiceLearnerPromotionMethods {
 function createPartitionServiceLearnerPromotionMethods() {
   const methods = {};
   for (const name of Object.getOwnPropertyNames(PartitionServiceLearnerPromotionMethods.prototype)) {
-    if (name !== "constructor") {
+    if (name !== 'constructor') {
       methods[name] = PartitionServiceLearnerPromotionMethods.prototype[name];
     }
   }

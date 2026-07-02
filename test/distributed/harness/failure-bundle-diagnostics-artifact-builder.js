@@ -566,16 +566,16 @@ export function buildPublicationMissingPublishedEvidence({
       rawActiveGateSelectedNodeIds !== null &&
         rawActiveGateSelectedNodeIds.length > ZERO ?
         rawActiveGateSelectedNodeIds :
-      priorityRecoveryMissingPublishedNodeIds.length > ZERO ?
-        priorityRecoveryMissingPublishedNodeIds :
-      normalizeDistinctStringArray([
-        ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
-          publicationConvergenceGate.missingPublishedNodeIds :
-          []),
-        ...(Array.isArray(publicationConvergence?.missingPublishedNodeIds) ?
-          publicationConvergence.missingPublishedNodeIds :
-          []),
-      ]);
+        priorityRecoveryMissingPublishedNodeIds.length > ZERO ?
+          priorityRecoveryMissingPublishedNodeIds :
+          normalizeDistinctStringArray([
+            ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
+              publicationConvergenceGate.missingPublishedNodeIds :
+              []),
+            ...(Array.isArray(publicationConvergence?.missingPublishedNodeIds) ?
+              publicationConvergence.missingPublishedNodeIds :
+              []),
+          ]);
   const coverageCanonicalCount = rawCoverageCanonicalEvidenceAvailable === true ?
     Math.max(
       rawCoverageCanonicalCount,
@@ -1247,13 +1247,13 @@ export function buildPublicationConvergenceSummary(controlPlane) {
   const missingPublishedNodeIds = suppressMissingPublishedForPendingAckPriorityActuation ?
     [] :
     shouldUseSelectedMissingPublishedFallback ?
-    fallbackMissingPublishedNodeIds :
-    missingPublishedEvidence.nodeIds;
+      fallbackMissingPublishedNodeIds :
+      missingPublishedEvidence.nodeIds;
   const missingPublishedCount = suppressMissingPublishedForPendingAckPriorityActuation ?
     ZERO :
     shouldUseSelectedMissingPublishedFallback ?
-    Math.max(fallbackMissingPublishedNodeIds.length, fallbackPriorityRecoveryMissingPublishedCount) :
-    missingPublishedEvidence.count;
+      Math.max(fallbackMissingPublishedNodeIds.length, fallbackPriorityRecoveryMissingPublishedCount) :
+      missingPublishedEvidence.count;
   const hasRawPublicationMissingPublishedNodeIds = normalizeDistinctStringArray([
     ...normalizeDistinctStringArray(
       rawPublicationConvergenceGate?.missingPublishedNodeIds,

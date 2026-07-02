@@ -176,7 +176,6 @@ function assignAdminServiceDiscoveryReadinessMethods(
         nodeEndpointRows: this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
       });
     }
-
   }
 
   for (const methodName of Object.getOwnPropertyNames(

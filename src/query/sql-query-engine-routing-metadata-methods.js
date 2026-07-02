@@ -631,7 +631,6 @@ class SQLQueryEngineRoutingMetadataMethods {
 
     return true;
   }
-
 }
 
 function createSQLQueryEngineRoutingMetadataMethods() {

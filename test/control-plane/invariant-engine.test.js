@@ -1407,7 +1407,7 @@ test('checkPublicationDrainDeterministic passes when not owner or missingCount i
       missingPublishedCount: 5,
       scheduledReconcileObligationEnabled: false,
     }),
-    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC},
   );
 
   // Case 2: missingCount is 0
@@ -1417,7 +1417,7 @@ test('checkPublicationDrainDeterministic passes when not owner or missingCount i
       missingPublishedCount: 0,
       scheduledReconcileObligationEnabled: false,
     }),
-    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC},
   );
 
   // Case 3: obligationEnabled is true
@@ -1427,7 +1427,7 @@ test('checkPublicationDrainDeterministic passes when not owner or missingCount i
       missingPublishedCount: 5,
       scheduledReconcileObligationEnabled: true,
     }),
-    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC},
   );
 });
 
@@ -1438,6 +1438,6 @@ test('checkPublicationDrainDeterministic fails when owner and missingCount > 0 b
       missingPublishedCount: 3,
       scheduledReconcileObligationEnabled: false,
     }),
-    {passed: false, reason: INVARIANT_REASON.PUBLICATION_DRAIN_UNDETERMINISTIC}
+    {passed: false, reason: INVARIANT_REASON.PUBLICATION_DRAIN_UNDETERMINISTIC},
   );
 });

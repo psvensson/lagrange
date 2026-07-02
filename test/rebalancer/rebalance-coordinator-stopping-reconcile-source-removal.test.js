@@ -198,11 +198,11 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
       const persistedOperation =
         await coordinator.getOperation(operation.operationId);
 
-    t.equal(
-      reconcileResult,
-      true,
-      'ACTIVE replace reconciliation should consume already-visible source removal',
-    );
+      t.equal(
+        reconcileResult,
+        true,
+        'ACTIVE replace reconciliation should consume already-visible source removal',
+      );
       t.equal(
         deliveries.length,
         1,

@@ -575,7 +575,7 @@ const queryExecutorSqlCommandMethods = {
       sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
     }
     return this.appendReturning(sql, ast.returning);
-  }
+  },
 };
 
 function installQueryExecutorSqlCommandHelpers(target) {

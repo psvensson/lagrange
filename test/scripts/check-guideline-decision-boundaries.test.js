@@ -137,7 +137,7 @@ test('detects raw null/undefined/empty-array assigned or returned to/from semant
     ].join('\n'),
     '/repo/src/runtime/state-helper.js',
   );
-  t.equal(violationsNullReturn.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+  t.equal(violationsNullReturn.filter((v) => v.kind === 'raw_null_empty_state_outcome').length, 1);
 
   const violationsPropNull = collectDecisionBoundaryViolationsFromSource(
     [
@@ -147,7 +147,7 @@ test('detects raw null/undefined/empty-array assigned or returned to/from semant
     ].join('\n'),
     '/repo/src/runtime/state-helper.js',
   );
-  t.equal(violationsPropNull.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+  t.equal(violationsPropNull.filter((v) => v.kind === 'raw_null_empty_state_outcome').length, 1);
 
   const violationsUndefinedAssign = collectDecisionBoundaryViolationsFromSource(
     [
@@ -157,7 +157,7 @@ test('detects raw null/undefined/empty-array assigned or returned to/from semant
     ].join('\n'),
     '/repo/src/runtime/state-helper.js',
   );
-  t.equal(violationsUndefinedAssign.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+  t.equal(violationsUndefinedAssign.filter((v) => v.kind === 'raw_null_empty_state_outcome').length, 1);
 
   const violationsEmptyArrayAssign = collectDecisionBoundaryViolationsFromSource(
     [
@@ -167,7 +167,7 @@ test('detects raw null/undefined/empty-array assigned or returned to/from semant
     ].join('\n'),
     '/repo/src/runtime/state-helper.js',
   );
-  t.equal(violationsEmptyArrayAssign.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+  t.equal(violationsEmptyArrayAssign.filter((v) => v.kind === 'raw_null_empty_state_outcome').length, 1);
 
   const compliantOutcome = collectDecisionBoundaryViolationsFromSource(
     [
@@ -178,7 +178,7 @@ test('detects raw null/undefined/empty-array assigned or returned to/from semant
     ].join('\n'),
     '/repo/src/runtime/state-helper.js',
   );
-  t.equal(compliantOutcome.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 0);
+  t.equal(compliantOutcome.filter((v) => v.kind === 'raw_null_empty_state_outcome').length, 0);
 });
 
 test('detects mixed cache and SQL accesses in a decision function', async (t) => {
@@ -191,7 +191,7 @@ test('detects mixed cache and SQL accesses in a decision function', async (t) =>
     ].join('\n'),
     '/repo/src/runtime/decision-maker.js',
   );
-  t.equal(violationsMixed.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 1);
+  t.equal(violationsMixed.filter((v) => v.kind === 'mixed_cache_and_sql_decision').length, 1);
 
   const compliantCacheOnly = collectDecisionBoundaryViolationsFromSource(
     [
@@ -201,7 +201,7 @@ test('detects mixed cache and SQL accesses in a decision function', async (t) =>
     ].join('\n'),
     '/repo/src/runtime/decision-maker.js',
   );
-  t.equal(compliantCacheOnly.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 0);
+  t.equal(compliantCacheOnly.filter((v) => v.kind === 'mixed_cache_and_sql_decision').length, 0);
 
   const compliantSqlOnly = collectDecisionBoundaryViolationsFromSource(
     [
@@ -211,7 +211,7 @@ test('detects mixed cache and SQL accesses in a decision function', async (t) =>
     ].join('\n'),
     '/repo/src/runtime/decision-maker.js',
   );
-  t.equal(compliantSqlOnly.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 0);
+  t.equal(compliantSqlOnly.filter((v) => v.kind === 'mixed_cache_and_sql_decision').length, 0);
 });
 
 test('detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes', async (t) => {
@@ -221,7 +221,7 @@ test('detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes
     ].join('\n'),
     '/repo/src/runtime/db.js',
   );
-  t.equal(violationsReplace.filter(v => v.kind === 'schema_unsafe_system_table_write').length, 1);
+  t.equal(violationsReplace.filter((v) => v.kind === 'schema_unsafe_system_table_write').length, 1);
 
   const compliantInsert = collectDecisionBoundaryViolationsFromSource(
     [
@@ -229,7 +229,7 @@ test('detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes
     ].join('\n'),
     '/repo/src/runtime/db.js',
   );
-  t.equal(compliantInsert.filter(v => v.kind === 'schema_unsafe_system_table_write').length, 0);
+  t.equal(compliantInsert.filter((v) => v.kind === 'schema_unsafe_system_table_write').length, 0);
 });
 
 test('detects local retry loops using setTimeout/setInterval or loops', async (t) => {
@@ -243,7 +243,7 @@ test('detects local retry loops using setTimeout/setInterval or loops', async (t
     ].join('\n'),
     '/repo/src/runtime/runner.js',
   );
-  t.equal(violationsTimeoutRetry.filter(v => v.kind === 'local_retry_loop').length, 1);
+  t.equal(violationsTimeoutRetry.filter((v) => v.kind === 'local_retry_loop').length, 1);
 
   const violationsWhileRetry = collectDecisionBoundaryViolationsFromSource(
     [
@@ -255,7 +255,7 @@ test('detects local retry loops using setTimeout/setInterval or loops', async (t
     ].join('\n'),
     '/repo/src/runtime/runner.js',
   );
-  t.equal(violationsWhileRetry.filter(v => v.kind === 'local_retry_loop').length, 1);
+  t.equal(violationsWhileRetry.filter((v) => v.kind === 'local_retry_loop').length, 1);
 
   const compliantTimeout = collectDecisionBoundaryViolationsFromSource(
     [
@@ -267,5 +267,5 @@ test('detects local retry loops using setTimeout/setInterval or loops', async (t
     ].join('\n'),
     '/repo/src/runtime/runner.js',
   );
-  t.equal(compliantTimeout.filter(v => v.kind === 'local_retry_loop').length, 0);
+  t.equal(compliantTimeout.filter((v) => v.kind === 'local_retry_loop').length, 0);
 });

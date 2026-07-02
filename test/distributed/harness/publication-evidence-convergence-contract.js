@@ -590,44 +590,44 @@ function buildCanonicalPublicationConvergence(
       staleGenericPublicationEpochClosure === true &&
       steadyPublishedSelectedPublicationMembershipOpen !== true &&
       currentSelectedPublicationMembershipDeficitOpen !== true ?
-      PUBLICATION_EVIDENCE_EMPTY_LIST :
-      authoritativePublicationMembershipAvailable ?
-        normalizeDistinctStringArray([
-          ...authoritativeMissingPublishedNodeIds,
-          ...(relevantObservedMissingPublishedNodeIds ??
+        PUBLICATION_EVIDENCE_EMPTY_LIST :
+        authoritativePublicationMembershipAvailable ?
+          normalizeDistinctStringArray([
+            ...authoritativeMissingPublishedNodeIds,
+            ...(relevantObservedMissingPublishedNodeIds ??
           PUBLICATION_EVIDENCE_EMPTY_LIST),
-        ]) :
-        normalizeDistinctStringArray([
-          ...authoritativeMissingPublishedNodeIds,
-          ...observedMissingPublishedNodeIds,
-        ]);
+          ]) :
+          normalizeDistinctStringArray([
+            ...authoritativeMissingPublishedNodeIds,
+            ...observedMissingPublishedNodeIds,
+          ]);
   const missingPublishedCount =
     ownerReconcileNarrowsOpenPublication ?
       ownerReconcileNarrowedMissingPublishedNodeIds.length :
       staleGenericPublicationEpochClosure === true &&
       currentSelectedPublicationMembershipDeficitOpen !== true ?
-      PUBLICATION_EVIDENCE_ZERO :
-      authoritativePublicationMembershipAvailable ?
-        Math.max(
-          missingPublishedNodeIds.length,
-          normalizeNonNegativeInteger(
-            publicationConvergenceGate?.missingPublishedCount,
-          ) ?? PUBLICATION_EVIDENCE_ZERO,
-          normalizeNonNegativeInteger(
-            rawPublicationConvergence?.missingPublishedCount,
-          ) ?? PUBLICATION_EVIDENCE_ZERO,
-        ) :
-        Math.max(
-          missingPublishedNodeIds.length,
-          normalizeNonNegativeInteger(
-            publicationConvergenceGate?.missingPublishedCount,
-          ) ?? PUBLICATION_EVIDENCE_ZERO,
-          normalizeNonNegativeInteger(
-            rawPublicationConvergence?.missingPublishedCount,
-          ) ?? PUBLICATION_EVIDENCE_ZERO,
-          normalizeNonNegativeInteger(activeGateProgress?.missingPublishedCount) ??
+        PUBLICATION_EVIDENCE_ZERO :
+        authoritativePublicationMembershipAvailable ?
+          Math.max(
+            missingPublishedNodeIds.length,
+            normalizeNonNegativeInteger(
+              publicationConvergenceGate?.missingPublishedCount,
+            ) ?? PUBLICATION_EVIDENCE_ZERO,
+            normalizeNonNegativeInteger(
+              rawPublicationConvergence?.missingPublishedCount,
+            ) ?? PUBLICATION_EVIDENCE_ZERO,
+          ) :
+          Math.max(
+            missingPublishedNodeIds.length,
+            normalizeNonNegativeInteger(
+              publicationConvergenceGate?.missingPublishedCount,
+            ) ?? PUBLICATION_EVIDENCE_ZERO,
+            normalizeNonNegativeInteger(
+              rawPublicationConvergence?.missingPublishedCount,
+            ) ?? PUBLICATION_EVIDENCE_ZERO,
+            normalizeNonNegativeInteger(activeGateProgress?.missingPublishedCount) ??
           PUBLICATION_EVIDENCE_ZERO,
-        );
+          );
   const closureRecordId =
     normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
     normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||

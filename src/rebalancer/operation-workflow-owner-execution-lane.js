@@ -793,7 +793,6 @@ class OperationWorkflowOwnerExecutionLane extends withOwnerHandoffState(Operatio
       return false;
     }
   }
-
 }
 
 export {OperationWorkflowOwnerExecutionLane};

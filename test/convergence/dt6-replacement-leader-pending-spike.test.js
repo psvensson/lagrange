@@ -197,7 +197,7 @@ function makeRevertedHandoff() {
   const realBuilder =
     PriorityPublicationHandoff.prototype
       .buildPriorityPublicationLeaderRemoveSafetySnapshot;
-  instance.buildPriorityPublicationLeaderRemoveSafetySnapshot = function (
+  instance.buildPriorityPublicationLeaderRemoveSafetySnapshot = function(
     operation,
     sourceReplicaRow,
     replacementReplicaRow,

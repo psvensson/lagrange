@@ -31,7 +31,9 @@ t.test('tier 0: live in-memory role via canWriteSystemTableLocally (never lags)'
   // throwing cdc -> fall through to cache tiers, fail-safe
   t.equal(
     isControlPlanePublicationsWriteLeader(emptyCache, 'seed', {
-      canWriteSystemTableLocally: () => {throw new Error('x');},
+      canWriteSystemTableLocally: () => {
+        throw new Error('x');
+      },
     }),
     false,
   );
@@ -135,7 +137,11 @@ t.test('fail-safe: null cache / nodeId / throwing cache -> false', async (t) => 
   t.equal(isControlPlanePublicationsWriteLeader({get: () => null, find: () => null}, null), false);
   t.equal(
     isControlPlanePublicationsWriteLeader(
-      {get: () => {throw new Error('x');}, find: () => {throw new Error('y');}},
+      {get: () => {
+        throw new Error('x');
+      }, find: () => {
+        throw new Error('y');
+      }},
       'seed',
     ),
     false,

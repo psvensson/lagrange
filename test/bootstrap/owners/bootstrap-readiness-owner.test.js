@@ -9,7 +9,7 @@ test('BootstrapReadinessOwner buildPriorityControlPlaneRecoveryUnavailableHealth
 
   const health = owner.buildPriorityControlPlaneRecoveryUnavailableHealth(
     'control_plane_recovery_diagnostics_read_failed',
-    new Error('WebSocket was closed before the connection was established')
+    new Error('WebSocket was closed before the connection was established'),
   );
 
   t.equal(health.healthy, false);

@@ -204,7 +204,7 @@ test('runFinalAdjudication performs drain, queries mock nodes and evaluates cons
   const mockNode1 = {
     id: 'node-1',
     getReachabilityDiagnostics: async () => {
-      return { nodeId: 'node-1', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null };
+      return {nodeId: 'node-1', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null};
     },
     getControlSnapshot: async () => {
       return {
@@ -226,18 +226,18 @@ test('runFinalAdjudication performs drain, queries mock nodes and evaluates cons
                 source: 'partitions',
                 inconsistentReplicaRoles: false,
                 replicaLeaderNodeIds: ['node-1'],
-              }
-            }
-          }
-        }]
+              },
+            },
+          },
+        }],
       };
-    }
+    },
   };
 
   const mockNode2 = {
     id: 'node-2',
     getReachabilityDiagnostics: async () => {
-      return { nodeId: 'node-2', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null };
+      return {nodeId: 'node-2', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null};
     },
     getControlSnapshot: async () => {
       return {
@@ -259,12 +259,12 @@ test('runFinalAdjudication performs drain, queries mock nodes and evaluates cons
                 source: 'partitions',
                 inconsistentReplicaRoles: false,
                 replicaLeaderNodeIds: ['node-1'],
-              }
-            }
-          }
-        }]
+              },
+            },
+          },
+        }],
       };
-    }
+    },
   };
 
   const result = await runFinalAdjudication([mockNode1, mockNode2]);

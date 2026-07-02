@@ -254,7 +254,7 @@ function createObservedProgressCoordinator({
 
       return {
         success: true,
-          source: TEST_READ_SOURCE_LOCAL_PARTITION_REPLICA,
+        source: TEST_READ_SOURCE_LOCAL_PARTITION_REPLICA,
         rows: [],
       };
     },
@@ -485,68 +485,68 @@ test(TEST_DISPATCH_WAKE_TEST_NAME,
   });
 
 test(TEST_TRANSITION_GRACE_TEST_NAME,
-async (t) => {
-  const nowMs = Date.now();
-  const operationRow = buildCreatingOperationRow(
-    TEST_TRANSITION_GRACE_OPERATION_ID,
-    nowMs,
-  );
-  const serviceRow = buildActiveLearnerServiceRow();
-  const dispatchedMessages = [];
-  const coordinator = createObservedProgressCoordinator({
-    operationRow,
-    serviceRow,
-    dispatchedMessages,
-  });
-
-  coordinator.initialize();
-  try {
-    const operation = coordinator.repository.rowToOperation(operationRow);
-    coordinator.workflowOwner.recordTransitionRetryGrace(
-      operation.operationId,
-      {
-        workflowStep: operation.workflowStep,
-        partitionId: operation.partitionId,
-        updatedAt: operation.updatedAt,
-        createdAt: operation.createdAt,
-      },
-      TEST_TRANSITION_GRACE_DELAY_MS,
+  async (t) => {
+    const nowMs = Date.now();
+    const operationRow = buildCreatingOperationRow(
+      TEST_TRANSITION_GRACE_OPERATION_ID,
+      nowMs,
     );
-
-    t.equal(
-      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
-        operation.operationId,
-        nowMs,
-      ),
-      true,
-      TEST_MESSAGE_TRANSITION_GRACE_ACTIVE,
-    );
-    t.equal(
-      coordinator.workflowOwner.hasObservedOperationRowTargetProgress(
-        operation,
-      ),
-      true,
-      TEST_MESSAGE_ACTIVE_LEARNER_OBSERVED,
-    );
-
-    await coordinator.workflowOwner.reconcileTimeoutOperation(operation, nowMs);
-
-    t.equal(
-      operationRow.workflow_step,
-      WORKFLOW_STEP.SYNCING,
-      TEST_MESSAGE_TRANSITION_GRACE_SYNCING,
-    );
-    t.equal(
-      operationRow.status,
-      ReplicaStatus.SYNCING,
-      TEST_MESSAGE_TRANSITION_GRACE_PERSISTS_SYNCING,
-    );
-    t.same(
+    const serviceRow = buildActiveLearnerServiceRow();
+    const dispatchedMessages = [];
+    const coordinator = createObservedProgressCoordinator({
+      operationRow,
+      serviceRow,
       dispatchedMessages,
-      [],
-      TEST_MESSAGE_TRANSITION_GRACE_NO_DISPATCH,
-    );
-  } finally {
-    await coordinator.shutdown();
-  }
-});
+    });
+
+    coordinator.initialize();
+    try {
+      const operation = coordinator.repository.rowToOperation(operationRow);
+      coordinator.workflowOwner.recordTransitionRetryGrace(
+        operation.operationId,
+        {
+          workflowStep: operation.workflowStep,
+          partitionId: operation.partitionId,
+          updatedAt: operation.updatedAt,
+          createdAt: operation.createdAt,
+        },
+        TEST_TRANSITION_GRACE_DELAY_MS,
+      );
+
+      t.equal(
+        coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+          operation.operationId,
+          nowMs,
+        ),
+        true,
+        TEST_MESSAGE_TRANSITION_GRACE_ACTIVE,
+      );
+      t.equal(
+        coordinator.workflowOwner.hasObservedOperationRowTargetProgress(
+          operation,
+        ),
+        true,
+        TEST_MESSAGE_ACTIVE_LEARNER_OBSERVED,
+      );
+
+      await coordinator.workflowOwner.reconcileTimeoutOperation(operation, nowMs);
+
+      t.equal(
+        operationRow.workflow_step,
+        WORKFLOW_STEP.SYNCING,
+        TEST_MESSAGE_TRANSITION_GRACE_SYNCING,
+      );
+      t.equal(
+        operationRow.status,
+        ReplicaStatus.SYNCING,
+        TEST_MESSAGE_TRANSITION_GRACE_PERSISTS_SYNCING,
+      );
+      t.same(
+        dispatchedMessages,
+        [],
+        TEST_MESSAGE_TRANSITION_GRACE_NO_DISPATCH,
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });

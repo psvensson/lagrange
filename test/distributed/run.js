@@ -1410,7 +1410,7 @@ async function main() {
 
     if (args.contract) {
       process.stdout.write(`\n[contract] evaluated contract: ${args.contract}\n`);
-      process.stdout.write(`[contract] emitted outcome: pending-before-rerun\n`);
+      process.stdout.write('[contract] emitted outcome: pending-before-rerun\n');
     }
 
     const gateFailed =

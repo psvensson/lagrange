@@ -122,9 +122,9 @@ test('Unit: a single transient ready probe is not recovery', async () => {
     docker: {socketPath: '/var/run/docker.sock'},
     image: 'distributed-db:test',
     timeouts: {
-        nodeStartup: READINESS_TIMEOUT_MS,
-        restartRecoveryHoldRecheckMs: 100,
-      },
+      nodeStartup: READINESS_TIMEOUT_MS,
+      restartRecoveryHoldRecheckMs: 100,
+    },
   });
   // Exactly one ready probe, then dead: the consecutive-probe requirement
   // must keep the readiness WAIT itself from succeeding.

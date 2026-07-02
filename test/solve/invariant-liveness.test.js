@@ -217,7 +217,7 @@ t.test('evaluateAndRecord on a failing predicate => BREACHED and a breach falsif
   const transition = evaluateAndRecord(root, inv, {});
   t.same(transition, {id: 'br-x', from: STATUS.UNGUARDED, to: STATUS.BREACHED});
 
-  const log = readLog(root, `invariant-br-x`);
+  const log = readLog(root, 'invariant-br-x');
   t.ok(log.some((e) => e.type === 'invariant.breach'), 'breach falsifier recorded');
   t.notOk(fs.existsSync(questFilePath(root, restorationQuestId('br-x'))),
     'no restoration Quest when autoSpawn is off');

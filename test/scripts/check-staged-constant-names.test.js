@@ -14,7 +14,7 @@ const DIFF_WITH_NEW_HASH_CONSTANT = [
   '+++ b/src/example/decision-owner.js',
   '@@ -10,0 +11,2 @@',
   `+const ${HASH_CONSTANT_NAME} = 'new hash-named constant';`,
-  "+const REASON_SPREAD_PENDING = 'priority_spread_pending';",
+  '+const REASON_SPREAD_PENDING = \'priority_spread_pending\';',
 ].join('\n');
 
 const DIFF_TOUCHING_LEGACY_FILE_WITHOUT_NEW_HASH = [
@@ -22,8 +22,8 @@ const DIFF_TOUCHING_LEGACY_FILE_WITHOUT_NEW_HASH = [
   '--- a/src/example/legacy.js',
   '+++ b/src/example/legacy.js',
   '@@ -5,1 +5,1 @@',
-  "-  return LOCAL_STR_1ABCD;",
-  "+  return LOCAL_STR_1ABCD.trim();",
+  '-  return LOCAL_STR_1ABCD;',
+  '+  return LOCAL_STR_1ABCD.trim();',
 ].join('\n');
 
 test('staged gate flags only newly added opaque constant declarations', (t) => {

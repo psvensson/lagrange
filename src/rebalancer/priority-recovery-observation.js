@@ -90,10 +90,10 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     const authoritativeOperations = Array.isArray(
       authoritativeObservation?.operations,
     ) ?
-        authoritativeObservation.operations.filter((operation) => {
-          return operation && typeof operation === TYPEOF.OBJECT;
-        }) :
-        [];
+      authoritativeObservation.operations.filter((operation) => {
+        return operation && typeof operation === TYPEOF.OBJECT;
+      }) :
+      [];
     const selection =
       this.decidePriorityRecoveryPartitionObservationSelection({
         authoritativeOperationAvailable:

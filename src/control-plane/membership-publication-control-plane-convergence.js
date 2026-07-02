@@ -82,7 +82,7 @@ function buildCriticalControlPlaneConvergenceOptions(
     ownerKey,
     operation,
     pressureOutcome =
-      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+    CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
   } = {},
 ) {
   const retryAfterMs = normalizeControlPlaneConvergenceRetryAfterMs(

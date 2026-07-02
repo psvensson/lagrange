@@ -1,4 +1,4 @@
-import { LogsTableService } from '../logging/logs-table-service.js';
+import {LogsTableService} from '../logging/logs-table-service.js';
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
@@ -66,4 +66,4 @@ class OwnerQueue {
   }
 }
 
-export { OwnerQueue };
+export {OwnerQueue};

@@ -824,5 +824,4 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       await coordinator.shutdown();
     }
   });
-
 }

@@ -127,8 +127,8 @@ export function classifyActiveGateClosureWitness({
   );
   const hasStrongAdminWitness = hasStartupAdminClosureWitness({
     ...progressSnapshot,
-      selectedReachabilityError: progressSnapshot?.selectedReachabilityError,
-      selectedError: progressSnapshot?.selectedError,
+    selectedReachabilityError: progressSnapshot?.selectedReachabilityError,
+    selectedError: progressSnapshot?.selectedError,
   });
   const closedStartupPublicationBestProgress =
     isClosedStartupPublicationProgress(bestProgressSnapshot);

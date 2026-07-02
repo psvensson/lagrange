@@ -738,85 +738,85 @@ test('NodeJoiningService - query-state shortcut keeps terminal ' +
 
 test('NodeJoiningService - MOVE_REPLICA control-plane upsert preserves ' +
   'assignment publication when preferred', {skip: 'STALE: dead test re-enabled; expected preferControlPlaneUpsert shortcut to route MOVE_REPLICA via control-plane upsert (httpCalls=0, upsertCalls=1) but product now calls seed HTTP register-service (httpCalls=1, upsertCalls=0)'}, async (t) => {
-    initializeTestEnvironment();
+  initializeTestEnvironment();
 
-    const TEST_NODE_ID = 'join-node-move-replica-upsert';
-    const TEST_NODE_ADDRESS = 'ws://localhost:9090';
-    const TEST_SEED_ADDRESS = 'http://localhost:8080';
-    const TEST_GROUP_ID = 'mg-1';
-    const TEST_REPLICA_ID = 'mg-1-r0';
-    const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
-    const TEST_REQUESTED_STATUS = SERVICE_STATUS.ACTIVE;
-    let httpCalls = 0;
-    const upsertCalls = [];
-    const seededRows = [];
-    const service = new NodeJoiningService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-      httpPost: async () => {
-        httpCalls += 1;
-        return {success: true};
-      },
-    });
-    service.seedNodeId = 'seed-node-1';
-    service.bootstrapResponse = {
-      messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
-        groupId: TEST_GROUP_ID,
-        replicaToMove: TEST_REPLICA_ID,
-        assignmentId: TEST_ASSIGNMENT_ID,
-      },
-    };
-    service.upsertJoinServiceRowWithRetry = async (row, options) => {
-      upsertCalls.push({row, options});
+  const TEST_NODE_ID = 'join-node-move-replica-upsert';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_GROUP_ID = 'mg-1';
+  const TEST_REPLICA_ID = 'mg-1-r0';
+  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
+  const TEST_REQUESTED_STATUS = SERVICE_STATUS.ACTIVE;
+  let httpCalls = 0;
+  const upsertCalls = [];
+  const seededRows = [];
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    httpPost: async () => {
+      httpCalls += 1;
       return {success: true};
-    };
-    service.seedJoinTimeCacheRow = (tableName, row) => {
-      seededRows.push({tableName, row});
-    };
-
-    await service.registerMessageGroupService(
-      TEST_GROUP_ID,
-      TEST_REPLICA_ID,
-      {getRole: () => 'leader'},
-      {
-        status: TEST_REQUESTED_STATUS,
-        [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
-      },
-    );
-
-    t.equal(
-      httpCalls,
-      0,
-      'MOVE_REPLICA control-plane upsert should not call seed HTTP',
-    );
-    t.equal(
-      upsertCalls.length,
-      1,
-      'MOVE_REPLICA control-plane upsert should publish one service row',
-    );
-    t.equal(
-      upsertCalls[0].row.assignment_id,
-      TEST_ASSIGNMENT_ID,
-      'control-plane upsert should preserve the MOVE_REPLICA assignment token',
-    );
-    t.equal(
-      upsertCalls[0].row.status,
-      TEST_REQUESTED_STATUS,
-      'control-plane upsert should preserve the requested service status',
-    );
-    t.equal(
-      upsertCalls[0].options?.admissionTarget,
-      QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET,
-      'control-plane upsert should use the join metadata admission target',
-    );
-    t.equal(
-      seededRows[0]?.row?.assignment_id,
-      TEST_ASSIGNMENT_ID,
-      'join-time cache seed should retain assignment publication metadata',
-    );
+    },
   });
+  service.seedNodeId = 'seed-node-1';
+  service.bootstrapResponse = {
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: TEST_GROUP_ID,
+      replicaToMove: TEST_REPLICA_ID,
+      assignmentId: TEST_ASSIGNMENT_ID,
+    },
+  };
+  service.upsertJoinServiceRowWithRetry = async (row, options) => {
+    upsertCalls.push({row, options});
+    return {success: true};
+  };
+  service.seedJoinTimeCacheRow = (tableName, row) => {
+    seededRows.push({tableName, row});
+  };
+
+  await service.registerMessageGroupService(
+    TEST_GROUP_ID,
+    TEST_REPLICA_ID,
+    {getRole: () => 'leader'},
+    {
+      status: TEST_REQUESTED_STATUS,
+      [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
+    },
+  );
+
+  t.equal(
+    httpCalls,
+    0,
+    'MOVE_REPLICA control-plane upsert should not call seed HTTP',
+  );
+  t.equal(
+    upsertCalls.length,
+    1,
+    'MOVE_REPLICA control-plane upsert should publish one service row',
+  );
+  t.equal(
+    upsertCalls[0].row.assignment_id,
+    TEST_ASSIGNMENT_ID,
+    'control-plane upsert should preserve the MOVE_REPLICA assignment token',
+  );
+  t.equal(
+    upsertCalls[0].row.status,
+    TEST_REQUESTED_STATUS,
+    'control-plane upsert should preserve the requested service status',
+  );
+  t.equal(
+    upsertCalls[0].options?.admissionTarget,
+    QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET,
+    'control-plane upsert should use the join metadata admission target',
+  );
+  t.equal(
+    seededRows[0]?.row?.assignment_id,
+    TEST_ASSIGNMENT_ID,
+    'join-time cache seed should retain assignment publication metadata',
+  );
+});
 
 test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',
   async (t) => {

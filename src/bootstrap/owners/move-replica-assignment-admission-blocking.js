@@ -213,7 +213,7 @@ const moveReplicaAssignmentAdmissionBlockingMethods = {
       reservation,
       now,
     ) === null;
-  }
+  },
 };
 
 export {moveReplicaAssignmentAdmissionBlockingMethods};

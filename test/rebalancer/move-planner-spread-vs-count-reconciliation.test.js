@@ -199,8 +199,8 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
             move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
         ),
         true,
-        'the replaceMoves>0 leak still emits the bare ADD (count-neutral '
-        + 'reconciliation only defers when no REPLACE paired this round)');
+        'the replaceMoves>0 leak still emits the bare ADD (count-neutral ' +
+        'reconciliation only defers when no REPLACE paired this round)');
     },
   );
 });

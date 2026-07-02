@@ -708,7 +708,6 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       );
     }
   }
-
 }
 
 Object.defineProperties(

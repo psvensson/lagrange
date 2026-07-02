@@ -166,7 +166,7 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES = Object.freeze([
       priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
         evidence,
         PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
-    ),
+      ),
   }),
 ]);
 const PRIORITY_RECOVERY_WITNESS_SUPERSESSION_TABLE = Object.freeze([

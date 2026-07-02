@@ -166,7 +166,6 @@ class PartitionSplitMergeManager extends EventEmitter {
       loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) :
       console;
   }
-
 }
 
 Object.assign(

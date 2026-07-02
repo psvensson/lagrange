@@ -113,23 +113,23 @@ const FENCING_REQUIREMENT_WITNESS_DECISION_TABLE = Object.freeze({
 
 // Decision table for verifying bounded progress mechanisms are witnessed during simulation
 const PROGRESS_MECHANISM_WITNESS_DECISION_TABLE = Object.freeze({
-  wake: (entry, _state, _eventLog) =>
+  'wake': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('wake'),
-  retry: (entry, _state, _eventLog) =>
+  'retry': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('retry'),
-  timeout: (entry, _state, _eventLog) =>
+  'timeout': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('timeout'),
-  reconcile: (entry, _state, _eventLog) =>
+  'reconcile': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('reconcile'),
-  drain: (entry, _state, _eventLog) =>
+  'drain': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('drain'),
-  dispatch: (entry, _state, _eventLog) =>
+  'dispatch': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('dispatch'),
-  delivery: (entry, _state, _eventLog) =>
+  'delivery': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('delivery'),
-  timer: (entry, _state, _eventLog) =>
+  'timer': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('timer'),
-  advance: (entry, _state, _eventLog) =>
+  'advance': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('advance'),
   'bounded progress': (entry, _state, _eventLog) =>
     entry.boundedProgressMechanisms.includes('bounded progress'),
@@ -364,7 +364,7 @@ async function runTopologyFailureGate(entry) {
   const invariantResults = evaluateInvariants(invariantState);
   assertInvariantGate(invariantResults);
   const eventLog = runDeterministicGateScenario(entry);
-  
+
   // Enforce validation of the declared topology gate matrix contracts against the simulated outputs
   validateGateContracts(entry, invariantState, invariantResults, eventLog);
 

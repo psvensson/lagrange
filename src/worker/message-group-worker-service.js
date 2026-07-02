@@ -575,7 +575,6 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
   getSystemCache() {
     return this.systemCache;
   }
-
 }
 
 Object.assign(

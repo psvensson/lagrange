@@ -457,7 +457,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
         activeReplicaNodeIds.has(canonicalLeaderNodeId)
       );
     }
-
   }
 
   for (const methodName of Object.getOwnPropertyNames(

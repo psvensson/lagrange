@@ -33,105 +33,105 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
    *   operationId?: string, idempotent?: boolean}>}
    * @throws {LifecycleOrchestrationError} On driver failure.
    */
-  async prepare(definition, context, options) {
-    const runtimeKind = resolveRuntimeKind(definition);
-    const serviceId = resolveServiceId(definition);
-    const op = LIFECYCLE_OPERATION.PREPARE;
-    const idempotencyKey = options?.idempotencyKey ?? null;
+    async prepare(definition, context, options) {
+      const runtimeKind = resolveRuntimeKind(definition);
+      const serviceId = resolveServiceId(definition);
+      const op = LIFECYCLE_OPERATION.PREPARE;
+      const idempotencyKey = options?.idempotencyKey ?? null;
 
-    if (!runtimeKind) {
-      throw new LifecycleOrchestrationError(
-        op, LOCAL_STR_NONE, serviceId,
-        LOCAL_STR_17O4M,
-      );
-    }
-    this._validateRuntimeDescriptor(
-      definition, runtimeKind, op, serviceId,
-    );
-
-    this.emit(LIFECYCLE_EVENT.PREPARE_START, {
-      runtimeKind, serviceId,
-    });
-    const start = Date.now();
-    let operation = null;
-
-    try {
-      operation = await this._journalCreate(
-        serviceId, runtimeKind, op,
-        definition.tenantId, idempotencyKey,
+      if (!runtimeKind) {
+        throw new LifecycleOrchestrationError(
+          op, LOCAL_STR_NONE, serviceId,
+          LOCAL_STR_17O4M,
+        );
+      }
+      this._validateRuntimeDescriptor(
+        definition, runtimeKind, op, serviceId,
       );
 
-      // Idempotency hit: return existing operation identity
-      if (operation && operation.idempotent) {
-        const durationMs = Date.now() - start;
-        const result = {
-          status: operation.existing.state ??
+      this.emit(LIFECYCLE_EVENT.PREPARE_START, {
+        runtimeKind, serviceId,
+      });
+      const start = Date.now();
+      let operation = null;
+
+      try {
+        operation = await this._journalCreate(
+          serviceId, runtimeKind, op,
+          definition.tenantId, idempotencyKey,
+        );
+
+        // Idempotency hit: return existing operation identity
+        if (operation && operation.idempotent) {
+          const durationMs = Date.now() - start;
+          const result = {
+            status: operation.existing.state ??
             WASM_OPERATION_STATE.PENDING,
-          operationId: operation.operationId,
-          idempotent: true,
-        };
+            operationId: operation.operationId,
+            idempotent: true,
+          };
+          this.emit(LIFECYCLE_EVENT.PREPARE_SUCCESS, {
+            runtimeKind, serviceId, durationMs, result,
+          });
+          return result;
+        }
+
+        await this._journalTransition(
+          operation, serviceId, runtimeKind, op,
+          WASM_OPERATION_STATE.PENDING,
+          WASM_OPERATION_STATE.IN_PROGRESS,
+        );
+
+        const driver = this._resolveDriver(runtimeKind);
+        const result = await driver.prepare(definition, context);
+        const durationMs = Date.now() - start;
+
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.CREATED,
+          {created_at: start},
+        );
+
+        await this._journalTransition(
+          operation, serviceId, runtimeKind, op,
+          WASM_OPERATION_STATE.IN_PROGRESS,
+          WASM_OPERATION_STATE.COMPLETED,
+          result,
+        );
+
         this.emit(LIFECYCLE_EVENT.PREPARE_SUCCESS, {
           runtimeKind, serviceId, durationMs, result,
         });
         return result;
-      }
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.PENDING,
-        WASM_OPERATION_STATE.IN_PROGRESS,
-      );
-
-      const driver = this._resolveDriver(runtimeKind);
-      const result = await driver.prepare(definition, context);
-      const durationMs = Date.now() - start;
-
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.CREATED,
-        {created_at: start},
-      );
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.IN_PROGRESS,
-        WASM_OPERATION_STATE.COMPLETED,
-        result,
-      );
-
-      this.emit(LIFECYCLE_EVENT.PREPARE_SUCCESS, {
-        runtimeKind, serviceId, durationMs, result,
-      });
-      return result;
-    } catch (err) {
-      const durationMs = Date.now() - start;
-      if (operation && !(err instanceof OperationJournalError) &&
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        if (operation && !(err instanceof OperationJournalError) &&
           !(err instanceof IdempotencyCheckError)) {
-        await this._journalTransition(
-          operation, serviceId, runtimeKind, op,
-          WASM_OPERATION_STATE.IN_PROGRESS,
-          WASM_OPERATION_STATE.FAILED,
-          {message: err.message},
-        ).catch(() => {});
-      }
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
-        {error_message: err.message},
-      );
-      this.emit(LIFECYCLE_EVENT.PREPARE_FAILURE, {
-        runtimeKind, serviceId, durationMs, error: err,
-      });
-      if (err instanceof LifecycleOrchestrationError ||
+          await this._journalTransition(
+            operation, serviceId, runtimeKind, op,
+            WASM_OPERATION_STATE.IN_PROGRESS,
+            WASM_OPERATION_STATE.FAILED,
+            {message: err.message},
+          ).catch(() => {});
+        }
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+          {error_message: err.message},
+        );
+        this.emit(LIFECYCLE_EVENT.PREPARE_FAILURE, {
+          runtimeKind, serviceId, durationMs, error: err,
+        });
+        if (err instanceof LifecycleOrchestrationError ||
           err instanceof OperationJournalError ||
           err instanceof IdempotencyCheckError) {
-        throw err;
+          throw err;
+        }
+        throw new LifecycleOrchestrationError(
+          op, runtimeKind, serviceId, err.message, {cause: err},
+        );
       }
-      throw new LifecycleOrchestrationError(
-        op, runtimeKind, serviceId, err.message, {cause: err},
-      );
     }
-  }
 
-  /**
+    /**
    * Start a service replica.
    *
    * When the driver returns an endpointIntent in its StartResult,
@@ -158,163 +158,163 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
    * @throws {LifecycleOrchestrationError} On driver failure.
    * @throws {EndpointIntentError} On invalid endpoint intent.
    */
-  async start(replicaContext, options) {
-    const definition = replicaContext?.definition ?? replicaContext;
-    const runtimeKind = resolveRuntimeKind(definition);
-    const serviceId = resolveServiceId(definition);
-    const op = LIFECYCLE_OPERATION.START;
-    const idempotencyKey = options?.idempotencyKey ?? null;
+    async start(replicaContext, options) {
+      const definition = replicaContext?.definition ?? replicaContext;
+      const runtimeKind = resolveRuntimeKind(definition);
+      const serviceId = resolveServiceId(definition);
+      const op = LIFECYCLE_OPERATION.START;
+      const idempotencyKey = options?.idempotencyKey ?? null;
 
-    if (!runtimeKind) {
-      throw new LifecycleOrchestrationError(
-        op, LOCAL_STR_NONE, serviceId,
-        LOCAL_STR_VUZ91,
-      );
-    }
-    this._validateRuntimeDescriptor(
-      definition, runtimeKind, op, serviceId,
-    );
-
-    this.emit(LIFECYCLE_EVENT.START_START, {
-      runtimeKind, serviceId,
-    });
-    const start = Date.now();
-    let operation = null;
-    let causeId = null;
-
-    try {
-      operation = await this._journalCreate(
-        serviceId, runtimeKind, op,
-        definition.tenantId, idempotencyKey,
+      if (!runtimeKind) {
+        throw new LifecycleOrchestrationError(
+          op, LOCAL_STR_NONE, serviceId,
+          LOCAL_STR_VUZ91,
+        );
+      }
+      this._validateRuntimeDescriptor(
+        definition, runtimeKind, op, serviceId,
       );
 
-      // Idempotency hit: return existing operation identity
-      if (operation && operation.idempotent) {
-        const durationMs = Date.now() - start;
-        const result = {
-          status: operation.existing.state ??
+      this.emit(LIFECYCLE_EVENT.START_START, {
+        runtimeKind, serviceId,
+      });
+      const start = Date.now();
+      let operation = null;
+      let causeId = null;
+
+      try {
+        operation = await this._journalCreate(
+          serviceId, runtimeKind, op,
+          definition.tenantId, idempotencyKey,
+        );
+
+        // Idempotency hit: return existing operation identity
+        if (operation && operation.idempotent) {
+          const durationMs = Date.now() - start;
+          const result = {
+            status: operation.existing.state ??
             WASM_OPERATION_STATE.PENDING,
-          operationId: operation.operationId,
-          idempotent: true,
-        };
+            operationId: operation.operationId,
+            idempotent: true,
+          };
+          this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
+            runtimeKind, serviceId, durationMs, result,
+          });
+          return result;
+        }
+
+        await this._journalTransition(
+          operation, serviceId, runtimeKind, op,
+          WASM_OPERATION_STATE.PENDING,
+          WASM_OPERATION_STATE.IN_PROGRESS,
+        );
+
+        causeId = getOrCreateCauseId(operation?.operationId);
+
+        // Inject service-scoped query executor into replica context
+        // so drivers and lifecycle modules can query tables through
+        // the standard SQL execution path.
+        if (this._queryExecutorFactory) {
+          replicaContext.queryExecutor =
+          this._queryExecutorFactory(serviceId);
+          this.emit(
+            QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
+            {runtimeKind, serviceId},
+          );
+        }
+
+        const driver = this._resolveDriver(runtimeKind);
+        const result = await driver.start(replicaContext);
+        const durationMs = Date.now() - start;
+
+        // --- Endpoint intent single-write-path handling ---
+        if (result && result.endpointIntent) {
+          const validation = validateEndpointIntent(
+            result.endpointIntent,
+          );
+          if (!validation.valid) {
+            throw new EndpointIntentError(
+              runtimeKind, serviceId, validation.reason,
+            );
+          }
+          this.emit(LIFECYCLE_EVENT.ENDPOINT_INTENT_RECEIVED, {
+            runtimeKind, serviceId, endpointIntent: result.endpointIntent,
+            causeId,
+          });
+
+          if (this._endpointWriter) {
+            try {
+              await this._endpointWriter(
+                serviceId, runtimeKind, result.endpointIntent,
+                {causeId},
+              );
+              this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTERED, {
+                runtimeKind, serviceId,
+                endpointIntent: result.endpointIntent,
+                causeId,
+              });
+            } catch (writeErr) {
+              this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTRATION_FAILED, {
+                runtimeKind, serviceId, error: writeErr,
+                causeId,
+              });
+              throw new LifecycleOrchestrationError(
+                op, runtimeKind, serviceId,
+                `endpoint registration failed: ${writeErr.message}`,
+                {cause: writeErr},
+              );
+            }
+          }
+        }
+
+        await this._journalTransition(
+          operation, serviceId, runtimeKind, op,
+          WASM_OPERATION_STATE.IN_PROGRESS,
+          WASM_OPERATION_STATE.COMPLETED,
+          result,
+        );
+
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE, null, {causeId},
+        );
+
         this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
           runtimeKind, serviceId, durationMs, result,
         });
         return result;
-      }
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.PENDING,
-        WASM_OPERATION_STATE.IN_PROGRESS,
-      );
-
-      causeId = getOrCreateCauseId(operation?.operationId);
-
-      // Inject service-scoped query executor into replica context
-      // so drivers and lifecycle modules can query tables through
-      // the standard SQL execution path.
-      if (this._queryExecutorFactory) {
-        replicaContext.queryExecutor =
-          this._queryExecutorFactory(serviceId);
-        this.emit(
-          QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
-          {runtimeKind, serviceId},
-        );
-      }
-
-      const driver = this._resolveDriver(runtimeKind);
-      const result = await driver.start(replicaContext);
-      const durationMs = Date.now() - start;
-
-      // --- Endpoint intent single-write-path handling ---
-      if (result && result.endpointIntent) {
-        const validation = validateEndpointIntent(
-          result.endpointIntent,
-        );
-        if (!validation.valid) {
-          throw new EndpointIntentError(
-            runtimeKind, serviceId, validation.reason,
-          );
-        }
-        this.emit(LIFECYCLE_EVENT.ENDPOINT_INTENT_RECEIVED, {
-          runtimeKind, serviceId, endpointIntent: result.endpointIntent,
-          causeId,
-        });
-
-        if (this._endpointWriter) {
-          try {
-            await this._endpointWriter(
-              serviceId, runtimeKind, result.endpointIntent,
-              {causeId},
-            );
-            this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTERED, {
-              runtimeKind, serviceId,
-              endpointIntent: result.endpointIntent,
-              causeId,
-            });
-          } catch (writeErr) {
-            this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTRATION_FAILED, {
-              runtimeKind, serviceId, error: writeErr,
-              causeId,
-            });
-            throw new LifecycleOrchestrationError(
-              op, runtimeKind, serviceId,
-              `endpoint registration failed: ${writeErr.message}`,
-              {cause: writeErr},
-            );
-          }
-        }
-      }
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.IN_PROGRESS,
-        WASM_OPERATION_STATE.COMPLETED,
-        result,
-      );
-
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE, null, {causeId},
-      );
-
-      this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
-        runtimeKind, serviceId, durationMs, result,
-      });
-      return result;
-    } catch (err) {
-      const durationMs = Date.now() - start;
-      if (operation && !(err instanceof OperationJournalError) &&
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        if (operation && !(err instanceof OperationJournalError) &&
           !(err instanceof IdempotencyCheckError)) {
-        await this._journalTransition(
-          operation, serviceId, runtimeKind, op,
-          WASM_OPERATION_STATE.IN_PROGRESS,
-          WASM_OPERATION_STATE.FAILED,
-          {message: err.message},
-        ).catch(() => {});
-      }
-      await this._removeEndpoint(serviceId, definition);
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
-        {error_message: err.message},
-        {causeId: causeId || getOrCreateCauseId(operation?.operationId)},
-      );
-      this.emit(LIFECYCLE_EVENT.START_FAILURE, {
-        runtimeKind, serviceId, durationMs, error: err,
-      });
-      if (err instanceof LifecycleOrchestrationError ||
+          await this._journalTransition(
+            operation, serviceId, runtimeKind, op,
+            WASM_OPERATION_STATE.IN_PROGRESS,
+            WASM_OPERATION_STATE.FAILED,
+            {message: err.message},
+          ).catch(() => {});
+        }
+        await this._removeEndpoint(serviceId, definition);
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+          {error_message: err.message},
+          {causeId: causeId || getOrCreateCauseId(operation?.operationId)},
+        );
+        this.emit(LIFECYCLE_EVENT.START_FAILURE, {
+          runtimeKind, serviceId, durationMs, error: err,
+        });
+        if (err instanceof LifecycleOrchestrationError ||
           err instanceof EndpointIntentError ||
           err instanceof OperationJournalError ||
           err instanceof IdempotencyCheckError) {
-        throw err;
+          throw err;
+        }
+        throw new LifecycleOrchestrationError(
+          op, runtimeKind, serviceId, err.message, {cause: err},
+        );
       }
-      throw new LifecycleOrchestrationError(
-        op, runtimeKind, serviceId, err.message, {cause: err},
-      );
     }
-  }
 
-  /**
+    /**
    * Stop a service replica.
    *
    * @param {Object} replicaContext - Replica execution context.
@@ -324,151 +324,151 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
    * @return {Promise<void|{operationId: string, idempotent: true}>}
    * @throws {LifecycleOrchestrationError} On driver failure.
    */
-  async stop(replicaContext, options) {
-    const definition = replicaContext?.definition ?? replicaContext;
-    const runtimeKind = resolveRuntimeKind(definition);
-    const serviceId = resolveServiceId(definition);
-    const op = LIFECYCLE_OPERATION.STOP;
-    const idempotencyKey = options?.idempotencyKey ?? null;
+    async stop(replicaContext, options) {
+      const definition = replicaContext?.definition ?? replicaContext;
+      const runtimeKind = resolveRuntimeKind(definition);
+      const serviceId = resolveServiceId(definition);
+      const op = LIFECYCLE_OPERATION.STOP;
+      const idempotencyKey = options?.idempotencyKey ?? null;
 
-    if (!runtimeKind) {
-      throw new LifecycleOrchestrationError(
-        op, LOCAL_STR_NONE, serviceId,
-        LOCAL_STR_VUZ91,
-      );
-    }
-    this._validateRuntimeDescriptor(
-      definition, runtimeKind, op, serviceId,
-    );
-
-    this.emit(LIFECYCLE_EVENT.STOP_START, {
-      runtimeKind, serviceId,
-    });
-    const start = Date.now();
-    let operation = null;
-
-    try {
-      operation = await this._journalCreate(
-        serviceId, runtimeKind, op,
-        definition.tenantId, idempotencyKey,
-      );
-
-      // Idempotency hit: return existing operation identity
-      if (operation && operation.idempotent) {
-        const durationMs = Date.now() - start;
-        this.emit(LIFECYCLE_EVENT.STOP_SUCCESS, {
-          runtimeKind, serviceId, durationMs,
-        });
-        return {
-          operationId: operation.operationId,
-          idempotent: true,
-        };
+      if (!runtimeKind) {
+        throw new LifecycleOrchestrationError(
+          op, LOCAL_STR_NONE, serviceId,
+          LOCAL_STR_VUZ91,
+        );
       }
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.PENDING,
-        WASM_OPERATION_STATE.IN_PROGRESS,
+      this._validateRuntimeDescriptor(
+        definition, runtimeKind, op, serviceId,
       );
 
-      const driver = this._resolveDriver(runtimeKind);
-      await driver.stop(replicaContext);
-      const durationMs = Date.now() - start;
-
-      await this._journalTransition(
-        operation, serviceId, runtimeKind, op,
-        WASM_OPERATION_STATE.IN_PROGRESS,
-        WASM_OPERATION_STATE.COMPLETED,
-      );
-
-      await this._removeEndpoint(serviceId, definition);
-
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.STOPPED,
-      );
-
-      this.emit(LIFECYCLE_EVENT.STOP_SUCCESS, {
-        runtimeKind, serviceId, durationMs,
+      this.emit(LIFECYCLE_EVENT.STOP_START, {
+        runtimeKind, serviceId,
       });
-    } catch (err) {
-      const durationMs = Date.now() - start;
-      if (operation && !(err instanceof OperationJournalError) &&
-          !(err instanceof IdempotencyCheckError)) {
+      const start = Date.now();
+      let operation = null;
+
+      try {
+        operation = await this._journalCreate(
+          serviceId, runtimeKind, op,
+          definition.tenantId, idempotencyKey,
+        );
+
+        // Idempotency hit: return existing operation identity
+        if (operation && operation.idempotent) {
+          const durationMs = Date.now() - start;
+          this.emit(LIFECYCLE_EVENT.STOP_SUCCESS, {
+            runtimeKind, serviceId, durationMs,
+          });
+          return {
+            operationId: operation.operationId,
+            idempotent: true,
+          };
+        }
+
+        await this._journalTransition(
+          operation, serviceId, runtimeKind, op,
+          WASM_OPERATION_STATE.PENDING,
+          WASM_OPERATION_STATE.IN_PROGRESS,
+        );
+
+        const driver = this._resolveDriver(runtimeKind);
+        await driver.stop(replicaContext);
+        const durationMs = Date.now() - start;
+
         await this._journalTransition(
           operation, serviceId, runtimeKind, op,
           WASM_OPERATION_STATE.IN_PROGRESS,
-          WASM_OPERATION_STATE.FAILED,
-          {message: err.message},
-        ).catch(() => {});
-      }
-      await this._removeEndpoint(serviceId, definition);
-      await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
-        {error_message: err.message},
-      );
-      this.emit(LIFECYCLE_EVENT.STOP_FAILURE, {
-        runtimeKind, serviceId, durationMs, error: err,
-      });
-      if (err instanceof LifecycleOrchestrationError ||
+          WASM_OPERATION_STATE.COMPLETED,
+        );
+
+        await this._removeEndpoint(serviceId, definition);
+
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.STOPPED,
+        );
+
+        this.emit(LIFECYCLE_EVENT.STOP_SUCCESS, {
+          runtimeKind, serviceId, durationMs,
+        });
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        if (operation && !(err instanceof OperationJournalError) &&
+          !(err instanceof IdempotencyCheckError)) {
+          await this._journalTransition(
+            operation, serviceId, runtimeKind, op,
+            WASM_OPERATION_STATE.IN_PROGRESS,
+            WASM_OPERATION_STATE.FAILED,
+            {message: err.message},
+          ).catch(() => {});
+        }
+        await this._removeEndpoint(serviceId, definition);
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
+          {error_message: err.message},
+        );
+        this.emit(LIFECYCLE_EVENT.STOP_FAILURE, {
+          runtimeKind, serviceId, durationMs, error: err,
+        });
+        if (err instanceof LifecycleOrchestrationError ||
           err instanceof OperationJournalError ||
           err instanceof IdempotencyCheckError) {
-        throw err;
+          throw err;
+        }
+        throw new LifecycleOrchestrationError(
+          op, runtimeKind, serviceId, err.message, {cause: err},
+        );
       }
-      throw new LifecycleOrchestrationError(
-        op, runtimeKind, serviceId, err.message, {cause: err},
-      );
     }
-  }
 
-  /**
+    /**
    * Check health of a service replica.
    *
    * @param {Object} replicaContext - Replica execution context.
    * @return {Promise<{status: string, detail?: string}>}
    * @throws {LifecycleOrchestrationError} On driver failure.
    */
-  async health(replicaContext) {
-    const definition = replicaContext?.definition ?? replicaContext;
-    const runtimeKind = resolveRuntimeKind(definition);
-    const serviceId = resolveServiceId(definition);
-    const op = LIFECYCLE_OPERATION.HEALTH;
+    async health(replicaContext) {
+      const definition = replicaContext?.definition ?? replicaContext;
+      const runtimeKind = resolveRuntimeKind(definition);
+      const serviceId = resolveServiceId(definition);
+      const op = LIFECYCLE_OPERATION.HEALTH;
 
-    if (!runtimeKind) {
-      throw new LifecycleOrchestrationError(
-        op, LOCAL_STR_NONE, serviceId,
-        LOCAL_STR_VUZ91,
-      );
-    }
-    this._validateRuntimeDescriptor(
-      definition, runtimeKind, op, serviceId,
-    );
-
-    this.emit(LIFECYCLE_EVENT.HEALTH_CHECK, {
-      runtimeKind, serviceId,
-    });
-    const start = Date.now();
-
-    try {
-      const driver = this._resolveDriver(runtimeKind);
-      const result = await driver.health(replicaContext);
-      const durationMs = Date.now() - start;
-      this.emit(LIFECYCLE_EVENT.HEALTH_RESULT, {
-        runtimeKind, serviceId, durationMs, result,
-      });
-      return result;
-    } catch (err) {
-      const durationMs = Date.now() - start;
-      this.emit(LIFECYCLE_EVENT.HEALTH_RESULT, {
-        runtimeKind, serviceId, durationMs, error: err,
-      });
-      if (err instanceof LifecycleOrchestrationError) {
-        throw err;
+      if (!runtimeKind) {
+        throw new LifecycleOrchestrationError(
+          op, LOCAL_STR_NONE, serviceId,
+          LOCAL_STR_VUZ91,
+        );
       }
-      throw new LifecycleOrchestrationError(
-        op, runtimeKind, serviceId, err.message, {cause: err},
+      this._validateRuntimeDescriptor(
+        definition, runtimeKind, op, serviceId,
       );
+
+      this.emit(LIFECYCLE_EVENT.HEALTH_CHECK, {
+        runtimeKind, serviceId,
+      });
+      const start = Date.now();
+
+      try {
+        const driver = this._resolveDriver(runtimeKind);
+        const result = await driver.health(replicaContext);
+        const durationMs = Date.now() - start;
+        this.emit(LIFECYCLE_EVENT.HEALTH_RESULT, {
+          runtimeKind, serviceId, durationMs, result,
+        });
+        return result;
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        this.emit(LIFECYCLE_EVENT.HEALTH_RESULT, {
+          runtimeKind, serviceId, durationMs, error: err,
+        });
+        if (err instanceof LifecycleOrchestrationError) {
+          throw err;
+        }
+        throw new LifecycleOrchestrationError(
+          op, runtimeKind, serviceId, err.message, {cause: err},
+        );
+      }
     }
-  }
   }
 
   const descriptors = Object.getOwnPropertyDescriptors(
