@@ -70,12 +70,6 @@
   ],
   "runtimeBindings": [
     {
-      "path": "_legacy_work/scripts/work-tracker.js",
-      "owner": "workflow_tooling_owner",
-      "boundary": "owner_dossier_model_coverage",
-      "transition": "archived owner-dossier read model formerly read modelProvenRoutes and invariant modelRef coverage for representative rerun admission"
-    },
-    {
       "path": "src/rebalancer/operation-workflow-owner-ports.js",
       "owner": "operation_workflow_owner",
       "boundary": "rebalancer_handoff",
@@ -92,7 +86,7 @@
   "metrics": [
     {
       "name": "archived owner-dossier model coverage",
-      "probe": "archived under _legacy_work/scripts/work-tracker.js; active workflow uses Quest health and Solver reports"
+      "probe": "former work-tracker read model archived in git history (pruned _legacy_work); active workflow uses Quest health and Solver reports"
     },
     {
       "name": "representative rerun Quest probe",
@@ -143,8 +137,8 @@ successor selection before representative evidence runs again.
 
 ## Runtime Bindings
 
-`_legacy_work/scripts/work-tracker.js` archives the former owner-dossier read
-model that reported proven or modeled coverage.
+The former owner-dossier read model (`work-tracker.js`) that reported proven
+or modeled coverage is archived in git history (pruned `_legacy_work`).
 `src/rebalancer/operation-workflow-owner-ports.js` owns the upstream
 `blocked_model_route` signal consumed by this representative rerun progress
 model.
