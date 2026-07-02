@@ -107,10 +107,11 @@ class MembershipPublicationCoordinatorPlanning extends
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
               .getMembershipPublicationPlanningSnapshotBestEffort === TYPEOF.FUNCTION ?
-          await this.controlPlaneReadinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-            options.publisherNodeId || this.nodeId,
-            normalizePositiveInteger(options.nowMs, this.now()),
-          ) :
+          await this.controlPlaneReadinessService
+            .getMembershipPublicationPlanningSnapshotBestEffort(
+              options.publisherNodeId || this.nodeId,
+              normalizePositiveInteger(options.nowMs, this.now()),
+            ) :
           null;
     return buildMembershipPublicationEvidenceSnapshot({
       ...options,

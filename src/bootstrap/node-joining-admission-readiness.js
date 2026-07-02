@@ -20,7 +20,6 @@ const {
   JOIN_SESSION_PHASE,
   JoiningEvent,
   JoiningPhase,
-  NODE_JOINING_SERVICE_LITERAL,
   NUM,
   NodeLifecycleStateMachine,
   NodeService,

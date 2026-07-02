@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {TYPEOF} from '../constants/index.js';
 import {ADMISSION_DECISION} from './storage-capacity-constants.js';
 
 function freezeStrings(values) {

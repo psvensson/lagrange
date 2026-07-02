@@ -272,7 +272,10 @@ export class NodesView extends BaseView {
       sections.push({
         title: LOCAL_STR_NETWORK,
         fields: [
-          {label: LOCAL_STR_CONNECTIONS, value: String(node.network_info.connections ?? LOCAL_STR_N_A)},
+          {
+            label: LOCAL_STR_CONNECTIONS,
+            value: String(node.network_info.connections ?? LOCAL_STR_N_A),
+          },
           {label: LOCAL_STR_BYTES_IN, value: this.formatBytes(node.network_info.bytes_in)},
           {label: LOCAL_STR_BYTES_OUT, value: this.formatBytes(node.network_info.bytes_out)},
         ],

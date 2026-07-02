@@ -326,7 +326,9 @@ class SystemCacheQueryService extends EventEmitter {
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
       hitRate: this.queryCount > LOCAL_NUM_ZERO ?
-        (this.cacheHits / this.queryCount * LOCAL_NUM_100).toFixed(LOCAL_NUM_TWO) + LOCAL_STR_PERCENT : LOCAL_STR_0,
+        (this.cacheHits / this.queryCount * LOCAL_NUM_100).toFixed(LOCAL_NUM_TWO) +
+          LOCAL_STR_PERCENT :
+        LOCAL_STR_0,
       registeredReplicas: this.messageGroupServices.size,
     };
   }

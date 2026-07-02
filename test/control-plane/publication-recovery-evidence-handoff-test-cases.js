@@ -3,7 +3,6 @@ import {CONTROL_PLANE_PUBLICATION_STATUS} from
   '../../src/control-plane/control-plane-publication-merge.js';
 import {
   PUBLICATION_OWNER_FRESHNESS_FENCE,
-  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
@@ -27,11 +26,7 @@ const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT = 2;
 const TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT = 3;
-const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
 const TEST_ACTIVE_GATE_EXPECTED_NODE_COUNT = 5;
-const TEST_UNKNOWN_PUBLICATION_MISSING_COUNT = 5;
-const TEST_PRESSURE_RETRY_AFTER_MS = 250;
-const TEST_PRESSURE_REASON_CODE = 'control_plane_pressure_degraded';
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const TEST_NODE_ID = Object.freeze({
@@ -41,10 +36,6 @@ const TEST_NODE_ID = Object.freeze({
   FOURTH: 'node-d',
   FIFTH: 'node-e',
 });
-const TEST_CLOSURE_RECORD_ID = 'CL-003';
-const TEST_CLOSURE_WITNESS_CLASS =
-  'publication_converged_priority_spread_pending';
-const TEST_CLOSURE_WITNESS_STATE = 'closure_satisfied_stale_publication';
 const TEST_PUBLICATION_PENDING_REASON_CODE = 'publication_epoch_pending';
 const TEST_STALE_REASON_CODE = 'priority_partitions_not_spread';
 const TEST_STALE_PRESENTATION_REASON_CODE = Object.freeze({
@@ -85,22 +76,6 @@ const TEST_NON_PRIORITY_PARTITION_ID =
   'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
 const TEST_DECISION_SNAPSHOT_ACK_TARGET_ASSERTION =
   'decision snapshot ACK targets should become canonical pending ACK evidence';
-const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION =
-  'count-only canonical reentry should preserve explicit pending ACK targets';
-const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
-  'buildCanonicalPublicationRecoveryEvidence keeps pending ACK targets ' +
-  'when empty required lists are canonical reentry noise';
-const TEST_STALE_PUBLISHED_PUBLICATION_PENDING_TEST_NAME =
-  'buildCanonicalPublicationRecoveryEvidence settles stale published ' +
-  'publication pending evidence';
-const TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME =
-  'buildCanonicalPublicationRecoveryEvidence classifies unknown count-only ' +
-  'publication debt as unpublished startup evidence';
-const TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
-  TEST_NODE_ID.FIRST,
-  TEST_NODE_ID.SECOND,
-  TEST_NODE_ID.THIRD,
-]);
 const TEST_SELECTED_ONLY_MISSING_NODE_IDS = Object.freeze([
   TEST_NODE_ID.FOURTH,
   TEST_NODE_ID.FIFTH,
@@ -142,17 +117,6 @@ const TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   blockedPartitionCount: 0,
   largestSpreadGap: 0,
   totalSpreadGap: 0,
-});
-const TEST_STALE_PRIORITY_RECOVERY_CLOSURE_WITNESS = Object.freeze({
-  state: TEST_CLOSURE_WITNESS_STATE,
-  prioritySpreadPending: false,
-  publicationRefreshRequired: true,
-  closureRecordId: TEST_CLOSURE_RECORD_ID,
-  closureWitnessClass: TEST_CLOSURE_WITNESS_CLASS,
-  refreshedPriorityPartitionSummary:
-    TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
-  summarySpreadPending: true,
-  publicationEpoch: TEST_PUBLICATION_EPOCH,
 });
 
 function buildDecisionSnapshots() {
@@ -1266,7 +1230,10 @@ test('buildCanonicalPublicationRecoveryEvidence preemption adjudication and leas
     now: 2500, // force expiration
   });
 
-  t.equal(evidence.preemptionAdjudication.decision, RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS);
+  t.equal(
+    evidence.preemptionAdjudication.decision,
+    RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS,
+  );
   t.match(evidence.preemptionAdjudication.reason, /Local coordination epoch is stale/);
   t.equal(evidence.leaseExpired, true);
 

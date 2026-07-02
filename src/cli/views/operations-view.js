@@ -76,12 +76,17 @@ export const OPERATION_STATUS = {
 /**
  * Workflow steps for ADD operations
  */
-export const ADD_WORKFLOW_STEPS = [LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_CREATING_2, LOCAL_STR_SYNCING_2, LOCAL_STR_ACTIVE_2];
+export const ADD_WORKFLOW_STEPS = [
+  LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_CREATING_2, LOCAL_STR_SYNCING_2,
+  LOCAL_STR_ACTIVE_2,
+];
 
 /**
  * Workflow steps for REMOVE operations
  */
-export const REMOVE_WORKFLOW_STEPS = [LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_STOPPING, LOCAL_STR_REMOVED_2];
+export const REMOVE_WORKFLOW_STEPS = [
+  LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_STOPPING, LOCAL_STR_REMOVED_2,
+];
 
 /**
  * OperationsView displays all replica operations with workflow steps
@@ -153,7 +158,8 @@ export class OperationsView extends BaseView {
   formatTimestamp(timestamp) {
     if (!timestamp) return LOCAL_STR_N_A;
     const date = new Date(timestamp);
-    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
+      .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
   }
 
   /**

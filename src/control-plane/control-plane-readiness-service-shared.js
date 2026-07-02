@@ -267,7 +267,9 @@ function normalizeLocalQueryTransportEvidence(readiness) {
   }
   const ready = typeof readiness.ready === 'boolean' ? readiness.ready : null;
   return Object.freeze({
-    state: ready === true ? LOCAL_STR_READY : ready === false ? LOCAL_STR_DEFERRED : LOCAL_STR_UNKNOWN,
+    state: ready === true ?
+      LOCAL_STR_READY :
+      ready === false ? LOCAL_STR_DEFERRED : LOCAL_STR_UNKNOWN,
     ready,
     reason:
       typeof readiness.reason === TYPEOF.STRING &&

@@ -3,7 +3,6 @@ import {
   TYPEOF_OBJECT,
   TYPEOF_STRING,
   normalizeDistinctStringArray,
-  normalizeFirstNonEmptyDistinctStringArray,
 } from './cluster-active-wait-normalization.js';
 
 const {

@@ -1,6 +1,5 @@
 import {
   PressureGovernor,
-  TYPEOF,
   buildLocalControlPlaneMutationReadinessFailure,
   getLocalControlPlaneMutationReadinessBlocker,
   requiresStableLocalControlPlaneMutationReadiness,

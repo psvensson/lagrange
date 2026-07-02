@@ -366,9 +366,18 @@ export class PartitionsView extends BaseView {
       title: LOCAL_STR_RAFT_STATE,
       fields: [
         {label: LOCAL_STR_TERM, value: String(partition.raft_term ?? LOCAL_NUM_ZERO)},
-        {label: LOCAL_STR_COMMIT_INDEX, value: String(partition.raft_commit_index ?? LOCAL_NUM_ZERO)},
-        {label: LOCAL_STR_APPLIED_INDEX, value: String(partition.raft_applied_index ?? LOCAL_NUM_ZERO)},
-        {label: LOCAL_STR_LAST_LOG_INDEX, value: String(partition.raft_last_log_index ?? LOCAL_NUM_ZERO)},
+        {
+          label: LOCAL_STR_COMMIT_INDEX,
+          value: String(partition.raft_commit_index ?? LOCAL_NUM_ZERO),
+        },
+        {
+          label: LOCAL_STR_APPLIED_INDEX,
+          value: String(partition.raft_applied_index ?? LOCAL_NUM_ZERO),
+        },
+        {
+          label: LOCAL_STR_LAST_LOG_INDEX,
+          value: String(partition.raft_last_log_index ?? LOCAL_NUM_ZERO),
+        },
         {label: LOCAL_STR_ROLE, value: partition.raft_role || LOCAL_STR_N_A},
       ],
     });
@@ -461,7 +470,8 @@ export class PartitionsView extends BaseView {
       if (isNaN(date.getTime())) {
         return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace(LOCAL_STR_T_2, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      return date.toISOString().replace(LOCAL_STR_T_2, LOCAL_STR_SPACE)
+        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }

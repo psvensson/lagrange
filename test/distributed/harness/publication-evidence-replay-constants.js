@@ -1,11 +1,7 @@
 import {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_LOG_MSG,
-  REBALANCER_SKIP_REASON,
 } from '../../../src/rebalancer/rebalancer-constants.js';
-import {
-  STORAGE_CAPACITY_LOG_MSG,
-} from '../../../src/rebalancer/storage-capacity-constants.js';
 
 const PUBLICATION_EVIDENCE_REPLAY_FILE = Object.freeze({
   FAILURE_BUNDLE: 'failure-bundle.json',

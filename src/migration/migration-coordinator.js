@@ -36,7 +36,6 @@ const LOCAL_STR_SCHEMA_MIGRATION = 'schema-migration';
 const LOCAL_STR_SCHEMA_MIGRATION_2 = 'schema_migration';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_1G5VR = 'MigrationCoordinator requires sqlCore.queryExecutor';
-const LOCAL_STR_1S4LL = 'Migration tableId is required';
 const LOCAL_STR_18RRO = 'Migration alter SQL is required for dual-write stage';
 const LOCAL_STR_1S5V1 = 'Partition ALTER TABLE failed';
 const LOCAL_STR_1A9V5 = 'Missing migration_id for rollback';

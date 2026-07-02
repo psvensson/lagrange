@@ -1,6 +1,5 @@
 import {
   NUM,
-  TYPEOF,
 } from '../../constants/index.js';
 import {
   BOOTSTRAP_API_REQUEST_FIELD,

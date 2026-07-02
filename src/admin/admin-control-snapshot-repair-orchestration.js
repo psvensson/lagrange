@@ -37,7 +37,6 @@ import {
   hasDeferredRepairLocalControlSnapshotCoverage,
   hasForcedRepairDeferredFailureCause,
   hasOnlyLeaderResolutionGapRepairCause,
-  hasPressureOrTimeoutRepairCause,
   isRecoverableControlSnapshotPublicationReadError,
   isReadyLocalTransportDiagnostic,
   resolveAuthoritativeRepairTimeoutMs,

@@ -197,7 +197,8 @@ export class CommandParser {
 
     // Get parameter completions
     const paramIndex = parts.length - 2;
-    return this.getParameterCompletions(commandName, paramIndex, parts[parts.length - LOCAL_NUM_ONE]);
+    return this.getParameterCompletions(
+      commandName, paramIndex, parts[parts.length - LOCAL_NUM_ONE]);
   }
 
   /**

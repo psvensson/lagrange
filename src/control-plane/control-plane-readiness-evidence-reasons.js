@@ -30,7 +30,11 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
     super(...args);
     const originalBuild = this.buildPriorityControlPlaneRecoveryUnavailableHealth;
     if (typeof originalBuild === 'function') {
-      this.buildPriorityControlPlaneRecoveryUnavailableHealth = function(failureReason, error = null, context = null) {
+      this.buildPriorityControlPlaneRecoveryUnavailableHealth = function(
+        failureReason,
+        error = null,
+        context = null,
+      ) {
         const result = originalBuild.call(this, failureReason, error, context);
         const isWebSocketClosed = error && (
           String(error).includes('WebSocket') ||

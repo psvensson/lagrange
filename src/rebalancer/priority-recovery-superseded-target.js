@@ -8,8 +8,6 @@ import {
   resolvePriorityPublicationReplacementLeaderCandidateState,
   resolvePriorityPublicationReplacementLeaderCandidateAction,
   resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds,
-  PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE,
-  PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION,
 } from './operation-workflow-replacement-leader-state.js';
 import {
   hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound,
@@ -42,8 +40,6 @@ const {
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
   REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
   TYPEOF,
   WORKFLOW_STEP,

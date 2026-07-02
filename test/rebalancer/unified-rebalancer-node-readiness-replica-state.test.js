@@ -26,8 +26,6 @@ import {
 import {
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,

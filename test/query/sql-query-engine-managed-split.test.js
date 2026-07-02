@@ -7,16 +7,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-} from '../../src/query/query-constants.js';
-import {
   TABLES,
 } from '../../src/constants/index.js';
-import {
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
@@ -24,14 +16,6 @@ import {
   TIMEOUT_BUDGET_CLASSIFICATION,
   createTimeoutBudget,
 } from '../../src/control-plane/timeout-budget.js';
-import {
-} from '../../src/control-plane/pressure-governor.js';
-import {
-} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
-import {
-} from '../../src/control-plane/owner-contract-outcome.js';
-import {
-} from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -39,7 +23,6 @@ const config = ConfigurationManager.getInstance();
 config.initialize();
 
 import {
-  mockPartitionData,
   createMockMessageRouter,
   createMockSystemCache,
   createAdmittedSplitAdmissionService,

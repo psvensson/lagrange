@@ -21,10 +21,12 @@ export function resolveOwnerWitnessNextAction(edge) {
   if (source.topologyOperatorNextAction && source.topologyOperatorNextAction !== ABSENT_VALUE) {
     return source.topologyOperatorNextAction;
   }
-  if (source.publicationActiveGateHandoffNextAction && source.publicationActiveGateHandoffNextAction !== ABSENT_VALUE) {
+  if (source.publicationActiveGateHandoffNextAction &&
+      source.publicationActiveGateHandoffNextAction !== ABSENT_VALUE) {
     return source.publicationActiveGateHandoffNextAction;
   }
-  if (source.selectedSnapshotObservationNextAction && source.selectedSnapshotObservationNextAction !== ABSENT_VALUE) {
+  if (source.selectedSnapshotObservationNextAction &&
+      source.selectedSnapshotObservationNextAction !== ABSENT_VALUE) {
     return source.selectedSnapshotObservationNextAction;
   }
   // Default values based on edge id
@@ -103,12 +105,23 @@ export function buildTopologyConvergenceOwnerWitness(edge) {
   const witnessBoundary = pc.boundary && pc.boundary !== ABSENT_VALUE ? pc.boundary : edge.boundary;
   const witnessState = pc.state && pc.state !== ABSENT_VALUE ? pc.state : edge.state;
   const witnessReason = pc.reason && pc.reason !== ABSENT_VALUE ? pc.reason : reason;
-  const witnessNextAction = pc.nextAction && pc.nextAction !== ABSENT_VALUE ? pc.nextAction : resolveOwnerWitnessNextAction(edge);
-  const witnessWakeSource = pc.wakeSource && pc.wakeSource !== ABSENT_VALUE ? pc.wakeSource : resolveOwnerWitnessWakeSource(edge);
+  const witnessNextAction = pc.nextAction && pc.nextAction !== ABSENT_VALUE ?
+    pc.nextAction :
+    resolveOwnerWitnessNextAction(edge);
+  const witnessWakeSource = pc.wakeSource && pc.wakeSource !== ABSENT_VALUE ?
+    pc.wakeSource :
+    resolveOwnerWitnessWakeSource(edge);
   const witnessRetryAfterMs = typeof pc.retryAfterMs === 'number' && pc.retryAfterMs > 0 ? pc.retryAfterMs : resolveOwnerWitnessRetryAfterMs(edge);
-  const witnessTerminalState = pc.terminalState && pc.terminalState !== ABSENT_VALUE ? pc.terminalState : resolveOwnerWitnessTerminalState(edge);
-  const witnessEvidencePath = pc.evidencePath && pc.evidencePath !== ABSENT_VALUE ? pc.evidencePath : edge.evidencePath;
-  const witnessBlockingDependency = pc.blockingDependency && pc.blockingDependency !== ABSENT_VALUE ? pc.blockingDependency : resolveOwnerWitnessBlockingDependency(edge);
+  const witnessTerminalState = pc.terminalState && pc.terminalState !== ABSENT_VALUE ?
+    pc.terminalState :
+    resolveOwnerWitnessTerminalState(edge);
+  const witnessEvidencePath = pc.evidencePath && pc.evidencePath !== ABSENT_VALUE ?
+    pc.evidencePath :
+    edge.evidencePath;
+  const witnessBlockingDependency =
+    pc.blockingDependency && pc.blockingDependency !== ABSENT_VALUE ?
+      pc.blockingDependency :
+      resolveOwnerWitnessBlockingDependency(edge);
 
   return {
     [OWNER_WITNESS_FIELD.EDGE_ID]: textOrAbsent(edge.id),

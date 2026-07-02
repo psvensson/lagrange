@@ -6,23 +6,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
 import {
-  BOOTSTRAP_API_ASSIGNMENT,
-  BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_READINESS_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
   BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
-import {
-  SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT,
-  SERVICE_REGISTRATION_HANDOFF_FIELD,
-  SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION,
-  SERVICE_REGISTRATION_HANDOFF_OUTCOME,
-  SERVICE_REGISTRATION_HANDOFF_OWNER,
-  SERVICE_REGISTRATION_HANDOFF_REASON,
-} from '../../src/bootstrap/owners/service-registration-handoff-owner.js';
-import {
-  configureSyntheticMoveReplicaRegisterServiceHandoff,
-} from './move-replica-assignment-token-test-helpers.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -31,9 +18,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   HTTP_STATUS,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
 } from '../../src/constants/index.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {
@@ -41,7 +25,6 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   STARTUP_RECOVERY_STAGE,
   StartupRecoveryCoordinator,
@@ -49,13 +32,6 @@ import {
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
-} from '../../src/control-plane/control-plane-workload-profile.js';
-import {
-  OWNER_OUTCOME_FRESHNESS,
-  OWNER_OUTCOME_STATE,
-} from '../../src/control-plane/owner-outcome-contract.js';
 import {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
@@ -73,32 +49,6 @@ const TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS = 'ws://localhost:9210';
 const TEST_BOOTSTRAP_RESPONSE_GROUP_ID = 'mg-seed-authority';
 const TEST_READY_STABLE_WINDOW_MS = 0;
 const TEST_READY_RETRY_AFTER_MS = 250;
-const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
-const TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE =
-  'CONTROL_PLANE_PRESSURE_DEGRADED';
-const TEST_SQL_ENGINE_UNAVAILABLE_ERROR = 'SQL query engine not available';
-const TEST_REGISTER_SERVICE_NODE_ID = 'joiner-node-1';
-const TEST_REGISTER_SERVICE_GROUP_ID = 'mg-1';
-const TEST_REGISTER_SERVICE_REPLICA_ID = 'mg-1-r1';
-const TEST_DURABLE_REJOIN_GROUP_ID = 'mg-durable';
-const TEST_DURABLE_REJOIN_REPLICA_ID = 'mg-durable-r1';
-const TEST_DURABLE_REJOIN_PEER_REPLICA_ID = 'mg-durable-r2';
-const TEST_DURABLE_REJOIN_SECOND_PEER_REPLICA_ID = 'mg-durable-r3';
-const TEST_DURABLE_REJOIN_PEER_NODE_ID = 'peer-node-1';
-const TEST_DURABLE_REJOIN_SECOND_PEER_NODE_ID = 'peer-node-2';
-const TEST_DURABLE_REJOIN_MESSAGE_GROUP_ADDRESS =
-  'joiner-node-1/message-group/mg-durable-r1';
-const TEST_DURABLE_REJOIN_PEER_MESSAGE_GROUP_ADDRESS =
-  'peer-node-1/message-group/mg-durable-r2';
-const TEST_DURABLE_REJOIN_SECOND_PEER_MESSAGE_GROUP_ADDRESS =
-  'peer-node-2/message-group/mg-durable-r3';
-const TEST_DURABLE_REJOIN_SERVICES_PARTITION_ID = 'services-p1';
-const TEST_DURABLE_REJOIN_SERVICES_REPLICA_ID = 'services-p1-r1';
-const TEST_DURABLE_REJOIN_LOCAL_READ_FAILURE =
-  'durable rejoin assignment should not query local authoritative partitions';
-const TEST_DURABLE_REJOIN_LOCAL_READ_COUNT_NONE = 0;
-const TEST_DURABLE_REJOIN_BOUNDED_ASSIGNMENT_ASSERTION =
-  'durable rejoin assignment should use bounded published/cache topology rows';
 const TEST_STARTUP_AUTHORITY_STATE = 'seed_locally_ready_unpublished';
 const TEST_STARTUP_AUTHORITY_PUBLICATION_STATE = 'unpublished';
 const TEST_STARTUP_AUTHORITY_FAILURE_STATE = 'none';

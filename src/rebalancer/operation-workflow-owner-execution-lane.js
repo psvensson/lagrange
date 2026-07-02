@@ -34,7 +34,8 @@ const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
     allowCacheFallback: false,
   });
 
-class OperationWorkflowOwnerExecutionLane extends withOwnerHandoffState(OperationWorkflowOwnerRetryRegistry) {
+class OperationWorkflowOwnerExecutionLane
+  extends withOwnerHandoffState(OperationWorkflowOwnerRetryRegistry) {
   buildTopologyOperatorWitnessFromWorkflowProgress(
     snapshot = {},
     options = {},

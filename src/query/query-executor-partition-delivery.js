@@ -23,7 +23,6 @@ const {
   LOG_MSG,
   NUM,
   QUERY_ERROR_MSG,
-  QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,

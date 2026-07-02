@@ -373,9 +373,10 @@ function createInvariantRecord(options = {}) {
     scope: typeof options.scope === LOCAL_STR_STRING && options.scope.length > LOCAL_NUM_ZERO ?
       options.scope :
       definition.scope,
-    entityId: typeof options.entityId === LOCAL_STR_STRING && options.entityId.length > LOCAL_NUM_ZERO ?
-      options.entityId :
-      null,
+    entityId:
+      typeof options.entityId === LOCAL_STR_STRING && options.entityId.length > LOCAL_NUM_ZERO ?
+        options.entityId :
+        null,
     owningSubsystem:
       typeof options.owningSubsystem === LOCAL_STR_STRING &&
         options.owningSubsystem.length > LOCAL_NUM_ZERO ?

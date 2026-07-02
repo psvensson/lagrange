@@ -10,7 +10,9 @@ function normalizePartitionSize(partition) {
 }
 
 function findLocalLeaderPartitionService(partitionServices, partitionId) {
-  if (!partitionServices || !partitionId || typeof partitionServices.values !== LOCAL_STR_FUNCTION) {
+  if (!partitionServices ||
+      !partitionId ||
+      typeof partitionServices.values !== LOCAL_STR_FUNCTION) {
     return null;
   }
 

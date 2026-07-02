@@ -308,7 +308,9 @@ class HeartbeatServiceReporterVisibilityMethods {
 }
 
 function defineHeartbeatServiceReporterVisibilityMethods(HeartbeatService) {
-  const methodDescriptors = Object.getOwnPropertyDescriptors(HeartbeatServiceReporterVisibilityMethods.prototype);
+  const methodDescriptors = Object.getOwnPropertyDescriptors(
+    HeartbeatServiceReporterVisibilityMethods.prototype,
+  );
   delete methodDescriptors.constructor;
   Object.defineProperties(HeartbeatService.prototype, methodDescriptors);
 }

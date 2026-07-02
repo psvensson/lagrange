@@ -20,7 +20,6 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   ReplicaStateMachine,
   SYSTEM_TABLE_NAME,
   createMockCDCService,
-  createMockPartitionServiceFactory,
   createSeededCache,
   createMetadataOnlyCache,
   seedReplicaOperation,

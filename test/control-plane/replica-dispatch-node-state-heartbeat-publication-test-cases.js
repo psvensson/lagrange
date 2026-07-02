@@ -9,7 +9,6 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  COLUMN,
   SERVICE_STATUS,
   STATE,
   STRING,

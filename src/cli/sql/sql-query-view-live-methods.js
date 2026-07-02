@@ -4,7 +4,6 @@ const LOCAL_STR_PAUSED = 'paused';
 const LOCAL_STR_EXPIRED = 'expired';
 const LOCAL_STR_CANCELLED = 'cancelled';
 const LOCAL_STR_1RDRD = 'livequery:initialized';
-const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
 const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';

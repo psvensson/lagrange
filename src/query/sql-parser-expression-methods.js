@@ -10,7 +10,6 @@ import {
 import {translateFunctionCall} from './pg/pg-function-registry.js';
 
 const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_VALUE = 'value';
 const LOCAL_STR_145ZS = '!=';
 const LOCAL_STR_151ZF = '<>';
 

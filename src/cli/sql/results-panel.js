@@ -237,7 +237,9 @@ export class ResultsPanel {
     if (typeof value === LOCAL_STR_OBJECT) {
       try {
         const json = JSON.stringify(value);
-        return json.length > LOCAL_NUM_50 ? json.slice(LOCAL_NUM_ZERO, LOCAL_NUM_47) + LOCAL_STR_2ZI04 : json;
+        return json.length > LOCAL_NUM_50 ?
+          json.slice(LOCAL_NUM_ZERO, LOCAL_NUM_47) + LOCAL_STR_2ZI04 :
+          json;
       } catch (_e) {
         return LOCAL_STR_OBJECT_2;
       }
@@ -456,7 +458,8 @@ export class ResultsPanel {
    */
   render() {
     if (this.widget) {
-      if (this.resultType === RESULT_TYPE.SELECT && this.currentResult?.rows?.length > LOCAL_NUM_ZERO) {
+      if (this.resultType === RESULT_TYPE.SELECT &&
+        this.currentResult?.rows?.length > LOCAL_NUM_ZERO) {
         // Render table
         const tableData = this.getTableData();
         this.widget.setData({

@@ -5,8 +5,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {registerReplicaDispatchNodeStateOperationDispatchRetryTests} from
   './replica-dispatch-node-state-operation-dispatch-retry-test-cases.js';
-import {ReplicaDispatchService} from
-  '../../src/control-plane/replica-dispatch-service.js';
 import {
   createService,
   initEnv,
@@ -19,9 +17,6 @@ import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
   NODE_STATE_UPDATE_RETRY_CLASS,

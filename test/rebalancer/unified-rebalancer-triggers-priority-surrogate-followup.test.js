@@ -16,24 +16,17 @@ import {
   EntityType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
-  DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
   OperationType,
 } from '../../src/rebalancer/replica-status.js';
 import {
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
@@ -42,12 +35,6 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  ENDPOINT_STATUS,
-  META_SERVICE_ID,
-  TRANSPORT_TYPE,
-} from '../../src/constants/index.js';
-import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
 
 import {
   createMockCache,

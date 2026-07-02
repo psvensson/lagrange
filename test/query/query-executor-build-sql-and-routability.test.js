@@ -8,7 +8,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
-  mockPartitionData,
   createMockMessageRouter,
   createMockSystemCache,
   parseSQL,

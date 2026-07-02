@@ -119,11 +119,15 @@ Object.assign(
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayPublicationPendingScenarioBuilders(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayPublicationPendingScenarioBuilders(
+    publicationEvidenceReplayTestContext,
+  ),
 );
 Object.assign(
   publicationEvidenceReplayTestContext,
-  buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders(publicationEvidenceReplayTestContext),
+  buildPublicationEvidenceReplayRebalancerHandoffScenarioBuilders(
+    publicationEvidenceReplayTestContext,
+  ),
 );
 describe(publicationEvidenceReplayTestContext.REPLAY_TEST_SUITE_NAME, () => {
   let tempDir;
@@ -146,6 +150,10 @@ describe(publicationEvidenceReplayTestContext.REPLAY_TEST_SUITE_NAME, () => {
   };
 
   registerPublicationEvidenceReplayRuntimeAndOwnerTests(publicationEvidenceReplayTestContext);
-  registerPublicationEvidenceReplayPostAckPublicationPendingTests(publicationEvidenceReplayTestContext);
-  registerPublicationEvidenceReplayReachabilityRebalancerTests(publicationEvidenceReplayTestContext);
+  registerPublicationEvidenceReplayPostAckPublicationPendingTests(
+    publicationEvidenceReplayTestContext,
+  );
+  registerPublicationEvidenceReplayReachabilityRebalancerTests(
+    publicationEvidenceReplayTestContext,
+  );
 });

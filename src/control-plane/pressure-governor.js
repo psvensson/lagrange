@@ -476,7 +476,10 @@ class PressureGovernor {
       globalLastEmitTime = NUM.ZERO;
       lastGlobalEmit = NUM.ZERO;
     }
-    if (now - lastEmit < EMIT_PRESSURE_METRIC_LIMIT_MS || now - lastGlobalEmit < EMIT_PRESSURE_GLOBAL_LIMIT_MS) {
+    if (
+      now - lastEmit < EMIT_PRESSURE_METRIC_LIMIT_MS ||
+      now - lastGlobalEmit < EMIT_PRESSURE_GLOBAL_LIMIT_MS
+    ) {
       return;
     }
     GLOBAL_LAST_EMIT_TIMES.set(key, now);

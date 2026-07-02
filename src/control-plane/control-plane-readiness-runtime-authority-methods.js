@@ -221,158 +221,166 @@ function resolveRuntimeAuthorityState(details = {}) {
   return RUNTIME_AUTHORITY_STATE.UNAVAILABLE;
 }
 
-function buildRuntimeAuthoritySnapshot(context = {}) {
-  const missingNodeReadinessState =
+const controlPlaneReadinessRuntimeAuthorityMethods = {
+  buildRuntimeAuthorityFailureDescriptor,
+  buildRuntimeAuthorityPublicationDescriptor,
+  buildRuntimeAuthorityVisibilityDescriptor,
+  buildRuntimeAuthorityRepairDescriptor,
+  resolveRuntimeAuthorityFailureReason,
+  resolveRuntimeAuthorityState,
+
+  buildRuntimeAuthoritySnapshot(context = {}) {
+    const missingNodeReadinessState =
     context?.missingNodeReadinessState ===
     MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE ?
       MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE :
       MISSING_NODE_READINESS_STATE.FAIL_CLOSED;
-  const processAlive =
+    const processAlive =
     !CONTROL_PLANE_READINESS_DEFAULT.NON_RUNNING_PROCESS_STATES.includes(
       String(context.lifecycleState || ''),
     );
-  const localQueryTransportBlocked = this.isLocalQueryTransportBlockedForNode(
-    context.nodeId,
-    context.nodeEvidence,
-  );
-  const localQueryTransportRoutable =
+    const localQueryTransportBlocked = this.isLocalQueryTransportBlockedForNode(
+      context.nodeId,
+      context.nodeEvidence,
+    );
+    const localQueryTransportRoutable =
     this.isLocalQueryTransportRoutableForNode(
       context.nodeId,
       context.nodeEvidence,
     );
-  const clusterMemberHealthy =
+    const clusterMemberHealthy =
     this.isClusterMemberHealthy(context.nodeId, context.nodeRow) ||
     missingNodeReadinessState ===
       MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE;
-  const writableControlPlaneService = this.hasWritableControlPlaneService(
-    context.serviceRows,
-  );
-  const routingReady =
+    const writableControlPlaneService = this.hasWritableControlPlaneService(
+      context.serviceRows,
+    );
+    const routingReady =
     this.hasRoutableService(context.serviceRows) &&
     localQueryTransportRoutable;
-  const controlPlanePublished = this.isControlPlanePublished(
-    context.membershipPublication,
-  );
-  const membershipPublicationPlanningSnapshot =
+    const controlPlanePublished = this.isControlPlanePublished(
+      context.membershipPublication,
+    );
+    const membershipPublicationPlanningSnapshot =
     this.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
       context,
     );
-  const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
-    membershipPublicationPlanningSnapshot,
-  );
-  const publication = this.buildRuntimeAuthorityPublicationDescriptor(
-    context.publication,
-  );
-  const publicationHealthy = publication.healthy === true;
-  const writeEligible =
+    const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
+      membershipPublicationPlanningSnapshot,
+    );
+    const publication = this.buildRuntimeAuthorityPublicationDescriptor(
+      context.publication,
+    );
+    const publicationHealthy = publication.healthy === true;
+    const writeEligible =
     clusterMemberHealthy &&
     routingReady &&
     writableControlPlaneService &&
     publicationHealthy;
-  const recoveryEligible = this.isControlPlaneRecoveryEligible({
-    ...context,
-    priorityRecoveryActive,
-    routingReady,
-    writableControlPlaneService,
-    publicationHealthy,
-    publicationMode: publication.mode,
-    controlPlanePublished,
-    clusterMemberHealthy,
-  });
-  const repairEligible = processAlive && writeEligible;
-  const visibility = this.buildRuntimeAuthorityVisibilityDescriptor({
-    controlPlanePublished,
-    enteredAt:
+    const recoveryEligible = this.isControlPlaneRecoveryEligible({
+      ...context,
+      priorityRecoveryActive,
+      routingReady,
+      writableControlPlaneService,
+      publicationHealthy,
+      publicationMode: publication.mode,
+      controlPlanePublished,
+      clusterMemberHealthy,
+    });
+    const repairEligible = processAlive && writeEligible;
+    const visibility = this.buildRuntimeAuthorityVisibilityDescriptor({
+      controlPlanePublished,
+      enteredAt:
       context.membershipPublication?.createdAt ||
       context.membershipPublication?.updatedAt ||
       null,
-    missingNodeReadinessState,
-    priorityRecoveryActive,
-    publicationObservationState:
+      missingNodeReadinessState,
+      priorityRecoveryActive,
+      publicationObservationState:
       membershipPublicationPlanningSnapshot?.publicationObservationState ||
       context.membershipPublication?.publicationObservationState ||
       null,
-    publicationStatus:
+      publicationStatus:
       membershipPublicationPlanningSnapshot?.publicationStatus ||
       context.membershipPublication?.status ||
       null,
-    recoveryEligible,
-    repairEligible,
-  });
-  const resolvedProvisioning = this.resolveProvisioningEligibility({
-    processAlive,
-    repairEligible,
-    controlPlaneRecoveryEligible: recoveryEligible,
-    controlPlanePublished,
-    priorityRecoveryActive,
-  });
-  const provisioningState =
+      recoveryEligible,
+      repairEligible,
+    });
+    const resolvedProvisioning = this.resolveProvisioningEligibility({
+      processAlive,
+      repairEligible,
+      controlPlaneRecoveryEligible: recoveryEligible,
+      controlPlanePublished,
+      priorityRecoveryActive,
+    });
+    const provisioningState =
     visibility.state ===
     RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION ?
       PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE :
       resolvedProvisioning.state;
-  const repair = this.buildRuntimeAuthorityRepairDescriptor(
-    this.getLatestAuthoritativeReadinessRepair(context.nodeId || null),
-  );
-  const failureReason = this.resolveRuntimeAuthorityFailureReason({
-    clusterMemberHealthy,
-    controlPlanePublished,
-    localQueryTransportBlocked,
-    processAlive,
-    publicationHealthy,
-    publicationMode: publication.mode,
-    routingReady,
-    visibilityState: visibility.state,
-    writableControlPlaneService,
-  });
-  const state = this.resolveRuntimeAuthorityState({
-    repairEligible,
-    visibilityState: visibility.state,
-  });
-  const reasonCodes = [];
-  if (
-    visibility.state ===
+    const repair = this.buildRuntimeAuthorityRepairDescriptor(
+      this.getLatestAuthoritativeReadinessRepair(context.nodeId || null),
+    );
+    const failureReason = this.resolveRuntimeAuthorityFailureReason({
+      clusterMemberHealthy,
+      controlPlanePublished,
+      localQueryTransportBlocked,
+      processAlive,
+      publicationHealthy,
+      publicationMode: publication.mode,
+      routingReady,
+      visibilityState: visibility.state,
+      writableControlPlaneService,
+    });
+    const state = this.resolveRuntimeAuthorityState({
+      repairEligible,
+      visibilityState: visibility.state,
+    });
+    const reasonCodes = [];
+    if (
+      visibility.state ===
     RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION
-  ) {
-    reasonCodes.push(
-      CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
-    );
-  }
-  if (failureReason) {
-    reasonCodes.push(failureReason);
-  }
-  if (
-    Array.isArray(
-      membershipPublicationPlanningSnapshot?.priorityRecoveryReasonCodes,
-    )
-  ) {
-    reasonCodes.push(
-      ...membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes,
-    );
-  }
-  return Object.freeze({
-    state,
-    ready: state === RUNTIME_AUTHORITY_STATE.CONFIRMED,
-    authorityAvailable: state !== RUNTIME_AUTHORITY_STATE.UNAVAILABLE,
-    processAlive,
-    clusterMemberHealthy,
-    routingReady,
-    writeEligible,
-    recoveryEligible,
-    repairEligible,
-    publication,
-    visibility,
-    repair,
-    provisioning: Object.freeze({
-      state: provisioningState,
-      eligible: resolvedProvisioning.eligible === true,
-    }),
-    failure: this.buildRuntimeAuthorityFailureDescriptor(failureReason),
-    reasonCodes: Object.freeze([...new Set(reasonCodes)]),
-  });
-}
+    ) {
+      reasonCodes.push(
+        CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
+      );
+    }
+    if (failureReason) {
+      reasonCodes.push(failureReason);
+    }
+    if (
+      Array.isArray(
+        membershipPublicationPlanningSnapshot?.priorityRecoveryReasonCodes,
+      )
+    ) {
+      reasonCodes.push(
+        ...membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes,
+      );
+    }
+    return Object.freeze({
+      state,
+      ready: state === RUNTIME_AUTHORITY_STATE.CONFIRMED,
+      authorityAvailable: state !== RUNTIME_AUTHORITY_STATE.UNAVAILABLE,
+      processAlive,
+      clusterMemberHealthy,
+      routingReady,
+      writeEligible,
+      recoveryEligible,
+      repairEligible,
+      publication,
+      visibility,
+      repair,
+      provisioning: Object.freeze({
+        state: provisioningState,
+        eligible: resolvedProvisioning.eligible === true,
+      }),
+      failure: this.buildRuntimeAuthorityFailureDescriptor(failureReason),
+      reasonCodes: Object.freeze([...new Set(reasonCodes)]),
+    });
+  },
 
-/**
+  /**
  * Build readiness for a missing node row.
  * @param {string} nodeId
  * @param {string} observedAt
@@ -380,49 +388,49 @@ function buildRuntimeAuthoritySnapshot(context = {}) {
  * @return {Object}
  * @private
  */
-function buildMissingNodeReadiness(
-  nodeId,
-  observedAt,
-  publication,
-  membershipPublication = null,
-) {
-  const runtimeAuthority = this.buildRuntimeAuthoritySnapshot({
+  buildMissingNodeReadiness(
     nodeId,
-    lifecycleState: null,
-    membershipPublication,
-    membershipPublicationPlanningSnapshot: null,
-    missingNodeReadinessState: MISSING_NODE_READINESS_STATE.FAIL_CLOSED,
-    nodeEvidence: null,
-    nodeRow: null,
     observedAt,
     publication,
-    serviceRows: Object.freeze([]),
-  });
-  const dimensions = Object.freeze({
-    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]:
-      runtimeAuthority.visibility?.published === true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
-      runtimeAuthority.publication?.healthy === true,
-    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-  });
-  const reasons = Object.freeze([
-    buildReason(
-      CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
-      CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
-      CONTROL_PLANE_READINESS_OWNER.SYSTEM_TABLE_CACHE,
+    membershipPublication = null,
+  ) {
+    const runtimeAuthority = this.buildRuntimeAuthoritySnapshot({
+      nodeId,
+      lifecycleState: null,
+      membershipPublication,
+      membershipPublicationPlanningSnapshot: null,
+      missingNodeReadinessState: MISSING_NODE_READINESS_STATE.FAIL_CLOSED,
+      nodeEvidence: null,
+      nodeRow: null,
       observedAt,
-    ),
-  ]);
-  const priorityControlPlaneRecovery =
+      publication,
+      serviceRows: Object.freeze([]),
+    });
+    const dimensions = Object.freeze({
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]:
+      runtimeAuthority.visibility?.published === true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
+      runtimeAuthority.publication?.healthy === true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+    });
+    const reasons = Object.freeze([
+      buildReason(
+        CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+        CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+        CONTROL_PLANE_READINESS_OWNER.SYSTEM_TABLE_CACHE,
+        observedAt,
+      ),
+    ]);
+    const priorityControlPlaneRecovery =
     this.getPriorityControlPlaneRecoveryState({
       nodeId,
       observedAt,
@@ -430,7 +438,7 @@ function buildMissingNodeReadiness(
       membershipPublication,
       dimensions,
     });
-  const projectionReadinessContract =
+    const projectionReadinessContract =
     this.buildProjectionReadinessContract({
       nodeId,
       observedAt,
@@ -442,33 +450,23 @@ function buildMissingNodeReadiness(
       runtimeAuthority,
     });
 
-  return Object.freeze({
-    ...createEligibilitySnapshot({
-      nodeId,
-      lifecycleState: null,
-      publication,
-      membershipPublication,
-      priorityControlPlaneRecovery,
-      capacity: null,
-      nodeEvidence: null,
-      observedAt,
-      dimensions,
-      reasons,
-    }),
-    projectionReadinessContract,
-    runtimeAuthority,
-  });
-}
-
-const controlPlaneReadinessRuntimeAuthorityMethods = {
-  buildRuntimeAuthorityFailureDescriptor,
-  buildRuntimeAuthorityPublicationDescriptor,
-  buildRuntimeAuthorityVisibilityDescriptor,
-  buildRuntimeAuthorityRepairDescriptor,
-  resolveRuntimeAuthorityFailureReason,
-  resolveRuntimeAuthorityState,
-  buildRuntimeAuthoritySnapshot,
-  buildMissingNodeReadiness,
+    return Object.freeze({
+      ...createEligibilitySnapshot({
+        nodeId,
+        lifecycleState: null,
+        publication,
+        membershipPublication,
+        priorityControlPlaneRecovery,
+        capacity: null,
+        nodeEvidence: null,
+        observedAt,
+        dimensions,
+        reasons,
+      }),
+      projectionReadinessContract,
+      runtimeAuthority,
+    });
+  },
 };
 
 function installControlPlaneReadinessRuntimeAuthorityMethods(prototype) {

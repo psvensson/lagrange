@@ -553,7 +553,8 @@ class QueryGroup extends EventEmitter {
     return {
       queryId: this.queryId,
       table: this.table,
-      predicateHash: canonicalizePredicate(this.whereClause).substring(LOCAL_NUM_ZERO, LOCAL_NUM_32),
+      predicateHash: canonicalizePredicate(this.whereClause)
+        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_32),
       partitionKeyValue: this.partitionKeyValue,
       clientCount: this.clients.size,
       subscribedPartitions: Array.from(this.subscribedPartitions),

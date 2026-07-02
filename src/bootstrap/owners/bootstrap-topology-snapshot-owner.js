@@ -1,5 +1,4 @@
 import {
-  NUM,
   TYPEOF,
 } from '../../constants/index.js';
 import {

@@ -4,28 +4,8 @@ import {TABLES} from '../../src/constants/index.js';
 import {
   ControlPlaneSnapshotOwner,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
-import {
-  MembershipPublicationCoordinator,
-} from '../../src/control-plane/membership-publication-coordinator.js';
-import {
-  CONTROL_PLANE_CONVERGENCE_CLASS,
-  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
-} from '../../src/control-plane/control-plane-error-classification.js';
-import {
-  buildTopologyConvergenceGraph,
-  buildTopologyConvergenceReplayFixture,
-  replayTopologyConvergenceFixture,
-} from '../../src/diagnostics/topology-convergence-graph.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
-const TEST_DEFER_INLINE_OWNER_COMMAND_FIELD = 'deferInlineOwnerCommand';
-const TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK = true;
-const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
-  'publicationActiveGateHandoff';
-const TEST_PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
-const TEST_ALLOW_EMPTY_PRELOADED_ROWS_FIELD = 'allowEmptyPreloadedRows';
-const TEST_NODE_ROWS_FIELD = 'nodeRows';
-const TEST_OWNER_QUEUE_STOPPED_REASON = 'owner_queue_stopped';
 const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
 const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
@@ -190,7 +170,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         applied: false,
         skipped: false,
         failedTables: [TABLES.NODES],
-        errors: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL],
+        errors: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL,
+        ],
         causeChain: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE],
         firstFailedParticipant: {
           failedTable: TABLES.NODES,
@@ -300,7 +282,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         applied: false,
         skipped: false,
         failedTables: [TABLES.NODES],
-        errors: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL],
+        errors: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL,
+        ],
         causeChain: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE],
         firstFailedParticipant: {
           failedTable: TABLES.NODES,
@@ -359,14 +343,17 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
               {
                 sharedMetadata: {
                   referencedNodeIds: [
-                    ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS,
+                    ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                      .ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS,
                   ],
                 },
               } :
               {}),
             activeProjection: {
               hasCoverageGap: true,
-              missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+              missingNodeIds: [
+                ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS,
+              ],
             },
           },
         };
@@ -534,7 +521,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         nodeCoverage: {
           activeProjection: {
             hasCoverageGap: true,
-            missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+            missingNodeIds: [
+              ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS,
+            ],
           },
         },
       });
@@ -624,7 +613,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
       const buildOptions = [];
       const projectedFallbackSnapshot = {
         nodes: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_UNUSABLE_LOCAL_NODE_IDS],
-        projectedNodes: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS],
+        projectedNodes: [
+          ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS,
+        ],
         controlPlaneDiagnostics: {
           publicationConvergence: null,
         },
@@ -633,7 +624,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         applied: false,
         skipped: false,
         failedTables: [TABLES.NODES],
-        errors: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL],
+        errors: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL,
+        ],
         causeChain: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE],
         firstFailedParticipant: {
           failedTable: TABLES.NODES,
@@ -662,7 +655,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         nodeCoverage: {
           activeProjection: {
             hasCoverageGap: true,
-            missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+            missingNodeIds: [
+              ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS,
+            ],
           },
         },
       });
@@ -735,7 +730,9 @@ export function registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTes
         applied: false,
         skipped: false,
         failedTables: [TABLES.NODES],
-        errors: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL],
+        errors: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL,
+        ],
         causeChain: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE],
         firstFailedParticipant: {
           failedTable: TABLES.NODES,

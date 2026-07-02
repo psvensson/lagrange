@@ -13,8 +13,6 @@
  */
 
 import {
-  UnifiedRebalancer,
-  EntityType,
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';

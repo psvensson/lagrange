@@ -17,10 +17,6 @@ import {
 } from '../../src/control-plane/publication-recovery-gate.js';
 import {
   buildCanonicalPublicationRecoveryEvidence,
-  RECOVERY_PREEMPTION_DECISION,
-  TopologyEpochFencer,
-  PublicationRecoveryLease,
-  adjudicateRecoveryPreemption,
 } from '../../src/control-plane/publication-recovery-evidence.js';
 
 const TEST_PUBLICATION_EPOCH = 9;
@@ -70,22 +66,6 @@ const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({
 const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE = Object.freeze({
   WRITE_DEFERRED: 'write_deferred',
 });
-const TEST_OPERATION_WORKFLOW_HANDOFF_STATE = 'deferred';
-const TEST_OPERATION_WORKFLOW_HANDOFF_REASON_CODE =
-  'classified_backpressure';
-const TEST_PUBLICATION_OWNER = 'topology_publication_owner';
-const TEST_PUBLICATION_BOUNDARY = 'publication_convergence';
-const TEST_OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
-const TEST_OPERATION_WORKFLOW_BOUNDARY = 'workflow_progress';
-const TEST_OPERATION_WORKFLOW_ADVANCE_ACTION = 'advance_existing_operation';
-const TEST_OPERATION_WORKFLOW_ACTUATION_STATE = 'persisted_not_dispatched';
-const TEST_OPERATION_WORKFLOW_WAIT_MODE = 'event_driven';
-const TEST_OPERATION_WORKFLOW_PROGRESS_PHASE = 'dispatch_pending';
-const TEST_OPERATION_WORKFLOW_OPERATION_ID = 'operation-workflow-1';
-const TEST_NON_PRIORITY_PARTITION_ID =
-  'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
-const TEST_DECISION_SNAPSHOT_ACK_TARGET_ASSERTION =
-  'decision snapshot ACK targets should become canonical pending ACK evidence';
 const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION =
   'count-only canonical reentry should preserve explicit pending ACK targets';
 const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
@@ -126,12 +106,6 @@ const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   blockedPartitionCount: 1,
   largestSpreadGap: 1,
   totalSpreadGap: 1,
-});
-const TEST_ZERO_GAP_PRIORITY_PARTITION_SUMMARY = Object.freeze({
-  satisfied: false,
-  blockedPartitionCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
-  largestSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
-  totalSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
 });
 const TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   satisfied: true,

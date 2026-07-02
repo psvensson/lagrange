@@ -201,7 +201,10 @@ class RouterDeliveryManager {
           endpointId: endpoint[COLUMN.ENDPOINT_ID],
           transportType, priority: endpoint[COLUMN.PRIORITY],
         },
-        error: {code: LOCAL_STR_DELIVERY_FAILED, message: result.error || LOCAL_STR_DELIVERY_FAILED_2},
+        error: {
+          code: LOCAL_STR_DELIVERY_FAILED,
+          message: result.error || LOCAL_STR_DELIVERY_FAILED_2,
+        },
       });
     }
 

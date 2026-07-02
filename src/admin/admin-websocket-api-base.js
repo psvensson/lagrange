@@ -250,6 +250,7 @@ class AdminWebSocketAPIBase {
         return loggingService.forSubsystem(ADMIN_SUBSYSTEM.WEBSOCKET_API);
       }
     } catch (_logErr) {
+      // Logging service unavailable during early boot; fall back to console below.
     }
     return console;
   }
@@ -490,7 +491,9 @@ class AdminWebSocketAPIBase {
       });
       try {
         socket.terminate();
-      } catch (_err) {}
+      } catch (_err) {
+        // Best-effort terminate: socket may already be destroyed.
+      }
     });
   }
   handleDisconnection(clientInfo) {
@@ -499,7 +502,9 @@ class AdminWebSocketAPIBase {
     if (clientInfo.socket) {
       try {
         clientInfo.socket.terminate();
-      } catch (_err) {}
+      } catch (_err) {
+        // Best-effort terminate: socket may already be destroyed.
+      }
     }
 
     if (this.liveQueryManager) {

@@ -385,8 +385,6 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
         incompleteOperationObservation,
       );
-    const operationIds =
-      this.collectPriorityRecoveryOperationIds(operationRecords);
     const planningDecisionSnapshot =
       this.resolvePriorityRecoveryDecisionSnapshotFromPlanning(
         normalizedPartitionId,

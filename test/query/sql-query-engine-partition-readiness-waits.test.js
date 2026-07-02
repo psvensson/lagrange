@@ -49,7 +49,6 @@ const config = ConfigurationManager.getInstance();
 config.initialize();
 
 import {
-  mockPartitionData,
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';

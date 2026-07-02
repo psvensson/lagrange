@@ -105,11 +105,6 @@ const EXT_EXPR_TYPE = Object.freeze({
  */
 const STAR_VALUE = '*';
 
-/**
- * Parameter placeholder in origin nodes.
- */
-const ORIGIN_PARAM = '?';
-
 const SQL_KEYWORD = Object.freeze({
   BEGIN: 'BEGIN',
   BEGIN_PREFIX: 'BEGIN ',

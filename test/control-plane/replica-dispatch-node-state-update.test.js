@@ -15,21 +15,8 @@ import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {
-} from '../../src/control-plane/replica-dispatch-service-constants.js';
-import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
-import {
-} from '../../src/message-group/message-group-forwarding-owner.js';
-import {
-} from '../../src/rebalancer/replica-operation-repository.js';
 import {
   COLUMN,
   SERVICE_STATUS,

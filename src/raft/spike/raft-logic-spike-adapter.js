@@ -471,7 +471,9 @@ class RaftLogicSpikeAdapter extends EventEmitter {
       this._handleRoleChange(this._role, snapshot.role);
     }
 
-    if (snapshot.lead !== undefined && snapshot.lead !== null && snapshot.lead !== LOCAL_STR_EMPTY) {
+    if (snapshot.lead !== undefined &&
+        snapshot.lead !== null &&
+        snapshot.lead !== LOCAL_STR_EMPTY) {
       this._setLeaderFromInternalId(snapshot.lead);
     }
   }

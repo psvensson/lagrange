@@ -17,16 +17,12 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
-  DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
   REPLICA_OPERATION_SEMANTIC_PHASE,
 } from '../../src/rebalancer/replica-status.js';
 import {
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';

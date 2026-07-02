@@ -22,14 +22,12 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     REPLICA_OPERATION_READ_RETRY_DELAY_MS,
     REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
-    REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
     REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
     REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
     REPLICA_OPERATION_VISIBILITY_REASON,
     TYPEOF,
     buildPriorityRecoveryCompletion,
-    buildReplicaOperationVisibilityReadOptions,
     getControlPlaneRetryAfterMs,
     hasPriorityRecoverySpreadGap,
     isRetryableControlPlaneError,
@@ -380,14 +378,20 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return null;
       }
       const observedAt = Date.now();
-      if (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort === TYPEOF.FUNCTION) {
+      if (
+        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
+        TYPEOF.FUNCTION
+      ) {
         return (
-          readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(this.nodeId, observedAt) ||
-        null
+          readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
+            this.nodeId,
+            observedAt,
+          ) || null
         );
       }
       if (
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort === TYPEOF.FUNCTION
+        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
+        TYPEOF.FUNCTION
       ) {
         return (
           readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
@@ -401,9 +405,15 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           readinessService.getPriorityRecoveryPlanningAnswerSync(this.nodeId, observedAt) || null
         );
       }
-      if (typeof readinessService.getMembershipPublicationPlanningAnswerSync === TYPEOF.FUNCTION) {
+      if (
+        typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
+        TYPEOF.FUNCTION
+      ) {
         return (
-          readinessService.getMembershipPublicationPlanningAnswerSync(this.nodeId, observedAt) || null
+          readinessService.getMembershipPublicationPlanningAnswerSync(
+            this.nodeId,
+            observedAt,
+          ) || null
         );
       }
       if (typeof readinessService.getPriorityRecoveryPlanningSnapshotSync === TYPEOF.FUNCTION) {
@@ -411,10 +421,15 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           readinessService.getPriorityRecoveryPlanningSnapshotSync(this.nodeId, observedAt) || null
         );
       }
-      if (typeof readinessService.getMembershipPublicationPlanningSnapshotSync === TYPEOF.FUNCTION) {
+      if (
+        typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
+        TYPEOF.FUNCTION
+      ) {
         return (
-          readinessService.getMembershipPublicationPlanningSnapshotSync(this.nodeId, observedAt) ||
-        null
+          readinessService.getMembershipPublicationPlanningSnapshotSync(
+            this.nodeId,
+            observedAt,
+          ) || null
         );
       }
       return null;
@@ -629,7 +644,9 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         if (leftUpdatedAt !== rightUpdatedAt) {
           return leftUpdatedAt - rightUpdatedAt;
         }
-        return String(left?.operationId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE).localeCompare(
+        return String(
+          left?.operationId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
+        ).localeCompare(
           String(right?.operationId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE),
         );
       });

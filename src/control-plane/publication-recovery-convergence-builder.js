@@ -1,10 +1,4 @@
 import {NUM} from '../constants/index.js';
-import {buildPriorityRecoveryObservationSnapshot} from
-  './priority-recovery-observation-snapshot.js';
-import {
-  buildPublicationRecoveryGateSnapshot,
-} from
-  './publication-recovery-gate.js';
 import {
   buildPublicationOwnerStreamState,
   isPublicationOwnerStreamPublicationPending,
@@ -19,11 +13,9 @@ import {
   resolvePublicationRecoveryConvergenceRequiredAckNodeListInput,
   resolvePublicationRecoveryConvergenceAcknowledgedNodeListInput,
   hasAuthoritativeEmptyPendingAckGate,
-  hasAuthoritativeEmptyMissingPublishedGate,
   hasPublicationRecoveryPressureDeferredEvidence,
   normalizeDistinctStringArray,
   normalizePublicationEpoch,
-  normalizeNonNegativeInteger,
   normalizeMaximumNonNegativeInteger,
   normalizePublicationRecoveryAckEvidence,
   resolvePublicationRecoveryPendingAckNodeIds,
@@ -36,17 +28,10 @@ import {
   hasSteadyPublishedSelectedPublicationMembershipOpen,
   hasActiveGateSelectedMissingPublishedEvidence,
   normalizeOptionalString,
-  normalizeBoolean,
-  normalizeClosedUnknownNoDebtPriorityRecoveryObservation,
-  normalizePriorityRecoveryObservationFromPublicationGate,
-  hasCountOnlyUnknownPublicationDeficit,
   resolveOwnerReconcileNarrowedMissingPublishedNodeIds,
   hasOwnerReconcilePublicationHandoff,
   resolvePublicationMissingPublishedNodeIds,
   resolvePublicationMissingPublishedCount,
-  activeGateOpenDebtOutrunsPublicationOwnerStream,
-  ownerReconcileNarrowingRefreshesPublicationOwnerStream,
-  alignPublicationRecoveryGateOwnerStreamWithOpenDebt,
   normalizeActiveGateProgressRecords,
   resolvePublicationRecoveryActiveGateHandoff,
   enrichPublicationRecoveryActiveGateHandoff,
@@ -56,15 +41,12 @@ import {
   normalizeActiveGateProgressNodeIds,
   normalizeActiveGateProgressCount,
   normalizePriorityRecoveryDecisionPendingAckNodeIds,
-  resolveRawPublicationConvergenceGate,
-  resolvePriorityRecoveryClosureWitness,
   resolveAuthoritativePublicationMembershipNodeIds,
   resolveRelevantPublicationMembershipNodeIds,
 
   // Constants
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD,
-  PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE,
   PUBLICATION_RECOVERY_PUBLICATION_STATUS,
   PUBLICATION_RECOVERY_PROTOCOL_STATE,
 } from './publication-recovery-evidence-normalizers.js';

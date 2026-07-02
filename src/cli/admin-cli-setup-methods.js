@@ -125,7 +125,10 @@ const ADMIN_CLI_SETUP_METHODS = {
         cell: {fg: LOCAL_STR_WHITE},
       },
       columnSpacing: LOCAL_NUM_TWO,
-      columnWidth: [LOCAL_NUM_20, LOCAL_NUM_20, LOCAL_NUM_12, LOCAL_NUM_10, LOCAL_NUM_10, LOCAL_NUM_10, LOCAL_NUM_10],
+      columnWidth: [
+        LOCAL_NUM_20, LOCAL_NUM_20, LOCAL_NUM_12, LOCAL_NUM_10,
+        LOCAL_NUM_10, LOCAL_NUM_10, LOCAL_NUM_10,
+      ],
     });
 
     // Status bar at bottom

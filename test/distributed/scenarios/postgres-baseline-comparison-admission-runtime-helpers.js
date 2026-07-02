@@ -2,7 +2,10 @@ import {
   POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE,
 } from './postgres-baseline-comparison-constants-and-imports.js';
 
-const {DISCOVERY_ADMISSION_SOURCE, ZERO} = POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE;
+const {
+  DISCOVERY_ADMISSION_SOURCE,
+  ZERO,
+} = POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE;
 
 export function normalizeNonNegativeInteger(value) {
   if (!Number.isFinite(value)) {

@@ -616,7 +616,9 @@ class HeartbeatServiceLifecycleMethods {
 }
 
 function defineHeartbeatServiceLifecycleMethods(HeartbeatService) {
-  const methodDescriptors = Object.getOwnPropertyDescriptors(HeartbeatServiceLifecycleMethods.prototype);
+  const methodDescriptors = Object.getOwnPropertyDescriptors(
+    HeartbeatServiceLifecycleMethods.prototype,
+  );
   delete methodDescriptors.constructor;
   Object.defineProperties(HeartbeatService.prototype, methodDescriptors);
 }

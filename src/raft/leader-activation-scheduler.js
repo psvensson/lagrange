@@ -37,9 +37,10 @@ class LeaderActivationScheduler {
   }
 
   constructor(options = {}) {
-    this.nodeId = typeof options.nodeId === LOCAL_STR_STRING && options.nodeId.length > LOCAL_NUM_ZERO ?
-      options.nodeId :
-      LOCAL_STR_SHARED_NODE;
+    this.nodeId =
+      typeof options.nodeId === LOCAL_STR_STRING && options.nodeId.length > LOCAL_NUM_ZERO ?
+        options.nodeId :
+        LOCAL_STR_SHARED_NODE;
     this.spacingMs = normalizeSpacingMs(options.spacingMs);
     this.queue = [];
     this.nextEntryId = NUM.ONE;

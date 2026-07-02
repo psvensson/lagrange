@@ -1,33 +1,19 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_STEADY_STATE = 'steady_state';
-const LOCAL_STR_6ABQV = 'table_partition_metadata_wait';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_164LE = 'partition_routing_wait';
-const LOCAL_STR_GC3QE = 'partition_leader_wait';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_AVAILABLE = 'available';
 const LOCAL_STR_OBJECT = 'object';
 
 const {
   COLUMN,
-  DEFAULT_PARTITION_VERSION,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   NUM,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  QUERY_ERROR_MSG,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  getRemainingBudgetMs,
   isPriorityControlPlanePartition,
-  isRetryableManagedSplitTransition,
 } = SQL_QUERY_ENGINE_SHARED;
 
 const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({

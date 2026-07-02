@@ -3,8 +3,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ReplicaDispatchService} from
-  '../../src/control-plane/replica-dispatch-service.js';
 import {
   createService,
   initEnv,

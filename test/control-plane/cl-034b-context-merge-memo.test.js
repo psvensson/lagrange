@@ -22,7 +22,10 @@ function memoCtx() {
     // distinguishes a memo hit from a rebuild.
     resolveMembershipPublicationPlanningSnapshot: (context) => {
       builds.push(context?.membershipPublicationPlanningSnapshot ?? null);
-      return Object.freeze({mergeOf: context?.membershipPublicationPlanningSnapshot ?? null, build: builds.length});
+      return Object.freeze({
+        mergeOf: context?.membershipPublicationPlanningSnapshot ?? null,
+        build: builds.length,
+      });
     },
   };
   return {ctx, builds};
@@ -62,11 +65,20 @@ t.test('context memo: a retained snapshot object re-presented after the publicat
   const provided = {publicationEpoch: 24}; // the retained object, reused across builds
   const pubM = {publicationEpoch: 24, status: 'PUBLISHED'};
   const pubN = {publicationEpoch: 25, status: 'ACK_PENDING'}; // advanced => new object
-  const a = resolveMemo.call(ctx, {membershipPublication: pubM, membershipPublicationPlanningSnapshot: provided});
-  const b = resolveMemo.call(ctx, {membershipPublication: pubM, membershipPublicationPlanningSnapshot: provided});
+  const a = resolveMemo.call(ctx, {
+    membershipPublication: pubM,
+    membershipPublicationPlanningSnapshot: provided,
+  });
+  const b = resolveMemo.call(ctx, {
+    membershipPublication: pubM,
+    membershipPublicationPlanningSnapshot: provided,
+  });
   t.equal(builds.length, 1, 'same provided + same publication object reuses within a build');
   t.equal(b, a, 'reused merge');
-  const c = resolveMemo.call(ctx, {membershipPublication: pubN, membershipPublicationPlanningSnapshot: provided});
+  const c = resolveMemo.call(ctx, {
+    membershipPublication: pubN,
+    membershipPublicationPlanningSnapshot: provided,
+  });
   t.equal(builds.length, 2, 'rebuilt because the live publication advanced to a new object');
   t.not(c, a, 'fresh merge for the advanced publication, not the stale retained one');
 });

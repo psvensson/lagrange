@@ -2,8 +2,6 @@ import {createMessageGroupForwardingOwnerTargetMethods} from
   './message-group-forwarding-owner-target-methods.js';
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
-  const buildMessageGroupLeaderIdentitySnapshot =
-    options.buildMessageGroupLeaderIdentitySnapshot;
   const buildForwardTopologyRepairReadOptions =
     options.buildForwardTopologyRepairReadOptions;
   const resolveCDCForwardDeliveryProfile =
@@ -15,7 +13,6 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const normalizeCauseId = options.normalizeCauseId;
   const column = options.column || {};
   const controlPlaneReadStrategy = options.controlPlaneReadStrategy || {};
-  const entityType = options.entityType || {};
   const forwardTopologyRepairOutcome =
     options.forwardTopologyRepairOutcome || {};
   const messageGroupApplicationErrorMsg =
@@ -29,13 +26,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
     options.messageGroupCdcLogContextField || {};
   const messageGroupForwardingOwnerLiteral =
     options.messageGroupForwardingOwnerLiteral || {};
-  const messageGroupLeaderIdentitySource =
-    options.messageGroupLeaderIdentitySource || {};
-  const messageGroupLeaderIdentityState =
-    options.messageGroupLeaderIdentityState || {};
   const num = options.num || {};
   const serviceType = options.serviceType || {};
-  const state = options.state || {};
   const tables = options.tables || {};
   const transportErrorMsg = options.transportErrorMsg || {};
   const typeofToken = options.typeofToken || {};

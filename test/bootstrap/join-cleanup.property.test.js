@@ -185,9 +185,9 @@ test('Property 4: Join failure cleanup', async (t) => {
  * join admission owner path, and cleanup should not issue
  * direct row deletions for nodes/services.
    */
-	  t.test(
-	    'cleanup withdraws membership without direct node/service deletes',
-	    async (t) => {
+  t.test(
+    'cleanup withdraws membership without direct node/service deletes',
+    async (t) => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(...PHASES_WITH_QUERYING_STATE_CLEANUP),
@@ -259,10 +259,10 @@ test('Property 4: Join failure cleanup', async (t) => {
         {numRuns: 10},
       );
 
-	      t.pass(
-	        'cleanup withdraws membership without direct node/service deletes',
-	      );
-	    });
+      t.pass(
+        'cleanup withdraws membership without direct node/service deletes',
+      );
+    });
 
   t.test(
     'querying-state cleanup fails closed when owner withdrawal is unavailable',
@@ -344,9 +344,9 @@ test('Property 4: Join failure cleanup', async (t) => {
       );
     });
 
-		  /**
-		   * Property: For phases that include MG cleanup, all message
-	   * group services should be shut down.
+  /**
+   * Property: For phases that include MG cleanup, all message
+   * group services should be shut down.
    */
   t.test(
     'message groups are shut down for MG-related failure phases',

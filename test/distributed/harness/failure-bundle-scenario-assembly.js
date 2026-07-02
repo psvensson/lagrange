@@ -1,19 +1,3 @@
-import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
-import {
-  JOINING_PHASE,
-} from '../../../src/bootstrap/bootstrap-constants.js';
-import {
-  CONTROL_PLANE_READINESS_REASON,
-} from '../../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  POST_REBALANCE_CLOSURE_STATE,
-} from './post-rebalance-closure-contract.js';
-import {
-  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
-} from './control-plane-quiescence-snapshot.js';
-import {
-  hasMeaningfulPriorityRecoveryProgressWitness,
-} from './priority-recovery-summary-normalization.js';
 import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -61,7 +45,6 @@ const {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
-  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,
@@ -179,9 +162,6 @@ const {
   collectReadinessReasonCodes,
   buildRecoveryReadinessSummary,
   buildStabilityGate,
-  hasPublicationMissingActiveNodeBlocker,
-  hasBlockingPublicationClosureRecord,
-  isStartupReadinessBlocked,
   countRestartBoundaries,
   buildConvergenceStabilityGate,
   buildFailoverStabilityGate,

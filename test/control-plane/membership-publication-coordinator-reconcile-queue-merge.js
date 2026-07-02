@@ -6,18 +6,8 @@ import {
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
 } from '../../src/control-plane/membership-publication-coordinator-queue.js';
-import {COLUMN, TABLES} from '../../src/constants/index.js';
-import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-  shouldPreferAuthoritativeMembershipState,
-} from '../../src/control-plane/membership-publication-planning-evidence.js';
+import {TABLES} from '../../src/constants/index.js';
 import {MEMBERSHIP_LIFECYCLE_STATE} from '../../src/control-plane/membership-lifecycle-constants.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READINESS_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
@@ -26,64 +16,15 @@ import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {
-  buildPublicationActiveGateHandoffContract,
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
-import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-candidate-fixtures.js';
 
-const PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH = 29;
-const PUBLICATION_CONVERGENCE_REPAIR_NOW_MS = 1000;
-const PUBLICATION_CONVERGENCE_REPAIR_PUBLISHER_NODE_ID = 'seed-node';
-const PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID = 'node-1';
-const PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID = 'node-2';
-const PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ID = 'node-1-ws';
-const PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID = 'svc-1';
-const PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ADDRESS = 'ws://node-1:8082';
-const PUBLICATION_CONVERGENCE_REPAIR_TRANSPORT = 'ws';
-const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
-const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
-const PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT = 5000;
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH = 31;
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID = 'node-auth-refresh';
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY = Object.freeze({
-  satisfied: true,
-  readyEligibleNodeCount: 1,
-  totalPriorityPartitionCount: 1,
-  blockedPartitionCount: 0,
-});
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_PUBLICATION_ID =
-  'publication-auth-refresh';
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_MISSING_NODE_ID =
-  'node-auth-refresh-missing';
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_READY_LEASE_EXPIRES_AT = 5000;
-const PUBLICATION_CONVERGENCE_AUTH_REFRESH_NOW_MS = 2500;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
   'publication-handoff-target';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_KIND =
-  'cluster_membership';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH = 41;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH = 42;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS = 3200;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT = 3201;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_START_INDEX = 1;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SINGLE_WRITE_ATTEMPT = 1;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT = 1;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
-  'explicit handoff target should not require authoritative node repair';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
-  'active-gate owner reconcile should not read broad membership tables';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT = true;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
-  'diagnostics';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE =
-  'durable_handoff_readback';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS = Object.freeze([
   'node-handoff-seed',
   'node-handoff-a',
@@ -132,16 +73,6 @@ const PUBLICATION_CONVERGENCE_CRITICAL_OWNER_RECOVERY_WAKE =
   'owner_recovery_wake';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUNDED_REASON =
   'owner_queue_bounded';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME =
-  'reconcileActiveGateMembershipPublication accepts pending owner queue merge';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_OUTCOME_MESSAGE =
-  'pending owner-key merge should expose an accepted critical convergence retry';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_MESSAGE =
-  'pending owner-key merge should still reach the owner queue once';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_CONTEXT_MESSAGE =
-  'pending owner-key merge should retain the complete handoff target';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE =
-  'pending owner-key merge should retain the complete latest publication row';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT = 1;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS = Object.freeze([
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
@@ -166,18 +97,6 @@ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_MESSAGE =
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS = 37;
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT = 1;
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT = 1;
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNKNOWN_EPOCH = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNPUBLISHED_OBSERVATION =
-  'unpublished_observation';
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_NO_ENQUEUE_COUNT = 0;
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME =
-  'reconcileClusterMembership preserves target-blocked active-gate handoff replay';
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_CONTRACT_MESSAGE =
-  'no-debt publication pending replay should emit an owner reconcile handoff';
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_STATE_MESSAGE =
-  'empty replay target should remain a typed owner outcome';
-const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_QUEUE_MESSAGE =
-  'target-blocked replay should not enqueue downstream owner recovery work';
 
 test('reconcileActiveGateMembershipPublication reports bounded critical queue pressure',
   async (t) => {

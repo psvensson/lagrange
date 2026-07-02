@@ -71,52 +71,8 @@ const READY_RETRY_OWNER_STARTING_TEST_NAME =
 const READY_RETRY_OWNER_DEFERRED_TEST_NAME =
   'ReplicaDispatchService retains direct wake-up rows when workflow owner ' +
   'has a deferred retry pending';
-const READY_RETRY_PARTIAL_CACHE_TEST_NAME =
-  'ReplicaDispatchService ready-node retry merges authoritative priority ' +
-  'rows when cache coverage is partial';
-const READY_RETRY_OPERATION_WITNESS_TEST_NAME =
-  'ReplicaDispatchService ready-node retry rediscovers the priority witness ' +
-  'operation when its partition is cache-visible';
-const READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID =
-  'op-priority-retry-cache-visible';
-const READY_RETRY_PARTIAL_CACHE_SECOND_OPERATION_ID =
-  'op-priority-retry-cache-visible-2';
-const READY_RETRY_PARTIAL_CACHE_MISSING_OPERATION_ID =
-  'op-priority-retry-cache-missing';
-const READY_RETRY_OPERATION_WITNESS_VISIBLE_OPERATION_ID =
-  'op-priority-retry-witness-visible';
-const READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID =
-  'b81411d7-43b0-4fd2-8803-46d413628e9d';
-const READY_RETRY_PARTIAL_CACHE_SECOND_PARTITION_ID =
-  'sql_transactions-p1';
-const READY_RETRY_PARTIAL_CACHE_MISSING_PARTITION_ID =
-  'sql_transaction_participants-p1';
-const READY_RETRY_OPERATION_WITNESS_PARTITION_ID =
-  'sql_write_operations-p1';
-const READY_RETRY_PARTIAL_CACHE_EXPECTED_QUEUE_COUNT = 3;
-const READY_RETRY_OPERATION_WITNESS_EXPECTED_QUEUE_COUNT = 2;
-const READY_RETRY_PUBLICATION_FORCE_TEST_NAME =
-  'ReplicaDispatchService publication updates force ready-node retry after ' +
-  'an unchanged ready watermark';
-const READY_RETRY_PUBLICATION_FORCE_OPERATION_ID =
-  'op-priority-retry-publication-force';
 const READY_RETRY_PUBLICATION_FORCE_PARTITION_ID =
   'control_plane_publications-p1';
-const READY_RETRY_PUBLICATION_FORCE_ID =
-  'publication-ready-retry-force';
-const READY_RETRY_ASSERT_PARTIAL_AUTHORITY_READ =
-  'partial priority cache coverage should query authoritative operations';
-const READY_RETRY_ASSERT_PARTIAL_QUEUE_IDS =
-  'partial priority cache coverage should enqueue cached and authoritative rows';
-const READY_RETRY_ASSERT_WITNESS_AUTHORITY_READ =
-  'operation-level priority witness coverage should query authoritative rows';
-const READY_RETRY_ASSERT_WITNESS_QUEUE_IDS =
-  'operation-level priority witness coverage should enqueue the blocked row';
-const READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ =
-  'publication updates should force authoritative rediscovery after an ' +
-  'unchanged ready watermark';
-const READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE =
-  'publication updates should re-enter dispatch for newly visible operations';
 const READY_RETRY_ASSERT_INITIAL_DISPATCH =
   'ready-node rediscovery should attempt dispatch once before owner ' +
   'initialization finishes';

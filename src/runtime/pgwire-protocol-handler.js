@@ -65,7 +65,6 @@ import {
 } from './pgwire-buffer-codec.js';
 
 const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
 const LOCAL_STR_ROLLBACK = 'ROLLBACK';

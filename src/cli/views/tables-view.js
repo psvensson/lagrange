@@ -211,7 +211,8 @@ export class TablesView extends BaseView {
 
     // Requirements: 4.15 - truncation
     if (summary.length > POLICY_SUMMARY_MAX_LENGTH) {
-      return summary.substring(LOCAL_NUM_ZERO, POLICY_SUMMARY_MAX_LENGTH - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
+      return summary.substring(LOCAL_NUM_ZERO, POLICY_SUMMARY_MAX_LENGTH - LOCAL_NUM_THREE) +
+        LOCAL_STR_2ZI04;
     }
 
     return summary;

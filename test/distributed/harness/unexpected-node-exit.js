@@ -113,7 +113,7 @@ async function sweepUnexpectedNodeExits(nodes, isNodeExpectedDown) {
         EXIT_SWEEP_PER_NODE_TIMEOUT_MS,
         'Container inspect for node ' + node.id,
       );
-    } catch (error) {
+    } catch (_error) {
       continue;
     }
     if (!state || state.error || !isExitedContainerStatus(state.status)) {

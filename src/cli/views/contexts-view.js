@@ -157,7 +157,8 @@ export class ContextsView extends BaseView {
       if (isNaN(date.getTime())) {
         return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
+        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch {
       return LOCAL_STR_N_A;
     }

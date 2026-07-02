@@ -254,7 +254,7 @@ test('traffic-readiness-utils - keeps retry hints stable under backpressure', as
         sleepNormalDelay = delayMs;
       },
     });
-  } catch (err) {
+  } catch (_error) {
     // Expected to throw not-ready error
   }
 
@@ -270,7 +270,7 @@ test('traffic-readiness-utils - keeps retry hints stable under backpressure', as
         sleepBackpressuredDelay = delayMs;
       },
     });
-  } catch (err) {
+  } catch (_error) {
     // Expected to throw not-ready error
   }
 

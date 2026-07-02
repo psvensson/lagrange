@@ -276,7 +276,8 @@ export class BaseViewModel {
     }
 
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
+      .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
   }
 
   /**

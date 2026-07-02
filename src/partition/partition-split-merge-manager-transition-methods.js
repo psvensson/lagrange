@@ -575,7 +575,9 @@ class PartitionSplitMergeManagerTransitionMethods {
 
 function createPartitionSplitMergeManagerTransitionMethods() {
   const methods = {};
-  for (const name of Object.getOwnPropertyNames(PartitionSplitMergeManagerTransitionMethods.prototype)) {
+  const prototypeNames =
+    Object.getOwnPropertyNames(PartitionSplitMergeManagerTransitionMethods.prototype);
+  for (const name of prototypeNames) {
     if (name !== 'constructor') {
       methods[name] = PartitionSplitMergeManagerTransitionMethods.prototype[name];
     }

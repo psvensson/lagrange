@@ -21,8 +21,6 @@ import {NodeService} from '../node/node-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   attachTrafficReadinessListener,
-  isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
-  isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
 } from '../bootstrap/traffic-readiness-utils.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
@@ -46,7 +44,6 @@ import {
   MESSAGE_GROUP_SERVICE_LITERAL,
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
-  isWebSocketBasedMessageRouterTransport,
 } from './message-group-service-runtime-support.js';
 
 /**

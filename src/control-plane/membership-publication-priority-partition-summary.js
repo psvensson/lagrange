@@ -283,13 +283,6 @@ function resolvePrioritySpreadReplicaExclusionReason(
   return null;
 }
 
-function isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId = {}) {
-  return resolvePrioritySpreadReplicaExclusionReason(
-    normalizedService,
-    readinessByNodeId,
-  ) === null;
-}
-
 function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
   if (serviceRows.length === NUM.ZERO) {

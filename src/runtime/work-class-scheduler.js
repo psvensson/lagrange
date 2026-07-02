@@ -240,7 +240,9 @@ class WorkClassScheduler extends EventEmitter {
         workClass === WORK_CLASS.C) {
       return workClass;
     }
-    throw new Error(WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + LOCAL_STR_13EMY + String(workClass));
+    throw new Error(
+      WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + LOCAL_STR_13EMY + String(workClass),
+    );
   }
 
   createClassStats() {

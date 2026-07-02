@@ -14,8 +14,6 @@ import {
   PUBLICATION_EVIDENCE_TEXT,
   PUBLICATION_EVIDENCE_ZERO,
   filterPublicationDerivedBlockers,
-  hasOnlyGenericPublicationEpochGateReason,
-  isPublicationMissingActiveGateReason,
   isRecord,
   normalizeDistinctStringArray,
   normalizeNonNegativeInteger,

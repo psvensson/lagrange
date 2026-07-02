@@ -5,9 +5,6 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  REBALANCER_SKIP_REASON,
-} from '../../src/rebalancer/rebalancer-constants.js';
-import {
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {

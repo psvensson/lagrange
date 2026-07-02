@@ -8,97 +8,27 @@ import {
   NodeJoiningService,
   JoiningPhase,
 } from '../../src/bootstrap/node-joining-service.js';
-import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
 import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {
-  PARTITION_SERVICE_ACTIVATION_ERROR,
-} from '../../src/bootstrap/shared/partition-service-activation.js';
-import {
-} from '../../src/control-plane/control-plane-kernel-ingress.js';
-import {
-  PRESSURE_GOVERNOR_ERROR_CODE,
-} from '../../src/control-plane/pressure-governor.js';
-import {
-} from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
   JOINING_SEED_CONTACT_FAILURE_KIND,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
-  BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_PROBE_REASON,
-  BOOTSTRAP_API_REQUEST_FIELD,
-  BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {
-} from '../../src/control-plane/membership-lifecycle-controller.js';
-import {
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-} from '../../src/control-plane/owner-contract-outcome.js';
-import {
-} from '../../src/control-plane/control-plane-constants.js';
-import {
-} from '../../src/query/query-constants.js';
-import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
-  JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
-  JOIN_PROMOTION_STATE,
-} from '../../src/bootstrap/join-promotion-state-owner.js';
-import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
-import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
-import {
-  SERVICE_TYPE,
-  SERVICE_STATUS,
-  TABLES,
   NUM,
   TIME_MS,
-  CDC_OPERATION,
-  ENDPOINT_STATUS,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 
-const DEFAULT_SEED_WS_ADDRESS =
-  `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
-const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
-  'preferControlPlaneUpsert';
-const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
-  'create-self-hosted join metadata service registration';
-const ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE =
-  'ASSIGNMENT_TOKEN_UNKNOWN';
-const TEST_SHORTCUT_RETRY_AFTER_MS = 125;
-const TEST_TERMINAL_SHORTCUT_ERROR_CODE =
-  'SHORTCUT_VALIDATION_FAILED';
-const TEST_SHORTCUT_NON_SUCCESS_ERROR_PATTERN =
-  /shortcut returned non-success/;
-const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
-  state: 'seed_locally_ready_unpublished',
-  ready: false,
-  authorityAvailable: true,
-  publication: Object.freeze({
-    observationState: 'unpublished',
-  }),
-  canonicalStartupNodeIds: Object.freeze(['seed-node-1']),
-  failure: Object.freeze({
-    state: 'none',
-  }),
-});
-const TEST_CONTACT_SEED_ATTEMPT_NOW_MS = 1000;
-const TEST_CONTACT_SEED_HTTP_TIMEOUT_MS = 50;
-const TEST_CONTACT_SEED_RETRY_TIMEOUT_MS = 100;
 
 test('NodeJoiningService - move-replica bootstrap defer keeps configured ' +
   'seed-contact timeout on the progress path', async (t) => {

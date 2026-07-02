@@ -21,7 +21,8 @@ const {
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
-class ControlPlaneReadinessPublicationDiagnostics extends ControlPlaneReadinessDiagnosticsEligibility {
+class ControlPlaneReadinessPublicationDiagnostics
+  extends ControlPlaneReadinessDiagnosticsEligibility {
   async getMembershipPublicationDiagnostics(
     nodeId,
     observedAt,

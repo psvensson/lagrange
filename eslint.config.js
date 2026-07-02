@@ -63,6 +63,7 @@ export default [
           'Fastify',
           'CREATE_TOPOLOGY_REQUIRED',
           'MISSING_REQUIRED_FIELD',
+          'REPLICA_HANDLER_ADDRESS',
           'REPLICA_HANDLER_NOT_REGISTERED',
           'SEED_READINESS_TIMEOUT_MSG',
           'SQL_SELECT_ALL_FROM_TABLE',

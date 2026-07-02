@@ -23,16 +23,11 @@ import {
 import {
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
-  PRESSURE_GOVERNOR_ERROR_CODE,
-} from '../../src/control-plane/pressure-governor.js';
-import {
 } from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
-  JOINING_SEED_CONTACT_FAILURE_KIND,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
-  BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_REQUEST_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
@@ -52,7 +47,6 @@ import {
 import {
 } from '../../src/query/query-constants.js';
 import {
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
   JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
@@ -63,10 +57,7 @@ import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
   SERVICE_TYPE,
-  SERVICE_STATUS,
   TABLES,
-  NUM,
-  TIME_MS,
   CDC_OPERATION,
   ENDPOINT_STATUS,
   TRANSPORT_TYPE,
@@ -74,17 +65,6 @@ import {
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
-const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
-  'preferControlPlaneUpsert';
-const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
-  'create-self-hosted join metadata service registration';
-const ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE =
-  'ASSIGNMENT_TOKEN_UNKNOWN';
-const TEST_SHORTCUT_RETRY_AFTER_MS = 125;
-const TEST_TERMINAL_SHORTCUT_ERROR_CODE =
-  'SHORTCUT_VALIDATION_FAILED';
-const TEST_SHORTCUT_NON_SUCCESS_ERROR_PATTERN =
-  /shortcut returned non-success/;
 const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
   state: 'seed_locally_ready_unpublished',
   ready: false,

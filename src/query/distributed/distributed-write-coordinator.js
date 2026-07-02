@@ -542,7 +542,9 @@ class DistributedWriteCoordinator {
       return expr.value;
     }
     if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      if (typeof expr.index === LOCAL_STR_NUMBER && expr.index >= LOCAL_NUM_ZERO && expr.index < params.length) {
+      if (typeof expr.index === LOCAL_STR_NUMBER &&
+          expr.index >= LOCAL_NUM_ZERO &&
+          expr.index < params.length) {
         return params[expr.index];
       }
       return params[LOCAL_NUM_ZERO];

@@ -85,9 +85,6 @@ const TEST_RETRYABLE_CREATE_STATUS_ERROR =
 const TEST_RETRYABLE_CREATE_STATUS_CODE =
   'DISTRIBUTED_PARTICIPANT_FAILURE';
 const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1;
-const TEST_WAIT_FOR_CONDITION_TIMEOUT_MS = 100;
-const TEST_WAIT_FOR_CONDITION_POLL_MS = 5;
-const TEST_WAIT_FOR_CONDITION_TIMEOUT_ERROR = 'condition not reached';
 
 /**
  * Create a mock CDC integration service.
@@ -318,23 +315,6 @@ function waitForReplicaEvent(handler, successEvent, failureEvent) {
   });
 }
 
-/**
- * Wait for a short-lived async test condition.
- * @param {Function} predicate - Predicate returning true when ready.
- * @return {Promise<void>}
- */
-async function waitForCondition(predicate) {
-  const deadline = Date.now() + TEST_WAIT_FOR_CONDITION_TIMEOUT_MS;
-  while (Date.now() <= deadline) {
-    if (predicate()) {
-      return;
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, TEST_WAIT_FOR_CONDITION_POLL_MS);
-    });
-  }
-  throw new Error(TEST_WAIT_FOR_CONDITION_TIMEOUT_ERROR);
-}
 
 test('ReplicaHandler', async (t) => {
   let tempDir;

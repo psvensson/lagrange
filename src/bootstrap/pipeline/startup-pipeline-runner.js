@@ -223,7 +223,8 @@ class StartupPipelineRunner {
       nodeId: options.nodeId,
       allowResumeLatest: options.allowResumeLatest === true,
     });
-    if (typeof resolvedSessionId !== LOCAL_STR_STRING || resolvedSessionId.length === LOCAL_NUM_ZERO) {
+    if (typeof resolvedSessionId !== LOCAL_STR_STRING ||
+      resolvedSessionId.length === LOCAL_NUM_ZERO) {
       throw new Error(LOCAL_STR_1JUYB);
     }
     return resolvedSessionId;

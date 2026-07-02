@@ -63,7 +63,6 @@ const {
   resolveBenchmarkConfig,
   resolveDiagnosticsCoverage,
   resolveNodeClientChannelPolicyOverrides,
-  resolvePreflightConvergenceOptions,
   resolvePrimaryProvider,
   resolveScenarioOverrides,
   selectFailureDiagnosticNodes,

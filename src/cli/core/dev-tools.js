@@ -447,7 +447,9 @@ export class DevTools {
       return LOCAL_STR_EMPTY;
     }
     const str = JSON.stringify(data);
-    return str.length > LOCAL_NUM_80 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04 : str;
+    return str.length > LOCAL_NUM_80 ?
+      str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04 :
+      str;
   }
 
   /**

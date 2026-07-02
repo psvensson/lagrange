@@ -35,7 +35,7 @@ class OperationWorkflowTransitionPersistence
    * @return {Promise<Object|null>}
    * @private
    */
-  async claimPriorityDispatchTransition(operation, options = {}) {
+  async claimPriorityDispatchTransition(operation) {
     if (
       !operation ||
       operation.workflowStep !== WORKFLOW_STEP.PENDING ||

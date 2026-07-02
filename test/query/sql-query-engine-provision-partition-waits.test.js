@@ -38,7 +38,6 @@ const config = ConfigurationManager.getInstance();
 config.initialize();
 
 import {
-  mockPartitionData,
   createMockMessageRouter,
 } from './sql-query-engine-test-support.js';
 

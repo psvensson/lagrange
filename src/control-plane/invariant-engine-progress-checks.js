@@ -13,7 +13,6 @@ import {
 } from './invariant-constants.js';
 import {buildInvariantResult} from './invariant-engine-result.js';
 
-const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_1W88E = 'serve_without_repair';
 const LOCAL_STR_WRONG_DIMENSION = 'wrong_dimension';
@@ -400,7 +399,9 @@ function checkSnapshotCoverageMonotonic(state) {
  */
 function checkPublicationDrainDeterministic(state) {
   const isOwner = state?.isPublicationOwner === true;
-  const missingCount = Number.isFinite(state?.missingPublishedCount) ? state.missingPublishedCount : 0;
+  const missingCount = Number.isFinite(state?.missingPublishedCount) ?
+    state.missingPublishedCount :
+    0;
   const obligationEnabled = state?.scheduledReconcileObligationEnabled === true;
 
   if (isOwner && missingCount > 0 && !obligationEnabled) {

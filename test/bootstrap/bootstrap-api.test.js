@@ -4,7 +4,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   registerBootstrapApiReadinessTests,
 } from './bootstrap-api-readiness-test-cases.js';
@@ -15,9 +15,6 @@ import {
 import {
   BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_READINESS_FIELD,
-  BOOTSTRAP_API_RESPONSE_FIELD,
-  BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT,
@@ -31,7 +28,6 @@ import {
   configureSyntheticMoveReplicaRegisterServiceHandoff,
 } from './move-replica-assignment-token-test-helpers.js';
 import {
-  BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {
@@ -40,20 +36,7 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {
-  LIFECYCLE_LEGACY_STATE,
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {
-  STARTUP_RECOVERY_STAGE,
-  StartupRecoveryCoordinator,
-} from '../../src/bootstrap/startup-recovery-coordinator.js';
-import {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
@@ -61,23 +44,7 @@ import {
   OWNER_OUTCOME_FRESHNESS,
   OWNER_OUTCOME_STATE,
 } from '../../src/control-plane/owner-outcome-contract.js';
-import {
-  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
-} from '../../src/control-plane/startup-authority-snapshot-owner.js';
 
-const TEST_BOOTSTRAP_JOIN_AUTHORITY_BLOCKER =
-  'control_snapshot_authority_unavailable';
-const TEST_BOOTSTRAP_PHASE_CONTACTING_SEED = 'contacting_seed';
-const TEST_HTTP_METHOD_GET = 'GET';
-const TEST_HTTP_METHOD_POST = 'POST';
-const TEST_SEED_NODE_ID = 'seed-node-1';
-const TEST_SEED_NODE_ADDRESS = 'ws://localhost:8080';
-const TEST_BOOTSTRAP_REQUEST_NODE_ID =
-  '550e8400-e29b-41d4-a716-446655440210';
-const TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS = 'ws://localhost:9210';
-const TEST_BOOTSTRAP_RESPONSE_GROUP_ID = 'mg-seed-authority';
-const TEST_READY_STABLE_WINDOW_MS = 0;
-const TEST_READY_RETRY_AFTER_MS = 250;
 const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
 const TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE =
   'CONTROL_PLANE_PRESSURE_DEGRADED';
@@ -104,134 +71,6 @@ const TEST_DURABLE_REJOIN_LOCAL_READ_FAILURE =
 const TEST_DURABLE_REJOIN_LOCAL_READ_COUNT_NONE = 0;
 const TEST_DURABLE_REJOIN_BOUNDED_ASSIGNMENT_ASSERTION =
   'durable rejoin assignment should use bounded published/cache topology rows';
-const TEST_STARTUP_AUTHORITY_STATE = 'seed_locally_ready_unpublished';
-const TEST_STARTUP_AUTHORITY_PUBLICATION_STATE = 'unpublished';
-const TEST_STARTUP_AUTHORITY_FAILURE_STATE = 'none';
-const TEST_STARTUP_AUTHORITY_OBSERVATION_PENDING =
-  'startup_authority_observation_pending';
-const TEST_STARTUP_AUTHORITY_NODE_IDS = Object.freeze([
-  TEST_SEED_NODE_ID,
-]);
-const TEST_SEED_CONTACT_STARTUP_AUTHORITY = Object.freeze({
-  state: TEST_STARTUP_AUTHORITY_STATE,
-  ready: false,
-  authorityAvailable: true,
-  publication: Object.freeze({
-    observationState: TEST_STARTUP_AUTHORITY_PUBLICATION_STATE,
-  }),
-  canonicalStartupNodeIds: TEST_STARTUP_AUTHORITY_NODE_IDS,
-  failure: Object.freeze({
-    state: TEST_STARTUP_AUTHORITY_FAILURE_STATE,
-  }),
-});
-const TEST_BOOTSTRAP_INIT_RUNTIME_WIRING_RECOVERY_REASONS = Object.freeze([
-  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
-  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
-  BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-]);
-
-function createSatisfiedControlPlaneReadinessService() {
-  const diagnostics = Object.freeze({
-    publicationEpoch: 1,
-    status: 'PUBLISHED',
-    publishedActiveNodeIds: Object.freeze(['seed-node-1']),
-    priorityPartitionSummary: Object.freeze({
-      satisfied: true,
-      requiredDistinctNodeCount: 3,
-      readyEligibleNodeCount: 3,
-      totalPriorityPartitionCount: 5,
-      missingPartitionIds: Object.freeze([]),
-      blockedPartitions: Object.freeze([]),
-    }),
-  });
-  return {
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-
-const TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON =
-  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE;
-const TRANSITIONAL_PRIORITY_RECOVERY_PROTOCOL_STATE = 'publication_pending';
-const TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS = 'OPEN';
-const TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES = Object.freeze([
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-]);
-const TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS = Object.freeze([
-  'seed-node-1',
-  'node-2',
-]);
-const TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY = Object.freeze({
-  satisfied: false,
-  missingPartitionIds: Object.freeze(['control_plane_publications-p1']),
-});
-const TRANSITIONAL_PRIORITY_RECOVERY_GATE = Object.freeze({
-  active: true,
-  state: 'publication_pending',
-  reasonCodes: TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
-  publicationStatus: TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
-  priorityPartitionSummary: TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
-});
-
-function createTransitionalPriorityRecoveryFailureControlPlaneReadinessService() {
-  return {
-    getPriorityControlPlaneRecoveryHealthSync() {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        details: {
-          failureReason: TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON,
-          publicationRecoveryGate: TRANSITIONAL_PRIORITY_RECOVERY_GATE,
-          publicationStatus:
-            TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
-          priorityPartitionSummary:
-            TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
-          recoveryProtocolState:
-            TRANSITIONAL_PRIORITY_RECOVERY_PROTOCOL_STATE,
-          priorityRecoveryReasonCodes:
-            TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
-          canonicalStartupNodeIds:
-            TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS,
-        },
-      };
-    },
-    getStartupAuthoritySnapshotSync() {
-      return {
-        state: 'authority_unavailable',
-        ready: false,
-        authorityAvailable: false,
-        publication: {
-          observationState: 'observation_unavailable',
-        },
-        priorityRecoveryReasonCodes:
-          TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
-        canonicalStartupNodeIds:
-          TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS,
-        publicationRecoveryGate: TRANSITIONAL_PRIORITY_RECOVERY_GATE,
-        failure: {
-          state: 'present',
-          reason: TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON,
-        },
-      };
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return {
-        publicationEpoch: 14,
-        status: TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
-        priorityPartitionSummary:
-          TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
-      };
-    },
-  };
-}
-
 test('BootstrapAPI - initialization', async (t) => {
   initializeTestEnvironment();
 

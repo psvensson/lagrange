@@ -1,6 +1,5 @@
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
-    ENDPOINT_INTENT_FIELD,
     EndpointIntentError,
     IdempotencyCheckError,
     LIFECYCLE_EVENT,

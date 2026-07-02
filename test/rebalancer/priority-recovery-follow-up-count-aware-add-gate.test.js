@@ -46,18 +46,6 @@ function activeVoterReplica(nodeId, replicaId) {
   };
 }
 
-function activeLearnerReplica(nodeId, replicaId) {
-  return {
-    service_id: replicaId,
-    service_type: EntityType.PARTITION,
-    node_id: nodeId,
-    partition_id: PARTITION_ID,
-    replica_id: replicaId,
-    address: `addr-${replicaId}`,
-    raft_role: 'learner',
-    status: ReplicaStatus.ACTIVE,
-  };
-}
 
 function inFlightOperation(operationId, type, targetNodeId, replicaId) {
   return {

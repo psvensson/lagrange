@@ -439,7 +439,11 @@ class ManagedSplitWorkflowProvisioningMethods {
     );
     const sourceNodeIdSet = new Set(sourceRoutableNodeIds);
     const candidateOrderByNodeId = new Map();
-    for (let index = LOCAL_NUM_ZERO; index < candidateTargetNodeIds.length; index += LOCAL_NUM_ONE) {
+    for (
+      let index = LOCAL_NUM_ZERO;
+      index < candidateTargetNodeIds.length;
+      index += LOCAL_NUM_ONE
+    ) {
       candidateOrderByNodeId.set(candidateTargetNodeIds[index], index);
     }
 

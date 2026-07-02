@@ -16,8 +16,6 @@ const PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH =
   'src/rebalancer/priority-publication-leader-safety.js';
 const PUBLICATION_COORDINATOR_FILE_PATH =
   'src/control-plane/membership-publication-coordinator-reads.js';
-const PUBLICATION_RECOVERY_GATE_FILE_PATH =
-  'src/control-plane/publication-recovery-gate.js';
 const PUBLICATION_PRIORITY_SPREAD_FILE_PATH =
   'src/control-plane/publication-recovery-priority-spread.js';
 const READINESS_SERVICE_SEGMENT_4_FILE_PATH =

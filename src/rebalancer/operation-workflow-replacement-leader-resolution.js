@@ -9,7 +9,6 @@ import {
 
 const {
   TYPEOF,
-  NUM,
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
 } = OPERATION_WORKFLOW_OWNER_SHARED;

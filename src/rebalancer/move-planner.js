@@ -20,7 +20,6 @@ import {
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_DECISION,
-  PARTITION_DESCRIPTOR_EPOCH_REASON,
 } from '../partition/partition-constants.js';
 import {
   buildPartitionDescriptorEpochDecision,
@@ -33,19 +32,14 @@ import {
   isOddReplicaCount,
 } from './odd-replica-count.js';
 import {
-  MOVE_REASON,
   PLACEMENT_DEGRADED_REASON,
   REBALANCER_ENTITY_TYPE,
-  REBALANCER_LOG_MSG,
-  REBALANCER_MOVE_TYPE,
   MOVE_PLANNER_ERROR_MSG,
   REBALANCER_SUBSYSTEM,
 } from './rebalancer-constants.js';
 import {
   ADMISSION_DECISION,
   ADMISSION_REASON,
-  MOVE_CRITICALITY,
-  PRESSURE_BEHAVIOR_DECISION,
   STORAGE_CAPACITY_ERROR_MSG,
   STORAGE_CAPACITY_LOG_MSG,
 } from './storage-capacity-constants.js';
@@ -63,9 +57,6 @@ import {
 import {
   PLACEMENT_OWNER_SCORE_PROFILE,
 } from './placement-owner-constants.js';
-import {
-  buildPlacementOwnerDecision as buildPlacementOwnerPolicyDecision,
-} from './placement-owner-decision.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -81,14 +72,7 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
   UNKNOWN: 'unknown',
 });
 const EntityType = REBALANCER_ENTITY_TYPE;
-const MoveType = REBALANCER_MOVE_TYPE;
 const DegradedReason = PLACEMENT_DEGRADED_REASON;
-const PLACEMENT_OCCUPIED_STATUSES = new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-  ReplicaStatus.ACTIVE,
-]);
 const CAPACITY_REJECTION_REASON = Object.freeze({
   ADMISSION_ERROR: 'admission_error',
 });

@@ -1,14 +1,8 @@
 import {NUM} from '../constants/index.js';
-import {buildPriorityRecoveryObservationSnapshot} from
-  './priority-recovery-observation-snapshot.js';
 import {
   buildPublicationRecoveryGateSnapshot,
 } from
   './publication-recovery-gate.js';
-import {
-  buildPublicationOwnerStreamState,
-  isPublicationOwnerStreamPublicationPending,
-} from './publication-owner-state.js';
 
 import {
   isRecord,
@@ -20,28 +14,19 @@ import {
   resolvePublicationRecoveryConvergenceAcknowledgedNodeListInput,
   hasAuthoritativeEmptyPendingAckGate,
   hasAuthoritativeEmptyMissingPublishedGate,
-  hasPublicationRecoveryPressureDeferredEvidence,
   normalizeDistinctStringArray,
-  normalizePublicationEpoch,
-  normalizeNonNegativeInteger,
-  normalizeMaximumNonNegativeInteger,
   normalizePublicationRecoveryAckEvidence,
   resolvePublicationRecoveryPendingAckNodeIds,
   resolveActiveGateSelectedMissingPublishedEvidence,
   resolveActiveGateSelectedPublicationMembershipNodeIds,
   hasActiveGateSelectedPublicationMembershipOpenEvidence,
-  hasActiveGateSelectedPublicationMembershipCohortProof,
   hasSelectedPublicationMembershipClosureEvidence,
   resolveEffectivePublicationMembershipNodeIds,
   hasSteadyPublishedSelectedPublicationMembershipOpen,
   hasActiveGateSelectedMissingPublishedEvidence,
   normalizeOptionalString,
-  normalizeBoolean,
-  normalizeClosedUnknownNoDebtPriorityRecoveryObservation,
-  normalizePriorityRecoveryObservationFromPublicationGate,
   hasCountOnlyUnknownPublicationDeficit,
   resolveOwnerReconcileNarrowedMissingPublishedNodeIds,
-  hasOwnerReconcilePublicationHandoff,
   resolvePublicationMissingPublishedNodeIds,
   resolvePublicationMissingPublishedCount,
   activeGateOpenDebtOutrunsPublicationOwnerStream,
@@ -50,9 +35,7 @@ import {
   normalizeActiveGateProgressRecords,
   resolvePublicationRecoveryActiveGateHandoff,
   enrichPublicationRecoveryActiveGateHandoff,
-  resolvePublicationRecoveryEmittedActiveGateHandoff,
   resolveActiveGateProgressString,
-  resolvePublicationRecoveryPublishedActiveNodeIds,
   normalizeActiveGateProgressNodeIds,
   normalizeActiveGateProgressCount,
   normalizePriorityRecoveryDecisionPendingAckNodeIds,
@@ -60,8 +43,6 @@ import {
   resolvePriorityRecoveryClosureWitness,
   resolveAuthoritativePublicationMembershipNodeIds,
   resolveRelevantPublicationMembershipNodeIds,
-
-  // Constants
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD,
   PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE,

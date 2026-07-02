@@ -27,25 +27,6 @@ function derivePartitionKey(primaryKey) {
 }
 
 /**
- * Build schema definition from column AST.
- * @param {Array<Object>} columns - Column definitions from AST.
- * @return {Object} Schema definition.
- * @private
- */
-function buildSchemaDefinition(columns) {
-  return {
-    columns: columns.map((col) => ({
-      name: col.name,
-      type: this.normalizeDataType(col.dataType),
-      primaryKey: col.primaryKey || false,
-      notNull: col.notNull || false,
-      unique: col.unique || false,
-      defaultValue: col.defaultValue?.value,
-    })),
-  };
-}
-
-/**
  * Normalize data type to SQLite-compatible type.
  * @param {Object} dataType - Data type AST.
  * @return {string} Normalized type name.
@@ -81,7 +62,26 @@ function normalizeDataType(dataType) {
 
 const SCHEMA_DERIVATION_METHODS = Object.freeze({
   derivePartitionKey,
-  buildSchemaDefinition,
+
+  /**
+   * Build schema definition from column AST.
+   * @param {Array<Object>} columns - Column definitions from AST.
+   * @return {Object} Schema definition.
+   * @private
+   */
+  buildSchemaDefinition(columns) {
+    return {
+      columns: columns.map((col) => ({
+        name: col.name,
+        type: this.normalizeDataType(col.dataType),
+        primaryKey: col.primaryKey || false,
+        notNull: col.notNull || false,
+        unique: col.unique || false,
+        defaultValue: col.defaultValue?.value,
+      })),
+    };
+  },
+
   normalizeDataType,
 });
 

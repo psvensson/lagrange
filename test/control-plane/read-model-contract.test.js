@@ -11,7 +11,6 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
-import {TABLES} from '../../src/constants/index.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 const FIXTURE_REPLICA_ID = 'partition-1-r1';
@@ -19,7 +18,6 @@ const FIXTURE_NODE_ID = 'node-local';
 const FIXTURE_TABLE_NAME = 'services';
 const FIXTURE_OWNER_COMPONENT = 'TestOwner';
 const FIXTURE_ROW_KEY = 'row-key-1';
-const FIXTURE_SERVICE_ID = 'svc-role-1';
 const FIXTURE_ENTITY_TYPE = 'partition';
 const FIXTURE_ENTITY_ID = 'partition-1';
 const FIXTURE_PARTITION_ID = 'partition-1';

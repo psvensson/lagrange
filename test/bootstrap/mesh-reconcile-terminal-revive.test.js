@@ -17,7 +17,7 @@
  * a hand-rolled reimplementation.
  */
 
-import {describe, it, beforeEach, afterEach} from 'node:test';
+import {describe, it, afterEach} from 'node:test';
 import assert from 'node:assert';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConnectWebSocketPhase} from

@@ -3,8 +3,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ReplicaDispatchService} from
-  '../../src/control-plane/replica-dispatch-service.js';
 import {
   createService,
   initEnv,
@@ -26,12 +24,6 @@ import {
 import {
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-} from '../../src/rebalancer/replica-operation-repository.js';
-import {
-  OPERATION_WORKFLOW_OWNER_SHARED,
-} from '../../src/rebalancer/operation-workflow-owner-shared.js';
-import {
   NUM,
   SERVICE_STATUS,
   STATE,
@@ -40,16 +32,10 @@ import {
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 
-const {
-  OPERATION_WORKFLOW_OWNER_REASON,
-  REBALANCER_SKIP_REASON,
-} = OPERATION_WORKFLOW_OWNER_SHARED;
-
 const READY_RETRY_TARGET_NODE_ID = 'node-2';
 const READY_RETRY_SOURCE_NODE_ID = 'node-1';
 const READY_RETRY_PARTITION_ID = 'replica_operations-p1';
 const READY_RETRY_PENDING_STATUS = 'pending';
-const READY_RETRY_EMPTY_STEPS_HISTORY = '[]';
 const READY_RETRY_PUBLICATION_STATUS = 'PUBLISHED';
 const READY_RETRY_PUBLICATION_EPOCH = 14;
 const READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT = 2;
@@ -57,20 +43,9 @@ const READY_RETRY_READY_ELIGIBLE_NODE_COUNT = 1;
 const READY_RETRY_READY_DISTINCT_NODE_COUNT = 1;
 const READY_RETRY_SPREAD_GAP = 1;
 const READY_RETRY_EXPECTED_SINGLE_CALL = 1;
-const READY_RETRY_DEFERRED_RETRY_AFTER_MS = 5;
 const READY_RETRY_QUEUE_DRAIN_TICKS = 8;
 const READY_RETRY_QUEUE_DRAIN_START = 0;
 const READY_RETRY_QUEUE_DRAIN_INCREMENT = 1;
-const READY_RETRY_OWNER_STARTING_OPERATION_ID =
-  'op-priority-retry-owner-starting';
-const READY_RETRY_OWNER_DEFERRED_OPERATION_ID =
-  'op-priority-retry-owner-deferred';
-const READY_RETRY_OWNER_STARTING_TEST_NAME =
-  'ReplicaDispatchService retries ready-node rediscovered PENDING rows ' +
-  'when workflow owner initialization is still catching up';
-const READY_RETRY_OWNER_DEFERRED_TEST_NAME =
-  'ReplicaDispatchService retains direct wake-up rows when workflow owner ' +
-  'has a deferred retry pending';
 const READY_RETRY_PARTIAL_CACHE_TEST_NAME =
   'ReplicaDispatchService ready-node retry merges authoritative priority ' +
   'rows when cache coverage is partial';
@@ -117,26 +92,6 @@ const READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ =
   'unchanged ready watermark';
 const READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE =
   'publication updates should re-enter dispatch for newly visible operations';
-const READY_RETRY_ASSERT_INITIAL_DISPATCH =
-  'ready-node rediscovery should attempt dispatch once before owner ' +
-  'initialization finishes';
-const READY_RETRY_ASSERT_DEFERRED_RETRY_ARMED =
-  'shutdown-in-progress owner skips should arm a dispatch retry';
-const READY_RETRY_ASSERT_BOUNDED_DELAY =
-  'dispatch retry should use the bounded operation retry delay';
-const READY_RETRY_ASSERT_RETRY_LANE =
-  'the pending operation should remain in the dispatch retry lane';
-const READY_RETRY_ASSERT_INITIAL_OPERATION =
-  'first dispatch attempt should use the rediscovered pending operation';
-const READY_RETRY_ASSERT_RETRY_REENTRY =
-  'deferred retry should re-enter the canonical dispatch queue with the ' +
-  'rediscovered PENDING row';
-const READY_RETRY_ASSERT_RETRY_SLOT_CLEARED =
-  'retry enqueue should clear the deferred dispatch slot before re-entry';
-const READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED =
-  'owner-deferred dispatch should keep the direct wake-up row in the retry lane';
-const READY_RETRY_ASSERT_OWNER_DEFERRED_REENTRY =
-  'owner-deferred dispatch retry should re-enter with the original wake-up row';
 
 async function waitForOperationDispatchQueueDrain(service = null) {
   for (

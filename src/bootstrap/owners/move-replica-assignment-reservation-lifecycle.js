@@ -1,5 +1,5 @@
 import {v4 as uuidv4} from 'uuid';
-import {NUM, TABLES, WORKFLOW_STEP} from '../../constants/index.js';
+import {TABLES, WORKFLOW_STEP} from '../../constants/index.js';
 import {
   BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_LOG_MSG,

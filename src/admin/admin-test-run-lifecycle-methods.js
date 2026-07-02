@@ -332,7 +332,10 @@ const adminTestRunLifecycleMethods = Object.freeze({
     return {
       phase: input?.phase || RUN_PROGRESS_PHASE.STARTING,
       message: input?.message || EMPTY_STRING,
-      percent: Math.max(LOCAL_NUM_ZERO, Math.min(LOCAL_NUM_100, Number(input?.percent || LOCAL_NUM_ZERO))),
+      percent: Math.max(
+        LOCAL_NUM_ZERO,
+        Math.min(LOCAL_NUM_100, Number(input?.percent || LOCAL_NUM_ZERO)),
+      ),
       updatedAt: new Date(this.now()).toISOString(),
     };
   },

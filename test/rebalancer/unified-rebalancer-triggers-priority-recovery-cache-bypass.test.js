@@ -17,8 +17,6 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
-  DEFAULT_MESSAGE_GROUP_POLICY,
   TriggerType,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -34,9 +32,6 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
 import {
@@ -49,13 +44,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  ENDPOINT_STATUS,
-  META_SERVICE_ID,
-  TRANSPORT_TYPE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {registerPriorityRecoveryFollowUpTestCases} from './unified-rebalancer-priority-recovery-follow-up-test-cases.js';
 import {registerPriorityRecoverySerialWaitTestCases} from './unified-rebalancer-priority-recovery-serial-wait-test-cases.js';
@@ -1092,7 +1083,6 @@ test(TEST_NAME.SUITE, async (t) => {
       const TEST_BLOCKER_ELIGIBLE_NO_OPERATION =
         'eligible_but_no_operation_created';
       const TEST_NEXT_ACTION_CREATE_OPERATION = 'create_recovery_operation';
-      const nodes = Object.freeze([]);
       const priorityPartitionSummary = Object.freeze({
         satisfied: false,
         requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,

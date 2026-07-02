@@ -649,9 +649,18 @@ class ReplicasView extends BaseView {
         title: LOCAL_STR_RAFT_STATE,
         fields: [
           {label: LOCAL_STR_TERM, value: String(service.raft_term ?? LOCAL_STR_N_A)},
-          {label: LOCAL_STR_COMMIT_INDEX, value: String(service.raft_commit_index ?? LOCAL_STR_N_A)},
-          {label: LOCAL_STR_APPLIED_INDEX, value: String(service.raft_applied_index ?? LOCAL_STR_N_A)},
-          {label: LOCAL_STR_LAST_LOG_INDEX, value: String(service.raft_last_log_index ?? LOCAL_STR_N_A)},
+          {
+            label: LOCAL_STR_COMMIT_INDEX,
+            value: String(service.raft_commit_index ?? LOCAL_STR_N_A),
+          },
+          {
+            label: LOCAL_STR_APPLIED_INDEX,
+            value: String(service.raft_applied_index ?? LOCAL_STR_N_A),
+          },
+          {
+            label: LOCAL_STR_LAST_LOG_INDEX,
+            value: String(service.raft_last_log_index ?? LOCAL_STR_N_A),
+          },
           {label: LOCAL_STR_LEADER_ID, value: service.raft_leader_id || LOCAL_STR_N_A},
         ],
       });
@@ -688,7 +697,10 @@ class ReplicasView extends BaseView {
         title: LOCAL_STR_EPOCH_INFORMATION,
         fields: [
           {label: LOCAL_STR_CURRENT_EPOCH, value: String(service.epoch ?? LOCAL_STR_N_A)},
-          {label: LOCAL_STR_ASSIGNMENT_EPOCH, value: String(service.assignment_epoch ?? LOCAL_STR_N_A)},
+          {
+            label: LOCAL_STR_ASSIGNMENT_EPOCH,
+            value: String(service.assignment_epoch ?? LOCAL_STR_N_A),
+          },
         ],
       });
     }
@@ -742,7 +754,8 @@ class ReplicasView extends BaseView {
       if (isNaN(date.getTime())) {
         return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE)
+        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }

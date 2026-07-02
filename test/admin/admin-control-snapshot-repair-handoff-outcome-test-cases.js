@@ -14,11 +14,6 @@ import {
 import {
   buildControlSnapshotHandoffRetryOptions,
 } from '../../src/admin/admin-control-snapshot-publication-handoff.js';
-import {
-  buildTopologyConvergenceGraph,
-  buildTopologyConvergenceReplayFixture,
-  replayTopologyConvergenceFixture,
-} from '../../src/diagnostics/topology-convergence-graph.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 import {
   registerAdminControlSnapshotRepairHandoffForcedRepairFallbackTestCases,
@@ -38,7 +33,6 @@ const TEST_OWNER_QUEUE_STOPPED_REASON = 'owner_queue_stopped';
 const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
 const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
-const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR = 2;
 const TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS = 16000;
 
 test('AdminControlSnapshot preserves bounded retry for accepted owner reconcile handoff',
@@ -407,7 +401,9 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
       controlPlaneReadinessService: {
         membershipPublicationService: {
           async reconcileClusterMembership() {
-            throw new Error(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_ERROR);
+            throw new Error(
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_ERROR,
+            );
           },
           enqueueClusterMembershipReconcile(_reason, context = {}) {
             enqueuedContext = context;
@@ -724,7 +720,8 @@ test('AdminControlSnapshot distinguishes critical convergence defer from ordinar
               target: {
                 reconcileRequired: true,
               },
-              [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE]: {
+              [ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE]: {
                 convergenceClass:
                   CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
                 pressureOutcome:
@@ -940,7 +937,9 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
       },
       async getPublication() {
         publicationReadbackAttempts += 1;
-        throw new Error(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READBACK_FAILURE);
+        throw new Error(
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READBACK_FAILURE,
+        );
       },
       async upsertPublication(row) {
         upsertedRows.push(row);
@@ -1035,13 +1034,16 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
                   ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
                 status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
                 published_active_node_ids: [
-                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                    .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
                 ],
                 required_ack_node_ids: [
-                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                    .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
                 ],
                 acknowledged_node_ids: [
-                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+                  ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                    .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
                 ],
               },
             };

@@ -9,15 +9,9 @@ const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_164LE = 'partition_routing_wait';
 const LOCAL_STR_GC3QE = 'partition_leader_wait';
-const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_AVAILABLE = 'available';
-const LOCAL_STR_OBJECT = 'object';
 
 const {
-  COLUMN,
   DEFAULT_PARTITION_VERSION,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  NUM,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   QUERY_ERROR_MSG,
@@ -28,33 +22,6 @@ const {
   getRemainingBudgetMs,
   isRetryableManagedSplitTransition,
 } = SQL_QUERY_ENGINE_SHARED;
-
-const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
-  AVAILABLE: 'available',
-  AUTHORITATIVE_MISSING: 'authoritative_missing',
-  MISSING: 'missing',
-});
-
-const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE = Object.freeze({
-  AVAILABLE: 'available',
-  UNAVAILABLE: 'unavailable',
-});
-
-const AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE = Object.freeze({
-  ELIGIBLE: 'eligible',
-  MASKED: 'masked',
-});
-
-const AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE = Object.freeze({
-  COMPLETE: 'complete',
-  INCOMPLETE: 'incomplete',
-  UNKNOWN: 'unknown',
-});
-
-const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD = Object.freeze({
-  REPLICA_COUNT: 'replica_count',
-  REPLICA_COUNT_CAMEL: 'replicaCount',
-});
 
 class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialPartitionProvisioning {
   listManagedSplitPartitions() {
@@ -698,6 +665,9 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
   }
 }
 
-Object.defineProperties(SQLQueryEnginePartitionRoutingReadiness.prototype, createSQLQueryEngineRoutingMetadataMethods());
+Object.defineProperties(
+  SQLQueryEnginePartitionRoutingReadiness.prototype,
+  createSQLQueryEngineRoutingMetadataMethods(),
+);
 
 export {SQLQueryEnginePartitionRoutingReadiness};

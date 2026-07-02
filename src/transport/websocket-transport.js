@@ -161,7 +161,9 @@ class WebSocketTransport extends EventEmitter {
       });
       try {
         ws.terminate();
-      } catch (_err) {}
+      } catch (_err) {
+        // Best-effort terminate: socket may already be destroyed.
+      }
     });
 
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
@@ -184,7 +186,9 @@ class WebSocketTransport extends EventEmitter {
       if (existing.ws) {
         try {
           existing.ws.terminate();
-        } catch (_err) {}
+        } catch (_err) {
+          // Best-effort terminate: socket may already be destroyed.
+        }
       }
       if (existing.reconnectTimeout) {
         clearTimeout(existing.reconnectTimeout);
@@ -250,7 +254,9 @@ class WebSocketTransport extends EventEmitter {
             rejectConnection(new Error(MSG_CONNECTION_ESTABLISHMENT_TIMEOUT));
             try {
               ws.terminate();
-            } catch (_err) {}
+            } catch (_err) {
+              // Best-effort terminate: socket may already be destroyed.
+            }
           }
         }, this.messageTimeoutMs);
         if (typeof timeoutId.unref === TRANSPORT_TYPEOF.FUNCTION) {
@@ -270,7 +276,9 @@ class WebSocketTransport extends EventEmitter {
             }
             try {
               ws.terminate();
-            } catch (_err) {}
+            } catch (_err) {
+              // Best-effort terminate: socket may already be destroyed.
+            }
             resolve();
             return;
           }
@@ -312,7 +320,9 @@ class WebSocketTransport extends EventEmitter {
 
           try {
             ws.terminate();
-          } catch (_err) {}
+          } catch (_err) {
+            // Best-effort terminate: socket may already be destroyed.
+          }
 
           if (connectionInfo.state === ConnectionState.CONNECTING && connectionInfo.ws === ws) {
             rejectConnection(error);
@@ -392,7 +402,9 @@ class WebSocketTransport extends EventEmitter {
         if (existing.ws) {
           try {
             existing.ws.terminate();
-          } catch (_err) {}
+          } catch (_err) {
+            // Best-effort terminate: socket may already be destroyed.
+          }
         }
 
         this.handleConnectionClose(nodeId, existing.ws);
@@ -467,7 +479,9 @@ class WebSocketTransport extends EventEmitter {
       if (connection.ws) {
         try {
           connection.ws.terminate();
-        } catch (_err) {}
+        } catch (_err) {
+          // Best-effort terminate: socket may already be destroyed.
+        }
       }
       connection.ws = null;
       if (connection.pingInterval) {

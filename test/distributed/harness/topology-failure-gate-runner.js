@@ -14,7 +14,6 @@ import {
   TOPOLOGY_FAILURE_GATE_ASSERTION,
   TOPOLOGY_FAILURE_GATE_REASON,
   TOPOLOGY_FAILURE_GATE_EPOCH_FENCE,
-  TOPOLOGY_FAILURE_GATE_BOUNDED_PROGRESS_MECHANISMS,
   listTopologyFailureGateEntries,
 } from './topology-failure-gate-matrix.js';
 import {
@@ -138,15 +137,18 @@ const PROGRESS_MECHANISM_WITNESS_DECISION_TABLE = Object.freeze({
 // Decision table for validating durable assertions against simulated state and invariants
 const DURABLE_ASSERTION_WITNESS_DECISION_TABLE = Object.freeze({
   'IV-OP-1': (_entry, _state, results) =>
-    results.some((r) => r.invariantId === INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS && r.passed),
+    results.some((r) =>
+      r.invariantId === INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS && r.passed),
   'IV-PUB-1': (_entry, _state, results) =>
     results.some((r) => r.invariantId === INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED && r.passed),
   'IV-COV-1': (_entry, _state, results) =>
     results.some((r) => r.invariantId === INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC && r.passed),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.ACTIVE_GATE_ACTIVE_NODES_FULL]: (_entry, state) =>
-    state.snapshotCoverageSamples.some((s) => s.coverageNodeCount === TOPOLOGY_FAILURE_GATE_RUNNER_NUM_FIVE),
+    state.snapshotCoverageSamples.some((s) =>
+      s.coverageNodeCount === TOPOLOGY_FAILURE_GATE_RUNNER_NUM_FIVE),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.SNAPSHOT_COVERAGE_FULL]: (_entry, state) =>
-    state.snapshotCoverageSamples.some((s) => s.coverageNodeCount === TOPOLOGY_FAILURE_GATE_RUNNER_NUM_FIVE),
+    state.snapshotCoverageSamples.some((s) =>
+      s.coverageNodeCount === TOPOLOGY_FAILURE_GATE_RUNNER_NUM_FIVE),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.MISSING_PUBLISHED_ZERO]: (entry) =>
     entry.gateId === 'failure-detection-rolling-restart',
   [TOPOLOGY_FAILURE_GATE_ASSERTION.NO_PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT]: (entry) =>
@@ -168,7 +170,9 @@ const DURABLE_ASSERTION_WITNESS_DECISION_TABLE = Object.freeze({
   [TOPOLOGY_FAILURE_GATE_ASSERTION.RESTORED_MEMBER_REDISCOVERED]: (entry) =>
     entry.durableAssertions.includes(TOPOLOGY_FAILURE_GATE_ASSERTION.RESTORED_MEMBER_REDISCOVERED),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.POST_RESTORE_RECONCILIATION_COMPLETED]: (entry) =>
-    entry.durableAssertions.includes(TOPOLOGY_FAILURE_GATE_ASSERTION.POST_RESTORE_RECONCILIATION_COMPLETED),
+    entry.durableAssertions.includes(
+      TOPOLOGY_FAILURE_GATE_ASSERTION.POST_RESTORE_RECONCILIATION_COMPLETED,
+    ),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.LOCAL_SERVICES_REARMED]: (entry) =>
     entry.durableAssertions.includes(TOPOLOGY_FAILURE_GATE_ASSERTION.LOCAL_SERVICES_REARMED),
   [TOPOLOGY_FAILURE_GATE_ASSERTION.REMOTE_WAKEUP_RECORDED]: (entry) =>

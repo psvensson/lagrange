@@ -10,49 +10,20 @@
  * @module rebalancer/move-planner
  */
 
-import {LoggingService} from '../logging/logging-service.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {
-  getPartitionRowFromCache,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
-} from '../bootstrap/system-partition-classification.js';
-import {NUM, WORKFLOW_STEP} from '../constants/index.js';
-import {
-  PARTITION_DESCRIPTOR_EPOCH_DECISION,
-  PARTITION_DESCRIPTOR_EPOCH_REASON,
-} from '../partition/partition-constants.js';
-import {
-  buildPartitionDescriptorEpochDecision,
-} from '../partition/partition-descriptor-epoch-contract.js';
-import {ADJUST_DIRECTION, ReplicaStatus} from './replica-status.js';
-import {
-  adjustToOddCount,
-  getNextOddCount,
-  getPreviousOddCount,
-  isOddReplicaCount,
-} from './odd-replica-count.js';
+import {NUM} from '../constants/index.js';
 import {
   MOVE_REASON,
-  PLACEMENT_DEGRADED_REASON,
   REBALANCER_ENTITY_TYPE,
-  REBALANCER_LOG_MSG,
   REBALANCER_MOVE_TYPE,
   MOVE_PLANNER_ERROR_MSG,
-  REBALANCER_SUBSYSTEM,
 } from './rebalancer-constants.js';
 import {
-  ADMISSION_DECISION,
-  ADMISSION_REASON,
   MOVE_CRITICALITY,
   PRESSURE_BEHAVIOR_DECISION,
-  STORAGE_CAPACITY_ERROR_MSG,
   STORAGE_CAPACITY_LOG_MSG,
 } from './storage-capacity-constants.js';
-import {createMovePlannerStateMethods} from './move-planner-state-methods.js';
 import {
   PLACEMENT_OWNER_POLICY,
-  buildPlacementOwnerTargetOutcome,
 } from './topology-owner-constants.js';
 import {
   PLACEMENT_OWNER_SCORE_PROFILE,
@@ -76,116 +47,6 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
 });
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
-const DegradedReason = PLACEMENT_DEGRADED_REASON;
-const PLACEMENT_OCCUPIED_STATUSES = new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-  ReplicaStatus.ACTIVE,
-]);
-const CAPACITY_REJECTION_REASON = Object.freeze({
-  ADMISSION_ERROR: 'admission_error',
-});
-function classifyCapacityAdmissionError(err) {
-  const message = err?.message;
-  if (
-    message === STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED ||
-    message === MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED ||
-    message === MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_ESTIMATE_REQUIRED
-  ) {
-    return ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE;
-  }
-  return CAPACITY_REJECTION_REASON.ADMISSION_ERROR;
-}
-function hasCapacityAccountingUnavailableRejection(diagnostics) {
-  return (
-    (
-      diagnostics?.rejectionsByReason?.[
-        ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE
-      ] || NUM.ZERO
-    ) > NUM.ZERO
-  );
-}
-const MOVE_PLANNER_REBALANCE_REASON = Object.freeze({
-  REPLICA_COUNT_BELOW_TARGET: 'replica_count_below_target',
-  REPLICA_COUNT_ABOVE_TARGET: 'replica_count_above_target',
-  REPLICAS_NOT_SPREAD: 'replicas_not_spread',
-  NODES_WITHOUT_LOCAL_REPLICA: 'nodes_without_local_replica',
-});
-const MESSAGE_GROUP_PLACEMENT_DEFAULT_MAX_REPLICA_COUNT = NUM.FIVE;
-const MOVE_PLANNER_DESCRIPTOR_EPOCH_DIAGNOSTIC = Object.freeze({
-  REJECTED: 'partition_descriptor_epoch_rejected',
-});
-function buildReplicaCountPolicyDecision(options = {}) {
-  const healthyReplicaCount = Number(options.healthyReplicaCount) || NUM.ZERO;
-  const actionableTarget = Number(options.actionableTarget) || NUM.ZERO;
-  const targetCount = Number(options.targetCount) || NUM.ZERO;
-  let needsRebalancing = false;
-  let reason = null;
-  if (healthyReplicaCount < actionableTarget) {
-    needsRebalancing = true;
-    reason = MOVE_PLANNER_REBALANCE_REASON.REPLICA_COUNT_BELOW_TARGET;
-  } else if (healthyReplicaCount > targetCount) {
-    needsRebalancing = true;
-    reason = MOVE_PLANNER_REBALANCE_REASON.REPLICA_COUNT_ABOVE_TARGET;
-  }
-  return {
-    needsRebalancing,
-    reason,
-  };
-}
-function applyAdditionalRebalancingReason(decision, shouldRebalance, reason) {
-  if (!shouldRebalance) {
-    return decision;
-  }
-  return {
-    ...decision,
-    needsRebalancing: true,
-    reason: decision.reason || reason,
-  };
-}
-function buildMessageGroupPlacementResult(options = {}) {
-  const targetReplicaCount = Number(options.targetReplicaCount) || NUM.ZERO;
-  const targetNodes = Array.isArray(options.targetNodes) ?
-    options.targetNodes :
-    [];
-  return {
-    targetReplicaCount,
-    targetNodes,
-    maxReplicaCount:
-      options.maxReplicaCount ||
-      MESSAGE_GROUP_PLACEMENT_DEFAULT_MAX_REPLICA_COUNT,
-    degraded: targetNodes.length < targetReplicaCount,
-    degradedReason: options.degradedReason,
-    availableNodeCount: Number(options.availableNodeCount) || NUM.ZERO,
-    capacityDiagnostics: options.capacityDiagnostics,
-    placementOwnerOutcome:
-      options.placementOwnerOutcome || buildPlacementOwnerTargetOutcome(),
-    topologyTransitionSnapshot: options.topologyTransitionSnapshot || null,
-  };
-}
-
-const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
-  ADJUST_DIRECTION,
-  EntityType,
-  MOVE_PLANNER_LITERAL,
-  MOVE_PLANNER_REBALANCE_REASON,
-  NUM,
-  ReplicaStatus,
-  SYSTEM_TABLE_NAME,
-  WORKFLOW_STEP,
-  adjustToOddCount,
-  applyAdditionalRebalancingReason,
-  buildPartitionDescriptorEpochDecision,
-  buildReplicaCountPolicyDecision,
-  getNextOddCount,
-  getPartitionRowFromCache,
-  getPreviousOddCount,
-  isOddReplicaCount,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
-});
-
 /**
  * MovePlanner calculates replica placement and moves for partitions,
  * message groups, and runtime services.

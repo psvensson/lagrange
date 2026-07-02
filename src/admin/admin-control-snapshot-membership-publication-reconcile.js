@@ -602,7 +602,8 @@ function resolveLatestMembershipPublicationRow(
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotMembershipPublicationReconcile extends AdminControlSnapshotControlPlaneDiagnostics {
+class AdminControlSnapshotMembershipPublicationReconcile
+  extends AdminControlSnapshotControlPlaneDiagnostics {
   resolveMembershipPublicationService() {
     const readinessServices = [
       this.controlPlaneReadinessService || null,

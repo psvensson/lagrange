@@ -1,6 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
-import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -43,12 +42,18 @@ test('AdminControlSnapshot maps clean priority recovery readiness debt to public
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
           ],
-          publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          publishedActiveNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
         },
         publicationConvergence: {
           publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
-          publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
-          missingPublishedNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+          publishedActiveNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
+          missingPublishedNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+          ],
           priorityRecoveryCurrentSummary: {
             unresolvedClassCount:
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
@@ -79,7 +84,9 @@ test('AdminControlSnapshot maps clean priority recovery readiness debt to public
         ],
         pendingRecoveryCount:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
-        pendingReconcileNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+        pendingReconcileNodeIds: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+        ],
         pendingReconcileCount: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_COUNT,
       },
       'clean canonical priority recovery evidence should not keep missing publication nodes in owner-recovery wait',
@@ -108,9 +115,15 @@ test('AdminControlSnapshot widens owner truth from missing published recovery no
         publicationConvergence: {
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
           publicationStatus: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-          publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
-          requiredAckNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
-          acknowledgedNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          publishedActiveNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
+          requiredAckNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
+          acknowledgedNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
           pendingAckNodeIds: [],
           priorityPartitionSummary: {
             satisfied: true,
@@ -208,7 +221,9 @@ test('canonical publication evidence retains active-gate best publication owner 
         recoveryProtocolState:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY,
         pendingAckCount: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
-        publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        publishedActiveNodeIds: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        ],
         missingPublishedNodeIds: [
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
         ],
@@ -257,7 +272,9 @@ test('AdminControlSnapshot projects recovery-eligible readiness into diagnostic 
         publishedMembershipObservation: {
           publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-          publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          publishedActiveNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
         },
         readinessByNodeId: {
           [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID]: {
@@ -343,7 +360,9 @@ test('AdminControlSnapshot projects connected active heartbeat rows when readine
         publishedMembershipObservation: {
           publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-          publishedActiveNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          publishedActiveNodeIds: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          ],
         },
         readinessByNodeId: {},
       },
@@ -712,7 +731,9 @@ test('AdminControlSnapshot schedules workflow-owner reentry for dispatch-pending
     snapshot.buildPriorityRecoveryDecisionSnapshots = () => ({
       priorityPartitionSummary: {
         satisfied: false,
-        missingPartitionIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.PRIORITY_RECOVERY_REENTRY_PARTITION_ID],
+        missingPartitionIds: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.PRIORITY_RECOVERY_REENTRY_PARTITION_ID,
+        ],
         blockedPartitions: [],
       },
       partitionIdsBySemanticState: {},
