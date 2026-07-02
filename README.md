@@ -11,32 +11,11 @@ there first and move only the data that actually has to move.
 That puts Lagrange somewhere between a distributed SQL database, a dataflow
 runtime, and a service platform. Tables are split into partitions, every
 partition is copied to several nodes, SQL goes through one execution engine,
-and distributed functions and services can run on the same nodes that store
-the data they use.
+and the cluster places service replicas on the nodes that store the data they
+use.
 
 This repo is for people interested in building or studying that model. It is
 substantial, but still experimental.
-
----
-
-## Five Terms This README Leans On
-
-If you work with distributed databases daily, skip ahead. Otherwise, these
-five terms carry most of the meaning on this page:
-
-- **Partition** — one slice of a table's rows. Tables are split into
-  partitions so the cluster can spread storage and work across many nodes.
-- **Replica** — a copy of a partition kept on another node, so losing a node
-  loses no data.
-- **Raft** — the consensus protocol that keeps replicas agreeing. One replica
-  (the leader) accepts writes and the rest follow; if the leader's node dies,
-  the remaining replicas elect a new leader. The node holding the leader is
-  said to *own* that partition.
-- **Shuffle** — copying rows from the nodes that store them to the nodes that
-  need them. In most data systems this is the dominant cost of distributed
-  work, and it happens implicitly, all the time.
-- **Data locality** — running work on the node that already stores the data
-  it reads, so there is nothing to ship.
 
 ---
 
@@ -52,10 +31,10 @@ In practice that means:
 - table data is split into partitions, each replicated across nodes with Raft
 - SQL runs through a shared execution path
 - distributed compute runs on the nodes that own the relevant partitions
+- services are replicated too, and the cluster places each service replica on
+  a node holding as many replicas of the partitions it accesses as possible —
+  and re-places it as the data layout changes
 - services can query tables without a separate data access stack
-- during distributed compute, rows move between nodes only when your code
-  explicitly asks — a shuffle is an operation you invoke, not a side effect
-  baked into every step of the architecture
 
 If you have ever built a system that looked like this:
 
@@ -71,6 +50,14 @@ Lagrange explores a tighter loop:
 ```text
 client -> cluster -> execute near the data -> return results
 ```
+
+To be clear about where the novelty is: any distributed system can read
+remote data over the network. What Lagrange adds is placement. Services are
+replicated things, just like partitions, and the cluster continuously
+positions each service replica so it sits as close as possible to as many
+replicas of the data it reads and writes. Locality is something the cluster
+produces and maintains for you, not something you engineer by hand and watch
+decay as the data moves.
 
 ---
 
@@ -107,7 +94,8 @@ deployment system, and failure domain.
 
 Lagrange is not mainly about replacing a container scheduler. The difference
 is that compute placement is derived from data ownership: the cluster decides
-where your code runs based on which nodes store the data it touches.
+where each service replica runs based on which nodes store the data it
+touches, and keeps adjusting that placement as the data layout changes.
 
 In practice that changes a few things:
 
