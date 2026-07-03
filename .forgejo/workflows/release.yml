@@ -81,6 +81,10 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
             | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
+          # Drop the bundled runtime deps dir — it is not a release asset (you
+          # cannot attach a directory) and would break the release upload below.
+          # dist/ is not the Docker build context, so this is safe.
+          rm -rf node_modules
 
       # Strip the leading `v` from the tag once, so the image tags and the
       # release notes below all reference the SAME string (e.g. tag v0.1.0 ->
@@ -134,6 +138,8 @@ jobs:
           direction: upload
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
+          # forgejo-release@v2 requires a non-empty title (fails "title is empty").
+          title: "Lagrange ${{ github.ref_name }}"
           release-dir: dist
           release-notes: |
             Lagrange ${{ github.ref_name }} (experimental / alpha).
