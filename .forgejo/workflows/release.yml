@@ -72,10 +72,14 @@ jobs:
         run: helm package charts/lagrange-node --destination dist/
 
       # Checksum every release artifact (SEA binaries + Helm chart tarball).
+      # Only top-level FILES: build-sea.js also bundles a dist/node_modules/
+      # directory (runtime deps), and `sha256sum *` errors on a directory
+      # ("Is a directory"). Exclude SHA256SUMS itself; sort for stable output.
       - name: Checksum release artifacts
         run: |
           cd dist
-          sha256sum * > SHA256SUMS
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+            | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
       # Strip the leading `v` from the tag once, so the image tags and the
