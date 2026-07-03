@@ -131,9 +131,18 @@ existing degenerate form of this alternative).
 - Objective composition: is write-to-leader affinity worth chasing given
   leaders move on elections, or should write affinity target the replica *set*
   and let leader placement follow (leaderRetention already exists)?
-- What hysteresis form: incumbent bonus in-score (revive
+- ~~What hysteresis form: incumbent bonus in-score (revive
   `retainHealthyIncumbents`?), move-budget damping, or threshold-gated
-  improvement (only move when Φ gain > cost)?
+  improvement (only move when Φ gain > cost)?~~ — **DECIDED 2026-07-03
+  (Tier 1b): in-score incumbent movement-cost dimension**
+  (`DATA_AFFINITY_INCUMBENT_RETENTION`, −4 vs affinity weight 10).
+  Reservation-based `retainHealthyIncumbents` was examined and rejected
+  for this role: reserved incumbents seed the intent FIRST
+  (placement-owner-decision reserve phase), which freezes affinity
+  movement regardless of gradient size — the sim's symmetric-high
+  freeze. The in-score margin gives exactly "move iff gradient >
+  margin". `retainHealthyIncumbents` stays as-is (dead through the
+  wired path, documented by real-kernel harness claim 3).
 - When does widen-replication dominate move-services (read-hot, many-consumer
   data)? Should the planner choose per-partition strategy?
 - Where does A[s][p] attribution live so both service and partition planners
@@ -141,6 +150,36 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-03 — **Prerequisite #0 SHIPPED (`f594adb0`, quest
+  `service-read-locality-policy` SOLVED)**: `service_definitions.read_locality`
+  column (TEXT NOT NULL DEFAULT 'any', `SERVICE_READ_LOCALITY` enum
+  'any'|'same_group'), CDC-propagated, validated on create/update; the
+  service-scoped query executor factory passes `issuingServiceId`, the
+  engine resolves the policy from the node-local cache (one Map.get per
+  SELECT) and threads `preferSameLatencyGroup` into the previously
+  dormant ordering, which now ranks local node → same latency group →
+  rest. Policy-off routing is unchanged (verified byte-identical); the
+  planner-coherence obligation (score with the same field) lands with the
+  production policy lift. Guard: `test/query/service-read-locality-routing.test.js`
+  (dt:prove red-on-revert), runner `scripts/run-placement-affinity-scenarios.js`.
+- 2026-07-03 — **Tier 1b SHIPPED (`3ebff067`, quest
+  `placement-data-affinity-tier1b` SOLVED)**: `DATA_AFFINITY` +
+  `DATA_AFFINITY_INCUMBENT_RETENTION` score dimensions in the real
+  kernel (`PLACEMENT_OWNER_DATA_AFFINITY_SCORE` affinity 10 /
+  movement-cost 4), fed by policy-carried `dataAffinity.groupWeights`
+  normalized into `evidence.dataAffinityContext`; fully gated (off =
+  byte-identical output); proven through the REAL MovePlanner
+  (`calculateTargetState`+`calculateMoves`, ordinal-non-degenerate
+  scenarios): supra-margin gradients move the service toward its data,
+  sub-margin gradients produce ZERO moves. No bridge changes needed —
+  policy + currentReplicas already forwarded whole. Guard:
+  `test/convergence/dt-placement-affinity-tier1b-kernel.test.js`
+  (dt:prove red-on-revert; subagent-verified FAITHFUL, 3 low findings
+  fixed). **Remaining production prerequisites**: A[s][p] access
+  attribution (extend managed-split-metrics-provider), the
+  `getRuntimeServicePolicy` lift (assemble groupWeights + set
+  `preferDataAffinity`/read-cost model from `read_locality`), and the
+  Tier-3 demo.
 - 2026-07-03 — **Prerequisite #0 shape decided (user): per-service read-routing
   policy**, not a cluster-wide flip. Rationale: locality routing trades away
   uniform routing's implicit load spreading (census sweep D's loadStddev 47→156
