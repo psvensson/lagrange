@@ -1,17 +1,39 @@
 # Forgejo Actions CI — runs on Codeberg.
-# Syntax is GitHub-Actions-compatible. `runs-on: docker` targets Codeberg's
-# hosted runner label; adjust to match your registered runner if different.
-# Requires Codeberg Actions to be enabled for the repository.
+# Syntax is GitHub-Actions-compatible. `runs-on: docker` targets the
+# self-hosted runner from ci/forgejo-runner/ (capacity 1, shares the machine
+# with local dev work), so per-push cost is kept deliberately low.
+#
+# Tiered gating:
+#   * push / PR         -> this workflow: static lane only (lint, knip,
+#                          depcruise, complexity/duplication ratchets, audits,
+#                          steering pack drift). A few minutes.
+#   * nightly / manual  -> full-gate.yml: complete test:gate (fast test fleet
+#                          + static + TLC model contracts).
+#   * v* tag            -> release.yml: full test:ci + release artifacts.
+#
+# paths-ignore lists ONLY the high-churn Solver-artifact directories that BOTH
+# repo scanners (check-no-kiro-refs.js, check-no-legacy-naming.js) already
+# allowlist AND no other test:static script reads — so a push touching only
+# these skips the lane with zero loss of static coverage. Everything else runs
+# the lane: architecture/** is read by check-runtime-grammar-contracts.js;
+# docs/steering/** by steering:check; README/CHANGELOG and solve/{quests,epics,
+# specs}/** are scanned by the no-kiro / no-legacy audits. The nightly full
+# gate (full-gate.yml) re-runs test:static in full regardless.
 name: ci
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "solve/changes/**"
+      - "solve/log/**"
+      - "solve/report/**"
+      - "solve/autonomous/**"
   pull_request:
     branches: [main]
 
 jobs:
-  gate:
+  static:
     runs-on: docker
     container:
       image: node:22-bookworm
@@ -19,22 +41,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Tools the gate shells out to that node:22-bookworm does not ship:
-      # rg (spec-led-runtime-legacy-deletion-guard test), jq (failure-report
-      # shell scripts), java (model:contracts runs TLC via tla2tools.jar).
-      - name: Install gate CLI tools (ripgrep, jq, java)
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless
-
+      # test:static is node/eslint/knip/depcruise/git only — none of the
+      # rg/jq/java CLI tools the test fleet needs, so no apt step here.
       - name: Install dependencies
         run: npm ci
 
-      # test:gate = test:fast + test:static + model:contracts.
-      # The statistical rolling-restart convergence gate is deliberately NOT
-      # run here: its pass rate is variance-bounded (~25-33% per run) and a
-      # per-push pass/fail would be satisfiable or violable by chance alone.
-      # It is promoted only on a sealed Wilson-95 bar over N>=20 runs
-      # (see docs/convergence-donewhen-metric.md) and tracked as a trend.
-      - name: Gate (fast tests + static analysis + model contracts)
-        run: npm run test:gate
+      - name: Static lane (test:static)
+        run: npm run test:static
