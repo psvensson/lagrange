@@ -598,4 +598,9 @@ not as a polished end-user product.
 
 ## License
 
-AGPL v3
+AGPL-3.0. See [LICENSE](LICENSE).
+
+This project is open source but **closed to outside contributions**
+("open-source, not open-contribution", like SQLite) — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for why. Bug reports are welcome; pull
+requests are disabled.
