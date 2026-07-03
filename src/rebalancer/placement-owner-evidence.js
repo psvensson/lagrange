@@ -356,5 +356,6 @@ function normalizePlacementOwnerEvidence(options = {}) {
 }
 
 export {
+  PLACEMENT_OWNER_POLICY_FIELD,
   normalizePlacementOwnerEvidence,
 };
