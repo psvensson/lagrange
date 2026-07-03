@@ -65,7 +65,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
     // Create seed node router (like bootstrap service)
     const seedRouter = new MessageRouter({
       nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedPort}`,
+      nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
 
@@ -78,7 +78,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
     // Create joining node router (like node joining service)
     const joiningRouter = new MessageRouter({
       nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningPort}`,
+      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
     });
 
@@ -113,7 +113,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
 
       // Joining node connects to seed node (like phaseConnectWebSocket)
       // This is the ONLY connection - joining node initiates
-      await joiningRouter.connectToNode(seedNodeId, `ws://localhost:${seedPort}`);
+      await joiningRouter.connectToNode(seedNodeId, `ws://127.0.0.1:${seedPort}`);
 
       // Wait for connection to be established on joining node side
       const joiningConnected = await waitFor(() => {
@@ -169,7 +169,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
     // Create seed node router
     const seedRouter = new MessageRouter({
       nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedPort}`,
+      nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
     seedRouter.setServiceNodeResolver((address) => {
@@ -180,7 +180,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
     // Create joining node router
     const joiningRouter = new MessageRouter({
       nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningPort}`,
+      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
     });
     joiningRouter.setServiceNodeResolver((address) => {
@@ -209,7 +209,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
       });
 
       // Joining node connects to seed node
-      await joiningRouter.connectToNode(seedNodeId, `ws://localhost:${seedPort}`);
+      await joiningRouter.connectToNode(seedNodeId, `ws://127.0.0.1:${seedPort}`);
 
       // Wait for connections
       await waitFor(() => {

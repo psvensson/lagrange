@@ -325,7 +325,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         await resources.secondNodeRouter.initialize({startServer: true});
         await resources.seedRouter.connectToNode(
           secondNodeId,
-          `ws://localhost:${secondPort}`,
+          `ws://127.0.0.1:${secondPort}`,
         );
 
         // ========================================

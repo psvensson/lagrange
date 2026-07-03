@@ -114,14 +114,14 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
     // Create MessageRouter for seed node (sends CREATE_REPLICA)
     const seedRouter = new MessageRouter({
       nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedPort}`,
+      nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
 
     // Create MessageRouter for joining node (receives CREATE_REPLICA)
     const joiningRouter = new MessageRouter({
       nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningPort}`,
+      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
     });
 
@@ -201,7 +201,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
       });
 
       // Connect seed node to joining node via WebSocket
-      await seedRouter.connectToNode(joiningNodeId, `ws://localhost:${joiningPort}`);
+      await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
 
       // Wait for connection to be established
       await waitFor(() => {
@@ -282,13 +282,13 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
     const seedRouter = new MessageRouter({
       nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedPort}`,
+      nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
 
     const joiningRouter = new MessageRouter({
       nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningPort}`,
+      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
     });
 
@@ -317,7 +317,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         };
       });
 
-      await seedRouter.connectToNode(joiningNodeId, `ws://localhost:${joiningPort}`);
+      await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
       await waitFor(() => {
         return seedRouter.getConnectionState(joiningNodeId) === 'connected';
       }, 2000);
@@ -354,7 +354,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
     const seedRouter = new MessageRouter({
       nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedPort}`,
+      nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
     // Override timeout for this test
@@ -362,7 +362,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
     const joiningRouter = new MessageRouter({
       nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningPort}`,
+      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
     });
 
@@ -380,7 +380,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         return {acknowledged: true};
       });
 
-      await seedRouter.connectToNode(joiningNodeId, `ws://localhost:${joiningPort}`);
+      await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
       await waitFor(() => {
         return seedRouter.getConnectionState(joiningNodeId) === 'connected';
       }, 2000);

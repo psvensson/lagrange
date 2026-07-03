@@ -11,6 +11,16 @@ import {MessageRouterSetup} from '../../../src/bootstrap/shared/message-router-s
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
+import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
+
+// Bind 127.0.0.1 explicitly: in CI containers 'localhost' can resolve to ::1
+// for the server bind while cross-router dials go to 127.0.0.1, producing
+// ECONNREFUSED from an address-family mismatch.
+ConfigurationManager.resetInstance();
+ConfigurationManager.getInstance().initialize({
+  node: {id: 'message-router-setup-test'},
+  transport: {wsHost: '127.0.0.1'},
+});
 
 const ports = createPortAllocator(import.meta.url);
 
@@ -138,7 +148,7 @@ describe('MessageRouterSetup', () => {
 
         await peerRouter.connectToNode(
           'gated-node',
-          `ws://localhost:${gatedPort}`,
+          `ws://127.0.0.1:${gatedPort}`,
         );
         await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -155,7 +165,7 @@ describe('MessageRouterSetup', () => {
         gatedRouter.setExternalAdmissionEnabled(true);
         await peerRouter.connectToNode(
           'gated-node',
-          `ws://localhost:${gatedPort}`,
+          `ws://127.0.0.1:${gatedPort}`,
         );
         await new Promise((resolve) => setTimeout(resolve, 50));
 
