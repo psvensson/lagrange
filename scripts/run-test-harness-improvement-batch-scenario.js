@@ -75,7 +75,7 @@ const CHECKS = [
   },
   {
     id: 'rerun-flake-marking',
-    ok: () => fileContains('scripts/summarize-harness-runs.js', 'flake'),
+    ok: () => fileContains('scripts/summarize-harness-runs.js', 'isRerun'),
   },
   {
     id: 'cross-gate-trend-query',
@@ -106,7 +106,7 @@ const CHECKS = [
   {
     id: 'dt-determinism-runtime-tripwire-and-liferaft-seam',
     ok: () => fs.existsSync('test/distributed/harness/determinism-tripwire.js') &&
-      fileContains('src/raft/liferaft.js', 'virtual clock'),
+      fileContains('src/raft/liferaft.js', 'timeSource'),
   },
   {
     id: 'repro-tier-routes-to-dt6',

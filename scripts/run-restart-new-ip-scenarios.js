@@ -41,6 +41,7 @@ const REPORT_DIR = 'test-output/reports';
 const SCENARIOS = {
   'restart-new-ip-name-first-advertising': [
     'test/transport/node-address-resolution.test.js',
+    'test/transport/name-first-advertising-publication.test.js',
   ],
   'restart-new-ip-peer-reconnect-unwedge': [
     'test/transport/message-router-endpoint-address-change-redial.test.js',
