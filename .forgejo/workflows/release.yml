@@ -92,20 +92,40 @@ jobs:
 
       # NOTE: the image is amd64-only — the Dockerfile keeps only the linux-x64
       # leveldown prebuild. ARM hosts can pull it but run under emulation.
+      #
+      # Build once, then push. Docker Hub is REQUIRED (the primary registry);
+      # Codeberg's container registry is BEST-EFFORT — its /v2/ endpoint has
+      # returned transient "unexpected EOF", and a flaky mirror must not sink the
+      # release or block the Docker Hub push. Both login+push are retried.
       - name: Build and push Docker image
         run: |
-          echo "${{ secrets.REGISTRY_TOKEN }}" | \
-            docker login codeberg.org -u "${{ secrets.REGISTRY_USER }}" --password-stdin
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-            docker login docker.io -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+          set -eu
           TAG="${{ steps.ver.outputs.version }}"
+
           docker build \
             -t "$IMAGE:$TAG"           -t "$IMAGE:latest" \
             -t "$DOCKERHUB_IMAGE:$TAG" -t "$DOCKERHUB_IMAGE:latest" .
-          docker push "$IMAGE:$TAG"
-          docker push "$IMAGE:latest"
-          docker push "$DOCKERHUB_IMAGE:$TAG"
-          docker push "$DOCKERHUB_IMAGE:latest"
+
+          retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 3 ] && return 1; \
+            echo "retry $n/3: $*"; sleep $((n*5)); done; }
+          dh_login() { echo "${{ secrets.DOCKERHUB_TOKEN }}" \
+            | docker login docker.io -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin; }
+          cb_login() { echo "${{ secrets.REGISTRY_TOKEN }}" \
+            | docker login codeberg.org -u "${{ secrets.REGISTRY_USER }}" --password-stdin; }
+
+          # Docker Hub — required.
+          retry dh_login
+          retry docker push "$DOCKERHUB_IMAGE:$TAG"
+          retry docker push "$DOCKERHUB_IMAGE:latest"
+          echo "Docker Hub push OK: $DOCKERHUB_IMAGE:$TAG + :latest"
+
+          # Codeberg — best-effort; warnings, never a hard failure.
+          if retry cb_login; then
+            retry docker push "$IMAGE:$TAG"   || echo "::warning::codeberg push $IMAGE:$TAG failed (non-fatal)"
+            retry docker push "$IMAGE:latest" || echo "::warning::codeberg push $IMAGE:latest failed (non-fatal)"
+          else
+            echo "::warning::codeberg registry login failed (non-fatal); image is on Docker Hub only"
+          fi
 
       # Publishes the tag as a Forgejo Release and attaches the artifacts.
       - name: Publish Forgejo release
