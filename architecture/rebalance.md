@@ -114,6 +114,37 @@ Key characteristics:
 - Critical REMOVE moves (failed replicas, wrong nodes) execute alongside ADDs
 - Non-critical REMOVE moves (spread optimization) deferred until ADDs complete
 
+## Read-Locality Routing (Service↔Data Affinity)
+
+Placement (above) decides *where replicas live*; read-locality routing decides
+*which replica a read is sent to*. They are distinct layers — read-locality
+needs no placement move.
+
+Read-locality is a **per-service** policy carried by the durable
+`service_definitions.read_locality` column (`SERVICE_READ_LOCALITY` in
+`src/constants/service.js`):
+
+- `any` — uniform routing over routable replicas (implicit load spreading). The
+  default when no policy is set.
+- `same_group` — prefer replicas in the reader's own latency group, local node
+  first.
+
+At read time, `SqlCore` calls `resolveIssuingServiceReadLocality(queryOptions)`
+(`src/query/sql-query-engine-table-routing-methods.js`), which reads the issuing
+service's definition from the node-local CDC-fed `SystemTableCache`. No issuing
+service, no definition, or `any` yields uniform routing; `same_group` steers
+partition-routing candidate selection toward the local latency group
+(`src/query/sql-query-engine-select-execution.js`). This is the shipped
+service↔data affinity mechanism.
+
+**Not to be confused with** the *placement*-side data-access affinity scoring
+dimension (`calculateDataAffinityScoreDimensions` in
+`src/rebalancer/placement-owner-decision.js`), which would move replicas toward
+the services that read them. That scoring dimension is scaffolded in the placement
+scorer but gated off — no production policy sets `preferDataAffinity` yet, so it
+does not affect placement today (background in
+[`future/activation-cost-aware-placement.md`](future/activation-cost-aware-placement.md)).
+Read-locality routing above is the active, user-observable affinity mechanism.
 
 ## Storage Capacity-Aware Placement
 

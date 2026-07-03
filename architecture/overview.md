@@ -116,153 +116,16 @@ To prevent overlap and contradictory runtime behavior:
    to the canonical leader.
 6. **Readiness Gating:** internal topology consumers (`ReplicaDispatchService`,
    `RebalanceCoordinator`, `ManagedSplitWorkflow`, admission planning) use the
-   shared `repairEligible` dimension from `ControlPlaneReadinessService`.
-   Routing and benchmark admission use `serveEligible`.
-   Self-readiness may preserve `serveEligible` through one timed-out
-   `node_state_reporter` attempt when the last canonically visible local
-   heartbeat is still fresh; this prevents transient self-denial while the
-   bounded authoritative repair path is timing out under load.
-   **Transport-reconciled cluster membership (§1.4.12):**
-   `isClusterMemberHealthy` reconciles stale cache lease/heartbeat data
-   with live transport connectivity from the `MessageRouter`. When a node
-   row has an active status and the transport layer reports the node as
-   connected, the node is considered healthy regardless of cache-side
-   lease expiry. This prevents transient `serveEligible=false` during
-   topology changes (partition splits, rebalance) where CDC-driven
-   `SystemTableCache` updates lag behind authoritative state. Transport
-   disconnection remains the definitive negative signal: a disconnected
-   node with expired lease data is always unhealthy.
-   **Lease sweep transport guard (§1.4.12):** `LeaseService` consults
-   the `MessageRouter` before marking a node as disconnected during
-   expired-lease sweeps. When the router reports the node as connected
-   or ready, the sweep skips the disconnect — the expired lease is
-   caused by CDC propagation delay, not actual node failure. Without
-   this guard, the sweep poisons the `connection_state` field in the
-   cache, causing `isClusterMemberHealthy` to return false for all
-   nodes and blocking split child provisioning admission.
-   **Self-node cluster membership fast path (§1.4.12):** when a node
-   evaluates its own cluster membership (`nodeId === this.nodeId`) and
-   its cached status is `active`, it is trivially healthy — the node is
-   alive and executing the check. This is the strongest possible signal,
-   stronger than any cache lease or transport evidence. Without this,
-   CDC propagation delays during topology changes cause the local cache
-   lease to expire before the heartbeat CDC event propagates back,
-   leading to self-denial of load-lane admission.
-   **Load-lane cache invalidation:** the load-lane readiness path
-   (`resolveLoadLaneReadinessSnapshot` in `AdminWebSocketAPI`) does not
-   use `allowStaleOnCacheChange`, so cache invalidation forces immediate
-   re-evaluation rather than serving a stale snapshot. This ensures
-   load-lane admission reflects the latest readiness state after topology
-   changes.
-   **Promise-shaped owner contract kernel:** `src/control-plane/owner-contract-outcome.js`
-   defines one shared cross-layer envelope: `contractState`
-   (`ready`, `pending`, `deferred`, `blocked`, `failed`) plus `nextAction`
-   (`proceed`, `wait`, `retry`, `stop`). Reason codes, retry hints,
-   visibility state, runtime-authority evidence, and durable protocol phase
-   remain attached as evidence instead of widening the caller-facing branch
-   surface.
-   **Control-plane mutation defer contract:** background gateway-owned
-   metadata writes and retryable routed system-table SQL DML both consume
-   `ControlPlaneMutationReadiness`, which derives one canonical deferred
-   outcome from `ControlPlaneReadinessService` while publication convergence
-   is still establishing. `ControlPlaneSystemTableGateway` now normalizes
-   those mutation results into the shared owner-contract envelope, and admin
-   plus harness consumers preserve `contractState`/`nextAction` alongside
-   the legacy `outcome`/`reasonCodes`/`runtimeAuthority` evidence instead of
-   inferring meaning from opaque write timeouts. The same owner now also
-   classifies transaction-control routing gaps on `sql_transactions`,
-   `sql_transaction_participants`, and `sql_write_operations`, so retryable
-   system-table mutations preserve one explicit deferred owner-gap outcome
-   instead of re-entering CDC retry loops as generic distributed failures.
-   **Control-plane write-health contract:** bootstrap/startup readiness now
-   consumes one shared `ControlPlaneWriteHealth` owner, which reuses
-   heartbeat publication evidence plus transport pressure partitions to
-   distinguish three states: `healthy`, `background_backlog_contained`, and
-   `critical_write_unhealthy`. Contained observability backlog is exposed as
-   degraded soft context, while true critical-reserve exhaustion remains a
-   hard readiness blocker. This prevents background heartbeat churn from
-   poisoning the same dependency used by actual control-plane write loss.
-   **Canonical leader-gap routing contract:** routing snapshots derive one
-   shared `canonicalLeaderRoutingGapState` from canonical leader identity
-   and required-table service visibility. Query write routing and
-   `ControlPlaneKernelIngress` consume that same state, so only
-   recovery-owned system-table writes may widen on `owner_missing` or
-   `service_missing` during `controlPlaneRecoveryEligible`; steady-state
-   writes stay fail-closed, while local `NODE_STATE_UPDATE` ingress keeps
-   only a bounded local fallback on that same contract.
-   **Priority recovery completion contract:** critical control-plane recovery
-   derives one shared `PriorityRecoveryCompletion` outcome, including bounded
-   `temporaryOverflowVoterBudget` while replace/remove work is still pending.
-   `PartitionService`, priority remove-safety, and other recovery consumers
-   must use that completion/planning contract instead of inferring temporary
-   overflow or authoritative recovery membership from local voter-count math
-   or stale durable published-membership rows, so multi-learner recovery can
-   finish without widening steady-state promotion rules or deadlocking source
-   removal behind lagging publication visibility.
-   **Strict CDC recovery-routing contract:** strict system-table CDC
-   dissemination derives one shared
-   `MessageGroupForwardingOwner.resolveCdcIngressDecision(...)` outcome.
-   For strict CDC tables, the forwarding owner reuses one recovery-routing
-   contract from the system-table partition
-   `controlPlaneRecoveryEligible` routing snapshot, ordered connected
-   message-group candidates, and bounded local system-table write
-   availability. Metadata-ingress readiness, bootstrap/join CDC propagation,
-   and strict CDC apply-vs-forward execution must therefore consume the same
-   ingress states: `forward_strict_target`,
-   `forward_strict_recovery_target`, `local_strict_convergence_ingress`,
-   `local_strict_recovery_ingress`, or `defer_strict_target_unknown`,
-   instead of re-deriving leader-unknown behavior from partial cache
-   visibility.
-   **Benchmark table bootstrap timeout contract:** admin control-lane SQL
-   requests derive one inner `SqlRequest.timeoutBudget` with bounded
-   completion margin, and `CREATE TABLE` carries that same budget through
-   `SQLQueryEngine` and `TableCreationService` into initial partition
-   provisioning and `IF NOT EXISTS` reconciliation. Benchmark table bootstrap
-   must therefore fail or defer on the same caller-owned timeout path instead
-   of letting inner provisioning outlive the outer admin request.
-   **Benchmark load-node availability contract:** distributed harness
-   benchmark load first derives one shared
-   `Cluster.resolveBenchmarkLoadAdmissionSnapshot(...)` from table-local
-   benchmark discovery plus the real load lane, then
-   `benchmark-partition-convergence` combines that snapshot with
-   replica-bearing spread so planners can distinguish `ready_replica` from
-   `replica_blocked` and `routed_admission_only` while preserving the
-   readiness and degradation evidence that explains each node:
-   routing/schema/topology readiness, local replica role and voter
-   readiness, degradation state, blocker reasons, and bounded
-   `retryAfterMs`.
-   The same convergence owner also derives one explicit dispatch
-   contribution state: `local_primary`, `local_blocked`,
-   `routed_support`, or `none`.
-   `resolveBenchmarkPartitionDispatchMode(...)` then derives one shared
-   steady-dispatch outcome from that convergence snapshot:
-   `local_ready_only` or `bootstrap_backfill_required`. Partitioning load
-   must therefore stay in backfill mode until the usable-spread target
-   exists, instead of collapsing to the smaller bootstrap quorum while
-   replica-bearing or routed support is still needed. `LoadNodeAvailability`
-   then derives one canonical dispatch state from local cooldown, external
-   admission, and sustained slot saturation. Borrowed healthy-node overflow
-   is explicit as `slot_borrowing`, while `slot_stalled` is reserved for
-   peers that have aged out at the borrowed dispatch ceiling, not merely at
-   the steady contribution floor. Healthy benchmark nodes can therefore keep
-   borrowing that budget instead of being capped by peers that are only
-   nominally admitted or only routable through another node.
-   **Boundary catalog rule:** current hotspot boundaries are cataloged in
-   `architecture/current-owner-maps.md` with the same fields each time:
-   semantic owner, canonical evidence, canonical vocabulary, allowed
-   consumers, forbidden reinterpretations, and primary diagnostics. The
-   current catalog centers on:
-   - benchmark load admission
-   - usable benchmark spread
-   - benchmark dispatch contribution
-   - structured deferred owner outcomes
-   - promise-shaped owner contracts: callers branch on `contractState` and
-     `nextAction`; visibility, phase, and owner-specific outcome labels stay
-     in reasons/evidence
-   - strict CDC recovery ingress
-   - diagnostics as derived consumers of owner state
-   Architectural fixes in these areas should extend that catalog instead of
-   adding new prose-only explanations or caller-local interpretations.
+   shared `repairEligible` dimension from `ControlPlaneReadinessService`;
+   routing and benchmark admission use `serveEligible`. The membership-health
+   guards and the shared cross-layer owner-contract kernels (mutation-defer,
+   write-health, leader-gap routing, priority-recovery, strict-CDC ingress,
+   benchmark admission, boundary catalog) are documented in
+   [`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md). The
+   rule: callers branch on `contractState`/`nextAction`; visibility, phase, and
+   owner-specific labels stay in evidence, and fixes extend the owner catalog in
+   [`current-owner-maps.md`](current-owner-maps.md) rather than adding
+   caller-local reinterpretations.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
@@ -270,42 +133,42 @@ To prevent overlap and contradictory runtime behavior:
    (`src/workflow/owner-key-reconcile-queue.js`). The queue de-duplicates by
    owner key and drains items through a single reconcile callback. Periodic
    polling loops remain as recovery-only paths.
-8. **SQL Scaling:** SQL service replicas use the replicated service lifecycle
+9. **SQL Scaling:** SQL service replicas use the replicated service lifecycle
    (`service_profile = 'sql_engine'`, active `runtime_kind = native_js`
    via `SQL_ENGINE_RUNTIME_KIND`). No parallel SQL-specific scaling framework.
-9. **WASM Entity Management:** External module/service administration flows
+10. **WASM Entity Management:** External module/service administration flows
    through the default replicated meta service (`sys-wasm-meta`). Other APIs
    may expose adapters, but must delegate to the meta-service command path.
-10. **Admin API Ownership:** Node-local admin APIs are compatibility adapters.
+11. **Admin API Ownership:** Node-local admin APIs are compatibility adapters.
     Service-owned handlers (`sys-admin-meta` and `sys-wasm-meta`) are the
     mutation/control owners.
-11. **Programmatic Runtime API Ownership:** `runtime.run` + `ctx.call` is the
+12. **Programmatic Runtime API Ownership:** `runtime.run` + `ctx.call` is the
     single user-facing execution surface for programmatic distributed SQL
     workflows. No parallel runtime API may bypass this path.
-12. **Execution Mode Dispatch Ownership:** `SqlCore.executeRequest(SqlRequest)`
+13. **Execution Mode Dispatch Ownership:** `SqlCore.executeRequest(SqlRequest)`
     is the owner for execution-mode dispatch (`sql_statement`,
     `partition_callback`, and plan-object execution). Each mode has a dedicated
     dispatch branch; `partition_callback` is not aliased to statement execution.
     Adapters may normalize requests but must not own runtime dispatch logic.
-13. **Runtime Selection Ownership:** `Runtime_Driver_Registry` is the single
+14. **Runtime Selection Ownership:** `Runtime_Driver_Registry` is the single
     selector from `runtime_kind` to runtime driver. No fallback driver
     selection is allowed.
-14. **Runtime Lifecycle Ownership:** `Service_Runtime_Lifecycle` is the single
+15. **Runtime Lifecycle Ownership:** `Service_Runtime_Lifecycle` is the single
     owner for runtime prepare/start/stop/health orchestration across all
     runtime kinds.
-15. **Adapter Boundary Ownership:** Node-local admin endpoints are ingress
+16. **Adapter Boundary Ownership:** Node-local admin endpoints are ingress
     adapters only (fixed port `ADMIN_DEFAULT.WEBSOCKET_PORT` in
     `src/admin/admin-constants.js`), not mutation owners.
-16. **Runtime Mutation Ownership:** Runtime drivers must not write system
-   metadata directly; service and operation mutations flow through SQL/CDC.
-17. **Timeout Budget Tree:** Every top-level control-plane operation starts
+17. **Runtime Mutation Ownership:** Runtime drivers must not write system
+    metadata directly; service and operation mutations flow through SQL/CDC.
+18. **Timeout Budget Tree:** Every top-level control-plane operation starts
    with one canonical budget (`createTopLevelOperationBudget` in
    `src/control-plane/timeout-budget.js`). Sub-operations derive from
    remaining budget via `createChildTimeoutBudget`; they never start with
    fresh defaults. Sub-operations below `MINIMUM_OPERATION_BUDGET_MS` are
    rejected. Named constants for rebalance, split, and dispatch budgets
    live in `TIMEOUT_BUDGET_DEFAULT`.
-17. **Live Query Runtime Ownership:** `createLiveQueryStartupWiring` is the
+19. **Live Query Runtime Ownership:** `createLiveQueryStartupWiring` is the
     single startup-owned path that creates one `LiveQueryManager` per node,
     wires it into `AdminWebSocketAPI`, and bridges `SystemTableCache` CDC
     notifications to active live subscriptions.

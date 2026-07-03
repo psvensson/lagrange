@@ -108,9 +108,11 @@ binding-blocker idiom; and the `OutboundDeliveryPriority` / `pressure-governor.j
 reserve lanes (a model to imitate). The genuinely missing piece is a thin
 convergence/liveness owner — a natural host is the Invariant Engine — carrying
 an eventually-converge liveness invariant plus a composed binding-blocker
-readout. Transport mitigations landed so far (reconnect-on-incoming-close and
-adopt-over-dead-on-open in `src/transport/message-router-segment-2.js` /
-`message-router-connection-lifecycle-methods.js`) reduce connection stranding
+readout. Transport mitigations landed so far (reconnect-on-incoming-close in
+`src/transport/message-router-connection-close-reconnect.js` and
+adopt-over-dead-on-open in
+`src/transport/message-router-connection-lifecycle-methods.js`) reduce
+connection stranding
 but do not by themselves stabilize convergence under owner saturation.
 
 ### Invariant Engine

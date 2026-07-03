@@ -18,7 +18,25 @@ Do not use this file for:
 - roadmap scope decisions
 
 For durable implementation rules, use
-[`docs/steering/system guidelines.md`](../docs/steering/system%20guidelines.md).
+[`docs/steering/system-guidelines.md`](../docs/steering/system-guidelines.md).
+
+## Contents
+
+This file is long reference material. Jump to a section:
+
+- [Runtime Grammar Hierarchy](#runtime-grammar-hierarchy) — active target hierarchy for runtime coherence work
+- [Core Ownership Assignments](#core-ownership-assignments) — the top-level concern → owner map
+- [Topology Workflow Owner Map](#topology-workflow-owner-map) — split/rebalance/replace workflow owners
+- [Operation Progress Owner File Map](#operation-progress-owner-file-map) — per-file owners of operation progression
+- [Rebalancer Segment Removal Ledger](#rebalancer-segment-removal-ledger) — decomposition removal tracking (rebalancer)
+- [Control-Plane Snapshot Stage Removal Ledger](#control-plane-snapshot-stage-removal-ledger) — decomposition removal tracking (snapshot)
+- [Shared Control-Plane Building Blocks](#shared-control-plane-building-blocks) — the owner-contract kernels catalog (largest section)
+- [Distributed Harness Building Blocks](#distributed-harness-building-blocks) — benchmark/harness admission owners
+- [Active Boundary Catalog](#active-boundary-catalog) — the canonical hotspot-boundary table
+
+The narrative behind the shared control-plane owner contracts lives in
+[`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md); this file
+is the concrete owner/evidence/vocabulary catalog.
 
 ## Runtime Grammar Hierarchy
 

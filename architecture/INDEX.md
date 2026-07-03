@@ -4,6 +4,21 @@ This is the canonical entrypoint for current system architecture. The former mon
 
 Use this index to choose the narrowest architecture domain file before reading implementation detail.
 
+## Start Here
+
+New to the system? Read in this order for the shortest path from "what is this?"
+to "I understand how this works":
+
+1. [Architecture Overview](overview.md) — what the system is and its ownership model
+2. [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md) — the visual mental model
+3. [Bootstrap And Data Flow](bootstrap.md) — how a cluster forms and routes queries
+4. [Query Runtime Architecture](query-runtime.md) — the compute-near-data execution model
+5. [Raft, Rebalancing, And Placement](rebalance.md) — consensus, placement, and read-locality routing
+
+The domain-file list below is the full ordered tree.
+
+## Domain Files
+
 <!-- architecture-domain-files:start -->
 - [Architecture Overview](overview.md) - Global architecture role, principles, and single-path ownership contract.
 - [Runtime Lifecycle Architecture](runtime-lifecycle.md) - Runtime readiness, lifecycle ownership, runtime descriptors, and observability contracts.
@@ -18,22 +33,37 @@ Use this index to choose the narrowest architecture domain file before reading i
 
 ## Supporting Documents
 
+### Reference
+
 - [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) - Logical-nodeId-vs-location identity, address resolution order, the three restart-with-new-IP recovery mechanisms, and name-first (hostname) addressing config.
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
+- [Readiness Gating & Owner-Contract Kernels](readiness-and-owner-contracts.md) - Readiness dimensions (repairEligible/serveEligible), membership-health guards, and the shared cross-layer owner-contract kernels.
+- [Runtime Grammar Hierarchy](runtime-grammar-hierarchy.md) - Runtime grammar and boundary hierarchy reference.
+
+### Service Platform
+
+- [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
+- [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.
+- [Lagrange Service Registry](lagrange-service-registry.md) - Service registry architecture.
+
+### Diagrams
+
+- [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md) - Primary visual architecture references.
+- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md) - Advanced architecture diagrams.
+
+### Contracts & Invariants
+
 - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
 - [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence)** verifies an entry's optional `liveEvidence` predicate against the running system / a deterministic repro and derives HELD/BREACHED as a fold over the Solver event log — run `node scripts/solve.js invariants --evaluate`; a BREACH means the doc no longer reflects the system (spec: [`solve/specs/standing-invariant-closure/`](../solve/specs/standing-invariant-closure/)).
-- [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
 - [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
 - [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.
 - [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
 - [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
 - [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Workflow statechart contract for Quest attempts, findings, closure, and redirect safety.
-- [Runtime Grammar Hierarchy](runtime-grammar-hierarchy.md) - Runtime grammar and boundary hierarchy reference.
-- [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
-- [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.
-- [Lagrange Service Registry](lagrange-service-registry.md) - Service registry architecture.
-- [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md) - Primary visual architecture references.
-- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md) - Advanced architecture diagrams.
+
+### Models
+
+- [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
 
 ## Future Architecture
 

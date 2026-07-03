@@ -145,7 +145,7 @@ objects consumed by SqlCore:
 
 - **InternalSqlAdapter** (`src/query/internal-sql-adapter.js`) — in-process SQL
   calls from system components
-- **PostgresWireAdapter** (`src/query/postgres-wire-adapter.js`) — external SQL
+- **PostgresWireAdapter** (`src/query/pg/postgres-wire-adapter.js`) — external SQL
   protocol sessions with authentication and feature negotiation
 - **WasmCallAdapter** (`src/query/wasm-call-adapter.js`) — `DB.call(select, fn)`
   programmatic distributed execution from WASM services
@@ -188,7 +188,8 @@ Dialect flows through `SqlRequest.dialect` from `PostgresWireAdapter` to
 `SqlCore` to `SQLParser`. Internal system queries omit dialect, defaulting
 to SQLite mode. No component outside the parse phase is aware of dialect.
 
-Spec: `solve/specs/pg-sql-compat-layer/`
+Spec: the `pg-sql-compat-layer` spec has been archived out of the tree; the
+compatibility layer described above is shipped and lives in `SQLParser`.
 
 ### PostgreSQL Compatibility — Future Directions (Planned)
 

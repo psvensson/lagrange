@@ -101,12 +101,9 @@ Mandatory owner boundaries:
 
 ## Ownership Consolidation (Architecture Traceability)
 
-This section is the canonical owner map for consolidation work tracked in:
-
-1. `solve/specs/architecture-ownership-consolidation/requirements.md`
-2. `solve/specs/architecture-ownership-consolidation/design.md`
-3. `solve/specs/architecture-ownership-consolidation/tasks.md`
-4. `solve/specs/architecture-ownership-consolidation/owner-map.md`
+This section is the canonical owner map. The ownership-consolidation work it
+tracked shipped; its `architecture-ownership-consolidation` spec has since been
+archived out of the tree, so this map — not that spec — is the live source.
 
 | Concern | Owner | Runtime boundary |
 | --- | --- | --- |
@@ -186,8 +183,9 @@ State labels in this section are explicit and mandatory.
    services.
 2. Adapter ingress remains fixed, and mutation ownership remains serviceized
    via replicated meta services.
-3. Documentation, tests, and status claims stay closure-gated by
-   `solve/specs/runtime-ownership-closure/closure-matrix.md`.
+3. Documentation, tests, and status claims stay closure-gated by live evidence
+   (the Solver event log and `contracts/invariants.json`), not by the archived
+   `runtime-ownership-closure` spec.
 
 ### Planned
 
@@ -349,8 +347,10 @@ The unified runtime model has one steady-state posture:
 
 1. `docs/admin-api-reference.md`
 2. `docs/wasm-services-user-guide.md`
-3. `solve/specs/runtime-ownership-closure/closure-matrix.md`
-4. `solve/specs/runtime-ownership-closure/completion-gates.md`
+
+The `runtime-ownership-closure` closure-matrix and completion-gates specs have
+been archived out of the tree; runtime-ownership status is now derived from live
+evidence (see the Solver and `contracts/invariants.json`).
 ## Safety Interval (Read Consistency)
 
 WASM service groups use a CockroachDB-style closed-timestamp mechanism for strong reads without routing all reads to the leader.

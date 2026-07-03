@@ -1,5 +1,14 @@
 # Active Gate Convergence Contract
 
+> **Reading this contract.** The block immediately below is the machine-readable
+> `system-contract` consumed by `npm run model:contracts` — you do not need to
+> read the JSON. For the human narrative, jump to
+> [Membership Publication Drain](#membership-publication-drain-reconciled-but-unpublished-residual)
+> and [Operational Analysis](#operational-analysis); the
+> [Failure Classes](#failure-classes), [Invariants](#invariants),
+> [Runtime Bindings](#runtime-bindings), and [Model Bindings](#model-bindings)
+> sections render the same contract in prose.
+
 <!-- system-contract
 {
   "schema": "system-contract-v1",

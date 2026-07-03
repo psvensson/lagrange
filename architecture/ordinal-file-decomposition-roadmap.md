@@ -17,40 +17,27 @@ duplicate them:
   owner file + deletion condition). Source of truth for *where each file's content
   goes* once a cluster is laddered. That file explicitly excludes "roadmap scope
   decisions", which is why this roadmap is separate.
-- `docs/steering/system guidelines.md` §8–9 — the durable rule forbidding new
+- `docs/steering/system-guidelines.md` §8–9 — the durable rule forbidding new
   ordinal/grab-bag filenames. Source of truth for *the standard we are converging on*.
 
 This roadmap is planning-only. It does not rename or move any runtime module.
 
-## Status
+## Status — COMPLETE (2026-07-03)
 
-- Inventory: **136 ordinal source files** across **24 semantic clusters**
-  (`{"segment":93,"stage":26,"part":17}`).
-- Test side: **~196 ordinal test files** (`*.test-part-N`, `*-core-NN-test-cases`,
-  `*-segment/stage/part-N`). These are a parallel track that follows their source
-  cluster.
-- **4 of 24 clusters are laddered** (have per-file removal-ledger rows in
-  `current-owner-maps.md`): `operation-workflow-owner`, `unified-rebalancer`,
-  `rebalance-coordinator`, `priority-recovery-snapshot`.
-- The remaining **20 clusters** have inventory entries + a single proposed module
-  name, but no per-file ladder yet.
-- **Progress: Wave A is 4/5 done** (decomposed + tested + adversarially verified +
-  landed): `table-creation-service-class`, `message-group-service-class`,
-  `message-group-service-runtime-methods-class`, `bootstrap-readiness-owner-class`.
-  `replica-handler-class` is built but **deferred** — it is a runtime-grammar hotspot
-  whose two ordinal paths are keys in `RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS`, so it needs
-  the registry repoint before it can land.
-- Live inventory (regenerated) now reports **134 ordinal source files** (the earlier
-  `136/24` figure was stale; actual pre-Wave-A was ~142). The ordinal-file count is
-  the progress meter.
-- The file-size ratchet *ceiling* is **144 source / 60 test** oversized files, but
-  only **23 source / 14 test** files currently exceed the thresholds — most ordinal
-  chunks are *already under* 800 lines (over-split). The size gate is the historical
-  **cause**, not the progress meter (see Definition of Done).
-- ⚠️ Pre-existing, not introduced by this work: the decision-boundaries audit is
-  already red on `main` with **34 unbaselined violations + line-drift** from prior
-  merges. Wave A introduced **zero** new violations (verified); its baseline edit is
-  scoped to relocating only the moved entries. The 34 want their own re-baseline chore.
+**The ordinal-file removal is done.** A live scan with `ORDINAL_FILE_PATTERN`
+finds **0 ordinal source files and 0 ordinal test files** remaining in the tree;
+every one of the original 24 clusters has been decomposed into semantically-named
+owner modules (final cluster `operation-workflow-owner` landed in `c86718f6`,
+Wave D). The ordinal-file count — the progress meter this roadmap tracked — has
+reached zero.
+
+This document is retained as the **reference for the sanctioned decomposition
+shapes** (cited from `docs/steering/code-style.md`) and for the historical
+cluster catalog below. It is no longer an active work queue.
+
+Residual bookkeeping only (not blocking): reconcile any remaining
+"Delete after …" wrapper rows in the `current-owner-maps.md` removal ledgers so
+the ledgers reflect the completed state.
 
 ## Scope
 

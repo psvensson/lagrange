@@ -82,7 +82,7 @@ Every willful-failure point to convert to bounded-slowdown-never-abandon:
 | give-up point | location | convert to |
 | --- | --- | --- |
 | join budget exhaustion → `process.exit` / router teardown | `index.js`, `join-cleanup-handler.js` (`_cleanupConnectingWebSocket`) | keep router alive; reuse-retry the join indefinitely with capped backoff |
-| `reconnectMaxAttempts` → connection dead | `scheduleReconnect` (`message-router-segment-2.js`) MAX_ATTEMPTS_REACHED | cap reconnect *delay*, retry forever |
+| `reconnectMaxAttempts` → connection dead | `scheduleReconnect` (`message-router-connection-close-reconnect.js`) MAX_ATTEMPTS_REACHED | cap reconnect *delay*, retry forever |
 | ack-timeout quarantine → retire connection | `message-router-reconnect-behaviors.js` | back off the connection, do not retire it dead |
 | publication abandon (vs defer) | active-gate reconcile / drain paths | always reschedule a wake while unconverged |
 

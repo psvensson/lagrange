@@ -312,27 +312,96 @@ Leader --> Timers[Persistent Timers]
 
 ---
 
-# 12. Suggested Repo Layout
+# 12. Service Platform — Definitions, Runtime Drivers, and Registry
 
-```text
-architecture/
-  lagrange_architecture_diagrams.md
-  lagrange_advanced_architecture_diagrams.md
+Services are first-class: a partition is a service, and so are the SQL engine,
+WASM services, and the admin/meta services. This diagram separates what is
+**shipped** (the replicated service runtime driven by `service_definitions`) from
+the **planned** installable-service registry (OCI packaging, manifest, kernel
+capability model — designed in `lagrange-service-registry.md`,
+`lagrange-service-manifest.md`, and `lagrange-kernel-platform-api-v0.md`, not yet
+in code).
+
+```mermaid
+flowchart TD
+
+subgraph Planned["Installable service registry — PLANNED (design only)"]
+  OCI[OCI registries] --> Install["INSTALL SERVICE / lagrange service install"]
+  Install --> Catalog[Service catalog<br>desired vs actual]
+  Catalog --> Reconcile[Reconciler:<br>fetch, verify digest,<br>validate manifest + capability allowlist]
+end
+
+Reconcile -. activates .-> Def
+
+subgraph Active["Replicated service runtime — ACTIVE (shipped)"]
+  Def["service_definitions row<br>runtime_kind, service_profile, read_locality"] --> Registry[Runtime_Driver_Registry<br>selects driver by runtime_kind]
+  Registry --> Native["native_js (e.g. sql_engine)"]
+  Registry --> Wasm[wasm_component]
+  Registry --> Oci[oci_container<br>feature-gated]
+  Native --> Lifecycle
+  Wasm --> Lifecycle
+  Oci --> Lifecycle
+  Lifecycle["Service_Runtime_Lifecycle<br>prepare / start / stop / health"] --> Group[Replicated service group<br>Raft + load-aware placement]
+end
 ```
+
+### What this communicates
+
+- One `service_definitions` row + `Runtime_Driver_Registry` selects the runtime
+  driver; `Service_Runtime_Lifecycle` owns prepare/start/stop/health for every
+  runtime kind — no per-kind lifecycle fork.
+- The OCI registry / manifest / kernel-API layer is designed but not yet built;
+  it feeds `service_definitions` when it lands.
 
 ---
 
-# 13. Best Use Order for Documentation
+# 13. Placement, Rebalancing, and Read-Locality Routing
 
-For best comprehension, link the diagrams in this order:
+Placement (where replicas live, write/topology-time) and read-locality routing
+(which replica a read is sent to, read-time) are **two distinct layers** that are
+easy to conflate. Read-locality routing is the shipped service↔data affinity
+differentiator; two placement *scoring dimensions* are still future.
 
-1. High-level architecture
-2. Compute-near-data model
-3. Query routing
-4. Distributed execution pipeline
-5. Partition lifecycle
-6. Bootstrap process
-7. WASM activation / service groups
+```mermaid
+flowchart TD
 
-That gives new readers the shortest path from **"what is this?"** to
-**"I understand how this works."**
+subgraph L1["Layer 1 — Placement (write-time / topology)"]
+  Trigger[Trigger:<br>node join/leave, replica failure,<br>policy change, periodic] --> UR[UnifiedRebalancer<br>per-entity, leader-driven]
+  UR --> MP[MovePlanner.sortNodesBySuitability]
+  MP --> D1[replica count + spread<br>TablePolicyService]
+  MP --> D2[storage capacity + pressure<br>StorageAdmissionService]
+  MP --> D3[activation cost / image locality<br>FUTURE]
+  MP --> D4["data-access affinity<br>scaffolded, gated off"]
+  MP --> RC[RebalanceCoordinator<br>ADD / REPLACE / REMOVE<br>via replica_operations]
+end
+
+subgraph L2["Layer 2 — Read-locality routing (read-time) — ACTIVE"]
+  Svc["Issuing service<br>service_definitions.read_locality"] --> SC["SqlCore.resolveIssuingServiceReadLocality"]
+  SC -->|same_group| Local[Prefer same-latency-group replica<br>local node first]
+  SC -->|any / unset| Uniform[Uniform routing over routable replicas]
+end
+```
+
+### What this communicates
+
+- `UnifiedRebalancer` + the single `MovePlanner` own placement; the production
+  scoring is replica-spread + storage. Activation-cost is a planned *placement*
+  dimension (see `future/activation-cost-aware-placement.md`); the data-access
+  affinity dimension (`calculateDataAffinityScoreDimensions`) is scaffolded in
+  the scorer but gated off — no production policy sets `preferDataAffinity` yet.
+- **Read-locality is a separate, shipped routing policy:** a service with
+  `read_locality = same_group` has its reads steered to its own latency group
+  (local node first); `any` keeps uniform load-spreading. This is resolved
+  per-query from the node-local CDC cache — no placement move required.
+
+---
+
+# Coverage and Intentional Gaps
+
+These two packs cover the query/execution/WASM/CDC/bootstrap core, the service
+platform, and placement/read-locality. Not yet diagrammed (tracked, not
+forgotten): control-plane readiness progression and the owner-contract kernels
+(see [`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md)), and
+the PostgreSQL wire/endpoint-discovery path (see [`postgres-wire.md`](postgres-wire.md)).
+
+For the recommended reading order, start at [INDEX.md](INDEX.md).

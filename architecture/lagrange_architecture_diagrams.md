@@ -13,7 +13,7 @@ engine class `SQLQueryEngine` (`src/query/sql-query-engine.js`).
 
 # 1. High Level Architecture
 
-``` mermaid
+```mermaid
 flowchart TD
 
 Client[Client Applications]
@@ -45,7 +45,7 @@ Nodes[Cluster Nodes]
 
 Traditional distributed systems move data to compute.
 
-``` mermaid
+```mermaid
 flowchart LR
 
 DB[(Database)]
@@ -59,7 +59,7 @@ DB --> Network1 --> Worker --> Network2 --> Result
 
 Lagrange moves compute to the data.
 
-``` mermaid
+```mermaid
 flowchart LR
 
 Client[Client]
@@ -75,7 +75,7 @@ Compute --> Result[Result]
 
 # 3. Cluster Structure
 
-``` mermaid
+```mermaid
 flowchart TD
 
 Cluster[Lagrange Cluster]
@@ -101,7 +101,7 @@ Each table is divided into partitions and replicated across nodes.
 
 # 4. Query Routing
 
-``` mermaid
+```mermaid
 sequenceDiagram
 
 participant Client
@@ -154,7 +154,7 @@ Reduce --> Result[Result stream]
 
 # 6. WASM Service Groups
 
-``` mermaid
+```mermaid
 flowchart TD
 
 Client --> Gateway
@@ -176,7 +176,7 @@ Services run inside replicated Raft groups.
 
 # 7. System Metadata Flow
 
-``` mermaid
+```mermaid
 flowchart LR
 
 SystemTables[(System Tables)]
@@ -200,7 +200,7 @@ Metadata changes propagate through CDC events.
 
 # 8. Full System Overview
 
-``` mermaid
+```mermaid
 flowchart TD
 
 Client
@@ -228,10 +228,13 @@ Runtime[WASM Runtime]
 
 ------------------------------------------------------------------------
 
-# Usage
+# Related
 
-You can reference these diagrams from the README:
-
-    See architecture/lagrange_architecture_diagrams.md for system diagrams.
-
-Or embed them directly into documentation pages.
+- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md)
+  — partition lifecycle/split, the full distributed-execution primitive set
+  (`ctx.emit`/`lookup`/`broadcast`/`out`), bootstrap sequences, the **service
+  platform**, and **placement / read-locality routing**. Diagrams 4 (query
+  routing), 5 (distributed execution), 6/8 (WASM/service groups), and 7 (CDC)
+  here are the simplified onboarding versions of their advanced-pack
+  counterparts.
+- [INDEX.md](INDEX.md) — the "Start Here" reading order and the full domain tree.

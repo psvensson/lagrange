@@ -156,7 +156,7 @@ Client SQL Query (any entrypoint)
 
 ### Query Routing Resilience During Topology Transitions
 
-Per §1.10 and §1.12, the query path must remain functional during partition
+The query path must remain functional during partition
 splits, moves, and leader elections. `QueryExecutor.executeOnPartition()`
 implements bounded retry and candidate fallthrough for read queries:
 

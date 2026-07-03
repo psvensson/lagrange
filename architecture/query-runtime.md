@@ -159,15 +159,16 @@ in this document:
 - `oci_container` is excluded from `SUPPORTED_RUNTIME_KINDS` in the callback
   host until the feature gate is lifted
 
-See "Runtime_Driver_Registry (Target Owner)" and
-"Service_Runtime_Lifecycle (Target Owner)" sections above for the unified
-runtime ownership model. See "Runtime Anti-Patterns (Forbidden)" for the
+See the "Runtime_Driver_Registry" and "Service_Runtime_Lifecycle" sections in
+[`runtime-lifecycle.md`](runtime-lifecycle.md) and
+[`runtime-components.md`](runtime-components.md) for the unified runtime
+ownership model, and their "Runtime Anti-Patterns (Forbidden)" material for the
 no-fallback and no-parallel-lifecycle invariants that apply equally to
 callback execution.
 
 ### Exchange and ReduceByKey Semantics (Active)
 - `exchangeBy: 'key'` routes same keys to the same destination partition
-  via `ExchangeManager` (`src/query/exchange-manager.js`)
+  via `ExchangeManager` (`src/query/distributed/exchange-manager.js`)
 - Exchange delivery is at-least-once; duplicates are possible on retry
 - Emit metadata supports `dedupeKey` for idempotency control
 - No global ordering guarantee across exchanged records
