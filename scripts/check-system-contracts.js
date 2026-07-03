@@ -68,7 +68,7 @@ function contractFilesFromArgs(files) {
 }
 
 function loadTheoryLedgerText(rootDir = process.cwd()) {
-  const ledgerPath = path.resolve(rootDir, '_legacy_work/theory-ledger.md');
+  const ledgerPath = path.resolve(rootDir, 'solve/theory-ledger.md');
   if (!fs.existsSync(ledgerPath)) {
     return '';
   }
@@ -192,7 +192,7 @@ function validateTheoryLedgerRefs(errors, filePath, contract, rootDir) {
     }
     if (!ledgerText.includes(theoryRef)) {
       errors.push(
-        `${filePath}: theoryLedgerRefs[${index}] is not present in _legacy_work/theory-ledger.md: ${theoryRef}`,
+        `${filePath}: theoryLedgerRefs[${index}] is not present in solve/theory-ledger.md: ${theoryRef}`,
       );
     }
   }

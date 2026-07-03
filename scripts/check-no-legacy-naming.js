@@ -28,7 +28,6 @@ const LEGACY_TOKENS = Object.freeze([
 // immutable historical record or a parallel working copy.
 const ALLOWED_PREFIXES = Object.freeze([
   'CHANGELOG.md', // release history may name removed commands
-  '_legacy_work/', // pruned archive remainder
   'solve/changes/', // recorded historical diffs of past Quest work
   'solve/log/', // append-only event logs (immutable)
   'solve/report/', // terminal Quest reports (historical)

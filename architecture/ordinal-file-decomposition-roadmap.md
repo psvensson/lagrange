@@ -10,7 +10,7 @@ modules.
 It is the scope/sequencing companion to three existing artifacts and does not
 duplicate them:
 
-- `_legacy_work/inventory/ordinal-segments.{json,md}` — the diagnostic inventory
+- `test-output/analysis/ordinal-segments.{json,md}` — the diagnostic inventory
   (cluster membership + proposed module names). Source of truth for *what files
   belong to which cluster*.
 - `architecture/current-owner-maps.md` — the per-file **removal ledgers** (target
@@ -238,7 +238,7 @@ Each source cluster has a mirrored set of ordinal test files (~196 total). They 
   (`audit:file-size`, `audit:owner-boundary-segments`). The 144/60 ratchet is a
   **regression guard** (don't add oversized files), not the progress meter.
 - **Inventory generator / progress meter:** `node scripts/inventory-ordinal-segments.js`
-  regenerates `_legacy_work/inventory/ordinal-segments.{json,md}`. The ordinal-file
+  regenerates `test-output/analysis/ordinal-segments.{json,md}`. The ordinal-file
   count it reports (136 → 0) is the real tracker — re-run after each cluster.
 - **Decision-boundary checker:** `scripts/check-guideline-decision-boundaries.js`
   (`audit:guideline:decision-boundaries`) with its 783-entry baseline — extractions

@@ -43,7 +43,7 @@ import {
 import {
   extractTheoryLedgerEntries,
   THEORY_LEDGER_FIELDS,
-} from '../../_legacy_work/scripts/work-theory-ledger.js';
+} from './work-theory-ledger.js';
 import {analyzeQuestHealth} from './health.js';
 import {
   CONTINUATION_BLOCKED_METRIC_PROJECTION,
@@ -59,7 +59,7 @@ const FLAG_THEORY = 'theory';
 const FLAG_FRONTIER = 'frontier';
 const FLAG_EVIDENCE = 'evidence';
 const FLAG_CARD = 'card';
-const DEFAULT_LEDGER = path.join('_legacy_work', 'theory-ledger.md');
+const DEFAULT_LEDGER = path.join('solve', 'theory-ledger.md');
 const MODEL_REF_PREFIXES = Object.freeze(['model:', 'statechart:', 'contract:', 'tla:']);
 const SELECTABLE_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_ACTIVE,

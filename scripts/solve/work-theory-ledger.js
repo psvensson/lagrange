@@ -5,7 +5,7 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
-import { normalizeMetadata } from './work-package-schema.js';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -380,14 +380,14 @@ function getPackagesMetadataSync(packagesDir) {
               status: file.split('-')[0],
               metadata,
             });
-          } catch (e) {
+          } catch (_e) {
             // ignore
           }
         }
       }
     }
     return packages;
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }
@@ -438,7 +438,7 @@ function validateStaleActiveTheories(entries, packagesDir) {
         if (matchesOwnerBoundary || citesTheory) {
           // Check if this closed package is linked in the theory
           const linkedPackages = parseTheoryReferenceList(entry.fields[FIELD_LINKED_PACKAGES]);
-          const isLinked = linkedPackages.some(ref => {
+          const isLinked = linkedPackages.some((ref) => {
             const cleanRef = ref.replace(/^`|`$/gu, EMPTY_TEXT);
             return pkg.filename.includes(cleanRef) || cleanRef.includes(pkg.filename);
           });
@@ -574,7 +574,7 @@ async function runValidate(flags) {
   const ledgerPath = ledgerPathFromFlags(flags);
   const packagesDir = firstFlag(flags, FLAG_PACKAGES_DIR);
   const content = await readLedgerFile(ledgerPath);
-  const {entries, errors} = validateTheoryLedgerContent(content, { packagesDir });
+  const {entries, errors} = validateTheoryLedgerContent(content, {packagesDir});
   if (errors.length > NUM_ZERO) {
     throw new Error(errors.join(NEWLINE));
   }
@@ -585,7 +585,7 @@ async function runList(flags) {
   const ledgerPath = ledgerPathFromFlags(flags);
   const packagesDir = firstFlag(flags, FLAG_PACKAGES_DIR);
   const content = await readLedgerFile(ledgerPath);
-  const {entries, errors} = validateTheoryLedgerContent(content, { packagesDir });
+  const {entries, errors} = validateTheoryLedgerContent(content, {packagesDir});
   if (errors.length > NUM_ZERO) {
     throw new Error(errors.join(NEWLINE));
   }
@@ -601,7 +601,7 @@ async function runNew(flags) {
   const content = await readLedgerFile(ledgerPath);
   const entry = buildEntryFromFlags(flags);
   const nextContent = appendTheoryLedgerEntry(content, entry);
-  const validation = validateTheoryLedgerContent(nextContent, { packagesDir });
+  const validation = validateTheoryLedgerContent(nextContent, {packagesDir});
   if (validation.errors.length > NUM_ZERO) {
     throw new Error(validation.errors.join(NEWLINE));
   }

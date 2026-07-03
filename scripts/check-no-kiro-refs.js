@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 // Guard: the `.kiro/` namespace was retired (steering -> docs/steering,
-// epics/specs -> solve/{epics,specs}, archived specs -> _legacy_work). This
+// epics/specs -> solve/{epics,specs}; archived specs lived in _legacy_work
+// until that directory was removed — history has them if ever needed). This
 // check fails if a tracked file reintroduces a `.kiro/` path reference outside
 // the whitelisted historical/immutable/external locations, so the old Kiro way
 // of working cannot creep back in.
@@ -14,7 +15,6 @@ import {execFileSync} from 'node:child_process';
 // immutable historical record, a deliberate external snapshot, or a parallel
 // working copy — none of which is the live operating surface.
 const ALLOWED_PREFIXES = Object.freeze([
-  '_legacy_work/', // archived specs + pre-Quest work packages
   '.claude/worktrees/', // parallel git worktrees
   'solve/changes/', // recorded historical diffs of past Quest work
   'solve/log/', // append-only event logs (immutable)

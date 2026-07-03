@@ -115,7 +115,7 @@ function defineDerivedLifecycleMetadata(shim, metadata, filePath) {
 function normalizeMetadata(metadata, filePath) {
   if (!metadata) return metadata;
   if (metadata.schema === 'work-package-v2') {
-    const shim = { ...metadata };
+    const shim = {...metadata};
 
     if (metadata.intent) {
       for (const [k, v] of Object.entries(metadata.intent)) {
