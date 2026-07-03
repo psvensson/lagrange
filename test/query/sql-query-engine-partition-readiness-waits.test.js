@@ -556,8 +556,8 @@ test('SQLQueryEngine - waitForCondition honors a predicate that flips exactly ' 
 
 test('SQLQueryEngine - waitForCondition classifies exact deadline exhaustion',
   async (t) => {
-    const engine = new SQLQueryEngine({nowFn: () => fakeNow});
     let fakeNow = 1000;
+    const engine = new SQLQueryEngine({nowFn: () => fakeNow});
 
     engine.sleep = async (ms) => {
       fakeNow += ms;
