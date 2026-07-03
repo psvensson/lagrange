@@ -338,7 +338,7 @@ The unified runtime model has one steady-state posture:
 
 ### Related Runtime Closure Docs
 
-1. `docs/admin-migration-guide.md`
+1. `docs/admin-api-reference.md`
 2. `docs/wasm-services-user-guide.md`
 3. `solve/specs/runtime-ownership-closure/closure-matrix.md`
 4. `solve/specs/runtime-ownership-closure/completion-gates.md`

@@ -12,8 +12,8 @@ Guides for running, inspecting, and administering a cluster:
   and run distributed WASM services (the main user guide)
 - [component-distribution.md](component-distribution.md) — how components are
   distributed across nodes
-- [admin-migration-guide.md](admin-migration-guide.md) — admin API / CLI
-  migration guide
+- [admin-api-reference.md](admin-api-reference.md) — admin API actions,
+  diagnostics endpoints, and CLI message contract
 - [admin-test-run-landing.md](admin-test-run-landing.md) — admin test-run
   landing page
 - [bootstrap-readiness-probes.md](bootstrap-readiness-probes.md) — readiness

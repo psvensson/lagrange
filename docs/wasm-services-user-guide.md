@@ -592,6 +592,6 @@ async start(replicaContext) {
 ## 15. Related Docs
 
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
-2. `docs/admin-migration-guide.md` (migration to meta-service owned admin paths)
+2. `docs/admin-api-reference.md` (meta-service owned admin actions and CLI contract)
 3. `docs/runtime-ownership-rollout-runbook.md` (phase rollout and rollback)
 4. `docs/steering/architecture.md` (active ownership model)
