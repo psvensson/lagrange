@@ -9,9 +9,14 @@
 #     40-60), and docker-in-docker is unsupported — see ci/forgejo-runner/
 #     README.md.
 #   * Secrets:
-#       REGISTRY_USER  - Codeberg username (package registry push)
-#       REGISTRY_TOKEN - Codeberg token with package:write scope
-#     GITHUB_TOKEN is provided automatically by Forgejo for release upload.
+#       REGISTRY_USER   - Codeberg username (package registry push)
+#       REGISTRY_TOKEN  - Codeberg token with package:write scope
+#       DOCKERHUB_USER  - Docker Hub username (e.g. psvensson; NOT an email)
+#       DOCKERHUB_TOKEN - Docker Hub access token with Read/Write scope
+#     The release-upload token is provided automatically by the Forgejo runner
+#     as secrets.GITHUB_TOKEN — that name (and the github.* context / GITHUB_*
+#     env vars used below) is Forgejo's GitHub-Actions-compat surface, NOT a
+#     dependency on github.com.
 #   * To re-fire for an already-pushed tag: delete and re-push the tag.
 name: release
 
@@ -21,6 +26,7 @@ on:
 
 env:
   IMAGE: codeberg.org/psvensson/lagrange
+  DOCKERHUB_IMAGE: docker.io/psvensson/lagrange
 
 jobs:
   release:
@@ -41,10 +47,15 @@ jobs:
       # test:chart:endpoint-sync, which renders/lints the endpoint-sync chart —
       # installing helm only in the later packaging step fails the gate).
       - name: Install gate CLI tools (ripgrep, jq, java, helm)
+        # helm comes from helm's own CDN (get.helm.sh), not github.com. Bump
+        # HELM_VERSION to adopt a newer helm; the URL accepts any released tag.
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless curl tar
+          HELM_VERSION=v3.16.3
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
+          helm version --short
 
       - name: Install dependencies
         run: npm ci
@@ -67,14 +78,30 @@ jobs:
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
 
+      # Strip the leading `v` from the tag once, so the image tags and the
+      # release notes below all reference the SAME string (e.g. tag v0.1.0 ->
+      # image :0.1.0). GITHUB_REF_NAME / GITHUB_OUTPUT are Forgejo's built-in
+      # runner variables (GitHub-Actions-compatible names), not github.com.
+      - name: Resolve version tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # NOTE: the image is amd64-only — the Dockerfile keeps only the linux-x64
+      # leveldown prebuild. ARM hosts can pull it but run under emulation.
       - name: Build and push Docker image
         run: |
           echo "${{ secrets.REGISTRY_TOKEN }}" | \
             docker login codeberg.org -u "${{ secrets.REGISTRY_USER }}" --password-stdin
-          TAG="${GITHUB_REF_NAME#v}"
-          docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+            docker login docker.io -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+          TAG="${{ steps.ver.outputs.version }}"
+          docker build \
+            -t "$IMAGE:$TAG"           -t "$IMAGE:latest" \
+            -t "$DOCKERHUB_IMAGE:$TAG" -t "$DOCKERHUB_IMAGE:latest" .
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
+          docker push "$DOCKERHUB_IMAGE:$TAG"
+          docker push "$DOCKERHUB_IMAGE:latest"
 
       # Publishes the tag as a Forgejo Release and attaches the artifacts.
       - name: Publish Forgejo release
@@ -86,4 +113,7 @@ jobs:
           release-dir: dist
           release-notes: |
             Lagrange ${{ github.ref_name }} (experimental / alpha).
-            See CHANGELOG.md and RELEASE.md. Docker image: ${{ env.IMAGE }}:${{ github.ref_name }}
+            See CHANGELOG.md and RELEASE.md.
+            Docker images:
+              ${{ env.IMAGE }}:${{ steps.ver.outputs.version }}
+              ${{ env.DOCKERHUB_IMAGE }}:${{ steps.ver.outputs.version }}
