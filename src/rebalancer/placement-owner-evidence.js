@@ -19,6 +19,9 @@ const PLACEMENT_OWNER_POLICY_FIELD = Object.freeze({
   CONSIDER_DISK_SPACE: 'considerDiskSpace',
   PREFER_SAME_LATENCY_GROUP: 'preferSameLatencyGroup',
   PREFER_LATENCY_GROUP_DIVERSITY: 'preferLatencyGroupDiversity',
+  PREFER_DATA_AFFINITY: 'preferDataAffinity',
+  DATA_AFFINITY: 'dataAffinity',
+  DATA_AFFINITY_GROUP_WEIGHTS: 'groupWeights',
 });
 const PLACEMENT_OWNER_DIAGNOSTIC_FIELD = Object.freeze({
   TOTAL_CANDIDATES: 'totalCandidates',
@@ -233,7 +236,42 @@ function normalizePlacementConstraints(policy) {
       constraints[
         PLACEMENT_OWNER_POLICY_FIELD.PREFER_LATENCY_GROUP_DIVERSITY
       ] === true,
+    preferDataAffinity:
+      constraints[
+        PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY
+      ] === true,
   });
+}
+
+// Accessed-data affinity evidence: the policy carries per-latency-group
+// weights in (0..1] describing where the entity's accessed data lives
+// (the A[s][p] · data-replica-location join, computed by the policy
+// owner; synthetic in Tier-1b tests). Invalid and zero-weight entries
+// are dropped, not defaulted — an empty map means "no affinity
+// evidence", so a map of only zeros carries none and must not engage
+// the dimension family (incumbent retention included).
+function buildDataAffinityContext(policy) {
+  const affinity =
+    policy?.[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] &&
+      typeof policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] === 'object' ?
+      policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] :
+      {};
+  const rawCandidate =
+    affinity[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS];
+  const rawWeights =
+    rawCandidate &&
+      typeof rawCandidate === 'object' &&
+      !Array.isArray(rawCandidate) ?
+      rawCandidate :
+      {};
+  const groupWeights = new Map();
+  for (const [groupId, weight] of Object.entries(rawWeights)) {
+    if (groupId.length === 0 || !Number.isFinite(weight) || weight <= 0) {
+      continue;
+    }
+    groupWeights.set(groupId, Math.min(weight, 1));
+  }
+  return Object.freeze({groupWeights});
 }
 
 function buildLatencyGroupContext(candidateNodes, currentReplicas) {
@@ -302,6 +340,7 @@ function normalizePlacementOwnerEvidence(options = {}) {
       candidateNodes,
       currentReplicas,
     ),
+    dataAffinityContext: buildDataAffinityContext(options.policy),
     leaderRetentionNodeId: resolveLeaderRetentionNodeId(
       currentReplicas,
       normalizePositiveInteger(options.targetCount),

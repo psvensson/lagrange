@@ -1,0 +1,498 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 53ad9b6b..883e0c1f 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -15,6 +15,13 @@
+  *        serialize/deserialize + create/update validation + engine
+  *        policy resolution + executeSelect threading + candidate
+  *        ordering local-node/same-group first, policy-off unchanged)
++ *   placement-data-affinity-tier1b
++ *     - test/convergence/dt-placement-affinity-tier1b-kernel.test.js
++ *       (DATA_AFFINITY dimension + in-score incumbent movement-cost in
++ *        the real placement kernel, driven through the REAL MovePlanner:
++ *        gradient above the margin moves the service toward its data,
++ *        gradient below is damped to zero moves, gated-off output
++ *        unchanged)
+  *
+  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
+  *   (default: run all scenarios)
+@@ -28,6 +35,9 @@ const SCENARIOS = {
+   'service-read-locality-policy': [
+     'test/query/service-read-locality-routing.test.js',
+   ],
++  'placement-data-affinity-tier1b': [
++    'test/convergence/dt-placement-affinity-tier1b-kernel.test.js',
++  ],
+ };
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/src/rebalancer/placement-owner-constants.js b/src/rebalancer/placement-owner-constants.js
+index 2297f7f0..7e07f758 100644
+--- a/src/rebalancer/placement-owner-constants.js
++++ b/src/rebalancer/placement-owner-constants.js
+@@ -45,6 +45,8 @@ const PLACEMENT_OWNER_SCORE_DIMENSION = Object.freeze({
+   DISK_LOAD: 'disk_load',
+   SAME_LATENCY_GROUP: 'same_latency_group',
+   LATENCY_GROUP_DIVERSITY: 'latency_group_diversity',
++  DATA_AFFINITY: 'data_affinity',
++  DATA_AFFINITY_INCUMBENT_RETENTION: 'data_affinity_incumbent_retention',
+   DISK_TIE_BREAKER: 'disk_tie_breaker',
+ });
+ 
+@@ -84,6 +86,20 @@ const PLACEMENT_OWNER_TOPOLOGY_SCORE = Object.freeze({
+   DIVERSITY_EXISTING_GROUP_PENALTY: NUM.FOUR,
+ });
+ 
++// DATA_AFFINITY dimension weights (service↔data affinity placement epic).
++// AFFINITY_WEIGHT scales a candidate group's accessed-data weight (0..1)
++// into score points, so the maximum affinity gradient between a
++// full-weight and a zero-weight group is AFFINITY_WEIGHT points.
++// INCUMBENT_MOVEMENT_COST is the in-score hysteresis margin: a challenger
++// must beat an incumbent by MORE than this many points before the rank
++// changes (Tier-1a sim: load-coupled scoring without such a margin
++// limit-cycles; the usable band is wide, bounded below by the load
++// shadow and above by the affinity gradient — census sweeps B/C/E).
++const PLACEMENT_OWNER_DATA_AFFINITY_SCORE = Object.freeze({
++  AFFINITY_WEIGHT: NUM.TEN,
++  INCUMBENT_MOVEMENT_COST: NUM.FOUR,
++});
++
+ export {
+   PLACEMENT_OWNER,
+   PLACEMENT_OWNER_FILTER_ACTION,
+@@ -97,6 +113,7 @@ export {
+   PLACEMENT_OWNER_REINTERPRETATION,
+   PLACEMENT_OWNER_RESERVATION_REASON,
+   PLACEMENT_OWNER_RESERVATION_STATE,
++  PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
+   PLACEMENT_OWNER_SCORE_DIMENSION,
+   PLACEMENT_OWNER_SCORE_PROFILE,
+   PLACEMENT_OWNER_SCORE_STATE,
+diff --git a/src/rebalancer/placement-owner-decision.js b/src/rebalancer/placement-owner-decision.js
+index f78d4725..b4378e41 100644
+--- a/src/rebalancer/placement-owner-decision.js
++++ b/src/rebalancer/placement-owner-decision.js
+@@ -1,5 +1,6 @@
+ import {
+   PLACEMENT_OWNER,
++  PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
+   PLACEMENT_OWNER_FILTER_ACTION,
+   PLACEMENT_OWNER_FILTER_REASON,
+   PLACEMENT_OWNER_FILTER_STATE,
+@@ -112,6 +113,49 @@ function calculateTopologyScoreDimensions(candidate, evidence) {
+   return dimensions;
+ }
+ 
++// DATA_AFFINITY dimension family (service↔data affinity placement epic):
++// candidates in latency groups holding more of the entity's accessed
++// data score better (negative values win), and incumbents carry an
++// in-score movement-cost bonus so an affinity gradient below the
++// retention margin does not churn the placement (Tier-1a sim finding:
++// affinity/load coupling without in-score hysteresis limit-cycles).
++// Gated on the preferDataAffinity constraint AND supplied affinity
++// evidence — absent either, no dimension is emitted and the kernel
++// output is byte-identical to the pre-affinity scorer.
++function calculateDataAffinityScoreDimensions(candidate, evidence) {
++  if (evidence.placementConstraints.preferDataAffinity !== true) {
++    return [];
++  }
++  const groupWeights = evidence.dataAffinityContext.groupWeights;
++  if (groupWeights.size === 0) {
++    return [];
++  }
++  const dimensions = [];
++  const candidateGroupId =
++    evidence.latencyGroupContext.nodeGroupById.get(candidate.nodeId) ||
++    PLACEMENT_OWNER_NO_DOMINANT_GROUP;
++  if (candidateGroupId.length > 0) {
++    const affinityWeight = groupWeights.get(candidateGroupId) || 0;
++    dimensions.push(buildScoreDimension(
++      PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
++      affinityWeight === 0 ?
++        0 :
++        -(PLACEMENT_OWNER_DATA_AFFINITY_SCORE.AFFINITY_WEIGHT *
++          affinityWeight),
++    ));
++  }
++  const isIncumbent = evidence.currentReplicas.some(
++    (replica) => replica.valid === true && replica.nodeId === candidate.nodeId,
++  );
++  if (isIncumbent) {
++    dimensions.push(buildScoreDimension(
++      PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_INCUMBENT_RETENTION,
++      -PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST,
++    ));
++  }
++  return dimensions;
++}
++
+ function calculateScoreDimensions(candidate, evidence) {
+   const dimensions = [];
+   if (
+@@ -142,6 +186,9 @@ function calculateScoreDimensions(candidate, evidence) {
+     ));
+   }
+   dimensions.push(...calculateTopologyScoreDimensions(candidate, evidence));
++  dimensions.push(
++    ...calculateDataAffinityScoreDimensions(candidate, evidence),
++  );
+   dimensions.push(buildScoreDimension(
+     PLACEMENT_OWNER_SCORE_DIMENSION.DISK_TIE_BREAKER,
+     candidate.diskUsagePercent,
+diff --git a/src/rebalancer/placement-owner-evidence.js b/src/rebalancer/placement-owner-evidence.js
+index bfd1052b..54b6d838 100644
+--- a/src/rebalancer/placement-owner-evidence.js
++++ b/src/rebalancer/placement-owner-evidence.js
+@@ -19,6 +19,9 @@ const PLACEMENT_OWNER_POLICY_FIELD = Object.freeze({
+   CONSIDER_DISK_SPACE: 'considerDiskSpace',
+   PREFER_SAME_LATENCY_GROUP: 'preferSameLatencyGroup',
+   PREFER_LATENCY_GROUP_DIVERSITY: 'preferLatencyGroupDiversity',
++  PREFER_DATA_AFFINITY: 'preferDataAffinity',
++  DATA_AFFINITY: 'dataAffinity',
++  DATA_AFFINITY_GROUP_WEIGHTS: 'groupWeights',
+ });
+ const PLACEMENT_OWNER_DIAGNOSTIC_FIELD = Object.freeze({
+   TOTAL_CANDIDATES: 'totalCandidates',
+@@ -233,9 +236,44 @@ function normalizePlacementConstraints(policy) {
+       constraints[
+         PLACEMENT_OWNER_POLICY_FIELD.PREFER_LATENCY_GROUP_DIVERSITY
+       ] === true,
++    preferDataAffinity:
++      constraints[
++        PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY
++      ] === true,
+   });
+ }
+ 
++// Accessed-data affinity evidence: the policy carries per-latency-group
++// weights in (0..1] describing where the entity's accessed data lives
++// (the A[s][p] · data-replica-location join, computed by the policy
++// owner; synthetic in Tier-1b tests). Invalid and zero-weight entries
++// are dropped, not defaulted — an empty map means "no affinity
++// evidence", so a map of only zeros carries none and must not engage
++// the dimension family (incumbent retention included).
++function buildDataAffinityContext(policy) {
++  const affinity =
++    policy?.[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] &&
++      typeof policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] === 'object' ?
++      policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] :
++      {};
++  const rawCandidate =
++    affinity[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS];
++  const rawWeights =
++    rawCandidate &&
++      typeof rawCandidate === 'object' &&
++      !Array.isArray(rawCandidate) ?
++      rawCandidate :
++      {};
++  const groupWeights = new Map();
++  for (const [groupId, weight] of Object.entries(rawWeights)) {
++    if (groupId.length === 0 || !Number.isFinite(weight) || weight <= 0) {
++      continue;
++    }
++    groupWeights.set(groupId, Math.min(weight, 1));
++  }
++  return Object.freeze({groupWeights});
++}
++
+ function buildLatencyGroupContext(candidateNodes, currentReplicas) {
+   const nodeGroupById = new Map();
+   for (const candidate of candidateNodes) {
+@@ -302,6 +340,7 @@ function normalizePlacementOwnerEvidence(options = {}) {
+       candidateNodes,
+       currentReplicas,
+     ),
++    dataAffinityContext: buildDataAffinityContext(options.policy),
+     leaderRetentionNodeId: resolveLeaderRetentionNodeId(
+       currentReplicas,
+       normalizePositiveInteger(options.targetCount),
+diff --git a/test/convergence/dt-placement-affinity-tier1b-kernel.test.js b/test/convergence/dt-placement-affinity-tier1b-kernel.test.js
+new file mode 100644
+index 00000000..305c867b
+--- /dev/null
++++ b/test/convergence/dt-placement-affinity-tier1b-kernel.test.js
+@@ -0,0 +1,284 @@
++import t from 'tap';
++import {
++  buildPlacementOwnerDecision,
++} from '../../src/rebalancer/placement-owner-decision.js';
++import {
++  PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
++  PLACEMENT_OWNER_POLICY,
++  PLACEMENT_OWNER_SCORE_DIMENSION,
++  PLACEMENT_OWNER_SCORE_PROFILE,
++} from '../../src/rebalancer/placement-owner-constants.js';
++import {MovePlanner} from '../../src/rebalancer/move-planner.js';
++import {
++  REBALANCER_ENTITY_TYPE,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
++
++// ---------------------------------------------------------------------------
++// Tier 1b of the service↔data affinity placement epic
++// (solve/epics/service-data-affinity-placement.md, quest
++// placement-data-affinity-tier1b): the REAL placement kernel scores a
++// DATA_AFFINITY dimension fed by accessed-data latency-group weights on
++// the policy, with an in-score incumbent movement-cost (hysteresis)
++// margin, and its effect is proven through the REAL MovePlanner —
++// calculateTargetState + calculateMoves with a stubbed
++// moveStateProvider, per the Tier-1a sim findings:
++//   (a) an affinity gradient above the retention margin moves a service
++//       replica toward its data's latency group (rank change becomes a
++//       real move);
++//   (b) a gradient below the margin is damped: the incumbent is
++//       retained and calculateMoves emits ZERO moves (the sim's
++//       limit-cycle/churn finding, encoded in-score);
++//   (c) with no affinity constraint or no affinity evidence, kernel
++//       output is unchanged (the dimension family is fully gated).
++// ---------------------------------------------------------------------------
++
++function node(nodeId, cpu, latencyGroupId) {
++  return {
++    node_id: nodeId,
++    status: ReplicaStatus.ACTIVE,
++    cpu_usage_percent: cpu,
++    memory_usage_percent: 0,
++    disk_usage_percent: 0,
++    latency_group_id: latencyGroupId,
++  };
++}
++
++function replica(replicaId, nodeId) {
++  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
++}
++
++// One service replica sits on s1 (G2); its accessed data lives in G1
++// where the equally-loaded d1 is available. Load cannot distinguish the
++// two nodes — only the affinity evidence can. Each test picks the node
++// ORDER so the equal-score ordinal fallback favors the outcome the
++// feature must overturn: test (a) lists the incumbent first (ordinal
++// alone would keep s1 — affinity must move to d1), test (b) lists the
++// challenger first (ordinal alone would pick d1 — the retention margin
++// must keep s1). Neither MovePlanner assertion can pass with the
++// dimension family dead.
++const NODES_INCUMBENT_FIRST = [node('s1', 30, 'G2'), node('d1', 30, 'G1')];
++const NODES_CHALLENGER_FIRST = [node('d1', 30, 'G1'), node('s1', 30, 'G2')];
++const CURRENT_REPLICAS = [replica('r1', 's1')];
++
++function kernelScenario(candidateNodes, policy) {
++  return {
++    candidateNodes,
++    currentReplicas: CURRENT_REPLICAS,
++    targetCount: 1,
++    policy,
++    placementPolicy: PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD,
++    scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.SUITABILITY,
++  };
++}
++
++function buildServicePlanner(candidateNodes) {
++  return new MovePlanner({
++    entityId: 'svc-tier1b',
++    entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
++    moveStateProvider: {
++      getAvailableNodes: () => candidateNodes,
++      getCurrentReplicas: () => CURRENT_REPLICAS,
++      getHealthyReplicas: (replicas) =>
++        replicas.filter((r) => r.status === ReplicaStatus.ACTIVE),
++      getInFlightOperations: () => [],
++      getGlobalTopologyBlockingInFlightOperations: () => [],
++      getPartitionDescriptorEpochEvidence: () => null,
++      hasPendingMove: () => false,
++      hasPendingAddForNode: () => false,
++    },
++  });
++}
++
++function dimensionOf(decision, nodeId, dimension) {
++  return decision.scoreResult.scoreVector
++    .find((entry) => entry.nodeId === nodeId)
++    ?.dimensions.find((d) => d.dimension === dimension) || null;
++}
++
++t.test('(a) an affinity gradient above the retention margin moves the ' +
++  'service toward its data through the REAL MovePlanner', async (t) => {
++  const policy = {
++    targetReplicaCount: 1,
++    placementConstraints: {preferDataAffinity: true},
++    dataAffinity: {groupWeights: {G1: 1}},
++  };
++
++  const decision = buildPlacementOwnerDecision(
++    kernelScenario(NODES_INCUMBENT_FIRST, policy),
++  );
++  const d1Affinity = dimensionOf(
++    decision, 'd1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
++  );
++  t.ok(d1Affinity, 'd1 (data group) is scored on the DATA_AFFINITY dimension');
++  t.equal(
++    d1Affinity.value,
++    -PLACEMENT_OWNER_DATA_AFFINITY_SCORE.AFFINITY_WEIGHT,
++    'full data weight scores the full affinity bonus',
++  );
++  const s1Retention = dimensionOf(
++    decision, 's1',
++    PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_INCUMBENT_RETENTION,
++  );
++  t.equal(
++    s1Retention?.value,
++    -PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST,
++    'the incumbent carries the in-score movement-cost bonus',
++  );
++  t.same(decision.intent.targetNodeIds, ['d1'],
++    'the gradient (10) beats the retention margin (4): intent moves to d1');
++
++  const planner = buildServicePlanner(NODES_INCUMBENT_FIRST);
++  const targetState = await planner.calculateTargetState(
++    CURRENT_REPLICAS, policy,
++  );
++  t.same(targetState.targetNodes, ['d1'],
++    'REAL MovePlanner target state lands on the data group node ' +
++      '(ordinal fallback alone would keep the incumbent-first order)');
++  const moves = planner.calculateMoves(CURRENT_REPLICAS, targetState);
++  t.ok(moves.length > 0,
++    `the rank change becomes real movement (${moves.map((m) => m.type)})`);
++  const touchedNodes = new Set(moves.flatMap((m) =>
++    [m.targetNodeId, m.sourceNodeId, m.nodeId].filter(Boolean)));
++  t.ok(touchedNodes.has('d1'),
++    'movement targets the data-group node');
++});
++
++t.test('(b) a gradient below the retention margin is damped: incumbent ' +
++  'retained, ZERO moves', async (t) => {
++  const policy = {
++    targetReplicaCount: 1,
++    placementConstraints: {preferDataAffinity: true},
++    dataAffinity: {groupWeights: {G1: 0.55, G2: 0.45}},
++  };
++
++  const decision = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, policy),
++  );
++  const d1Affinity = dimensionOf(
++    decision, 'd1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
++  );
++  const s1Affinity = dimensionOf(
++    decision, 's1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
++  );
++  t.ok(d1Affinity.value < s1Affinity.value,
++    'affinity ALONE still prefers the data-heavy group (it is the ' +
++      'movement cost that damps, not a missing gradient)');
++  t.same(decision.intent.targetNodeIds, ['s1'],
++    'the sub-margin gradient (1 point) loses to the retention margin (4)');
++
++  const planner = buildServicePlanner(NODES_CHALLENGER_FIRST);
++  const targetState = await planner.calculateTargetState(
++    CURRENT_REPLICAS, policy,
++  );
++  t.same(targetState.targetNodes, ['s1'],
++    'REAL MovePlanner target state keeps the incumbent (ordinal ' +
++      'fallback alone would pick the challenger-first order)');
++  const moves = planner.calculateMoves(CURRENT_REPLICAS, targetState);
++  t.same(moves, [],
++    'no churn: calculateMoves emits ZERO moves below the margin');
++});
++
++t.test('(c) without the constraint or without evidence, kernel output is ' +
++  'unchanged', async (t) => {
++  const baseline = buildPlacementOwnerDecision(kernelScenario(
++    NODES_CHALLENGER_FIRST,
++    {targetReplicaCount: 1, placementConstraints: {}},
++  ));
++  const constraintWithoutEvidence = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, {
++      targetReplicaCount: 1,
++      placementConstraints: {preferDataAffinity: true},
++    }),
++  );
++  const evidenceWithoutConstraint = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, {
++      targetReplicaCount: 1,
++      placementConstraints: {},
++      dataAffinity: {groupWeights: {G1: 1}},
++    }),
++  );
++  const zeroWeightsOnly = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, {
++      targetReplicaCount: 1,
++      placementConstraints: {preferDataAffinity: true},
++      dataAffinity: {groupWeights: {G1: 0, G2: 0}},
++    }),
++  );
++
++  for (const [label, decision] of [
++    ['baseline', baseline],
++    ['constraint without evidence', constraintWithoutEvidence],
++    ['evidence without constraint', evidenceWithoutConstraint],
++    ['zero-weight-only evidence', zeroWeightsOnly],
++  ]) {
++    const dimensionNames = new Set(decision.scoreResult.scoreVector
++      .flatMap((entry) => entry.dimensions.map((d) => d.dimension)));
++    t.notOk(
++      dimensionNames.has(PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY),
++      `${label}: no data_affinity dimension`,
++    );
++    t.notOk(
++      dimensionNames.has(
++        PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_INCUMBENT_RETENTION,
++      ),
++      `${label}: no incumbent-retention dimension`,
++    );
++  }
++  t.same(
++    constraintWithoutEvidence.scoreResult.rankedNodeIds,
++    baseline.scoreResult.rankedNodeIds,
++    'constraint without evidence ranks identically to baseline',
++  );
++  t.same(
++    evidenceWithoutConstraint.scoreResult.rankedNodeIds,
++    baseline.scoreResult.rankedNodeIds,
++    'evidence without constraint ranks identically to baseline',
++  );
++  t.same(
++    constraintWithoutEvidence.intent.targetNodeIds,
++    baseline.intent.targetNodeIds,
++    'intent is unchanged when the dimension family is gated off',
++  );
++  t.same(
++    zeroWeightsOnly.intent.targetNodeIds,
++    baseline.intent.targetNodeIds,
++    'a map of only zero weights carries no evidence: no retention, ' +
++      'intent unchanged',
++  );
++});
++
++t.test('affinity evidence normalization drops invalid entries', async (t) => {
++  const decision = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, {
++      targetReplicaCount: 1,
++      placementConstraints: {preferDataAffinity: true},
++      dataAffinity: {groupWeights: {
++        'G1': 2.5, // clamped to 1
++        'G2': -1, // dropped
++        '': 0.9, // dropped (empty group id)
++        'G3': Number.NaN, // dropped
++        'G4': 0, // dropped (zero carries no affinity evidence)
++      }},
++    }),
++  );
++  const weights = decision.evidence.dataAffinityContext.groupWeights;
++  t.equal(weights.get('G1'), 1, 'over-unit weight clamps to 1');
++  t.notOk(weights.has('G2'), 'negative weight dropped');
++  t.notOk(weights.has(''), 'empty group id dropped');
++  t.notOk(weights.has('G3'), 'non-finite weight dropped');
++  t.notOk(weights.has('G4'), 'zero weight dropped');
++
++  const arrayWeights = buildPlacementOwnerDecision(
++    kernelScenario(NODES_CHALLENGER_FIRST, {
++      targetReplicaCount: 1,
++      placementConstraints: {preferDataAffinity: true},
++      dataAffinity: {groupWeights: [0.5, 0.3]},
++    }),
++  );
++  t.equal(
++    arrayWeights.evidence.dataAffinityContext.groupWeights.size,
++    0,
++    'array-typed groupWeights is rejected (no phantom index groups)',
++  );
++});

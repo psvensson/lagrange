@@ -45,6 +45,8 @@ const PLACEMENT_OWNER_SCORE_DIMENSION = Object.freeze({
   DISK_LOAD: 'disk_load',
   SAME_LATENCY_GROUP: 'same_latency_group',
   LATENCY_GROUP_DIVERSITY: 'latency_group_diversity',
+  DATA_AFFINITY: 'data_affinity',
+  DATA_AFFINITY_INCUMBENT_RETENTION: 'data_affinity_incumbent_retention',
   DISK_TIE_BREAKER: 'disk_tie_breaker',
 });
 
@@ -84,6 +86,20 @@ const PLACEMENT_OWNER_TOPOLOGY_SCORE = Object.freeze({
   DIVERSITY_EXISTING_GROUP_PENALTY: NUM.FOUR,
 });
 
+// DATA_AFFINITY dimension weights (service↔data affinity placement epic).
+// AFFINITY_WEIGHT scales a candidate group's accessed-data weight (0..1)
+// into score points, so the maximum affinity gradient between a
+// full-weight and a zero-weight group is AFFINITY_WEIGHT points.
+// INCUMBENT_MOVEMENT_COST is the in-score hysteresis margin: a challenger
+// must beat an incumbent by MORE than this many points before the rank
+// changes (Tier-1a sim: load-coupled scoring without such a margin
+// limit-cycles; the usable band is wide, bounded below by the load
+// shadow and above by the affinity gradient — census sweeps B/C/E).
+const PLACEMENT_OWNER_DATA_AFFINITY_SCORE = Object.freeze({
+  AFFINITY_WEIGHT: NUM.TEN,
+  INCUMBENT_MOVEMENT_COST: NUM.FOUR,
+});
+
 export {
   PLACEMENT_OWNER,
   PLACEMENT_OWNER_FILTER_ACTION,
@@ -97,6 +113,7 @@ export {
   PLACEMENT_OWNER_REINTERPRETATION,
   PLACEMENT_OWNER_RESERVATION_REASON,
   PLACEMENT_OWNER_RESERVATION_STATE,
+  PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
   PLACEMENT_OWNER_SCORE_DIMENSION,
   PLACEMENT_OWNER_SCORE_PROFILE,
   PLACEMENT_OWNER_SCORE_STATE,

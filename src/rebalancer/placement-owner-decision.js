@@ -1,5 +1,6 @@
 import {
   PLACEMENT_OWNER,
+  PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
   PLACEMENT_OWNER_FILTER_ACTION,
   PLACEMENT_OWNER_FILTER_REASON,
   PLACEMENT_OWNER_FILTER_STATE,
@@ -112,6 +113,49 @@ function calculateTopologyScoreDimensions(candidate, evidence) {
   return dimensions;
 }
 
+// DATA_AFFINITY dimension family (service↔data affinity placement epic):
+// candidates in latency groups holding more of the entity's accessed
+// data score better (negative values win), and incumbents carry an
+// in-score movement-cost bonus so an affinity gradient below the
+// retention margin does not churn the placement (Tier-1a sim finding:
+// affinity/load coupling without in-score hysteresis limit-cycles).
+// Gated on the preferDataAffinity constraint AND supplied affinity
+// evidence — absent either, no dimension is emitted and the kernel
+// output is byte-identical to the pre-affinity scorer.
+function calculateDataAffinityScoreDimensions(candidate, evidence) {
+  if (evidence.placementConstraints.preferDataAffinity !== true) {
+    return [];
+  }
+  const groupWeights = evidence.dataAffinityContext.groupWeights;
+  if (groupWeights.size === 0) {
+    return [];
+  }
+  const dimensions = [];
+  const candidateGroupId =
+    evidence.latencyGroupContext.nodeGroupById.get(candidate.nodeId) ||
+    PLACEMENT_OWNER_NO_DOMINANT_GROUP;
+  if (candidateGroupId.length > 0) {
+    const affinityWeight = groupWeights.get(candidateGroupId) || 0;
+    dimensions.push(buildScoreDimension(
+      PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
+      affinityWeight === 0 ?
+        0 :
+        -(PLACEMENT_OWNER_DATA_AFFINITY_SCORE.AFFINITY_WEIGHT *
+          affinityWeight),
+    ));
+  }
+  const isIncumbent = evidence.currentReplicas.some(
+    (replica) => replica.valid === true && replica.nodeId === candidate.nodeId,
+  );
+  if (isIncumbent) {
+    dimensions.push(buildScoreDimension(
+      PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_INCUMBENT_RETENTION,
+      -PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST,
+    ));
+  }
+  return dimensions;
+}
+
 function calculateScoreDimensions(candidate, evidence) {
   const dimensions = [];
   if (
@@ -142,6 +186,9 @@ function calculateScoreDimensions(candidate, evidence) {
     ));
   }
   dimensions.push(...calculateTopologyScoreDimensions(candidate, evidence));
+  dimensions.push(
+    ...calculateDataAffinityScoreDimensions(candidate, evidence),
+  );
   dimensions.push(buildScoreDimension(
     PLACEMENT_OWNER_SCORE_DIMENSION.DISK_TIE_BREAKER,
     candidate.diskUsagePercent,
