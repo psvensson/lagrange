@@ -150,6 +150,27 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-03 — **A[s][p] attribution SHIPPED (`6646ff18`, quest
+  `service-partition-access-attribution` SOLVED)** and **the production
+  policy lift SHIPPED (`4c0101b9`, quest
+  `runtime-service-affinity-policy-lift` SOLVED)** — the feature is now
+  LIVE end to end: engine-side (issuingServiceId, partition, read|write)
+  recording at the statement seams → per-(node, service) delta rows in
+  the new CDC-propagated `service_partition_access` table (heartbeat
+  publication pattern; single-flight publisher with merge-back on thrown
+  AND resolved gateway failures) → `getRuntimeServicePolicy` aggregates
+  fresh rows (120s bound), credits reads to replica-holding groups and
+  writes to the leader group, and emits `dataAffinity.groupWeights` +
+  `preferDataAffinity` iff `read_locality = same_group` (planner/router
+  coherence on one field). **Epic assumption corrected** (recorded
+  finding): A[s][p] could NOT extend the split-metrics sampler — it is
+  leader-local and write-only, and the issuing identity exists only on
+  the coordinator; the engine statement layer is the only seam where
+  identity and partition set coexist. Where the matrix lives (open
+  question answered): the CDC-propagated table, so every planner reads
+  the SAME matrix from cache. Remaining: Tier-3 demo (deployed service
+  issuing queries); write-affinity-to-leader-vs-set and per-partition
+  widen-vs-chase stay open.
 - 2026-07-03 — **Prerequisite #0 SHIPPED (`f594adb0`, quest
   `service-read-locality-policy` SOLVED)**: `service_definitions.read_locality`
   column (TEXT NOT NULL DEFAULT 'any', `SERVICE_READ_LOCALITY` enum
