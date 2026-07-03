@@ -59,6 +59,17 @@ replicas of the data it reads and writes. Locality is something the cluster
 produces and maintains for you, not something you engineer by hand and watch
 decay as the data moves.
 
+A classical distributed database splits tables into partitions, replicates
+those partitions across nodes, and routes each request to the right one:
+
+![Classical distributed database: logical tables split into partitions, replicated across nodes, requests routed to the right partitions and run in parallel](docs/dist_db.png)
+
+Lagrange keeps that data layer and adds a partitioned *service* layer on top of
+it — service instances are placed on or near the data they access, so compute
+moves to the data instead of the data moving to the compute:
+
+![Lagrange data + service layer: a partitioned service layer sits above the logical tables, and service instances are co-located with the data partitions they read and write](docs/dist_db_service.png)
+
 ---
 
 ## QA

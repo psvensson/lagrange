@@ -17,6 +17,21 @@ to "I understand how this works":
 
 The domain-file list below is the full ordered tree.
 
+## Visual Overview
+
+The system starts from a classical distributed database — logical tables split
+into partitions, each partition replicated across several nodes, with requests
+routed to the right partition and executed in parallel:
+
+![Classical distributed database: logical Orders and Customers tables split into partitions, each replicated across six nodes, with queries routed to the right partition and executed in parallel](../docs/dsitributed_db.png)
+
+Lagrange layers a partitioned service tier over that same data layout. Each
+service is partitioned and replicated like the data, and the cluster places
+every service instance on or near the replicas of the data it accesses so that
+compute moves to the data and cross-node traffic is reduced:
+
+![Lagrange data + service layer: a partitioned Order Processor service whose instances are co-located across six nodes with the Orders and Customers data partitions they read and write](../docs/distributed_db_and_services.png)
+
 ## Domain Files
 
 <!-- architecture-domain-files:start -->
