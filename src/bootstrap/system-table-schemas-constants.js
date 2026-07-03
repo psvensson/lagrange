@@ -37,6 +37,7 @@ import {
   REPLICA_OPERATIONS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
+  SERVICE_PARTITION_ACCESS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
   WASM_OPERATIONS_SCHEMA,
 } from './system-table-runtime-schema-definitions.js';
@@ -90,6 +91,7 @@ const SYSTEM_TABLE_SCHEMAS = [
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
+  SERVICE_PARTITION_ACCESS_SCHEMA,
 ];
 
 /**
@@ -136,6 +138,7 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: 'storage_reservations-p1',
   [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: 'latency_groups-p1',
   [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
+  [SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS]: 'service_partition_access-p1',
 };
 
 const PRIORITY_CONTROL_PLANE_PARTITION_IDS = new Set([
@@ -265,6 +268,11 @@ const INITIAL_REPLICA_IDS = {
     'inter_group_latencies-p1-r1',
     'inter_group_latencies-p1-r2',
     'inter_group_latencies-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS]: [
+    'service_partition_access-p1-r1',
+    'service_partition_access-p1-r2',
+    'service_partition_access-p1-r3',
   ],
 };
 

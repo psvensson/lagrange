@@ -229,6 +229,12 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       this.queryExecutor.markShuttingDown();
     }
     if (
+      this.servicePartitionAccessPublisher &&
+      typeof this.servicePartitionAccessPublisher.stop === LOCAL_STR_FUNCTION
+    ) {
+      this.servicePartitionAccessPublisher.stop();
+    }
+    if (
       this.transactionCoordinator &&
       typeof this.transactionCoordinator.stopRecoverySweep === LOCAL_STR_FUNCTION
     ) {

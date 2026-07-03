@@ -224,6 +224,36 @@ class SQLQueryEngineTableRoutingMethods {
   }
 
   /**
+   * Record a service-attributed partition access into the node-local
+   * attribution accumulator (service↔data affinity placement feed).
+   * No-op when the statement has no issuing service — external SQL
+   * clients are never attributed. Lazily arms the access publisher on
+   * the first recorded access so engines that never see
+   * service-attributed traffic never run a publish timer.
+   * @param {Object} queryOptions - Options carrying issuingServiceId.
+   * @param {Array<string>} partitionIds - Partitions the statement
+   *   touched (planned/executed set).
+   * @param {string} kind - SERVICE_PARTITION_ACCESS_KIND value.
+   * @private
+   */
+  recordServicePartitionAccess(queryOptions, partitionIds, kind) {
+    const issuingServiceId = queryOptions?.issuingServiceId;
+    if (
+      !issuingServiceId ||
+      !this.servicePartitionAccessMetrics ||
+      typeof this.servicePartitionAccessMetrics !== LOCAL_STR_OBJECT
+    ) {
+      return;
+    }
+    this.servicePartitionAccessMetrics.record(
+      issuingServiceId,
+      partitionIds,
+      kind,
+    );
+    this.servicePartitionAccessPublisher?.start();
+  }
+
+  /**
    * Read schema-migration rows for one table from system cache.
    * @param {Object|null} tableInfo - Table metadata row.
    * @return {Object[]} Matching migration rows.

@@ -1,4 +1,10 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  ServicePartitionAccessMetrics,
+} from './service-partition-access-metrics.js';
+import {
+  ServicePartitionAccessPublisher,
+} from './service-partition-access-publisher.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -105,6 +111,15 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     options.tablePartitionTargetNodeConvergenceTimeoutMs > 0 ?
       Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
       QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
+
+  engine.servicePartitionAccessMetrics = new ServicePartitionAccessMetrics();
+  engine.servicePartitionAccessPublisher = new ServicePartitionAccessPublisher({
+    nodeId: engine.nodeId,
+    metrics: engine.servicePartitionAccessMetrics,
+    getGateway: () => engine.controlPlaneSystemTableGateway,
+    getLogger: () => engine.logger,
+    now: engine.nowFn,
+  });
 
   engine.partitionResolver = new PartitionResolver({
     systemCache: engine.systemCache,

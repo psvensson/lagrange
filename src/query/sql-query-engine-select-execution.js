@@ -1,5 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineBootstrapRoutingOverlay} from './sql-query-engine-bootstrap-routing-overlay.js';
+import {SERVICE_PARTITION_ACCESS_KIND} from '../constants/index.js';
 import {
   createSQLQueryEngineProvisioningMethods,
 } from './sql-query-engine-provisioning-methods.js';
@@ -257,6 +258,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       },
     );
     const executionDurationMs = Date.now() - executionStartTimeMs;
+
+    if (result?.success === true) {
+      // Attribution feed: result.partitions is the executed set (main
+      // table plus join fanout); fall back to the planned root set.
+      this.recordServicePartitionAccess(
+        queryOptions,
+        Array.isArray(result.partitions) ? result.partitions : partitionIds,
+        SERVICE_PARTITION_ACCESS_KIND.READ,
+      );
+    }
 
     return {
       ...result,

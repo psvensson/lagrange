@@ -22,6 +22,17 @@
  *        gradient above the margin moves the service toward its data,
  *        gradient below is damped to zero moves, gated-off output
  *        unchanged)
+ *   service-partition-access-attribution
+ *     - test/query/service-partition-access-attribution.test.js
+ *       (A[service][partition] feed: engine-side read/write recording
+ *        for issuing services, delta publisher with failure restore,
+ *        service_partition_access system table registered end-to-end)
+ *   runtime-service-affinity-policy-lift
+ *     - test/rebalancer/runtime-service-affinity-policy-lift.test.js
+ *       (getRuntimeServicePolicy lifts read_locality=same_group +
+ *        fresh attribution into dataAffinity.groupWeights +
+ *        preferDataAffinity, coherent with routing; end-to-end walk
+ *        record -> publish -> aggregate -> policy -> kernel dimensions)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -37,6 +48,12 @@ const SCENARIOS = {
   ],
   'placement-data-affinity-tier1b': [
     'test/convergence/dt-placement-affinity-tier1b-kernel.test.js',
+  ],
+  'service-partition-access-attribution': [
+    'test/query/service-partition-access-attribution.test.js',
+  ],
+  'runtime-service-affinity-policy-lift': [
+    'test/rebalancer/runtime-service-affinity-policy-lift.test.js',
   ],
 };
 

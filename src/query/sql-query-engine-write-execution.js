@@ -1,5 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineTransactionRecoveryMethods} from './sql-query-engine-transaction-recovery-methods.js';
+import {SERVICE_PARTITION_ACCESS_KIND} from '../constants/index.js';
 
 
 const {
@@ -174,6 +175,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         result,
       );
       this.requestManagedSplitEvaluationForWrite(tableName, writePlan, result);
+    }
+
+    if (result?.success === true) {
+      this.recordServicePartitionAccess(
+        queryOptions,
+        writePartitions,
+        SERVICE_PARTITION_ACCESS_KIND.WRITE,
+      );
     }
 
     return {
@@ -363,6 +372,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       this.requestManagedSplitEvaluationForWrite(tableName, writePlan, result);
     }
 
+    if (result?.success === true) {
+      this.recordServicePartitionAccess(
+        queryOptions,
+        writePartitions,
+        SERVICE_PARTITION_ACCESS_KIND.WRITE,
+      );
+    }
+
     return {
       ...result,
       tableName,
@@ -547,6 +564,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         result,
       );
       this.requestManagedSplitEvaluationForWrite(tableName, writePlan, result);
+    }
+
+    if (result?.success === true) {
+      this.recordServicePartitionAccess(
+        queryOptions,
+        writePartitions,
+        SERVICE_PARTITION_ACCESS_KIND.WRITE,
+      );
     }
 
     return {

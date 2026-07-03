@@ -223,6 +223,20 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
       externalCdcAllowed: false,
     },
   ),
+  // PLACEMENT-classified (rule 3): the runtime-service rebalancer reads the
+  // aggregated attribution rows from cache to build affinity group weights.
+  // Not readiness-relevant — attribution is a load signal, never a gate.
+  [TABLES.SERVICE_PARTITION_ACCESS]: createTablePolicy(
+    TABLES.SERVICE_PARTITION_ACCESS,
+    {
+      policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
+      authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+      internalCachePropagation: true,
+      readinessRelevant: false,
+      bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
+      externalCdcAllowed: false,
+    },
+  ),
   [TABLES.LOGS]: createTablePolicy(TABLES.LOGS, {
     policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
     authorityClass: CDC_AUTHORITY_CLASS.CONTROL,

@@ -7,6 +7,9 @@ import {
   SERVICE_DEFINITION_COLUMN_LIST,
 } from '../wasm-service/wasm-service-models.js';
 import {
+  SERVICE_PARTITION_ACCESS_COL as SPA_COL,
+} from '../constants/service.js';
+import {
   COLUMN_TYPE,
   SYSTEM_TABLE_NAME,
 } from './system-table-schema-shared-constants.js';
@@ -469,12 +472,41 @@ const WASM_OPERATIONS_SCHEMA = {
   ],
 };
 
+/**
+ * Service↔partition access attribution system table schema.
+ * One row per (node, service): JSON-packed per-partition read/write
+ * counts published as deltas by each node's access publisher; the
+ * placement policy owner aggregates them across nodes into the
+ * A[service][partition] matrix (service↔data affinity placement epic).
+ */
+const SERVICE_PARTITION_ACCESS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS,
+  columns: [
+    {name: SPA_COL.ACCESS_ID, type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: SPA_COL.NODE_ID, type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: SPA_COL.SERVICE_ID, type: COLUMN_TYPE.TEXT, notNull: true},
+    {
+      name: SPA_COL.ACCESS_JSON,
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      defaultValue: '\'{}\'',
+    },
+    {name: SPA_COL.WINDOW_STARTED_AT, type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: SPA_COL.PUBLISHED_AT, type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_svc_part_access_service', columns: [SPA_COL.SERVICE_ID]},
+    {name: 'idx_svc_part_access_node', columns: [SPA_COL.NODE_ID]},
+  ],
+};
+
 export {
   CONTROL_PLANE_PUBLICATIONS_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
+  SERVICE_PARTITION_ACCESS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
   MODULE_MANIFESTS_SCHEMA,
   PACKAGE_REGISTRY_MAPPINGS_SCHEMA,
