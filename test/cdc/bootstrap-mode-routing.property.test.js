@@ -17,7 +17,11 @@ import {
 } from '../../src/cdc/cdc-integration-service.js';
 import {
   SYSTEM_TABLE_NAME,
+  SYSTEM_TABLE_SCHEMAS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  COLUMN_TYPE,
+} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../../src/cache/system-cache-key-descriptor.js';
@@ -100,37 +104,36 @@ function buildPartitionServicesMap() {
 }
 
 /**
- * Get a valid update column and value for a given system table.
- * Each table has different columns, so we pick one that exists.
+ * Non-primary-key columns per table, derived from the LIVE schema registry.
+ * Deriving (rather than a hardcoded switch) means adding a system table can
+ * never silently break this property test: the old switch defaulted to
+ * {updated_at}, which does not exist on newer tables such as
+ * service_partition_access, so filterDataForTable stripped it to {} and
+ * updateSystemTableRow threw — a seed-dependent flake that only surfaced when
+ * fast-check happened to generate (that table, 'update').
+ */
+const NON_PK_COLUMNS_BY_TABLE = new Map(
+  SYSTEM_TABLE_SCHEMAS.map((schema) => [
+    schema.tableName,
+    schema.columns.filter((column) => !column.primaryKey),
+  ]),
+);
+
+/**
+ * Get a valid update column and value for a given system table, chosen from
+ * the table's real columns so the value always survives filterDataForTable.
  * @param {string} tableName - System table name.
  * @return {Object} A single-key object with a valid column and value.
  */
 function getValidUpdateData(tableName) {
-  // Use columns that actually exist on each table
-  switch (tableName) {
-  case SYSTEM_TABLE_NAME.NODES:
-    return {status: 'active'};
-  case SYSTEM_TABLE_NAME.LIVE_QUERIES:
-    return {last_activity_at: Date.now()};
-  case SYSTEM_TABLE_NAME.INDICES:
-    return {created_at: Date.now()};
-  case SYSTEM_TABLE_NAME.LOGS:
-    return {created_at: Date.now()};
-  case SYSTEM_TABLE_NAME.MODULE_MANIFESTS:
-    return {digest: 'sha256:updated'};
-  case SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES:
-    return {registry_url: 'https://updated.example.com'};
-  case SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS:
-    return {target_service_id: 'svc-updated'};
-  case SYSTEM_TABLE_NAME.DEBUG_SESSIONS:
-    return {status: 'active'};
-  case SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS:
-    return {resolved: 1};
-  case SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS:
-    return {host_call_count: 2};
-  default:
-    return {updated_at: Date.now()};
+  const [column] = NON_PK_COLUMNS_BY_TABLE.get(tableName) || [];
+  if (!column) {
+    return {};
   }
+  return {
+    [column.name]:
+      column.type === COLUMN_TYPE.INTEGER ? Date.now() : 'property-test-update',
+  };
 }
 
 /**
