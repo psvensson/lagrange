@@ -72,13 +72,21 @@ const TEST_ASSIGNMENT = Object.freeze({
 });
 const TEST_LOCK_WAIT_OPERATION_NAME = 'bootstrap_request_execution';
 const TEST_LOCK_WAIT_BUDGET_MS = 5;
-const TEST_LOCK_WAIT_FAILSAFE_MS = 50;
+// Hang guard only — must comfortably exceed every deliberate wait below
+// (the 5ms lock-wait budget and the 150ms client-attempt deadline), with
+// margin for a loaded CI container.
+const TEST_LOCK_WAIT_FAILSAFE_MS = 1000;
 const TEST_LOCK_WAIT_SENTINEL = 'lock_wait_still_pending';
 const TEST_PRE_ADMISSION_FAILSAFE_SENTINEL =
   'pre_admission_readiness_still_pending';
 const TEST_EXPIRED_CLIENT_ATTEMPT_LAG_MS = 1;
 const TEST_PRE_ADMISSION_CLIENT_ATTEMPT_BUDGET_MS = 100;
-const TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS = 5;
+// Must be exhausted DURING the pre-admission wait but still valid when the
+// handler first checks it. 5ms lost that entry race on a loaded CI container
+// (>5ms elapsed between the test's Date.now() and the handler's check, so
+// pre-admission work never started); 150ms keeps entry validity with margin
+// while still exhausting well inside the failsafe.
+const TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS = 150;
 const TEST_PRE_ADMISSION_STALL_MS = 125;
 const TEST_IDLE_STAGE_CALL_COUNT = 0;
 const TEST_ACTIVE_STAGE_CALL_COUNT = 1;
