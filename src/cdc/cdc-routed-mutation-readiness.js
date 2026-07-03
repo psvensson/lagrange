@@ -360,13 +360,19 @@ class CDCRoutedMutationReadiness {
       Number.isFinite(queryTimeoutMs) && queryTimeoutMs > 0 ?
         Math.floor(queryTimeoutMs) :
         null;
-    const queryExecutionDeadlineMs =
-      queryExecutionBudgetMs === null ?
-        null :
-        Date.now() + queryExecutionBudgetMs;
+    // Armed lazily on first use: stamping the deadline here would let the
+    // admission work between here and attempt 1 (session resolution,
+    // coalescing-key/delivery-source derivation) shave milliseconds off the
+    // first attempt's timeout budget, so attempt 1 would see e.g. 199 of a
+    // 200ms budget instead of the full per-call budget.
+    let queryExecutionDeadlineMs = null;
     const getRemainingQueryExecutionBudgetMs = () => {
-      if (queryExecutionDeadlineMs === null) {
+      if (queryExecutionBudgetMs === null) {
         return null;
+      }
+      if (queryExecutionDeadlineMs === null) {
+        queryExecutionDeadlineMs = Date.now() + queryExecutionBudgetMs;
+        return queryExecutionBudgetMs;
       }
       return Math.max(0, queryExecutionDeadlineMs - Date.now());
     };

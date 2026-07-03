@@ -135,6 +135,63 @@ test('CDCIntegrationService - routed system-table write timeout budget bounds tr
   },
 );
 
+test('CDCIntegrationService - attempt-1 timeout budget is immune to pre-attempt admission latency',
+  async (t) => {
+    // Binds the lazy arming of the per-call budget clock: every Date.now()
+    // call advances the clock 1ms, so if the deadline were stamped at
+    // executeSQLViaQueryEngine entry, the admission work before attempt 1
+    // (session resolution, coalescing-key/delivery-source derivation) would
+    // shave milliseconds off the first attempt's timeoutMs (e.g. 199 of 200).
+    const executedQueries = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      retryMaxAttempts: 5,
+      retryDelayMs: 50,
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options) {
+          executedQueries.push({sql, params, options});
+          return {
+            success: false,
+            error: 'query transport reconnecting',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 250,
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    const originalDateNow = Date.now;
+    let fakeNow = originalDateNow();
+    Date.now = () => {
+      fakeNow += 1;
+      return fakeNow;
+    };
+    try {
+      await t.rejects(
+        service.updateSystemTableRow(
+          SYSTEM_TABLE_NAME.NODES,
+          {node_id: 'node-1'},
+          {
+            status: 'active',
+          },
+          {
+            queryTimeoutMs: 200,
+            skipCacheWait: true,
+          },
+        ),
+        'routed system-table writes should fail once the per-call timeout budget is exhausted',
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    t.equal(executedQueries[0]?.options?.timeoutMs, 200,
+      'attempt 1 should receive the full per-call timeout budget even when admission work consumes wall-clock time');
+  },
+);
+
 test('CDCIntegrationService - routed system-table writes default to shared background transport when the table is not transport critical',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();

@@ -41,9 +41,13 @@ async function createTestTransport(nodeId, preferredPort) {
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const port = attempt === 0 ? preferredPort : getUniquePort();
+    // Bind 127.0.0.1 explicitly: in CI containers 'localhost' can resolve to
+    // ::1 for the server bind while cross-node dials go to 127.0.0.1,
+    // producing ECONNREFUSED from an address-family mismatch.
     const router = new MessageRouter({
       nodeId,
       wsPort: port,
+      wsHost: '127.0.0.1',
     });
 
     try {
@@ -88,7 +92,7 @@ test('Raft response address validation', async (t) => {
       // Connect joining node to seed node
       await joiningTransport.router.connectToNode(
         seedNodeId,
-        `ws://localhost:${seedTransport.port}`,
+        `ws://127.0.0.1:${seedTransport.port}`,
       );
 
       // Wait for connection

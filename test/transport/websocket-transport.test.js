@@ -197,11 +197,14 @@ test('WebSocketTransport', async (t) => {
   });
 
   t.test('server and client communication', async (t) => {
-    // Create server transport
+    // Bind and dial 127.0.0.1 explicitly: in CI containers 'localhost' can
+    // resolve to ::1 for the server bind while the client dials 127.0.0.1,
+    // producing ECONNREFUSED from an address-family mismatch.
     const serverTransport = new WebSocketTransport({
       localNodeId: 'server-node',
-      localAddress: 'ws://localhost:9876',
+      localAddress: 'ws://127.0.0.1:9876',
     });
+    t.teardown(() => serverTransport.shutdown());
 
     let receivedMessage = null;
     serverTransport.register('test-service', (msg) => {
@@ -211,7 +214,7 @@ test('WebSocketTransport', async (t) => {
 
     // Start server
     try {
-      await serverTransport.startServer(9876);
+      await serverTransport.startServer(9876, '127.0.0.1');
     } catch (error) {
       // Some sandboxes/CI runners disallow binding sockets entirely (EPERM).
       // Treat that as an environment constraint and still pass the test suite.
@@ -226,14 +229,15 @@ test('WebSocketTransport', async (t) => {
     // Create client transport
     const clientTransport = new WebSocketTransport({
       localNodeId: 'client-node',
-      localAddress: 'ws://localhost:9877',
+      localAddress: 'ws://127.0.0.1:9877',
     });
+    t.teardown(() => clientTransport.shutdown());
 
     // Connect to server
     await clientTransport.initialize({
       peerNodes: [{
         nodeId: 'server-node',
-        address: 'ws://localhost:9876',
+        address: 'ws://127.0.0.1:9876',
       }],
     });
 
@@ -249,10 +253,6 @@ test('WebSocketTransport', async (t) => {
     t.ok(result.acknowledged, 'should be acknowledged');
     t.ok(receivedMessage, 'server should receive message');
     t.equal(receivedMessage.payload.data, 'hello', 'should have correct data');
-
-    // Cleanup
-    await clientTransport.shutdown();
-    await serverTransport.shutdown();
   });
 
   t.test('async handler returns resolved value in ACK', async (t) => {
@@ -260,8 +260,9 @@ test('WebSocketTransport', async (t) => {
     // Previously, async handlers would return Promise objects instead of resolved values
     const serverTransport = new WebSocketTransport({
       localNodeId: 'server-async',
-      localAddress: 'ws://localhost:9878',
+      localAddress: 'ws://127.0.0.1:9878',
     });
+    t.teardown(() => serverTransport.shutdown());
 
     // Register an ASYNC handler that returns a promise
     serverTransport.register('async-service', async (msg) => {
@@ -276,7 +277,7 @@ test('WebSocketTransport', async (t) => {
     });
 
     try {
-      await serverTransport.startServer(9878);
+      await serverTransport.startServer(9878, '127.0.0.1');
     } catch (error) {
       if (error?.code === 'EPERM' || /EPERM/i.test(error?.message || '')) {
         t.pass(`socket listen not permitted in this environment: ${error.message}`);
@@ -288,13 +289,14 @@ test('WebSocketTransport', async (t) => {
 
     const clientTransport = new WebSocketTransport({
       localNodeId: 'client-async',
-      localAddress: 'ws://localhost:9879',
+      localAddress: 'ws://127.0.0.1:9879',
     });
+    t.teardown(() => clientTransport.shutdown());
 
     await clientTransport.initialize({
       peerNodes: [{
         nodeId: 'server-async',
-        address: 'ws://localhost:9878',
+        address: 'ws://127.0.0.1:9878',
       }],
     });
 
@@ -314,8 +316,5 @@ test('WebSocketTransport', async (t) => {
     // Verify result is not a Promise object
     t.notOk(result instanceof Promise, 'result should not be a Promise');
     t.notOk(result.then, 'result should not have .then method');
-
-    await clientTransport.shutdown();
-    await serverTransport.shutdown();
   });
 });
