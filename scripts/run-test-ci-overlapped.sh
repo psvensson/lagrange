@@ -15,19 +15,6 @@ LOG_DIR=test-output
 ANALYSIS_LOG="$LOG_DIR/analysis-lane.log"
 mkdir -p "$LOG_DIR"
 
-# CI_LEAN=1 trades the overlap-for-speed design for a low-memory-PEAK gate:
-# the analysis lane runs SERIALLY (not concurrently with the tap fleet) and the
-# integration/bootstrap lanes run one-at-a-time (test:sharded:serial) instead of
-# five-concurrent. Used by release.yml on the memory-constrained self-hosted
-# runner, where the concurrent-cluster peak + eslint/TLC OOM-kills the job
-# container (exit 137). Unset => identical to the historical overlapped gate.
-if [ "${CI_LEAN:-}" = "1" ]; then
-  echo "=== CI_LEAN: serial analysis + serial sharded lanes (low memory peak) ==="
-  npm run test:static && npm run model:contracts || exit 1
-  npm run test:sharded:serial && npm run test:chart:endpoint-sync
-  exit $?
-fi
-
 nice -n 10 bash -c 'npm run test:static && npm run model:contracts' \
   > "$ANALYSIS_LOG" 2>&1 &
 analysis_pid=$!

@@ -61,14 +61,7 @@ jobs:
         run: npm ci
 
       # Full pre-release gate. Fails the release if the tagged tree is not green.
-      # CI_LEAN + TAP_JOBS keep the gate's memory PEAK low so the job container is
-      # not OOM-killed (exit 137) on the memory-constrained self-hosted runner:
-      # the analysis lane runs serially and the integration/bootstrap lanes run
-      # one-at-a-time instead of five-concurrent. See scripts/run-test-ci-overlapped.sh.
       - name: Full gate (test:ci)
-        env:
-          CI_LEAN: "1"
-          TAP_JOBS: "4"
         run: npm run test:ci
 
       # Bundle + single-executable (SEA) builds -> ./dist

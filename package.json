@@ -29,7 +29,7 @@
     "pretest": "npm run audit:state-machine-pressure",
     "test": "npm run test:sharded:all",
     "test:safety-pregate": "tap $(cat test/shards/safety-pregate.txt)",
-    "test:fast": "find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap --jobs=${TAP_JOBS:-8}",
+    "test:fast": "find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap --jobs=8",
     "test:integration:1": "tap $(cat test/shards/integration-1.txt)",
     "test:integration:2": "tap $(cat test/shards/integration-2.txt)",
     "test:integration:3": "tap $(cat test/shards/integration-3.txt)",
