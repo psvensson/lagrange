@@ -240,14 +240,41 @@ See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
 
 ## Small Mental Model
 
-At a high level, a request goes through these steps:
+**Your code is a callback.** You write an async function that takes a context
+object (`ctx`) and works with rows: `ctx.call(sql)` to read data, `ctx.out(row)`
+to emit results, and the distribution primitives below when a step genuinely has
+to cross partitions. That function is the unit Lagrange schedules — there is no
+separate worker service to stand up.
 
-1. a SQL query or runtime call enters the cluster
-2. the cluster looks up which nodes hold the partitions for that data
-3. work is sent to those nodes
+**Two ways to hand that function to the cluster:**
+
+- **Embedded** — run the runtime inside your own Node process and call
+  `runtime.run(fn)` directly (the [Example](#example) below). This is the
+  quickest path for scripts, drivers, and tests: the runtime connects to the
+  cluster, and your function executes against it.
+- **Uploaded** — package the function as a callback module plus a small manifest
+  (`example.manifest.json`: the entry file, the exported `run` function, its
+  `runtimeKind` — `native_js` or `wasm_component` — and the `SELECT` that drives
+  it). A runner stores the module inside the cluster and invokes it by that
+  statement. This is how the
+  [runnable examples](examples/distributed-sql/README.md) work, and how a
+  service ships as a first-class, replicated cluster citizen.
+
+**Where it runs.** The `SELECT` in your callback names a table. The cluster
+resolves that table to the partitions that hold its rows, and the nodes that own
+those partitions — then sends your callback *to those nodes* and runs it there,
+against local data. You never name a host or assemble a worker topology; the
+cluster already knows where the partitions live. Only rows that genuinely must
+cross the network move, and results stream back to wherever you made the call.
+
+Put together, a request goes through these steps:
+
+1. a SQL query or a `runtime.run` callback enters the cluster
+2. the cluster resolves the target table to its partitions and their owner nodes
+3. your callback is sent to those nodes
 4. local execution happens there first
 5. only the rows that genuinely must cross the network are moved
-6. results stream back
+6. results stream back to the caller
 
 The important part is not the routing itself. The important part is the
 order: local work first, network traffic only for what is left. Most stacks
@@ -266,12 +293,20 @@ runtime.run(async (ctx) => {
 });
 ```
 
-The interesting part of this example is not the API surface. It is what the
-runtime does for you:
+This is the *embedded* form from the mental model above: the runtime lives in
+your process and you call it directly. The interesting part is not the API
+surface — it is what the runtime does for you:
 
 1. it finds the partitions that own `users`
-2. it runs the work on those nodes
+2. it sends this function to the nodes that own those partitions and runs it there
 3. it streams rows back without asking you to assemble a worker topology
+
+An *uploaded* callback module exports a similar `run(ctx, batch)` function and
+works with the same `ctx` surface; the only difference is that the cluster
+stores the module and drives it by the `SELECT` in its manifest instead of you
+calling `runtime.run` in-process. See
+[examples/distributed-sql](examples/distributed-sql/README.md) for runnable
+versions.
 
 For more complex cases, the runtime exposes a small set of explicit
 distribution primitives:
