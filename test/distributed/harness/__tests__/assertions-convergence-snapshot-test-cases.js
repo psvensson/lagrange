@@ -376,6 +376,22 @@ test('waitForConvergence — uses control snapshot path only',
     assert.ok(result.settledAfterMs >= 0);
   });
 
+// Three ACTIVE p1 service rows for the SQL-fallback tests; the first row's
+// raft role varies per test (leader-labeled vs derived-from-partitions).
+function buildSqlFallbackServicesRows(firstRowRole) {
+  return [
+    ['node-a/p1/r0', firstRowRole],
+    ['node-b/p1/r1', 'follower'],
+    ['node-c/p1/r2', 'follower'],
+  ].map(([address, role]) => ({
+    service_type: 'partition',
+    status: 'ACTIVE',
+    raft_role: role,
+    address,
+    partition_id: 'p1',
+  }));
+}
+
 test('waitForConvergence — uses SQL compatibility when control snapshot owner is absent',
   async () => {
     let sqlQueryCount = 0;
@@ -388,31 +404,7 @@ test('waitForConvergence — uses SQL compatibility when control snapshot owner 
           return {rows: [{partition_id: 'p1'}]};
         }
         if (sql.includes('FROM services')) {
-          return {
-            rows: [
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'leader',
-                address: 'node-a/p1/r0',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-b/p1/r1',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-c/p1/r2',
-                partition_id: 'p1',
-              },
-            ],
-          };
+          return {rows: buildSqlFallbackServicesRows('leader')};
         }
         throw new Error('Unexpected SQL query: ' + sql);
       },
@@ -451,31 +443,7 @@ test('waitForConvergence — SQL fallback derives leaders from partitions metada
           };
         }
         if (sql.includes('FROM services')) {
-          return {
-            rows: [
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-a/p1/r0',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-b/p1/r1',
-                partition_id: 'p1',
-              },
-              {
-                service_type: 'partition',
-                status: 'ACTIVE',
-                raft_role: 'follower',
-                address: 'node-c/p1/r2',
-                partition_id: 'p1',
-              },
-            ],
-          };
+          return {rows: buildSqlFallbackServicesRows('follower')};
         }
         throw new Error('Unexpected SQL query: ' + sql);
       },

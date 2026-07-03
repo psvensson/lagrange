@@ -112,113 +112,105 @@ function defineDerivedLifecycleMetadata(shim, metadata, filePath) {
   }
 }
 
+// Pure-ish: copy source fields onto the shim without clobbering existing
+// (or already-flattened) top-level fields.
+function copyFieldsWithoutClobber(shim, source, skipKey) {
+  for (const [k, v] of Object.entries(source)) {
+    if (k === skipKey) continue;
+    if (shim[k] === undefined) shim[k] = v;
+  }
+}
+
+const V2_FLATTENED_SECTIONS = ['intent', 'scope', 'gates', 'modelFit'];
+
+function flattenExecutionSection(shim, execution) {
+  if (!execution) return;
+  copyFieldsWithoutClobber(shim, execution, 'proof');
+  if (execution.proof && shim.proof === undefined) {
+    shim.proof = Array.isArray(execution.proof) ?
+      execution.proof :
+      execution.proof.commands || [];
+  }
+}
+
+function parseCompanionGatesContent(companionPath, content) {
+  if (companionPath.endsWith('.json')) {
+    return JSON.parse(content);
+  }
+  const match =
+    content.match(/<!--\s*(?:work-package-gates|companion-gates)\s*(\{[\s\S]*?\})\s*-->/u) ||
+    content.match(/<!--\s*work-package\s*(\{[\s\S]*?\})\s*-->/u);
+  return match ? JSON.parse(match[1]) : {};
+}
+
+function overlayCompanionGates(shim, metadata, filePath) {
+  const companionFile = metadata.gates?.companionGatesFile;
+  if (!companionFile || !filePath) return;
+  try {
+    const companionPath = path.resolve(path.dirname(filePath), companionFile);
+    if (!fsSync.existsSync(companionPath)) return;
+    const companionData = parseCompanionGatesContent(
+      companionPath,
+      fsSync.readFileSync(companionPath, 'utf8'),
+    );
+    copyFieldsWithoutClobber(shim, companionData);
+  } catch {
+    // Companion gates are optional overlay data; local package metadata
+    // remains valid and lifecycle-derived fields still apply.
+  }
+}
+
+function applyRouteDerivedFields(shim, metadata) {
+  const baseRoute = {
+    scenario: shim.scenario,
+    artifact: shim.artifact,
+    owner: shim.owner,
+    boundary: shim.boundary,
+    dominantReason: shim.dominantReason,
+  };
+  if (metadata.representativeResidual) {
+    shim.representativeResidual = {
+      ...baseRoute,
+      ...metadata.representativeResidual,
+    };
+  }
+  if (metadata.rerunDecision) {
+    shim.rerunDecision = {
+      sourceArtifact: baseRoute.artifact,
+      routeOwner: baseRoute.owner,
+      routeBoundary: baseRoute.boundary,
+      routeDominantReason: baseRoute.dominantReason,
+      ...metadata.rerunDecision,
+    };
+  }
+  const canonicalClassification =
+    metadata.result?.classification ||
+    metadata.closureSummary?.resultClassification ||
+    metadata.scenarioCausalClosure?.resultClassification ||
+    metadata.causalGovernance?.representativeOutcome ||
+    metadata.representativeResidual?.status ||
+    metadata.theoryLoop?.result;
+  if (canonicalClassification && !shim.result) {
+    shim.result = {classification: canonicalClassification};
+  }
+}
+
 function normalizeMetadata(metadata, filePath) {
   if (!metadata) return metadata;
-  if (metadata.schema === 'work-package-v2') {
-    const shim = {...metadata};
-
-    if (metadata.intent) {
-      for (const [k, v] of Object.entries(metadata.intent)) {
-        if (shim[k] === undefined) shim[k] = v;
-      }
-    }
-    if (metadata.scope) {
-      for (const [k, v] of Object.entries(metadata.scope)) {
-        if (shim[k] === undefined) shim[k] = v;
-      }
-    }
-    if (metadata.gates) {
-      for (const [k, v] of Object.entries(metadata.gates)) {
-        if (shim[k] === undefined) shim[k] = v;
-      }
-    }
-    if (metadata.modelFit) {
-      for (const [k, v] of Object.entries(metadata.modelFit)) {
-        if (shim[k] === undefined) shim[k] = v;
-      }
-    }
-    if (metadata.execution) {
-      for (const [k, v] of Object.entries(metadata.execution)) {
-        if (k === 'proof') continue;
-        if (shim[k] === undefined) shim[k] = v;
-      }
-      if (metadata.execution.proof) {
-        if (shim.proof === undefined) {
-          if (Array.isArray(metadata.execution.proof)) {
-            shim.proof = metadata.execution.proof;
-          } else {
-            shim.proof = metadata.execution.proof.commands || [];
-          }
-        }
-      }
-    }
-
-    const companionFile = metadata.gates?.companionGatesFile;
-    if (companionFile && filePath) {
-      try {
-        const companionPath = path.resolve(path.dirname(filePath), companionFile);
-        if (fsSync.existsSync(companionPath)) {
-          const content = fsSync.readFileSync(companionPath, 'utf8');
-          let companionData = {};
-          if (companionPath.endsWith('.json')) {
-            companionData = JSON.parse(content);
-          } else {
-            const match = content.match(/<!--\s*(?:work-package-gates|companion-gates)\s*(\{[\s\S]*?\})\s*-->/u) || content.match(/<!--\s*work-package\s*(\{[\s\S]*?\})\s*-->/u);
-            if (match) {
-              companionData = JSON.parse(match[1]);
-            }
-          }
-          for (const [k, v] of Object.entries(companionData)) {
-            if (shim[k] === undefined) {
-              shim[k] = v;
-            }
-          }
-        }
-      } catch {
-        // Companion gates are optional overlay data; local package metadata
-        // remains valid and lifecycle-derived fields still apply.
-      }
-    }
-
+  const shim = {...metadata};
+  if (metadata.schema !== 'work-package-v2') {
     defineDerivedLifecycleMetadata(shim, metadata, filePath);
-
-    const baseRoute = {
-      scenario: shim.scenario,
-      artifact: shim.artifact,
-      owner: shim.owner,
-      boundary: shim.boundary,
-      dominantReason: shim.dominantReason,
-    };
-    if (metadata.representativeResidual) {
-      shim.representativeResidual = {
-        ...baseRoute,
-        ...metadata.representativeResidual,
-      };
-    }
-    if (metadata.rerunDecision) {
-      shim.rerunDecision = {
-        sourceArtifact: baseRoute.artifact,
-        routeOwner: baseRoute.owner,
-        routeBoundary: baseRoute.boundary,
-        routeDominantReason: baseRoute.dominantReason,
-        ...metadata.rerunDecision,
-      };
-    }
-    const canonicalClassification =
-      metadata.result?.classification ||
-      metadata.closureSummary?.resultClassification ||
-      metadata.scenarioCausalClosure?.resultClassification ||
-      metadata.causalGovernance?.representativeOutcome ||
-      metadata.representativeResidual?.status ||
-      metadata.theoryLoop?.result;
-    if (canonicalClassification && !shim.result) {
-      shim.result = {classification: canonicalClassification};
-    }
-
     return shim;
   }
-  const shim = {...metadata};
+  for (const section of V2_FLATTENED_SECTIONS) {
+    if (metadata[section]) {
+      copyFieldsWithoutClobber(shim, metadata[section]);
+    }
+  }
+  flattenExecutionSection(shim, metadata.execution);
+  overlayCompanionGates(shim, metadata, filePath);
   defineDerivedLifecycleMetadata(shim, metadata, filePath);
+  applyRouteDerivedFields(shim, metadata);
   return shim;
 }
 

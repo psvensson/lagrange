@@ -46,13 +46,14 @@ const RATCHET_TARGETS = [
     strictEligible: true,
   },
   {
-    // Anchored 2026-07-02 after the primitive-alias inlining codemod
-    // (inlines shifted clone boundaries by +29 lines, same 842 groups).
+    // Ratcheted DOWN 2026-07-03 after deduplicating the SQL-fallback
+    // services-rows clones in the convergence snapshot test cases
+    // (was 842/32222, anchored 2026-07-02 post primitive-alias codemod).
     // Ratchet DOWN only from here.
     name: 'test',
     directories: ['test'],
-    baselineCloneGroupCount: 842,
-    baselineDuplicatedLineCount: 32222,
+    baselineCloneGroupCount: 841,
+    baselineDuplicatedLineCount: 32182,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

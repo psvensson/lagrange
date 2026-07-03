@@ -392,61 +392,70 @@ function getPackagesMetadataSync(packagesDir) {
   }
 }
 
+// Pure: descriptor for an active theory entry, or null when the entry is not
+// active / has no parseable owner-boundary / has no dated id.
+function parseActiveTheoryDescriptor(entry) {
+  if (entryField(entry, FIELD_STATUS) !== 'active') {
+    return null;
+  }
+  const parts = entryField(entry, FIELD_OWNER_BOUNDARY).split('/');
+  if (parts.length < NUM_TWO) {
+    return null;
+  }
+  // Parse theory date from entry ID: theory-YYYYMMDD-slug
+  const dateMatch = entry.id.match(/^theory-(\d{8})-/u);
+  if (!dateMatch) {
+    return null;
+  }
+  return {
+    owner: parts[NUM_ZERO].trim().toLowerCase(),
+    boundary: parts[NUM_ONE].trim().toLowerCase(),
+    dateStr: dateMatch[NUM_ONE], // YYYYMMDD
+  };
+}
+
+// Pure: a done package newer than the theory that shares its owner/boundary
+// or explicitly cites the theory entry.
+function packageSupersedesTheory(pkg, entry, theory) {
+  if (pkg.status !== 'done') {
+    return false;
+  }
+  // Parse package date from filename: done-YYYYMMDD-slug.md
+  const pkgDateMatch = pkg.filename.match(/^done-(\d{8})-/u);
+  if (!pkgDateMatch || pkgDateMatch[NUM_ONE] < theory.dateStr) {
+    return false;
+  }
+  const pkgOwner = String(pkg.metadata.owner || EMPTY_TEXT).trim().toLowerCase();
+  const pkgBoundary = String(pkg.metadata.boundary || EMPTY_TEXT).trim().toLowerCase();
+  const matchesOwnerBoundary =
+    pkgOwner === theory.owner && pkgBoundary === theory.boundary;
+  const citesTheory = Array.isArray(pkg.metadata.theoryLedgerRefs) &&
+    pkg.metadata.theoryLedgerRefs.includes(entry.id);
+  return matchesOwnerBoundary || citesTheory;
+}
+
+// Pure: is the closed package linked in the theory's Linked packages field?
+function isPackageLinkedInTheory(entry, pkg) {
+  const linkedPackages =
+    parseTheoryReferenceList(entry.fields[FIELD_LINKED_PACKAGES]);
+  return linkedPackages.some((ref) => {
+    const cleanRef = ref.replace(/^`|`$/gu, EMPTY_TEXT);
+    return pkg.filename.includes(cleanRef) || cleanRef.includes(pkg.filename);
+  });
+}
+
 function validateStaleActiveTheories(entries, packagesDir) {
   const errors = [];
   const packages = getPackagesMetadataSync(packagesDir);
   for (const entry of entries) {
-    const status = entryField(entry, FIELD_STATUS);
-    if (status !== 'active') {
+    const theory = parseActiveTheoryDescriptor(entry);
+    if (!theory) {
       continue;
     }
-    const ownerBoundary = entryField(entry, FIELD_OWNER_BOUNDARY);
-    const parts = ownerBoundary.split('/');
-    if (parts.length < NUM_TWO) {
-      continue;
-    }
-    const theoryOwner = parts[NUM_ZERO].trim().toLowerCase();
-    const theoryBoundary = parts[NUM_ONE].trim().toLowerCase();
-
-    // Parse theory date from entry ID: theory-YYYYMMDD-slug
-    const dateMatch = entry.id.match(/^theory-(\d{8})-/u);
-    if (!dateMatch) {
-      continue;
-    }
-    const theoryDateStr = dateMatch[NUM_ONE]; // YYYYMMDD
-
     for (const pkg of packages) {
-      if (pkg.status !== 'done') {
-        continue;
-      }
-      // Parse package date from filename: done-YYYYMMDD-slug.md
-      const pkgDateMatch = pkg.filename.match(/^done-(\d{8})-/u);
-      if (!pkgDateMatch) {
-        continue;
-      }
-      const pkgDateStr = pkgDateMatch[NUM_ONE];
-
-      // If package is newer than or equal to theory date
-      if (pkgDateStr >= theoryDateStr) {
-        const pkgOwner = String(pkg.metadata.owner || EMPTY_TEXT).trim().toLowerCase();
-        const pkgBoundary = String(pkg.metadata.boundary || EMPTY_TEXT).trim().toLowerCase();
-
-        const matchesOwnerBoundary = (pkgOwner === theoryOwner && pkgBoundary === theoryBoundary);
-        const citesTheory = Array.isArray(pkg.metadata.theoryLedgerRefs) &&
-                            pkg.metadata.theoryLedgerRefs.includes(entry.id);
-
-        if (matchesOwnerBoundary || citesTheory) {
-          // Check if this closed package is linked in the theory
-          const linkedPackages = parseTheoryReferenceList(entry.fields[FIELD_LINKED_PACKAGES]);
-          const isLinked = linkedPackages.some((ref) => {
-            const cleanRef = ref.replace(/^`|`$/gu, EMPTY_TEXT);
-            return pkg.filename.includes(cleanRef) || cleanRef.includes(pkg.filename);
-          });
-
-          if (!isLinked) {
-            errors.push(`${entry.id}: active theory is stale because newer closed package ${pkg.filename} in same owner/boundary is not linked in the ledger.`);
-          }
-        }
+      if (packageSupersedesTheory(pkg, entry, theory) &&
+          !isPackageLinkedInTheory(entry, pkg)) {
+        errors.push(`${entry.id}: active theory is stale because newer closed package ${pkg.filename} in same owner/boundary is not linked in the ledger.`);
       }
     }
   }
