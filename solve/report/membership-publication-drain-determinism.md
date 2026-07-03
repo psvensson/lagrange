@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/membership-publication-drain-determinism.json
 
 **Attempts:** 0
 
