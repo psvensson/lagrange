@@ -157,6 +157,7 @@ describe('wasm-service-models', () => {
         handlerFunctionId: 'func-1',
         readConsistency: 'leader_only',
         writeConsistency: 'async',
+        readLocality: 'same_group',
         replicaCount: 5,
         protocol: 'websocket',
         resourceBudget: {

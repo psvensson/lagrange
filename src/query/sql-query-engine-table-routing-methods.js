@@ -1,4 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {SERVICE_READ_LOCALITY} from '../constants/index.js';
+import {SD_COL} from '../wasm-service/wasm-service-models.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -192,6 +194,33 @@ class SQLQueryEngineTableRoutingMethods {
     }
 
     return null;
+  }
+
+  /**
+   * Resolve whether the issuing service's read-locality policy prefers
+   * same-latency-group replicas. The policy is the durable
+   * service_definitions read_locality column, observed from the
+   * node-local CDC-fed cache; no issuing service or no definition
+   * means no preference (uniform routing).
+   * @param {Object} queryOptions - Query options carrying issuingServiceId.
+   * @return {boolean} True when reads should prefer the local latency group.
+   * @private
+   */
+  resolveIssuingServiceReadLocality(queryOptions) {
+    const issuingServiceId = queryOptions?.issuingServiceId;
+    if (
+      !issuingServiceId ||
+      !this.systemCache ||
+      typeof this.systemCache.get !== LOCAL_STR_FUNCTION
+    ) {
+      return false;
+    }
+    const definition = this.systemCache.get(
+      TABLES.SERVICE_DEFINITIONS,
+      issuingServiceId,
+    );
+    return definition?.[SD_COL.READ_LOCALITY] ===
+      SERVICE_READ_LOCALITY.SAME_GROUP;
   }
 
   /**

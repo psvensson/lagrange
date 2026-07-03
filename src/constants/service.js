@@ -10,4 +10,12 @@ const SERVICE_PROFILE = Object.freeze({
   SQL_ENGINE: 'sql_engine',
 });
 
-export {SERVICE_TYPE, SERVICE_PROFILE};
+// Per-service read routing locality policy (service_definitions.read_locality).
+// ANY keeps uniform routing over routable replicas (implicit load spreading);
+// SAME_GROUP prefers replicas in the reader's latency group, local node first.
+const SERVICE_READ_LOCALITY = Object.freeze({
+  ANY: 'any',
+  SAME_GROUP: 'same_group',
+});
+
+export {SERVICE_TYPE, SERVICE_PROFILE, SERVICE_READ_LOCALITY};

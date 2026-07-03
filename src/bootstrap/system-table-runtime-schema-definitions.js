@@ -148,6 +148,11 @@ const SERVICE_DEFINITION_COLUMN_SPEC = Object.freeze({
     notNull: true,
     defaultValue: '\'strong\'',
   }),
+  [SD_COL.READ_LOCALITY]: Object.freeze({
+    type: COLUMN_TYPE.TEXT,
+    notNull: true,
+    defaultValue: '\'any\'',
+  }),
   [SD_COL.REPLICA_COUNT]: Object.freeze({
     type: COLUMN_TYPE.INTEGER,
     notNull: true,

@@ -1,0 +1,40 @@
+{
+  "id": "service-read-locality-policy",
+  "statement": "service_definitions carries a durable per-service readLocality policy field (default off, not a flag): accepted at service registration/validation, CDC-propagated to all nodes, readable from the node-local cached view on the query read hot path without per-read lookups; when readLocality is enabled for a service, read routing candidate selection prefers same-latency-group (and local-node) replicas via the existing dormant ordering mechanism; with the policy off, routing behavior is unchanged. Proven by deterministic tests that are red-on-revert of the wiring (dt:prove), including one test showing policy-off order is unchanged and policy-on order prefers the local latency group.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/service-data-affinity-placement.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-read-locality-policy",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-read-locality-policy-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-read-locality-policy",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

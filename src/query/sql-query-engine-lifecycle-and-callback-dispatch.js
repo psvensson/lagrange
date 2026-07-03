@@ -276,7 +276,10 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     }
     lifecycle.setQueryExecutorFactory(
       (serviceId) => async (sql, params) =>
-        this.executeQuery(sql, params, {sessionId: serviceId}),
+        this.executeQuery(sql, params, {
+          sessionId: serviceId,
+          issuingServiceId: serviceId,
+        }),
     );
   }
 

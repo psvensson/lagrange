@@ -1,0 +1,1110 @@
+diff --git a/scripts/checks/guard-test-scenario-runner.js b/scripts/checks/guard-test-scenario-runner.js
+new file mode 100644
+index 00000000..89639ed1
+--- /dev/null
++++ b/scripts/checks/guard-test-scenario-runner.js
+@@ -0,0 +1,120 @@
++/**
++ * Shared machinery for quest scenario runner scripts that prove a
++ * scenario by running its committed deterministic guard-test files.
++ *
++ * Each runner declares a `{scenario: [guardTestFile, ...]}` map and calls
++ * `runGuardTestScenarios(SCENARIOS)`. Every scenario's guard files are
++ * executed via tap and a scenario-harness report is written into
++ * `test-output/reports/` in the shape the Solver's `scenario-harness`
++ * probe reads (`scripts/solve/probes/scenario-harness.js`):
++ *   - standardSummary.scenarios[].current.passed / verdict
++ *   - optimizationSummary.totalPriorityItems (lower-is-better gradient =
++ *     number of failing guard-test files)
++ *   - summary.failed
++ *
++ * Deterministic and fast (no Docker); safe to run N times for a
++ * doneWhen's `consecutive` gate.
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {spawnSync} from 'node:child_process';
++
++const REPORT_DIR = 'test-output/reports';
++const GUARD_FILE_TIMEOUT_MS = 300000;
++
++function runGuardFile(file) {
++  const result = spawnSync('npx', ['tap', file, '--disable-coverage'], {
++    encoding: 'utf8',
++    timeout: GUARD_FILE_TIMEOUT_MS,
++  });
++  const out = `${result.stdout || ''}${result.stderr || ''}`;
++  const totals = out.match(/# \{ total: (\d+), pass: (\d+) \}/);
++  return {
++    file,
++    passed: result.status === 0,
++    assertions: totals ? Number(totals[1]) : null,
++    assertionsPassed: totals ? Number(totals[2]) : null,
++  };
++}
++
++function buildReport(scenario, results, timestamp) {
++  const failing = results.filter((r) => !r.passed);
++  const passed = failing.length === 0;
++  return {
++    timestamp,
++    scenario,
++    summary: {
++      total: results.length,
++      passed: results.length - failing.length,
++      failed: failing.length,
++    },
++    optimizationSummary: {
++      totalPriorityItems: failing.length,
++    },
++    standardSummary: {
++      scenarios: [
++        {
++          scenario,
++          passed,
++          current: {
++            passed,
++            verdict: passed ? 'PASS' : 'FAIL',
++          },
++          detail: {
++            guardTests: results,
++          },
++        },
++      ],
++    },
++  };
++}
++
++function runScenario(scenarios, scenario) {
++  const files = scenarios[scenario];
++  const results = files.map(runGuardFile);
++  const timestamp = new Date().toISOString();
++  const report = buildReport(scenario, results, timestamp);
++
++  fs.mkdirSync(REPORT_DIR, {recursive: true});
++  const fileStamp = timestamp.replace(/[:.]/g, '-');
++  const reportPath = path.join(
++    REPORT_DIR,
++    `${scenario}-${fileStamp}.report.json`,
++  );
++  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
++
++  const passed = report.summary.failed === 0;
++  process.stdout.write(
++    `${scenario}: ${passed ? 'PASS' : 'FAIL'} — ` +
++    `${report.summary.passed}/${report.summary.total} guard files green ` +
++    `(${results.map((r) => `${path.basename(r.file)}=` +
++      `${r.assertionsPassed ?? '?'}/${r.assertions ?? '?'}`).join(' ')})\n` +
++    `report: ${reportPath}\n`,
++  );
++  return passed;
++}
++
++/**
++ * Run the named scenario (argv[2]) or every scenario in the map, and set
++ * the process exit code (0 all pass, 1 any fail, 2 unknown scenario).
++ * @param {Object<string, string[]>} scenarios - scenario -> guard files.
++ */
++function runGuardTestScenarios(scenarios) {
++  const only = process.argv[2];
++  const names = only ? [only] : Object.keys(scenarios);
++  for (const name of names) {
++    if (!scenarios[name]) {
++      process.stderr.write(`unknown scenario: ${name}\n`);
++      process.exitCode = 2;
++      return;
++    }
++  }
++  let allPassed = true;
++  for (const name of names) {
++    if (!runScenario(scenarios, name)) allPassed = false;
++  }
++  process.exitCode = allPassed ? 0 : 1;
++}
++
++export {runGuardTestScenarios};
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+new file mode 100644
+index 00000000..53ad9b6b
+--- /dev/null
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -0,0 +1,33 @@
++#!/usr/bin/env node
++/**
++ * Runner for the service↔data affinity placement quest scenarios
++ * (epic: solve/epics/service-data-affinity-placement.md).
++ *
++ * Executes each scenario's deterministic guard-test suite (the committed
++ * proof of the quest statement) and writes a scenario-harness report for
++ * the Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests:
++ *   service-read-locality-policy
++ *     - test/query/service-read-locality-routing.test.js
++ *       (service_definitions.read_locality column end-to-end: schema +
++ *        serialize/deserialize + create/update validation + engine
++ *        policy resolution + executeSelect threading + candidate
++ *        ordering local-node/same-group first, policy-off unchanged)
++ *
++ * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
++ *   (default: run all scenarios)
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'service-read-locality-policy': [
++    'test/query/service-read-locality-routing.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/run-restart-new-ip-scenarios.js b/scripts/run-restart-new-ip-scenarios.js
+index ca43d89b..7dcdb0fc 100644
+--- a/scripts/run-restart-new-ip-scenarios.js
++++ b/scripts/run-restart-new-ip-scenarios.js
+@@ -2,14 +2,10 @@
+ /**
+  * Runner for the two `restart-new-ip-*` quest scenarios.
+  *
+- * Executes each scenario's deterministic guard-test suite (the committed proof
+- * of the quest statement) via tap and writes a scenario-harness report into
+- * `test-output/reports/` in the shape the Solver's `scenario-harness` probe
+- * reads (`scripts/solve/probes/scenario-harness.js`):
+- *   - standardSummary.scenarios[].current.passed / verdict
+- *   - optimizationSummary.totalPriorityItems (lower-is-better gradient =
+- *     number of failing guard-test files)
+- *   - summary.failed
++ * Executes each scenario's deterministic guard-test suite (the committed
++ * proof of the quest statement) and writes a scenario-harness report for
++ * the Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
+  *
+  * Scenario -> guard tests:
+  *   restart-new-ip-name-first-advertising
+@@ -25,18 +21,13 @@
+  *     - test/transport/node-address-resolution.test.js
+  *       (defect 3: stale seedNodeWsAddress vs canonical row precedence)
+  *
+- * Deterministic and fast (no Docker); safe to run N times for the doneWhen's
+- * `consecutive: 3` gate.
+- *
+  * Usage: node scripts/run-restart-new-ip-scenarios.js [scenario]
+  *   (default: run both scenarios)
+  */
+ 
+-import fs from 'node:fs';
+-import path from 'node:path';
+-import {spawnSync} from 'node:child_process';
+-
+-const REPORT_DIR = 'test-output/reports';
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
+ 
+ const SCENARIOS = {
+   'restart-new-ip-name-first-advertising': [
+@@ -50,90 +41,4 @@ const SCENARIOS = {
+   ],
+ };
+ 
+-function runGuardFile(file) {
+-  const result = spawnSync('npx', ['tap', file, '--disable-coverage'], {
+-    encoding: 'utf8',
+-    timeout: 300000,
+-  });
+-  const out = `${result.stdout || ''}${result.stderr || ''}`;
+-  const totals = out.match(/# \{ total: (\d+), pass: (\d+) \}/);
+-  return {
+-    file,
+-    passed: result.status === 0,
+-    assertions: totals ? Number(totals[1]) : null,
+-    assertionsPassed: totals ? Number(totals[2]) : null,
+-  };
+-}
+-
+-function buildReport(scenario, results, timestamp) {
+-  const failing = results.filter((r) => !r.passed);
+-  const passed = failing.length === 0;
+-  return {
+-    timestamp,
+-    scenario,
+-    summary: {
+-      total: results.length,
+-      passed: results.length - failing.length,
+-      failed: failing.length,
+-    },
+-    optimizationSummary: {
+-      totalPriorityItems: failing.length,
+-    },
+-    standardSummary: {
+-      scenarios: [
+-        {
+-          scenario,
+-          passed,
+-          current: {
+-            passed,
+-            verdict: passed ? 'PASS' : 'FAIL',
+-          },
+-          detail: {
+-            guardTests: results,
+-          },
+-        },
+-      ],
+-    },
+-  };
+-}
+-
+-function runScenario(scenario) {
+-  const files = SCENARIOS[scenario];
+-  const results = files.map(runGuardFile);
+-  const timestamp = new Date().toISOString();
+-  const report = buildReport(scenario, results, timestamp);
+-
+-  fs.mkdirSync(REPORT_DIR, {recursive: true});
+-  const fileStamp = timestamp.replace(/[:.]/g, '-');
+-  const reportPath = path.join(REPORT_DIR, `${scenario}-${fileStamp}.report.json`);
+-  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+-
+-  const passed = report.summary.failed === 0;
+-  process.stdout.write(
+-    `${scenario}: ${passed ? 'PASS' : 'FAIL'} — ` +
+-    `${report.summary.passed}/${report.summary.total} guard files green ` +
+-    `(${results.map((r) => `${path.basename(r.file)}=` +
+-      `${r.assertionsPassed ?? '?'}/${r.assertions ?? '?'}`).join(' ')})\n` +
+-    `report: ${reportPath}\n`,
+-  );
+-  return passed;
+-}
+-
+-function main() {
+-  const only = process.argv[2];
+-  const names = only ? [only] : Object.keys(SCENARIOS);
+-  for (const name of names) {
+-    if (!SCENARIOS[name]) {
+-      process.stderr.write(`unknown scenario: ${name}\n`);
+-      process.exitCode = 2;
+-      return;
+-    }
+-  }
+-  let allPassed = true;
+-  for (const name of names) {
+-    if (!runScenario(name)) allPassed = false;
+-  }
+-  process.exitCode = allPassed ? 0 : 1;
+-}
+-
+-main();
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/system-table-runtime-schema-definitions.js b/src/bootstrap/system-table-runtime-schema-definitions.js
+index 2eed9437..7f4cf6ec 100644
+--- a/src/bootstrap/system-table-runtime-schema-definitions.js
++++ b/src/bootstrap/system-table-runtime-schema-definitions.js
+@@ -148,6 +148,11 @@ const SERVICE_DEFINITION_COLUMN_SPEC = Object.freeze({
+     notNull: true,
+     defaultValue: '\'strong\'',
+   }),
++  [SD_COL.READ_LOCALITY]: Object.freeze({
++    type: COLUMN_TYPE.TEXT,
++    notNull: true,
++    defaultValue: '\'any\'',
++  }),
+   [SD_COL.REPLICA_COUNT]: Object.freeze({
+     type: COLUMN_TYPE.INTEGER,
+     notNull: true,
+diff --git a/src/constants/index.js b/src/constants/index.js
+index d882b6ad..279a97ae 100644
+--- a/src/constants/index.js
++++ b/src/constants/index.js
+@@ -14,7 +14,11 @@ export {NODE_STATE} from './node-state.js';
+ export {NUM} from './numbers.js';
+ export {SQL} from './sql.js';
+ export {SERVICE_STATUS} from './service-status.js';
+-export {SERVICE_TYPE, SERVICE_PROFILE} from './service.js';
++export {
++  SERVICE_TYPE,
++  SERVICE_PROFILE,
++  SERVICE_READ_LOCALITY,
++} from './service.js';
+ export {
+   UNIFIED_SERVICE_TYPE,
+   ALLOWED_UNIFIED_SERVICE_TYPES,
+diff --git a/src/constants/service.js b/src/constants/service.js
+index dabb89db..049d6080 100644
+--- a/src/constants/service.js
++++ b/src/constants/service.js
+@@ -10,4 +10,12 @@ const SERVICE_PROFILE = Object.freeze({
+   SQL_ENGINE: 'sql_engine',
+ });
+ 
+-export {SERVICE_TYPE, SERVICE_PROFILE};
++// Per-service read routing locality policy (service_definitions.read_locality).
++// ANY keeps uniform routing over routable replicas (implicit load spreading);
++// SAME_GROUP prefers replicas in the reader's latency group, local node first.
++const SERVICE_READ_LOCALITY = Object.freeze({
++  ANY: 'any',
++  SAME_GROUP: 'same_group',
++});
++
++export {SERVICE_TYPE, SERVICE_PROFILE, SERVICE_READ_LOCALITY};
+diff --git a/src/query/query-executor-partition-routing-candidates.js b/src/query/query-executor-partition-routing-candidates.js
+index caf57e9e..c53d081f 100644
+--- a/src/query/query-executor-partition-routing-candidates.js
++++ b/src/query/query-executor-partition-routing-candidates.js
+@@ -272,7 +272,8 @@ const queryExecutorPartitionRoutingCandidateMethods = {
+   },
+ 
+   /**
+-   * Sort services to prefer same-group replicas for read queries.
++   * Sort services to prefer near replicas for read queries: the local
++   * node first, then same-latency-group replicas, then the rest.
+    * @param {Object[]} services - Routable services.
+    * @param {string|null} localGroupId - Local node's latency group.
+    * @param {boolean} enabled - Preference enabled flag.
+@@ -287,19 +288,16 @@ const queryExecutorPartitionRoutingCandidateMethods = {
+     ) {
+       return services;
+     }
+-    return [...services].sort((left, right) => {
+-      const leftGroupId = this.resolveNodeLatencyGroupId(left?.node_id);
+-      const rightGroupId = this.resolveNodeLatencyGroupId(right?.node_id);
+-      const leftPreferred = leftGroupId === localGroupId;
+-      const rightPreferred = rightGroupId === localGroupId;
+-      if (leftPreferred && !rightPreferred) {
+-        return -1;
++    const localityRank = (service) => {
++      if (service?.node_id === this.nodeId) {
++        return 0;
+       }
+-      if (!leftPreferred && rightPreferred) {
+-        return 1;
+-      }
+-      return 0;
+-    });
++      const groupId = this.resolveNodeLatencyGroupId(service?.node_id);
++      return groupId === localGroupId ? 1 : 2;
++    };
++    return [...services].sort(
++      (left, right) => localityRank(left) - localityRank(right),
++    );
+   },
+ 
+   resolveRecoveryCandidateSelectionOffset(services = [], selectionKey = null) {
+diff --git a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+index e963b557..b7b37888 100644
+--- a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
++++ b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+@@ -276,7 +276,10 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+     }
+     lifecycle.setQueryExecutorFactory(
+       (serviceId) => async (sql, params) =>
+-        this.executeQuery(sql, params, {sessionId: serviceId}),
++        this.executeQuery(sql, params, {
++          sessionId: serviceId,
++          issuingServiceId: serviceId,
++        }),
+     );
+   }
+ 
+diff --git a/src/query/sql-query-engine-select-execution.js b/src/query/sql-query-engine-select-execution.js
+index 64fc1e78..9e4442a0 100644
+--- a/src/query/sql-query-engine-select-execution.js
++++ b/src/query/sql-query-engine-select-execution.js
+@@ -239,12 +239,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
+       tableName,
+       queryOptions.deliveryPriority,
+     );
++    const preferSameLatencyGroup =
++      queryOptions.preferSameLatencyGroup === true ||
++      this.resolveIssuingServiceReadLocality(queryOptions);
+     const result = await this.queryExecutor.executeSelect(
+       ast,
+       partitionIds,
+       params,
+       {
+         preferLeader,
++        preferSameLatencyGroup,
+         deliveryPriority,
+         distributedPlan,
+         routingReadinessDimension,
+diff --git a/src/query/sql-query-engine-table-routing-methods.js b/src/query/sql-query-engine-table-routing-methods.js
+index e003d354..90edf486 100644
+--- a/src/query/sql-query-engine-table-routing-methods.js
++++ b/src/query/sql-query-engine-table-routing-methods.js
+@@ -1,4 +1,6 @@
+ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
++import {SERVICE_READ_LOCALITY} from '../constants/index.js';
++import {SD_COL} from '../wasm-service/wasm-service-models.js';
+ 
+ const LOCAL_STR_STRING = 'string';
+ const LOCAL_STR_FUNCTION = 'function';
+@@ -194,6 +196,33 @@ class SQLQueryEngineTableRoutingMethods {
+     return null;
+   }
+ 
++  /**
++   * Resolve whether the issuing service's read-locality policy prefers
++   * same-latency-group replicas. The policy is the durable
++   * service_definitions read_locality column, observed from the
++   * node-local CDC-fed cache; no issuing service or no definition
++   * means no preference (uniform routing).
++   * @param {Object} queryOptions - Query options carrying issuingServiceId.
++   * @return {boolean} True when reads should prefer the local latency group.
++   * @private
++   */
++  resolveIssuingServiceReadLocality(queryOptions) {
++    const issuingServiceId = queryOptions?.issuingServiceId;
++    if (
++      !issuingServiceId ||
++      !this.systemCache ||
++      typeof this.systemCache.get !== LOCAL_STR_FUNCTION
++    ) {
++      return false;
++    }
++    const definition = this.systemCache.get(
++      TABLES.SERVICE_DEFINITIONS,
++      issuingServiceId,
++    );
++    return definition?.[SD_COL.READ_LOCALITY] ===
++      SERVICE_READ_LOCALITY.SAME_GROUP;
++  }
++
+   /**
+    * Read schema-migration rows for one table from system cache.
+    * @param {Object|null} tableInfo - Table metadata row.
+diff --git a/src/wasm-service/meta-command-handlers.js b/src/wasm-service/meta-command-handlers.js
+index e506e14f..a824d76f 100644
+--- a/src/wasm-service/meta-command-handlers.js
++++ b/src/wasm-service/meta-command-handlers.js
+@@ -11,6 +11,7 @@ import {
+   TABLES,
+   NUM,
+   SERVICE_PROFILE,
++  SERVICE_READ_LOCALITY,
+   UNIFIED_SERVICE_TYPE,
+ } from '../constants/index.js';
+ import {
+@@ -55,6 +56,8 @@ const META_COMMAND_ERROR_MSG = Object.freeze({
+   SERVICE_NAME_REQUIRED: 'Service name is required',
+   HANDLER_FUNCTION_REQUIRED: 'Handler function ID is required',
+   REPLICA_COUNT_ODD: 'Replica count must be an odd number >= 3',
++  READ_LOCALITY_INVALID:
++    'readLocality must be one of: any, same_group',
+   SERVICE_DESCRIPTOR_INVALID: 'Service descriptor is invalid',
+   RUNTIME_DESCRIPTOR_INVALID: 'Runtime descriptor is invalid',
+   RUNTIME_KIND_REQUIRED_FOR_UPDATE:
+@@ -200,6 +203,15 @@ function isValidReplicaCount(count) {
+     count % 2 !== 0;
+ }
+ 
++/**
++ * Validate that readLocality is a known locality mode.
++ * @param {string} value - Read locality value to validate.
++ * @return {boolean} True if valid.
++ */
++function isValidReadLocality(value) {
++  return Object.values(SERVICE_READ_LOCALITY).includes(value);
++}
++
+ /**
+  * Handle create service command.
+  * Validates params and produces INSERT SQL for service_definitions.
+@@ -223,6 +235,10 @@ function handleCreateService(params) {
+       !isValidReplicaCount(params.replicaCount)) {
+     errors.push(META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD);
+   }
++  if (params && params.readLocality !== undefined &&
++      !isValidReadLocality(params.readLocality)) {
++    errors.push(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID);
++  }
+   if (errors.length > 0) {
+     return {success: false, errors};
+   }
+@@ -271,6 +287,7 @@ const UPDATABLE_FIELDS = Object.freeze({
+   runtimeConfig: SD_COL.RUNTIME_CONFIG,
+   readConsistency: SD_COL.READ_CONSISTENCY,
+   writeConsistency: SD_COL.WRITE_CONSISTENCY,
++  readLocality: SD_COL.READ_LOCALITY,
+   resourceBudget: SD_COL.RESOURCE_BUDGET,
+   safetyIntervalMs: SD_COL.SAFETY_INTERVAL_MS,
+ });
+@@ -289,6 +306,14 @@ function handleUpdateService(params) {
+     };
+   }
+ 
++  if (params.readLocality !== undefined &&
++      !isValidReadLocality(params.readLocality)) {
++    return {
++      success: false,
++      errors: [META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID],
++    };
++  }
++
+   const hasRuntimeField =
+     params.runtimeKind !== undefined ||
+     params.runtimeRef !== undefined ||
+diff --git a/src/wasm-service/wasm-service-constants.js b/src/wasm-service/wasm-service-constants.js
+index 246fe31b..96e48b39 100644
+--- a/src/wasm-service/wasm-service-constants.js
++++ b/src/wasm-service/wasm-service-constants.js
+@@ -1,4 +1,4 @@
+-import {NUM} from '../constants/index.js';
++import {NUM, SERVICE_READ_LOCALITY} from '../constants/index.js';
+ 
+ const WASM_SERVICE_SUBSYSTEM = Object.freeze({
+   REPLICA: 'wasm-service-replica',
+@@ -129,6 +129,7 @@ const WASM_SERVICE_DEFAULT = Object.freeze({
+   SAFETY_INTERVAL_MS: DEFAULT_SAFETY_INTERVAL_MS,
+   READ_CONSISTENCY: READ_CONSISTENCY_MODE.STRONG,
+   WRITE_CONSISTENCY: WRITE_CONSISTENCY_MODE.STRONG,
++  READ_LOCALITY: SERVICE_READ_LOCALITY.ANY,
+   PROTOCOL: WASM_SERVICE_PROTOCOL.WEBSOCKET,
+   PORT_RANGE_START: DEFAULT_PORT_RANGE_START,
+   PORT_RANGE_END: DEFAULT_PORT_RANGE_END,
+diff --git a/src/wasm-service/wasm-service-models.js b/src/wasm-service/wasm-service-models.js
+index 13ae4f53..0aceda55 100644
+--- a/src/wasm-service/wasm-service-models.js
++++ b/src/wasm-service/wasm-service-models.js
+@@ -22,6 +22,7 @@ const SD_COL = Object.freeze({
+   HANDLER_FUNCTION_ID: 'handler_function_id',
+   READ_CONSISTENCY: 'read_consistency',
+   WRITE_CONSISTENCY: 'write_consistency',
++  READ_LOCALITY: 'read_locality',
+   REPLICA_COUNT: 'replica_count',
+   PROTOCOL: 'protocol',
+   RESOURCE_BUDGET: 'resource_budget',
+@@ -47,6 +48,7 @@ const SERVICE_DEFINITION_COLUMN_LIST = Object.freeze([
+   SD_COL.HANDLER_FUNCTION_ID,
+   SD_COL.READ_CONSISTENCY,
+   SD_COL.WRITE_CONSISTENCY,
++  SD_COL.READ_LOCALITY,
+   SD_COL.REPLICA_COUNT,
+   SD_COL.PROTOCOL,
+   SD_COL.RESOURCE_BUDGET,
+@@ -153,6 +155,9 @@ function serializeServiceDefinition(definition) {
+     [SD_COL.WRITE_CONSISTENCY]:
+       compat.writeConsistency ??
+       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
++    [SD_COL.READ_LOCALITY]:
++      compat.readLocality ??
++      WASM_SERVICE_DEFAULT.READ_LOCALITY,
+     [SD_COL.REPLICA_COUNT]:
+       compat.replicaCount ??
+       WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+@@ -198,6 +203,9 @@ function deserializeServiceDefinition(row) {
+     writeConsistency:
+       row[SD_COL.WRITE_CONSISTENCY] ??
+       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
++    readLocality:
++      row[SD_COL.READ_LOCALITY] ??
++      WASM_SERVICE_DEFAULT.READ_LOCALITY,
+     replicaCount:
+       row[SD_COL.REPLICA_COUNT] ??
+       WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+diff --git a/test/query/service-read-locality-routing.test.js b/test/query/service-read-locality-routing.test.js
+new file mode 100644
+index 00000000..44e40584
+--- /dev/null
++++ b/test/query/service-read-locality-routing.test.js
+@@ -0,0 +1,485 @@
++/**
++ * Guard tests for the per-service readLocality policy
++ * (quest: service-read-locality-policy).
++ *
++ * Proves the end-to-end wiring of service_definitions.read_locality:
++ *  1. The column is a durable service-definition field with default 'any'
++ *     (serialize/deserialize round-trip, schema spec, column list).
++ *  2. Create/update meta-command handlers accept and validate the field.
++ *  3. The query engine resolves the issuing service's policy from the
++ *     node-local system cache (resolveIssuingServiceReadLocality).
++ *  4. executeSelect threads the resolved preference into the query
++ *     executor options (the wiring that un-dormants locality routing).
++ *  5. Read routing candidate ordering honors the preference: local node
++ *     first, then same-latency-group replicas, then the rest — and is
++ *     UNCHANGED when the policy is off.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  SERVICE_READ_LOCALITY,
++  TABLES,
++} from '../../src/constants/index.js';
++import {
++  SD_COL,
++  SERVICE_DEFINITION_COLUMN_LIST,
++  serializeServiceDefinition,
++  deserializeServiceDefinition,
++} from '../../src/wasm-service/wasm-service-models.js';
++import {
++  META_COMMAND_ERROR_MSG,
++  handleCreateService,
++  handleUpdateService,
++} from '../../src/wasm-service/meta-command-handlers.js';
++import {
++  SERVICE_DEFINITIONS_SCHEMA,
++} from '../../src/bootstrap/system-table-runtime-schema-definitions.js';
++import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
++import {QueryExecutor} from '../../src/query/query-executor.js';
++import {
++  createMockMessageRouter,
++  createMockSystemCache,
++} from './sql-query-engine-test-support.js';
++
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++const config = ConfigurationManager.getInstance();
++config.initialize();
++
++const SVC_ID = 'svc-read-local';
++
++function definitionRow(readLocality) {
++  return {
++    [SD_COL.SERVICE_ID]: SVC_ID,
++    [SD_COL.READ_LOCALITY]: readLocality,
++  };
++}
++
++function cacheWithServiceDefinitions(baseCache, definitions) {
++  const byId = new Map(definitions.map(
++    (row) => [row[SD_COL.SERVICE_ID], row],
++  ));
++  const baseGet = baseCache.get.bind(baseCache);
++  baseCache.get = function(type, key) {
++    if (type === TABLES.SERVICE_DEFINITIONS) {
++      return byId.get(key) || null;
++    }
++    return baseGet(type, key);
++  };
++  return baseCache;
++}
++
++test('service_definitions carries read_locality: default, round-trip, ' +
++  'schema', (t) => {
++  t.ok(
++    SERVICE_DEFINITION_COLUMN_LIST.includes(SD_COL.READ_LOCALITY),
++    'read_locality is part of the canonical column list',
++  );
++
++  const schemaColumn = SERVICE_DEFINITIONS_SCHEMA.columns.find(
++    (column) => column.name === SD_COL.READ_LOCALITY,
++  );
++  t.ok(schemaColumn, 'read_locality has a physical schema spec');
++  t.equal(schemaColumn.notNull, true, 'read_locality is NOT NULL');
++  t.equal(
++    schemaColumn.defaultValue,
++    '\'any\'',
++    'read_locality schema default is any',
++  );
++
++  const defaultRow = serializeServiceDefinition({
++    serviceId: SVC_ID,
++    serviceName: 'read-local-svc',
++    handlerFunctionId: 'fn-1',
++  });
++  t.equal(
++    defaultRow[SD_COL.READ_LOCALITY],
++    SERVICE_READ_LOCALITY.ANY,
++    'serialize defaults read_locality to any',
++  );
++
++  const explicitRow = serializeServiceDefinition({
++    serviceId: SVC_ID,
++    serviceName: 'read-local-svc',
++    handlerFunctionId: 'fn-1',
++    readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
++  });
++  t.equal(
++    explicitRow[SD_COL.READ_LOCALITY],
++    SERVICE_READ_LOCALITY.SAME_GROUP,
++    'serialize preserves explicit same_group',
++  );
++
++  const roundTripped = deserializeServiceDefinition(explicitRow);
++  t.equal(
++    roundTripped.readLocality,
++    SERVICE_READ_LOCALITY.SAME_GROUP,
++    'deserialize round-trips same_group',
++  );
++
++  const legacyRow = {...explicitRow};
++  delete legacyRow[SD_COL.READ_LOCALITY];
++  t.equal(
++    deserializeServiceDefinition(legacyRow).readLocality,
++    SERVICE_READ_LOCALITY.ANY,
++    'rows without the column deserialize to the any default',
++  );
++
++  t.end();
++});
++
++test('create/update service handlers accept and validate readLocality',
++  (t) => {
++    const created = handleCreateService({
++      serviceId: SVC_ID,
++      serviceName: 'read-local-svc',
++      handlerFunctionId: 'fn-1',
++      readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
++    });
++    t.equal(created.success, true, 'create accepts same_group');
++    const localityIndex = SERVICE_DEFINITION_COLUMN_LIST
++      .indexOf(SD_COL.READ_LOCALITY);
++    t.equal(
++      created.params[localityIndex],
++      SERVICE_READ_LOCALITY.SAME_GROUP,
++      'INSERT params carry the read_locality value',
++    );
++    t.match(
++      created.sql,
++      new RegExp(SD_COL.READ_LOCALITY),
++      'INSERT projection includes read_locality',
++    );
++
++    const rejected = handleCreateService({
++      serviceId: SVC_ID,
++      serviceName: 'read-local-svc',
++      handlerFunctionId: 'fn-1',
++      readLocality: 'nearest-datacenter',
++    });
++    t.equal(rejected.success, false, 'create rejects unknown locality');
++    t.ok(
++      rejected.errors.includes(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID),
++      'create reports the readLocality validation error',
++    );
++
++    const updated = handleUpdateService({
++      serviceId: SVC_ID,
++      readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
++    });
++    t.equal(updated.success, true, 'update accepts same_group');
++    t.match(
++      updated.sql,
++      new RegExp(`${SD_COL.READ_LOCALITY} = `),
++      'UPDATE sets read_locality',
++    );
++    t.equal(
++      updated.params[0],
++      SERVICE_READ_LOCALITY.SAME_GROUP,
++      'UPDATE params carry the read_locality value',
++    );
++
++    const updateRejected = handleUpdateService({
++      serviceId: SVC_ID,
++      readLocality: 'bogus',
++    });
++    t.equal(updateRejected.success, false, 'update rejects unknown locality');
++    t.ok(
++      updateRejected.errors
++        .includes(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID),
++      'update reports the readLocality validation error',
++    );
++
++    t.end();
++  });
++
++test('resolveIssuingServiceReadLocality reads the cached definition',
++  (t) => {
++    const resolveIssuingServiceReadLocality =
++      SQLQueryEngine.prototype.resolveIssuingServiceReadLocality;
++    const systemCache = {
++      get(type, key) {
++        if (type !== TABLES.SERVICE_DEFINITIONS) {
++          return null;
++        }
++        if (key === 'svc-local') {
++          return definitionRow(SERVICE_READ_LOCALITY.SAME_GROUP);
++        }
++        if (key === 'svc-any') {
++          return definitionRow(SERVICE_READ_LOCALITY.ANY);
++        }
++        return null;
++      },
++    };
++
++    const call = (queryOptions) =>
++      resolveIssuingServiceReadLocality.call({systemCache}, queryOptions);
++
++    t.equal(call({}), false, 'no issuing service means no preference');
++    t.equal(
++      call({issuingServiceId: 'svc-local'}),
++      true,
++      'same_group policy resolves to a locality preference',
++    );
++    t.equal(
++      call({issuingServiceId: 'svc-any'}),
++      false,
++      'any policy resolves to uniform routing',
++    );
++    t.equal(
++      call({issuingServiceId: 'svc-unknown'}),
++      false,
++      'missing definition resolves to uniform routing',
++    );
++    t.equal(
++      resolveIssuingServiceReadLocality.call(
++        {systemCache: null},
++        {issuingServiceId: 'svc-local'},
++      ),
++      false,
++      'missing cache resolves to uniform routing',
++    );
++
++    t.end();
++  });
++
++test('executeSelect threads the issuing service readLocality into ' +
++  'executor options', async (t) => {
++  const tables = [{table_name: 'orders', table_id: 'orders'}];
++  const partitions = [{
++    partition_id: 'orders-p1',
++    table_name: 'orders',
++    status: 'active',
++  }];
++  const cache = cacheWithServiceDefinitions(
++    createMockSystemCache(tables, partitions, null),
++    [definitionRow(SERVICE_READ_LOCALITY.SAME_GROUP)],
++  );
++  const engine = new SQLQueryEngine({
++    systemCache: cache,
++    messageRouter: createMockMessageRouter(),
++    nodeId: 'node-a',
++  });
++  const capturedOptions = [];
++  engine.queryExecutor = {
++    executeSelect: async (_ast, _partitionIds, _params, options) => {
++      capturedOptions.push(options);
++      return {success: true, results: [], rows: []};
++    },
++  };
++
++  await engine.executeQuery('SELECT * FROM orders', [], {
++    issuingServiceId: SVC_ID,
++  });
++  t.equal(capturedOptions.length, 1, 'select reached the query executor');
++  t.equal(
++    capturedOptions[0].preferSameLatencyGroup,
++    true,
++    'same_group policy turns on preferSameLatencyGroup',
++  );
++
++  await engine.executeQuery('SELECT * FROM orders', [], {
++    issuingServiceId: 'svc-without-definition',
++  });
++  t.equal(
++    capturedOptions[1].preferSameLatencyGroup,
++    false,
++    'unknown issuing service keeps uniform routing',
++  );
++
++  await engine.executeQuery('SELECT * FROM orders', []);
++  t.equal(
++    capturedOptions[2].preferSameLatencyGroup,
++    false,
++    'no issuing service keeps uniform routing',
++  );
++
++  t.end();
++});
++
++test('end-to-end: policy-on SELECT delivers to the local-node replica ' +
++  'first through the real executor chain', async (t) => {
++  const partitionId = 'orders-p1';
++  const tables = [{table_name: 'orders', table_id: 'orders'}];
++  const partitions = [{
++    partition_id: partitionId,
++    table_name: 'orders',
++    status: 'active',
++    leader_node_id: 'node-b',
++  }];
++  const services = [
++    {
++      service_id: `${partitionId}-r1`,
++      service_type: 'partition',
++      partition_id: partitionId,
++      node_id: 'node-b',
++      raft_role: 'leader',
++      address: `node-b/partition/${partitionId}-r1`,
++      status: 'active',
++    },
++    {
++      service_id: `${partitionId}-r2`,
++      service_type: 'partition',
++      partition_id: partitionId,
++      node_id: 'node-a',
++      raft_role: 'follower',
++      address: `node-a/partition/${partitionId}-r2`,
++      status: 'active',
++    },
++  ];
++  const nodes = [
++    {node_id: 'node-a', latency_group_id: 'group-1'},
++    {node_id: 'node-b', latency_group_id: 'group-2'},
++  ];
++  const cache = cacheWithServiceDefinitions(
++    createMockSystemCache(tables, partitions, services, nodes),
++    [definitionRow(SERVICE_READ_LOCALITY.SAME_GROUP)],
++  );
++  const deliveredAddresses = [];
++  const recordingRouter = {
++    deliver: async (address, message) => {
++      if (message.type === 'QUERY') {
++        deliveredAddresses.push(address);
++        return {acknowledged: true, success: true, rows: [], changes: 0};
++      }
++      return {acknowledged: true, success: true};
++    },
++  };
++  const engine = new SQLQueryEngine({
++    systemCache: cache,
++    messageRouter: recordingRouter,
++    nodeId: 'node-a',
++    controlPlaneReadinessService: {
++      getNodeReadinessSync: () => ({dimensions: {serveEligible: true}}),
++    },
++  });
++
++  const uniformResult = await engine.executeQuery('SELECT * FROM orders', []);
++  t.equal(uniformResult.success, true, 'policy-off select succeeds');
++  t.equal(
++    deliveredAddresses[0],
++    `node-b/partition/${partitionId}-r1`,
++    'policy-off delivery goes to the first snapshot-order replica',
++  );
++
++  deliveredAddresses.length = 0;
++  const localityResult = await engine.executeQuery(
++    'SELECT * FROM orders',
++    [],
++    {issuingServiceId: SVC_ID},
++  );
++  t.equal(localityResult.success, true, 'policy-on select succeeds');
++  t.equal(
++    deliveredAddresses[0],
++    `node-a/partition/${partitionId}-r2`,
++    'policy-on delivery goes to the local-node replica first',
++  );
++
++  t.end();
++});
++
++test('read candidate ordering: policy-on prefers local node then same ' +
++  'latency group; policy-off is unchanged', (t) => {
++  const partitionId = 'orders-p1';
++  const nodes = [
++    {node_id: 'node-a', latency_group_id: 'group-1'},
++    {node_id: 'node-b', latency_group_id: 'group-2'},
++    {node_id: 'node-c', latency_group_id: 'group-1'},
++  ];
++  const services = [
++    {
++      service_id: `${partitionId}-r1`,
++      service_type: 'partition',
++      partition_id: partitionId,
++      node_id: 'node-b',
++      raft_role: 'leader',
++      address: `node-b/partition/${partitionId}`,
++      status: 'active',
++    },
++    {
++      service_id: `${partitionId}-r2`,
++      service_type: 'partition',
++      partition_id: partitionId,
++      node_id: 'node-c',
++      raft_role: 'follower',
++      address: `node-c/partition/${partitionId}`,
++      status: 'active',
++    },
++    {
++      service_id: `${partitionId}-r3`,
++      service_type: 'partition',
++      partition_id: partitionId,
++      node_id: 'node-a',
++      raft_role: 'follower',
++      address: `node-a/partition/${partitionId}`,
++      status: 'active',
++    },
++  ];
++  const systemCache = {
++    partitions: [{partition_id: partitionId, leader_node_id: 'node-b'}],
++    services,
++    nodes,
++    get(type, key) {
++      if (type === TABLES.PARTITIONS) {
++        return this.partitions.find((p) => p.partition_id === key) || null;
++      }
++      if (type === TABLES.NODES) {
++        return this.nodes.find((n) => n.node_id === key) || null;
++      }
++      return null;
++    },
++    filter(type, predicate) {
++      if (type === TABLES.SERVICES) {
++        return this.services.filter(predicate);
++      }
++      if (type === TABLES.PARTITIONS) {
++        return this.partitions.filter(predicate);
++      }
++      return [];
++    },
++  };
++  const executor = new QueryExecutor({
++    messageRouter: createMockMessageRouter(),
++    systemCache,
++    nodeId: 'node-a',
++    controlPlaneReadinessService: {
++      getNodeReadinessSync: () => ({dimensions: {serveEligible: true}}),
++    },
++  });
++
++  const uniform = executor.getPartitionServiceCandidates(
++    partitionId,
++    true,
++    false,
++    false,
++  );
++  t.same(
++    uniform.map((candidate) => candidate.nodeId),
++    ['node-b', 'node-c', 'node-a'],
++    'policy-off read order is the unchanged snapshot order',
++  );
++
++  const localityPreferred = executor.getPartitionServiceCandidates(
++    partitionId,
++    true,
++    false,
++    true,
++  );
++  t.same(
++    localityPreferred.map((candidate) => candidate.nodeId),
++    ['node-a', 'node-c', 'node-b'],
++    'policy-on read order is local node, same group, then the rest',
++  );
++
++  const writePath = executor.getPartitionServiceCandidates(
++    partitionId,
++    false,
++    false,
++    true,
++  );
++  t.same(
++    writePath.map((candidate) => candidate.nodeId),
++    ['node-b'],
++    'write routing stays leader-only regardless of the read policy',
++  );
++
++  t.end();
++});
+diff --git a/test/wasm-service/wasm-service-models.test.js b/test/wasm-service/wasm-service-models.test.js
+index 313c51d0..54211294 100644
+--- a/test/wasm-service/wasm-service-models.test.js
++++ b/test/wasm-service/wasm-service-models.test.js
+@@ -157,6 +157,7 @@ describe('wasm-service-models', () => {
+         handlerFunctionId: 'func-1',
+         readConsistency: 'leader_only',
+         writeConsistency: 'async',
++        readLocality: 'same_group',
+         replicaCount: 5,
+         protocol: 'websocket',
+         resourceBudget: {

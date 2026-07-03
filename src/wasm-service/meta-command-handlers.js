@@ -11,6 +11,7 @@ import {
   TABLES,
   NUM,
   SERVICE_PROFILE,
+  SERVICE_READ_LOCALITY,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {
@@ -55,6 +56,8 @@ const META_COMMAND_ERROR_MSG = Object.freeze({
   SERVICE_NAME_REQUIRED: 'Service name is required',
   HANDLER_FUNCTION_REQUIRED: 'Handler function ID is required',
   REPLICA_COUNT_ODD: 'Replica count must be an odd number >= 3',
+  READ_LOCALITY_INVALID:
+    'readLocality must be one of: any, same_group',
   SERVICE_DESCRIPTOR_INVALID: 'Service descriptor is invalid',
   RUNTIME_DESCRIPTOR_INVALID: 'Runtime descriptor is invalid',
   RUNTIME_KIND_REQUIRED_FOR_UPDATE:
@@ -201,6 +204,15 @@ function isValidReplicaCount(count) {
 }
 
 /**
+ * Validate that readLocality is a known locality mode.
+ * @param {string} value - Read locality value to validate.
+ * @return {boolean} True if valid.
+ */
+function isValidReadLocality(value) {
+  return Object.values(SERVICE_READ_LOCALITY).includes(value);
+}
+
+/**
  * Handle create service command.
  * Validates params and produces INSERT SQL for service_definitions.
  * @param {Object} params - Service definition params.
@@ -222,6 +234,10 @@ function handleCreateService(params) {
   if (params && params.replicaCount !== undefined &&
       !isValidReplicaCount(params.replicaCount)) {
     errors.push(META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD);
+  }
+  if (params && params.readLocality !== undefined &&
+      !isValidReadLocality(params.readLocality)) {
+    errors.push(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID);
   }
   if (errors.length > 0) {
     return {success: false, errors};
@@ -271,6 +287,7 @@ const UPDATABLE_FIELDS = Object.freeze({
   runtimeConfig: SD_COL.RUNTIME_CONFIG,
   readConsistency: SD_COL.READ_CONSISTENCY,
   writeConsistency: SD_COL.WRITE_CONSISTENCY,
+  readLocality: SD_COL.READ_LOCALITY,
   resourceBudget: SD_COL.RESOURCE_BUDGET,
   safetyIntervalMs: SD_COL.SAFETY_INTERVAL_MS,
 });
@@ -286,6 +303,14 @@ function handleUpdateService(params) {
     return {
       success: false,
       errors: [META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED],
+    };
+  }
+
+  if (params.readLocality !== undefined &&
+      !isValidReadLocality(params.readLocality)) {
+    return {
+      success: false,
+      errors: [META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID],
     };
   }
 

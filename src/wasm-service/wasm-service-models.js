@@ -22,6 +22,7 @@ const SD_COL = Object.freeze({
   HANDLER_FUNCTION_ID: 'handler_function_id',
   READ_CONSISTENCY: 'read_consistency',
   WRITE_CONSISTENCY: 'write_consistency',
+  READ_LOCALITY: 'read_locality',
   REPLICA_COUNT: 'replica_count',
   PROTOCOL: 'protocol',
   RESOURCE_BUDGET: 'resource_budget',
@@ -47,6 +48,7 @@ const SERVICE_DEFINITION_COLUMN_LIST = Object.freeze([
   SD_COL.HANDLER_FUNCTION_ID,
   SD_COL.READ_CONSISTENCY,
   SD_COL.WRITE_CONSISTENCY,
+  SD_COL.READ_LOCALITY,
   SD_COL.REPLICA_COUNT,
   SD_COL.PROTOCOL,
   SD_COL.RESOURCE_BUDGET,
@@ -153,6 +155,9 @@ function serializeServiceDefinition(definition) {
     [SD_COL.WRITE_CONSISTENCY]:
       compat.writeConsistency ??
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
+    [SD_COL.READ_LOCALITY]:
+      compat.readLocality ??
+      WASM_SERVICE_DEFAULT.READ_LOCALITY,
     [SD_COL.REPLICA_COUNT]:
       compat.replicaCount ??
       WASM_SERVICE_DEFAULT.REPLICA_COUNT,
@@ -198,6 +203,9 @@ function deserializeServiceDefinition(row) {
     writeConsistency:
       row[SD_COL.WRITE_CONSISTENCY] ??
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
+    readLocality:
+      row[SD_COL.READ_LOCALITY] ??
+      WASM_SERVICE_DEFAULT.READ_LOCALITY,
     replicaCount:
       row[SD_COL.REPLICA_COUNT] ??
       WASM_SERVICE_DEFAULT.REPLICA_COUNT,

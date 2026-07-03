@@ -239,12 +239,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       tableName,
       queryOptions.deliveryPriority,
     );
+    const preferSameLatencyGroup =
+      queryOptions.preferSameLatencyGroup === true ||
+      this.resolveIssuingServiceReadLocality(queryOptions);
     const result = await this.queryExecutor.executeSelect(
       ast,
       partitionIds,
       params,
       {
         preferLeader,
+        preferSameLatencyGroup,
         deliveryPriority,
         distributedPlan,
         routingReadinessDimension,

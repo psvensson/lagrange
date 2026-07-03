@@ -272,7 +272,8 @@ const queryExecutorPartitionRoutingCandidateMethods = {
   },
 
   /**
-   * Sort services to prefer same-group replicas for read queries.
+   * Sort services to prefer near replicas for read queries: the local
+   * node first, then same-latency-group replicas, then the rest.
    * @param {Object[]} services - Routable services.
    * @param {string|null} localGroupId - Local node's latency group.
    * @param {boolean} enabled - Preference enabled flag.
@@ -287,19 +288,16 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     ) {
       return services;
     }
-    return [...services].sort((left, right) => {
-      const leftGroupId = this.resolveNodeLatencyGroupId(left?.node_id);
-      const rightGroupId = this.resolveNodeLatencyGroupId(right?.node_id);
-      const leftPreferred = leftGroupId === localGroupId;
-      const rightPreferred = rightGroupId === localGroupId;
-      if (leftPreferred && !rightPreferred) {
-        return -1;
+    const localityRank = (service) => {
+      if (service?.node_id === this.nodeId) {
+        return 0;
       }
-      if (!leftPreferred && rightPreferred) {
-        return 1;
-      }
-      return 0;
-    });
+      const groupId = this.resolveNodeLatencyGroupId(service?.node_id);
+      return groupId === localGroupId ? 1 : 2;
+    };
+    return [...services].sort(
+      (left, right) => localityRank(left) - localityRank(right),
+    );
   },
 
   resolveRecoveryCandidateSelectionOffset(services = [], selectionKey = null) {

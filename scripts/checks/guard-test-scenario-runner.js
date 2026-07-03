@@ -1,0 +1,120 @@
+/**
+ * Shared machinery for quest scenario runner scripts that prove a
+ * scenario by running its committed deterministic guard-test files.
+ *
+ * Each runner declares a `{scenario: [guardTestFile, ...]}` map and calls
+ * `runGuardTestScenarios(SCENARIOS)`. Every scenario's guard files are
+ * executed via tap and a scenario-harness report is written into
+ * `test-output/reports/` in the shape the Solver's `scenario-harness`
+ * probe reads (`scripts/solve/probes/scenario-harness.js`):
+ *   - standardSummary.scenarios[].current.passed / verdict
+ *   - optimizationSummary.totalPriorityItems (lower-is-better gradient =
+ *     number of failing guard-test files)
+ *   - summary.failed
+ *
+ * Deterministic and fast (no Docker); safe to run N times for a
+ * doneWhen's `consecutive` gate.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+
+const REPORT_DIR = 'test-output/reports';
+const GUARD_FILE_TIMEOUT_MS = 300000;
+
+function runGuardFile(file) {
+  const result = spawnSync('npx', ['tap', file, '--disable-coverage'], {
+    encoding: 'utf8',
+    timeout: GUARD_FILE_TIMEOUT_MS,
+  });
+  const out = `${result.stdout || ''}${result.stderr || ''}`;
+  const totals = out.match(/# \{ total: (\d+), pass: (\d+) \}/);
+  return {
+    file,
+    passed: result.status === 0,
+    assertions: totals ? Number(totals[1]) : null,
+    assertionsPassed: totals ? Number(totals[2]) : null,
+  };
+}
+
+function buildReport(scenario, results, timestamp) {
+  const failing = results.filter((r) => !r.passed);
+  const passed = failing.length === 0;
+  return {
+    timestamp,
+    scenario,
+    summary: {
+      total: results.length,
+      passed: results.length - failing.length,
+      failed: failing.length,
+    },
+    optimizationSummary: {
+      totalPriorityItems: failing.length,
+    },
+    standardSummary: {
+      scenarios: [
+        {
+          scenario,
+          passed,
+          current: {
+            passed,
+            verdict: passed ? 'PASS' : 'FAIL',
+          },
+          detail: {
+            guardTests: results,
+          },
+        },
+      ],
+    },
+  };
+}
+
+function runScenario(scenarios, scenario) {
+  const files = scenarios[scenario];
+  const results = files.map(runGuardFile);
+  const timestamp = new Date().toISOString();
+  const report = buildReport(scenario, results, timestamp);
+
+  fs.mkdirSync(REPORT_DIR, {recursive: true});
+  const fileStamp = timestamp.replace(/[:.]/g, '-');
+  const reportPath = path.join(
+    REPORT_DIR,
+    `${scenario}-${fileStamp}.report.json`,
+  );
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+  const passed = report.summary.failed === 0;
+  process.stdout.write(
+    `${scenario}: ${passed ? 'PASS' : 'FAIL'} — ` +
+    `${report.summary.passed}/${report.summary.total} guard files green ` +
+    `(${results.map((r) => `${path.basename(r.file)}=` +
+      `${r.assertionsPassed ?? '?'}/${r.assertions ?? '?'}`).join(' ')})\n` +
+    `report: ${reportPath}\n`,
+  );
+  return passed;
+}
+
+/**
+ * Run the named scenario (argv[2]) or every scenario in the map, and set
+ * the process exit code (0 all pass, 1 any fail, 2 unknown scenario).
+ * @param {Object<string, string[]>} scenarios - scenario -> guard files.
+ */
+function runGuardTestScenarios(scenarios) {
+  const only = process.argv[2];
+  const names = only ? [only] : Object.keys(scenarios);
+  for (const name of names) {
+    if (!scenarios[name]) {
+      process.stderr.write(`unknown scenario: ${name}\n`);
+      process.exitCode = 2;
+      return;
+    }
+  }
+  let allPassed = true;
+  for (const name of names) {
+    if (!runScenario(scenarios, name)) allPassed = false;
+  }
+  process.exitCode = allPassed ? 0 : 1;
+}
+
+export {runGuardTestScenarios};

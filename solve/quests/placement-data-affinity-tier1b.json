@@ -1,0 +1,40 @@
+{
+  "id": "placement-data-affinity-tier1b",
+  "statement": "The real placement kernel scores a DATA_AFFINITY dimension (service near its accessed data) beside the existing latency-group dimensions, fed by an affinity context on the evidence path, and its effect is proven through the REAL MovePlanner: deterministic tests drive calculateTargetState + calculateMoves (stubbed moveStateProvider) showing (a) an affinity gradient moves a service replica toward its data's latency group, (b) an in-score incumbent movement-cost (hysteresis) term prevents churn when the gradient is below the retention margin, per the Tier-1a sim findings, and (c) with no affinity context supplied, kernel output is unchanged. Tests are red-on-revert of the src wiring (dt:prove).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "service-read-locality-policy",
+    "planDoc": "solve/epics/service-data-affinity-placement.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "placement-data-affinity-tier1b",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "placement-data-affinity-tier1b-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "placement-data-affinity-tier1b",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

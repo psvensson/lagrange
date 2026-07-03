@@ -14,7 +14,11 @@ export {NODE_STATE} from './node-state.js';
 export {NUM} from './numbers.js';
 export {SQL} from './sql.js';
 export {SERVICE_STATUS} from './service-status.js';
-export {SERVICE_TYPE, SERVICE_PROFILE} from './service.js';
+export {
+  SERVICE_TYPE,
+  SERVICE_PROFILE,
+  SERVICE_READ_LOCALITY,
+} from './service.js';
 export {
   UNIFIED_SERVICE_TYPE,
   ALLOWED_UNIFIED_SERVICE_TYPES,
