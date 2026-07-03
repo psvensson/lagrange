@@ -1,0 +1,17 @@
+{
+  "test": "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js",
+  "src": [
+    "src/raft/liferaft.js",
+    "src/node/replica-handler-leader-handoff-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-03T07:59:00.922Z"
+}

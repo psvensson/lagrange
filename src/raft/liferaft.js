@@ -58,6 +58,20 @@ const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
 // ceiling so any in-flight scheduling stays in-range; the in-flight end() clears
 // the Tick immediately after, so this value is never actually awaited to fire.
 const DEFAULT_ELECTION_TIMEOUT_MS = 300;
+// Candidacy reluctance (quest raft-candidacy-reluctance-drain-source): a
+// replica deliberately stepped down for drain kept out-racing caught-up peers
+// for the successor election and re-winning leadership the rebalancer was
+// draining away — 68% of drained-node leadership gains were undirected timer
+// wins (scripts/analyze-leadership-flap.js census). deferCandidacy() inflates
+// this node's randomized election delay by a FINITE multiplier for a bounded
+// window, so a live caught-up peer always draws a shorter delay and wins
+// first. Liveness is unconditional (finite inflation: with no viable peer the
+// reluctant node still campaigns), safety untouched (no vote/term/log logic),
+// and the deliberate replacement-election path is unaffected —
+// requestElectionNow passes an explicit 1ms duration that never consults
+// timeout().
+const CANDIDACY_RELUCTANCE_MULTIPLIER = 4;
+const CANDIDACY_RELUCTANCE_WINDOW_MS = 10000;
 const RAFT_STATE_CHANGE_EVENT = 'state change';
 
 function resolveFollowerLastIndex(packet) {
@@ -413,14 +427,51 @@ class LifeRaft extends BaseLifeRaft {
     if (!times) {
       return DEFAULT_ELECTION_TIMEOUT_MS;
     }
-    if (!this._electionRandomSource) {
-      return super.timeout();
+    const base = !this._electionRandomSource ?
+      super.timeout() :
+      Math.floor(
+        this._electionRandomSource.random() *
+          (times.max - times.min + NUMERIC_ONE) +
+        times.min,
+      );
+    if (
+      this._candidacyReluctantUntilMs != null &&
+      this._nowMs() < this._candidacyReluctantUntilMs
+    ) {
+      // A draw armed just before the window lapses keeps its inflated
+      // duration when it fires after expiry — bounded (one draw) and
+      // deferential in the right direction.
+      return base * CANDIDACY_RELUCTANCE_MULTIPLIER;
     }
-    return Math.floor(
-      this._electionRandomSource.random() *
-        (times.max - times.min + NUMERIC_ONE) +
-      times.min,
-    );
+    return base;
+  }
+
+  /**
+   * Same clock as the rest of the node: the DT virtual clock when hosted on
+   * the deterministic substrate, the real clock in production (see the
+   * catch-up TTL note above — a raw Date.now() under a virtual clock measures
+   * real test time and the window would never lapse virtually).
+   * @return {number} current time in ms.
+   */
+  _nowMs() {
+    return this._catchupTimeSource ?
+      this._catchupTimeSource.now() :
+      Date.now();
+  }
+
+  /**
+   * Mark this replica candidacy-reluctant for a bounded window: election
+   * delays drawn by timeout() are inflated CANDIDACY_RELUCTANCE_MULTIPLIER-x
+   * so a live caught-up peer wins the succession first. Called by the drain
+   * step-down path; explicit-duration elections (requestElectionNow) bypass
+   * timeout() and are unaffected.
+   * @param {number=} windowMs reluctance window; defaults to
+   *   CANDIDACY_RELUCTANCE_WINDOW_MS.
+   * @return {LifeRaft} this
+   */
+  deferCandidacy(windowMs = CANDIDACY_RELUCTANCE_WINDOW_MS) {
+    this._candidacyReluctantUntilMs = this._nowMs() + windowMs;
+    return this;
   }
 
   /**

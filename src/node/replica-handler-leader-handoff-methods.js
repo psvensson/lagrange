@@ -94,6 +94,14 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
       ) {
         service.cancelLeaderOwnedActivation();
       }
+      // Drain step-down: without reluctance this node's fresh election timer
+      // races the peers' and, holding the longest log, it re-wins the very
+      // leadership being drained (68% of drained-node leadership gains were
+      // undirected timer wins — analyze-leadership-flap census). Defer BEFORE
+      // re-arming so the timer below draws the inflated delay.
+      if (typeof raft.deferCandidacy === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        raft.deferCandidacy();
+      }
       raft.change({
         state: LifeRaft.FOLLOWER,
         leader: REPLICA_HANDLER_LEADER_HANDOFF_LITERAL.EMPTY_LEADER_ID,
