@@ -119,9 +119,15 @@ existing degenerate form of this alternative).
 
 ## Open questions
 
-- Read-cost model per tier: is enabling `preferSameLatencyGroup` reads
-  cluster-wide safe (staleness/consistency of follower reads), or per-service
-  opt-in?
+- ~~Read-cost model per tier: cluster-wide vs per-service locality reads~~ —
+  **DECIDED 2026-07-03 (user): per-service policy.** A `readLocality` field on
+  `service_definitions` (CDC-propagated, cached for the read hot path),
+  default off initially; long-term intent is to flip the default to locality
+  once the load-concentration story is validated, then keep the field as
+  durable per-service policy (some services legitimately want read
+  spreading). Coherence obligation: the affinity planner must score each
+  service with the read-cost model its routing policy actually uses (the sim's
+  routing-mismatch finding), so planner and router read the SAME policy field.
 - Objective composition: is write-to-leader affinity worth chasing given
   leaders move on elections, or should write affinity target the replica *set*
   and let leader placement follow (leaderRetention already exists)?
@@ -135,6 +141,14 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-03 — **Prerequisite #0 shape decided (user): per-service read-routing
+  policy**, not a cluster-wide flip. Rationale: locality routing trades away
+  uniform routing's implicit load spreading (census sweep D's loadStddev 47→156
+  concentration), which is workload-dependent — a genuine per-service policy,
+  not a temporary flag. Rollout: policy field default-off → opt in the demo +
+  latency-sensitive services → flip the default once validated. Same session:
+  solve.js repaired and `_legacy_work/` removed for good (`b67a27a4` — Solver
+  deps now live in `scripts/solve/` + `solve/theory-ledger.md`).
 - 2026-07-02 — Epic authored from a three-way survey (placement machinery,
   movielens example, DT substrate) + adversarial vet. Pivotal correction: the
   "reads already prefer near replicas" premise is FALSE (routing is
