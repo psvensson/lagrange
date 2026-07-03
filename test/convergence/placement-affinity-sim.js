@@ -204,6 +204,23 @@ function writeMiss(readerGroup, partitionView, groupByNode) {
   return groupByNode.get(partitionView.leaderNode) === readerGroup ? 0 : 1;
 }
 
+// Replica-side load of one reader's reads, mirroring the routing model:
+// locality routing splits the reads across the reader-group replicas (the
+// distance-0 set), uniform routing splits across every replica.
+function distributeReadLoad(partitionView, readerGroup, reads, routing, groupByNode, addLoad) {
+  const sameGroupReplicas = partitionView.nodes
+    .filter((n) => groupByNode.get(n) === readerGroup);
+  if (routing === ROUTING_MODEL.LOCALITY && sameGroupReplicas.length > 0) {
+    for (const replica of sameGroupReplicas) {
+      addLoad(replica, reads / sameGroupReplicas.length);
+    }
+    return;
+  }
+  for (const replica of partitionView.nodes) {
+    addLoad(replica, reads / partitionView.nodes.length);
+  }
+}
+
 /**
  * Analytic (never sampled) placement-quality metrics over one placement view.
  * phiAffinity = volume-weighted expected access distance (binary d ⇒ missed
@@ -238,17 +255,7 @@ function computeMetrics(snapshot, world, cfg) {
         const miss = readMissFraction(group, partitionView, groupByNode, cfg.routing);
         readVolume += reads;
         readHitVolume += reads * (1 - miss);
-        const sameGroupReplicas = partitionView.nodes
-          .filter((n) => groupByNode.get(n) === group);
-        if (cfg.routing === ROUTING_MODEL.LOCALITY && sameGroupReplicas.length > 0) {
-          for (const replica of sameGroupReplicas) {
-            addLoad(replica, reads / sameGroupReplicas.length);
-          }
-        } else {
-          for (const replica of partitionView.nodes) {
-            addLoad(replica, reads / partitionView.nodes.length);
-          }
-        }
+        distributeReadLoad(partitionView, group, reads, cfg.routing, groupByNode, addLoad);
       }
       if (writes > 0) {
         writeVolume += writes;
@@ -359,6 +366,52 @@ function effectiveOwnNodes(kind, entity, world) {
   return nodes.sort();
 }
 
+// One candidate node's planner score against the frozen view:
+// score = wLoad·normLoad + wAffinity·affinityCost + wSpread·sameGroupPicked
+//       − hysteresis[kind]·isIncumbent, quantized.
+function scorePlacementCandidate(node, picked, pickedGroups, ctx) {
+  const {kind, entity, viewSnapshot, viewLoads, ownSet, world, cfg} = ctx;
+  const {weights, hysteresis} = cfg;
+  let affinity = 0;
+  if (weights.affinity !== 0) {
+    affinity = kind === ENTITY_KIND.SERVICE ?
+      serviceAffinityCost(node.groupId, entity, viewSnapshot, world, cfg) :
+      partitionSetAffinityCost([...picked, node.id], entity, viewSnapshot, world, cfg);
+  }
+  const load = weights.load !== 0 && viewLoads.totalVolume > 0 ?
+    viewLoads.nodeLoads.get(node.id) / viewLoads.totalVolume :
+    0;
+  const spread = (pickedGroups.get(node.groupId) || 0) / Math.max(1, entity.replicaCount);
+  const isIncumbent = ownSet.has(node.id);
+  const score = quantizeScore(
+    weights.load * load +
+      weights.affinity * affinity +
+      weights.spread * spread -
+      (isIncumbent ? hysteresis[kind] : 0),
+  );
+  return {id: node.id, groupId: node.groupId, score, isIncumbent};
+}
+
+// Deterministic candidate ordering: lower score wins, ties break by node id.
+function preferCandidate(candidate, current) {
+  if (current === null) {
+    return true;
+  }
+  if (candidate.score !== current.score) {
+    return candidate.score < current.score;
+  }
+  return candidate.id < current.id;
+}
+
+// Incumbent retention: an incumbent within minGain of the best challenger is
+// kept (no zero-gain churn / float-noise tie flapping).
+function resolveRetainedChoice(best, bestIncumbent, minGain) {
+  if (best.isIncumbent || bestIncumbent === null) {
+    return best;
+  }
+  return bestIncumbent.score <= best.score + minGain ? bestIncumbent : best;
+}
+
 /**
  * Sequential greedy target selection for one entity against a FROZEN view.
  * score(node) = wLoad·normLoad + wAffinity·affinityCost + wSpread·sameGroupPicked
@@ -367,8 +420,7 @@ function effectiveOwnNodes(kind, entity, world) {
  * churn). Replicas of one entity occupy distinct nodes.
  */
 function planEntityTarget(kind, entity, viewSnapshot, viewLoads, own, world, cfg) {
-  const {weights, hysteresis} = cfg;
-  const ownSet = new Set(own);
+  const ctx = {kind, entity, viewSnapshot, viewLoads, ownSet: new Set(own), world, cfg};
   const picked = [];
   const pickedGroups = new Map();
   while (picked.length < entity.replicaCount && picked.length < world.nodes.length) {
@@ -378,40 +430,18 @@ function planEntityTarget(kind, entity, viewSnapshot, viewLoads, own, world, cfg
       if (picked.includes(node.id)) {
         continue;
       }
-      let affinity = 0;
-      if (weights.affinity !== 0) {
-        affinity = kind === ENTITY_KIND.SERVICE ?
-          serviceAffinityCost(node.groupId, entity, viewSnapshot, world, cfg) :
-          partitionSetAffinityCost([...picked, node.id], entity, viewSnapshot, world, cfg);
-      }
-      const load = weights.load !== 0 && viewLoads.totalVolume > 0 ?
-        viewLoads.nodeLoads.get(node.id) / viewLoads.totalVolume :
-        0;
-      const spread = (pickedGroups.get(node.groupId) || 0) / Math.max(1, entity.replicaCount);
-      const isIncumbent = ownSet.has(node.id);
-      const score = quantizeScore(
-        weights.load * load +
-          weights.affinity * affinity +
-          weights.spread * spread -
-          (isIncumbent ? hysteresis[kind] : 0),
-      );
-      const candidate = {id: node.id, groupId: node.groupId, score, isIncumbent};
-      if (best === null || score < best.score || (score === best.score && node.id < best.id)) {
+      const candidate = scorePlacementCandidate(node, picked, pickedGroups, ctx);
+      if (preferCandidate(candidate, best)) {
         best = candidate;
       }
-      if (isIncumbent && (bestIncumbent === null || score < bestIncumbent.score ||
-          (score === bestIncumbent.score && node.id < bestIncumbent.id))) {
+      if (candidate.isIncumbent && preferCandidate(candidate, bestIncumbent)) {
         bestIncumbent = candidate;
       }
     }
     if (best === null) {
       break;
     }
-    let choice = best;
-    if (!best.isIncumbent && bestIncumbent !== null &&
-        bestIncumbent.score <= best.score + cfg.minGain) {
-      choice = bestIncumbent;
-    }
+    const choice = resolveRetainedChoice(best, bestIncumbent, cfg.minGain);
     picked.push(choice.id);
     pickedGroups.set(choice.groupId, (pickedGroups.get(choice.groupId) || 0) + 1);
   }
@@ -493,6 +523,45 @@ function transitionSignature(world, cfg) {
   });
 }
 
+// Apply this tick's scenario events. Any mutation invalidates the settle
+// tracking: quiet counters restart and recorded transition signatures no
+// longer describe the (changed) closed system.
+function applyScenarioEvents(world, events, tick, quietRounds, signatureFirstMoves) {
+  for (const event of events) {
+    if (event.atTick === tick) {
+      event.mutate(world);
+      quietRounds.service = 0;
+      quietRounds.partition = 0;
+      signatureFirstMoves.clear();
+    }
+  }
+}
+
+// Per-kind quiet bookkeeping. Quiet only counts when this round's PLANNING
+// VIEW equals the live placement: quiet against a stale view is a false
+// signal (the false-fixpoint regression scenario exists to keep this honest).
+function updateQuietRounds(quietRounds, movesByKind, rounds, viewWasLive) {
+  if (rounds.service) {
+    quietRounds.service =
+      movesByKind.service === 0 && viewWasLive ? quietRounds.service + 1 : 0;
+  }
+  if (rounds.partition) {
+    quietRounds.partition =
+      movesByKind.partition === 0 && viewWasLive ? quietRounds.partition + 1 : 0;
+  }
+}
+
+// Records a first-seen signature's cumulative-move count; a recurrence with
+// MORE cumulative moves means the closed deterministic system entered a cycle
+// that emits moves — an oscillation, not an idle revisit.
+function recordsOscillationRecurrence(signatureFirstMoves, signature, cumulativeMoves) {
+  if (!signatureFirstMoves.has(signature)) {
+    signatureFirstMoves.set(signature, cumulativeMoves);
+    return false;
+  }
+  return cumulativeMoves > signatureFirstMoves.get(signature);
+}
+
 /**
  * Run the closed plan→apply→replan loop. Per tick: apply due scenario events →
  * land due in-flight ops → snapshot → (on each planner's cadence) plan every
@@ -520,14 +589,7 @@ function runPlacementSim(world, overrides = {}, events = []) {
 
   for (let tick = 0; tick <= cfg.maxTicks; tick += 1) {
     world.tick = tick;
-    for (const event of events) {
-      if (event.atTick === tick) {
-        event.mutate(world);
-        quietRounds.service = 0;
-        quietRounds.partition = 0;
-        signatureFirstMoves.clear();
-      }
-    }
+    applyScenarioEvents(world, events, tick, quietRounds, signatureFirstMoves);
     landDueOps(world);
     world.history[tick] = snapshotPlacement(world);
 
@@ -580,19 +642,14 @@ function runPlacementSim(world, overrides = {}, events = []) {
       cumulativeMoves: world.cumulativeMoves,
     });
 
-    // Quiet only counts when this round's PLANNING VIEW equals the live
-    // placement: quiet against a stale view is a false signal (the false-
-    // fixpoint regression scenario exists to keep this clause honest).
     const viewWasLive =
       placementKey(viewSnapshot) === placementKey(world.history[tick]);
-    if (serviceRound) {
-      quietRounds.service =
-        movesByKind.service === 0 && viewWasLive ? quietRounds.service + 1 : 0;
-    }
-    if (partitionRound) {
-      quietRounds.partition =
-        movesByKind.partition === 0 && viewWasLive ? quietRounds.partition + 1 : 0;
-    }
+    updateQuietRounds(
+      quietRounds,
+      movesByKind,
+      {service: serviceRound, partition: partitionRound},
+      viewWasLive,
+    );
     if (tick <= lastEventTick) {
       continue;
     }
@@ -604,14 +661,10 @@ function runPlacementSim(world, overrides = {}, events = []) {
       break;
     }
     const signature = transitionSignature(world, cfg);
-    if (signatureFirstMoves.has(signature)) {
-      if (world.cumulativeMoves > signatureFirstMoves.get(signature)) {
-        verdict = SIM_VERDICT.OSCILLATION;
-        verdictAtTick = tick;
-        break;
-      }
-    } else {
-      signatureFirstMoves.set(signature, world.cumulativeMoves);
+    if (recordsOscillationRecurrence(signatureFirstMoves, signature, world.cumulativeMoves)) {
+      verdict = SIM_VERDICT.OSCILLATION;
+      verdictAtTick = tick;
+      break;
     }
   }
 
