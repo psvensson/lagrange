@@ -1,5 +1,15 @@
 # Deterministic repro tier
 
+Internal testing-process note: a distributed-defect fix must come with a
+cheap, deterministic reproduction test, and this document names which existing
+simulator to host that repro in. "CL-###" refers to closure-ledger records
+(indexed by
+`solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md`,
+one record per file under its `closure-ledger/` directory);
+the deterministic substrate itself (virtual clock, seeded RNG, PCT) is mapped
+in
+[deterministic-directed-testing-plan.md](deterministic-directed-testing-plan.md).
+
 The docker rolling-restart stat-gate is the expensive, last-resort verdict: N≥8
 runs × ~400s ≈ 50 minutes, non-deterministic, and convergence fixes have
 repeatedly landed **correct but inert** (the precondition did not recur, costing

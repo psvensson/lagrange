@@ -1,6 +1,14 @@
 # Runtime Components
 
-Node-local components, replicated service owners, metadata services, and core runtime service components.
+A catalogue of the moving parts on a node: node-local components, replicated
+service owners, metadata services, and core runtime service components — what
+each owns and how they connect.
+
+Use this as the "who is who" reference when other architecture documents name
+a component. The ownership rules the components must respect are in
+[overview.md](overview.md) and [control-plane.md](control-plane.md); their
+startup and readiness lifecycle is
+[runtime-lifecycle.md](runtime-lifecycle.md).
 
 ## Component Architecture
 

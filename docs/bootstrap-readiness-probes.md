@@ -1,7 +1,8 @@
 # Bootstrap Readiness Probes
 
 This document defines the runtime probe contract for seed nodes and deployment
-guidance for Kubernetes and NGINX.
+guidance for Kubernetes and NGINX. The bootstrap phases these probes report on
+are described in [../architecture/bootstrap.md](../architecture/bootstrap.md).
 
 ## Endpoint Contract
 

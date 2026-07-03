@@ -1,6 +1,16 @@
 # Raft, Rebalancing, And Placement
 
-Address format, Raft consensus settings, rebalancing, storage-capacity-aware placement, and message-group assignment.
+Where data and services live, and how that changes safely: the unified address
+format, Raft consensus configuration, the UnifiedRebalancer,
+storage-capacity-aware placement, and message-group assignment.
+
+Partitions, message groups, and replicated service groups are all placed by
+the same rebalancer — a partition is one kind of rebalanced entity, not a
+special case. The membership and ownership rows these decisions read are
+defined in [control-plane.md](control-plane.md); the readiness states that
+gate moves are in [runtime-lifecycle.md](runtime-lifecycle.md);
+operator-facing capacity controls are in
+[../docs/storage-capacity-operations.md](../docs/storage-capacity-operations.md).
 
 ## Address Format
 

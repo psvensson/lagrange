@@ -1,6 +1,16 @@
 # Control Plane Architecture
 
-Control-plane predictability, system-table ownership, node state vocabulary, control-plane services, and configuration ownership.
+The control plane is the layer that decides cluster state — which nodes are
+members, which replicas exist where, and what is allowed to serve. This
+document covers control-plane predictability rules, system-table ownership and
+CDC propagation classes, the node state vocabulary, control-plane services,
+and configuration ownership.
+
+Read [overview.md](overview.md) first for the single-path ownership contract
+these rules enforce. How the system tables get populated on a fresh node is
+[bootstrap.md](bootstrap.md); the placement and rebalancing decisions built on
+top of them are [rebalance.md](rebalance.md); service readiness and lifecycle
+states are [runtime-lifecycle.md](runtime-lifecycle.md).
 
 ## Control-Plane Predictability and Determinism
 

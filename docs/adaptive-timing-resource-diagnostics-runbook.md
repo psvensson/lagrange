@@ -6,6 +6,10 @@ Use this runbook on a running node to isolate:
 - Idle CPU overhead
 - Disk-write pressure from metrics log persistence
 
+It is the step-by-step investigation companion to
+[runtime-resource-diagnostics.md](runtime-resource-diagnostics.md), which
+documents the diagnostics endpoint and fields this runbook polls.
+
 ## Prerequisites
 
 - Admin API is reachable at `http://127.0.0.1:8081`

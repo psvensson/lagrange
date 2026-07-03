@@ -1,6 +1,14 @@
 # Query Runtime Architecture
 
-Programmatic runtime, service replica query bridge, execution-mode dispatch, callback execution, movement primitives, and resource guardrails.
+How queries and compute callbacks execute once they reach the cluster: the
+programmatic runtime, service replica query bridge, execution-mode dispatch,
+partition-callback execution, the distributed movement primitives, and
+resource guardrails.
+
+This is the execution layer beneath the ingress surfaces — SQL arrives via
+[postgres-wire.md](postgres-wire.md) or the admin API and runs against
+partitions placed by [rebalance.md](rebalance.md). The components named here
+are catalogued in [runtime-components.md](runtime-components.md).
 
 ### Distributed Movement Primitives
 Cross-partition data movement is restricted to three explicit primitives,

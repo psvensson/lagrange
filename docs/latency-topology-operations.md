@@ -1,5 +1,12 @@
 # Latency Topology Operations
 
+Operator runbook for latency-aware topology: nodes are measured and assigned
+into latency groups, and CDC fanout can use that grouping for propagation.
+This document covers operating, configuring, and diagnosing that machinery;
+the ownership architecture behind it is described in
+[../architecture/runtime-lifecycle.md](../architecture/runtime-lifecycle.md)
+(Latency Topology Ownership).
+
 ## Scope
 
 This runbook covers runtime operation of latency-aware topology:

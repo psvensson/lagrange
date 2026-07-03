@@ -1,8 +1,13 @@
 # Admin Test Run Landing
 
-The node admin ingress (`:8081`) now serves a browser landing page for distributed test administration.
+A browser dashboard for starting, watching, and browsing distributed test
+runs: scenario selection, run start/stop controls, live log streaming, and
+links to reports and playback artifacts. Every cluster node serves it from the
+admin ingress (`:8081`); the artifacts it exposes are the same `test-output/`
+files described in
+[distributed-playback-viewer.md](distributed-playback-viewer.md).
 
-For local development where cluster nodes are short-lived, use the standalone userland server:
+For local development where cluster nodes are short-lived, use the standalone userland server instead:
 
 - `npm run start:test-dashboard`
 - `node scripts/start-test-run-dashboard.js --port 8181 --host 127.0.0.1`

@@ -1,6 +1,15 @@
 # PostgreSQL Wire And SQL Compatibility
 
-PostgreSQL wire service flow, endpoint discovery, service packaging, SQL compatibility, and planned compatibility extensions.
+How PostgreSQL clients (psql, drivers, ORMs) talk to the cluster: the wire
+service flow, endpoint discovery, service packaging, the active SQL
+compatibility layer, and planned compatibility extensions.
+
+The key orientation point: the PostgreSQL endpoint is a replicated runtime
+service (`sys-postgres-wire`), not a boot listener — a bare node does not open
+port 5432; the listener appears only where that service is started and placed
+like any other service (see [runtime-lifecycle.md](runtime-lifecycle.md) and
+[rebalance.md](rebalance.md)). Query execution behind the wire protocol is
+described in [query-runtime.md](query-runtime.md).
 
 ### PostgreSQL Wire Data Flow
 

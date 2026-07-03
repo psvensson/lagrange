@@ -1,6 +1,11 @@
 # Operational Appendices And Archived Patterns
 
-Error-handling, testing, Kubernetes endpoint sync, and discovery-surface appendix material retained from the former monolithic architecture document.
+Error-handling, testing, Kubernetes endpoint sync, and discovery-surface
+appendix material retained from the former monolithic architecture document.
+
+This is appendix material, not a starting point: it remains accurate but sits
+outside the main domain files. Newcomers should navigate from
+[INDEX.md](INDEX.md) and land here only when following a specific reference.
 
 ## Error Handling
 

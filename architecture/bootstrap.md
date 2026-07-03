@@ -1,6 +1,19 @@
 # Bootstrap And Data Flow
 
-Seed and joining bootstrap, query routing, CDC continuity, and meta-service management flow.
+How a node goes from process start to serving cluster member, and how queries
+and CDC events flow once it is one. Covers seed and joining bootstrap, query
+routing, CDC continuity across topology transitions, and meta-service
+management flow.
+
+Bootstrap is how a node enters the lifecycle model described in
+[runtime-lifecycle.md](runtime-lifecycle.md); the system tables it hydrates
+are owned per [control-plane.md](control-plane.md), and once a node is a
+member its replicas are placed by the machinery in
+[rebalance.md](rebalance.md). How peers find each other's addresses
+(including restart on a new IP) is
+[peer-address-resolution.md](peer-address-resolution.md); the Kubernetes/NGINX
+probe endpoints that report these phases are documented in
+[../docs/bootstrap-readiness-probes.md](../docs/bootstrap-readiness-probes.md).
 
 ## Bootstrap Process
 

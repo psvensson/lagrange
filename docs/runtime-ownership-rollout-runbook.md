@@ -4,6 +4,13 @@ This runbook defines the steady-state operating model, release verification,
 rollback posture, feature-gate behavior, and failure handling after
 runtime-ownership closure.
 
+"Runtime-ownership closure" is the shipped hard-cutover that removed
+node-local mutation ownership: admin mutations are owned by the replicated
+meta-services (see [admin-api-reference.md](admin-api-reference.md)) and
+runtime lifecycle operations by the unified single owners described in
+[../architecture/runtime-lifecycle.md](../architecture/runtime-lifecycle.md).
+This document is the operator-facing view of that steady state.
+
 ## 1. Steady-State Operating Model
 
 The runtime-ownership cutover is closed. Operators should reason about the

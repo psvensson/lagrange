@@ -1,6 +1,15 @@
 # Runtime Lifecycle Architecture
 
-Runtime readiness, service lifecycle, ownership consolidation, runtime descriptors, and observability contracts.
+How services start, become ready, and are owned over their lifetime: readiness
+classification, the unified service lifecycle owners, ownership consolidation
+traceability, runtime descriptors, and observability contracts.
+
+Lifecycle sits between bootstrap and steady state: a node arrives via
+[bootstrap.md](bootstrap.md), its services are managed by the owners described
+here, and the resulting readiness states feed the placement decisions in
+[rebalance.md](rebalance.md) and the control-plane rows in
+[control-plane.md](control-plane.md). The components being lifecycle-managed
+are catalogued in [runtime-components.md](runtime-components.md).
 
 ## Lifecycle Readiness Classification
 

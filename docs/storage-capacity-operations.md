@@ -3,6 +3,11 @@
 Operator reference for node storage budgets, capacity diagnostics,
 and admission mode management.
 
+The budgets configured here feed storage-capacity-aware placement in the
+rebalancer (see [../architecture/rebalance.md](../architecture/rebalance.md));
+the diagnostics are served through the admin ingress described in
+[admin-api-reference.md](admin-api-reference.md).
+
 ## Configuring Node Storage Budgets
 
 Each node declares a storage budget at startup. The budget determines

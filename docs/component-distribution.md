@@ -3,6 +3,10 @@
 Package identity, registry mapping, OCI source references,
 and dependency lock semantics for WASM module distribution.
 
+This is the format and semantics reference behind module publishing; the
+step-by-step publish and service-creation workflow that uses these identifiers
+is [wasm-services-user-guide.md](wasm-services-user-guide.md).
+
 ## Package Identity
 
 Canonical format: `namespace:name@version`

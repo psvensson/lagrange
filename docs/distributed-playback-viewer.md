@@ -1,6 +1,12 @@
 # Distributed Test Playback Viewer
 
-The distributed harness now writes playback artifacts for each scenario run under:
+A browser tool for stepping through a recorded distributed test run after it
+finishes — node lifecycle events, chaos actions, topology changes, and
+per-node load over time. It is also linked per-run from the test-run dashboard
+([admin-test-run-landing.md](admin-test-run-landing.md)).
+
+The distributed harness writes the playback artifacts the viewer consumes for
+each scenario run under:
 
 - `test-output/{scenario}/events.ndjson`
 - `test-output/{scenario}/samples.ndjson`
