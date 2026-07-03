@@ -273,6 +273,10 @@ class RebalanceCoordinatorLifecycle {
         controlPlaneReadinessService: this.controlPlaneReadinessService,
         logger: this.logger,
         emitter: this,
+        authoritativeVisibilityTimeoutMs:
+          options.authoritativeVisibilityTimeoutMs,
+        authoritativeVisibilityRetryDelayMs:
+          options.authoritativeVisibilityRetryDelayMs,
       });
 
     // Workflow owner owns single-flight keys, step transitions,

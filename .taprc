@@ -1,8 +1,13 @@
 timeout: 5000
 allow-incomplete-coverage: true
-# Shared unit validation is stable at 4 concurrent TAP workers on the current
-# workstation budget. Higher parallelism has produced aggregate-only gate
-# failures even when the same subsystem shards pass in isolation.
+# Default worker parallelism for ad-hoc tap invocations. The fast lane
+# (test:fast in package.json) overrides this to --jobs=8, validated 2026-07-03
+# with a 10x targeted loop on the known timing-sensitive suites under load
+# plus multiple clean full-lane runs; the April "aggregate-only failures at
+# higher parallelism" incident was confounded with a V8 compile-cache crash
+# class fixed separately by --no-compilation-cache below. The integration and
+# bootstrap lanes stay serial within a lane (see `serial:`); cross-lane
+# concurrency lives in scripts/run-sharded-lanes-concurrent.sh.
 jobs: 4
 node-arg:
   - --no-compilation-cache

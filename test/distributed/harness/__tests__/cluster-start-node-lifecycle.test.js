@@ -920,7 +920,10 @@ test('Unit: reusable cluster lease recovers stale holder files', async () => {
   await fs.writeFile(
     lockPath,
     JSON.stringify({
-      pid: 999999,
+      // Above kernel.pid_max (<= 4194304 on Linux), so no live process can
+      // ever hold it; 999999 was a REAL pid under test-runner process churn
+      // and made stale-recovery see a live holder.
+      pid: 2147483647,
       scenarioName: 'stale-owner',
       acquiredAtMs: Date.now() - 1000,
     }),

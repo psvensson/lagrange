@@ -75,18 +75,26 @@ test('fastJsonClone', async (t) => {
       payload: {dims: {a: true, b: false}, reasons: ['x', 'y']},
     };
     const iterations = 20000;
+    const passes = 3;
 
-    const startFast = process.hrtime.bigint();
-    for (let index = 0; index < iterations; index++) {
-      fastJsonClone(row);
-    }
-    const fastNs = Number(process.hrtime.bigint() - startFast);
+    // Interleaved best-of-N: on a loaded test host (concurrent tap
+    // workers) a single descheduled slice can invert a one-shot
+    // comparison; the best pass per side measures the real cost floor.
+    let fastNs = Infinity;
+    let jsonNs = Infinity;
+    for (let pass = 0; pass < passes; pass++) {
+      const startFast = process.hrtime.bigint();
+      for (let index = 0; index < iterations; index++) {
+        fastJsonClone(row);
+      }
+      fastNs = Math.min(fastNs, Number(process.hrtime.bigint() - startFast));
 
-    const startJson = process.hrtime.bigint();
-    for (let index = 0; index < iterations; index++) {
-      JSON.parse(JSON.stringify(row));
+      const startJson = process.hrtime.bigint();
+      for (let index = 0; index < iterations; index++) {
+        JSON.parse(JSON.stringify(row));
+      }
+      jsonNs = Math.min(jsonNs, Number(process.hrtime.bigint() - startJson));
     }
-    const jsonNs = Number(process.hrtime.bigint() - startJson);
 
     t.ok(
       fastNs < jsonNs,

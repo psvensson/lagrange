@@ -49,6 +49,7 @@ test('waitForConvergence — requires leader coverage for all partitions',
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -93,6 +94,7 @@ test('waitForConvergence — custom targetVoterCount of 5 converges with 5 voter
   // With custom targetVoterCount=5, 5 voters should converge
   const result = await waitForConvergence([node], {
     settleTimeoutMs: 500,
+    finalAdjudicationDrainTimeoutMs: 0,
     quietWindowMs: 0,
     maxSustainedOverTargetMs: 500,
     sampleIntervalMs: 10,
@@ -130,6 +132,7 @@ test('waitForConvergence — 5 voters fails with default targetVoterCount of 3',
   try {
     await waitForConvergence([node], {
       settleTimeoutMs: 50,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 0,
       sampleIntervalMs: 10,
@@ -168,6 +171,7 @@ test('waitForConvergence — transient join/replace over-target converges back t
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 200,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 100,
       sampleIntervalMs: 10,
@@ -206,6 +210,7 @@ test('waitForConvergence — transient remove with leader gap recovers to stable
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 200,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 100,
       sampleIntervalMs: 10,
@@ -253,6 +258,7 @@ test('waitForConvergence — waits for in-flight replica operations to settle',
     const startedAt = Date.now();
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 200,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 100,
       sampleIntervalMs: 10,
@@ -299,6 +305,7 @@ test('waitForConvergence — prefers a converged reachable snapshot over a stale
 
     const result = await waitForConvergence([staleNode, convergedNode], {
       settleTimeoutMs: 120,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 100,
       sampleIntervalMs: 10,
@@ -329,6 +336,7 @@ test('waitForConvergence — timeout diagnostics include in-flight operation cou
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 100,
         sampleIntervalMs: 10,
@@ -397,6 +405,7 @@ test('waitForConvergence — timeout diagnostics include control-plane context',
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 100,
         sampleIntervalMs: 10,
@@ -483,6 +492,7 @@ test('waitForConvergence — preserves last meaningful control-plane context ' +
   try {
     await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 100,
       sampleIntervalMs: 10,
@@ -536,6 +546,7 @@ test('waitForConvergence — escalates to forceRepair snapshots after threshold'
 
   const result = await waitForConvergence([node], {
     settleTimeoutMs: 120,
+    finalAdjudicationDrainTimeoutMs: 0,
     quietWindowMs: 0,
     maxSustainedOverTargetMs: 100,
     sampleIntervalMs: 10,
@@ -571,6 +582,7 @@ test('waitForConvergence — fails fast when no progress is observed before sett
     try {
       await waitForConvergence([node], {
         settleTimeoutMs,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 100,
         sampleIntervalMs: 10,
@@ -612,6 +624,7 @@ test('waitForConvergence — without noProgressTimeoutMs a stuck cluster runs to
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 100,
         sampleIntervalMs: 10,

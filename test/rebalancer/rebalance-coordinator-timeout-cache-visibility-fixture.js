@@ -29,12 +29,16 @@ export function createCoordinator(overrides = {}) {
 
   if (hasExplicitGateway || hasLocalAuthoritativeRead) {
     return new RebalanceCoordinator({
+      authoritativeVisibilityTimeoutMs: 0,
+      authoritativeVisibilityRetryDelayMs: 0,
       ...overrides,
       sqlQueryEngine,
     });
   }
 
   return new RebalanceCoordinator({
+    authoritativeVisibilityTimeoutMs: 0,
+    authoritativeVisibilityRetryDelayMs: 0,
     ...overrides,
     sqlQueryEngine,
     controlPlaneSystemTableGateway: {

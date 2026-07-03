@@ -22,6 +22,7 @@ test('waitForConvergence — timeout throws descriptive error with diagnostics',
   try {
     await waitForConvergence([node], {
       settleTimeoutMs: 50,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 1000,
       sampleIntervalMs: 10,
@@ -82,6 +83,7 @@ test('waitForConvergence — timeout error includes voter counts from partial st
   try {
     await waitForConvergence([node], {
       settleTimeoutMs: 50,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 9999,
       maxSustainedOverTargetMs: 1000,
       sampleIntervalMs: 10,
@@ -166,6 +168,7 @@ test('waitForConvergence — timeout diagnostics include membership and operatio
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 50,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 0,
         sampleIntervalMs: 10,
@@ -243,6 +246,7 @@ test(
     try {
       await waitForConvergence([node], {
         settleTimeoutMs: 50,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 0,
         sampleIntervalMs: 10,
@@ -321,6 +325,7 @@ test('waitForConvergence — does not double-count replicated services snapshots
     const nodeB = createSnapshotNode('mock-snapshot-b');
     const result = await waitForConvergence([nodeA, nodeB], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -361,6 +366,7 @@ test('waitForConvergence — uses control snapshot path only',
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -414,6 +420,7 @@ test('waitForConvergence — uses SQL compatibility when control snapshot owner 
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -476,6 +483,7 @@ test('waitForConvergence — SQL fallback derives leaders from partitions metada
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -553,6 +561,7 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -564,6 +573,7 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -638,6 +648,7 @@ test('waitForConvergence — uses drain-row stale classification when control-pl
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -707,6 +718,7 @@ test('waitForConvergence — does not use stale drain rows outside canonical in-
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -763,6 +775,7 @@ test('waitForConvergence — falls back to summary stale count when canonical dr
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -850,6 +863,7 @@ test('waitForConvergence — does not use noncanonical additional drain discount
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,

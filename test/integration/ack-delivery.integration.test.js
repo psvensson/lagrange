@@ -5,6 +5,9 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
+import {mkdtempSync} from 'fs';
+import {tmpdir} from 'os';
+import {join as joinPath} from 'path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -164,7 +167,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
         m.shutdown = async () => {};
         return m;
       },
-      dataDir: './test-data',
+      dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
     });
     res.lc.initialize();
 

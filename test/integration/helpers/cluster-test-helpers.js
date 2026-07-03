@@ -23,6 +23,9 @@ import {
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
 import {URL} from 'url';
+import {mkdtempSync} from 'fs';
+import {tmpdir} from 'os';
+import {join} from 'path';
 
 /**
  * Per-test-file allocator to avoid cross-file port collisions when tests
@@ -116,6 +119,7 @@ export function initializeTestEnvironment(options = {}) {
     rebalancer = {},
     replicaHandler = {},
     timeout = {},
+    storage = {},
   } = options;
 
   // Reset all singletons to ensure clean state
@@ -151,6 +155,13 @@ export function initializeTestEnvironment(options = {}) {
     },
     timeout: {
       ...timeout,
+    },
+    // Unique per-test data dir: the production default is the shared,
+    // cwd-relative './data', which concurrent test lanes would collide on
+    // (same SQLite file paths).
+    storage: {
+      dataDir: mkdtempSync(join(tmpdir(), 'lagrange-itest-data-')),
+      ...storage,
     },
   });
 

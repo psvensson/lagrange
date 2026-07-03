@@ -36,6 +36,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:distributed-failure` — Print consolidated distributed report and triage diagnostics.
 - `analyze:fix-engagement` — Report whether candidate fixes actually engaged in a run.
 - `analyze:latent-blockers` — Census the masked blocker distribution the serial gate hides: peel-order + emerging/masked candidates + grounding pack across the whole report corpus (Phase 0/L5 of the latent-blocker census).
+- `analyze:leadership-flap` — `node scripts/analyze-leadership-flap.js`
 - `analyze:monotone-drain` — `node scripts/analyze-monotone-drain.js`
 - `analyze:owner-decisions` — Print the topology owner decision table/state-machine index.
 - `analyze:owner-explain` — Explain topology evidence snapshot to owner decision outcome.
@@ -185,7 +186,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:bootstrap:1` — `tap $(cat test/shards/bootstrap-1.txt)`
 - `test:bootstrap:2` — `tap $(cat test/shards/bootstrap-2.txt)`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
-- `test:ci` — `npm run test:safety-pregate && npm run test:sharded:all && npm run test:static && npm run test:chart:endpoint-sync && npm run model:contracts`
+- `test:ci` — `npm run test:safety-pregate && bash scripts/run-test-ci-overlapped.sh`
 - `test:cli` — `tap test/cli/**/*.test.js`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
@@ -218,7 +219,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:pgwire:unit` — `tap $(cat test/shards/pgwire-unit.txt)`
 - `test:quality` — `npm run test:static && npm run test:mutation`
 - `test:safety-pregate` — `tap $(cat test/shards/safety-pregate.txt)`
-- `test:sharded:all` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
+- `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
+- `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
 - `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
@@ -241,4 +243,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-157 scripts indexed; 65 have a curated description, 92 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+159 scripts indexed; 65 have a curated description, 94 fall back to their raw command. Improve coverage in the two sources named in the header comment.

@@ -444,6 +444,8 @@ function createEventDrivenCoordinator(
 ) {
   return new RebalanceCoordinator({
     nodeId: TEST_OBSERVER_NODE_ID,
+    authoritativeVisibilityTimeoutMs: 0,
+    authoritativeVisibilityRetryDelayMs: 0,
     sqlQueryEngine: buildSqlQueryEngine(operationRow),
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),

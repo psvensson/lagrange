@@ -117,6 +117,7 @@ test(
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -128,6 +129,7 @@ test(
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -246,6 +248,7 @@ test(
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -257,6 +260,7 @@ test(
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -376,6 +380,7 @@ test(
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -487,6 +492,7 @@ test(
     await assert.rejects(
       waitForConvergence([node], {
         settleTimeoutMs: 80,
+        finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 80,
         sampleIntervalMs: 10,
@@ -498,6 +504,7 @@ test(
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,
@@ -592,6 +599,7 @@ test(
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,
+      finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
       maxSustainedOverTargetMs: 80,
       sampleIntervalMs: 10,

@@ -15,6 +15,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {mkdtempSync} from 'fs';
+import {tmpdir} from 'os';
+import {join as joinPath} from 'path';
 import {SystemTableCache, CDC_OPERATIONS} from '../../src/cache/system-table-cache.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -798,6 +801,11 @@ test('Membership Consistency Integration Tests', async (t) => {
         electionTimeoutMinMs: 100,
         electionTimeoutMaxMs: 200,
         heartbeatIntervalMs: 50,
+      },
+      // Unique data dir: the './data' default collides across concurrent
+      // test lanes (same SQLite file paths).
+      storage: {
+        dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
       },
     });
 

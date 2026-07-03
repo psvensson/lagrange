@@ -55,6 +55,7 @@ test('Property 9: Convergence Threshold Configuration', async (t) => {
             // (count > 3).
             const result = await waitForConvergence([node], {
               settleTimeoutMs: 500,
+              finalAdjudicationDrainTimeoutMs: 0,
               quietWindowMs: 0,
               maxSustainedOverTargetMs: 500,
               sampleIntervalMs: 10,
@@ -85,6 +86,7 @@ test('Property 9: Convergence Threshold Configuration', async (t) => {
             try {
               await waitForConvergence([node], {
                 settleTimeoutMs,
+                finalAdjudicationDrainTimeoutMs: 0,
                 quietWindowMs: 0,
                 maxSustainedOverTargetMs: 1000,
                 sampleIntervalMs: 10,

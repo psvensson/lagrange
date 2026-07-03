@@ -38,6 +38,8 @@ function createMockSqlEngine() {
 function createCoordinator(logger) {
   const coordinator = new RebalanceCoordinator({
     nodeId: 'test-node-1',
+    authoritativeVisibilityTimeoutMs: 0,
+    authoritativeVisibilityRetryDelayMs: 0,
     systemTableCache: {getAll: () => []},
     cdcIntegrationService: {},
     messageRouter: {},

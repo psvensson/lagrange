@@ -693,6 +693,14 @@ async function waitForConvergence(nodes, options = {}) {
     options.noProgressGraceMs >= 0 ?
     Math.floor(options.noProgressGraceMs) :
     Math.max(forceRepairAfterMs, quietWindowMs);
+  // Timeout-path diagnostics drain budget. Tests that drive a permanently
+  // stuck stub cluster can shrink this so the drain loop does not burn the
+  // full default per timeout assertion.
+  const finalAdjudicationDrainTimeoutMs =
+    Number.isFinite(options.finalAdjudicationDrainTimeoutMs) &&
+    options.finalAdjudicationDrainTimeoutMs >= 0 ?
+      Math.floor(options.finalAdjudicationDrainTimeoutMs) :
+      FINAL_ADJUDICATION_DRAIN_TIMEOUT_MS;
 
   const overTargetState = new Map();
   const previousLeaders = new Map();
@@ -1105,7 +1113,9 @@ async function waitForConvergence(nodes, options = {}) {
     'Operation history: ' +
     operationHistorySnippet;
 
-  const finalAdjudication = await runFinalAdjudication(nodes);
+  const finalAdjudication = await runFinalAdjudication(nodes, {
+    drainTimeoutMs: finalAdjudicationDrainTimeoutMs,
+  });
 
   const err = new Error(msg);
   err.diagnostics = {
@@ -1450,9 +1460,13 @@ function buildPublicationConvergenceFromState(state) {
   };
 }
 
-async function runFinalAdjudication(nodes) {
+async function runFinalAdjudication(nodes, options = {}) {
+  const drainTimeoutMs = Number.isFinite(options.drainTimeoutMs) &&
+    options.drainTimeoutMs >= 0 ?
+    Math.floor(options.drainTimeoutMs) :
+    FINAL_ADJUDICATION_DRAIN_TIMEOUT_MS;
   const startDrain = Date.now();
-  while (Date.now() - startDrain < FINAL_ADJUDICATION_DRAIN_TIMEOUT_MS) {
+  while (Date.now() - startDrain < drainTimeoutMs) {
     let anyInFlight = false;
     for (const node of nodes) {
       try {
