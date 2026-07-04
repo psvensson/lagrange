@@ -10,6 +10,15 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Added
+- Per-release notes on every release surface, generated from this changelog
+  (`scripts/release-notes.js`): the Codeberg/Forgejo release page carries the
+  tagged version's section instead of boilerplate, the Docker Hub repository
+  description gains an auto-updated per-release "Release notes" history, and
+  the Docker image carries OCI provenance labels
+  (`org.opencontainers.image.version/revision/created`). Tagging a version
+  without a non-empty changelog section now fails the release in seconds.
+
 ### Removed
 - The broken `test:coverage` npm script (`tap test/` exceeds the OS argument
   limit; use the sharded `test:*` scripts instead).

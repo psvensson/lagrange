@@ -40,6 +40,33 @@ jobs:
         with:
           node-version: "22"
 
+      # Fail-fast release-notes gate, BEFORE the 40-60min test:ci: the tag must
+      # match package.json's version and have a non-empty CHANGELOG.md section
+      # (`## [x.y.z] — date`). That section becomes the Forgejo release-page
+      # body and the "Release notes" section of the Docker Hub overview — a tag
+      # whose changes were never written down fails here in seconds.
+      # scripts/release-notes.js is dependency-free, so this runs before npm ci.
+      # GITHUB_REF_NAME / GITHUB_OUTPUT / RUNNER_TEMP are Forgejo's built-in
+      # GitHub-Actions-compatible runner variables, not github.com.
+      - name: Resolve version and render release notes
+        id: ver
+        run: |
+          set -eu
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          node scripts/release-notes.js --mode check --version "$VERSION"
+          NOTES_DIR="${RUNNER_TEMP:-/tmp}"
+          node scripts/release-notes.js --mode notes --version "$VERSION" \
+            > "$NOTES_DIR/release-notes.md"
+          node scripts/release-notes.js --mode overview --version "$VERSION" \
+            > "$NOTES_DIR/dockerhub-overview.md"
+          echo "notes_dir=$NOTES_DIR" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<LAGRANGE_RELEASE_NOTES_EOF"
+            cat "$NOTES_DIR/release-notes.md"
+            echo "LAGRANGE_RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # Tools test:ci shells out to that the act runner image does not ship:
       # rg (spec-led-runtime-legacy-deletion-guard test), jq (failure-report
       # shell scripts; present in the act image but cheap to pin), java
@@ -86,14 +113,6 @@ jobs:
           # dist/ is not the Docker build context, so this is safe.
           rm -rf node_modules
 
-      # Strip the leading `v` from the tag once, so the image tags and the
-      # release notes below all reference the SAME string (e.g. tag v0.1.0 ->
-      # image :0.1.0). GITHUB_REF_NAME / GITHUB_OUTPUT are Forgejo's built-in
-      # runner variables (GitHub-Actions-compatible names), not github.com.
-      - name: Resolve version tag
-        id: ver
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
       # NOTE: the image is amd64-only — the Dockerfile keeps only the linux-x64
       # leveldown prebuild. ARM hosts can pull it but run under emulation.
       #
@@ -106,7 +125,13 @@ jobs:
           set -eu
           TAG="${{ steps.ver.outputs.version }}"
 
+          # OCI provenance labels (Dockerfile ARGs): version/revision/created
+          # are the per-tag metadata Docker Hub and the Codeberg package UI
+          # display for a specific release's image.
           docker build \
+            --build-arg "VERSION=$TAG" \
+            --build-arg "VCS_REF=$GITHUB_SHA" \
+            --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -t "$IMAGE:$TAG"           -t "$IMAGE:latest" \
             -t "$DOCKERHUB_IMAGE:$TAG" -t "$DOCKERHUB_IMAGE:latest" .
 
@@ -131,7 +156,50 @@ jobs:
             echo "::warning::codeberg registry login failed (non-fatal); image is on Docker Hub only"
           fi
 
-      # Publishes the tag as a Forgejo Release and attaches the artifacts.
+      # Docker Hub has no per-tag release-notes surface, so the repository
+      # full_description carries the per-release history: the rendered
+      # overview (docs/dockerhub-overview.md + a generated "Release notes"
+      # section per version, from CHANGELOG.md) is PATCHed via the Hub API.
+      # Best-effort like the Codeberg mirror push: hub.docker.com/v2 login has
+      # historically been picky about personal access tokens, and a failed
+      # description update must not sink a release whose images are pushed.
+      - name: Update Docker Hub repository description
+        # Secrets flow through env (not ${{ }} textual splicing into the shell
+        # script) so special characters in a token can't break or inject shell.
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USER }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -eu
+          REPO="${DOCKERHUB_IMAGE#docker.io/}"
+          OVERVIEW="${{ steps.ver.outputs.notes_dir }}/dockerhub-overview.md"
+          update() {
+            TOKEN=$(jq -n --arg u "$DH_USER" --arg p "$DH_TOKEN" \
+                          '{username: $u, password: $p}' \
+              | curl -fsS -X POST -H 'Content-Type: application/json' -d @- \
+                  https://hub.docker.com/v2/users/login \
+              | jq -r '.token // empty')
+            [ -n "$TOKEN" ] || return 1
+            jq -n --rawfile fd "$OVERVIEW" '{full_description: $fd}' \
+              | curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" \
+                  -H 'Content-Type: application/json' -d @- \
+                  "https://hub.docker.com/v2/repositories/$REPO/" > /dev/null
+          }
+          if update; then
+            echo "Docker Hub overview updated for $REPO"
+          else
+            echo "::warning::Docker Hub description update failed (non-fatal)." \
+              "If login was rejected, DOCKERHUB_TOKEN may need Read/Write/Delete" \
+              "scope (or the account password) for hub.docker.com/v2/users/login;" \
+              "fallback: run 'node scripts/release-notes.js --mode overview" \
+              "--version ${{ steps.ver.outputs.version }}' and paste the output" \
+              "at https://hub.docker.com/r/$REPO"
+          fi
+
+      # Publishes the tag as a Forgejo Release and attaches the artifacts. The
+      # notes are the tagged version's CHANGELOG.md section (rendered by the
+      # fail-fast step above), so the Codeberg release page shows the concrete
+      # changes, not boilerplate.
       - name: Publish Forgejo release
         uses: actions/forgejo-release@v2
         with:
@@ -141,9 +209,4 @@ jobs:
           # forgejo-release@v2 requires a non-empty title (fails "title is empty").
           title: "Lagrange ${{ github.ref_name }}"
           release-dir: dist
-          release-notes: |
-            Lagrange ${{ github.ref_name }} (experimental / alpha).
-            See CHANGELOG.md and RELEASE.md.
-            Docker images:
-              ${{ env.IMAGE }}:${{ steps.ver.outputs.version }}
-              ${{ env.DOCKERHUB_IMAGE }}:${{ steps.ver.outputs.version }}
+          release-notes: ${{ steps.ver.outputs.notes }}

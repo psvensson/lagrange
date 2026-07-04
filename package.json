@@ -82,6 +82,7 @@
     "build:bundle": "node scripts/build-sea.js",
     "build:sea": "bash scripts/build-executables.sh",
     "build:all": "npm run build:bundle && npm run build:sea",
+    "release:notes": "node scripts/release-notes.js",
     "spike:raft-logic": "node scripts/run-raft-logic-investigation-spike.js",
     "migration:raft:benchmarks": "node scripts/run-raft-migration-benchmarks.js",
     "migration:raft:stage:dev": "node scripts/run-raft-migration-stage-gate.js --stage dev",

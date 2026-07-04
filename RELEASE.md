@@ -12,7 +12,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | Trigger | Workflow | What runs |
 | --- | --- | --- |
 | PR / push to `main` | `.forgejo/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
-| Push of a `v*` tag | `.forgejo/workflows/release.yml` | `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image → push it to Docker Hub (`docker.io/psvensson/lagrange`, required) and the Codeberg registry (`codeberg.org/psvensson/lagrange`, best-effort mirror), tagged `<x.y.z>` + `latest` → `helm package charts/lagrange-node` → publish chart + SEA binaries + `SHA256SUMS` to the Forgejo Release. |
+| Push of a `v*` tag | `.forgejo/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image with OCI provenance labels (`org.opencontainers.image.version/revision/created`) → push it to Docker Hub (`docker.io/psvensson/lagrange`, required) and the Codeberg registry (`codeberg.org/psvensson/lagrange`, best-effort mirror), tagged `<x.y.z>` + `latest` → update the Docker Hub repository description (rendered overview + per-release notes; best-effort) → `helm package charts/lagrange-node` → publish chart + SEA binaries + `SHA256SUMS` to the Forgejo Release, whose notes are the tagged version's changelog section. |
 
 ## Cutting a release
 
@@ -25,7 +25,13 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    `package.json` on disk — still reports the right version).
 3. **Update `CHANGELOG.md`.** Move `[Unreleased]` items under a new
    `[x.y.z] — YYYY-MM-DD` heading and refresh the compare/tag links. Keep the
-   _Known limitations_ section honest about convergence (see below).
+   _Known limitations_ section honest about convergence (see below). This is
+   not optional bookkeeping: the section is the source of the release-page
+   notes and Docker Hub release history, and `release.yml` fails in seconds if
+   the tagged version has no non-empty section
+   (`npm run release:notes -- --mode check --version x.y.z` runs the same
+   gate locally; `test/scripts/release-notes.test.js` also pins it to
+   `package.json`'s version in `test:fast`).
 4. **Verify on a clean checkout** (the release Quest's `doneWhen`):
    ```sh
    npm ci
@@ -41,11 +47,16 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    git push origin v0.1.0
    ```
    `release.yml` builds and publishes every artifact from the tagged tree.
-6. **Refresh the Docker Hub overview** if user-facing behavior changed:
-   [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is the source for
-   the repository description at
-   <https://hub.docker.com/r/psvensson/lagrange>; paste it in manually (Docker
-   Hub has no API-token-free automation for this).
+6. **Docker Hub overview updates itself.**
+   [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
+   `release.yml` renders it with a generated per-release "Release notes"
+   section (from `CHANGELOG.md`) and PATCHes it to the repository description
+   at <https://hub.docker.com/r/psvensson/lagrange> via the Hub API
+   (best-effort — a failed description update never sinks a release). Manual
+   fallback if the step warns:
+   `npm run release:notes -- --mode overview --version x.y.z` and paste the
+   output. Edit the template whenever user-facing container behavior changes;
+   never hand-edit between the `RELEASE-NOTES` markers.
 
 ## Convergence: what the release does and does not promise
 

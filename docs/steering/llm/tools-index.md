@@ -140,6 +140,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `quest:context` — Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.
 
+## release
+
+- `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, Forgejo release-page body, and Docker Hub overview renderer.
+
 ## shards
 
 - `shards:generate` — `node scripts/generate-test-shards.js`
@@ -243,4 +247,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-159 scripts indexed; 65 have a curated description, 94 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+160 scripts indexed; 66 have a curated description, 94 fall back to their raw command. Improve coverage in the two sources named in the header comment.
