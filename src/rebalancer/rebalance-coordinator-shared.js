@@ -17,6 +17,7 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
+  isOperationLedgerPartition as isOperationLedgerPartitionTable,
   isPriorityControlPlanePartition as isPriorityControlPlanePartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
@@ -311,6 +312,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   getControlPlaneRetryAfterMs,
   isCriticalTransportControlPlanePartitionTable,
   isPriorityRecoveryEmergencyPartition,
+  isOperationLedgerPartitionTable,
   isPriorityControlPlanePartitionTable,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,

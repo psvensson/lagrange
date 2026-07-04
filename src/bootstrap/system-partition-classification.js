@@ -130,6 +130,14 @@ function isPriorityControlPlanePartition(options = {}) {
   return tableId !== null && PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId);
 }
 
+// The replica_operations table is the operation LEDGER: every in-flight
+// operation persists its workflow progress into it, so a partition of this
+// table is the one partition whose own move disrupts every other move.
+function isOperationLedgerPartition(options = {}) {
+  return resolvePartitionTableId(options) ===
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
+}
+
 function isCriticalTransportControlPlanePartition(options = {}) {
   const tableId = resolvePartitionTableId(options);
   return tableId !== null &&
@@ -388,6 +396,7 @@ export {
   getPartitionRowFromCache,
   isCriticalTransportControlPlanePartition,
   isCriticalTransportTargetAddress,
+  isOperationLedgerPartition,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
   resolveCriticalTransportTargetSnapshot,

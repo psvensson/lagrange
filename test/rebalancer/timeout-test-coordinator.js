@@ -94,6 +94,14 @@ function createTimeoutTestCoordinator(options = {}) {
       if (sql.includes('replica_operations')) {
         const allOps = Array.from(trackedOperations.values());
 
+        // Point read (SELECT_OPERATION_BY_ID): must resolve the EXACT row, not
+        // fall through to the catch-all that returns every operation.
+        if (sql.includes('operation_id = ?')) {
+          const [operationId] = params;
+          const operation = trackedOperations.get(operationId);
+          return {success: true, rows: operation ? [operation] : []};
+        }
+
         if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
           const [partitionId, targetNodeId] = params;
           const matching = allOps.filter((op) =>

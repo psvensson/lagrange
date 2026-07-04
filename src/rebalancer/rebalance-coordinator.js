@@ -6,6 +6,7 @@ import {applyRebalanceCoordinatorOperationIntentMethods} from './rebalance-coord
 import {applyRebalanceCoordinatorOwnerDelegationMethods} from './rebalance-coordinator-owner-delegation-methods.js';
 import {applyRebalanceCoordinatorOperationCreationMethods} from './rebalance-coordinator-operation-creation.js';
 import {applyRebalanceCoordinatorPriorityBudgetAdmissionMethods} from './rebalance-coordinator-priority-budget-admission.js';
+import {applyRebalanceCoordinatorLedgerInterlockAdmissionMethods} from './rebalance-coordinator-ledger-interlock-admission.js';
 import {applyRebalanceCoordinatorConcurrentBudgetGateMethods} from './rebalance-coordinator-concurrent-budget-gate.js';
 import {applyRebalanceCoordinatorOwnerFacadeMethods} from './rebalance-coordinator-owner-facade.js';
 import {applyRebalanceCoordinatorReservationLifecycleMethods} from './rebalance-coordinator-reservation-lifecycle-methods.js';
@@ -223,6 +224,7 @@ applyRebalanceCoordinatorOperationIntentMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOwnerDelegationMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationCreationMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorPriorityBudgetAdmissionMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorLedgerInterlockAdmissionMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorConcurrentBudgetGateMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOwnerFacadeMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorReservationLifecycleMethods(RebalanceCoordinator);

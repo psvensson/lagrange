@@ -1,0 +1,434 @@
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+
+const {
+  OperationType,
+  SERVICE_TYPE,
+  STORAGE_ADMISSION_DECISION_TYPE,
+  isOperationLedgerPartitionTable,
+} = REBALANCE_COORDINATOR_SHARED;
+
+const LOCAL_STR_FUNCTION = 'function';
+
+// Every operation persists its workflow progress into the replica_operations
+// LEDGER, so a REPLACE/REMOVE of a ledger partition (the ledger moving itself)
+// disrupts every other in-flight operation's progress writes (run-20 formation
+// interlock; CL-017 mechanism at storm scale). The ledger self-move therefore
+// runs EXCLUSIVELY: it admits only into an idle ledger, and while it is live no
+// other operation admits. Deterministic reproduction:
+// test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js.
+const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
+  new Set([OperationType.REPLACE, OperationType.REMOVE]),
+);
+const OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX = 'Operation-ledger partition ';
+const OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX =
+  ' self-move admits only into an idle operation ledger';
+const OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX =
+  ' self-move in flight; operation admission deferred until it completes';
+const OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE =
+  'operation_ledger_self_move_in_flight';
+const OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE =
+  'operation_ledger_self_move_waiting_for_idle_ledger';
+
+// Interlock rejections must ride the admission channel (error.admissionResult)
+// so the DDL partition-provisioning loop absorbs them as target rejections and
+// re-plans, instead of re-throwing them to the client as internal errors. The
+// rebalance loop keeps using rebalanceSkipReason on the same error.
+function buildOperationLedgerInterlockAdmissionResult(reasonCode) {
+  return Object.freeze({
+    allowed: false,
+    decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+    reason: reasonCode,
+    blockingReasons: Object.freeze([Object.freeze({code: reasonCode})]),
+  });
+}
+
+class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+  /**
+   * @param {string|null} normalizedMoveType
+   * @param {string|null} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isDisruptiveOperationLedgerSelfMove(normalizedMoveType, partitionId) {
+    return (
+      OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES.has(normalizedMoveType) &&
+      isOperationLedgerPartitionTable({partitionId})
+    );
+  }
+
+  /**
+   * A ledger-interlock participant is an operation that still writes progress
+   * into the operation ledger: non-terminal AND not already stale past its
+   * step timeout (the CL-043 exclusion — a wedged phantom is a reaper
+   * candidate, not a serialization holder, so it must not dam admission).
+   * When the staleness predicate is unavailable the operation is
+   * conservatively treated as live.
+   * @param {Object} operation
+   * @param {number} nowMs
+   * @return {boolean}
+   * @private
+   */
+  isLiveOperationLedgerInterlockOperation(operation, nowMs) {
+    if (!operation || this.isOperationTerminal(operation)) {
+      return false;
+    }
+    if (
+      typeof this.workflowOwner?.isConcurrentOperationStalePastStepTimeout ===
+      LOCAL_STR_FUNCTION
+    ) {
+      return !this.workflowOwner.isConcurrentOperationStalePastStepTimeout(
+        operation,
+        nowMs,
+      );
+    }
+    return true;
+  }
+
+  /**
+   * Serialize the operation-ledger self-move against ALL other operations.
+   *
+   * The replica_operations table is where every operation persists workflow
+   * progress. Moving one of its partitions while other operations are in
+   * flight makes their progress writes (and the self-move's own) fail against
+   * the mid-move ledger raft group — the run-20 formation interlock: all
+   * operations pin non-terminal, zero completions, client DDL starves. The
+   * deterministic reproduction
+   * (test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js)
+   * proves co-scheduling stalls while serialized dispatch completes.
+   *
+   * Two directions, both surfaced as the standard typed budget skip so the
+   * planner retries next cycle:
+   * - A disruptive ledger self-move (REPLACE/REMOVE of a ledger partition)
+   *   admits only when no other live operation exists. ADD is exempt: ledger
+   *   spread recovery must stay admissible (CL-013 — formation-time priority
+   *   spread cannot be deferred without circularity).
+   * - While a live ledger self-move exists, every other operation defers.
+   *   Emergency quorum-restore ADDs (control_plane_publications /
+   *   replica_operations) stay exempt: control-plane spine availability
+   *   outranks storm avoidance, and the staleness exclusion still bounds a
+   *   wedged self-move.
+   *
+   * Inputs are actuals only: committed replica_operations rows via the
+   * established incomplete-operation observation (ARCH-0080/0084).
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureOperationLedgerSelfMoveSerialized(context) {
+    const normalizedMoveType = context?.normalizedMoveType;
+    const partitionId = context?.partitionId;
+    const isDisruptiveSelfMove = this.isDisruptiveOperationLedgerSelfMove(
+      normalizedMoveType,
+      partitionId,
+    );
+    const isEmergencyQuorumRestoreAdd =
+      normalizedMoveType === OperationType.ADD &&
+      this.isEmergencyPriorityControlPlanePartition(partitionId);
+    if (!isDisruptiveSelfMove && isEmergencyQuorumRestoreAdd) {
+      return;
+    }
+
+    const incompleteOperations = await this.queryIncompleteOperations();
+    const observation = this.getIncompleteOperationObservation(
+      incompleteOperations,
+    );
+    const observedOperations = Array.isArray(incompleteOperations) ?
+      incompleteOperations :
+      [];
+    const nowMs = this.timeSource?.now?.() ?? Date.now();
+    const currentOperationId = String(
+      context?.move?.operationId || '',
+    ).trim();
+    const liveOperations = observedOperations.filter(
+      (operation) =>
+        operation?.operationId !== currentOperationId &&
+        this.isLiveOperationLedgerInterlockOperation(operation, nowMs),
+    );
+
+    if (isDisruptiveSelfMove) {
+      const conflictingOperation = liveOperations[0] || null;
+      if (conflictingOperation) {
+        throw this.createOperationLedgerInterlockError(
+          normalizedMoveType,
+          OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+            String(partitionId) +
+            OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
+          OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
+          conflictingOperation.operationId,
+        );
+      }
+      // The disruptive self-move must not admit blind: unresolved operation
+      // visibility defers it (it is rare and planner-retried; admitting into
+      // an unobserved ledger is exactly the run-20 storm).
+      if (observation?.deferredOutcome) {
+        throw this.createDeferredOperationVisibilityError(
+          normalizedMoveType,
+          observation,
+          {
+            partitionId: partitionId || null,
+            entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+            entityId: context?.entityId || partitionId || null,
+          },
+        );
+      }
+      return;
+    }
+
+    // Every other operation defers while a live ledger self-move exists. This
+    // direction gates only on OBSERVED rows (absence of actuals never blocks
+    // routine admission).
+    const liveLedgerSelfMove = liveOperations.find((operation) =>
+      this.isDisruptiveOperationLedgerSelfMove(
+        operation?.type,
+        operation?.partitionId,
+      ),
+    );
+    if (!liveLedgerSelfMove) {
+      return;
+    }
+    throw this.createOperationLedgerInterlockError(
+      normalizedMoveType,
+      OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+        String(liveLedgerSelfMove.partitionId) +
+        OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+      OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+      liveLedgerSelfMove.operationId,
+    );
+  }
+
+  /**
+   * Build one typed interlock rejection that both callers understand: the
+   * rebalance loop reads rebalanceSkipReason (skip + retry next cycle) and the
+   * DDL provisioning loop reads admissionResult (target rejection + re-plan).
+   * @param {string|null} normalizedMoveType
+   * @param {string} message
+   * @param {string} reasonCode
+   * @param {string|null} conflictingOperationId
+   * @return {Error}
+   * @private
+   */
+  createOperationLedgerInterlockError(
+    normalizedMoveType,
+    message,
+    reasonCode,
+    conflictingOperationId,
+  ) {
+    const error = this.createConcurrentOperationBudgetError(
+      normalizedMoveType,
+      1,
+      {
+        message,
+        conflictingOperationId: conflictingOperationId || undefined,
+      },
+    );
+    error.admissionResult =
+      buildOperationLedgerInterlockAdmissionResult(reasonCode);
+    return error;
+  }
+
+  /**
+   * Synchronous single-coordinator interlock accounting around operation
+   * creation. The per-entity rebalancer loops dispatch moves concurrently
+   * (parallel createOperation calls), and the async observation in
+   * ensureOperationLedgerSelfMoveSerialized cannot see rows that are still
+   * mid-persist or not yet cache-visible — so without a synchronous gate two
+   * concurrent creates could co-admit the ledger self-move with a sibling and
+   * re-create the run-20 storm. This wrapper is that synchronous gate; the
+   * async lane remains the cross-node/cross-source backstop.
+   * @param {Object} move
+   * @param {Function} executionFactory
+   * @return {Promise<Object>}
+   * @private
+   */
+  async runOperationLedgerInterlockAccountedCreate(move, executionFactory) {
+    const normalizedMoveType = this.normalizeMoveType(move?.type);
+    const partitionId = move?.partitionId || move?.entityId || null;
+    const state = this.getOperationLedgerInterlockAdmissionState();
+    const isDisruptiveSelfMove = this.isDisruptiveOperationLedgerSelfMove(
+      normalizedMoveType,
+      partitionId,
+    );
+
+    if (isDisruptiveSelfMove) {
+      this.assertOperationLedgerSelfMoveGateOpen(
+        state,
+        normalizedMoveType,
+        partitionId,
+      );
+      if (state.heldSelfMoveOperationId) {
+        const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
+        if (!cleared) {
+          throw this.createOperationLedgerInterlockError(
+            normalizedMoveType,
+            OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+              String(partitionId) +
+              OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
+            OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
+            state.heldSelfMoveOperationId,
+          );
+        }
+        // Re-validate after the await: another create may have entered the
+        // gate while the point read was in flight (TOCTOU).
+        this.assertOperationLedgerSelfMoveGateOpen(
+          state,
+          normalizedMoveType,
+          partitionId,
+        );
+      }
+      state.selfMoveCreateInFlight = true;
+      try {
+        const operation = await executionFactory();
+        if (operation?.operationId) {
+          state.heldSelfMoveOperationId = operation.operationId;
+        }
+        return operation;
+      } finally {
+        state.selfMoveCreateInFlight = false;
+      }
+    }
+
+    const isEmergencyQuorumRestoreAdd =
+      normalizedMoveType === OperationType.ADD &&
+      this.isEmergencyPriorityControlPlanePartition(partitionId);
+    if (!isEmergencyQuorumRestoreAdd) {
+      if (state.selfMoveCreateInFlight) {
+        throw this.createOperationLedgerInterlockError(
+          normalizedMoveType,
+          OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+            String(partitionId) +
+            OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+          OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+          null,
+        );
+      }
+      if (state.heldSelfMoveOperationId) {
+        const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
+        if (!cleared) {
+          throw this.createOperationLedgerInterlockError(
+            normalizedMoveType,
+            OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+              String(partitionId) +
+              OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+            OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+            state.heldSelfMoveOperationId,
+          );
+        }
+        // Re-validate after the await: a ledger self-move may have entered
+        // the gate while the point read was in flight (TOCTOU — a sibling
+        // must not co-admit with it).
+        if (state.selfMoveCreateInFlight) {
+          throw this.createOperationLedgerInterlockError(
+            normalizedMoveType,
+            OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+              String(partitionId) +
+              OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+            OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+            null,
+          );
+        }
+      }
+    }
+
+    state.otherCreatesInFlight += 1;
+    try {
+      return await executionFactory();
+    } finally {
+      state.otherCreatesInFlight -= 1;
+    }
+  }
+
+  /**
+   * The self-move gate is open only when NO other create of any kind is
+   * between its gate and its persist. Called both on entry and again after
+   * every await inside the gate (each await is a TOCTOU window).
+   * @param {Object} state
+   * @param {string|null} normalizedMoveType
+   * @param {string|null} partitionId
+   * @return {void}
+   * @private
+   */
+  assertOperationLedgerSelfMoveGateOpen(
+    state,
+    normalizedMoveType,
+    partitionId,
+  ) {
+    if (state.selfMoveCreateInFlight || state.otherCreatesInFlight > 0) {
+      throw this.createOperationLedgerInterlockError(
+        normalizedMoveType,
+        OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+          String(partitionId) +
+          OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
+        OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
+        null,
+      );
+    }
+  }
+
+  /**
+   * @return {Object}
+   * @private
+   */
+  getOperationLedgerInterlockAdmissionState() {
+    if (!this.operationLedgerInterlockAdmission) {
+      this.operationLedgerInterlockAdmission = {
+        selfMoveCreateInFlight: false,
+        heldSelfMoveOperationId: null,
+        otherCreatesInFlight: 0,
+      };
+    }
+    return this.operationLedgerInterlockAdmission;
+  }
+
+  /**
+   * Resolve whether the held (locally created) ledger self-move has finished,
+   * via an authoritative point read of its row. Terminal or stale rows clear
+   * the hold; an unreadable ledger keeps it held — while the ledger is
+   * mid-move its reads failing IS the condition being serialized against, and
+   * the staleness bound still releases a wedged self-move once its row is
+   * readable again.
+   * @param {Object} state
+   * @return {Promise<boolean>} True when the hold was cleared.
+   * @private
+   */
+  async tryClearHeldOperationLedgerSelfMove(state) {
+    const operationId = state.heldSelfMoveOperationId;
+    if (!operationId) {
+      return true;
+    }
+    let operation = null;
+    try {
+      operation = await this.queryOperationById(operationId);
+    } catch {
+      return false;
+    }
+    if (!operation) {
+      return false;
+    }
+    const nowMs = this.timeSource?.now?.() ?? Date.now();
+    if (
+      this.isOperationTerminal(operation) ||
+      !this.isLiveOperationLedgerInterlockOperation(operation, nowMs)
+    ) {
+      state.heldSelfMoveOperationId = null;
+      return true;
+    }
+    return false;
+  }
+}
+
+function applyRebalanceCoordinatorLedgerInterlockAdmissionMethods(targetClass) {
+  const sourcePrototype =
+    RebalanceCoordinatorLedgerInterlockAdmissionMethods.prototype;
+  for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+    if (methodName === 'constructor') {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      sourcePrototype,
+      methodName,
+    );
+    Object.defineProperty(targetClass.prototype, methodName, descriptor);
+  }
+}
+
+export {applyRebalanceCoordinatorLedgerInterlockAdmissionMethods};

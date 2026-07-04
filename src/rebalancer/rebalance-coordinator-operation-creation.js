@@ -112,7 +112,9 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     return this.operationWorkflowRunExclusive(singleFlightKey, () =>
-      this.createOperationInternal(move),
+      this.runOperationLedgerInterlockAccountedCreate(move, () =>
+        this.createOperationInternal(move),
+      ),
     );
   }
 
@@ -220,6 +222,13 @@ class RebalanceCoordinatorOperationCreation {
       }
     }
 
+    await this.ensureOperationLedgerSelfMoveSerialized({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
     await this.ensureNoConflictingInFlightReplaceForRemove({
       move,
       normalizedMoveType,
