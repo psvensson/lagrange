@@ -1,0 +1,95 @@
+      Archived previous run state to /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/data/examples/service-data-affinity-demo-archive/run-2026-07-04T14-33-50-421Z.tar.gz
+[1/4] Starting 5 nodes (single zone)...
+      Cluster formed.
+      Waiting for formation settling...
+      ...1 operations in flight (2 completed)
+      ...1 operations in flight (2 completed)
+      ...5 operations in flight (3 completed)
+      ...4 operations in flight (8 completed)
+      ...1 operations in flight (12 completed)
+      ...3 operations in flight (15 completed)
+      ...5 operations in flight (16 completed)
+      ...5 operations in flight (16 completed)
+      ...5 operations in flight (16 completed)
+      ...7 operations in flight (16 completed)
+      ...7 operations in flight (16 completed)
+      ...8 operations in flight (16 completed)
+      ...8 operations in flight (16 completed)
+      ...9 operations in flight (16 completed)
+      ...11 operations in flight (16 completed)
+      ...11 operations in flight (16 completed)
+      ...11 operations in flight (16 completed)
+      ...11 operations in flight (16 completed)
+      ...11 operations in flight (16 completed)
+      Control plane settling STALLED (no operation completed for 120s) — proceeding anyway.
+[2/4] Loading movielens ratings (replicas land on SOME of the nodes — that asymmetry is the point)...
+      Loaded 100000 ratings.
+      Waiting for post-load settling...
+      ...14 operations in flight (16 completed)
+      ...14 operations in flight (16 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      ...12 operations in flight (18 completed)
+      Control plane settling STALLED (no operation completed for 120s) — proceeding anyway.
+      Ratings partitions: 1, data on nodes: ["742baa79-57b3-4853-b98b-016a87ec16c5","3c1e2260-ee38-4144-9820-56146c768420","870eebdd-6d2d-4c4d-8134-96577de7b3cf"]
+[3/4] Deploying the svc-movielens-topn runtime service (2 replicas, read_locality=same_group): full-table scan fanned out across all partitions, top-10 reduced IN-SERVICE, 10-row result written back)...
+[4/4] Watching code land on / move to its data...
+      t+10s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+20s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+31s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+41s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+51s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+61s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+72s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+82s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+92s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+102s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+112s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+122s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+132s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+143s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+154s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+164s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+174s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+184s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+194s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+204s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+215s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+225s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+235s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+246s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+256s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+266s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+276s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+286s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+296s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+306s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+      t+316s replicas=0 onData=0 attributionRows=0 dataPartitions=2 top10Rows=0 placement=[]
+
+      STALLED: no observable progress for 300s (replicas=0, onData=0, attributionRows=0) — aborting early. Something in the placement/attribution chain is not engaging; check the rebalancer and runtime-service-handler logs under the cluster data dir.
+
+Stopping cluster...
+Affinity demo result:
+{
+  "converged": false,
+  "stalled": true,
+  "elapsedMs": 316438,
+  "finalPlacement": [],
+  "dataNodes": [
+    "742baa79-57b3-4853-b98b-016a87ec16c5",
+    "3c1e2260-ee38-4144-9820-56146c768420",
+    "870eebdd-6d2d-4c4d-8134-96577de7b3cf"
+  ],
+  "attributionRows": 0,
+  "top10": []
+}

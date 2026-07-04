@@ -1,0 +1,19 @@
+{
+  "test": "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js",
+  "src": [
+    "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+    "src/rebalancer/rebalance-coordinator-operation-creation.js",
+    "src/rebalancer/rebalance-coordinator-shared.js",
+    "src/bootstrap/system-partition-classification.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-04T13:47:20.992Z"
+}

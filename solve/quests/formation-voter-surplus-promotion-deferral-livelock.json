@@ -1,0 +1,56 @@
+{
+  "id": "formation-voter-surplus-promotion-deferral-livelock",
+  "statement": "A 5-node formation drains control-plane voter surplus to target without the run-21 livelock: sql_write_operations-p1 sat at 5 active voters (target 3) with its surplus-drain REPLACE pinned SYNCING while the new replica's learner promotion deferred 168x on the even-voter-count guard (maxAllowedVotersAfterPromotion=4) — promotion waits for voter drain, drain waits for the REPLACE to terminalize, the REPLACE waits for promotion (circular-dependency-class-formation-vs-steady-state at the raft-membership level). The pinned non-terminal set (nodes-p1/tables-p1 REPLACE PENDING, message-group REPLACE/REMOVE, MOVE_ASSIGNMENT mg-1) held the global move budget so service placement ADDs skipped budget_exceeded and svc-movielens-topn placed ZERO replicas. The fix breaks the promotion/drain circular wait (e.g. the promotion guard accounts for the in-flight surplus drain it is blocking, or the drain terminalizes without requiring the blocked promotion) WITHOUT weakening raft voter-safety invariants — proven FIRST by a deterministic in-process reproduction (DT substrate; compose the promotion guard with the surplus-drain REPLACE workflow) that red-on-reverts the livelock shape, and then by the live affinity demo's formation settle completing (in-flight ops reaching terminal instead of the 120s staleness cut) and svc-movielens-topn placing replicas greater than zero.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-voter-surplus-promotion-deferral-livelock",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-voter-surplus-promotion-deferral-livelock-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-voter-surplus-promotion-deferral-livelock",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-dt-first",
+      "statement": "RUNG 1 (mandatory, before any src change): deterministic in-process reproduction of the promotion/drain circular wait on the DT substrate (operational-ground-truth deterministic-first). Compose the even-voter-count learner-promotion guard ('Learner promotion deferred - would cause even voter count', maxAllowedVotersAfterPromotion path) with the surplus-drain REPLACE workflow at 5-voters-over-target-3. Live demo runs are validation only, never discovery (gate-runs-last-resort-only). Run-21 forensics: data/examples/service-data-affinity-demo-archive/ (run-21 archived pre-wipe on next demo run) + solve log findings of quest formation-control-plane-move-interlock dated 2026-07-04T14:47."
+    },
+    {
+      "id": "c-vet",
+      "statement": "Adversarially vet the circular-wait hypothesis against the DT reproduction before sealing the fix direction (run-21 is single-run forensics; confirm the SYNCING REPLACE actually waits on the deferred promotion, and how the voter count reached 5 over target 3 in the first place — successive add-without-drain may be the upstream defect, and fixing THAT may dominate)."
+    },
+    {
+      "id": "c-class",
+      "statement": "circular-dependency-class-formation-vs-steady-state at raft-membership level. The fix must not weaken raft voter-safety invariants (odd-voter-count preference, quorum floors) and must not raise timeouts or budget sizes (TEST-0021); ledger lookups first: CL-038 (surplus-drain source-leader handoff), CL-043 (persist-failed drain terminalization), the dt-drain-safety-overremoval-hunt REFUTED strict-floor lesson, and quest formation-control-plane-move-interlock (the ledger self-move serialization landed there; the run-21 pinned set is downstream of THIS livelock, not of the ledger interlock)."
+    },
+    {
+      "id": "c-actuals",
+      "statement": "Any new gate inputs are classified per doctrine state-encoding section 10 (ARCH-0080/0084): actuals only; targets (replica_count, planned placement) never gate liveness."
+    }
+  ]
+}
