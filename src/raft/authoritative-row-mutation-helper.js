@@ -87,6 +87,8 @@ class AuthoritativeRowMutationHelper {
       nodeId = null,
       messageRouter = null,
       systemTableCache = null,
+      refreshObservedRow = null,
+      onObservedStateChanged = () => {},
       onAsyncError = () => {},
       now = () => Date.now(),
       setTimeoutFn = setTimeout,
@@ -135,6 +137,9 @@ class AuthoritativeRowMutationHelper {
     this.nodeId = nodeId;
     this.messageRouter = messageRouter;
     this.systemTableCache = systemTableCache;
+    this.refreshObservedRow =
+      typeof refreshObservedRow === 'function' ? refreshObservedRow : null;
+    this.onObservedStateChanged = onObservedStateChanged;
     this.onAsyncError = onAsyncError;
     this.now = now;
     this.setTimeoutFn = setTimeoutFn;
@@ -295,6 +300,12 @@ class AuthoritativeRowMutationHelper {
         partitionResult,
       );
       if (partitionResult?.success === false && gatewayFailureReason) {
+        if (
+          gatewayFailureReason ===
+          AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED
+        ) {
+          await this.recoverFromObservedStateChanged(value, partitionResult);
+        }
         this.scheduleRetry(partitionResult?.retryAfterMs);
         return this.buildResult({
           attempts: 1,
@@ -306,6 +317,7 @@ class AuthoritativeRowMutationHelper {
       if (gatewayFailureReason === AUTHORITATIVE_ROW_MUTATION_REASON
         .OBSERVED_STATE_CHANGED ||
         (affectedRows !== null && affectedRows <= 0)) {
+        await this.recoverFromObservedStateChanged(value, partitionResult);
         this.scheduleRetry();
         return this.buildResult({
           attempts: 1,
@@ -348,6 +360,40 @@ class AuthoritativeRowMutationHelper {
         this.pendingValue !== this.persistedValue) {
         this.scheduleFollowUpFlush();
       }
+    }
+  }
+
+  /**
+   * A zero-row CAS update means the authoritative row no longer matches the
+   * locally cached guard. Retrying against the same cached row can starve
+   * forever when the cache's CDC feed is itself stalled (the guard can only
+   * converge through the very publication this write is trying to make).
+   * Surface the miss and re-read the authoritative row into the cache so the
+   * next flush guards against current observed state instead of the stale
+   * snapshot.
+   * @param {*} value - The pending value whose flush missed.
+   * @param {Object|null} partitionResult - Gateway mutation result.
+   * @return {Promise<void>}
+   * @private
+   */
+  async recoverFromObservedStateChanged(value, partitionResult) {
+    try {
+      this.onObservedStateChanged({
+        tableName: this.tableName,
+        value,
+        retryAttemptCount: this.retryAttemptCount,
+        partitionResult,
+      });
+    } catch (_callbackError) {
+      // Observability callback failures must not break the retry loop.
+    }
+    if (!this.refreshObservedRow) {
+      return;
+    }
+    try {
+      await this.refreshObservedRow();
+    } catch (error) {
+      this.onAsyncError(error, {value, retry: true});
     }
   }
 

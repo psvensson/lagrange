@@ -1,0 +1,18 @@
+{
+  "test": "test/partition/partition-service-stale-topology-write-guard.test.js",
+  "src": [
+    "src/partition/partition-write-kernel.js",
+    "src/partition/partition-service-write-metrics-base.js",
+    "src/partition/partition-service-core-base.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-04T10:27:50.425Z"
+}

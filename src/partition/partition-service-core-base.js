@@ -551,6 +551,31 @@ class PartitionServiceCoreBase extends EventEmitter {
       },
     );
   }
+  /**
+   * Re-read one metadata row from the authoritative partition and repair the
+   * local cache copy. Metadata publications CAS-guard on the cached row, and
+   * that cache normally converges through CDC — which can be exactly the
+   * feed a starved publication is blocking, so the guard must be able to
+   * converge through this direct read instead.
+   * @param {string} tableName - System table name.
+   * @param {string} key - Primary key value.
+   * @return {Promise<boolean>} True when a repair pass completed.
+   */
+  async refreshMetadataPublicationGuardRow(tableName, key) {
+    const cdcIntegrationService = this.cdcIntegrationService;
+    if (
+      !cdcIntegrationService ||
+      typeof cdcIntegrationService.refreshAuthoritativeCacheRow !== 'function'
+    ) {
+      return false;
+    }
+    return (
+      (await cdcIntegrationService.refreshAuthoritativeCacheRow(
+        tableName,
+        key,
+      )) === true
+    );
+  }
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SYSTEM_TABLE_NAME.SERVICES,
@@ -594,6 +619,23 @@ class PartitionServiceCoreBase extends EventEmitter {
       isWriteReady: () => this.isServicesLeaderAvailable(),
       systemTableCache: this.systemTableCache,
       cdcIntegrationService: this.cdcIntegrationService,
+      refreshObservedRow: () =>
+        this.refreshMetadataPublicationGuardRow(
+          SYSTEM_TABLE_NAME.SERVICES,
+          this.replicaId,
+        ),
+      onObservedStateChanged: (context = {}) => {
+        this.logger.warn(
+          PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
+          {
+            tableName: SYSTEM_TABLE_NAME.SERVICES,
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            role: context.value ?? this.pendingRoleUpdate,
+            retryAttemptCount: context.retryAttemptCount,
+          },
+        );
+      },
       onAsyncError: (error, context = {}) => {
         this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_RAFT_ROLE_FAILED, {
           partitionId: this.partitionId,
@@ -654,6 +696,23 @@ class PartitionServiceCoreBase extends EventEmitter {
       isWriteReady: () => this.isPartitionsLeaderAvailable(),
       systemTableCache: this.systemTableCache,
       cdcIntegrationService: this.cdcIntegrationService,
+      refreshObservedRow: () =>
+        this.refreshMetadataPublicationGuardRow(
+          SYSTEM_TABLE_NAME.PARTITIONS,
+          this.partitionId,
+        ),
+      onObservedStateChanged: (context = {}) => {
+        this.logger.warn(
+          PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
+          {
+            tableName: SYSTEM_TABLE_NAME.PARTITIONS,
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
+            retryAttemptCount: context.retryAttemptCount,
+          },
+        );
+      },
       onAsyncError: (error, context = {}) => {
         this.logger.warn(
           PARTITION_SERVICE_ERROR_MSG.PERSIST_PARTITION_LEADER_FAILED,

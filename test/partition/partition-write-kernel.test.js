@@ -110,6 +110,58 @@ test('partition write kernel executes SQL once and shapes the canonical result',
     );
   });
 
+test('partition write kernel refuses unilateral direct commit against contradicted topology',
+  async (t) => {
+    // Run-15 freeze poison: a REPLACE-added replica whose local replica list
+    // was viability-filtered to self-only (CL-013 class) self-committed
+    // coordinator writes as a phantom leader. A known remote leader — an
+    // ACTUAL, observed via raft traffic or the published leader pointer —
+    // must force the consensus path instead of DIRECT. Targets like
+    // replica_count are NOT witnesses: they legitimately exceed placed
+    // membership on single-node and degraded clusters, and using them
+    // rejected (and, through the query envelope, silently dropped) every
+    // user-table write on a default-config single-node cluster.
+    t.equal(
+      resolvePartitionWriteCommitMode({
+        replicaIds: ['r5'],
+        raftState: 'follower',
+        raftLeaderState: 'leader',
+        hasKnownRemoteLeader: true,
+      }),
+      PARTITION_WRITE_COMMIT_MODE.REJECTED,
+      'self-only list with a known remote leader must reject, not direct-commit',
+    );
+    t.equal(
+      resolvePartitionWriteCommitMode({
+        replicaIds: ['r1'],
+        raftState: 'leader',
+        raftLeaderState: 'leader',
+        hasKnownRemoteLeader: false,
+      }),
+      PARTITION_WRITE_COMMIT_MODE.DIRECT,
+      'genuine single-replica groups keep the direct path',
+    );
+    t.equal(
+      resolvePartitionWriteCommitMode({
+        replicaIds: ['r1'],
+        raftState: 'leader',
+        raftLeaderState: 'leader',
+      }),
+      PARTITION_WRITE_COMMIT_MODE.DIRECT,
+      'absent witnesses keep the direct path (message groups, bare replicas)',
+    );
+    t.equal(
+      resolvePartitionWriteCommitMode({
+        replicaIds: ['r1'],
+        raftState: 'leader',
+        raftLeaderState: 'leader',
+        expectedReplicaCount: 3,
+      }),
+      PARTITION_WRITE_COMMIT_MODE.DIRECT,
+      'replica_count-style targets must NOT reject — 1-of-N placement is legitimate',
+    );
+  });
+
 test('partition write kernel separates commit/apply from replayable side effects',
   async (t) => {
     const sideEffectPlan = buildPartitionWriteSideEffectPlan(

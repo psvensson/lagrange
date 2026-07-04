@@ -16,6 +16,7 @@ const {
   PARTITION_WRITE_COMMIT_MODE,
   RaftRole,
   SQL,
+  TABLES,
   WRITE_PHASE_FIELD_APPLY_WRITE_MS,
   WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
   WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
@@ -556,6 +557,38 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
   }
   /**
+   * Resolve whether ACTUAL evidence names a leader for this partition
+   * somewhere other than this replica: the raft-observed leader id (set by
+   * received append traffic / leader-change events) or the published
+   * partitions-row leader pointer on another node. Both are actuals; a
+   * target such as replica_count must never be used here — it legitimately
+   * exceeds placed membership on single-node and degraded clusters.
+   * @return {boolean}
+   * @private
+   */
+  hasKnownRemoteLeaderWitness() {
+    if (
+      typeof this.leaderId === 'string' &&
+      this.leaderId.length > 0 &&
+      this.leaderId !== this.replicaId
+    ) {
+      return true;
+    }
+    const partitionRow = this.systemTableCache?.get?.(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    );
+    const publishedLeaderNodeId = partitionRow?.leader_node_id;
+    return (
+      typeof publishedLeaderNodeId === 'string' &&
+      publishedLeaderNodeId.length > 0 &&
+      typeof this.nodeId === 'string' &&
+      this.nodeId.length > 0 &&
+      publishedLeaderNodeId !== this.nodeId
+    );
+  }
+
+  /**
    * Apply a write operation (leader only).
    * @param {Object} entry - Write entry.
    * @param {Object|null} phaseTimings - Optional phase timing collector.
@@ -578,19 +611,15 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
-    const logAppendStartMs = Date.now();
-    const logEntry = this.storage.appendEntry(entry);
-    this.recordWritePhaseDuration(
-      phaseTimings,
-      WRITE_PHASE_FIELD_LOG_APPEND_MS,
-      logAppendStartMs,
-    );
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
       raftState: this.raft?.state,
       raftLeaderState: LifeRaft.LEADER,
+      hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
     });
-    let commitPromise = null;
+    // Rejected writes must not touch the local raft log: an appended entry
+    // at a self-assigned index conflicts with the index space the true
+    // leader is committing into.
     if (commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED) {
       this.recordWritePhaseDuration(
         phaseTimings,
@@ -603,6 +632,14 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         partitionId: this.partitionId,
       };
     }
+    const logAppendStartMs = Date.now();
+    const logEntry = this.storage.appendEntry(entry);
+    this.recordWritePhaseDuration(
+      phaseTimings,
+      WRITE_PHASE_FIELD_LOG_APPEND_MS,
+      logAppendStartMs,
+    );
+    let commitPromise = null;
     if (commitMode === PARTITION_WRITE_COMMIT_MODE.RAFT) {
       try {
         commitPromise = this.waitForCommittedWrite(entry.entryId, {

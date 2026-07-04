@@ -627,3 +627,101 @@ test('AuthoritativeRowMutationHelper - shutdown prevents retries from an in-flig
     t.equal(helper.pendingValue, null,
       'shutdown should discard pending state once the helper is terminal');
   });
+
+test('AuthoritativeRowMutationHelper - guard miss refreshes the observed row so a starved CDC feed cannot thrash the CAS forever',
+  async (t) => {
+    // Run-15 freeze trigger: the leader_node_id publish CAS-guards on the
+    // locally cached partitions row, but that cache converges through the
+    // very CDC publication this write is trying to make. With the guard
+    // stale and the feed stalled, the pre-fix helper silently retried the
+    // identical zero-row UPDATE for minutes (r4 became leader 09:32:27,
+    // the pointer landed 09:36:44). The fix: a guard miss surfaces via
+    // onObservedStateChanged and re-reads the authoritative row into the
+    // cache before the retry, so the next CAS targets observed state.
+    const scheduled = [];
+    const writes = [];
+    const observedEvents = [];
+    let refreshCallCount = 0;
+    const cachedRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-a',
+      updated_at: 7,
+    };
+    // What the authority actually holds (advanced past the cached snapshot
+    // by a write whose CDC event this node never received).
+    const authoritativeRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-x',
+      updated_at: 9,
+    };
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'partitions',
+      buildWhereClause: (_value, context = {}) => ({
+        partition_id: 'p1',
+        leader_node_id: context.cachedRow?.leader_node_id,
+        updated_at: context.cachedRow?.updated_at,
+      }),
+      buildUpdateData: (value, updatedAt) => ({
+        leader_node_id: value,
+        updated_at: updatedAt,
+      }),
+      readRowFromCache: () => cachedRow,
+      readValueFromCache: () => cachedRow.leader_node_id,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_tableName, whereClause, data) => {
+          writes.push({whereClause: {...whereClause}, data: {...data}});
+          const guardMatchesAuthority =
+            whereClause.leader_node_id === authoritativeRow.leader_node_id &&
+            whereClause.updated_at === authoritativeRow.updated_at;
+          return {
+            success: true,
+            partitionResult: {affectedRows: guardMatchesAuthority ? 1 : 0},
+          };
+        },
+      },
+      refreshObservedRow: async () => {
+        refreshCallCount += 1;
+        Object.assign(cachedRow, authoritativeRow);
+      },
+      onObservedStateChanged: (context) => {
+        observedEvents.push(context);
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+      now: () => 11,
+    });
+
+    helper.pendingValue = 'node-b';
+    helper.persistedValue = 'node-a';
+
+    const firstResult = await helper.flush();
+
+    t.equal(firstResult.reason, 'observed-state-changed',
+      'the stale guard should miss the authoritative row');
+    t.equal(observedEvents.length, 1,
+      'the guard miss must be surfaced, never silent');
+    t.equal(observedEvents[0].tableName, 'partitions',
+      'the surfaced miss should carry the table name');
+    t.equal(refreshCallCount, 1,
+      'the guard miss must refresh the observed row from the authority');
+    t.equal(scheduled.length, 1, 'the guard miss should arm one retry');
+
+    // Fire the armed retry: the guard was refreshed, so the CAS must now
+    // target the authoritative row and land.
+    await scheduled.shift()();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    t.equal(writes.length, 2, 'the retry should issue the follow-up write');
+    t.same(writes[1].whereClause, {
+      partition_id: 'p1',
+      leader_node_id: 'node-x',
+      updated_at: 9,
+    }, 'the retry must guard against the refreshed observed row, not the stale snapshot');
+    t.equal(helper.persistedValue, 'node-b',
+      'the pending publication must converge once the guard is refreshed');
+    t.equal(helper.pendingValue, null,
+      'the pending value should clear after the converged write');
+  });

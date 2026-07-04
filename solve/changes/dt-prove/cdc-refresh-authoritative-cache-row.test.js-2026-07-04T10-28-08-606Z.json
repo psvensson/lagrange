@@ -1,0 +1,16 @@
+{
+  "test": "test/cdc/cdc-refresh-authoritative-cache-row.test.js",
+  "src": [
+    "src/cdc/cdc-integration-service-cache-visibility-wait.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-04T10:28:08.572Z"
+}

@@ -353,9 +353,16 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           sessionId: sessionId || null,
         });
       }
+      // A routed write can come back rejected without throwing (for example
+      // NO_LEADER when a stale-topology commit guard refuses a unilateral
+      // apply). The envelope must carry that outcome — collapsing it to
+      // success acks a write that never landed and the coordinator stops
+      // re-routing to the true leader.
+      const resultSuccess = result?.success !== false;
       return {
         acknowledged: true,
-        success: true,
+        success: resultSuccess,
+        ...(resultSuccess || !result?.error ? {} : {error: result.error}),
         rows: result.rows,
         changes: result.changes,
         count: result.count,

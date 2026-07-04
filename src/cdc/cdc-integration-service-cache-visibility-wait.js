@@ -385,6 +385,45 @@ class CDCIntegrationServiceCacheVisibilityWait {
   }
 
   /**
+   * Re-read one row from the authoritative partition and force the local
+   * cache copy to match it. Unlike repairCacheVisibilityHole, a present but
+   * STALE cache row is repaired too — callers use this when a CAS guard
+   * built from the cached row keeps missing observed authoritative state
+   * and the cache's CDC feed cannot be assumed live (the guard may only be
+   * able to converge through this direct read).
+   * @param {string} tableName - System table name.
+   * @param {string} key - Primary key value.
+   * @return {Promise<boolean>} True when the cache row was aligned to the
+   *   authoritative row.
+   */
+  async refreshAuthoritativeCacheRow(tableName, key) {
+    if (!this.shouldWaitForCacheUpdate(tableName)) {
+      return false;
+    }
+    const primaryKeyField = this.getPrimaryKeyField(tableName);
+    const queryResult = await this.executeAuthoritativeSystemTableRead(
+      tableName,
+      `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
+      [key],
+    );
+    if (!queryResult?.success) {
+      return false;
+    }
+    const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
+    if (rows.length === 0) {
+      return false;
+    }
+    return (
+      this.applyAuthoritativeCacheRepair(
+        tableName,
+        CDC_OPERATION.UPSERT,
+        rows[0],
+        key,
+      ) === true
+    );
+  }
+
+  /**
    * Confirm one cache visibility gap authoritatively, emit divergence
    * diagnostics, and repair the local projection when a writable cache
    * target is available.
