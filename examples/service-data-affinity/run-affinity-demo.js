@@ -78,7 +78,14 @@ const NODE_STATUS_ACTIVE = 'active';
 // before the next stage. Bounded: proceed anyway on timeout.
 const SETTLE_POLL_INTERVAL_MS = 10000;
 const SETTLE_QUIET_POLLS = 3;
-const SETTLE_TIMEOUT_MS = 240000;
+// Staleness-based settle (same principle as the phase-3 convergence watch):
+// keep waiting while formation ops are COMPLETING — runs 15-19 proved a
+// fixed elapsed-time cap fires mid-churn and the load phase then starves
+// behind the rebalance storm. Cut only when nothing completes for the
+// stall window (genuine wedge — proceed and let the run fail loudly) or at
+// a generous absolute ceiling.
+const SETTLE_STALL_MS = 120000;
+const SETTLE_HARD_CAP_MS = 900000;
 
 const PARTITION_SPLIT_BYTES = 1048576;
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
@@ -208,13 +215,17 @@ async function waitForControlPlaneSettling() {
   const start = Date.now();
   let quietPolls = 0;
   let lastPartitionCount = -1;
-  while (Date.now() - start < SETTLE_TIMEOUT_MS) {
+  let lastCompletedCount = -1;
+  let lastProgressAt = Date.now();
+  while (Date.now() - start < SETTLE_HARD_CAP_MS) {
     let inFlight = null;
+    let completedCount = null;
     let partitionCount = -1;
     try {
       const rows = await queryRows(
         'SELECT operation_id, completed_at FROM replica_operations');
       inFlight = rows.filter((r) => !r.completed_at).length;
+      completedCount = rows.length - inFlight;
       const partitions = await queryRows(
         'SELECT partition_id FROM partitions');
       partitionCount = partitions.length;
@@ -234,15 +245,34 @@ async function waitForControlPlaneSettling() {
       }
     } else {
       quietPolls = 0;
+      // Completions (or the op set shrinking) are PROGRESS — keep waiting.
+      // Only a genuine stall (nothing completes for the stall window) cuts
+      // the settle early; a fixed elapsed cap fired mid-churn every run
+      // and starved the load phase behind the formation rebalance storm.
+      if (
+        completedCount !== null &&
+        (completedCount !== lastCompletedCount || inFlight === 0)
+      ) {
+        lastCompletedCount = completedCount;
+        lastProgressAt = Date.now();
+      }
       if (inFlight !== null) {
-        console.log(`      ...${inFlight} operations in flight`);
+        console.log(
+          `      ...${inFlight} operations in flight ` +
+          `(${completedCount} completed)`);
+      }
+      if (Date.now() - lastProgressAt >= SETTLE_STALL_MS) {
+        console.log(
+          '      Control plane settling STALLED (no operation completed ' +
+          `for ${Math.round(SETTLE_STALL_MS / 1000)}s) — proceeding anyway.`);
+        return false;
       }
     }
     await sleep(SETTLE_POLL_INTERVAL_MS);
   }
   console.log(
     '      Control plane still settling after ' +
-    `${Math.round(SETTLE_TIMEOUT_MS / 1000)}s — proceeding anyway.`);
+    `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s — proceeding anyway.`);
   return false;
 }
 
