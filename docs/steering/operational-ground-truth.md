@@ -95,5 +95,28 @@ any distributed-harness or convergence work:
   distributed drive paths), a red-on-revert deterministic/directed test, or a code trace.
   When a mechanism is half-wired, the fix is to FINISH it to authority (retire the old
   path, close the bypass, consume the evidence), NEVER to add a parallel path around it.
+- **Two hard triggers the research-first rule MUST fire on (learned the expensive
+  way — the affinity demo paid one 10-minute live run per half-wired link it could
+  have found in a single audit):**
+  1. **Never-exercised path → full-chain engagement audit UP FRONT.** Before the
+     first live/iterative debug run of a path that has never executed end-to-end in
+     a real cluster (a first demo, a first cutover, a first engagement of a
+     "designed" flow), trace the ENTIRE intended chain in one pass — every
+     setter/registry/projection/subscription the design mentions — and list which
+     links have zero production callers. Fix or scope them BEFORE the first run.
+     One code-trace pass costs minutes; discovering the same links serially through
+     live-run failures costs a run each (the demo found FOUR on one path: an
+     unassembled handler map, a reconcile never triggered on change, a
+     field-name contract break, and an unwired state projection).
+  2. **Failure matches a known class → ledger lookup BEFORE the fix.** When a live
+     failure's signature matches a recorded class — `budget_exceeded` starvation,
+     join-exits-instead-of-degrading, a gate rejecting on a stale view while fresher
+     evidence exists, formation-vs-steady-state circularity — grep
+     [`solve/theory-ledger.md`](../../solve/theory-ledger.md) and the
+     [`closure-ledger.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md)
+     index FIRST. The recorded theory/closure usually names the owner, the intended
+     mechanism, and the refuted fixes; a bespoke patch written without that lookup
+     re-derives (or contradicts) settled work. The fix write-up must state what it
+     reuses or finishes, or why nothing recorded applies.
 - **Independently verify after implementing.** After a change, have a separate
   subagent independently verify it before relying on or reporting it.
