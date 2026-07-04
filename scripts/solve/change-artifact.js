@@ -184,8 +184,16 @@ export function classifyQuestScope(quest) {
     quest?.statement,
     ...(quest?.frontiers || []).map((frontier) => frontier.id),
   ].join(' ').toLowerCase();
+  // "operation-workflow" is a RUNTIME subsystem name (src/rebalancer/
+  // operation-workflow-*), not Solver/workflow tooling; \b matches at the
+  // hyphen, so it must be masked before the keyword scan or every runtime
+  // quest that names that subsystem misclassifies as a workflow quest.
+  const runtimeSubsystemMaskedHaystack = haystack.replaceAll(
+    'operation-workflow',
+    'operation-subsystem',
+  );
   if (/\b(solver|workflow|work-tracker|tooling|steering|command|model|architecture|contract)\b/u
-    .test(haystack)) {
+    .test(runtimeSubsystemMaskedHaystack)) {
     return 'workflow';
   }
   return 'runtime';
