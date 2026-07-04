@@ -43,9 +43,10 @@
  *   node examples/service-data-affinity/run-affinity-demo.js
  */
 
-import {spawn} from 'node:child_process';
-import {createWriteStream} from 'node:fs';
-import {mkdir, rm} from 'node:fs/promises';
+import {execFile, spawn} from 'node:child_process';
+import {createWriteStream, existsSync} from 'node:fs';
+import {mkdir, readdir, rm} from 'node:fs/promises';
+import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
@@ -395,8 +396,47 @@ async function stopNodes(nodes) {
   }
 }
 
+const execFileAsync = promisify(execFile);
+const ARCHIVE_ROOT = `${CLUSTER_DATA_ROOT}-archive`;
+const ARCHIVE_RETENTION = 3;
+
+/**
+ * Archive the previous run's cluster state (logs + SQLite) before wiping —
+ * run-13's forensics were destroyed by the unconditional wipe and the
+ * root-cause investigation had to work from a later run. Keeps the newest
+ * ARCHIVE_RETENTION archives (~15-30MB each gzipped).
+ */
+async function archivePreviousRun() {
+  if (!existsSync(CLUSTER_DATA_ROOT)) {
+    return;
+  }
+  await mkdir(ARCHIVE_ROOT, {recursive: true});
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const archivePath = resolve(ARCHIVE_ROOT, `run-${stamp}.tar.gz`);
+  try {
+    await execFileAsync('tar', [
+      '-czf', archivePath,
+      '-C', resolve(CLUSTER_DATA_ROOT, '..'),
+      CLUSTER_DATA_ROOT.split('/').pop(),
+    ]);
+    console.log(`      Archived previous run state to ${archivePath}`);
+  } catch (error) {
+    console.log(
+      `      (previous-run archive failed: ${error.message} — proceeding)`);
+    return;
+  }
+  const entries = (await readdir(ARCHIVE_ROOT))
+    .filter((name) => name.startsWith('run-') && name.endsWith('.tar.gz'))
+    .sort();
+  while (entries.length > ARCHIVE_RETENTION) {
+    const oldest = entries.shift();
+    await rm(resolve(ARCHIVE_ROOT, oldest), {force: true});
+  }
+}
+
 async function runAffinityDemo() {
   const nodes = [];
+  await archivePreviousRun();
   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
 
