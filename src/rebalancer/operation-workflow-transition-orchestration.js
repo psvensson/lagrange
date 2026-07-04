@@ -312,7 +312,30 @@ class OperationWorkflowTransitionOrchestration
             {},
             TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
           );
-          await persistFn(sessionId);
+          const persistResult = await persistFn(sessionId);
+          if (persistResult === false) {
+            // Honest persist refusal (zero-row update, conflicting durable
+            // terminal state, expected-step mismatch): nothing durable
+            // changed, so the transition did NOT commit. Roll the empty
+            // transaction back and report uncommitted — swallowing this
+            // result is what minted the run-21 immortal SYNCING ghost.
+            const rollbackResult = await txCoordinator.rollback(sessionId);
+            if (rollbackResult?.success !== true) {
+              this.logger.warn(
+                OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
+                {
+                  operationId: operation.operationId,
+                  workflowStep: step,
+                  error: this.normalizeErrorMessage(
+                    rollbackResult?.error,
+                    OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+                  ),
+                },
+              );
+            }
+            this.clearTransitionExecutionAttempt(operation.operationId, step);
+            return false;
+          }
           const commitResult = await txCoordinator.commit(sessionId);
           if (!commitResult.success) {
             throw new Error(commitResult.error);

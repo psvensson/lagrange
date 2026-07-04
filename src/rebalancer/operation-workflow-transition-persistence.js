@@ -284,9 +284,12 @@ class OperationWorkflowTransitionPersistence
     };
 
     const persistFn = async (sessionId) => {
-      await this.repository.persistOperationUpdate(
+      return this.repository.persistOperationUpdate(
         projectedOperation,
-        this.buildOperationTransitionPersistOptions(operation, sessionId),
+        {
+          ...this.buildOperationTransitionPersistOptions(operation, sessionId),
+          terminalTransition: true,
+        },
       );
     };
     const bypassExecutionTransaction =
@@ -301,7 +304,10 @@ class OperationWorkflowTransitionPersistence
         onIdempotentTransition: projectIdempotentTransition,
         bypassExecutionTransaction,
         afterCommit: async () => {
-          await this.confirmCommittedTransitionPersistence(projectedOperation);
+          await this.confirmCommittedTransitionPersistence(
+            projectedOperation,
+            {terminalTransitionRepair: true},
+          );
         },
       },
     );
@@ -444,9 +450,12 @@ class OperationWorkflowTransitionPersistence
     };
 
     const persistFn = async (sessionId) => {
-      await this.repository.persistOperationUpdate(
+      return this.repository.persistOperationUpdate(
         projectedOperation,
-        this.buildOperationTransitionPersistOptions(operation, sessionId),
+        {
+          ...this.buildOperationTransitionPersistOptions(operation, sessionId),
+          terminalTransition: true,
+        },
       );
     };
     const bypassExecutionTransaction =
@@ -461,7 +470,10 @@ class OperationWorkflowTransitionPersistence
         onIdempotentTransition: projectIdempotentTransition,
         bypassExecutionTransaction,
         afterCommit: async () => {
-          await this.confirmCommittedTransitionPersistence(projectedOperation);
+          await this.confirmCommittedTransitionPersistence(
+            projectedOperation,
+            {terminalTransitionRepair: true},
+          );
         },
       },
     );

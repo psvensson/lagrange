@@ -147,6 +147,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         options.expectedWorkflowStep.length > 0 ?
           options.expectedWorkflowStep :
           null;
+      // Terminal-transition writes deliberately carry NO expected-step CAS: the
+      // owner's terminal truth must overwrite any lagging non-terminal durable
+      // step (a lost progress write would otherwise wedge the CAS forever). The
+      // only durable state a terminal write must not clobber is a DIFFERENT
+      // terminal state that already won.
+      const terminalTransition = options.terminalTransition === true;
+      if (
+        terminalTransition &&
+        (await this.shouldRejectConflictingTerminalTransitionMutation(
+          operation,
+        ))
+      ) {
+        return false;
+      }
       if (
         await this.shouldRejectExpectedWorkflowStepMutation(
           operation,
@@ -211,7 +225,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
       const changeCount = this.extractMutationChangeCount(result);
       if (changeCount !== null && changeCount <= 0) {
-        if (expectedWorkflowStep) {
+        if (expectedWorkflowStep || terminalTransition) {
           const authoritativeOperation =
             await this.queryAuthoritativeOperationById(operation.operationId, {
               authoritativeReadMode:
@@ -287,6 +301,31 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
       this.syncIncompleteOperationObservation(operation);
       return true;
+    }
+
+    // A terminal write is idempotent against its own durable state and must
+    // yield only to a DIFFERENT durable terminal state (a concurrent owner
+    // already terminalized this operation another way). A missing row falls
+    // through to the zero-change divergence arm, which re-inserts.
+    async shouldRejectConflictingTerminalTransitionMutation(operation) {
+      const authoritativeOperation =
+        await this.queryAuthoritativeOperationById(operation.operationId, {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          requireOwnerRpcRead: false,
+        });
+      if (!authoritativeOperation) {
+        return false;
+      }
+      if (
+        this.isReplicaOperationVisibilitySatisfied(
+          operation,
+          authoritativeOperation,
+        )
+      ) {
+        return false;
+      }
+      return this.isAuthoritativeOperationTerminal(authoritativeOperation);
     }
 
     async shouldRejectExpectedWorkflowStepMutation(

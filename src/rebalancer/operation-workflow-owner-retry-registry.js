@@ -96,6 +96,11 @@ class OperationWorkflowOwnerRetryRegistry {
     this.executorOutcomeRedriveInFlightByOperationId = new Set();
     this.executorOutcomeRetryDelayMsByOperationId = new Map();
     this.transitionExecutionAttemptByStepOwnerKey = new Map();
+    // Terminal-transition repair: retained terminal projections whose
+    // post-commit visibility confirmation failed or deferred, re-asserted
+    // with backoff until authoritatively visible (run-21 ghost-row class).
+    this.terminalTransitionRepairTimerByOperationId = new Map();
+    this.terminalTransitionRepairStateByOperationId = new Map();
 
     if (
       typeof this.getActualReplicaStatus !==
@@ -159,6 +164,11 @@ class OperationWorkflowOwnerRetryRegistry {
     this.executorOutcomeRetryPayloadByOperationId.clear();
     this.executorOutcomeRedriveInFlightByOperationId.clear();
     this.executorOutcomeRetryDelayMsByOperationId.clear();
+    for (const timerHandle of this.terminalTransitionRepairTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.terminalTransitionRepairTimerByOperationId.clear();
+    this.terminalTransitionRepairStateByOperationId.clear();
   }
 
   /**

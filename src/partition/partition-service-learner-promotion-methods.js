@@ -548,8 +548,8 @@ class PartitionServiceLearnerPromotionMethods {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
         reason: wouldExceedTargetReplicaCount ?
-          PARTITION_SERVICE_LITERAL.REPLICA_COUNT_LIMIT :
-          PARTITION_SERVICE_LITERAL.ODD_VOTER_REQUIREMENT,
+          PARTITION_SERVICE_LITERAL.WOULD_EXCEED_TARGET_REPLICA_COUNT :
+          PARTITION_SERVICE_LITERAL.WOULD_CAUSE_EVEN_VOTER_COUNT,
         activeVoterCount,
         learnerCount,
         targetReplicaCount,

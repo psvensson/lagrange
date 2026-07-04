@@ -1,6 +1,14 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
 import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
+import {
+  REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
+} from './replica-operation-repository.js';
+import {
+  TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armTerminalTransitionRepair,
+  clearTerminalTransitionRepair,
+} from './operation-workflow-terminal-transition-repair.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -712,14 +720,24 @@ class OperationWorkflowOwnerExecutionLane
   }
 
   /**
-   * Confirm one committed transition best-effort so post-commit visibility
-   * lag cannot unwind a transition that already durably committed.
+   * Confirm one committed transition so post-commit visibility lag cannot
+   * unwind a transition that already durably committed. Confirmation never
+   * throws to the caller; for TERMINAL transitions an unconfirmed outcome
+   * (thrown or deferred) arms the terminal-transition repair instead of being
+   * dropped — a terminal projection the ledger never reflects is an immortal
+   * non-terminal row that no level-triggered path re-drives (run-21 ghost).
    * @param {Object} operation
+   * @param {Object} [options]
+   * @param {boolean} [options.terminalTransitionRepair] - Arm repair when the
+   *   confirmation does not positively confirm visibility.
    * @return {Promise<void>}
    */
-  async confirmCommittedTransitionPersistence(operation) {
+  async confirmCommittedTransitionPersistence(operation, options = {}) {
+    const repairOnUnconfirmed = options.terminalTransitionRepair === true;
+    let visibility = null;
     try {
-      await this.repository.confirmReplicaOperationPersistence(operation);
+      visibility =
+        await this.repository.confirmReplicaOperationPersistence(operation);
     } catch (error) {
       this.logger.warn(
         OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
@@ -730,7 +748,31 @@ class OperationWorkflowOwnerExecutionLane
           error: error?.message || String(error),
         },
       );
+      if (repairOnUnconfirmed) {
+        armTerminalTransitionRepair(
+          this,
+          operation,
+          TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
+        );
+      }
+      return;
     }
+    if (!repairOnUnconfirmed) {
+      return;
+    }
+    if (
+      visibility?.confirmationState ===
+        REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
+      visibility?.operation
+    ) {
+      clearTerminalTransitionRepair(this, operation?.operationId || null);
+      return;
+    }
+    armTerminalTransitionRepair(
+      this,
+      operation,
+      TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
+    );
   }
 
   /**

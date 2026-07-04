@@ -277,6 +277,16 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_ROW_DIVERGENCE_REINSERT:
     'Operation row missing from authoritative partition after zero-row ' +
     'update; re-inserting owner copy',
+  TERMINAL_TRANSITION_REPAIR_ARMED:
+    'Committed terminal transition not authoritatively visible; ' +
+    'repair scheduled',
+  TERMINAL_TRANSITION_REPAIR_SUCCEEDED:
+    'Terminal transition repair confirmed authoritative visibility',
+  TERMINAL_TRANSITION_REPAIR_UNCONFIRMED:
+    'Terminal transition repair attempt still unconfirmed; rescheduling',
+  TERMINAL_TRANSITION_REPAIR_ABANDONED:
+    'Terminal transition repair abandoned: a different durable terminal ' +
+    'state won',
   PRIORITY_RECOVERY_DRAIN_SETTLED:
     'Priority recovery drain settled operation',
   BOOTSTRAP_TOPOLOGY_UNRESOLVED:
