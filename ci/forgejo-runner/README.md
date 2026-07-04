@@ -37,6 +37,26 @@ git push origin v0.1.0
 (Deleting and re-pushing a tag re-fires `release.yml`. The tag object is
 unchanged locally — same commit, same annotation.)
 
+## Reading pipeline logs locally
+
+The daemon runs at `log.level: debug`, which duplicates **every job/step
+output line** into the runner container's stdout — below debug the runner
+discards job output locally (NullLogger) and it exists only in the Codeberg
+web UI. Docker retains that stdout in rotated files (compose `logging:` block,
+3 × 100 MB ≈ a couple of full release runs), so the latest runs always have a
+local copy that overwrites itself over time.
+
+```sh
+./job-log.sh          # full log of the most recent job (e.g. after a failure)
+./job-log.sh --list   # task ids still retained locally
+./job-log.sh 7176575  # one specific task
+./job-log.sh -f       # follow the currently running job live
+```
+
+Applies from the next daemon restart after changing `data/config.yml`
+(`docker compose restart` — but never while a `FORGEJO-ACTIONS-*` job
+container is running).
+
 ## Design notes
 
 - **Host-socket pattern**: the runner and its job containers share the host

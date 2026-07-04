@@ -6,7 +6,13 @@
 # declarative connection model — credentials live in config, the daemon
 # connects on start. data/config.yml is gitignored (it holds the token).
 log:
-  level: info
+  # debug is REQUIRED for a local copy of job logs: below debug the runner
+  # installs a NullLogger and job/step output exists only on the Codeberg side
+  # (runner source internal/app/run/runner.go: WithJobLoggerFactory guarded by
+  # IsLevelEnabled(DebugLevel)). At debug, full step output lands in the
+  # daemon's stdout -> `docker logs` (rotated via docker-compose.yml); read
+  # per-job slices with ./job-log.sh.
+  level: debug
 
 runner:
   # One job at a time: the release workflow runs the full test:ci and gates
