@@ -1,0 +1,48 @@
+{
+  "id": "unwired-event-adjudication",
+  "statement": "Every event emission the unwired-event census (scripts/census/unwired-event-census.mjs) classifies as ORPHANED (no listener anywhere: 46 at authoring) or TEST-ONLY (118 at authoring, of 189 distinct emitted events) is explicitly adjudicated in a checked-in ledger (scripts/census/unwired-event-adjudications.json) with one of three verdicts and evidence: WIRED (a consumer was built \u2014 the mechanism was designed for a purpose, finish it: the readModelDivergence class, whose missing consumer let run-15's cache staleness freeze the cluster), DELETED (dead code removed per remove-dead-code-on-contact), or INTENTIONAL-DIAGNOSTIC (fire-and-forget by design, with the reason recorded); and a re-runnable checker fails when the census finds an emission with no ledger entry, so new unwired events cannot accumulate silently. Adjudication priority: control-plane failure events first (HEARTBEAT_FAILED, LEASE_EXPIRED, REPLICA_STATE_MACHINE PERSISTENCE_ERROR, SPLIT_FAILED/MERGE_FAILED, RECONCILER CYCLE_ERROR).",
+  "priority": 3,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "unwired-event-adjudication",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "unwired-event-adjudication-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "unwired-event-adjudication",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-classify-dont-count",
+      "statement": "The census MUST classify src-wired / test-only / orphaned (a count-only census false-negatives the readModelDivergence class, which had test listeners); adjudication verdicts require evidence (file:line of the new consumer, the deletion commit, or the diagnostic rationale)."
+    },
+    {
+      "id": "c-no-bulk-verdicts",
+      "statement": "No bulk INTENTIONAL-DIAGNOSTIC verdicts: each control-plane failure-event adjudication is individual; batching is allowed only for homogeneous diagnostic families explicitly listed together with one shared rationale."
+    }
+  ]
+}
