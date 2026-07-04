@@ -41,6 +41,11 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    git push origin v0.1.0
    ```
    `release.yml` builds and publishes every artifact from the tagged tree.
+6. **Refresh the Docker Hub overview** if user-facing behavior changed:
+   [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is the source for
+   the repository description at
+   <https://hub.docker.com/r/psvensson/lagrange>; paste it in manually (Docker
+   Hub has no API-token-free automation for this).
 
 ## Convergence: what the release does and does not promise
 

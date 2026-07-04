@@ -1,0 +1,135 @@
+<!--
+  Docker Hub repository overview for docker.io/psvensson/lagrange.
+
+  Paste this file's contents into the "Repository overview" (full description)
+  field at https://hub.docker.com/r/psvensson/lagrange — Docker Hub renders it
+  as the repository's front page. Docker Hub does not resolve relative links,
+  so every link below is an absolute URL into the Codeberg repository. Keep it
+  self-contained and under Docker Hub's 25,000-character limit.
+-->
+
+# Lagrange
+
+Distributed SQL database and compute-near-data runtime: a cluster of equal
+nodes that stores partitioned, Raft-replicated SQL tables and runs your
+compute (JS/WASM services) on the node that owns the data it reads.
+
+> **Experimental / alpha.** `0.x` releases carry no backward-compatibility
+> guarantee. See the
+> [changelog](https://codeberg.org/psvensson/lagrange/src/branch/main/CHANGELOG.md)
+> — including its *Known limitations* section — before running anything
+> load-bearing.
+
+- **Source / issues:** <https://codeberg.org/psvensson/lagrange>
+- **License:** AGPL-3.0-only
+- **Mirror registry:** `codeberg.org/psvensson/lagrange` (same image,
+  best-effort mirror of this repository)
+
+## Tags
+
+| Tag | Meaning |
+| --- | --- |
+| `latest` | Most recent release |
+| `0.1.0`, … | One tag per `vX.Y.Z` release, built from that git tag |
+
+Images are **linux/amd64 only** and built on
+[distroless Node.js 22](https://github.com/GoogleContainerTools/distroless)
+— there is no shell, package manager, or `npm` inside the container.
+
+## Quick start — single node
+
+```bash
+docker run --rm -p 8080:8080 -p 8081:8081 -p 8082:8082 psvensson/lagrange:latest
+```
+
+A node started without `SEED_NODE_ADDRESS` becomes the seed of a new
+cluster. It opens three ports:
+
+| Port | Purpose |
+| --- | --- |
+| `8080` | REST API (`/health` liveness, `/readyz` readiness) |
+| `8081` | Admin websocket (fixed; does not move with the REST port) |
+| `8082` | Node-to-node transport websocket (REST port + 2) |
+
+To interact with the node, connect the admin CLI from a checkout of the
+repository (the image itself has no shell to exec into):
+
+```bash
+git clone https://codeberg.org/psvensson/lagrange && cd lagrange
+npm install
+npm run cli    # interactive terminal UI against localhost:8081
+```
+
+## Multi-node cluster
+
+One container per node — two nodes cannot share a network namespace because
+the admin port is fixed at `8081`. Joiners point `SEED_NODE_ADDRESS` at the
+seed and advertise an address other nodes can reach:
+
+```bash
+docker network create lagrange-net
+
+docker run -d --name seed --network lagrange-net \
+  -e TRANSPORT_WS_HOST=0.0.0.0 \
+  -e NODE_ADDRESS=seed:8080 \
+  -e NODE_ADVERTISED_WS_ADDRESS=seed:8082 \
+  psvensson/lagrange:latest
+
+docker run -d --name node2 --network lagrange-net \
+  -e TRANSPORT_WS_HOST=0.0.0.0 \
+  -e NODE_ADDRESS=node2:8080 \
+  -e NODE_ADVERTISED_WS_ADDRESS=node2:8082 \
+  -e SEED_NODE_ADDRESS=http://seed:8080 \
+  psvensson/lagrange:latest
+```
+
+Leave `NODE_ID` unset: join admission requires a UUID identity, which the
+node mints on first start and restores from its data directory on restart.
+
+## Configuration
+
+Set via environment variables (`-e`):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SEED_NODE_ADDRESS` | unset | Unset → start as seed; set (`http://host:8080`) → join that cluster |
+| `NODE_ADDRESS` | localhost | Registration address other nodes reach you at (`host:8080`); the localhost default is rejected at join admission |
+| `NODE_ADVERTISED_WS_ADDRESS` | localhost | Advertised transport address (`host:8082`) |
+| `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
+| `REST_API_PORT` | `8080` | REST port (transport = this + 2; admin stays `8081`) |
+| `DATA_DIR` | `./data` | Storage directory — `/app/data` inside the container |
+| `NODE_ID` | unset | Leave unset (UUID minted and persisted on first start) |
+| `LOG_LEVEL` / `LOG_PRETTY_PRINT` | `info` / `false` | Logging |
+
+## Persistence
+
+All state — partition storage, Raft logs, and the node's durable identity —
+lives under `DATA_DIR` (`/app/data`). Mount a volume to survive container
+replacement:
+
+```bash
+docker run -d -v lagrange-data:/app/data -p 8080:8080 -p 8081:8081 -p 8082:8082 \
+  psvensson/lagrange:latest
+```
+
+## Kubernetes
+
+The repository ships a Helm chart (1 seed + N joiner StatefulSets, name-first
+addressing, per-pod PVCs) that deploys this image:
+[charts/lagrange-node](https://codeberg.org/psvensson/lagrange/src/branch/main/charts/lagrange-node).
+
+## Memory
+
+The container starts Node with `--max-old-space-size=1536`. Give the
+container more than that (the Helm chart defaults to a 2 GiB limit), or
+override the heap cap by replacing the command:
+
+```bash
+docker run ... psvensson/lagrange:latest --max-old-space-size=3072 src/index.js
+```
+
+## Learn more
+
+- [README — what Lagrange is, mental model, examples](https://codeberg.org/psvensson/lagrange/src/branch/main/README.md)
+- [Architecture overview](https://codeberg.org/psvensson/lagrange/src/branch/main/architecture.md)
+- [Release process and guarantees](https://codeberg.org/psvensson/lagrange/src/branch/main/RELEASE.md)
