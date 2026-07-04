@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  QUEST_CLASS_PRODUCT,
   SOLVE_DATA_DIR,
 } from './constants.js';
 
@@ -179,6 +180,14 @@ export function requiresModelEvidence(filePath) {
 }
 
 export function classifyQuestScope(quest) {
+  // The declared quest class is authoritative when present: a `product` quest
+  // is never Solver/workflow-tooling scope, no matter what runtime subsystem
+  // names its prose uses. The keyword heuristic below repeatedly misfires on
+  // runtime vocabulary ("operation-workflow", "the REPLACE workflow", ...);
+  // it remains only as the fallback for quests without a declared class.
+  if (quest?.class === QUEST_CLASS_PRODUCT) {
+    return 'runtime';
+  }
   const haystack = [
     quest?.id,
     quest?.statement,
