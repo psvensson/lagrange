@@ -281,6 +281,7 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
   engine.wasmExecutor = options.wasmExecutor || null;
 
   engine._wireQueryExecutorFactory(engine.serviceRuntimeLifecycle);
+  engine._wireStateProjectionWriter(engine.serviceRuntimeLifecycle);
 
   engine.activeTransactions = engine.transactionCoordinator.transactionsBySession;
   engine.transactionStateRecovered = false;

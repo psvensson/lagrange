@@ -286,7 +286,9 @@ function assignReplicaOperationRepositoryEntityReadMethods(
             return row.group_id === entityId;
           }
           if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
-            return row.service_id === entityId;
+            // Dispatched replica rows carry `${entityId}-rN` ids.
+            return row.service_id === entityId ||
+              String(row.service_id || '').startsWith(`${entityId}-r`);
           }
           return row.partition_id === partitionId;
         }) || []

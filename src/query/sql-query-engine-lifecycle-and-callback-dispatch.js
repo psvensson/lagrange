@@ -1,4 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  projectRuntimeReplicaServicesRow,
+} from './runtime-replica-state-projection.js';
 import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
 
@@ -263,6 +266,48 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
   setServiceRuntimeLifecycle(lifecycle) {
     this.serviceRuntimeLifecycle = lifecycle;
     this._wireQueryExecutorFactory(lifecycle);
+    this._wireStateProjectionWriter(lifecycle);
+  }
+
+  /**
+   * Wire the runtime replica state projection into the lifecycle
+   * owner so placed replicas become visible as authoritative
+   * services-table rows (the rebalancer's currentReplicas view and
+   * every observer read that table). Create-once-then-update
+   * discipline: the first projection for a replica INSERTs the row
+   * with its identity columns; every later transition UPDATEs the
+   * existing row primary-key addressed (never INSERT OR REPLACE).
+   *
+   * @param {Object} lifecycle - Service runtime lifecycle.
+   * @private
+   */
+  _wireStateProjectionWriter(lifecycle) {
+    if (
+      !lifecycle ||
+      typeof lifecycle.setStateProjectionWriter !== LOCAL_STR_FUNCTION
+    ) {
+      return;
+    }
+    lifecycle.setStateProjectionWriter(
+      async (serviceId, stateRow) =>
+        this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
+    );
+  }
+
+  /**
+   * Persist one runtime replica lifecycle state into the services
+   * table.
+   * @param {string} serviceId - Replica service id (row primary key).
+   * @param {Object} stateRow - Column values from the lifecycle.
+   * @return {Promise<void>}
+   */
+  async projectRuntimeReplicaServicesRow(serviceId, stateRow) {
+    await projectRuntimeReplicaServicesRow(
+      this.controlPlaneSystemTableGateway,
+      this.nodeId,
+      serviceId,
+      stateRow,
+    );
   }
 
   /**

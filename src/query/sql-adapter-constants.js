@@ -56,6 +56,9 @@ const DEFAULT_SESSION_ID = 'default';
  * @enum {string}
  */
 const ADAPTER_ERROR_MSG = Object.freeze({
+  STATE_PROJECTION_GATEWAY_REQUIRED:
+    'runtime replica state projection requires the control-plane ' +
+    'system-table gateway',
   SQL_CORE_REQUIRED: 'SqlCore (SQLQueryEngine) instance is required',
   STATEMENT_REQUIRED: 'SQL statement string is required',
   STATEMENT_MUST_BE_STRING: 'SQL statement must be a string',

@@ -7,6 +7,18 @@ import {
 } from './unified-rebalancer-priority-readiness.js';
 import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-nodes.js';
 
+// Dispatched runtime-service replicas carry canonical ids
+// `${entityId}-rN`; a bare entityId row (direct lifecycle use) also
+// belongs. Strict equality here made every dispatched replica
+// invisible to the planner (it re-planned ADDs forever).
+function runtimeServiceReplicaBelongsToEntity(serviceId, entityId) {
+  if (typeof serviceId !== 'string' || typeof entityId !== 'string') {
+    return false;
+  }
+  return serviceId === entityId ||
+    serviceId.startsWith(`${entityId}-r`);
+}
+
 const {
   COLUMN,
   EntityType,
@@ -241,7 +253,10 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
             const normalizedService = normalizeServiceRow(service);
             return (
               normalizedService.serviceType === EntityType.RUNTIME_SERVICE &&
-              normalizedService.serviceId === this.entityId
+              runtimeServiceReplicaBelongsToEntity(
+                normalizedService.serviceId,
+                this.entityId,
+              )
             );
           },
         ),
