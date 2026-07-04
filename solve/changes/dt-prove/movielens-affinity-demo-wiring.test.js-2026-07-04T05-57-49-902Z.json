@@ -1,0 +1,25 @@
+{
+  "test": "test/runtime/movielens-affinity-demo-wiring.test.js",
+  "src": [
+    "src/topology/latency-group-manager.js",
+    "src/topology/latency-group-manager-runtime-helpers.js",
+    "src/topology/latency-topology-constants.js",
+    "src/config/config-constants.js",
+    "src/config/config-key-constants.js",
+    "src/config/config-schema-constants.js",
+    "src/runtime/sql-query-loop-runtime-module.js",
+    "src/runtime/runtime-startup-wiring.js",
+    "src/runtime/service-runtime-lifecycle.js",
+    "src/runtime/service-runtime-lifecycle-operation-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-04T05:57:49.856Z"
+}

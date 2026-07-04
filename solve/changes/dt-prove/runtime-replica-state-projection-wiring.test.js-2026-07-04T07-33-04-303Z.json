@@ -1,0 +1,18 @@
+{
+  "test": "test/runtime/runtime-replica-state-projection-wiring.test.js",
+  "src": [
+    "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+    "src/query/sql-query-engine-instance-initializer.js",
+    "src/query/sql-adapter-constants.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-04T07:33:04.267Z"
+}

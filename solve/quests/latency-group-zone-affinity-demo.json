@@ -1,0 +1,53 @@
+{
+  "id": "latency-group-zone-affinity-demo",
+  "statement": "A live multi-latency-domain demo proves BOTH motives of latency groups without conflating them: on a cluster of two operator-pinned zones (latency.pinnedGroupId \u2014 the k8s zone-label analog), (a) PLACEMENT: data loaded while only zone-a exists stays zone-a-local, a deployed read_locality=same_group service converges its replicas into zone-a via the group-granular DATA_AFFINITY term (the coarse cross-domain coordinate that node weights cannot express), and its reads are routed same-group (locality routing observable); (b) CDC EFFICIENCY (the groups' original motive): cross-zone CDC propagation is observably representative-mediated \u2014 per-update cross-zone message count stays O(1) in group size rather than O(nodes) \u2014 measured from transport/CDC counters on a live run. Both observables are asserted by a re-runnable scenario script that emits a scenario-harness report, and the demo documents the zone-pinning operator surface. Builds on (does not modify) the single-zone node-affinity demo; the group-granular weights and zone pinning shipped by the epic are exercised, not reimplemented.",
+  "priority": 3,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null,
+    "epic": "service-data-affinity-placement"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "latency-group-zone-affinity-demo",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "latency-group-zone-affinity-demo-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "latency-group-zone-affinity-demo",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-order",
+      "statement": "Not scheduled before the single-zone node-affinity demo quest reaches a terminal state \u2014 this quest layers the multi-domain story on top of a proven single-domain baseline."
+    },
+    {
+      "id": "c-cdc-baseline",
+      "statement": "The CDC-efficiency observable needs a measurable baseline: if no per-update cross-zone transport counter exists yet, adding the counter (observability only, no propagation-behavior change) is in scope; changing propagation behavior is NOT."
+    },
+    {
+      "id": "c-emitter",
+      "statement": "doneWhen emitter: extend scripts/run-placement-affinity-scenarios.js with this scenario as part of the quest."
+    }
+  ]
+}
