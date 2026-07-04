@@ -13,6 +13,7 @@ import {
 
 function resolveLatencyGroupManagerConfig(config) {
   return {
+    pinnedGroupId: resolvePinnedGroupIdConfig(config),
     groupThresholdMs: resolveNumericConfig(
       config,
       LATENCY_TOPOLOGY_CONFIG_KEY.GROUP_THRESHOLD_MS,
@@ -31,6 +32,13 @@ function resolveLatencyGroupManagerConfig(config) {
       LATENCY_TOPOLOGY_DEFAULT.RECALC_JITTER_RATIO,
     ),
   };
+}
+
+// Operator-pinned latency group (zone label). Empty string is the
+// explicit "not pinned" value: assignment then follows measured RTT.
+function resolvePinnedGroupIdConfig(config) {
+  const value = config.get(LATENCY_TOPOLOGY_CONFIG_KEY.PINNED_GROUP_ID);
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function resolveNumericConfig(config, key, fallback, minValue) {

@@ -231,6 +231,7 @@ const CONFIG_SCHEMA = {
     latency: {
       type: 'object',
       properties: {
+        pinnedGroupId: {type: 'string'},
         groupThresholdMs: {type: 'number', minimum: 1},
         recalcIntervalMs: {type: 'number', minimum: 1000},
         recalcJitterRatio: {type: 'number', minimum: 0, maximum: 1},

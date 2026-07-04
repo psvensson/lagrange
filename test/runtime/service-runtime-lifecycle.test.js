@@ -506,7 +506,19 @@ describe('ServiceRuntimeLifecycle routing chain', () => {
       assert.equal(calls.length, 1);
       assert.equal(calls[0].op, 'prepare');
       assert.equal(calls[0].def, def);
-      assert.equal(calls[0].ctx, ctx);
+      // The lifecycle preserves caller context fields and supplies its
+      // registered native_js handler map when the caller passed none.
+      assert.equal(calls[0].ctx.nodeId, 'n1');
+      assert.deepEqual(calls[0].ctx.handlerMap, {});
+
+      const explicitHandlerMap = {ref: () => {}};
+      const explicitCtx = {nodeId: 'n1', handlerMap: explicitHandlerMap};
+      await lifecycle.prepare(nativeDef('chain-svc-explicit'), explicitCtx);
+      assert.equal(calls.length, 2);
+      assert.equal(
+        calls[1].ctx, explicitCtx,
+        'an explicit caller handlerMap passes the context through untouched',
+      );
     });
 
   it('start routes through registry.getDriver to driver.start',

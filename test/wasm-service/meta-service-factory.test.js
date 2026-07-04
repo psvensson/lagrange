@@ -58,11 +58,12 @@ describe('meta-service-factory', () => {
       );
     });
 
-    it('should use default replica count', () => {
+    it('ships not-started: replica count 0 — meta command handling runs ' +
+      'in-process via the meta router; no lifecycle module exists for ' +
+      'the runtime_ref, so placed replicas can only churn failed ADDs ' +
+      'and burn the concurrent-operation budget', () => {
       const def = createWasmMetaDefinition();
-      assert.equal(
-        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT,
-      );
+      assert.equal(def.replicaCount, 0);
     });
 
     it('should use empty resource budget', () => {
@@ -190,11 +191,12 @@ describe('meta-service-factory', () => {
       );
     });
 
-    it('should use default replica count', () => {
+    it('ships not-started: replica count 0 places no replicas until ' +
+      'an operator scales it (pgwire is a managed service, not a boot ' +
+      'listener — with the native_js handler map wired, a non-zero ' +
+      'ship count would bind :5432 on placement)', () => {
       const def = createPostgresWireDefinition();
-      assert.equal(
-        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT,
-      );
+      assert.equal(def.replicaCount, 0);
     });
 
     it('should serialize without errors', () => {

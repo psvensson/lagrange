@@ -12,6 +12,12 @@ import {ServiceRuntimeLifecycle} from './service-runtime-lifecycle.js';
 import {NativeJsDriver} from './native-js-driver.js';
 import {WasmComponentDriver} from './wasm-component-driver.js';
 import {OciContainerDriver} from './oci-container-driver.js';
+import {PostgresWireRuntimeModule} from './pgwire-runtime-module.js';
+import {
+  SQL_QUERY_LOOP_RUNTIME_REF,
+  SqlQueryLoopRuntimeModule,
+} from './sql-query-loop-runtime-module.js';
+import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
 
 /**
  * Build runtime wiring used by seed and joining startup flows.
@@ -41,6 +47,17 @@ function createRuntimeStartupWiring(options = {}) {
 
   const serviceRuntimeLifecycle = new ServiceRuntimeLifecycle(
     runtimeDriverRegistry,
+  );
+
+  // Built-in native_js lifecycle modules, resolved by runtime_ref when
+  // a placed replica prepares through the wired create path.
+  serviceRuntimeLifecycle.registerNativeJsHandler(
+    META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
+    new PostgresWireRuntimeModule(),
+  );
+  serviceRuntimeLifecycle.registerNativeJsHandler(
+    SQL_QUERY_LOOP_RUNTIME_REF,
+    new SqlQueryLoopRuntimeModule(),
   );
 
   return {

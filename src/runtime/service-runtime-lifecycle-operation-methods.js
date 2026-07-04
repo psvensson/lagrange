@@ -82,7 +82,15 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         );
 
         const driver = this._resolveDriver(runtimeKind);
-        const result = await driver.prepare(definition, context);
+        // The lifecycle owner supplies its registered native_js
+        // handler map unless the caller provided one explicitly, so
+        // placed replicas resolve their runtime_ref through the
+        // production create path.
+        const prepareContext =
+          context?.handlerMap ?
+            context :
+            {...context, handlerMap: this._nativeJsHandlerMap};
+        const result = await driver.prepare(definition, prepareContext);
         const durationMs = Date.now() - start;
 
         await this._projectReplicaState(

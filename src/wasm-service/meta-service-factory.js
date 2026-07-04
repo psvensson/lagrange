@@ -22,6 +22,16 @@ import {
 
 const META_FACTORY_SUBSYSTEM = 'meta-service-factory';
 
+// Built-in meta services SHIP NOT-STARTED (replica_count 0): their
+// command handling runs IN-PROCESS via the meta-service router
+// (routeToMetaService), not via placed runtime replicas — no lifecycle
+// module exists for their runtime_refs, so a placed replica can never
+// prepare. A non-zero ship count only produces a permanent failed-ADD
+// retry loop that burns the cluster-wide concurrent-operation budget
+// (observed starving unrelated runtime-service placement). Scale up
+// deliberately if/when real lifecycle modules exist.
+const META_SERVICE_SHIP_REPLICA_COUNT = 0;
+
 const META_FACTORY_LOG_MSG = Object.freeze({
   WASM_META_CREATED: 'Created sys-wasm-meta service definition',
   ADMIN_META_CREATED: 'Created sys-admin-meta service definition',
@@ -43,7 +53,7 @@ function createWasmMetaDefinition() {
     handlerFunctionId: null,
     readConsistency: READ_CONSISTENCY_MODE.STRONG,
     writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,
-    replicaCount: WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+    replicaCount: META_SERVICE_SHIP_REPLICA_COUNT,
     resourceBudget: {},
     safetyIntervalMs: WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
     runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
@@ -67,7 +77,7 @@ function createAdminMetaDefinition() {
     handlerFunctionId: null,
     readConsistency: READ_CONSISTENCY_MODE.STRONG,
     writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,
-    replicaCount: WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+    replicaCount: META_SERVICE_SHIP_REPLICA_COUNT,
     resourceBudget: {},
     safetyIntervalMs: WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
     runtimeKind: RUNTIME_KIND.NATIVE_JS,
@@ -91,7 +101,10 @@ function createPostgresWireDefinition() {
     handlerFunctionId: null,
     readConsistency: READ_CONSISTENCY_MODE.STRONG,
     writeConsistency: WRITE_CONSISTENCY_MODE.STRONG,
-    replicaCount: WASM_SERVICE_DEFAULT.REPLICA_COUNT,
+    // pgwire additionally HAS a working lifecycle module now (the wired
+    // native_js handler map) — a non-zero ship count would bind :5432 on
+    // every placed node, so the not-started posture must stay explicit.
+    replicaCount: META_SERVICE_SHIP_REPLICA_COUNT,
     resourceBudget: {},
     safetyIntervalMs: WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
     runtimeKind: RUNTIME_KIND.NATIVE_JS,

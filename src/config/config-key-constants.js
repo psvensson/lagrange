@@ -201,6 +201,7 @@ const CONFIG_KEY = Object.freeze({
     'rebalancer.storageAdmissionMode',
 
   // Latency topology keys
+  LATENCY_PINNED_GROUP_ID: 'latency.pinnedGroupId',
   LATENCY_GROUP_THRESHOLD_MS: 'latency.groupThresholdMs',
   LATENCY_RECALC_INTERVAL_MS: 'latency.recalcIntervalMs',
   LATENCY_RECALC_JITTER_RATIO: 'latency.recalcJitterRatio',

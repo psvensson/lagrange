@@ -80,6 +80,11 @@ const LOCAL_STR_ENDPOINT_REMOVER_MUST_BE_A_FUNCTION = 'endpoint remover must be 
 const LOCAL_STR_OPERATION_WRITER_MUST_BE_A_FUNCTION = 'operation writer must be a function';
 const LOCAL_STR_IDEMPOTENCY_READER_MUST_BE_A_FUNCTION = 'idempotency reader must be a function';
 const LOCAL_STR_STATE_PROJECTION_WRITER_MUST_BE_A_FUNCTI = 'state projection writer must be a function';
+const LIFECYCLE_ERROR_MSG = Object.freeze({
+  NATIVE_JS_HANDLER_REF_REQUIRED:
+    'native_js handler runtimeRef must be a non-empty string',
+  NATIVE_JS_HANDLER_REQUIRED: 'native_js handler is required',
+});
 const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_NONE = 'none';
 const LOCAL_STR_17O4M = 'service definition is missing runtime_kind';
@@ -270,6 +275,43 @@ class ServiceRuntimeLifecycle extends EventEmitter {
      * @private
      */
     this._queryExecutorFactory = null;
+
+    /**
+     * Registry of native_js handlers keyed by runtime_ref. The
+     * lifecycle owner supplies this map as the prepare context's
+     * handlerMap when the caller does not provide one, so a placed
+     * native_js replica resolves its lifecycle module (or handler
+     * function) through the production create/start path.
+     *
+     * @type {Object<string, *>}
+     * @private
+     */
+    this._nativeJsHandlerMap = {};
+  }
+
+  /**
+   * Register a native_js handler (a lifecycle-capable module or a
+   * plain handler function) under a runtime_ref, so service
+   * definitions with that runtime_ref resolve through the wired
+   * replica create/start path.
+   *
+   * @param {string} runtimeRef - The runtime_ref key.
+   * @param {*} handler - Lifecycle module or handler function.
+   * @throws {TypeError} If runtimeRef is not a non-empty string or
+   *   handler is missing.
+   */
+  registerNativeJsHandler(runtimeRef, handler) {
+    if (typeof runtimeRef !== 'string' || runtimeRef.length === 0) {
+      throw new TypeError(
+        LIFECYCLE_ERROR_MSG.NATIVE_JS_HANDLER_REF_REQUIRED,
+      );
+    }
+    if (!handler) {
+      throw new TypeError(
+        LIFECYCLE_ERROR_MSG.NATIVE_JS_HANDLER_REQUIRED,
+      );
+    }
+    this._nativeJsHandlerMap[runtimeRef] = handler;
   }
 
   /**

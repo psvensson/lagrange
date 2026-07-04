@@ -37,6 +37,7 @@ import {DependencyError} from '../bootstrap-errors.js';
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
+const SINK_WIRING_RETRY_INTERVAL_MS = 5000;
 
 // `service_definitions` is the desired-state table for runtime services ONLY
 // (partitions/message-groups live in their own tables), so every row is a
@@ -103,6 +104,18 @@ class RuntimeServiceRebalancerOwner {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM_NAME) : console;
+    // Reconcile on every service_definitions cache change so services
+    // deployed AFTER leadership attach get an owner (and deleted ones are
+    // quiesced) without waiting for a leadership move. refresh() no-ops
+    // while not leader, so the subscription is safe on every node.
+    this._cacheChangeListener = (tableName) => {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
+        this.refresh();
+      }
+    };
+    if (typeof this.systemTableCache.onCacheChange === 'function') {
+      this.systemTableCache.onCacheChange(this._cacheChangeListener);
+    }
   }
 
   /**
@@ -156,6 +169,9 @@ class RuntimeServiceRebalancerOwner {
   shutdown() {
     this._shuttingDown = true;
     this._isLeader = false;
+    if (typeof this.systemTableCache.offCacheChange === 'function') {
+      this.systemTableCache.offCacheChange(this._cacheChangeListener);
+    }
     this._quiesceAll();
   }
 
@@ -277,19 +293,55 @@ function attachRuntimeServiceRebalancerOwner(options = {}) {
   const owner = new RuntimeServiceRebalancerOwner(options);
   const partitionId =
     INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS];
-  const partitionService = resolvePartitionServiceByPartitionId(
-    options.partitionServices, partitionId,
-  );
-  if (partitionService &&
-      typeof partitionService.setRebalancerLeadershipSink === 'function') {
-    partitionService.setRebalancerLeadershipSink(owner);
-  } else {
+  // LEVEL-TRIGGERED sink wiring: at composition time this node may not
+  // yet host a service_definitions-p1 replica (only the seed does
+  // during formation; the other replicas are created later by the
+  // rebalancer). An attach-time-only resolution left every non-seed
+  // owner permanently inert — the moment leadership moved off the
+  // seed, NO node planned runtime services (observed live: 4/5 owners
+  // logged PARTITION_SERVICE_MISSING and the cluster lost its planning
+  // singleton on the first leadership move). Retry the resolution on a
+  // modest unref'd interval until the local replica exists, then wire
+  // the leadership sink; leadership gating itself stays with the
+  // partition service (the single owner of that decision).
+  let partitionService = null;
+  let retryTimer = null;
+  const tryWireSink = () => {
+    if (partitionService) {
+      return true;
+    }
+    const resolved = resolvePartitionServiceByPartitionId(
+      options.partitionServices, partitionId,
+    );
+    if (resolved &&
+        typeof resolved.setRebalancerLeadershipSink === 'function') {
+      partitionService = resolved;
+      partitionService.setRebalancerLeadershipSink(owner);
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = null;
+      }
+      return true;
+    }
+    return false;
+  };
+  if (!tryWireSink()) {
     owner.logger.warn(LOG_MSG.PARTITION_SERVICE_MISSING, {partitionId});
+    retryTimer = setInterval(tryWireSink, SINK_WIRING_RETRY_INTERVAL_MS);
+    if (typeof retryTimer.unref === 'function') {
+      retryTimer.unref();
+    }
   }
   return {
     owner,
-    partitionService: partitionService || null,
+    get partitionService() {
+      return partitionService;
+    },
     detach() {
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = null;
+      }
       if (partitionService &&
           typeof partitionService.setRebalancerLeadershipSink === 'function') {
         partitionService.setRebalancerLeadershipSink(null);

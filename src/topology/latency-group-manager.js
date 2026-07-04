@@ -325,12 +325,14 @@ class LatencyGroupManager extends EventEmitter {
 
   /**
    * Build a new latency group row for this node.
+   * @param {string} [pinnedGroupId] - Operator-pinned group id; when
+   *   absent a measured-assignment group id is generated.
    * @return {Object}
    * @private
    */
-  buildCreatedGroupRow() {
+  buildCreatedGroupRow(pinnedGroupId) {
     const now = this.now();
-    const groupId = buildLatencyGroupId({
+    const groupId = pinnedGroupId || buildLatencyGroupId({
       timestamp: now,
       nodeId: this.nodeId,
       nowFn: this.nowFn,
@@ -343,6 +345,46 @@ class LatencyGroupManager extends EventEmitter {
       [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
       [COLUMN.CREATED_AT]: now,
       [COLUMN.UPDATED_AT]: now,
+    };
+  }
+
+  /**
+   * Assignment decision when the operator has pinned this node's
+   * latency group (zone label): the pin wins unconditionally — RTT is
+   * never measured, and the group row is created on first use. The
+   * manager stays the single owner of nodes.latency_group_id; it
+   * honors the pin instead of being bypassed.
+   * @param {string|null} currentGroupId
+   * @param {Object[]} groupRows
+   * @return {Object}
+   * @private
+   */
+  computePinnedAssignmentDecision(currentGroupId, groupRows) {
+    const pinnedGroupId = this.pinnedGroupId;
+    if (currentGroupId === pinnedGroupId) {
+      return {
+        reason: LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP,
+        currentGroupId,
+        targetGroupId: pinnedGroupId,
+        changed: false,
+        createdGroupRow: null,
+        measurements: [],
+      };
+    }
+    const pinnedGroupExists = getActiveLatencyGroups(groupRows).some(
+      (group) => group[COLUMN.GROUP_ID] === pinnedGroupId,
+    );
+    return {
+      reason: pinnedGroupExists ?
+        LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP :
+        LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP,
+      currentGroupId,
+      targetGroupId: pinnedGroupId,
+      changed: true,
+      createdGroupRow: pinnedGroupExists ?
+        null :
+        this.buildCreatedGroupRow(pinnedGroupId),
+      measurements: [],
     };
   }
 
@@ -398,6 +440,9 @@ class LatencyGroupManager extends EventEmitter {
    */
   async computeAssignmentDecision(localNodeRow, groupRows) {
     const currentGroupId = localNodeRow[COLUMN.LATENCY_GROUP_ID] || null;
+    if (this.pinnedGroupId) {
+      return this.computePinnedAssignmentDecision(currentGroupId, groupRows);
+    }
     const activeGroups = getActiveLatencyGroups(groupRows);
     const measurements = await this.measureGroups(activeGroups);
     const nearestEligible = selectNearestEligibleGroup(
@@ -664,6 +709,7 @@ class LatencyGroupManager extends EventEmitter {
    */
   refreshConfig() {
     const runtimeConfig = resolveLatencyGroupManagerConfig(this.config);
+    this.pinnedGroupId = runtimeConfig.pinnedGroupId;
     this.groupThresholdMs = runtimeConfig.groupThresholdMs;
     this.recalcIntervalMs = runtimeConfig.recalcIntervalMs;
     this.recalcJitterRatio = runtimeConfig.recalcJitterRatio;

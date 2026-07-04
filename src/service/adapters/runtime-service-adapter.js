@@ -4,6 +4,7 @@
 
 import {
   RUNTIME_FIELD,
+  SERVICE_DESCRIPTOR_FIELD,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {validateRuntimeDescriptor} from '../../wasm-service/runtime-descriptor-validator.js';
@@ -13,6 +14,25 @@ const RUNTIME_ADAPTER_ERROR = Object.freeze({
   LIFECYCLE_REQUIRED:
     'runtime adapter requires serviceRuntimeLifecycle with prepare/start/stop/health',
 });
+
+// The lifecycle manager hands the adapter the CANONICAL descriptor
+// (camelCase); raw snake_case service_definitions rows are accepted
+// additively for direct callers.
+function resolveRuntimeDescriptorFields(definition) {
+  return {
+    runtimeKind:
+      definition?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] ??
+      definition?.[RUNTIME_FIELD.RUNTIME_KIND],
+    runtimeRef:
+      definition?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF] ??
+      definition?.[RUNTIME_FIELD.RUNTIME_REF] ??
+      null,
+    runtimeConfig:
+      definition?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG] ??
+      definition?.[RUNTIME_FIELD.RUNTIME_CONFIG] ??
+      null,
+  };
+}
 
 function hasRuntimeLifecycleContract(serviceRuntimeLifecycle) {
   return serviceRuntimeLifecycle &&
@@ -38,15 +58,16 @@ class RuntimeServiceAdapter extends ServiceTypeAdapter {
   }
 
   /**
+   * Reading only the snake column names here rejected every canonical
+   * descriptor with "runtime_kind is required" — see
+   * resolveRuntimeDescriptorFields for the accepted shapes.
    * @param {Object} definition
    * @return {{valid: boolean, errors?: string[]}}
    */
   validateDefinition(definition) {
-    const validation = validateRuntimeDescriptor({
-      runtimeKind: definition?.[RUNTIME_FIELD.RUNTIME_KIND],
-      runtimeRef: definition?.[RUNTIME_FIELD.RUNTIME_REF] || null,
-      runtimeConfig: definition?.[RUNTIME_FIELD.RUNTIME_CONFIG] || null,
-    });
+    const validation = validateRuntimeDescriptor(
+      resolveRuntimeDescriptorFields(definition),
+    );
 
     if (!validation.valid) {
       return {valid: false, errors: validation.errors};
