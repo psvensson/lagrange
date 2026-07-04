@@ -25,6 +25,16 @@ MovieLens 100k dataset.
   — the same example from the family above, driven end-to-end with data
   loading and a baseline to compare against.
 
+## [service-data-affinity/](service-data-affinity/README.md)
+
+The live demonstration of Lagrange's differentiator: a deployed runtime
+service that issues SQL converges onto the zone holding the data it
+reads — read-locality routing, access attribution, the affinity policy
+lift, and the DATA_AFFINITY placement dimension working end to end.
+
+- **Prerequisites**: the MovieLens dataset download (same as above);
+  local processes only, no Docker.
+
 ## [kubernetes-endpoint-sync-controller/](kubernetes-endpoint-sync-controller/README.md)
 
 A controller that mirrors Lagrange cluster membership into a Kubernetes

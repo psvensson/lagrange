@@ -27,6 +27,12 @@
  *       (A[service][partition] feed: engine-side read/write recording
  *        for issuing services, delta publisher with failure restore,
  *        service_partition_access system table registered end-to-end)
+ *   movielens-affinity-placement-demo
+ *     - test/runtime/movielens-affinity-demo-wiring.test.js
+ *       (zone pinning honored by the LatencyGroupManager without RTT,
+ *        sql-query-loop lifecycle module, production native_js handler
+ *        map resolving runtime_ref through the real prepare/start path
+ *        with service-scoped executor injection)
  *   runtime-service-affinity-policy-lift
  *     - test/rebalancer/runtime-service-affinity-policy-lift.test.js
  *       (getRuntimeServicePolicy lifts read_locality=same_group +
@@ -54,6 +60,12 @@ const SCENARIOS = {
   ],
   'runtime-service-affinity-policy-lift': [
     'test/rebalancer/runtime-service-affinity-policy-lift.test.js',
+  ],
+  'movielens-affinity-placement-demo': [
+    'test/runtime/movielens-affinity-demo-wiring.test.js',
+  ],
+  'runtime-replica-state-projection': [
+    'test/runtime/runtime-replica-state-projection-wiring.test.js',
   ],
 };
 

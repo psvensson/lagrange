@@ -64,13 +64,35 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
   return total;
 }
 
+const FLUSH_MAX_ATTEMPTS = 4;
+const FLUSH_RETRY_BASE_DELAY_MS = 500;
+
+// A 100k-row load is ~200 batches against a cluster that may still be
+// settling (control-plane replica creates, leadership moves) — a single
+// transient participant failure/timeout should not abort the whole
+// load. Batches use plain INSERTs with a composite primary key, so a
+// retried batch that partially landed is idempotent at worst-case
+// duplicate-key level for this dataset (one row per (user, movie)).
 async function flushBatch(client, rows) {
   const values = rows
     .map((row) => `(${row[0]}, ${row[1]}, ${row[2]}, ${row[3]})`)
     .join(',');
   const sql =
     'INSERT INTO ratings (user_id, movie_id, rating, rating_ts) VALUES ' + values;
-  await client.query(sql);
+  let lastError = null;
+  for (let attempt = 1; attempt <= FLUSH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await client.query(sql);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < FLUSH_MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, FLUSH_RETRY_BASE_DELAY_MS * attempt));
+      }
+    }
+  }
+  throw lastError;
 }
 
 export {loadRatingsIntoLagrange, DEFAULT_TARGET};
