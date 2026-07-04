@@ -46,6 +46,7 @@ const PLACEMENT_OWNER_SCORE_DIMENSION = Object.freeze({
   SAME_LATENCY_GROUP: 'same_latency_group',
   LATENCY_GROUP_DIVERSITY: 'latency_group_diversity',
   DATA_AFFINITY: 'data_affinity',
+  DATA_AFFINITY_NODE: 'data_affinity_node',
   DATA_AFFINITY_INCUMBENT_RETENTION: 'data_affinity_incumbent_retention',
   DISK_TIE_BREAKER: 'disk_tie_breaker',
 });
@@ -97,6 +98,10 @@ const PLACEMENT_OWNER_TOPOLOGY_SCORE = Object.freeze({
 // shadow and above by the affinity gradient — census sweeps B/C/E).
 const PLACEMENT_OWNER_DATA_AFFINITY_SCORE = Object.freeze({
   AFFINITY_WEIGHT: NUM.TEN,
+  // Node-granular term dominates the group term: within one latency
+  // group only node weights discriminate ("code ON its data"), and a
+  // data-holding node must outbid the incumbent movement cost.
+  NODE_AFFINITY_WEIGHT: NUM.SIXTEEN,
   INCUMBENT_MOVEMENT_COST: NUM.FOUR,
 });
 

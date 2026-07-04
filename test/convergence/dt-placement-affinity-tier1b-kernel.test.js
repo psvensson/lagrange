@@ -282,3 +282,97 @@ t.test('affinity evidence normalization drops invalid entries', async (t) => {
     'array-typed groupWeights is rejected (no phantom index groups)',
   );
 });
+
+// ---- Node-granular affinity (the primary nearness coordinate) ----
+// Latency groups exist for CDC fan-out efficiency; within ONE group
+// only node weights can discriminate ("code ON its data"). These
+// scenarios prove the DATA_AFFINITY_NODE term does that through the
+// real kernel + MovePlanner.
+
+t.test('(f) single latency group: node weights alone move the service ' +
+  'onto the data-holding node', async (t) => {
+  const singleGroupNodes =
+    [node('s1', 30, 'G1'), node('d1', 30, 'G1')];
+  const policy = {
+    targetReplicaCount: 1,
+    placementConstraints: {preferDataAffinity: true},
+    // The group term is DEGENERATE here (both nodes in G1) — exactly
+    // the single-zone cluster where the old group-only lift could not
+    // discriminate at all. Only nodeWeights separate the candidates.
+    dataAffinity: {groupWeights: {G1: 1}, nodeWeights: {d1: 1}},
+  };
+  const decision = buildPlacementOwnerDecision(
+    kernelScenario(singleGroupNodes, policy),
+  );
+  const d1Node = dimensionOf(
+    decision, 'd1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_NODE,
+  );
+  t.equal(
+    d1Node?.value,
+    -PLACEMENT_OWNER_DATA_AFFINITY_SCORE.NODE_AFFINITY_WEIGHT,
+    'the data-holding node scores the full node-affinity bonus',
+  );
+  t.equal(
+    dimensionOf(
+      decision, 's1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_NODE,
+    ),
+    null,
+    'a node without data replicas gets no node-affinity dimension',
+  );
+  t.same(decision.intent.targetNodeIds, ['d1'],
+    'node gradient (16) beats incumbent retention (4) inside one group');
+
+  const planner = buildServicePlanner(singleGroupNodes);
+  const targetState = await planner.calculateTargetState(
+    CURRENT_REPLICAS, policy,
+  );
+  t.same(targetState.targetNodes, ['d1'],
+    'the REAL MovePlanner moves the replica onto its data');
+});
+
+t.test('(g) the node term dominates the group term: code lands ON its ' +
+  'data even against a group gradient', async (t) => {
+  const policy = {
+    targetReplicaCount: 1,
+    placementConstraints: {preferDataAffinity: true},
+    // The incumbent s1 sits in the BEST group by group weights, but
+    // the data replica physically lives on d1 in the other group.
+    dataAffinity: {
+      groupWeights: {G2: 1, G1: 0.4},
+      nodeWeights: {d1: 1},
+    },
+  };
+  const decision = buildPlacementOwnerDecision(
+    kernelScenario(NODES_INCUMBENT_FIRST, policy),
+  );
+  t.same(decision.intent.targetNodeIds, ['d1'],
+    'node term (16) + partial group (4) outbids best-group (10) + ' +
+      'retention (4)');
+});
+
+t.test('(h) zero-only node weights do not engage the dimension family',
+  async (t) => {
+    const policy = {
+      targetReplicaCount: 1,
+      placementConstraints: {preferDataAffinity: true},
+      dataAffinity: {nodeWeights: {d1: 0}},
+    };
+    const decision = buildPlacementOwnerDecision(
+      kernelScenario(NODES_INCUMBENT_FIRST, policy),
+    );
+    t.equal(
+      dimensionOf(
+        decision, 'd1', PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_NODE,
+      ),
+      null,
+      'a map of only zeros carries no affinity evidence',
+    );
+    t.equal(
+      dimensionOf(
+        decision, 's1',
+        PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_INCUMBENT_RETENTION,
+      ),
+      null,
+      'incumbent retention stays off with the family (no free margin)',
+    );
+  });

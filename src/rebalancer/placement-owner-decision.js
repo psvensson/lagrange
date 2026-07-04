@@ -122,28 +122,51 @@ function calculateTopologyScoreDimensions(candidate, evidence) {
 // Gated on the preferDataAffinity constraint AND supplied affinity
 // evidence — absent either, no dimension is emitted and the kernel
 // output is byte-identical to the pre-affinity scorer.
+function buildNodeAffinityDimension(candidate, nodeWeights) {
+  const nodeAffinityWeight = nodeWeights.get(candidate.nodeId) || 0;
+  if (nodeWeights.size === 0 || nodeAffinityWeight <= 0) {
+    return [];
+  }
+  return [buildScoreDimension(
+    PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY_NODE,
+    -(PLACEMENT_OWNER_DATA_AFFINITY_SCORE.NODE_AFFINITY_WEIGHT *
+      nodeAffinityWeight),
+  )];
+}
+
+function buildGroupAffinityDimension(candidate, evidence, groupWeights) {
+  const candidateGroupId =
+    evidence.latencyGroupContext.nodeGroupById.get(candidate.nodeId) ||
+    PLACEMENT_OWNER_NO_DOMINANT_GROUP;
+  if (groupWeights.size === 0 || candidateGroupId.length === 0) {
+    return [];
+  }
+  const affinityWeight = groupWeights.get(candidateGroupId) || 0;
+  return [buildScoreDimension(
+    PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
+    affinityWeight === 0 ?
+      0 :
+      -(PLACEMENT_OWNER_DATA_AFFINITY_SCORE.AFFINITY_WEIGHT *
+        affinityWeight),
+  )];
+}
+
 function calculateDataAffinityScoreDimensions(candidate, evidence) {
   if (evidence.placementConstraints.preferDataAffinity !== true) {
     return [];
   }
   const groupWeights = evidence.dataAffinityContext.groupWeights;
-  if (groupWeights.size === 0) {
+  const nodeWeights = evidence.dataAffinityContext.nodeWeights;
+  if (groupWeights.size === 0 && nodeWeights.size === 0) {
     return [];
   }
   const dimensions = [];
-  const candidateGroupId =
-    evidence.latencyGroupContext.nodeGroupById.get(candidate.nodeId) ||
-    PLACEMENT_OWNER_NO_DOMINANT_GROUP;
-  if (candidateGroupId.length > 0) {
-    const affinityWeight = groupWeights.get(candidateGroupId) || 0;
-    dimensions.push(buildScoreDimension(
-      PLACEMENT_OWNER_SCORE_DIMENSION.DATA_AFFINITY,
-      affinityWeight === 0 ?
-        0 :
-        -(PLACEMENT_OWNER_DATA_AFFINITY_SCORE.AFFINITY_WEIGHT *
-          affinityWeight),
-    ));
-  }
+  // Node term first — the primary nearness coordinate ("code ON its
+  // data"); the group term is the coarse cross-latency-domain tie.
+  dimensions.push(...buildNodeAffinityDimension(candidate, nodeWeights));
+  dimensions.push(...buildGroupAffinityDimension(
+    candidate, evidence, groupWeights,
+  ));
   const isIncumbent = evidence.currentReplicas.some(
     (replica) => replica.valid === true && replica.nodeId === candidate.nodeId,
   );

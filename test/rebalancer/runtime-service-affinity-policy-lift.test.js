@@ -206,8 +206,10 @@ test('policy lift: same_group + fresh attribution enables the affinity ' +
   })).getRuntimeServicePolicy();
   t.equal(lifted.targetReplicaCount, 1,
     'replica_count override still applies');
-  t.same(lifted.dataAffinity, {groupWeights: {G2: 1}},
-    'writes-only attribution lifts leader-group weights onto the policy');
+  t.same(lifted.dataAffinity,
+    {nodeWeights: {[NODE_B]: 1}, groupWeights: {G2: 1}},
+    'writes-only attribution lifts the leader NODE (primary nearness ' +
+      'coordinate) and its group onto the policy');
   t.equal(lifted.placementConstraints.preferDataAffinity, true,
     'the DATA_AFFINITY dimension family is enabled');
   t.equal(lifted.placementConstraints.considerCpuLoad, true,

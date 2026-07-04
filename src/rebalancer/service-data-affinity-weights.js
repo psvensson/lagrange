@@ -1,21 +1,25 @@
 /**
- * Per-latency-group data-affinity weights for a runtime service
+ * Data-affinity weights for a runtime service at TWO granularities
  * (service↔data affinity placement epic — the production A[s][p] join).
  *
  * Aggregates the CDC-propagated `service_partition_access` rows for one
  * service across nodes (staleness-bounded), then joins each accessed
- * partition to latency groups using the same cluster-cached tables the
- * placement kernel reads:
- *   - READ counts credit every latency group holding an ACTIVE replica
- *     of the partition (locality read routing can serve the read in any
- *     of them — the router model the readLocality policy enables);
- *   - WRITE counts credit only the partition LEADER's group (writes
- *     always route to the leader).
- * Weights are normalized so the best group is 1 and the rest are
+ * partition to the placement coordinates the kernel scores:
+ *   - NODE weights (the primary nearness coordinate): READ counts
+ *     credit every node hosting an ACTIVE replica of the partition
+ *     (local reads never leave the node); WRITE counts credit the
+ *     partition LEADER's node. This is what "code moves to its data"
+ *     means inside a single latency group.
+ *   - GROUP weights (the coarse outer term for multi-latency-domain
+ *     clusters): the same credits collapsed to the nodes' latency
+ *     groups. Latency groups exist for CDC fan-out efficiency; for
+ *     placement they only express "don't cross a latency domain", not
+ *     within-domain nearness.
+ * Weights are normalized so the best entry is 1 and the rest are
  * proportional — the shape `buildDataAffinityContext` expects on
- * `policy.dataAffinity.groupWeights`. No fresh attribution, or no
- * joinable partitions, yields an empty object (the DATA_AFFINITY
- * dimension family then stays gated off).
+ * `policy.dataAffinity.{groupWeights,nodeWeights}`. No fresh
+ * attribution, or no joinable partitions, yields empty objects (the
+ * DATA_AFFINITY dimension family then stays gated off).
  */
 
 import {
@@ -78,7 +82,7 @@ function resolveNodeGroupId(cache, nodeId) {
   return nodeRow?.[COLUMN.LATENCY_GROUP_ID] || null;
 }
 
-function resolvePartitionReplicaGroupIds(cache, partitionId) {
+function resolvePartitionReplicaNodeIds(cache, partitionId) {
   const replicaRows = cache.filter(
     TABLES.SERVICES,
     (service) =>
@@ -87,75 +91,79 @@ function resolvePartitionReplicaGroupIds(cache, partitionId) {
       service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
       service?.[COLUMN.NODE_ID],
   ) || [];
-  const groupIds = new Set();
+  const nodeIds = new Set();
   for (const replica of replicaRows) {
-    const groupId = resolveNodeGroupId(cache, replica[COLUMN.NODE_ID]);
-    if (groupId) {
-      groupIds.add(groupId);
-    }
+    nodeIds.add(replica[COLUMN.NODE_ID]);
   }
-  return groupIds;
+  return nodeIds;
 }
 
-function resolvePartitionLeaderGroupId(cache, partitionId) {
+function resolvePartitionLeaderNodeId(cache, partitionId) {
   const partitionRow = cache.get(TABLES.PARTITIONS, partitionId);
-  return resolveNodeGroupId(cache, partitionRow?.[COLUMN.LEADER_NODE_ID]);
+  return partitionRow?.[COLUMN.LEADER_NODE_ID] || null;
 }
 
-function accumulateGroupScores(cache, countsByPartition) {
+function accumulateAffinityScores(cache, countsByPartition) {
+  const scoreByNode = new Map();
   const scoreByGroup = new Map();
-  const addScore = (groupId, score) => {
-    if (groupId && score > 0) {
-      scoreByGroup.set(groupId, (scoreByGroup.get(groupId) || 0) + score);
+  const addScore = (map, key, score) => {
+    if (key && score > 0) {
+      map.set(key, (map.get(key) || 0) + score);
     }
+  };
+  const creditNode = (nodeId, score) => {
+    addScore(scoreByNode, nodeId, score);
+    addScore(scoreByGroup, resolveNodeGroupId(cache, nodeId), score);
   };
   for (const [partitionId, counts] of countsByPartition) {
     const readCount = counts[SERVICE_PARTITION_ACCESS_KIND.READ];
     if (readCount > 0) {
-      for (const groupId of
-        resolvePartitionReplicaGroupIds(cache, partitionId)) {
-        addScore(groupId, readCount);
+      for (const nodeId of
+        resolvePartitionReplicaNodeIds(cache, partitionId)) {
+        creditNode(nodeId, readCount);
       }
     }
-    addScore(
-      resolvePartitionLeaderGroupId(cache, partitionId),
+    creditNode(
+      resolvePartitionLeaderNodeId(cache, partitionId),
       counts[SERVICE_PARTITION_ACCESS_KIND.WRITE],
     );
   }
-  return scoreByGroup;
+  return {scoreByNode, scoreByGroup};
 }
 
-function normalizeGroupScores(scoreByGroup) {
+function normalizeScores(scoreByKey) {
   let maxScore = 0;
-  for (const score of scoreByGroup.values()) {
+  for (const score of scoreByKey.values()) {
     maxScore = Math.max(maxScore, score);
   }
   if (maxScore <= 0) {
     return {};
   }
-  const groupWeights = {};
-  for (const [groupId, score] of scoreByGroup) {
-    groupWeights[groupId] = score / maxScore;
+  const weights = {};
+  for (const [key, score] of scoreByKey) {
+    weights[key] = score / maxScore;
   }
-  return groupWeights;
+  return weights;
 }
 
 /**
- * Build normalized per-latency-group affinity weights for a service.
+ * Build normalized affinity weights for a service at both placement
+ * granularities.
  * @param {Object} options
  * @param {Object} options.systemTableCache - Node-local system cache.
  * @param {string} options.serviceId - Runtime service id.
  * @param {number} options.nowMs - Current time (injectable).
  * @param {number} [options.maxAgeMs] - Attribution staleness bound.
- * @return {Object} `{latencyGroupId: weight in (0..1]}`, empty when no
- *   fresh joinable attribution exists.
+ * @return {{nodeWeights: Object, groupWeights: Object}} weights in
+ *   (0..1] keyed by nodeId / latencyGroupId; both empty when no fresh
+ *   joinable attribution exists.
  */
-function buildServiceDataAffinityGroupWeights(options = {}) {
+function buildServiceDataAffinityWeights(options = {}) {
   const cache = options.systemTableCache;
   const serviceId = options.serviceId;
   if (!cache || typeof cache.filter !== 'function' ||
       typeof cache.get !== 'function' || !serviceId) {
-    return {};
+    return {nodeWeights: {}, groupWeights: {}};
   }
   const maxAgeMs =
     Number.isFinite(options.maxAgeMs) && options.maxAgeMs > 0 ?
@@ -167,9 +175,24 @@ function buildServiceDataAffinityGroupWeights(options = {}) {
     options.nowMs,
     maxAgeMs,
   );
-  return normalizeGroupScores(
-    accumulateGroupScores(cache, countsByPartition),
-  );
+  const {scoreByNode, scoreByGroup} =
+    accumulateAffinityScores(cache, countsByPartition);
+  return {
+    nodeWeights: normalizeScores(scoreByNode),
+    groupWeights: normalizeScores(scoreByGroup),
+  };
 }
 
-export {buildServiceDataAffinityGroupWeights};
+/**
+ * Group-weights-only view (kept for the group-granular callers/tests).
+ * @param {Object} options - Same as buildServiceDataAffinityWeights.
+ * @return {Object} `{latencyGroupId: weight in (0..1]}`.
+ */
+function buildServiceDataAffinityGroupWeights(options = {}) {
+  return buildServiceDataAffinityWeights(options).groupWeights;
+}
+
+export {
+  buildServiceDataAffinityGroupWeights,
+  buildServiceDataAffinityWeights,
+};

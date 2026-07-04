@@ -22,6 +22,7 @@ const PLACEMENT_OWNER_POLICY_FIELD = Object.freeze({
   PREFER_DATA_AFFINITY: 'preferDataAffinity',
   DATA_AFFINITY: 'dataAffinity',
   DATA_AFFINITY_GROUP_WEIGHTS: 'groupWeights',
+  DATA_AFFINITY_NODE_WEIGHTS: 'nodeWeights',
 });
 const PLACEMENT_OWNER_DIAGNOSTIC_FIELD = Object.freeze({
   TOTAL_CANDIDATES: 'totalCandidates',
@@ -256,22 +257,31 @@ function buildDataAffinityContext(policy) {
       typeof policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] === 'object' ?
       policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] :
       {};
-  const rawCandidate =
-    affinity[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS];
-  const rawWeights =
-    rawCandidate &&
-      typeof rawCandidate === 'object' &&
-      !Array.isArray(rawCandidate) ?
-      rawCandidate :
-      {};
-  const groupWeights = new Map();
-  for (const [groupId, weight] of Object.entries(rawWeights)) {
-    if (groupId.length === 0 || !Number.isFinite(weight) || weight <= 0) {
-      continue;
+  const readWeightMap = (fieldName) => {
+    const rawCandidate = affinity[fieldName];
+    const rawWeights =
+      rawCandidate &&
+        typeof rawCandidate === 'object' &&
+        !Array.isArray(rawCandidate) ?
+        rawCandidate :
+        {};
+    const weights = new Map();
+    for (const [key, weight] of Object.entries(rawWeights)) {
+      if (key.length === 0 || !Number.isFinite(weight) || weight <= 0) {
+        continue;
+      }
+      weights.set(key, Math.min(weight, 1));
     }
-    groupWeights.set(groupId, Math.min(weight, 1));
-  }
-  return Object.freeze({groupWeights});
+    return weights;
+  };
+  return Object.freeze({
+    groupWeights: readWeightMap(
+      PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS,
+    ),
+    nodeWeights: readWeightMap(
+      PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS,
+    ),
+  });
 }
 
 function buildLatencyGroupContext(candidateNodes, currentReplicas) {

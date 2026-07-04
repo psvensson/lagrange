@@ -2,7 +2,7 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {SERVICE_READ_LOCALITY} from '../constants/index.js';
 import {SD_COL} from '../wasm-service/wasm-service-models.js';
 import {
-  buildServiceDataAffinityGroupWeights,
+  buildServiceDataAffinityWeights,
 } from './service-data-affinity-weights.js';
 import {
   PLACEMENT_OWNER_POLICY_FIELD,
@@ -88,13 +88,16 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (
       definition?.[SD_COL.READ_LOCALITY] === SERVICE_READ_LOCALITY.SAME_GROUP
     ) {
-      const groupWeights = buildServiceDataAffinityGroupWeights({
+      const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
         systemTableCache: this.systemTableCache,
         serviceId: this.entityId,
         nowMs: Date.now(),
       });
-      if (Object.keys(groupWeights).length > 0) {
+      if (Object.keys(nodeWeights).length > 0 ||
+          Object.keys(groupWeights).length > 0) {
         policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] = {
+          [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS]:
+            nodeWeights,
           [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS]:
             groupWeights,
         };
