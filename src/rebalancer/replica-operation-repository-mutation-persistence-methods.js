@@ -35,6 +35,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
      * (CL-017(b): the divergence re-insert path runs from within update
      * persistence, whose callers may already hold the lane — taking it
      * again would deadlock the serialized queue).
+     *
+     * The canonical-ingress insert is OR-IGNORE idempotent (ignoreExisting):
+     * operation ids are minted once, so a retry after a lost outcome
+     * (post-apply delivery failure now honestly surfaced instead of silently
+     * acked) lands on its own earlier row with zero changes instead of a
+     * UNIQUE-constraint participant failure. The already-applied claim is
+     * then proven by the authoritative visibility confirmation below — never
+     * inferred from the write result alone. (The raw-SQL fallback lane keeps
+     * the plain INSERT: production gateways always expose the canonical
+     * ingress, and the fallback exists for reduced test harnesses.)
      * @param {Object} operation
      * @return {Promise<boolean>}
      */
@@ -49,6 +59,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               },
               {
                 ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
+                ignoreExisting: true,
                 onRetryableFailure: (errorResult) =>
                   this.recoverPersistedReplicaOperationMutation(
                     operation,
@@ -114,7 +125,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
       this.syncIncompleteOperationObservation(operation);
       const changeCount = this.extractMutationChangeCount(result);
-      return changeCount === null ? true : changeCount > 0;
+      if (changeCount === null || changeCount > 0) {
+        return true;
+      }
+      // OR-IGNORE collision: zero changed rows means an identical-id row
+      // already exists — a lost-outcome retry landing on its own earlier
+      // write. The visibility confirmation above is the already-applied
+      // witness: it either observed the expected row (CONFIRMED, with the
+      // authoritative operation attached) or threw. Anything short of that
+      // observed row stays a failed persist.
+      return Boolean(
+        visibility?.confirmationState ===
+          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
+          visibility?.operation,
+      );
     }
 
     async persistOperationUpdate(operation, options = {}) {

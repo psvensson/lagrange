@@ -35,7 +35,7 @@ export function extractParamInsertData({
   fetchInsertRow,
 }) {
   const columnsMatch = sql.match(
-    /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+    /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
   );
   if (!columnsMatch) {
     logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {

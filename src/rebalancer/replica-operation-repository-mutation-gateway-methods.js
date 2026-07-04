@@ -535,6 +535,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         mergePolicy:
           options.mergePolicy ||
           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
+        ...(options.ignoreExisting === true ? {ignoreExisting: true} : {}),
         controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
         ...(coalescingKey ? {coalescingKey} : {}),
