@@ -36,6 +36,12 @@ function createMovePlannerStateMethods(deps = {}) {
       const defaultMax = this.entityType === EntityType.RUNTIME_SERVICE ?
         Math.max(defaultMin, count || defaultMin) :
         NUM.SEVEN;
+      // Ship-not-started contract: a runtime service with an explicit
+      // target of 0 places NO replicas (getRuntimeServicePolicy's
+      // documented semantics). The min clamp must not resurrect it.
+      if (this.entityType === EntityType.RUNTIME_SERVICE && count === 0) {
+        return 0;
+      }
       const min = policy.minReplicaCount || defaultMin;
       const max = policy.maxReplicaCount || defaultMax;
       let adjusted = Math.max(min, Math.min(max, count));
@@ -59,7 +65,13 @@ function createMovePlannerStateMethods(deps = {}) {
     getPolicyTargetReplicaCount(policy) {
       const defaultTarget =
         this.entityType === EntityType.RUNTIME_SERVICE ? 1 : NUM.THREE;
-      return policy.targetReplicaCount || policy.replicaCount || defaultTarget;
+      // `||` would coerce an EXPLICIT 0 (ship-not-started) to the
+      // default — resolve explicit finite values first.
+      const explicitTarget = [
+        policy.targetReplicaCount,
+        policy.replicaCount,
+      ].find((value) => Number.isFinite(value) && value >= 0);
+      return explicitTarget !== undefined ? explicitTarget : defaultTarget;
     }
 
     /**
@@ -471,7 +483,14 @@ function createMovePlannerStateMethods(deps = {}) {
       const readyNodes = Array.isArray(availableNodes) ?
         availableNodes :
         this.moveStateProvider.getAvailableNodes();
-      const minReplicas = policy.minReplicaCount || NUM.THREE;
+      // The critical minimum never exceeds the desired target: a
+      // ship-not-started service (explicit target 0) is NOT critical
+      // at zero replicas — the min floor forcing adds here was the
+      // third clamp defeating the documented target-0 semantics.
+      const minReplicas = Math.min(
+        policy.minReplicaCount || NUM.THREE,
+        this.getPolicyTargetReplicaCount(policy),
+      );
       if (
         healthyReplicas.length < minReplicas &&
         readyNodes.length >= minReplicas
@@ -502,7 +521,10 @@ function createMovePlannerStateMethods(deps = {}) {
       const readyNodes = Array.isArray(availableNodes) ?
         availableNodes :
         this.moveStateProvider.getAvailableNodes();
-      const minReplicas = policy.minReplicaCount || NUM.THREE;
+      const minReplicas = Math.min(
+        policy.minReplicaCount || NUM.THREE,
+        this.getPolicyTargetReplicaCount(policy),
+      );
       if (
         healthyReplicas.length < minReplicas &&
         readyNodes.length >= minReplicas
