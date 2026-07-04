@@ -1,0 +1,60 @@
+{
+  "id": "formation-replace-dispatch-deferred-retry-hold",
+  "statement": "A 5-node formation dispatches its control-plane REPLACE moves into execution without the run-22 pre-dispatch hold: four formation REPLACEs (sql_write_operations-p1 and replica_operations-p1 PENDING, sql_transactions-p1 and sql_transaction_participants-p1 SENDING) sat pinned before dispatch for the entire run in the coordinator's deferred-dispatch hold — the planner re-observed them every cycle ('Reusing in-flight operation for planned move', rearmAction alternating skip_live_deferred_retry/rearm_dispatch) while no dispatch attempt or dispatch error was logged mid-run, and control_plane_publications-p1's REPLACE reached SYNCING then held skip_not_pending — so active counts sat at 4 over target 3 with spread ADDs deferred over-creation-cap, formation settling hit the demo's 120s stall cut, and the phase-2 CREATE TABLE/ratings load died on an admin WS response timeout. Same class as the run-21 residual ledger rows 2f0237dc/ea742515/fd0b247f (never-dispatched REPLACEs in perpetual deferred-dispatch loops, isolated by the terminal-transition-repair vet). The fix makes the deferred-dispatch hold self-resolving — the armed retry actually fires and either dispatches the operation, re-plans it, or terminalizes it within a bounded window — WITHOUT weakening dispatch backpressure semantics or raising timeouts/budgets, proven FIRST by a deterministic in-process reproduction of the hold (compose the real coordinator-created remote-handoff/deferred-dispatch retry machinery with the formation move shape) that red-on-reverts the pre-dispatch pinning, and then by the live affinity demo's formation settling completing with the ratings load surviving phase 2.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-replace-dispatch-deferred-retry-hold",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-replace-dispatch-deferred-retry-hold-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-replace-dispatch-deferred-retry-hold",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-forensics-first",
+      "statement": "RUNG 0 (mandatory, before sealing any mechanism): the run-22 forensics only establish the OBSERVABLE (REPLACEs pinned pre-dispatch under skip_live_deferred_retry with no mid-run dispatch attempts or errors logged); the mechanism is UNPROVEN. Pin it from the run-22 logs (data/examples/service-data-affinity-demo/ node-{0..4}.log until the next demo run wipes them — archive first if needed) plus code trace: is the deferred-dispatch retry timer armed-but-never-firing, firing-and-silently-re-deferring (no log), gated behind a handoff-retry deadline in the future, or waiting on evidence that never arrives (readiness/topology)? Candidate machinery: coordinator_created_remote_handoff retries, operation-dispatch deferred-retry deadlines/snapshots (operation-workflow-owner-retry-registry.js), dispatch-rearm evidence (operation-workflow-dispatch-rearm-evidence.js), replica-dispatch-service deferral ('Deferred replica operation dispatch while control-plane path recovers')."
+    },
+    {
+      "id": "c-dt-first",
+      "statement": "RUNG 1 (mandatory, before any src change): deterministic in-process reproduction of the pre-dispatch hold on the DT substrate — compose the REAL coordinator-created remote-handoff / deferred-dispatch retry machinery with the formation move shape, red-on-revert once the fix lands (dt:prove). Live demo runs are validation only, never discovery (gate-runs-last-resort-only). Prior art: test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js (virtual owner-timer scheduler via the setTimeoutFn seam; createTimeoutTestCoordinator fixture; canonical replicaId comes from the create outcome, not the requested move)."
+    },
+    {
+      "id": "c-vet",
+      "statement": "Adversarially vet the pinned mechanism against the DT reproduction before sealing the fix direction (run-22 is single-run forensics; run-21's rows 2f0237dc/ea742515/fd0b247f showed a stale-session-rotation flavor of the same class — confirm whether run-22 shares it). Also discriminate the phase-2 admin WS timeout: downstream of the wedged formation (CREATE TABLE starved) or an independent defect — do not fold an unproven second defect into this quest's scope."
+    },
+    {
+      "id": "c-class",
+      "statement": "The fix must not weaken dispatch backpressure semantics, must not raise timeouts or budget sizes (TEST-0021), and must reuse/finish existing retry machinery rather than adding a parallel path (research-existing-mechanisms-first; the terminal-transition repair from formation-voter-surplus-promotion-deferral-livelock is precedent for finishing a half-wired loop). Ledger lookups first: the budget-lane COALESCING latent defect (runConcurrentCreateBudgetGate returns another move's operation to concurrent same-lane creators — recorded in formation-control-plane-move-interlock findings) may be implicated in stuck pre-dispatch ops."
+    },
+    {
+      "id": "c-actuals",
+      "statement": "Any new gate inputs are classified per doctrine state-encoding section 10 (ARCH-0080/0084): actuals only; targets never gate liveness."
+    }
+  ]
+}
