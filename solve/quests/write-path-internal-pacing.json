@@ -1,0 +1,56 @@
+{
+  "id": "write-path-internal-pacing",
+  "statement": "An internal pacing problem never relies on client fidelity (user directive 2026-07-04): a well-formed client write that hits transient participant timeouts while the cluster digests its own control-plane settling is absorbed INTERNALLY \u2014 via coordinator-internal bounded retry/wait within derived timeout budgets (ARCH-0013/0016/0017), optionally informed by the ingress pressure governor's signals, noting that a client-returned DEFER does not count as internal absorption \u2014 instead of surfacing 'Distributed operation failed due to participant failures' to the client. Proven by a deterministic red-on-revert reproduction of the observed failure class (participant timeout during settling -> client-visible failure on current code; absorbed internally with the fix), with the chosen internal-absorption mechanism's engagement asserted and no unbounded retry (budget-derived cutoff still fails loudly when genuinely stuck).",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "write-path-internal-pacing",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "write-path-internal-pacing-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "write-path-internal-pacing",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "vet-1",
+      "statement": "TEST-0021: raising product/participant timeouts is NOT a permissible fix absent a deterministic root cause \u2014 absorption comes from retry/wait/pacing, not longer deadlines."
+    },
+    {
+      "id": "vet-2",
+      "statement": "ARCH-0013: any internal retry consumes the remaining timeout budget; it never restarts a fresh full budget."
+    },
+    {
+      "id": "vet-3",
+      "statement": "doneWhen emitter: extend scripts/run-placement-affinity-scenarios.js with this scenario's guard files as part of the quest."
+    },
+    {
+      "id": "vet-4",
+      "statement": "Statement amended pre-drive per adversarial quest vet (subagent, 2026-07-04) before any attempt was recorded."
+    }
+  ]
+}
