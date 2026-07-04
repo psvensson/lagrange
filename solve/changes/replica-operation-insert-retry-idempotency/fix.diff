@@ -1,0 +1,426 @@
+commit e28f2c7243546b84f07de07c1319e55d24172c05
+Author: Peter Svensson <psvensson@gmail.com>
+Date:   Sat Jul 4 13:58:00 2026 +0200
+
+    fix(rebalancer): idempotent op-row inserts — lost-outcome retries converge instead of dying on UNIQUE
+    
+    Quest replica-operation-insert-retry-idempotency (P1, affinity-demo runs
+    16-17, 2/2 modal after f870f7a0): an op-row INSERT lands, its outcome is
+    lost (post-apply delivery failures are now honestly surfaced instead of
+    silently acked), and the blind re-INSERT collides with 'UNIQUE constraint
+    failed: replica_operations.operation_id' — wrapped as a fatal
+    DISTRIBUTED_PARTICIPANT_FAILURE that killed rebalancer moves and client
+    CREATE TABLE (379 UNIQUE warns / 36 fatal in run 17).
+    
+    Operation ids are minted once, so a same-id re-insert is always a
+    lost-outcome retry. The canonical-ingress insert now rides the gateway's
+    EXISTING ignoreExisting option (INSERT OR IGNORE; previously wired only by
+    dynamic-config), and a zero-change collision resolves as already-applied
+    ONLY through the existing authoritative visibility confirmation (CONFIRMED
+    with the observed row, content-matched) — never inferred from the write
+    result. Absent or content-mismatched same-id rows stay hard failures.
+    replica_operations has exactly one uniqueness constraint (the PK), so
+    OR IGNORE cannot absorb a legitimately-different conflicting row. The
+    raw-SQL fallback lane keeps the plain INSERT (production gateways always
+    expose the canonical ingress).
+    
+    Atomically included (run-18 witness): the CDC parameterized-INSERT
+    extractor accepted only INSERT [OR REPLACE] INTO, so OR-IGNORE statements
+    fell through to literal parsing and emitted CDC events whose every column
+    was the string '?' (3,712 parse errors, garbage read-model rows). The
+    regex now matches OR IGNORE like every sibling parser.
+    
+    All changes dt:proven red-on-revert; adversarially verified FAITHFUL
+    (single-constraint audit, changes-signal hop-by-hop trace, other-inserter
+    sweep, no coalescing race, HEAD-identical false-path behavior); scenario
+    harness 3x PASS (318 guard asserts); rebalancer lane green. Live witness:
+    run 18 UNIQUE collisions 379 -> 0, op completions doubled.
+    
+    Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+diff --git a/scripts/run-replica-operation-idempotency-scenarios.js b/scripts/run-replica-operation-idempotency-scenarios.js
+new file mode 100644
+index 00000000..9654acef
+--- /dev/null
++++ b/scripts/run-replica-operation-idempotency-scenarios.js
+@@ -0,0 +1,41 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `replica-operation-insert-retry-idempotency` quest scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed
++ * proof of the quest statement) and writes a scenario-harness report for
++ * the Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from affinity-demo runs 16-17,
++ * 2/2 modal after the write-routing-freeze fix f870f7a0):
++ *   replica-operation-insert-retry-idempotency
++ *     - test/rebalancer/replica-operation-insert-retry-idempotency.test.js
++ *       (an op-row INSERT retried after a lost outcome rides the canonical
++ *        ingress OR-IGNORE lane and resolves already-applied through the
++ *        authoritative visibility confirmation; absent or content-mismatched
++ *        same-id rows stay hard failures)
++ *     - test/rebalancer/replica-operation-repository.test.js
++ *       (the surrounding persistence/visibility machinery keeps its
++ *        contract under the ignoreExisting option)
++ *     - test/partition/partition-cdc-parameterized-insert-or-ignore.test.js
++ *       (run-18 regression: the CDC parameterized-INSERT extractor must
++ *        understand OR IGNORE, or the idempotent inserts emit CDC events
++ *        whose columns are literal '?' placeholder strings)
++ *
++ * Usage: node scripts/run-replica-operation-idempotency-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'replica-operation-insert-retry-idempotency': [
++    'test/rebalancer/replica-operation-insert-retry-idempotency.test.js',
++    'test/rebalancer/replica-operation-repository.test.js',
++    'test/partition/partition-cdc-parameterized-insert-or-ignore.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/partition/partition-cdc-parameterized-sql.js b/src/partition/partition-cdc-parameterized-sql.js
+index 86086f05..c0f3838e 100644
+--- a/src/partition/partition-cdc-parameterized-sql.js
++++ b/src/partition/partition-cdc-parameterized-sql.js
+@@ -35,7 +35,7 @@ export function extractParamInsertData({
+   fetchInsertRow,
+ }) {
+   const columnsMatch = sql.match(
+-    /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
++    /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+   );
+   if (!columnsMatch) {
+     logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
+diff --git a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+index c885b90d..e41a4fd0 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+@@ -535,6 +535,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
+         mergePolicy:
+           options.mergePolicy ||
+           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
++        ...(options.ignoreExisting === true ? {ignoreExisting: true} : {}),
+         controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
+         ...(coalescingKey ? {coalescingKey} : {}),
+diff --git a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+index cce885ff..d999c25b 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+@@ -35,6 +35,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+      * (CL-017(b): the divergence re-insert path runs from within update
+      * persistence, whose callers may already hold the lane — taking it
+      * again would deadlock the serialized queue).
++     *
++     * The canonical-ingress insert is OR-IGNORE idempotent (ignoreExisting):
++     * operation ids are minted once, so a retry after a lost outcome
++     * (post-apply delivery failure now honestly surfaced instead of silently
++     * acked) lands on its own earlier row with zero changes instead of a
++     * UNIQUE-constraint participant failure. The already-applied claim is
++     * then proven by the authoritative visibility confirmation below — never
++     * inferred from the write result alone. (The raw-SQL fallback lane keeps
++     * the plain INSERT: production gateways always expose the canonical
++     * ingress, and the fallback exists for reduced test harnesses.)
+      * @param {Object} operation
+      * @return {Promise<boolean>}
+      */
+@@ -49,6 +59,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+               },
+               {
+                 ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
++                ignoreExisting: true,
+                 onRetryableFailure: (errorResult) =>
+                   this.recoverPersistedReplicaOperationMutation(
+                     operation,
+@@ -114,7 +125,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+       }
+       this.syncIncompleteOperationObservation(operation);
+       const changeCount = this.extractMutationChangeCount(result);
+-      return changeCount === null ? true : changeCount > 0;
++      if (changeCount === null || changeCount > 0) {
++        return true;
++      }
++      // OR-IGNORE collision: zero changed rows means an identical-id row
++      // already exists — a lost-outcome retry landing on its own earlier
++      // write. The visibility confirmation above is the already-applied
++      // witness: it either observed the expected row (CONFIRMED, with the
++      // authoritative operation attached) or threw. Anything short of that
++      // observed row stays a failed persist.
++      return Boolean(
++        visibility?.confirmationState ===
++          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
++          visibility?.operation,
++      );
+     }
+ 
+     async persistOperationUpdate(operation, options = {}) {
+diff --git a/test/partition/partition-cdc-parameterized-insert-or-ignore.test.js b/test/partition/partition-cdc-parameterized-insert-or-ignore.test.js
+new file mode 100644
+index 00000000..f08800fd
+--- /dev/null
++++ b/test/partition/partition-cdc-parameterized-insert-or-ignore.test.js
+@@ -0,0 +1,66 @@
++/**
++ * CDC parameterized-INSERT extraction must understand every INSERT variant
++ * the write path emits — including OR IGNORE (the idempotent op-row insert
++ * from replica-operation-insert-retry-idempotency).
++ *
++ * Production witness (affinity-demo run 18): the extraction regex accepted
++ * only INSERT [OR REPLACE] INTO, so OR-IGNORE statements fell through to the
++ * literal-SQL fallback which parsed the raw '?' placeholders as VALUES —
++ * emitting CDC events whose every column was the string '?' (3,712
++ * "Failed to parse steps_history JSON" / operationId:"?" errors, garbage
++ * rows in subscriber projections).
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  extractParamInsertData,
++} from '../../src/partition/partition-cdc-parameterized-sql.js';
++
++const silentLogger = {info() {}, warn() {}, error() {}, debug() {}};
++
++function extract(sql) {
++  const fetched = [];
++  const result = extractParamInsertData({
++    sql,
++    params: ['op-1', 'ADD', 'partition-1'],
++    tableName: 'replica_operations',
++    logger: silentLogger,
++    fetchInsertRow: (_tableName, _keyColumn, _keyValue, data) => {
++      fetched.push(data);
++      return data;
++    },
++  });
++  return {result, fetched};
++}
++
++test('parameterized INSERT OR IGNORE extraction binds params to columns', async (t) => {
++  const {result} = extract(
++    'INSERT OR IGNORE INTO replica_operations ' +
++      '(operation_id, type, partition_id) VALUES (?, ?, ?)',
++  );
++
++  t.same(
++    result,
++    {operation_id: 'op-1', type: 'ADD', partition_id: 'partition-1'},
++    'OR IGNORE inserts must extract real param values — never fall through ' +
++      'to literal parsing that emits "?" placeholder strings as CDC data',
++  );
++});
++
++test('plain and OR REPLACE inserts keep extracting', async (t) => {
++  const plain = extract(
++    'INSERT INTO replica_operations ' +
++      '(operation_id, type, partition_id) VALUES (?, ?, ?)',
++  );
++  t.equal(plain.result.operation_id, 'op-1', 'plain INSERT still extracts');
++
++  const orReplace = extract(
++    'INSERT OR REPLACE INTO replica_operations ' +
++      '(operation_id, type, partition_id) VALUES (?, ?, ?)',
++  );
++  t.equal(
++    orReplace.result.operation_id,
++    'op-1',
++    'OR REPLACE INSERT still extracts',
++  );
++});
+diff --git a/test/rebalancer/replica-operation-insert-retry-idempotency.test.js b/test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+new file mode 100644
+index 00000000..8abb136c
+--- /dev/null
++++ b/test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+@@ -0,0 +1,185 @@
++/**
++ * Guard for quest replica-operation-insert-retry-idempotency.
++ *
++ * Production witness (affinity-demo runs 16-17, 2/2 modal): an op-row INSERT
++ * lands, its outcome is lost (post-apply delivery failure now honestly
++ * surfaced instead of silently acked), and the blind re-INSERT collides with
++ * 'UNIQUE constraint failed: replica_operations.operation_id' — wrapped as a
++ * fatal DISTRIBUTED_PARTICIPANT_FAILURE that kills rebalancer moves and the
++ * client's CREATE TABLE (379 UNIQUE warns / 36 fatal in run 17).
++ *
++ * The fix: the op-row insert is OR-IGNORE idempotent (operation ids are
++ * minted once), and a zero-change collision resolves through the EXISTING
++ * authoritative visibility confirmation — the already-applied claim is
++ * proven by observing the expected row, never inferred from the write
++ * result. A collision whose authoritative row is absent or content-mismatched
++ * stays a hard failure.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {SERVICE_TYPE} from '../../src/constants/service.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
++
++const TEST_NODE_ID = 'test-node-1';
++const TEST_OPERATION_ID = 'op-idem-1';
++const TEST_PARTITION_ID = 'partition-1';
++const TEST_REPLICA_ID = 'partition-1-r1';
++const TEST_TARGET_NODE_ID = 'node-2';
++const VISIBILITY_TIMEOUT_MS = 200;
++const VISIBILITY_RETRY_DELAY_MS = 10;
++
++function makeRow(overrides = {}) {
++  return {
++    operation_id: TEST_OPERATION_ID,
++    type: OperationType.ADD,
++    partition_id: TEST_PARTITION_ID,
++    replica_id: TEST_REPLICA_ID,
++    source_node_id: TEST_NODE_ID,
++    target_node_id: TEST_TARGET_NODE_ID,
++    status: 'in_progress',
++    workflow_step: WORKFLOW_STEP.CREATING,
++    created_at: 1000,
++    updated_at: 1000,
++    completed_at: null,
++    error_message: null,
++    steps_history: '[]',
++    entity_type: SERVICE_TYPE.PARTITION,
++    entity_id: TEST_PARTITION_ID,
++    ...overrides,
++  };
++}
++
++function createRepository({insertResults, authoritativeRows, insertCalls}) {
++  const mockLogger = {info() {}, warn() {}, error() {}, debug() {}};
++  const gateway = {
++    insertSystemTableRow: async (tableName, row, options = {}) => {
++      insertCalls.push({tableName, row, options});
++      const next = insertResults.shift();
++      if (next instanceof Error) {
++        throw next;
++      }
++      return next || {success: true, affectedRows: 1};
++    },
++    readRows: async () => ({
++      success: true,
++      rows: authoritativeRows(),
++    }),
++    readAuthoritativeRows: async () => ({
++      success: true,
++      rows: authoritativeRows(),
++    }),
++    executeQuery: async () => ({success: true, changes: 1}),
++    resolveCdcIntegrationService: () => ({
++      insertSystemTableRow: async () => ({success: true}),
++    }),
++  };
++  return new ReplicaOperationRepository({
++    nodeId: TEST_NODE_ID,
++    systemTableCache: {
++      get: () => null,
++      getAll: () => [],
++      filter: (_table, predicate) => [].filter(predicate),
++    },
++    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
++    controlPlaneSystemTableGateway: gateway,
++    authoritativeVisibilityTimeoutMs: VISIBILITY_TIMEOUT_MS,
++    authoritativeVisibilityRetryDelayMs: VISIBILITY_RETRY_DELAY_MS,
++    logger: mockLogger,
++  });
++}
++
++test('lost-outcome insert retry converges to already-applied success', async (t) => {
++  // The OR-IGNORE collision surface: the gateway reports success with zero
++  // affected rows because an identical-id row (this op's own earlier landed
++  // write) already exists; the authority serves the expected row.
++  const insertCalls = [];
++  const repo = createRepository({
++    insertResults: [{success: true, affectedRows: 0}],
++    authoritativeRows: () => [makeRow()],
++    insertCalls,
++  });
++  const operation = repo.rowToOperation(makeRow());
++
++  const persisted = await repo.persistNewOperation(operation);
++
++  t.equal(
++    persisted,
++    true,
++    'a zero-change collision with a confirmed authoritative row is already-applied success',
++  );
++  t.equal(insertCalls.length, 1, 'one canonical insert submission');
++  t.equal(
++    insertCalls[0]?.options?.ignoreExisting,
++    true,
++    'the op-row insert must ride the OR-IGNORE lane — operation ids are minted once, ' +
++      'so a same-id re-insert is always a lost-outcome retry',
++  );
++});
++
++test('fresh insert keeps returning success unchanged', async (t) => {
++  const insertCalls = [];
++  const repo = createRepository({
++    insertResults: [{success: true, affectedRows: 1}],
++    authoritativeRows: () => [makeRow()],
++    insertCalls,
++  });
++  const operation = repo.rowToOperation(makeRow());
++
++  const persisted = await repo.persistNewOperation(operation);
++
++  t.equal(persisted, true, 'a fresh insert persists as before');
++});
++
++test('collision without an authoritative row stays a hard failure', async (t) => {
++  // Honesty guard: already-applied must be PROVEN by observing the row.
++  // success+0 changes with an empty authoritative read is not a witness.
++  const insertCalls = [];
++  const repo = createRepository({
++    insertResults: [{success: true, affectedRows: 0}],
++    authoritativeRows: () => [],
++    insertCalls,
++  });
++  const operation = repo.rowToOperation(makeRow());
++
++  const outcome = await repo.persistNewOperation(operation).then(
++    (value) => ({value}),
++    (error) => ({error}),
++  );
++
++  t.ok(
++    outcome.error || outcome.value !== true,
++    'an unobservable collision must not claim success (false or a thrown ' +
++      'not-confirmed are both honest outcomes)',
++  );
++});
++
++test('collision with content-mismatched authoritative row stays a hard failure', async (t) => {
++  // A same-id row whose content does not satisfy the expected operation is
++  // NOT an already-applied witness — genuine-duplicate detection must not
++  // be weakened by the OR-IGNORE lane.
++  const insertCalls = [];
++  const repo = createRepository({
++    insertResults: [{success: true, affectedRows: 0}],
++    authoritativeRows: () => [
++      makeRow({
++        workflow_step: WORKFLOW_STEP.SENDING,
++        status: 'failed',
++        updated_at: 1,
++      }),
++    ],
++    insertCalls,
++  });
++  const operation = repo.rowToOperation(makeRow());
++
++  const outcome = await repo.persistNewOperation(operation).then(
++    (value) => ({value}),
++    (error) => ({error}),
++  );
++
++  t.ok(
++    outcome.error || outcome.value !== true,
++    'a mismatched same-id row must not be claimed as already-applied',
++  );
++});
