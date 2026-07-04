@@ -346,6 +346,13 @@ A Quest is not SOLVED merely because the hot path passes.
 Required contract:
 
 1. Quest validation must prove the owner path and affected tail consumers.
+   Concretely: when a change alters the SHAPE of a boundary-crossing string
+   (a new SQL statement variant, message payload type, log-message format
+   matched elsewhere, or address format), enumerate every parser/matcher of
+   that shape BEFORE landing — grep for the statement prefix regexes and
+   `startsWith` classifiers. (Witnessed: an `INSERT OR IGNORE` variant broke
+   one of eight SQL-text parsers and emitted `'?'`-placeholder garbage rows
+   cluster-wide; a two-minute parser sweep would have caught it statically.)
 2. Static guardrail proof is required for touched runtime/control-plane,
    diagnostics, admin, harness, or shared test infrastructure boundaries.
 3. Before closure, perform the affected-area deep dive required by

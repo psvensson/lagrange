@@ -89,6 +89,25 @@ policy.
   they are equivalent.
 - Never let degraded evidence promote a blocked entity to ready or admitted.
 
+Every input to a liveness or safety gate must be classified before use:
+
+- **Actuals** — observed state: a raft-observed leader, an active service row,
+  a committed operation read back from the authority. A gate must consume
+  actuals only.
+- **Targets** — intent: `replica_count`, planned placement, configured cohort
+  sizes. A target must never gate liveness: it legitimately exceeds placed
+  reality on single-node and degraded clusters, so a target-built gate
+  rejects correct work.
+- **Inferences** — derived signals such as error-string matching or absence
+  of a row. An inference may trigger a re-read of actuals; it must never be
+  the witness itself.
+
+A guard whose inputs cannot each be named actual, target, or inference is not
+designed yet. (Witnessed: a `replica_count` liveness witness would have
+rejected — and, through an envelope bug, silently dropped — every user-table
+write on default-config single-node clusters; the correct witnesses were the
+raft-observed leader and the published leader pointer, both actuals.)
+
 If fixes keep arriving as new boolean exemptions, the decision boundary is not
 modeled yet. Replace the branch pile with an explicit state model and decision
 table.
