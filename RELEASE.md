@@ -12,7 +12,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | Trigger | Workflow | What runs |
 | --- | --- | --- |
 | PR / push to `main` | `.forgejo/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
-| Push of a `v*` tag | `.forgejo/workflows/release.yml` | `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image → `helm package charts/lagrange-node` → publish image + chart + SEA binaries + `SHA256SUMS` to the Forgejo Release. |
+| Push of a `v*` tag | `.forgejo/workflows/release.yml` | `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image → push it to Docker Hub (`docker.io/psvensson/lagrange`, required) and the Codeberg registry (`codeberg.org/psvensson/lagrange`, best-effort mirror), tagged `<x.y.z>` + `latest` → `helm package charts/lagrange-node` → publish chart + SEA binaries + `SHA256SUMS` to the Forgejo Release. |
 
 ## Cutting a release
 

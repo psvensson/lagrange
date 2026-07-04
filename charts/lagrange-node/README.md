@@ -9,8 +9,11 @@ helm install lagrange charts/lagrange-node \
 ```
 
 The default `image.repository` (`codeberg.org/psvensson/lagrange`) is the
-published release image, which exists once a `v*` release has been cut. Until
-then, or for local builds, build and push your own image and pass
+published release image on the Codeberg container registry. The same image is
+published to Docker Hub as
+[`psvensson/lagrange`](https://hub.docker.com/r/psvensson/lagrange) (the
+primary registry) — select it with `--set image.repository=psvensson/lagrange`.
+For local builds, build and push your own image and pass
 `--set image.repository=<your-registry>/lagrange --set image.tag=<tag>`.
 
 ## Shape and why

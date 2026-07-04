@@ -389,24 +389,26 @@ seed. Three things to know:
   (`NODE_ADDRESS`, `NODE_ADVERTISED_WS_ADDRESS`) — the localhost default
   is rejected at join admission because it collides with the seed's
 
-The easiest local multi-node setup is Docker, one container per node:
+The easiest local multi-node setup is Docker, one container per node, using
+the published release image (or `docker build -t lagrange .` for a local
+build):
 
 ```bash
 docker network create lagrange-net
-docker build -t lagrange .
+docker pull psvensson/lagrange:latest
 
 docker run -d --name seed --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
   -e NODE_ADDRESS=seed:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=seed:8082 \
-  lagrange
+  psvensson/lagrange:latest
 
 docker run -d --name node2 --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
   -e NODE_ADDRESS=node2:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=node2:8082 \
   -e SEED_NODE_ADDRESS=http://seed:8080 \
-  lagrange
+  psvensson/lagrange:latest
 ```
 
 For a real cluster, use the Helm chart below — it wires the same
@@ -414,22 +416,33 @@ name-first addressing per pod automatically.
 
 ### Docker And Kubernetes
 
-The repo ships a distroless Docker image and a Helm chart:
+Release images (distroless, amd64) are published to
+[Docker Hub](https://hub.docker.com/r/psvensson/lagrange) — the primary
+registry — and mirrored to the Codeberg container registry:
+
+```bash
+docker pull psvensson/lagrange:latest              # or a version tag, e.g. :0.1.0
+docker pull codeberg.org/psvensson/lagrange:latest # mirror
+```
+
+The repo also ships the Dockerfile and a Helm chart:
 
 ```bash
 # Single node in Docker
-docker build -t lagrange .
-docker run --rm -p 8080:8080 -p 8081:8081 -p 8082:8082 lagrange
+docker run --rm -p 8080:8080 -p 8081:8081 -p 8082:8082 psvensson/lagrange:latest
 
-# Seed + joiner cluster on Kubernetes
+# Or build the image locally
+docker build -t lagrange .
+
+# Seed + joiner cluster on Kubernetes (defaults to the published image)
+helm install lagrange charts/lagrange-node
+
+# ... or point it at a local/private build
 helm install lagrange charts/lagrange-node \
   --set image.repository=<your-registry>/lagrange --set image.tag=<tag>
 ```
 
-The chart's default image reference points at the published release image,
-which exists once a `v*` release has been cut; until then, or for local
-builds, set `image.repository`/`image.tag` as above. See
-[charts/lagrange-node/README.md](charts/lagrange-node/README.md) for
+See [charts/lagrange-node/README.md](charts/lagrange-node/README.md) for
 values and topology details.
 
 ### Useful Commands
