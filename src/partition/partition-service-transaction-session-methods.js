@@ -27,11 +27,15 @@ class PartitionServiceTransactionSessionMethods {
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       return sessionId;
     }
+    // Sessionless resolution stops at the explicit DEFAULT session. The old
+    // single-foreign-session adoption arm silently absorbed unrelated writes
+    // into whatever transaction happened to be open — run-23's zombie
+    // participant BEGIN swallowed every later ledger write that way, making
+    // the whole partition non-durable with zero errors. A sessionless write
+    // with only a foreign session open now takes the ordinary proposeWrite
+    // path instead.
     if (this.activeTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
       return DEFAULT_TRANSACTION_SESSION_ID;
-    }
-    if (this.activeTransactions.size === 1) {
-      return this.activeTransactions.keys().next().value || null;
     }
     return null;
   }
@@ -90,11 +94,10 @@ class PartitionServiceTransactionSessionMethods {
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       return sessionId;
     }
+    // Mirrors resolveActiveTransactionSessionId: no silent adoption of a
+    // single foreign prepared session.
     if (this.preparedTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
       return DEFAULT_TRANSACTION_SESSION_ID;
-    }
-    if (this.preparedTransactions.size === 1) {
-      return this.preparedTransactions.keys().next().value || null;
     }
     return null;
   }

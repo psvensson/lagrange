@@ -306,6 +306,19 @@ class SQLiteLogAdapter {
   }
 
   /**
+   * Re-anchor the in-memory committed-index cache to DURABLE state. A swept
+   * transaction rollback evaporates watermark writes that the monotonic
+   * cache still remembers (verifier finding Z1) — without this refresh every
+   * post-heal catch-up commit is clamped and the durable watermark never
+   * advances again.
+   * @return {number} The durable committed index the cache now reflects.
+   */
+  refreshCommittedIndexCacheFromStore() {
+    this._committedIndexCache = undefined;
+    return this.getCommittedIndex();
+  }
+
+  /**
    * Acknowledge a command from a follower.
    * Required by liferaft for quorum tracking.
    * Requirements: 12.2

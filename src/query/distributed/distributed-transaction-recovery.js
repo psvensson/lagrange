@@ -439,7 +439,7 @@ const distributedTransactionRecoveryMethods = {
       payload.writeOperations :
       [];
 
-    this.workflowCoordinator.recover({
+    const recoveryOutcome = this.workflowCoordinator.recover({
       workflows: transactionRows,
       participants: participantRows,
       loadWorkflow: (row) => {
@@ -495,9 +495,16 @@ const distributedTransactionRecoveryMethods = {
         TERMINAL_TRANSACTION_STATUS.has(workflow.status),
     });
 
+    // Live transactions the recover() clobber-guard preserved were NOT
+    // restored from rows: enrolling them as "recovered" would hand them to
+    // resumeRecoveredTransactions (which rolls back live ACTIVE work), and
+    // re-appending their writeOperations from rows would duplicate live
+    // in-memory entries.
+    const restoredWorkflowIds =
+      recoveryOutcome?.restoredWorkflowIds || new Set();
     for (const row of transactionRows) {
       const transactionId = row.transaction_id || row.transactionId;
-      if (!transactionId) {
+      if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
         continue;
       }
       const tx = this.workflowCoordinator.getWorkflowById(transactionId);
@@ -509,7 +516,7 @@ const distributedTransactionRecoveryMethods = {
 
     for (const row of writeOperationRows) {
       const transactionId = row.transaction_id || row.transactionId;
-      if (!transactionId) {
+      if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
         continue;
       }
       const tx = this.workflowCoordinator.getWorkflowById(transactionId);

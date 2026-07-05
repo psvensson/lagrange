@@ -181,10 +181,14 @@ t.test(
           'tracked leader handoff)',
       );
       // The single-replica fixture has no real successor; the probe seam is
-      // what a cluster-informed caller supplies (CL-039 viability gate).
+      // what a cluster-informed caller supplies (CL-039 viability gate). The
+      // group SHAPE is widened too: candidacy deferral is deliberately
+      // skipped for solo groups (deferring the only possible leader leaves
+      // none), so the re-assertion contract needs a multi-member shape.
       if (typeof partition.setLeaderDurabilitySuccessorProbe === 'function') {
         partition.setLeaderDurabilitySuccessorProbe(() => true);
       }
+      partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
       const deferCandidacyCalls = [];
       if (partition.raft && typeof partition.raft.deferCandidacy === 'function') {
         const original = partition.raft.deferCandidacy.bind(partition.raft);

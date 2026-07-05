@@ -1,0 +1,913 @@
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index 2f6c0c1f..59660c9b 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -315,6 +315,13 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+   PREPARING_TRANSACTION: 'Preparing transaction',
+   PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
+   PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
++  ACTIVE_TRANSACTION_HOLD_TIMEOUT:
++    'Active transaction held beyond its legal window; rolled back ' +
++    '(orphaned participant hold — run-23 zombie class)',
++  STUCK_TRANSACTION_HEAL_DEFERRED:
++    'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
++    'would re-mint acked raft indices; waiting for durability-fitness ' +
++    'demotion',
+   COMMITTING_TRANSACTION: 'Committing transaction',
+   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
+   EXECUTING_QUERY: 'Executing query',
+diff --git a/src/partition/partition-service-durability-fitness.js b/src/partition/partition-service-durability-fitness.js
+index 29c8f878..50a19951 100644
+--- a/src/partition/partition-service-durability-fitness.js
++++ b/src/partition/partition-service-durability-fitness.js
+@@ -300,15 +300,19 @@ class PartitionServiceDurabilityFitnessMethods {
+         evidence,
+       );
+     }
++    // The alive zombie's in-memory log matches the followers', so vote rules
++    // do NOT disfavor it: candidacy deferral must be re-asserted every tick
++    // while unfit or it re-wins after the deferral window (CL-033/034
++    // churn). Asserted BEFORE the viability gate — an unfit CANDIDATE win is
++    // unsafe even when no demotion will run (heal-vet hardening G4).
++    if (!this.isSoloReplicaGroup?.()) {
++      this.raft?.deferCandidacy?.();
++    }
+     if (!successorViable) {
+       // Surface-only: a single-replica (or successor-less) group must keep
+       // serving — deposing it would leave no leader at all.
+       return;
+     }
+-    // The alive zombie's in-memory log matches the followers', so vote rules
+-    // do NOT disfavor it: candidacy deferral must be re-asserted every tick
+-    // while unfit or it re-wins after the deferral window (CL-033/034 churn).
+-    this.raft?.deferCandidacy?.();
+     if (isLeader && !state.handoffRequestedWhileLeader) {
+       state.handoffRequestedWhileLeader = true;
+       // The shared flap-safe demotion sequence (one owner with the replica
+diff --git a/src/partition/partition-service-transaction-base.js b/src/partition/partition-service-transaction-base.js
+index 2da752fd..9aa492f8 100644
+--- a/src/partition/partition-service-transaction-base.js
++++ b/src/partition/partition-service-transaction-base.js
+@@ -9,6 +9,7 @@ const {
+   PARTITION_SERVICE_LOG_MSG,
+   PARTITION_SERVICE_OPERATION,
+   PARTITION_SERVICE_SQL,
++  RaftRole,
+ } = PARTITION_SERVICE_SHARED;
+ 
+ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+@@ -269,7 +270,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+    * @param {number} [nowMs] - Clock override for deterministic tests.
+    * @return {number} Number of released prepared transactions.
+    */
+-  enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
++  collectExpiredPreparedSessions(nowMs) {
+     const expiredPreparedSessions = [];
+     for (const [sessionId, state] of this.preparedTransactions.entries()) {
+       if (!Number.isFinite(state?.preparedAt)) {
+@@ -285,7 +286,58 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+         preparedAt: state.preparedAt,
+       });
+     }
+-    if (expiredPreparedSessions.length === 0) {
++    return expiredPreparedSessions;
++  }
++
++  // An ACTIVE participant hold past the legal window is the run-23 zombie
++  // class: an orphaned BEGIN that silently absorbs every later write on the
++  // connection. It sweeps under the same bound as the prepared holds.
++  collectExpiredActiveSessions(nowMs) {
++    const expiredActiveSessions = [];
++    for (const [sessionId, state] of this.activeTransactions.entries()) {
++      if (this.preparedTransactions.has(sessionId)) {
++        continue;
++      }
++      if (!Number.isFinite(state?.startTime)) {
++        continue;
++      }
++      const holdDurationMs = nowMs - state.startTime;
++      if (holdDurationMs < this.preparedStateHoldTimeoutMs) {
++        continue;
++      }
++      expiredActiveSessions.push({
++        sessionId,
++        holdDurationMs,
++        startedAt: state.startTime,
++      });
++    }
++    return expiredActiveSessions;
++  }
++
++  enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
++    const expiredPreparedSessions = this.collectExpiredPreparedSessions(nowMs);
++    const expiredActiveSessions = this.collectExpiredActiveSessions(nowMs);
++    if (
++      expiredPreparedSessions.length === 0 &&
++      expiredActiveSessions.length === 0
++    ) {
++      return 0;
++    }
++    // Rolling back on a LEADER (or a CANDIDATE, whose solicited votes
++    // reference the in-memory log head) re-mints already-acked raft indices
++    // and makes followers truncate committed entries — the heal must wait
++    // for the durability-fitness demotion. A solo group is the carve-out:
++    // no follower exists to truncate, and demotion is impossible there.
++    if (!this.isStuckTransactionHealPermitted()) {
++      this.logger.warn(
++        PARTITION_SERVICE_LOG_MSG.STUCK_TRANSACTION_HEAL_DEFERRED,
++        {
++          partitionId: this.partitionId,
++          role: this.role,
++          expiredPreparedSessionCount: expiredPreparedSessions.length,
++          expiredActiveSessionCount: expiredActiveSessions.length,
++        },
++      );
+       return 0;
+     }
+     try {
+@@ -296,6 +348,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+         {partitionId: this.partitionId, error: error.message},
+       );
+     }
++    // A swept rollback is NOT crash-equivalent for JS memory: the apply
++    // dedup set and the adapter's monotonic committed-index cache survive it
++    // and would make post-heal catch-up skip re-execution and clamp the
++    // durable watermark forever (verifier finding Z1). Clear both so the
++    // replica genuinely re-applies what the rollback evaporated.
++    this.recentlyAppliedEntryKeys?.clear?.();
++    this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
+     for (const expiredSession of expiredPreparedSessions) {
+       this.preparedTransactions.delete(expiredSession.sessionId);
+       this.activeTransactions.delete(expiredSession.sessionId);
+@@ -308,8 +367,54 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+         preparedAt: expiredSession.preparedAt,
+       });
+     }
++    for (const expiredSession of expiredActiveSessions) {
++      this.activeTransactions.delete(expiredSession.sessionId);
++      this.preparedStateLostSessions.add(expiredSession.sessionId);
++      this.logger.warn(
++        PARTITION_SERVICE_LOG_MSG.ACTIVE_TRANSACTION_HOLD_TIMEOUT,
++        {
++          partitionId: this.partitionId,
++          transactionId: expiredSession.sessionId,
++          sessionId: expiredSession.sessionId,
++          holdDurationMs: expiredSession.holdDurationMs,
++          startedAt: expiredSession.startedAt,
++        },
++      );
++    }
+     this.syncLegacyTransactionAliases();
+-    return expiredPreparedSessions.length;
++    return expiredPreparedSessions.length + expiredActiveSessions.length;
++  }
++
++  /**
++   * Healing a stuck transaction in place (bare ROLLBACK) is raft-safe only
++   * where no follower can be made to truncate committed entries: on a
++   * FOLLOWER/LEARNER (crash-equivalent locally) or in a solo group (no
++   * follower exists; demotion is structurally impossible there).
++   * @return {boolean}
++   * @private
++   */
++  isStuckTransactionHealPermitted() {
++    if (this.role !== RaftRole.LEADER && this.role !== RaftRole.CANDIDATE) {
++      return true;
++    }
++    return this.isSoloReplicaGroup();
++  }
++
++  /**
++   * Same predicate family as raft-init's isSingleReplica: a solo group is a
++   * single configured replica with NO joined raft peers (a joined peer means
++   * a follower exists that a leader-side rollback could make truncate).
++   * @return {boolean}
++   * @private
++   */
++  isSoloReplicaGroup() {
++    const peerCount = Array.isArray(this.raft?.nodes) ?
++      this.raft.nodes.length :
++      0;
++    return (
++      (!Array.isArray(this.replicaIds) || this.replicaIds.length <= 1) &&
++      peerCount === 0
++    );
+   }
+   /**
+    * Start periodic prepared-state hold-timeout enforcement.
+@@ -650,8 +755,26 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
+           error: error.message,
+         },
+       );
+-      this.activeTransactions.delete(resolvedSessionId);
+-      this.preparedTransactions.delete(resolvedSessionId);
++      // The failed path previously deleted the bookkeeping WITHOUT executing
++      // ROLLBACK — the stranded open transaction became invisible to every
++      // sweep forever (a run-23 zombie source). Attempt the ROLLBACK where
++      // the role permits; when it cannot run, KEEP the session registered so
++      // the ACTIVE-hold sweep (and durability fitness) still see it.
++      let stuckStateReleased = false;
++      if (this.isStuckTransactionHealPermitted()) {
++        try {
++          this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
++          this.recentlyAppliedEntryKeys?.clear?.();
++          this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
++          stuckStateReleased = true;
++        } catch {
++          // The connection itself is wedged: leave the session visible.
++        }
++      }
++      if (stuckStateReleased) {
++        this.activeTransactions.delete(resolvedSessionId);
++        this.preparedTransactions.delete(resolvedSessionId);
++      }
+       this.syncLegacyTransactionAliases();
+       throw error;
+     }
+diff --git a/src/partition/partition-service-transaction-session-methods.js b/src/partition/partition-service-transaction-session-methods.js
+index 62de9584..0303eb22 100644
+--- a/src/partition/partition-service-transaction-session-methods.js
++++ b/src/partition/partition-service-transaction-session-methods.js
+@@ -27,12 +27,16 @@ class PartitionServiceTransactionSessionMethods {
+     if (typeof sessionId === 'string' && sessionId.length > 0) {
+       return sessionId;
+     }
++    // Sessionless resolution stops at the explicit DEFAULT session. The old
++    // single-foreign-session adoption arm silently absorbed unrelated writes
++    // into whatever transaction happened to be open — run-23's zombie
++    // participant BEGIN swallowed every later ledger write that way, making
++    // the whole partition non-durable with zero errors. A sessionless write
++    // with only a foreign session open now takes the ordinary proposeWrite
++    // path instead.
+     if (this.activeTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
+       return DEFAULT_TRANSACTION_SESSION_ID;
+     }
+-    if (this.activeTransactions.size === 1) {
+-      return this.activeTransactions.keys().next().value || null;
+-    }
+     return null;
+   }
+   /**
+@@ -90,12 +94,11 @@ class PartitionServiceTransactionSessionMethods {
+     if (typeof sessionId === 'string' && sessionId.length > 0) {
+       return sessionId;
+     }
++    // Mirrors resolveActiveTransactionSessionId: no silent adoption of a
++    // single foreign prepared session.
+     if (this.preparedTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
+       return DEFAULT_TRANSACTION_SESSION_ID;
+     }
+-    if (this.preparedTransactions.size === 1) {
+-      return this.preparedTransactions.keys().next().value || null;
+-    }
+     return null;
+   }
+   /**
+diff --git a/src/query/distributed/distributed-transaction-recovery.js b/src/query/distributed/distributed-transaction-recovery.js
+index d8963e87..c5d9980e 100644
+--- a/src/query/distributed/distributed-transaction-recovery.js
++++ b/src/query/distributed/distributed-transaction-recovery.js
+@@ -439,7 +439,7 @@ const distributedTransactionRecoveryMethods = {
+       payload.writeOperations :
+       [];
+ 
+-    this.workflowCoordinator.recover({
++    const recoveryOutcome = this.workflowCoordinator.recover({
+       workflows: transactionRows,
+       participants: participantRows,
+       loadWorkflow: (row) => {
+@@ -495,9 +495,16 @@ const distributedTransactionRecoveryMethods = {
+         TERMINAL_TRANSACTION_STATUS.has(workflow.status),
+     });
+ 
++    // Live transactions the recover() clobber-guard preserved were NOT
++    // restored from rows: enrolling them as "recovered" would hand them to
++    // resumeRecoveredTransactions (which rolls back live ACTIVE work), and
++    // re-appending their writeOperations from rows would duplicate live
++    // in-memory entries.
++    const restoredWorkflowIds =
++      recoveryOutcome?.restoredWorkflowIds || new Set();
+     for (const row of transactionRows) {
+       const transactionId = row.transaction_id || row.transactionId;
+-      if (!transactionId) {
++      if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
+         continue;
+       }
+       const tx = this.workflowCoordinator.getWorkflowById(transactionId);
+@@ -509,7 +516,7 @@ const distributedTransactionRecoveryMethods = {
+ 
+     for (const row of writeOperationRows) {
+       const transactionId = row.transaction_id || row.transactionId;
+-      if (!transactionId) {
++      if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
+         continue;
+       }
+       const tx = this.workflowCoordinator.getWorkflowById(transactionId);
+diff --git a/src/raft/sqlite-log-adapter.js b/src/raft/sqlite-log-adapter.js
+index c2c01cec..30f19291 100644
+--- a/src/raft/sqlite-log-adapter.js
++++ b/src/raft/sqlite-log-adapter.js
+@@ -305,6 +305,19 @@ class SQLiteLogAdapter {
+     return this.lastDeclaredCommitIndex || 0;
+   }
+ 
++  /**
++   * Re-anchor the in-memory committed-index cache to DURABLE state. A swept
++   * transaction rollback evaporates watermark writes that the monotonic
++   * cache still remembers (verifier finding Z1) — without this refresh every
++   * post-heal catch-up commit is clamped and the durable watermark never
++   * advances again.
++   * @return {number} The durable committed index the cache now reflects.
++   */
++  refreshCommittedIndexCacheFromStore() {
++    this._committedIndexCache = undefined;
++    return this.getCommittedIndex();
++  }
++
+   /**
+    * Acknowledge a command from a follower.
+    * Required by liferaft for quorum tracking.
+diff --git a/src/workflow/durable-workflow-coordinator.js b/src/workflow/durable-workflow-coordinator.js
+index ff2065b6..5ce25fab 100644
+--- a/src/workflow/durable-workflow-coordinator.js
++++ b/src/workflow/durable-workflow-coordinator.js
+@@ -240,6 +240,13 @@ class DurableWorkflowCoordinator {
+     const existing = existingKey ? workflow.participants.get(existingKey) : null;
+     const participant = this.createParticipantRecord(workflowId, record, existing);
+     workflow.participants.set(participant.participantKey, participant);
++    if (!existing) {
++      // Monotonic enlistment witness: a workflow that ever enlisted a
++      // participant must never later commit against an empty registry
++      // (the run-23 orphaned-BEGIN shape).
++      workflow.enlistedParticipantCount =
++        (workflow.enlistedParticipantCount || 0) + 1;
++    }
+     await this.persistParticipant(participant);
+     return participant;
+   }
+@@ -405,10 +412,33 @@ class DurableWorkflowCoordinator {
+       Array.from(workflow.participants.keys());
+     const failureStatus = options.failureStatus || 'FAILED';
+     const failedParticipants = [];
++    // A workflow that enlisted participants must never run a stage against
++    // an empty registry: the run-23 coordinator committed with zero
++    // iterations after recovery emptied its participants Map, orphaning a
++    // delivered participant BEGIN forever. Zero-participant stages stay
++    // legal for workflows that never enlisted anyone.
++    if (
++      participantKeys.length === 0 &&
++      (workflow.enlistedParticipantCount || 0) > 0
++    ) {
++      failedParticipants.push({
++        participantId: null,
++        participantKey: null,
++        error: WORKFLOW_ERROR_MSG.ENLISTED_PARTICIPANTS_MISSING,
++      });
++      return failedParticipants;
++    }
+ 
+     for (const participantKey of participantKeys) {
+       const participant = workflow.participants.get(participantKey);
+       if (!participant) {
++        // A REQUESTED key missing from the registry is lost enlistment
++        // state, not a skippable no-op.
++        failedParticipants.push({
++          participantId: null,
++          participantKey,
++          error: WORKFLOW_ERROR_MSG.ENLISTED_PARTICIPANTS_MISSING,
++        });
+         continue;
+       }
+ 
+@@ -456,18 +486,16 @@ class DurableWorkflowCoordinator {
+     const loadParticipant = payload.loadParticipant;
+     const isTerminalWorkflow = payload.isTerminalWorkflow;
+ 
++    const restoredWorkflowIds = new Set();
+     for (const row of workflowRows) {
+-      const workflowRecord = typeof loadWorkflow === 'function' ?
+-        loadWorkflow(row) :
+-        row;
+-      if (!workflowRecord) {
+-        continue;
+-      }
+-      if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
+-          isTerminalWorkflow(workflowRecord, row)) {
+-        continue;
++      const restored = this.restoreRecoveredWorkflowRow(
++        row,
++        loadWorkflow,
++        isTerminalWorkflow,
++      );
++      if (restored) {
++        restoredWorkflowIds.add(restored.workflowId);
+       }
+-      this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
+     }
+ 
+     for (const row of participantRows) {
+@@ -485,9 +513,16 @@ class DurableWorkflowCoordinator {
+       if (!workflow) {
+         continue;
+       }
++      // An in-memory participant is fresher than its cache row; only fill
++      // registry gaps (restart restore), never overwrite live statuses.
++      const participantKey = this.resolveParticipantKey(participantRecord);
++      if (participantKey && workflow.participants.has(participantKey)) {
++        continue;
++      }
+       const participant = this.createParticipantRecord(workflowId, participantRecord);
+       workflow.participants.set(participant.participantKey, participant);
+     }
++    return {restoredWorkflowIds};
+   }
+ 
+   /**
+@@ -592,6 +627,40 @@ class DurableWorkflowCoordinator {
+     };
+   }
+ 
++  /**
++   * Restore one workflow row unless a LIVE in-memory workflow exists: the
++   * cache rows lag CDC and the rebuilt record starts with an EMPTY
++   * participants registry — the run-23 clobber orphaned an already-enlisted
++   * participant BEGIN that way, and the coordinator then committed against
++   * the empty set. Recovery exists to restore state after a restart
++   * (nothing live) or to refresh terminal records.
++   * @return {Object|null} The restored workflow, or null when skipped.
++   * @private
++   */
++  restoreRecoveredWorkflowRow(row, loadWorkflow, isTerminalWorkflow) {
++    const workflowRecord = typeof loadWorkflow === 'function' ?
++      loadWorkflow(row) :
++      row;
++    if (!workflowRecord) {
++      return null;
++    }
++    if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
++        isTerminalWorkflow(workflowRecord, row)) {
++      return null;
++    }
++    const existingWorkflow = this.getWorkflowById(
++      String(workflowRecord.workflowId || ''),
++    );
++    const existingIsLive =
++      existingWorkflow &&
++      !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
++        isTerminalWorkflow(existingWorkflow, null));
++    if (existingIsLive) {
++      return null;
++    }
++    return this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
++  }
++
+   /**
+    * Store a workflow in both registries.
+    * @param {Object} workflow - Workflow state.
+diff --git a/src/workflow/workflow-constants.js b/src/workflow/workflow-constants.js
+index 0bf3e8b1..053b3099 100644
+--- a/src/workflow/workflow-constants.js
++++ b/src/workflow/workflow-constants.js
+@@ -48,6 +48,9 @@ const WORKFLOW_ERROR_MSG = Object.freeze({
+     'Workflow step runner requires a workflow coordinator',
+   PARTICIPANT_ID_REQUIRED: 'Workflow participant ID is required',
+   NEXT_STEP_REQUIRED: 'Workflow transition requires nextStep',
++  ENLISTED_PARTICIPANTS_MISSING:
++    'Workflow enlisted participants that are missing from the registry; ' +
++    'refusing to run the stage against lost enlistment state',
+   REASON_REQUIRED: 'Workflow transition requires reason',
+   DUPLICATE_TRANSITION: 'Duplicate transition rejected by idempotency check',
+   STALE_FENCE_TOKEN: 'Transition rejected: stale fence token',
+diff --git a/test/convergence/dt6-ledger-leader-durability-fitness.test.js b/test/convergence/dt6-ledger-leader-durability-fitness.test.js
+index 86ba5d0d..2540d573 100644
+--- a/test/convergence/dt6-ledger-leader-durability-fitness.test.js
++++ b/test/convergence/dt6-ledger-leader-durability-fitness.test.js
+@@ -181,10 +181,14 @@ t.test(
+           'tracked leader handoff)',
+       );
+       // The single-replica fixture has no real successor; the probe seam is
+-      // what a cluster-informed caller supplies (CL-039 viability gate).
++      // what a cluster-informed caller supplies (CL-039 viability gate). The
++      // group SHAPE is widened too: candidacy deferral is deliberately
++      // skipped for solo groups (deferring the only possible leader leaves
++      // none), so the re-assertion contract needs a multi-member shape.
+       if (typeof partition.setLeaderDurabilitySuccessorProbe === 'function') {
+         partition.setLeaderDurabilitySuccessorProbe(() => true);
+       }
++      partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
+       const deferCandidacyCalls = [];
+       if (partition.raft && typeof partition.raft.deferCandidacy === 'function') {
+         const original = partition.raft.deferCandidacy.bind(partition.raft);
+diff --git a/test/convergence/dt6-zombie-transaction-lifecycle.test.js b/test/convergence/dt6-zombie-transaction-lifecycle.test.js
+new file mode 100644
+index 00000000..381f5a11
+--- /dev/null
++++ b/test/convergence/dt6-zombie-transaction-lifecycle.test.js
+@@ -0,0 +1,360 @@
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import t from 'tap';
++import {
++  PartitionService,
++  RaftRole,
++} from '../../src/partition/partition-service.js';
++import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++// Quest ledger-participant-transaction-zombie-lifecycle (P1, companion to the
++// landed leader-durability-fitness) — the transaction-lifecycle HEAL for the
++// run-23 zombie class:
++//
++//   A 2PC participant BEGIN IMMEDIATE was orphaned when its coordinator
++//   committed against an EMPTY participant set — recovery had replaced the
++//   live in-memory transaction with a cache-derived copy whose participants
++//   Map was rebuilt from CDC-lagging rows. The open transaction absorbed
++//   every later write on the connection; the whole ledger went non-durable
++//   in silence.
++//
++// The fix set under test:
++//   1. ACTIVE participant holds sweep under the same 60s legal bound as
++//      prepared holds — but the heal (bare ROLLBACK) is ROLE-GATED: safe on
++//      a follower/learner (crash-equivalent) or a SOLO group (no follower
++//      exists to truncate); a LEADER or CANDIDATE must wait for the
++//      durability-fitness demotion (a leader rollback re-mints acked raft
++//      indices and followers truncate committed entries).
++//   2. The heal is NOT crash-equivalent for JS memory (verifier finding Z1):
++//      it must clear the apply-dedup set and re-anchor the adapter's
++//      monotonic committed-index cache, or post-heal catch-up silently
++//      skips re-execution and clamps the durable watermark forever.
++//   3. The coordinator never commits against lost enlistment state: recovery
++//      never clobbers a LIVE workflow's participant registry with a staler
++//      cache view, and a stage over an empty/missing registry fails instead
++//      of silently succeeding.
++//   4. Sessionless writes are never silently absorbed into a FOREIGN open
++//      transaction (the DEFAULT session keeps its adoption by design).
++
++const config = ConfigurationManager.getInstance();
++config.initialize();
++const logging = LoggingService.getInstance();
++logging.initialize({level: 'error'});
++
++const LEGAL_HOLD_MS = 60_000;
++// The sweep compares against the transaction's real begin timestamp, so the
++// deterministic drive anchors past it in real time.
++const pastLegalHold = () => Date.now() + LEGAL_HOLD_MS + 1_000;
++
++let tmpDirCounter = 0;
++function makeTmpDbPath(t) {
++  const dir = fs.mkdtempSync(
++    path.join(os.tmpdir(), `dt6-zombie-lifecycle-${tmpDirCounter++}-`),
++  );
++  t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
++  return path.join(dir, 'partition.db');
++}
++
++// A real single-replica PartitionService (peers cannot initialize without a
++// transport registry); multi-replica GROUP SHAPE is modeled by overriding the
++// replicaIds field after init — the exact input of the solo-group predicate.
++async function createPartition(t, {groupReplicaIds = ['replica-1']} = {}) {
++  const warnings = [];
++  const partition = new PartitionService({
++    partitionId: `replica_operations-p8-${tmpDirCounter}`,
++    tableId: 'replica_operations',
++    tableName: 'replica_operations',
++    replicaId: 'replica-1',
++    replicaIds: ['replica-1'],
++    nodeId: 'node-test',
++    schema: {
++      columns: [
++        {name: 'id', type: 'INTEGER', primaryKey: true},
++        {name: 'value', type: 'TEXT'},
++      ],
++    },
++    dbPath: makeTmpDbPath(t),
++  });
++  await partition.initialize();
++  partition.replicaIds = groupReplicaIds;
++  const originalWarn = partition.logger.warn.bind(partition.logger);
++  partition.logger = Object.create(partition.logger);
++  partition.logger.warn = (message, payload) => {
++    warnings.push({message, payload});
++    return originalWarn(message, payload);
++  };
++  return {partition, warnings};
++}
++
++t.test(
++  'follower heal: an ACTIVE hold past the legal window is rolled back with ' +
++    'the JS-memory state cleared (RED on the unfixed head)',
++  async (t) => {
++    const {partition, warnings} = await createPartition(t, {
++      groupReplicaIds: ['replica-1', 'replica-2', 'replica-3'],
++    });
++    try {
++      partition.role = RaftRole.FOLLOWER;
++      await partition.beginTransaction('tx-zombie');
++      // Seed the Z1 poison state: an apply-dedup key and a stale adapter
++      // committed-index cache that a bare rollback would strand.
++      partition.recentlyAppliedEntryKeys.add('poisoned-entry-key');
++      partition.logAdapter._committedIndexCache = 155;
++
++      const swept = partition.enforcePreparedStateHoldTimeouts(
++        pastLegalHold(),
++      );
++      t.ok(swept >= 1, 'the ACTIVE hold was swept');
++      t.equal(
++        partition.db.inTransaction,
++        false,
++        'the zombie transaction was rolled back on a follower',
++      );
++      t.notOk(
++        partition.activeTransactions.has('tx-zombie'),
++        'the session bookkeeping is cleared',
++      );
++      t.ok(
++        partition.preparedStateLostSessions.has('tx-zombie'),
++        'the session is marked lost for late commit/rollback callers',
++      );
++      t.equal(
++        partition.recentlyAppliedEntryKeys.size,
++        0,
++        'Z1: the apply-dedup set is cleared so evaporated entries re-execute',
++      );
++      t.equal(
++        partition.logAdapter.getCommittedIndex(),
++        0,
++        'Z1: the committed-index cache is re-anchored to DURABLE state ' +
++          '(0 here — nothing was ever durably committed)',
++      );
++      t.ok(
++        warnings.some(
++          (w) => typeof w.message === 'string' && w.message.includes('Active transaction held'),
++        ),
++        'the heal is loud',
++      );
++    } finally {
++      await partition.shutdown();
++    }
++  },
++);
++
++t.test(
++  'leader/candidate defer: a multi-replica LEADER never bare-rollbacks; the ' +
++    'heal waits for demotion (RED on the unfixed head — the old sweep would ' +
++    'have rolled back a leader)',
++  async (t) => {
++    const {partition, warnings} = await createPartition(t, {
++      groupReplicaIds: ['replica-1', 'replica-2', 'replica-3'],
++    });
++    try {
++      partition.role = RaftRole.LEADER;
++      await partition.beginTransaction('tx-zombie');
++      const sweptAsLeader = partition.enforcePreparedStateHoldTimeouts(
++        pastLegalHold(),
++      );
++      t.equal(sweptAsLeader, 0, 'no heal ran on the leader');
++      t.equal(
++        partition.db.inTransaction,
++        true,
++        'the transaction is untouched on the leader (rollback would re-mint ' +
++          'acked raft indices)',
++      );
++      t.ok(
++        partition.activeTransactions.has('tx-zombie'),
++        'the session stays visible to future sweeps',
++      );
++      t.ok(
++        warnings.some(
++          (w) =>
++            typeof w.message === 'string' &&
++            w.message.includes('Stuck transaction heal deferred'),
++        ),
++        'the deferral is loud',
++      );
++
++      // Demotion (the durability-fitness consequence) flips the role; the
++      // next sweep tick heals crash-equivalently.
++      partition.role = RaftRole.FOLLOWER;
++      const sweptAsFollower = partition.enforcePreparedStateHoldTimeouts(
++        pastLegalHold() + 1_000,
++      );
++      t.ok(sweptAsFollower >= 1, 'the post-demotion sweep heals');
++      t.equal(
++        partition.db.inTransaction,
++        false,
++        'the zombie is rolled back once the replica is a follower',
++      );
++    } finally {
++      await partition.shutdown();
++    }
++  },
++);
++
++t.test(
++  'solo carve-out: a single-replica LEADER heals in place (no follower ' +
++    'exists to truncate; demotion is structurally impossible)',
++  async (t) => {
++    const {partition} = await createPartition(t, {});
++    try {
++      t.equal(partition.role, RaftRole.LEADER, 'solo fixture is the leader');
++      await partition.beginTransaction('tx-zombie-solo');
++      const swept = partition.enforcePreparedStateHoldTimeouts(
++        pastLegalHold(),
++      );
++      t.ok(swept >= 1, 'the solo leader sweeps its own stuck hold');
++      t.equal(
++        partition.db.inTransaction,
++        false,
++        'the solo heal rolled the zombie back in place',
++      );
++    } finally {
++      await partition.shutdown();
++    }
++  },
++);
++
++t.test(
++  'absorption removed: a sessionless write with only a FOREIGN transaction ' +
++    'open is NOT adopted into its session bookkeeping (RED on the unfixed ' +
++    'head - run-23 lost every such write into the zombie)',
++  async (t) => {
++    const {partition} = await createPartition(t, {});
++    try {
++      await partition.beginTransaction('tx-foreign');
++      await partition.executeQuery(
++        'INSERT INTO replica_operations (id, value) VALUES (7, ?)',
++        ['independent'],
++      );
++      const foreignState = partition.activeTransactions.get('tx-foreign');
++      t.equal(
++        (foreignState?.operations || []).length,
++        0,
++        'the sessionless write is not registered in the foreign session ' +
++          '(it rides the ordinary write path; on a healed replica it ' +
++          're-applies durably instead of evaporating with the zombie)',
++      );
++      await partition.rollbackTransaction('tx-foreign').catch(() => {});
++    } finally {
++      await partition.shutdown();
++    }
++  },
++);
++
++t.test(
++  'coordinator guards: recovery never clobbers a LIVE workflow registry, ' +
++    'and a stage never silently succeeds against lost enlistment ' +
++    '(RED on the unfixed head — the run-23 empty-set commit)',
++  async (t) => {
++    const coordinator = new DurableWorkflowCoordinator();
++    const workflowId = 'tx-run23';
++    await coordinator.registerWorkflow({
++      workflowId,
++      ownerKey: 'session-run23',
++      status: 'ACTIVE',
++    });
++    await coordinator.upsertParticipant(workflowId, {
++      workflowId,
++      participantId: 'p-ledger',
++      participantKey: 'replica_operations-p1',
++      partitionId: 'replica_operations-p1',
++      status: 'ACTIVE',
++    });
++
++    // The run-23 clobber: a recovery pass whose cache-derived rows lag CDC
++    // (participant row not yet visible) replaces the live workflow.
++    coordinator.recover({
++      workflows: [
++        {
++          workflowId,
++          ownerKey: 'session-run23',
++          status: 'ACTIVE',
++        },
++      ],
++      participants: [],
++      loadWorkflow: (row) => row,
++      loadParticipant: (row) => row,
++      isTerminalWorkflow: (workflow) =>
++        workflow.status === 'COMMITTED' || workflow.status === 'ROLLED_BACK',
++    });
++    const workflow = coordinator.getWorkflowById(workflowId);
++    t.equal(
++      workflow.participants.size,
++      1,
++      'the LIVE participant registry survives a lagging recovery pass',
++    );
++
++    // Even if the registry were lost, a commit stage must refuse to run
++    // against nothing when enlistment happened: simulate the loss directly.
++    workflow.participants.clear();
++    const failures = await coordinator.executeParticipantStage(
++      workflowId,
++      'COMMITTING',
++      'COMMITTED',
++      async () => {},
++    );
++    t.ok(
++      failures.length >= 1,
++      'a stage against lost enlistment state FAILS instead of silently ' +
++        'committing with zero participants',
++    );
++
++    // A workflow that never enlisted anyone keeps zero-participant commits
++    // legal (the established 2PC-as-theater formation norm).
++    await coordinator.registerWorkflow({
++      workflowId: 'tx-theater',
++      ownerKey: 'session-theater',
++      status: 'ACTIVE',
++    });
++    const theaterFailures = await coordinator.executeParticipantStage(
++      'tx-theater',
++      'COMMITTING',
++      'COMMITTED',
++      async () => {},
++    );
++    t.equal(
++      theaterFailures.length,
++      0,
++      'zero-participant stages stay legal for never-enlisted workflows',
++    );
++    t.end();
++  },
++);
++
++t.test(
++  'restart recovery still restores workflows and participants (nothing ' +
++    'live to protect)',
++  async (t) => {
++    const coordinator = new DurableWorkflowCoordinator();
++    coordinator.recover({
++      workflows: [
++        {workflowId: 'tx-restart', ownerKey: 'session-restart', status: 'PREPARING'},
++      ],
++      participants: [
++        {
++          workflowId: 'tx-restart',
++          participantId: 'p-1',
++          participantKey: 'part-1',
++          partitionId: 'part-1',
++          status: 'PREPARED',
++        },
++      ],
++      loadWorkflow: (row) => row,
++      loadParticipant: (row) => row,
++      isTerminalWorkflow: (workflow) => workflow.status === 'COMMITTED',
++    });
++    const workflow = coordinator.getWorkflowById('tx-restart');
++    t.ok(workflow, 'the workflow is restored after restart');
++    t.equal(
++      workflow.participants.size,
++      1,
++      'its participant registry is restored from rows',
++    );
++    t.end();
++  },
++);
+diff --git a/scripts/run-ledger-participant-transaction-zombie-lifecycle-scenarios.js b/scripts/run-ledger-participant-transaction-zombie-lifecycle-scenarios.js
+new file mode 100644
+index 00000000..81ea65e6
+--- /dev/null
++++ b/scripts/run-ledger-participant-transaction-zombie-lifecycle-scenarios.js
+@@ -0,0 +1,41 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `ledger-participant-transaction-zombie-lifecycle` quest
++ * scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed proof
++ * of the quest statement) and writes a scenario-harness report for the
++ * Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from affinity-demo run-23
++ * forensics; evidence under
++ * solve/changes/formation-ledger-leader-local-persistence-wedge/):
++ *   ledger-participant-transaction-zombie-lifecycle
++ *     - test/convergence/dt6-zombie-transaction-lifecycle.test.js
++ *       (the run-23 zombie root: an orphaned 2PC participant BEGIN whose
++ *        coordinator committed against an empty participant set after
++ *        recovery clobbered the live registry with CDC-lagging rows. The fix
++ *        sweeps ACTIVE participant holds under the same 60s legal bound as
++ *        prepared holds with the heal gated on role — follower/learner or
++ *        solo heal crash-equivalently WITH the JS-memory state cleared
++ *        (apply-dedup set, committed-index cache); a leader/candidate defers
++ *        to the durability-fitness demotion; recovery never clobbers a live
++ *        workflow registry; a stage never silently succeeds against lost
++ *        enlistment; sessionless writes are never absorbed into a foreign
++ *        transaction.)
++ *
++ * Usage: node scripts/run-ledger-participant-transaction-zombie-lifecycle-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'ledger-participant-transaction-zombie-lifecycle': [
++    'test/convergence/dt6-zombie-transaction-lifecycle.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);

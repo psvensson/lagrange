@@ -240,6 +240,13 @@ class DurableWorkflowCoordinator {
     const existing = existingKey ? workflow.participants.get(existingKey) : null;
     const participant = this.createParticipantRecord(workflowId, record, existing);
     workflow.participants.set(participant.participantKey, participant);
+    if (!existing) {
+      // Monotonic enlistment witness: a workflow that ever enlisted a
+      // participant must never later commit against an empty registry
+      // (the run-23 orphaned-BEGIN shape).
+      workflow.enlistedParticipantCount =
+        (workflow.enlistedParticipantCount || 0) + 1;
+    }
     await this.persistParticipant(participant);
     return participant;
   }
@@ -405,10 +412,33 @@ class DurableWorkflowCoordinator {
       Array.from(workflow.participants.keys());
     const failureStatus = options.failureStatus || 'FAILED';
     const failedParticipants = [];
+    // A workflow that enlisted participants must never run a stage against
+    // an empty registry: the run-23 coordinator committed with zero
+    // iterations after recovery emptied its participants Map, orphaning a
+    // delivered participant BEGIN forever. Zero-participant stages stay
+    // legal for workflows that never enlisted anyone.
+    if (
+      participantKeys.length === 0 &&
+      (workflow.enlistedParticipantCount || 0) > 0
+    ) {
+      failedParticipants.push({
+        participantId: null,
+        participantKey: null,
+        error: WORKFLOW_ERROR_MSG.ENLISTED_PARTICIPANTS_MISSING,
+      });
+      return failedParticipants;
+    }
 
     for (const participantKey of participantKeys) {
       const participant = workflow.participants.get(participantKey);
       if (!participant) {
+        // A REQUESTED key missing from the registry is lost enlistment
+        // state, not a skippable no-op.
+        failedParticipants.push({
+          participantId: null,
+          participantKey,
+          error: WORKFLOW_ERROR_MSG.ENLISTED_PARTICIPANTS_MISSING,
+        });
         continue;
       }
 
@@ -456,18 +486,16 @@ class DurableWorkflowCoordinator {
     const loadParticipant = payload.loadParticipant;
     const isTerminalWorkflow = payload.isTerminalWorkflow;
 
+    const restoredWorkflowIds = new Set();
     for (const row of workflowRows) {
-      const workflowRecord = typeof loadWorkflow === 'function' ?
-        loadWorkflow(row) :
-        row;
-      if (!workflowRecord) {
-        continue;
+      const restored = this.restoreRecoveredWorkflowRow(
+        row,
+        loadWorkflow,
+        isTerminalWorkflow,
+      );
+      if (restored) {
+        restoredWorkflowIds.add(restored.workflowId);
       }
-      if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
-          isTerminalWorkflow(workflowRecord, row)) {
-        continue;
-      }
-      this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
     }
 
     for (const row of participantRows) {
@@ -485,9 +513,16 @@ class DurableWorkflowCoordinator {
       if (!workflow) {
         continue;
       }
+      // An in-memory participant is fresher than its cache row; only fill
+      // registry gaps (restart restore), never overwrite live statuses.
+      const participantKey = this.resolveParticipantKey(participantRecord);
+      if (participantKey && workflow.participants.has(participantKey)) {
+        continue;
+      }
       const participant = this.createParticipantRecord(workflowId, participantRecord);
       workflow.participants.set(participant.participantKey, participant);
     }
+    return {restoredWorkflowIds};
   }
 
   /**
@@ -590,6 +625,40 @@ class DurableWorkflowCoordinator {
       createdAt,
       updatedAt,
     };
+  }
+
+  /**
+   * Restore one workflow row unless a LIVE in-memory workflow exists: the
+   * cache rows lag CDC and the rebuilt record starts with an EMPTY
+   * participants registry — the run-23 clobber orphaned an already-enlisted
+   * participant BEGIN that way, and the coordinator then committed against
+   * the empty set. Recovery exists to restore state after a restart
+   * (nothing live) or to refresh terminal records.
+   * @return {Object|null} The restored workflow, or null when skipped.
+   * @private
+   */
+  restoreRecoveredWorkflowRow(row, loadWorkflow, isTerminalWorkflow) {
+    const workflowRecord = typeof loadWorkflow === 'function' ?
+      loadWorkflow(row) :
+      row;
+    if (!workflowRecord) {
+      return null;
+    }
+    if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
+        isTerminalWorkflow(workflowRecord, row)) {
+      return null;
+    }
+    const existingWorkflow = this.getWorkflowById(
+      String(workflowRecord.workflowId || ''),
+    );
+    const existingIsLive =
+      existingWorkflow &&
+      !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
+        isTerminalWorkflow(existingWorkflow, null));
+    if (existingIsLive) {
+      return null;
+    }
+    return this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
   }
 
   /**

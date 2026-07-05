@@ -1,0 +1,23 @@
+{
+  "test": "test/convergence/dt6-zombie-transaction-lifecycle.test.js",
+  "src": [
+    "src/partition/partition-service-transaction-base.js",
+    "src/partition/partition-service-transaction-session-methods.js",
+    "src/partition/partition-service-constants.js",
+    "src/partition/partition-service-durability-fitness.js",
+    "src/raft/sqlite-log-adapter.js",
+    "src/workflow/durable-workflow-coordinator.js",
+    "src/workflow/workflow-constants.js",
+    "src/query/distributed/distributed-transaction-recovery.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-05T10:54:23.199Z"
+}

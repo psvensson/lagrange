@@ -300,15 +300,19 @@ class PartitionServiceDurabilityFitnessMethods {
         evidence,
       );
     }
+    // The alive zombie's in-memory log matches the followers', so vote rules
+    // do NOT disfavor it: candidacy deferral must be re-asserted every tick
+    // while unfit or it re-wins after the deferral window (CL-033/034
+    // churn). Asserted BEFORE the viability gate — an unfit CANDIDATE win is
+    // unsafe even when no demotion will run (heal-vet hardening G4).
+    if (!this.isSoloReplicaGroup?.()) {
+      this.raft?.deferCandidacy?.();
+    }
     if (!successorViable) {
       // Surface-only: a single-replica (or successor-less) group must keep
       // serving — deposing it would leave no leader at all.
       return;
     }
-    // The alive zombie's in-memory log matches the followers', so vote rules
-    // do NOT disfavor it: candidacy deferral must be re-asserted every tick
-    // while unfit or it re-wins after the deferral window (CL-033/034 churn).
-    this.raft?.deferCandidacy?.();
     if (isLeader && !state.handoffRequestedWhileLeader) {
       state.handoffRequestedWhileLeader = true;
       // The shared flap-safe demotion sequence (one owner with the replica

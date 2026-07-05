@@ -9,6 +9,7 @@ const {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_SQL,
+  RaftRole,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
@@ -269,7 +270,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @param {number} [nowMs] - Clock override for deterministic tests.
    * @return {number} Number of released prepared transactions.
    */
-  enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
+  collectExpiredPreparedSessions(nowMs) {
     const expiredPreparedSessions = [];
     for (const [sessionId, state] of this.preparedTransactions.entries()) {
       if (!Number.isFinite(state?.preparedAt)) {
@@ -285,7 +286,58 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         preparedAt: state.preparedAt,
       });
     }
-    if (expiredPreparedSessions.length === 0) {
+    return expiredPreparedSessions;
+  }
+
+  // An ACTIVE participant hold past the legal window is the run-23 zombie
+  // class: an orphaned BEGIN that silently absorbs every later write on the
+  // connection. It sweeps under the same bound as the prepared holds.
+  collectExpiredActiveSessions(nowMs) {
+    const expiredActiveSessions = [];
+    for (const [sessionId, state] of this.activeTransactions.entries()) {
+      if (this.preparedTransactions.has(sessionId)) {
+        continue;
+      }
+      if (!Number.isFinite(state?.startTime)) {
+        continue;
+      }
+      const holdDurationMs = nowMs - state.startTime;
+      if (holdDurationMs < this.preparedStateHoldTimeoutMs) {
+        continue;
+      }
+      expiredActiveSessions.push({
+        sessionId,
+        holdDurationMs,
+        startedAt: state.startTime,
+      });
+    }
+    return expiredActiveSessions;
+  }
+
+  enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
+    const expiredPreparedSessions = this.collectExpiredPreparedSessions(nowMs);
+    const expiredActiveSessions = this.collectExpiredActiveSessions(nowMs);
+    if (
+      expiredPreparedSessions.length === 0 &&
+      expiredActiveSessions.length === 0
+    ) {
+      return 0;
+    }
+    // Rolling back on a LEADER (or a CANDIDATE, whose solicited votes
+    // reference the in-memory log head) re-mints already-acked raft indices
+    // and makes followers truncate committed entries — the heal must wait
+    // for the durability-fitness demotion. A solo group is the carve-out:
+    // no follower exists to truncate, and demotion is impossible there.
+    if (!this.isStuckTransactionHealPermitted()) {
+      this.logger.warn(
+        PARTITION_SERVICE_LOG_MSG.STUCK_TRANSACTION_HEAL_DEFERRED,
+        {
+          partitionId: this.partitionId,
+          role: this.role,
+          expiredPreparedSessionCount: expiredPreparedSessions.length,
+          expiredActiveSessionCount: expiredActiveSessions.length,
+        },
+      );
       return 0;
     }
     try {
@@ -296,6 +348,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         {partitionId: this.partitionId, error: error.message},
       );
     }
+    // A swept rollback is NOT crash-equivalent for JS memory: the apply
+    // dedup set and the adapter's monotonic committed-index cache survive it
+    // and would make post-heal catch-up skip re-execution and clamp the
+    // durable watermark forever (verifier finding Z1). Clear both so the
+    // replica genuinely re-applies what the rollback evaporated.
+    this.recentlyAppliedEntryKeys?.clear?.();
+    this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
     for (const expiredSession of expiredPreparedSessions) {
       this.preparedTransactions.delete(expiredSession.sessionId);
       this.activeTransactions.delete(expiredSession.sessionId);
@@ -308,8 +367,54 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         preparedAt: expiredSession.preparedAt,
       });
     }
+    for (const expiredSession of expiredActiveSessions) {
+      this.activeTransactions.delete(expiredSession.sessionId);
+      this.preparedStateLostSessions.add(expiredSession.sessionId);
+      this.logger.warn(
+        PARTITION_SERVICE_LOG_MSG.ACTIVE_TRANSACTION_HOLD_TIMEOUT,
+        {
+          partitionId: this.partitionId,
+          transactionId: expiredSession.sessionId,
+          sessionId: expiredSession.sessionId,
+          holdDurationMs: expiredSession.holdDurationMs,
+          startedAt: expiredSession.startedAt,
+        },
+      );
+    }
     this.syncLegacyTransactionAliases();
-    return expiredPreparedSessions.length;
+    return expiredPreparedSessions.length + expiredActiveSessions.length;
+  }
+
+  /**
+   * Healing a stuck transaction in place (bare ROLLBACK) is raft-safe only
+   * where no follower can be made to truncate committed entries: on a
+   * FOLLOWER/LEARNER (crash-equivalent locally) or in a solo group (no
+   * follower exists; demotion is structurally impossible there).
+   * @return {boolean}
+   * @private
+   */
+  isStuckTransactionHealPermitted() {
+    if (this.role !== RaftRole.LEADER && this.role !== RaftRole.CANDIDATE) {
+      return true;
+    }
+    return this.isSoloReplicaGroup();
+  }
+
+  /**
+   * Same predicate family as raft-init's isSingleReplica: a solo group is a
+   * single configured replica with NO joined raft peers (a joined peer means
+   * a follower exists that a leader-side rollback could make truncate).
+   * @return {boolean}
+   * @private
+   */
+  isSoloReplicaGroup() {
+    const peerCount = Array.isArray(this.raft?.nodes) ?
+      this.raft.nodes.length :
+      0;
+    return (
+      (!Array.isArray(this.replicaIds) || this.replicaIds.length <= 1) &&
+      peerCount === 0
+    );
   }
   /**
    * Start periodic prepared-state hold-timeout enforcement.
@@ -650,8 +755,26 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
           error: error.message,
         },
       );
-      this.activeTransactions.delete(resolvedSessionId);
-      this.preparedTransactions.delete(resolvedSessionId);
+      // The failed path previously deleted the bookkeeping WITHOUT executing
+      // ROLLBACK — the stranded open transaction became invisible to every
+      // sweep forever (a run-23 zombie source). Attempt the ROLLBACK where
+      // the role permits; when it cannot run, KEEP the session registered so
+      // the ACTIVE-hold sweep (and durability fitness) still see it.
+      let stuckStateReleased = false;
+      if (this.isStuckTransactionHealPermitted()) {
+        try {
+          this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+          this.recentlyAppliedEntryKeys?.clear?.();
+          this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
+          stuckStateReleased = true;
+        } catch {
+          // The connection itself is wedged: leave the session visible.
+        }
+      }
+      if (stuckStateReleased) {
+        this.activeTransactions.delete(resolvedSessionId);
+        this.preparedTransactions.delete(resolvedSessionId);
+      }
       this.syncLegacyTransactionAliases();
       throw error;
     }

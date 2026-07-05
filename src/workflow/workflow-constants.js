@@ -48,6 +48,9 @@ const WORKFLOW_ERROR_MSG = Object.freeze({
     'Workflow step runner requires a workflow coordinator',
   PARTICIPANT_ID_REQUIRED: 'Workflow participant ID is required',
   NEXT_STEP_REQUIRED: 'Workflow transition requires nextStep',
+  ENLISTED_PARTICIPANTS_MISSING:
+    'Workflow enlisted participants that are missing from the registry; ' +
+    'refusing to run the stage against lost enlistment state',
   REASON_REQUIRED: 'Workflow transition requires reason',
   DUPLICATE_TRANSITION: 'Duplicate transition rejected by idempotency check',
   STALE_FENCE_TOKEN: 'Transition rejected: stale fence token',

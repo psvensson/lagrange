@@ -315,6 +315,13 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   PREPARING_TRANSACTION: 'Preparing transaction',
   PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
   PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
+  ACTIVE_TRANSACTION_HOLD_TIMEOUT:
+    'Active transaction held beyond its legal window; rolled back ' +
+    '(orphaned participant hold — run-23 zombie class)',
+  STUCK_TRANSACTION_HEAL_DEFERRED:
+    'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
+    'would re-mint acked raft indices; waiting for durability-fitness ' +
+    'demotion',
   COMMITTING_TRANSACTION: 'Committing transaction',
   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
