@@ -1,0 +1,52 @@
+{
+  "id": "formation-ledger-spread-window-follow-up-latency",
+  "statement": "The post-formation operation-ledger spread window (seeded bootstrap concentrates all ledger replicas on the seed; quorum-spread-first then relocates them via SERIALIZED self-moves) shrinks enough that a CREATE TABLE arriving right after formation succeeds within its existing 30s provisioning budget on the 5-node MovieLens demo: the serialized follow-up self-move is re-driven immediately when its predecessor settles (run-26 measured an 8.7s dead gap — op-1 drain settled 12:09:48.676, op-2 CREATE_REPLICA 12:09:57.46 — a full planner period), rather than waiting for the next planner cycle, and the per-move cost regressions (retryable control-plane status-write deferrals ~3.7s while the ledger itself moves; ~7.7s empty-partition CREATE_REPLICA) are measured and the binding ones addressed. Proven by a deterministic DT reproduction of the follow-up re-drive (guard-test scenario-harness, consecutive 3) and the demo's ratings load progressing past table creation in a live run. NO timeout/budget raises; NO weakening of the run-20 serialization or run-22 spread-first semantics.",
+  "priority": "P1",
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-ledger-spread-window-follow-up-latency",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-ledger-spread-window-follow-up-latency-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-ledger-spread-window-follow-up-latency",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "c-research-first",
+      "text": "RESEARCH FIRST: map how the spread-first planner generates the SECOND self-move (rebalancer planning cadence; is there an existing completion-triggered re-plan/re-drive mechanism — level-triggered machinery, priority-recovery lane — that the settled self-move fails to ping?), the run-20 serialization release path (tryClearHeldOperationLedgerSelfMove: does the hold clear promptly on op-1 terminal, or does CDC/read lag add to the gap?), and the per-move cost breakdown from run-26 forensics (solve/changes/provisioning-admission-ledger-hold-transient-wait/run26-demo.log + node logs). REUSED vs EXTENDED vs NEW required. Related recorded classes: transition-mutation-budget-doom-loop P2 (1ms budgets could explain the status-write deferrals), coordinator-reconcile-lane-ledger-write-head-of-line P2."
+    },
+    {
+      "id": "c-dt-first",
+      "text": "DT-FIRST: deterministic reproduction of the follow-up gap (a settled ledger self-move NOT triggering the successor plan until the next cycle) RED on head BEFORE src changes; dt:prove red-on-revert; scenario-harness x3."
+    },
+    {
+      "id": "c-vet",
+      "text": "Design + implementation adversarially vetted BEFORE commit. Attack: does immediate re-drive re-create the run-20 concurrent-self-move storm (the serialization gate must still admit exactly one); starvation of non-ledger planning; formation-vs-steady-state circularity (the self-move status writes go through the ledger being moved — do NOT fix by bypassing the ledger)."
+    },
+    {
+      "id": "c-class",
+      "text": "One class: the spread-window LATENCY (follow-up dead gap first, per-move costs if binding). Do NOT raise timeouts/budgets (TEST-0021); do NOT weaken run-20 serialization or run-22 spread-first engagement; do NOT add demo-side waits; bootstrap placement redesign (spreading at node-join time) is OUT of scope — record as a lead if evidence points there."
+    }
+  ]
+}

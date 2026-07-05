@@ -305,3 +305,83 @@ test('forensic honesty: the interlock blocking message embeds the HELD ' +
       'actually examined), not the user table being admitted',
   );
 });
+
+test('run-25: the provisioning PRECHECK consults the ledger interlock — a ' +
+  'precheck that admits what createOperation refuses defeats the ' +
+  'convergence wait (RED on the run-25 head)', async (t) => {
+  const {applyRebalanceCoordinatorOperationCreationMethods} = await import(
+    '../../src/rebalancer/rebalance-coordinator-operation-creation.js'
+  );
+  class CoordinatorFixture {
+    constructor() {
+      // Storage admission always admits — run-25's live shape.
+      this.provisioningAdmissionPolicy = {
+        async checkProvisioningAdmission() {
+          return {
+            allowed: true,
+            decisionType: 'admitted',
+            admissionResult: {allowed: true, decisionType: 'admitted'},
+          };
+        },
+      };
+    }
+    normalizeMoveType(type) {
+      return type;
+    }
+    isEmergencyPriorityControlPlanePartition() {
+      return false;
+    }
+    isOperationTerminal() {
+      return false;
+    }
+    isLiveOperationLedgerInterlockOperation() {
+      return true;
+    }
+    async queryIncompleteOperations() {
+      // A live ledger self-move is in flight (REPLACE of the ledger
+      // partition) — the exact run-24/25 formation window.
+      return [
+        {
+          operationId: 'op-ledger-self-move',
+          type: 'REPLACE',
+          partitionId: 'replica_operations-p1',
+          status: 'executing',
+        },
+      ];
+    }
+    getIncompleteOperationObservation() {
+      return {deferredOutcome: null};
+    }
+    createConcurrentOperationBudgetError(normalizedMoveType, budget, options) {
+      return new Error(options.message);
+    }
+  }
+  applyRebalanceCoordinatorOperationCreationMethods(CoordinatorFixture);
+  const {applyRebalanceCoordinatorLedgerInterlockAdmissionMethods:
+    applyInterlock} = await import(
+    '../../src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js'
+  );
+  applyInterlock(CoordinatorFixture);
+  const coordinator = new CoordinatorFixture();
+
+  const decision = await coordinator.checkProvisioningAdmission({
+    type: 'ADD',
+    partitionId: 'tbl-run25-user-table-p1',
+    nodeId: 'node-b',
+  });
+  t.equal(
+    decision.allowed,
+    false,
+    'the precheck DEFERS while a ledger self-move is live — it predicts ' +
+      'what createOperation would refuse instead of lying to the ' +
+      'convergence wait',
+  );
+  t.match(
+    decision.admissionResult?.blockingReasons?.[0]?.code ||
+      decision.admissionResult?.blockingReasons?.[0] ||
+      decision.admissionResult?.reason,
+    /operation_ledger_self_move/,
+    'the deferral carries the transient ledger-hold reason the ' +
+      'provisioning transient-wait classifies on',
+  );
+});

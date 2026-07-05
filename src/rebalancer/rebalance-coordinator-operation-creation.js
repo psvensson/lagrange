@@ -19,6 +19,24 @@ const {
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
+/**
+ * Interlock-probe context for one prospective move (precheck side of
+ * createOperationInternal's own interlock call).
+ * @param {Object} move
+ * @param {string|null} normalizedMoveType
+ * @return {Object}
+ */
+function buildLedgerInterlockProbeContext(move, normalizedMoveType) {
+  const entityId = move?.entityId || move?.partitionId;
+  return {
+    move,
+    normalizedMoveType,
+    entityType: move?.entityType || SERVICE_TYPE.PARTITION,
+    entityId,
+    partitionId: move?.partitionId || entityId,
+  };
+}
+
 class RebalanceCoordinatorOperationCreation {
   assertMembershipPublicationEpoch(move) {
     const requestedEpoch = Number(move?.membershipPublicationEpoch);
@@ -133,7 +151,55 @@ class RebalanceCoordinatorOperationCreation {
    * @return {Promise<Object>} Admission decision payload.
    */
   async checkProvisioningAdmission(move) {
+    // The precheck must PREDICT createOperation's admission. The ledger
+    // interlock rejects at CREATION time (createOperationInternal), and a
+    // precheck that admits what creation then refuses turns whole-cluster
+    // transient formation holds into instant client failures: run-24/25's
+    // provisioning convergence wait polls THIS method, saw storage-only
+    // admission, exited on the first probe, and every createOperation was
+    // still interlock-deferred — the CREATE TABLE failed in one pass while
+    // the hold would have cleared inside the provisioning budget.
+    const ledgerInterlockDeferral =
+      await this.resolveProvisioningLedgerInterlockDeferral(move);
+    if (ledgerInterlockDeferral) {
+      return ledgerInterlockDeferral;
+    }
     return this.provisioningAdmissionPolicy.checkProvisioningAdmission(move);
+  }
+
+  /**
+   * Probe the operation-ledger interlock for one prospective move; returns
+   * the deferral decision when the interlock would refuse creation, null
+   * when creation is clear to proceed.
+   * @param {Object} move - Move specification.
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveProvisioningLedgerInterlockDeferral(move) {
+    try {
+      await this.ensureOperationLedgerSelfMoveSerialized(
+        buildLedgerInterlockProbeContext(move, this.normalizeMoveType(move?.type)),
+      );
+    } catch (error) {
+      const admissionResult = error?.admissionResult;
+      if (!admissionResult) {
+        // The precheck is ADVISORY: an unreadable ledger must not turn a
+        // probe into a provisioning abort (absence of actuals never blocks
+        // routine admission). Creation remains the enforcer.
+        this.logger?.debug?.(
+          REBALANCE_COORDINATOR_LOG_MSG.PROVISIONING_ADMISSION_DENIED,
+          {probeError: error?.message || String(error)},
+        );
+        return null;
+      }
+      return {
+        allowed: false,
+        decisionType: admissionResult.decisionType || null,
+        admissionResult,
+        error,
+      };
+    }
+    return null;
   }
 
   /**
