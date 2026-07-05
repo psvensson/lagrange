@@ -3,8 +3,9 @@
 // must stay a pointer list — its own header mandates one line per memory,
 // ≤~160 chars, narrative in topic files (see docs/steering/memory-boundary.md).
 // Warn-only (always exits 0): memory lives under ~/.claude, outside the repo,
-// so this can never gate CI. It is wired as a SessionStart hook nudge (the
-// warning lands in session context at boot) and as `npm run check:memory-index`.
+// so this can never gate CI. Run via `npm run check:memory-index`; to surface
+// violations at session boot, add it as a SessionStart hook in
+// .claude/settings.json (operator-approved change).
 
 import fs from 'node:fs';
 import os from 'node:os';
