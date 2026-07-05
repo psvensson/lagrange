@@ -100,6 +100,10 @@ export function computeInFlightAwareReplicaAccounting({
   const targetPartition = trimmedString(partitionId);
   const activeReplicaIds = new Set();
   const occupiedReplicaIds = new Set();
+  // Materialized-but-not-yet-active replica rows (durable learners) indexed by
+  // node, so a drain-phase REPLACE can be row-op-linked to the specific
+  // replacement row sitting on its target node (see the credit pass below).
+  const nonActiveOccupiedByNode = new Map();
   for (const replica of currentReplicas) {
     if (!replica?.node_id) {
       continue;
@@ -114,6 +118,13 @@ export function computeInFlightAwareReplicaAccounting({
     }
     if (OCCUPIED_STATUSES.has(status)) {
       occupiedReplicaIds.add(replicaId);
+      if (status !== ReplicaStatus.ACTIVE) {
+        const nodeId = trimmedString(replica.node_id);
+        if (!nonActiveOccupiedByNode.has(nodeId)) {
+          nonActiveOccupiedByNode.set(nodeId, new Set());
+        }
+        nonActiveOccupiedByNode.get(nodeId).add(replicaId);
+      }
     }
   }
 
@@ -146,16 +157,73 @@ export function computeInFlightAwareReplicaAccounting({
     }
   }
 
+  // Row-op-linked drain-phase REPLACE credit. A REPLACE is USUALLY net-neutral
+  // (its source is still an active voter, so its slot is already in activeCount).
+  // But once the source has DRAINED (left activeCount) while the replacement is
+  // still a durable non-voting LEARNER (a materialized syncing/creating row, not
+  // yet ACTIVE), that replacement's slot is counted NOWHERE: activeCount dropped
+  // with the source, and deficitEffectiveCount excludes REPLACE replacements. The
+  // planner then reads a false deficit, mints a spurious count-increasing ADD, and
+  // the group overshoots target (4 voters / 3), concentrates, and stalls. Credit
+  // exactly the specific replacement row on the op's target node (industry
+  // pattern: TiKV/PD "current + in-flight operator influence"; CockroachDB counts
+  // the learner). Row-op-linked — NOT an occupied-count heuristic — so stale
+  // learners unlinked to a REPLACE, replacements already ACTIVE, and net-neutral
+  // (source-still-active) REPLACEs are all correctly excluded.
+  let drainPhaseReplacementCredit = 0;
+  const creditedReplacementIds = new Set();
+  for (const operation of inFlightOperations) {
+    if (operationType(operation) !== MoveType.REPLACE) {
+      continue;
+    }
+    const opPartition = operationPartitionId(operation);
+    if (targetPartition && opPartition && opPartition !== targetPartition) {
+      continue;
+    }
+    const sourceReplicaId = trimmedString(
+      operation?.replica_id || operation?.replicaId,
+    );
+    // Net-neutral REPLACE: source still an active voter -> already counted.
+    if (sourceReplicaId && activeReplicaIds.has(sourceReplicaId)) {
+      continue;
+    }
+    const targetNodeId = trimmedString(
+      operation?.target_node_id || operation?.targetNodeId,
+    );
+    const candidates = targetNodeId ?
+      nonActiveOccupiedByNode.get(targetNodeId) :
+      null;
+    if (!candidates) {
+      continue;
+    }
+    // Bind to exactly one materialized non-active replacement row on the target
+    // node, excluding the source and any row already credited to another REPLACE
+    // (two REPLACEs cannot both claim one learner).
+    for (const replicaId of candidates) {
+      if (replicaId === sourceReplicaId ||
+        creditedReplacementIds.has(replicaId)) {
+        continue;
+      }
+      creditedReplacementIds.add(replicaId);
+      drainPhaseReplacementCredit += 1;
+      break;
+    }
+  }
+
   const activeCount = activeReplicaIds.size;
   return {
     activeCount,
     occupiedCount: occupiedReplicaIds.size,
     inFlightAddCount,
     inFlightReplaceInCreationCount,
+    drainPhaseReplacementCredit,
     // Count-increasing work only: what a genuine replica-count DEFICIT decision
-    // should compare against the target (a REPLACE is net-neutral, never fills a
-    // deficit).
-    deficitEffectiveCount: activeCount + inFlightAddCount,
+    // should compare against the target. A net-neutral REPLACE never fills a
+    // deficit, but a drain-phase REPLACE whose source has left activeCount and
+    // whose replacement is a durable learner DOES occupy the slot — credit it so
+    // the planner does not re-fill an already-filled slot and overshoot target.
+    deficitEffectiveCount:
+      activeCount + inFlightAddCount + drainPhaseReplacementCredit,
     // All replicas that will exist if every in-flight creation lands before any
     // blocked source drains — what an OVER-creation cap must bound.
     creationEffectiveCount:
