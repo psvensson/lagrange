@@ -392,6 +392,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         const operation = await executionFactory();
         if (operation?.operationId) {
           state.heldSelfMoveOperationId = operation.operationId;
+          state.heldSelfMovePartitionId = operation.partitionId || partitionId;
         }
         return operation;
       } finally {
@@ -407,7 +408,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         throw this.createOperationLedgerInterlockError(
           normalizedMoveType,
           OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
-            String(partitionId) +
+            String(state.heldSelfMovePartitionId || partitionId) +
             OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
           OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
           null,
@@ -416,10 +417,12 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       if (state.heldSelfMoveOperationId) {
         const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
         if (!cleared) {
+          // The held LEDGER partition is the state examined here — embedding
+          // the admitted operation's partition mislabeled run-24 forensics.
           throw this.createOperationLedgerInterlockError(
             normalizedMoveType,
             OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
-              String(partitionId) +
+              String(state.heldSelfMovePartitionId || partitionId) +
               OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
             OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
             state.heldSelfMoveOperationId,
@@ -485,6 +488,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       this.operationLedgerInterlockAdmission = {
         selfMoveCreateInFlight: false,
         heldSelfMoveOperationId: null,
+        heldSelfMovePartitionId: null,
         otherCreatesInFlight: 0,
         lastQuorumHoldWarnAtMs: null,
       };
@@ -523,6 +527,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       !this.isLiveOperationLedgerInterlockOperation(operation, nowMs)
     ) {
       state.heldSelfMoveOperationId = null;
+      state.heldSelfMovePartitionId = null;
       return true;
     }
     return false;

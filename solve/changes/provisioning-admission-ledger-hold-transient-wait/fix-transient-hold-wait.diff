@@ -1,0 +1,543 @@
+diff --git a/src/query/query-constants.js b/src/query/query-constants.js
+index fa4b22dd..0826cf0d 100644
+--- a/src/query/query-constants.js
++++ b/src/query/query-constants.js
+@@ -238,6 +238,9 @@ const QUERY_LOG_MSG = Object.freeze({
+   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
+   TABLE_PARTITION_TARGET_NODE_FALLBACK_USED:
+     'Using degraded provisioning target-node fallback',
++  TABLE_PARTITION_TRANSIENT_HOLD_WAIT:
++    'Whole-cluster transient provisioning hold; waiting it out under the ' +
++    'provisioning budget instead of failing the create',
+   TABLE_PARTITION_TARGET_NODE_REJECTED:
+     'Provisioning target node rejected during operation planning',
+   TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS:
+diff --git a/src/query/sql-query-engine-initial-partition-provisioning.js b/src/query/sql-query-engine-initial-partition-provisioning.js
+index be3ab4e7..d82a02b1 100644
+--- a/src/query/sql-query-engine-initial-partition-provisioning.js
++++ b/src/query/sql-query-engine-initial-partition-provisioning.js
+@@ -126,13 +126,25 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+ 
+     if (
+       explicitTargetNodeIds.length === 0 &&
+-      enforceEveryProvisioningOperation &&
++      // Quorum-minimum creates (minimum < target, the CREATE TABLE default)
++      // must ALSO converge admission before planning: run-24 skipped this
++      // block entirely on that geometry and fail-fasted the client into a
++      // transient whole-cluster ledger hold in a single admission pass.
++      (enforceEveryProvisioningOperation ||
++        this.supportsProvisioningAdmissionPrecheck()) &&
+       (provisionTargetNodeIds.length < targetReplicaCount ||
+         this.supportsProvisioningAdmissionPrecheck())
+     ) {
+-      const convergenceResult = await this.waitForProvisionTargetNodeIds({
++      // A quorum-minimum create is satisfied as soon as the minimum admits —
++      // requiring the full target here would make routine partial-admission
++      // creates wait out the whole window for replicas the rebalancer can
++      // fill in afterwards.
++      const convergenceRequiredReplicaCount = enforceEveryProvisioningOperation ?
++        targetReplicaCount :
++        Math.max(1, minimumRoutableReplicaCount);
++      let convergenceResult = await this.waitForProvisionTargetNodeIds({
+         partitionId,
+-        requiredReplicaCount: targetReplicaCount,
++        requiredReplicaCount: convergenceRequiredReplicaCount,
+         timeoutBudget,
+         failOnTimeout: false,
+         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
+@@ -142,6 +154,19 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+           QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS,
+       });
+       admissionConvergence = convergenceResult.admissionProbe || null;
++      const transientHoldRewaitResult =
++        await this.waitOutWholeClusterTransientProvisioningHold({
++          partitionId,
++          requiredReplicaCount: convergenceRequiredReplicaCount,
++          timeoutBudget,
++          explicitTargetNodeIds,
++          hasExplicitMinimumRoutableReplicaCount,
++          admissionConvergence,
++        });
++      if (transientHoldRewaitResult) {
++        convergenceResult = transientHoldRewaitResult;
++        admissionConvergence = convergenceResult.admissionProbe || null;
++      }
+       provisionTargetDiagnostics =
+         convergenceResult.diagnostics || provisionTargetDiagnostics;
+       provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
+@@ -645,6 +670,63 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+     });
+   }
+ 
++  /**
++   * Wait out a WHOLE-CLUSTER transient provisioning hold under the full
++   * provisioning budget (run-24): when the short convergence window expires
++   * with ZERO provisionable targets and EVERY rejection is a transient
++   * ledger-interlock/health reason, the hold is an internal formation
++   * window — failing the client's CREATE at the convergence window's edge
++   * violates internal-pacing-not-client-fidelity while the governing
++   * provisioning budget still has headroom. This is honest budget
++   * attribution, not a raised timeout: the client-facing budget
++   * (tablePartitionProvisioningTimeoutMs / the caller's timeoutBudget)
++   * always governed the create; only the inner window's early throw is
++   * removed. Hard (non-transient) rejections and explicit caller minimums
++   * never take this path.
++   * @param {Object} options
++   * @return {Promise<Object|null>} The re-wait convergence result, or null
++   *   when the extended wait does not apply.
++   * @private
++   */
++  isWholeClusterTransientProvisioningHold(options = {}) {
++    const admissionConvergence = options.admissionConvergence || null;
++    const maximumProvisionableReplicaCount = Number.isInteger(
++      admissionConvergence?.maximumProvisionableReplicaCount,
++    ) ?
++      admissionConvergence.maximumProvisionableReplicaCount :
++      null;
++    return (
++      maximumProvisionableReplicaCount === 0 &&
++      options.hasExplicitMinimumRoutableReplicaCount !== true &&
++      this.hasOnlyTransientProvisioningShortfall(
++        admissionConvergence?.rejectedTargetNodePlans,
++      )
++    );
++  }
++
++  async waitOutWholeClusterTransientProvisioningHold(options = {}) {
++    if (!this.isWholeClusterTransientProvisioningHold(options)) {
++      return null;
++    }
++    const admissionConvergence = options.admissionConvergence || null;
++    this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
++      partitionId: options.partitionId || null,
++      requiredReplicaCount: options.requiredReplicaCount || null,
++      rejectedTargetNodePlans:
++        admissionConvergence?.rejectedTargetNodePlans || [],
++      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
++    });
++    return this.waitForProvisionTargetNodeIds({
++      partitionId: options.partitionId,
++      requiredReplicaCount: options.requiredReplicaCount,
++      timeoutBudget: options.timeoutBudget,
++      failOnTimeout: false,
++      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
++      explicitTargetNodeIds: options.explicitTargetNodeIds || [],
++      allowAdaptiveAdmissionConvergenceWait: false,
++    });
++  }
++
+   buildProvisioningCompletionSummary(options = {}) {
+     const requestedReplicaCount =
+       Number.isInteger(options?.requestedReplicaCount) &&
+diff --git a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+index c89e4267..c019985b 100644
+--- a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
++++ b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+@@ -392,6 +392,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+         const operation = await executionFactory();
+         if (operation?.operationId) {
+           state.heldSelfMoveOperationId = operation.operationId;
++          state.heldSelfMovePartitionId = operation.partitionId || partitionId;
+         }
+         return operation;
+       } finally {
+@@ -407,7 +408,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+         throw this.createOperationLedgerInterlockError(
+           normalizedMoveType,
+           OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+-            String(partitionId) +
++            String(state.heldSelfMovePartitionId || partitionId) +
+             OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+           OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+           null,
+@@ -416,10 +417,12 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       if (state.heldSelfMoveOperationId) {
+         const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
+         if (!cleared) {
++          // The held LEDGER partition is the state examined here — embedding
++          // the admitted operation's partition mislabeled run-24 forensics.
+           throw this.createOperationLedgerInterlockError(
+             normalizedMoveType,
+             OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+-              String(partitionId) +
++              String(state.heldSelfMovePartitionId || partitionId) +
+               OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
+             OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
+             state.heldSelfMoveOperationId,
+@@ -485,6 +488,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       this.operationLedgerInterlockAdmission = {
+         selfMoveCreateInFlight: false,
+         heldSelfMoveOperationId: null,
++        heldSelfMovePartitionId: null,
+         otherCreatesInFlight: 0,
+         lastQuorumHoldWarnAtMs: null,
+       };
+@@ -523,6 +527,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       !this.isLiveOperationLedgerInterlockOperation(operation, nowMs)
+     ) {
+       state.heldSelfMoveOperationId = null;
++      state.heldSelfMovePartitionId = null;
+       return true;
+     }
+     return false;
+diff --git a/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js b/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
+new file mode 100644
+index 00000000..2b35938f
+--- /dev/null
++++ b/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
+@@ -0,0 +1,307 @@
++/**
++ * Quest provisioning-admission-ledger-hold-transient-wait (run-24 head).
++ *
++ * Run-24: the MovieLens demo's FIRST CREATE TABLE arrived ~6s after
++ * formation, while the run-20 operation-ledger self-move hold was
++ * legitimately engaged (ledger replicas spreading off the seed). EVERY
++ * target node was deferred with the transient reason
++ * operation_ledger_self_move_in_flight, so provisionable=0 — and the create
++ * failed the CLIENT after only the short target-node convergence window
++ * (1s default / 10s adaptive), even though the governing client-facing
++ * provisioning budget (TABLE_CREATE_PROVISION_TIMEOUT_MS = 30s) had ~24s
++ * left and the hold clears in seconds. Internal pacing must not rely on
++ * client fidelity (ARCH-0016: load may slow the system, not break it).
++ *
++ * The contract under test: when the convergence wait expires with ZERO
++ * provisionable targets and EVERY rejection is a transient ledger-hold
++ * reason, provisioning keeps waiting the hold out under the EXISTING
++ * provisioning budget (no raised timeouts — honest budget attribution);
++ * a hold that never clears still fails within that budget, and a
++ * non-transient whole-cluster rejection still fails fast.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
++import {
++  applyRebalanceCoordinatorLedgerInterlockAdmissionMethods,
++} from '../../src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js';
++import {TABLES} from '../../src/constants/index.js';
++
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++const config = ConfigurationManager.getInstance();
++config.initialize();
++
++import {createMockMessageRouter} from './sql-query-engine-test-support.js';
++
++const LEDGER_HOLD_REJECTION = Object.freeze({
++  allowed: false,
++  decisionType: 'deferred',
++  admissionResult: {
++    allowed: false,
++    decisionType: 'deferred',
++    blockingReasons: ['operation_ledger_self_move_in_flight'],
++  },
++});
++
++function createClusterFixture({nodeIds}) {
++  const nodes = nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'}));
++  const services = [];
++  const cache = {
++    onCacheChange() {},
++    offCacheChange() {},
++    filter(type, predicate) {
++      if (type === TABLES.NODES) {
++        return nodes.filter(predicate);
++      }
++      if (type === TABLES.SERVICES) {
++        return services.filter(predicate);
++      }
++      return [];
++    },
++    getAll(type) {
++      if (type === TABLES.NODES) {
++        return nodes;
++      }
++      if (type === TABLES.SERVICES) {
++        return services;
++      }
++      return [];
++    },
++  };
++  return {nodes, services, cache};
++}
++
++function createHoldingRebalanceCoordinator({
++  isHoldEngaged,
++  createdTargetNodeIds,
++  services,
++  localNodeId,
++  rejection = LEDGER_HOLD_REJECTION,
++}) {
++  return {
++    async checkProvisioningAdmission() {
++      if (isHoldEngaged()) {
++        return rejection;
++      }
++      return {
++        allowed: true,
++        decisionType: 'admitted',
++        admissionResult: {allowed: true, decisionType: 'admitted'},
++      };
++    },
++    async createOperation(move) {
++      createdTargetNodeIds.push(move.nodeId);
++      return {operationId: `op-${move.nodeId}`, ...move};
++    },
++    async executeOperation(operation) {
++      const targetNodeId = operation.targetNodeId || operation.nodeId;
++      services.push({
++        service_id:
++          operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
++        replica_id:
++          operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
++        partition_id: operation.partitionId,
++        service_type: 'partition',
++        status: 'active',
++        node_id: targetNodeId,
++        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
++        address: `${targetNodeId}/partition/${operation.partitionId}`,
++      });
++      return {success: true};
++    },
++  };
++}
++
++function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {
++  const engine = new SQLQueryEngine({
++    nodeId: localNodeId,
++    systemCache: cache,
++    messageRouter: createMockMessageRouter(),
++    rebalanceCoordinator,
++    // Compressed real geometry: convergence window << provisioning budget.
++    tablePartitionProvisioningTimeoutMs: 400,
++    tablePartitionProvisioningPollIntervalMs: 1,
++    tablePartitionTargetNodeConvergenceTimeoutMs: 10,
++  });
++  engine.waitForRoutablePartitionServiceCount = async () => {};
++  engine.waitForPartitionLeaderService = async () => {};
++  return engine;
++}
++
++test('run-24: CREATE TABLE survives a whole-cluster transient ' +
++  'operation-ledger hold that outlasts the convergence window but clears ' +
++  'inside the provisioning budget (RED on the unfixed head)', async (t) => {
++  const partitionId = 'tbl-run24-ledger-hold-p1';
++  const localNodeId = 'node-a';
++  const createdTargetNodeIds = [];
++  const {services, cache} = createClusterFixture({
++    nodeIds: ['node-a', 'node-b', 'node-c'],
++  });
++
++  // The hold clears only after MANY sleep ticks — far past the 10ms
++  // convergence window at 1ms polls, well inside the 400ms budget.
++  let sleepCalls = 0;
++  const rebalanceCoordinator = createHoldingRebalanceCoordinator({
++    isHoldEngaged: () => sleepCalls < 40,
++    createdTargetNodeIds,
++    services,
++    localNodeId,
++  });
++  const engine = createEngineFixture(t, {
++    rebalanceCoordinator,
++    cache,
++    localNodeId,
++  });
++  engine.sleep = async () => {
++    sleepCalls += 1;
++  };
++
++  // The REAL CREATE TABLE geometry (table-creation-service): a defaulted
++  // QUORUM minimum below the target count — the shape that skipped the
++  // convergence wait entirely in run-24 (enforceEveryProvisioningOperation
++  // false), so the create fail-fasted in one admission pass.
++  await engine.provisionInitialTablePartition({
++    partitionId,
++    replicaCount: 3,
++    minimumRoutableReplicaCount: 2,
++    minimumRoutableReplicaCountWasDefaulted: true,
++  });
++
++  t.ok(
++    sleepCalls >= 40,
++    'provisioning waited out the whole-cluster transient hold internally ' +
++      `(${sleepCalls} polls)`,
++  );
++  t.same(
++    createdTargetNodeIds.sort(),
++    ['node-a', 'node-b', 'node-c'],
++    'all three replicas provisioned once the ledger hold cleared — the ' +
++      'client never saw the transient',
++  );
++});
++
++test('control: a transient hold that NEVER clears still fails within the ' +
++  'provisioning budget (bounded — no livelock)', async (t) => {
++  const partitionId = 'tbl-run24-hold-never-clears-p1';
++  const localNodeId = 'node-a';
++  const createdTargetNodeIds = [];
++  const {services, cache} = createClusterFixture({
++    nodeIds: ['node-a', 'node-b', 'node-c'],
++  });
++  const rebalanceCoordinator = createHoldingRebalanceCoordinator({
++    isHoldEngaged: () => true,
++    createdTargetNodeIds,
++    services,
++    localNodeId,
++  });
++  const engine = createEngineFixture(t, {
++    rebalanceCoordinator,
++    cache,
++    localNodeId,
++  });
++
++  await t.rejects(
++    engine.provisionInitialTablePartition({
++      partitionId,
++      replicaCount: 3,
++      minimumRoutableReplicaCount: 2,
++      minimumRoutableReplicaCountWasDefaulted: true,
++    }),
++    /minimum routable provisioning cohort/,
++    'an unclearable hold still surfaces the canonical typed failure',
++  );
++  t.same(createdTargetNodeIds, [], 'nothing was planned under the hold');
++});
++
++test('control: a NON-transient whole-cluster rejection fails fast without ' +
++  'consuming the transient-hold wait', async (t) => {
++  const partitionId = 'tbl-run24-hard-rejection-p1';
++  const localNodeId = 'node-a';
++  const createdTargetNodeIds = [];
++  const {services, cache} = createClusterFixture({
++    nodeIds: ['node-a', 'node-b', 'node-c'],
++  });
++  let sleepCalls = 0;
++  const rebalanceCoordinator = createHoldingRebalanceCoordinator({
++    isHoldEngaged: () => true,
++    createdTargetNodeIds,
++    services,
++    localNodeId,
++    rejection: {
++      allowed: false,
++      decisionType: 'blocked',
++      admissionResult: {
++        allowed: false,
++        decisionType: 'blocked',
++        blockingReasons: ['replica_already_present'],
++      },
++    },
++  });
++  const engine = createEngineFixture(t, {
++    rebalanceCoordinator,
++    cache,
++    localNodeId,
++  });
++  const originalSleep = engine.sleep.bind(engine);
++  engine.sleep = async (ms) => {
++    sleepCalls += 1;
++    return originalSleep(ms);
++  };
++
++  await t.rejects(
++    engine.provisionInitialTablePartition({
++      partitionId,
++      replicaCount: 3,
++      minimumRoutableReplicaCount: 2,
++      minimumRoutableReplicaCountWasDefaulted: true,
++    }),
++    /minimum routable provisioning cohort/,
++    'a hard rejection surfaces the canonical typed failure',
++  );
++  t.ok(
++    sleepCalls < 40,
++    'no extended transient-hold wait was consumed for a hard rejection ' +
++      `(${sleepCalls} polls)`,
++  );
++});
++
++test('forensic honesty: the interlock blocking message embeds the HELD ' +
++  'ledger partition, not the admitted operation\'s partition (run-24 ' +
++  'mislabel)', async (t) => {
++  class InterlockFixture {
++    normalizeMoveType(type) {
++      return type;
++    }
++    isEmergencyPriorityControlPlanePartition() {
++      return false;
++    }
++    isOperationTerminal() {
++      return false;
++    }
++    async queryOperationById(operationId) {
++      // The held ledger self-move is still live: the hold cannot clear.
++      return {operationId, status: 'executing'};
++    }
++    isLiveOperationLedgerInterlockOperation() {
++      return true;
++    }
++    createConcurrentOperationBudgetError(normalizedMoveType, budget, options) {
++      return new Error(options.message);
++    }
++  }
++  applyRebalanceCoordinatorLedgerInterlockAdmissionMethods(InterlockFixture);
++  const coordinator = new InterlockFixture();
++  const state = coordinator.getOperationLedgerInterlockAdmissionState();
++  state.heldSelfMoveOperationId = 'op-ledger-self-move';
++  state.heldSelfMovePartitionId = 'replica_operations-p1';
++
++  await t.rejects(
++    coordinator.runOperationLedgerInterlockAccountedCreate(
++      {type: 'ADD', partitionId: 'tbl-user-table-p1'},
++      async () => ({operationId: 'op-user-add'}),
++    ),
++    /replica_operations-p1/,
++    'the blocking error names the held LEDGER partition (the state ' +
++      'actually examined), not the user table being admitted',
++  );
++});
+diff --git a/scripts/run-provisioning-admission-ledger-hold-transient-wait-scenarios.js b/scripts/run-provisioning-admission-ledger-hold-transient-wait-scenarios.js
+new file mode 100644
+index 00000000..1b506bac
+--- /dev/null
++++ b/scripts/run-provisioning-admission-ledger-hold-transient-wait-scenarios.js
+@@ -0,0 +1,42 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `provisioning-admission-ledger-hold-transient-wait` quest
++ * scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed proof
++ * of the quest statement) and writes a scenario-harness report for the
++ * Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from affinity-demo run-24
++ * forensics; evidence under
++ * solve/changes/provisioning-admission-ledger-hold-transient-wait/):
++ *   provisioning-admission-ledger-hold-transient-wait
++ *     - test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
++ *       (run-24: the demo's first CREATE TABLE landed inside the legitimate
++ *        run-20 ledger self-move hold and was failed to the CLIENT in one
++ *        admission pass — the quorum-minimum CREATE geometry skipped the
++ *        convergence wait entirely, and even where it runs its window is
++ *        dwarfed by ledger-hold windows while the 30s provisioning budget
++ *        had headroom. Fix: the convergence wait also covers quorum-minimum
++ *        creates (satisfied at the minimum, so partial-admission creates do
++ *        not slow), and a whole-cluster ALL-transient shortfall gets one
++ *        budget-bounded re-wait — honest budget attribution, no raised
++ *        timeouts. Guards: the run-24 reproduction, bounded never-clears,
++ *        hard-rejection fail-fast, and the interlock message embedding the
++ *        HELD ledger partition.)
++ *
++ * Usage: node scripts/run-provisioning-admission-ledger-hold-transient-wait-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'provisioning-admission-ledger-hold-transient-wait': [
++    'test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);

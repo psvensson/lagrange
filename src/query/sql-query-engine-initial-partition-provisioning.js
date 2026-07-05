@@ -126,13 +126,25 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     if (
       explicitTargetNodeIds.length === 0 &&
-      enforceEveryProvisioningOperation &&
+      // Quorum-minimum creates (minimum < target, the CREATE TABLE default)
+      // must ALSO converge admission before planning: run-24 skipped this
+      // block entirely on that geometry and fail-fasted the client into a
+      // transient whole-cluster ledger hold in a single admission pass.
+      (enforceEveryProvisioningOperation ||
+        this.supportsProvisioningAdmissionPrecheck()) &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
-      const convergenceResult = await this.waitForProvisionTargetNodeIds({
+      // A quorum-minimum create is satisfied as soon as the minimum admits —
+      // requiring the full target here would make routine partial-admission
+      // creates wait out the whole window for replicas the rebalancer can
+      // fill in afterwards.
+      const convergenceRequiredReplicaCount = enforceEveryProvisioningOperation ?
+        targetReplicaCount :
+        Math.max(1, minimumRoutableReplicaCount);
+      let convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
-        requiredReplicaCount: targetReplicaCount,
+        requiredReplicaCount: convergenceRequiredReplicaCount,
         timeoutBudget,
         failOnTimeout: false,
         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
@@ -142,6 +154,19 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS,
       });
       admissionConvergence = convergenceResult.admissionProbe || null;
+      const transientHoldRewaitResult =
+        await this.waitOutWholeClusterTransientProvisioningHold({
+          partitionId,
+          requiredReplicaCount: convergenceRequiredReplicaCount,
+          timeoutBudget,
+          explicitTargetNodeIds,
+          hasExplicitMinimumRoutableReplicaCount,
+          admissionConvergence,
+        });
+      if (transientHoldRewaitResult) {
+        convergenceResult = transientHoldRewaitResult;
+        admissionConvergence = convergenceResult.admissionProbe || null;
+      }
       provisionTargetDiagnostics =
         convergenceResult.diagnostics || provisionTargetDiagnostics;
       provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
@@ -642,6 +667,63 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       nextAction: provisioningNextAction,
       reasonCodes: provisioningReasonCodes,
       retryAfterMs: provisioningRetryAfterMs,
+    });
+  }
+
+  /**
+   * Wait out a WHOLE-CLUSTER transient provisioning hold under the full
+   * provisioning budget (run-24): when the short convergence window expires
+   * with ZERO provisionable targets and EVERY rejection is a transient
+   * ledger-interlock/health reason, the hold is an internal formation
+   * window — failing the client's CREATE at the convergence window's edge
+   * violates internal-pacing-not-client-fidelity while the governing
+   * provisioning budget still has headroom. This is honest budget
+   * attribution, not a raised timeout: the client-facing budget
+   * (tablePartitionProvisioningTimeoutMs / the caller's timeoutBudget)
+   * always governed the create; only the inner window's early throw is
+   * removed. Hard (non-transient) rejections and explicit caller minimums
+   * never take this path.
+   * @param {Object} options
+   * @return {Promise<Object|null>} The re-wait convergence result, or null
+   *   when the extended wait does not apply.
+   * @private
+   */
+  isWholeClusterTransientProvisioningHold(options = {}) {
+    const admissionConvergence = options.admissionConvergence || null;
+    const maximumProvisionableReplicaCount = Number.isInteger(
+      admissionConvergence?.maximumProvisionableReplicaCount,
+    ) ?
+      admissionConvergence.maximumProvisionableReplicaCount :
+      null;
+    return (
+      maximumProvisionableReplicaCount === 0 &&
+      options.hasExplicitMinimumRoutableReplicaCount !== true &&
+      this.hasOnlyTransientProvisioningShortfall(
+        admissionConvergence?.rejectedTargetNodePlans,
+      )
+    );
+  }
+
+  async waitOutWholeClusterTransientProvisioningHold(options = {}) {
+    if (!this.isWholeClusterTransientProvisioningHold(options)) {
+      return null;
+    }
+    const admissionConvergence = options.admissionConvergence || null;
+    this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
+      partitionId: options.partitionId || null,
+      requiredReplicaCount: options.requiredReplicaCount || null,
+      rejectedTargetNodePlans:
+        admissionConvergence?.rejectedTargetNodePlans || [],
+      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
+    });
+    return this.waitForProvisionTargetNodeIds({
+      partitionId: options.partitionId,
+      requiredReplicaCount: options.requiredReplicaCount,
+      timeoutBudget: options.timeoutBudget,
+      failOnTimeout: false,
+      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
+      explicitTargetNodeIds: options.explicitTargetNodeIds || [],
+      allowAdaptiveAdmissionConvergenceWait: false,
     });
   }
 
