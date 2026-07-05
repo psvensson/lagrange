@@ -7,10 +7,43 @@ const LOCAL_STR_OBJECT = 'object';
 const {
   CONCURRENT_CREATE_BUDGET_SCOPE,
   OperationType,
+  UNIFIED_SERVICE_TYPE,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   isPriorityRecoveryEmergencyPartition,
   resolveTrackedPriorityRecoveryAdmissionPlan,
 } = REBALANCE_COORDINATOR_SHARED;
+
+/**
+ * The number of plain-ADD budget slots held in fair-share reserve for genuine
+ * runtime-service replica-creates (quest
+ * formation-runtime-service-create-lane-budget-starvation). The global plain-ADD
+ * lane is shared by every non-priority ADD + non-dispatch-phase REPLACE, so a
+ * service's replica-create is otherwise starved by ordinary spread/REPLACE churn.
+ * @param {Object} coordinator
+ * @return {number}
+ */
+function getReservedCreateAddSlots(coordinator) {
+  const reserved = Number(coordinator?.config?.reservedCreateAddSlots);
+  return Number.isFinite(reserved) && reserved > 0 ? Math.floor(reserved) : 0;
+}
+
+/**
+ * A genuine runtime-service replica-create admission: an ADD move for a
+ * runtime_service entity. REPLACE/self-move of a service is count-neutral and is
+ * NOT a create, so it cannot consume the reserved create slot.
+ * @param {string} normalizedMoveType
+ * @param {string} entityType
+ * @return {boolean}
+ */
+function isGenuineServiceCreateAdmission(normalizedMoveType, entityType) {
+  if (normalizedMoveType !== OperationType.ADD) {
+    return false;
+  }
+  return (
+    String(entityType || '').toLowerCase() ===
+    UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+  );
+}
 
 async function runConcurrentCreateBudgetGate(
   coordinator,
@@ -211,7 +244,9 @@ export {
   getLatestMembershipPublicationRow,
   getPriorityConcurrentAddBudgetLimit,
   getPriorityRecoveryAdmissionPlan,
+  getReservedCreateAddSlots,
   getReservedPriorityRecoveryAddSlots,
+  isGenuineServiceCreateAdmission,
   isEmergencyPriorityControlPlanePartition,
   isEmergencyPriorityControlPlaneRecoveryActive,
   isGlobalPriorityControlPlaneRecoveryActive,

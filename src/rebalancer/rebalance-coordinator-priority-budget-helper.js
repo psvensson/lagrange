@@ -3,6 +3,9 @@ import {
   shouldAllowPriorityRecoveryDeferredObservation,
 } from './rebalance-coordinator-pressure-helper.js';
 import {
+  resolveCreateReservedAddLimit,
+} from './rebalance-coordinator-create-slot-reservation.js';
+import {
   PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD,
   REBALANCE_COORDINATOR_OPERATION_FIELD,
   REBALANCE_COORDINATOR_SEGMENT_5_LITERAL,
@@ -396,11 +399,17 @@ async function resolveAuthoritativeAddAdmission(
   options,
   concurrentAddLimit,
 ) {
-  const authoritativeCount = await getConcurrentAddCount(coordinator, {
+  const authoritativeReadOptions = {
     partitionId: options.partitionId,
     visibilityReadMode:
       REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-  });
+  };
+  const authoritativeOperations = await filterConcurrentAddBudgetOperations(
+    coordinator,
+    await coordinator.queryIncompleteOperations(authoritativeReadOptions),
+    authoritativeReadOptions,
+  );
+  const authoritativeCount = authoritativeOperations.length;
   const authoritativeObservation =
     coordinator.getIncompleteOperationObservation();
   coordinator.reconcileIncompleteOperationEmptyQueryDelay(
@@ -413,7 +422,12 @@ async function resolveAuthoritativeAddAdmission(
   ) {
     return false;
   }
-  return authoritativeCount < concurrentAddLimit;
+  return authoritativeCount < resolveCreateReservedAddLimit(
+    coordinator,
+    authoritativeOperations,
+    concurrentAddLimit,
+    options,
+  );
 }
 
 async function canStartAddOperation(coordinator, options = {}) {
@@ -442,6 +456,15 @@ async function canStartAddOperation(coordinator, options = {}) {
   const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
     cachedIncompleteOperations.length :
     0;
+  // Reserve a fair-share plain-ADD slot for genuine runtime-service creates so
+  // ordinary non-priority spread/REPLACE churn cannot starve a service's
+  // replica-create (quest formation-runtime-service-create-lane-budget-starvation).
+  const cachedCandidateEffectiveLimit = resolveCreateReservedAddLimit(
+    coordinator,
+    cachedIncompleteOperations,
+    concurrentAddLimit,
+    options,
+  );
   const cachedAddBudgetCandidateCount = (
     Array.isArray(cachedIncompleteOperations) ?
       cachedIncompleteOperations :
@@ -450,24 +473,29 @@ async function canStartAddOperation(coordinator, options = {}) {
     isConcurrentAddBudgetOperation(coordinator, operation),
   ).length;
   if (
-    cachedAddBudgetCandidateCount >= concurrentAddLimit &&
+    cachedAddBudgetCandidateCount >= cachedCandidateEffectiveLimit &&
     options?.concurrentBudgetReadMode !==
       REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION
   ) {
     return false;
   }
-  const cachedCount = (
-    await filterConcurrentAddBudgetOperations(
-      coordinator,
-      cachedIncompleteOperations,
-      options,
-    )
-  ).length;
+  const cachedFilteredOperations = await filterConcurrentAddBudgetOperations(
+    coordinator,
+    cachedIncompleteOperations,
+    options,
+  );
+  const cachedCount = cachedFilteredOperations.length;
+  const cachedEffectiveLimit = resolveCreateReservedAddLimit(
+    coordinator,
+    cachedFilteredOperations,
+    concurrentAddLimit,
+    options,
+  );
   if (cachedOperationCount > 0) {
     coordinator.clearEmptyIncompleteOperationQueryDelay();
   }
   if (cachedCount > 0) {
-    if (cachedCount < concurrentAddLimit) {
+    if (cachedCount < cachedEffectiveLimit) {
       return true;
     }
     if (
@@ -506,7 +534,7 @@ async function canStartAddOperation(coordinator, options = {}) {
       incompleteOperationObservation,
     )
   ) {
-    return count < concurrentAddLimit;
+    return count < cachedCandidateEffectiveLimit;
   }
   if (
     coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
@@ -515,7 +543,7 @@ async function canStartAddOperation(coordinator, options = {}) {
   ) {
     return false;
   }
-  return count < concurrentAddLimit;
+  return count < cachedCandidateEffectiveLimit;
 }
 
 async function canStartPriorityAddOperation(coordinator, options = {}) {

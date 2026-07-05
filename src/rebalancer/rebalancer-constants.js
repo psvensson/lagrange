@@ -78,6 +78,13 @@ const REBALANCER_DEFAULT = Object.freeze({
     SYNCING_TIMEOUT_MS: 300000,
     REMOVING_TIMEOUT_MS: 60000,
     MAX_CONCURRENT_ADDS: NUM.FIVE,
+    // One plain-ADD slot is held in fair-share reserve for genuine
+    // runtime-service replica-creates so ordinary non-priority spread/REPLACE
+    // churn cannot starve a service's placement (quest
+    // formation-runtime-service-create-lane-budget-starvation). Demand-sensitive
+    // (lifted once a create is in flight) and clamped so ordinary adds never
+    // deadlock.
+    RESERVED_CREATE_ADD_SLOTS: NUM.ONE,
     MAX_CONCURRENT_REMOVES: NUM.FIVE,
     PERIODIC_CHECK_INTERVAL_MS: 60000,
     TIMEOUT_CHECK_INTERVAL_MS: 1000,

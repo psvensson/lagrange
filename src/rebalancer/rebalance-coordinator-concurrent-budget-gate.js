@@ -39,6 +39,10 @@ class RebalanceCoordinatorConcurrentBudgetGate {
           bypassEmptyQueryDelay,
           concurrentBudgetReadMode,
           partitionId: options.partitionId,
+          isGenuineCreate: this.isGenuineServiceCreateAdmission(
+            normalizedMoveType,
+            options.entityType,
+          ),
         });
       if (canStart) {
         return;

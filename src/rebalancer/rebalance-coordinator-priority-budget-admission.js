@@ -4,7 +4,9 @@ import {
   getLatestMembershipPublicationRow,
   getPriorityConcurrentAddBudgetLimit,
   getPriorityRecoveryAdmissionPlan,
+  getReservedCreateAddSlots,
   getReservedPriorityRecoveryAddSlots,
+  isGenuineServiceCreateAdmission,
   isEmergencyPriorityControlPlanePartition,
   isEmergencyPriorityControlPlaneRecoveryActive,
   isGlobalPriorityControlPlaneRecoveryActive,
@@ -789,6 +791,30 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
    */
   getReservedPriorityRecoveryAddSlots(options = {}) {
     return getReservedPriorityRecoveryAddSlots(this, options);
+  }
+
+  /**
+   * The number of plain-ADD budget slots held in fair-share reserve for genuine
+   * runtime-service replica-creates (quest
+   * formation-runtime-service-create-lane-budget-starvation).
+   * @param {Object} [_options={}]
+   * @return {number}
+   * @private
+   */
+  getReservedCreateAddSlots(_options = {}) {
+    return getReservedCreateAddSlots(this);
+  }
+
+  /**
+   * Whether an admission is a genuine runtime-service replica-create (an ADD of
+   * a runtime_service entity) that the reserved create slot protects.
+   * @param {string} normalizedMoveType
+   * @param {string} entityType
+   * @return {boolean}
+   * @private
+   */
+  isGenuineServiceCreateAdmission(normalizedMoveType, entityType) {
+    return isGenuineServiceCreateAdmission(normalizedMoveType, entityType);
   }
 
   /**

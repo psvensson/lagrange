@@ -162,6 +162,8 @@ class RebalanceCoordinatorLifecycle {
       maxConcurrentAdds:
         configManager.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_ADDS) ||
         REBALANCER_DEFAULT.COORDINATOR.MAX_CONCURRENT_ADDS,
+      reservedCreateAddSlots:
+        REBALANCER_DEFAULT.COORDINATOR.RESERVED_CREATE_ADD_SLOTS,
       maxConcurrentRemoves:
         configManager.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_REMOVES) ||
         REBALANCER_DEFAULT.COORDINATOR.MAX_CONCURRENT_REMOVES,
