@@ -66,7 +66,6 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
-| formation-ledger-quorum-spread-first | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
 | latency-group-zone-affinity-demo | product | 0 | 0 | — |
@@ -82,6 +81,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | runtime-owner-reconcile-alignment | product | 0 | 0 | — |
 | runtime-replica-state-projection | product | 0 | 0 | — |
 | seed-join-gate-authoritative-refresh | product | 0 | 0 | — |
+| transition-mutation-budget-doom-loop | product | 0 | 0 | — |
 | unwired-event-adjudication | product | 0 | 0 | — |
 | write-path-internal-pacing | product | 0 | 0 | — |
 
