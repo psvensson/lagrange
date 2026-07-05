@@ -1,0 +1,56 @@
+{
+  "id": "formation-ledger-post-spread-voter-visibility-latency",
+  "statement": "The TAIL of the post-formation operation-ledger spread window — the run-22 quorum-spread admission hold (operation_ledger_quorum_concentrated) staying engaged AFTER the physical spread moves have completed — shrinks so that a CREATE TABLE arriving right after formation succeeds within its existing 30s provisioning budget on the 5-node MovieLens demo. Run-27 measured (logs archived in solve/changes/formation-ledger-spread-window-follow-up-latency/run27-node-logs): both serialized ledger self-moves physically done by 13:22:08-10, yet the hold's actuals evaluation still saw totalVoters=2 at 13:22:03.5 (REPLACE source already removed while the replacement replica was still a LEARNER inside the 5s LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS stability floor, plus services-row raft_role CDC propagation to the evaluating node) and the demo's provisioning transient-wait expired at 13:22:19.6, seconds before the projected release (~13:22:20-25) — an ~11s visibility/ordering tail on top of completed moves; note src/rebalancer/operation-ledger-quorum-concentration.js makes ANY 2-voter state concentrated regardless of node spread (majority=2, outside-hottest max 1), so a remove-before-promote dip through 2 voters ALWAYS engages the hold. The legs of that tail (mid-REPLACE 2-voter dip ordering; learner-promotion floor applicability to a spread-relief promotion; raft_role actuals propagation lag; provisioning transient-wait/hold-release interplay) are measured from run-27 forensics and the binding ones addressed. Proven by a deterministic DT reproduction of the tail class RED on head (scenario-harness, consecutive 3) and the demo's ratings load progressing past CREATE TABLE in a live run. NO client timeout/budget raises; NO weakening of the concentration hold's safety purpose (a ledger whose quorum genuinely needs one hot node still holds); run-20 serialization and run-22 spread-first semantics untouched; actuals-only inputs preserved (ARCH-0080/0084 — no target-based witnesses, no counting an unpromoted learner as a voter).",
+  "priority": "P1",
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-ledger-post-spread-voter-visibility-latency",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-ledger-post-spread-voter-visibility-latency-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-ledger-post-spread-voter-visibility-latency",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "c-research-first",
+      "text": "RESEARCH FIRST (rung 0, subagent forensics over the archived run-27 gzipped node logs + code): (1) establish the ACTUAL hold-release time and the per-leg latency split — source-removal completion -> promotion-eligible -> promoted (raft level) -> services-row raft_role updated -> evaluating node's cache sees it -> next hold evaluation -> provisioning retry observes release; (2) map WHO re-evaluates evaluateOperationLedgerQuorumConcentration and WHEN (event-driven on CDC change, per-admission poll, or timer) — src/rebalancer/operation-ledger-quorum-concentration.js + rebalance-coordinator-ledger-interlock-admission.js + sql-query-engine-provisioning-admission-methods.js; (3) determine WHY the REPLACE removed its source before the replacement was promoted to voter (the run-21 executor voter-ready gate exists — did it pass on raft-level promotion while the 5s priority-recovery floor only delays PRIORITY promotion, or was ordering genuinely remove-first?); (4) the provisioning transient-wait ledger-hold budget interplay (which budget expired at 13:22:19.6, from provisioning-admission-ledger-hold-transient-wait). REUSED vs EXTENDED vs NEW required in the fix design. Related recorded classes: run-21 voter-surplus promotion deferral (even-voter guard maxAllowedVotersAfterPromotion), transition-mutation-budget-doom-loop P2."
+    },
+    {
+      "id": "c-dt-first",
+      "text": "DT-FIRST: deterministic reproduction of the tail class (hold still engaged after physical spread completion, beyond the floor + bounded observation lag; or the 2-voter remove-before-promote dip if research shows ordering is the binding leg) RED on head BEFORE any src change; dt:prove red-on-revert; scenario-harness x3 consecutive."
+    },
+    {
+      "id": "c-vet",
+      "text": "Design + implementation adversarially vetted BEFORE commit. Attack lines: does releasing the hold earlier re-create the run-22 wedge (a quorum that still needs the hot node counted as spread — e.g. counting a learner or a not-yet-stable voter); does promote-before-remove trip the run-21 even-voter promotion guard or raft joint-membership safety; does conditioning the 5s stability floor starve its original purpose (priority-recovery churn protection); TOCTOU between hold evaluation and admission; does a progress-aware transient wait become an unbounded client hang when the hold is NOT progressing."
+    },
+    {
+      "id": "c-class",
+      "text": "ONE CLASS: the post-spread hold-release tail. Do NOT raise client timeouts/budgets (TEST-0021); do NOT add demo-side waits; do NOT bypass the ledger for status writes; bootstrap placement redesign (spreading at node-join time) stays OUT of scope — record as a lead if evidence points there. The 5s LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS floor may be scoped/conditioned ONLY with vet-approved evidence that it is the binding leg AND its stability purpose is preserved; blanket removal or global reduction is out of scope."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
