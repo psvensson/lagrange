@@ -1,0 +1,16 @@
+{
+  "test": "test/logging/logs-table-service.test.js",
+  "src": [
+    "src/logging/logs-table-service.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-05T19:09:10.539Z"
+}

@@ -643,6 +643,56 @@ test('LogsTableService requires the owner path and does not fall back to gateway
     LogsTableService.resetInstance();
   });
 
+test('LogsTableService never proposes a NULL message to the NOT NULL column',
+  async (t) => {
+    // Regression guard: a caller that logs with an undefined/null message
+    // (mis-resolved message constant, err.message on an error without one)
+    // must NOT produce a logs-table INSERT with message=NULL. Because logs are
+    // raft-replicated, such a row commits and then throws
+    // "NOT NULL constraint failed: logs.message" on apply at every replica — a
+    // poison committed entry that wedges the partition apply loop. Observed
+    // live in the service-data-affinity demo (run-29): 4992 apply failures /
+    // unhandled rejections from a single bad entry retried forever.
+    LogsTableService.resetInstance();
+
+    const captured = [];
+    const service = new LogsTableService({
+      logsOwner: createLogsOwner(async (row) => {
+        captured.push(row);
+        return {success: true};
+      }),
+      maxRetries: 1,
+    });
+    service.initialize();
+
+    for (const badMessage of [undefined, null]) {
+      captured.length = 0;
+      await service.writeEntryToTable({
+        logId: `log-null-${String(badMessage)}`,
+        timestamp: Date.now(),
+        level: 'ERROR',
+        nodeId: 'test-node',
+        message: badMessage,
+        metadata: {subsystem: 'poison-producer'},
+        createdAt: Date.now(),
+      });
+
+      t.equal(captured.length, 1, 'the entry is written through the owner');
+      const row = captured[0];
+      t.equal(
+        typeof row.message, 'string',
+        `message coerced to a string for ${String(badMessage)} input`,
+      );
+      t.not(
+        row.message, null,
+        `message is never null (input ${String(badMessage)})`,
+      );
+    }
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
 test('LogsTableService handles write errors', async (t) => {
   LogsTableService.resetInstance();
 

@@ -87,6 +87,31 @@ import {
 } from './logs-table-service-pressure-helpers.js';
 
 /**
+ * Coerce a log entry's message into the non-null string the logs table's
+ * `message TEXT NOT NULL` column requires. A caller that logs with an
+ * undefined/null message (e.g. a mis-resolved message constant, or
+ * `logger.error(err.message)` on an error without one) would otherwise mint a
+ * row that violates the constraint. Because logs are raft-replicated, that bad
+ * INSERT commits to the log and then throws on apply at EVERY replica — a
+ * poison committed entry that wedges the partition's apply loop and floods the
+ * process with unhandled rejections. Enforcing the contract here, at the owner
+ * boundary that builds the row, guarantees no such entry is ever proposed.
+ * The originating context is preserved in the metadata column, so a
+ * message-less log remains discoverable rather than silently lost.
+ * @param {*} message - Raw message from the log entry.
+ * @return {string} A guaranteed-non-null string.
+ */
+function normalizeLogMessage(message) {
+  if (typeof message === 'string') {
+    return message;
+  }
+  if (message === null || message === undefined) {
+    return '';
+  }
+  return String(message);
+}
+
+/**
  * LogsTableService manages writing log entries to the logs system table.
  * It integrates with LoggingService to flush buffered entries after bootstrap.
  */
@@ -491,7 +516,7 @@ class LogsTableService extends EventEmitter {
       node_id: entry.nodeId,
       service_id: entry.serviceId || null,
       service_type: entry.serviceType || null,
-      message: entry.message,
+      message: normalizeLogMessage(entry.message),
       trace_id: entry.traceId || null,
       metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
       created_at: entry.createdAt || Date.now(),
