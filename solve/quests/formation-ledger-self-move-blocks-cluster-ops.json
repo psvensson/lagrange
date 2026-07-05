@@ -1,0 +1,40 @@
+{
+  "id": "formation-ledger-self-move-blocks-cluster-ops",
+  "statement": "The replica_operations ledger self-move (spreading its own quorum/leadership off the seed during cold formation) does NOT indefinitely block other partitions' operations cluster-wide, so a cold 5-node MovieLens demo control plane SETTLES (no 120s no-completion stall) and [2/4] ratings load completes. ROOT (run-4/run-3 forensics, after poison fix 56ebbedb + create-lane fix ab15e03e let earlier phases pass): during cold formation all 5 control-plane system partitions (control_plane_publications-p1, sql_transactions-p1, sql_write_operations-p1, sql_transaction_participants-p1, replica_operations-p1) bootstrap concentrated on the seed and must spread; every non-ledger operation must record a replica_operations row, but while the ledger is doing its OWN self-move the interlock rejects them operation_ledger_self_move_in_flight (330x run-4) + operation_ledger_quorum_concentrated (288x) — a retry-storm that never drains within the settle window, so the control plane never settles and the load times out. The interlock (rebalance-coordinator-ledger-interlock-admission.js, from SOLVED quest formation-control-plane-move-interlock) serializes disruptive self-moves into an idle ledger; the deadlock quest (c7a3bf19) fixed a cache-first stale-ghost read but the SERIALIZATION itself still stalls cold formation. SCOPE: let non-conflicting other-partition operations make progress while the ledger spreads (buffer/pipeline the ledger write, or narrow the interlock so it blocks only genuinely-conflicting ledger-self-move ops, not all ledger writes), and/or make the ledger quorum spread complete faster during formation, so formation settles. NOT weakening run-20/run-22 serialization safety; NOT the create-lane budget starvation (ab15e03e, downstream [4/4]); NOT the poison. doneWhen = the cold-formation control plane settles and load completes, reproduced by scenario-harness 3x consecutive.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-ledger-self-move-blocks-cluster-ops",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-ledger-self-move-blocks-cluster-ops-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-ledger-self-move-blocks-cluster-ops",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
