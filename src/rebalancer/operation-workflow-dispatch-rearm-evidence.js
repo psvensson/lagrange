@@ -737,6 +737,97 @@ function canContinueCoordinatorCreatedRemoteHandoff(
   );
   return owner.hasActiveTransitionRetryGrace(operationId);
 }
+/**
+ * Re-drive a coordinator-created remote handoff from its RETAINED snapshot
+ * when the authoritative op row is unreadable (it lives in the ledger
+ * partition being moved — run-26). Loud on every path; bounded by the same
+ * operation-budget timeout decision as the visible-row branch (the snapshot
+ * carries the creation timestamps).
+ * @param {Object} owner
+ * @param {string} operationId
+ * @param {Object} operationSnapshot
+ * @return {boolean|Promise<boolean>}
+ */
+function resolveSnapshotHandoffRetryStop(owner, operationSnapshot) {
+  const hasBoundingTimestamp = [
+    operationSnapshot?.createdAt,
+    operationSnapshot?.createdAtMs,
+    operationSnapshot?.updatedAt,
+    operationSnapshot?.updatedAtMs,
+  ].some((value) => Number.isFinite(value));
+  if (!hasBoundingTimestamp) {
+    // A snapshot without timestamps cannot bound the retry loop — stop
+    // loudly rather than loop forever on degenerate evidence.
+    return {stop: true, degenerateSnapshot: true};
+  }
+  if (
+    owner.repository.isOperationTerminal(operationSnapshot) ||
+    !owner.shouldRetryCoordinatorCreatedRemoteHandoff(operationSnapshot)
+  ) {
+    return {stop: true};
+  }
+  const handoffTimeoutDecision =
+    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
+      operationSnapshot,
+    );
+  if (handoffTimeoutDecision.shouldStop) {
+    return {
+      stop: true,
+      workflowStep: handoffTimeoutDecision.workflowStep,
+      operationBudgetDeadlineMs:
+        handoffTimeoutDecision.operationBudgetDeadlineMs,
+    };
+  }
+  return {stop: false};
+}
+
+function buildSnapshotHandoffRetryLogFields(
+  operationId,
+  operationSnapshot,
+  stopDecision = {},
+) {
+  return {
+    operationId,
+    partitionId: operationSnapshot?.partitionId || null,
+    targetNodeId: operationSnapshot?.targetNodeId || null,
+    workflowStep:
+      stopDecision.workflowStep || operationSnapshot?.workflowStep || null,
+    degenerateSnapshot: stopDecision.degenerateSnapshot === true,
+    operationBudgetDeadlineMs:
+      stopDecision.operationBudgetDeadlineMs || null,
+  };
+}
+
+function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
+  owner,
+  operationId,
+  operationSnapshot,
+) {
+  const stopDecision = resolveSnapshotHandoffRetryStop(
+    owner,
+    operationSnapshot,
+  );
+  if (stopDecision.stop) {
+    owner.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
+      buildSnapshotHandoffRetryLogFields(
+        operationId,
+        operationSnapshot,
+        stopDecision,
+      ),
+    );
+    owner.clearCreatedOperationHandoffRetry(operationId);
+    return false;
+  }
+  owner.logger.warn(
+    REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT,
+    buildSnapshotHandoffRetryLogFields(operationId, operationSnapshot),
+  );
+  return owner.wakeCoordinatorCreatedRemoteOwner(
+    owner.cloneOperationSnapshot(operationSnapshot),
+  );
+}
+
 function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   owner,
   operation,
@@ -771,8 +862,21 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     }
     return owner.getDeferredDispatchRetryOperation(operationId, operationSnapshot)
       .then((currentOperation) => {
+        if (!currentOperation) {
+          // The op row is INVISIBLE and no deferred outcome exists — for a
+          // coordinator-created remote handoff that is the run-26 shape:
+          // the row lives in the ledger partition BEING MOVED. Silently
+          // self-cancelling here stranded the follow-up ledger self-move
+          // in PENDING (its brief live window also suppressed the planner's
+          // only rearm). Retry LOUDLY from the retained snapshot instead;
+          // the operation budget in the timeout decision bounds the loop.
+          return retryCoordinatorCreatedRemoteHandoffFromSnapshot(
+            owner,
+            operationId,
+            operationSnapshot,
+          );
+        }
         if (
-          !currentOperation ||
           owner.repository.isOperationTerminal(currentOperation) ||
           !owner.shouldRetryCoordinatorCreatedRemoteHandoff(currentOperation)
         ) {
@@ -784,6 +888,16 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
             currentOperation,
           );
         if (handoffTimeoutDecision.shouldStop) {
+          owner.logger.warn(
+            REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
+            {
+              operationId,
+              partitionId: currentOperation?.partitionId || null,
+              workflowStep: handoffTimeoutDecision.workflowStep,
+              operationBudgetDeadlineMs:
+                handoffTimeoutDecision.operationBudgetDeadlineMs,
+            },
+          );
           owner.clearCreatedOperationHandoffRetry(operationId);
           return false;
         }

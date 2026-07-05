@@ -242,6 +242,13 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
   OPERATION_DISPATCH_RETRY_DEFERRED:
     'Deferred retryable replica operation dispatch failure',
+  COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT:
+    'Coordinator-created remote handoff re-waking owner from retained ' +
+    'snapshot: the authoritative operation row is unreadable (its ledger ' +
+    'partition is likely mid-move)',
+  COORDINATOR_HANDOFF_RETRY_STOPPED:
+    'Coordinator-created remote handoff retry stopped at its operation ' +
+    'budget; the operation remains for planner rearm / ready-node replay',
   OPERATION_DISPATCH_RETRY_SHED:
     'Shed replica operation dispatch retry: per-target retry budget exhausted',
   OPERATION_DISPATCH_RETRY_FAILED:

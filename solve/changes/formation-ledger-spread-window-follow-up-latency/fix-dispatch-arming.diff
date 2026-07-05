@@ -1,0 +1,695 @@
+diff --git a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+index 0db86449..4d30c5e4 100644
+--- a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
++++ b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+@@ -737,6 +737,97 @@ function canContinueCoordinatorCreatedRemoteHandoff(
+   );
+   return owner.hasActiveTransitionRetryGrace(operationId);
+ }
++/**
++ * Re-drive a coordinator-created remote handoff from its RETAINED snapshot
++ * when the authoritative op row is unreadable (it lives in the ledger
++ * partition being moved — run-26). Loud on every path; bounded by the same
++ * operation-budget timeout decision as the visible-row branch (the snapshot
++ * carries the creation timestamps).
++ * @param {Object} owner
++ * @param {string} operationId
++ * @param {Object} operationSnapshot
++ * @return {boolean|Promise<boolean>}
++ */
++function resolveSnapshotHandoffRetryStop(owner, operationSnapshot) {
++  const hasBoundingTimestamp = [
++    operationSnapshot?.createdAt,
++    operationSnapshot?.createdAtMs,
++    operationSnapshot?.updatedAt,
++    operationSnapshot?.updatedAtMs,
++  ].some((value) => Number.isFinite(value));
++  if (!hasBoundingTimestamp) {
++    // A snapshot without timestamps cannot bound the retry loop — stop
++    // loudly rather than loop forever on degenerate evidence.
++    return {stop: true, degenerateSnapshot: true};
++  }
++  if (
++    owner.repository.isOperationTerminal(operationSnapshot) ||
++    !owner.shouldRetryCoordinatorCreatedRemoteHandoff(operationSnapshot)
++  ) {
++    return {stop: true};
++  }
++  const handoffTimeoutDecision =
++    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
++      operationSnapshot,
++    );
++  if (handoffTimeoutDecision.shouldStop) {
++    return {
++      stop: true,
++      workflowStep: handoffTimeoutDecision.workflowStep,
++      operationBudgetDeadlineMs:
++        handoffTimeoutDecision.operationBudgetDeadlineMs,
++    };
++  }
++  return {stop: false};
++}
++
++function buildSnapshotHandoffRetryLogFields(
++  operationId,
++  operationSnapshot,
++  stopDecision = {},
++) {
++  return {
++    operationId,
++    partitionId: operationSnapshot?.partitionId || null,
++    targetNodeId: operationSnapshot?.targetNodeId || null,
++    workflowStep:
++      stopDecision.workflowStep || operationSnapshot?.workflowStep || null,
++    degenerateSnapshot: stopDecision.degenerateSnapshot === true,
++    operationBudgetDeadlineMs:
++      stopDecision.operationBudgetDeadlineMs || null,
++  };
++}
++
++function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
++  owner,
++  operationId,
++  operationSnapshot,
++) {
++  const stopDecision = resolveSnapshotHandoffRetryStop(
++    owner,
++    operationSnapshot,
++  );
++  if (stopDecision.stop) {
++    owner.logger.warn(
++      REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
++      buildSnapshotHandoffRetryLogFields(
++        operationId,
++        operationSnapshot,
++        stopDecision,
++      ),
++    );
++    owner.clearCreatedOperationHandoffRetry(operationId);
++    return false;
++  }
++  owner.logger.warn(
++    REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT,
++    buildSnapshotHandoffRetryLogFields(operationId, operationSnapshot),
++  );
++  return owner.wakeCoordinatorCreatedRemoteOwner(
++    owner.cloneOperationSnapshot(operationSnapshot),
++  );
++}
++
+ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+   owner,
+   operation,
+@@ -771,8 +862,21 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+     }
+     return owner.getDeferredDispatchRetryOperation(operationId, operationSnapshot)
+       .then((currentOperation) => {
++        if (!currentOperation) {
++          // The op row is INVISIBLE and no deferred outcome exists — for a
++          // coordinator-created remote handoff that is the run-26 shape:
++          // the row lives in the ledger partition BEING MOVED. Silently
++          // self-cancelling here stranded the follow-up ledger self-move
++          // in PENDING (its brief live window also suppressed the planner's
++          // only rearm). Retry LOUDLY from the retained snapshot instead;
++          // the operation budget in the timeout decision bounds the loop.
++          return retryCoordinatorCreatedRemoteHandoffFromSnapshot(
++            owner,
++            operationId,
++            operationSnapshot,
++          );
++        }
+         if (
+-          !currentOperation ||
+           owner.repository.isOperationTerminal(currentOperation) ||
+           !owner.shouldRetryCoordinatorCreatedRemoteHandoff(currentOperation)
+         ) {
+@@ -784,6 +888,16 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+             currentOperation,
+           );
+         if (handoffTimeoutDecision.shouldStop) {
++          owner.logger.warn(
++            REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
++            {
++              operationId,
++              partitionId: currentOperation?.partitionId || null,
++              workflowStep: handoffTimeoutDecision.workflowStep,
++              operationBudgetDeadlineMs:
++                handoffTimeoutDecision.operationBudgetDeadlineMs,
++            },
++          );
+           owner.clearCreatedOperationHandoffRetry(operationId);
+           return false;
+         }
+diff --git a/src/rebalancer/operation-workflow-owner-handoff-state.js b/src/rebalancer/operation-workflow-owner-handoff-state.js
+index 5933f4c2..23baa25b 100644
+--- a/src/rebalancer/operation-workflow-owner-handoff-state.js
++++ b/src/rebalancer/operation-workflow-owner-handoff-state.js
+@@ -283,6 +283,10 @@ function withOwnerHandoffState(Base) {
+           );
+         }
+ 
++        if (response?.noHandler === true) {
++          return this.handleDroppedNoHandlerWake(operation);
++        }
++
+         this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);
+         this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+           operation,
+@@ -300,6 +304,34 @@ function withOwnerHandoffState(Base) {
+       }
+     }
+ 
++    /**
++     * ACK-before-handler-lookup: the target's router acknowledged the wake
++     * but had no dispatch ingress registered (mid-startup) — the wake was
++     * DROPPED, not delivered. Treating this as success left run-26's
++     * follow-up ledger self-move idle in PENDING for ~9s with zero logs.
++     * Route into the warning retry lane; the synthetic deferRetry marks it
++     * retryable for the evidence classifier.
++     *
++     * @param {Object} operation
++     * @return {boolean}
++     * @private
++     */
++    handleDroppedNoHandlerWake(operation) {
++      const noHandlerError = new Error(
++        REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
++      );
++      noHandlerError.deferRetry = true;
++      if (
++        this.deferCoordinatorCreatedRemoteHandoffRetry(
++          operation,
++          noHandlerError,
++        )
++      ) {
++        return false;
++      }
++      throw noHandlerError;
++    }
++
+     /**
+      * Honor a late dispatch SERVICE_RESPONSE whose pending waiter was already
+      * retired (deferred / ack-timeout) so the coordinator stops re-driving a
+@@ -334,7 +366,15 @@ function withOwnerHandoffState(Base) {
+         if (!this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+           return;
+         }
+-        if (!operation || this.repository.isOperationTerminal(operation)) {
++        if (!operation) {
++          // The op row is INVISIBLE (it lives in the ledger partition being
++          // moved) — that is no evidence of completion. Clearing here would
++          // preempt-cancel the armed follow-up, which is the only re-drive
++          // for a dropped wake (run-26). Leave the timer to fire; it retries
++          // from the retained snapshot.
++          return;
++        }
++        if (this.repository.isOperationTerminal(operation)) {
+           this.clearCreatedOperationHandoffRetry(operationId);
+           return;
+         }
+diff --git a/src/rebalancer/rebalancer-constants.js b/src/rebalancer/rebalancer-constants.js
+index 122cc798..aa6c014d 100644
+--- a/src/rebalancer/rebalancer-constants.js
++++ b/src/rebalancer/rebalancer-constants.js
+@@ -242,6 +242,13 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
+   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
+   OPERATION_DISPATCH_RETRY_DEFERRED:
+     'Deferred retryable replica operation dispatch failure',
++  COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT:
++    'Coordinator-created remote handoff re-waking owner from retained ' +
++    'snapshot: the authoritative operation row is unreadable (its ledger ' +
++    'partition is likely mid-move)',
++  COORDINATOR_HANDOFF_RETRY_STOPPED:
++    'Coordinator-created remote handoff retry stopped at its operation ' +
++    'budget; the operation remains for planner rearm / ready-node replay',
+   OPERATION_DISPATCH_RETRY_SHED:
+     'Shed replica operation dispatch retry: per-target retry budget exhausted',
+   OPERATION_DISPATCH_RETRY_FAILED:
+diff --git a/test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js b/test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js
+new file mode 100644
+index 00000000..c21e332d
+--- /dev/null
++++ b/test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js
+@@ -0,0 +1,414 @@
++/**
++ * Quest formation-ledger-spread-window-follow-up-latency (run-26 head).
++ *
++ * Run-26 forensics: the formation ledger-spread window (~25-30s) outlasts
++ * the CREATE TABLE provisioning budget NOT because of planner cadence — the
++ * planner created the follow-up ledger self-move 30ms after its predecessor
++ * settled — but because the newly created REMOTE-owned operation sat in
++ * PENDING with dispatch never armed:
++ *   - the creator's arm seam (armCoordinatorCreatedOperation) produced no
++ *     owner wake, no handoff attempt, and no warn (silent);
++ *   - 47ms later the planner's rearm was suppressed by
++ *     SKIP_LIVE_DEFERRED_RETRY on the strength of a deferred dispatch retry
++ *     that never fires;
++ *   - rescue came only from a COINCIDENTAL ready-node replay cascade ~8.7s
++ *     later. The predecessor op had the same pre-dispatch idle (11.7s).
++ *
++ * Contract under test: creating a remote-owned priority operation ARMS its
++ * dispatch — the remote owner is woken promptly (or a live retry that
++ * actually fires is registered); a registered-but-dead retry never
++ * suppresses the only rearm.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {
++  createMockControlPlaneReadinessService,
++  createMockTransactionCoordinator,
++} from './test-helpers.js';
++
++const LOCAL_NODE_ID = 'node-creator';
++const REMOTE_OWNER_NODE_ID = 'node-remote-owner';
++const LEDGER_PARTITION_ID = 'replica_operations-p1';
++
++function createCoordinatorFixture(t, {deliveries}) {
++  const coordinator = new RebalanceCoordinator({
++    nodeId: LOCAL_NODE_ID,
++    systemTableCache: {
++      get() {
++        return null;
++      },
++      getAll() {
++        return [];
++      },
++      filter() {
++        return [];
++      },
++    },
++    cdcIntegrationService: {
++      async waitForCacheUpdate() {},
++    },
++    tablePolicyService: {
++      async getPolicyForPartition() {
++        return {minReplicaCount: 1};
++      },
++    },
++    messageRouter: {
++      async deliver(address, message) {
++        deliveries.push({address, message});
++        return {acknowledged: true, status: 'initiated'};
++      },
++    },
++    sqlQueryEngine: {
++      async executeQuery() {
++        return {success: true, rows: [], affectedRows: 0};
++      },
++    },
++    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
++    transactionCoordinator: createMockTransactionCoordinator(),
++    enableTimeouts: false,
++  });
++  coordinator.initialize();
++  t.teardown(() => coordinator.shutdown?.());
++  return coordinator;
++}
++
++function buildRemoteOwnedLedgerSelfMove() {
++  return {
++    operationId: 'op-ledger-follow-up',
++    type: 'REPLACE',
++    partitionId: LEDGER_PARTITION_ID,
++    entityType: 'partition',
++    entityId: LEDGER_PARTITION_ID,
++    replicaId: `${LEDGER_PARTITION_ID}-r2`,
++    sourceNodeId: 'node-seed',
++    targetNodeId: REMOTE_OWNER_NODE_ID,
++    status: 'pending',
++    workflowStep: WORKFLOW_STEP.PENDING,
++    // The live create stamps creation time (persistNewOperation); the
++    // retained-snapshot retry loop is BOUNDED by it.
++    createdAt: Date.now(),
++    stepsHistory: [],
++  };
++}
++
++function recordRemoteWakes(coordinator) {
++  const remoteWakes = [];
++  const originalWake =
++    coordinator.workflowOwner.wakeCoordinatorCreatedRemoteOwner?.bind(
++      coordinator.workflowOwner,
++    );
++  if (originalWake) {
++    coordinator.workflowOwner.wakeCoordinatorCreatedRemoteOwner = (
++      wakeOperation,
++    ) => {
++      remoteWakes.push(wakeOperation?.operationId || null);
++      return originalWake(wakeOperation);
++    };
++  }
++  return remoteWakes;
++}
++
++test('run-26: creating a REMOTE-owned priority ledger self-move ARMS its ' +
++  'dispatch — the remote owner is woken instead of the operation idling in ' +
++  'PENDING until a coincidental replay (RED on the unfixed head)', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++
++  const remoteWakes = recordRemoteWakes(coordinator);
++  coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
++    async () => null;
++
++  const armed =
++    await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
++
++  const wakeDelivered =
++    remoteWakes.length > 0 ||
++    deliveries.some(
++      (delivery) =>
++        JSON.stringify(delivery.message || {}).includes(
++          operation.operationId,
++        ),
++    );
++  t.ok(
++    wakeDelivered,
++    `the remote owner was woken for the pending operation (armed=${
++      JSON.stringify(armed)
++    }, wakes=${remoteWakes.length}, deliveries=${deliveries.length})`,
++  );
++});
++
++/**
++ * Run-26 root-cause shape (node-4 12:09:48.706-.753 → 12:09:57.447):
++ *
++ * The wake transport ACKs without the owner ever processing the message —
++ * the receiving router sends ACK BEFORE checking for a registered handler
++ * (message-router-inbound-dispatch.js handleServiceMessage), and a
++ * mid-startup owner has no `/service/replica-dispatch` ingress yet. The
++ * creator's wake path classifies acknowledged:true as DELIVERED, silently
++ * arms ONLY the 1s verification follow-up
++ * (scheduleCoordinatorCreatedRemoteHandoffFollowUp — zero logging), and
++ * returns success. That follow-up re-reads the operation through
++ * repository.getOperationByIdVisibilityObservation — but the row lives in
++ * the ledger partition BEING MOVED and is not visible (run-26: "No row
++ * found for CDC update") — so resolveDeferredRetryVisibleOperation yields
++ * null and the timer SELF-CANCELS (clearCreatedOperationHandoffRetry)
++ * without any wake or warn. While that doomed retry is live it is exactly
++ * what suppresses the planner's only rearm:
++ * resolveReusedOperationRearmAction → SKIP_LIVE_DEFERRED_RETRY (node-4
++ * 12:09:48.753). After creation the priority planning gate blocks on
++ * topology_operations_in_flight, so no later rearm ever comes; the op
++ * idles in PENDING until a coincidental replay cascade (12:09:57.447).
++ *
++ * Contract (RED on the unfixed head): when the wake is ACK-swallowed and
++ * the row is read-starved, the arm must leave behind a retry that ACTUALLY
++ * fires a re-wake — or must not suppress the rearm seam.
++ */
++test('run-26 root cause: ACK-swallowed wake + read-starved op row — the ' +
++  'silent 1s verification retry self-cancels without ever re-waking the ' +
++  'remote owner while its live window suppresses the only planner rearm ' +
++  '(RED on the unfixed head)', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++
++  // The op row lives in the moving ledger partition: authoritative and
++  // visibility reads see nothing (and report no deferred outcome) — the
++  // run-26 'No row found for CDC update' starvation.
++  coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
++    async () => null;
++  coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
++    async () => null;
++
++  const armed =
++    await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
++  const deliveriesAfterArm = deliveries.length;
++
++  // Live mirror of node-4 12:09:48.753: the planner pass dedupes onto the
++  // just-created op 47ms later and asks whether to rearm its dispatch.
++  const rearmActionAtOnlyRearmOpportunity =
++    coordinator.resolveReusedOperationRearmAction(
++      operation,
++      WORKFLOW_STEP.PENDING,
++    );
++
++  // Sanity (not the binding assert): the arm reported success off a bare
++  // transport ACK and one delivery attempt exists.
++  t.equal(
++    deliveriesAfterArm,
++    1,
++    `the arm produced exactly one (ACK-swallowed) wake delivery (armed=${
++      JSON.stringify(armed)
++    })`,
++  );
++
++  // Cover the 1s verification window: the registered follow-up must either
++  // re-fire a real wake attempt, or it must not have suppressed the rearm.
++  await new Promise((resolve) => setTimeout(resolve, 2500));
++
++  const retryRefiredWake = deliveries.length > deliveriesAfterArm;
++  const rearmNotSuppressed =
++    rearmActionAtOnlyRearmOpportunity === 'rearm_dispatch';
++  t.ok(
++    retryRefiredWake || rearmNotSuppressed,
++    'the deferred dispatch retry registered by the ACK-swallowed wake ' +
++      'actually fires a re-wake, or the planner rearm is not suppressed (' +
++      `deliveries=${deliveries.length}, rearmAction=${
++        rearmActionAtOnlyRearmOpportunity
++      }, retryStillLive=${
++        coordinator.hasLiveDeferredDispatchRetry(operation)
++      })`,
++  );
++});
++
++test('run-26 circularity: the arm still wakes the remote owner when the ' +
++  'authoritative operation read fails (the read goes THROUGH the ledger ' +
++  'being moved) — RED if the arm silently skips', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++
++  const remoteWakes = recordRemoteWakes(coordinator);
++  coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
++    async () => {
++      throw new Error(
++        'authoritative read unavailable: replica_operations-p1 mid-move',
++      );
++    };
++
++  let armError = null;
++  let armed = null;
++  try {
++    armed = await coordinator.workflowOwner.armCoordinatorCreatedOperation(
++      operation,
++    );
++  } catch (error) {
++    armError = error;
++  }
++
++  const wakeDelivered =
++    remoteWakes.length > 0 ||
++    deliveries.some(
++      (delivery) =>
++        JSON.stringify(delivery.message || {}).includes(
++          operation.operationId,
++        ),
++    );
++  t.ok(
++    wakeDelivered,
++    `the remote owner is still woken when the ledger read fails (armed=${
++      JSON.stringify(armed)
++    }, error=${armError?.message || 'none'}, wakes=${remoteWakes.length})`,
++  );
++});
++
++test('control: the snapshot retry loop is BOUNDED — past the operation ' +
++  'budget it stops LOUDLY instead of re-waking forever', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = {
++    ...buildRemoteOwnedLedgerSelfMove(),
++    // Created far past the operation budget: the very first follow-up must
++    // stop the loop.
++    createdAt: Date.now() - 400_000,
++    updatedAt: Date.now() - 400_000,
++  };
++  const warns = [];
++  const owner = coordinator.workflowOwner;
++  const originalWarn = owner.logger.warn.bind(owner.logger);
++  owner.logger = Object.create(owner.logger);
++  owner.logger.warn = (message, payload) => {
++    warns.push({message, payload});
++    return originalWarn(message, payload);
++  };
++  owner.repository.queryAuthoritativeOperationById = async () => null;
++  owner.repository.getOperationByIdVisibilityObservation = async () => null;
++
++  await owner.armCoordinatorCreatedOperation(operation);
++  const deliveriesAfterArm = deliveries.length;
++  await new Promise((resolve) => setTimeout(resolve, 2500));
++
++  t.equal(
++    deliveries.length,
++    deliveriesAfterArm,
++    'no re-wakes past the operation budget',
++  );
++  t.notOk(
++    owner.createdOperationHandoffRetryTimerByOperationId.has(
++      operation.operationId,
++    ),
++    'the retry is cleared at the bound',
++  );
++  // Past the budget no live retry exists, so the planner rearm is NOT
++  // suppressed — the stranded op self-heals through the ordinary planner
++  // lane instead of hiding behind a dead retry.
++  t.not(
++    coordinator.resolveReusedOperationRearmAction(
++      operation,
++      WORKFLOW_STEP.PENDING,
++    ),
++    'skip_live_deferred_retry',
++    'a budget-expired op never suppresses the planner rearm',
++  );
++});
++
++test('control: a degenerate snapshot (no timestamps) stops LOUDLY instead ' +
++  'of looping unboundedly', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++  delete operation.createdAt;
++  const warns = [];
++  const owner = coordinator.workflowOwner;
++  const originalWarn = owner.logger.warn.bind(owner.logger);
++  owner.logger = Object.create(owner.logger);
++  owner.logger.warn = (message, payload) => {
++    warns.push({message, payload});
++    return originalWarn(message, payload);
++  };
++  owner.repository.queryAuthoritativeOperationById = async () => null;
++  owner.repository.getOperationByIdVisibilityObservation = async () => null;
++
++  await owner.armCoordinatorCreatedOperation(operation);
++  const deliveriesAfterArm = deliveries.length;
++  await new Promise((resolve) => setTimeout(resolve, 2200));
++
++  t.equal(
++    deliveries.length,
++    deliveriesAfterArm,
++    'no unbounded re-wakes from a snapshot that cannot bound the loop',
++  );
++  t.ok(
++    warns.some((w) => w.payload?.degenerateSnapshot === true),
++    'the degenerate-snapshot stop is loud',
++  );
++});
++
++test('control (R4): a late delivery-honored event with an INVISIBLE row ' +
++  'does not preempt-cancel the armed follow-up', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++  const owner = coordinator.workflowOwner;
++  owner.repository.queryAuthoritativeOperationById = async () => null;
++  owner.repository.getOperationByIdVisibilityObservation = async () => null;
++
++  await owner.armCoordinatorCreatedOperation(operation);
++  t.ok(
++    owner.createdOperationHandoffRetryTimerByOperationId.has(
++      operation.operationId,
++    ),
++    'the verification follow-up is armed after the wake',
++  );
++
++  await owner.onLateDispatchDeliveryHonored({
++    deliverySource: 'coordinator_created_remote_handoff',
++    responseContext: operation.operationId,
++  });
++  t.ok(
++    owner.createdOperationHandoffRetryTimerByOperationId.has(
++      operation.operationId,
++    ),
++    'an invisible-row late honor leaves the follow-up armed (the only ' +
++      're-drive for a dropped wake)',
++  );
++});
++
++test('part 2: a wake whose transport ACK carries noHandler routes into the ' +
++  'WARNING retry lane instead of counting as owner-woken', async (t) => {
++  const deliveries = [];
++  const coordinator = createCoordinatorFixture(t, {deliveries});
++  const operation = buildRemoteOwnedLedgerSelfMove();
++  const owner = coordinator.workflowOwner;
++  const warns = [];
++  const originalWarn = owner.logger.warn.bind(owner.logger);
++  owner.logger = Object.create(owner.logger);
++  owner.logger.warn = (message, payload) => {
++    warns.push({message, payload});
++    return originalWarn(message, payload);
++  };
++  // ACK-before-handler-lookup: the target acknowledges but reports no
++  // registered handler (mid-startup drop).
++  coordinator.messageRouter.deliver = async (address, message) => {
++    deliveries.push({address, message});
++    return {acknowledged: true, noHandler: true};
++  };
++  owner.repository.queryAuthoritativeOperationById = async () => null;
++  owner.repository.getOperationByIdVisibilityObservation = async () => null;
++
++  const armed = await owner.armCoordinatorCreatedOperation(operation);
++  t.notOk(
++    armed === true,
++    'a dropped (noHandler) wake never reports the owner as woken',
++  );
++  t.ok(
++    warns.some(
++      (w) =>
++        typeof w.message === 'string' &&
++        w.message.includes('Deferred retryable replica operation dispatch'),
++    ),
++    'the drop is loud (routed into the deferral retry lane)',
++  );
++});
+diff --git a/scripts/run-formation-ledger-spread-window-follow-up-latency-scenarios.js b/scripts/run-formation-ledger-spread-window-follow-up-latency-scenarios.js
+new file mode 100644
+index 00000000..56bb85cc
+--- /dev/null
++++ b/scripts/run-formation-ledger-spread-window-follow-up-latency-scenarios.js
+@@ -0,0 +1,42 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `formation-ledger-spread-window-follow-up-latency` quest
++ * scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed proof
++ * of the quest statement) and writes a scenario-harness report for the
++ * Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from affinity-demo run-26
++ * forensics; evidence under
++ * solve/changes/formation-ledger-spread-window-follow-up-latency/):
++ *   formation-ledger-spread-window-follow-up-latency
++ *     - test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js
++ *       (run-26: the formation ledger-spread window outlasted the CREATE
++ *        TABLE budget because remote-owned ledger self-moves idled in
++ *        PENDING — the wake's transport ACK was swallowed by a mid-startup
++ *        owner with no handler [ACK-before-handler-lookup], the 1s
++ *        verification retry self-cancelled silently when the op row was
++ *        unreadable through the ledger being moved, and its live window
++ *        suppressed the planner's only rearm. Fix: the retry re-wakes from
++ *        the retained snapshot LOUDLY, bounded by the existing operation
++ *        budget; invisible-row late honors never preempt-cancel the
++ *        follow-up; noHandler ACKs route into the warning retry lane.
++ *        Guards: the root-cause reproduction, bounded-stop, degenerate
++ *        snapshot, R4 preempt-cancel survival, noHandler routing.)
++ *
++ * Usage: node scripts/run-formation-ledger-spread-window-follow-up-latency-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'formation-ledger-spread-window-follow-up-latency': [
++    'test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);

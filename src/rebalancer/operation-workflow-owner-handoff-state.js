@@ -283,6 +283,10 @@ function withOwnerHandoffState(Base) {
           );
         }
 
+        if (response?.noHandler === true) {
+          return this.handleDroppedNoHandlerWake(operation);
+        }
+
         this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);
         this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
           operation,
@@ -298,6 +302,34 @@ function withOwnerHandoffState(Base) {
         }
         throw error;
       }
+    }
+
+    /**
+     * ACK-before-handler-lookup: the target's router acknowledged the wake
+     * but had no dispatch ingress registered (mid-startup) — the wake was
+     * DROPPED, not delivered. Treating this as success left run-26's
+     * follow-up ledger self-move idle in PENDING for ~9s with zero logs.
+     * Route into the warning retry lane; the synthetic deferRetry marks it
+     * retryable for the evidence classifier.
+     *
+     * @param {Object} operation
+     * @return {boolean}
+     * @private
+     */
+    handleDroppedNoHandlerWake(operation) {
+      const noHandlerError = new Error(
+        REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
+      );
+      noHandlerError.deferRetry = true;
+      if (
+        this.deferCoordinatorCreatedRemoteHandoffRetry(
+          operation,
+          noHandlerError,
+        )
+      ) {
+        return false;
+      }
+      throw noHandlerError;
     }
 
     /**
@@ -334,7 +366,15 @@ function withOwnerHandoffState(Base) {
         if (!this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
           return;
         }
-        if (!operation || this.repository.isOperationTerminal(operation)) {
+        if (!operation) {
+          // The op row is INVISIBLE (it lives in the ledger partition being
+          // moved) — that is no evidence of completion. Clearing here would
+          // preempt-cancel the armed follow-up, which is the only re-drive
+          // for a dropped wake (run-26). Leave the timer to fire; it retries
+          // from the retained snapshot.
+          return;
+        }
+        if (this.repository.isOperationTerminal(operation)) {
           this.clearCreatedOperationHandoffRetry(operationId);
           return;
         }
