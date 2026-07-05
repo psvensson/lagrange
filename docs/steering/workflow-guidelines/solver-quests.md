@@ -17,7 +17,14 @@ last_reviewed: 2026-06-01
 
 ## Operating Contract
 
-Use a Quest for non-trivial problem solving and feature implementation.
+Use a Quest for non-trivial problem solving and feature implementation. The
+threshold: author a Quest when the work will likely need **more than one
+measured attempt with evidence**, or when it **changes an owner-boundary
+contract** (recorded under `architecture/` or in an active spec — changing the
+contract, not merely editing owner-owned code). Below that threshold — a
+single-sitting fix, doc edit, or mechanical change with an obvious proof — do
+the work directly and commit it (core.md "Default Posture: Commit On
+Completion"); the Solver records nothing.
 
 A Quest must:
 

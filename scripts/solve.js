@@ -133,6 +133,7 @@ function cmdNew(root, args) {
     args.statement : null);
   const written = saveQuest(root, quest);
   process.stdout.write(`created ${written}\nEdit it, then: solve run --id ${id}\n`);
+  refreshFrontierBoard(root);
 }
 
 function buildRunOptions(root, id, args) {
@@ -167,6 +168,7 @@ function writeRunOutcome(root, id, result) {
     next +
     commitLine(result.commit) +
     `report: ${file}\n`);
+  refreshFrontierBoard(root);
 }
 
 function cmdRun(root, args) {
@@ -249,6 +251,7 @@ function cmdReport(root, args) {
     `\n${renderAdvisoryLines(advisories).join('\n')}\n` :
     '';
   process.stdout.write(`${md}${warning}${advisoryText}\n(written to ${file})\n`);
+  refreshFrontierBoard(root);
 }
 
 function cmdProbe(root, args) {
@@ -481,14 +484,17 @@ function cmdStep(root, args) {
       `${(r.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
       `${next}\n`);
     emitAdvisories(root, quest);
+    refreshFrontierBoard(root);
     return;
   }
   if (r.terminal === 'solved') {
     process.stdout.write(`SOLVED — evidence: ${r.evidence || '(none)'}\n`);
+    refreshFrontierBoard(root);
     return;
   }
   if (r.terminal === 'exhausted') {
     process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
+    refreshFrontierBoard(root);
     return;
   }
   if (!args.changeRef) {
@@ -507,6 +513,19 @@ function cmdStep(root, args) {
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
     `(${moved})${r.done ? ' DONE' : ''}${viol}\n${commitLine(r.commit)}`);
   emitAdvisories(root, quest);
+  refreshFrontierBoard(root);
+}
+
+// Keep the generated frontier board (solve/FRONTIER.generated.md) fresh at the
+// quest lifecycle points that change board state, so boot orientation never
+// reads a stale board. Board regeneration must never fail the lifecycle
+// command that triggered it.
+function refreshFrontierBoard(root) {
+  try {
+    writeFrontier(root, runFrontierCommand(root));
+  } catch (err) {
+    process.stderr.write(`frontier board refresh skipped: ${err.message}\n`);
+  }
 }
 
 // One-line human summary of the auto-commit outcome, printed after a step.

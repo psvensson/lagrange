@@ -61,18 +61,27 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 10
+## Open quests — 19
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
-| dst-cost-model-fidelity-spike | product | 0 | 0 | — |
-| l-write-membership-deferred-seed | product | 0 | 0 | — |
+| coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
+| formation-ledger-quorum-spread-first | product | 0 | 0 | — |
+| join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
-| membership-publication-drain-determinism | product | 0 | 0 | CL-001 |
+| latency-group-zone-affinity-demo | product | 0 | 0 | — |
+| listener-port-model-single-authority | product | 0 | 0 | — |
+| movielens-affinity-placement-demo | product | 0 | 0 | — |
+| newcomer-onboarding-friction | product | 0 | 0 | — |
+| rebalancer-own-create-memory-duplicate-replace | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |
 | rolling-restart-run4-critical-spread | product | 1 | 0 | — |
 | rolling-restart-run4-join-runtime-activation | product | 2 | 0 | — |
 | rolling-restart-run4-observer-staleness | product | 1 | 0 | — |
-| rolling-restart-run4-operation-drain | product | 1 | 0 | — |
 | rolling-restart-run4-publication-visibility-run2 | product | 0 | 0 | — |
+| runtime-owner-reconcile-alignment | product | 0 | 0 | — |
+| runtime-replica-state-projection | product | 0 | 0 | — |
+| seed-join-gate-authoritative-refresh | product | 0 | 0 | — |
+| unwired-event-adjudication | product | 0 | 0 | — |
+| write-path-internal-pacing | product | 0 | 0 | — |
 

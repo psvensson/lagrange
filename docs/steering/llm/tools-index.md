@@ -77,6 +77,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `build:bundle` — `node scripts/build-sea.js`
 - `build:sea` — `bash scripts/build-executables.sh`
 
+## check
+
+- `check:memory-index` — `node scripts/check-memory-index.js`
+
 ## debug
 
 - `debug:admin:ws` — `node scripts/debug/admin-ws-connection-check.mjs`
@@ -177,7 +181,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## steering
 
-- `steering:check` — `npm run steering:llm:pack && git diff --quiet -- docs/steering/llm`
+- `steering:check` — `npm run steering:llm:pack && git diff --quiet -- docs/steering/llm && node scripts/check-steering-freshness.js`
+- `steering:freshness` — `node scripts/check-steering-freshness.js`
 - `steering:llm:pack` — Regenerate compact steering packs for prompt loading.
 
 ## summarize
@@ -247,4 +252,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-160 scripts indexed; 66 have a curated description, 94 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+162 scripts indexed; 66 have a curated description, 96 fall back to their raw command. Improve coverage in the two sources named in the header comment.

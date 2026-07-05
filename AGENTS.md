@@ -13,6 +13,12 @@ The unit of non-trivial work is a **Quest**. A Quest is a sealed, declarative
 goal under `solve/quests/<id>.json`; attempts, findings, state, and reports are
 derived from the Solver event log.
 
+**Quest or not?** Author a Quest when the work will likely need more than one
+measured attempt with evidence, or when it changes an owner-boundary contract.
+Below that — a single-sitting fix, doc edit, or mechanical change with an
+obvious proof — just do the work and commit it. Authoritative statement:
+solver-quests.md "Operating Contract".
+
 The Solver owns work execution:
 
 - `node scripts/solve.js new --id <id> --statement "<sealed result>"` creates a

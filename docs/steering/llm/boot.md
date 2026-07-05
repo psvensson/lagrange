@@ -25,19 +25,14 @@ When sources appear to disagree at execution time, follow this order:
    scope intersects the touched owner boundary.
 
 The source-vs-pack distinction is a generator concern, not an execution-time
-override path. If cited source detail shows the pack is wrong or stale, fix the
-source and regenerate with `npm run steering:llm:pack`.
+override path (see core.md "Pack vs Source Precedence"; drift repair is covered
+under "Conflict Rule And Escape Hatch" below).
 
 ## Quest Vocabulary
 
-The canonical glossary (Quest, `doneWhen`, Frontier, Attempt, Finding, Theory,
-park, owner, sealed, proof ladder, subagent, probe, gate states) lives in
-[`core.md`](core.md) "Vocabulary" — always loaded and read first. One additional
-term used here:
-
-| Term | Meaning |
-| --- | --- |
-| Report | Projection of the event log and terminal state. |
+The canonical glossary lives in [`core.md`](core.md) "Vocabulary" — always
+loaded and read first. One additional term used here: a **Report** is the
+projection of the event log and terminal state.
 
 ## First Commands
 
@@ -111,9 +106,8 @@ domain-pack constraints:
 1. State the contradiction in the chat or the Quest finding log.
 2. Ask for confirmation before weakening safety bounds, deleting guardrails, or
    bypassing validation. This is the safety-specific instance of the core.md
-   "Default Posture: Autonomy" stop-triggers (Authorization / Safety / scope — see
-   core.md for the authoritative four); the default
-   posture stays autonomous for everything outside that stop-list.
+   "Default Posture: Autonomy" stop-triggers; everything outside that stop-list
+   stays autonomous.
 
 Separately — and this is **drift repair, not a runtime override** — if a domain
 pack rule is simply outdated (the source and the user agree; the generated pack

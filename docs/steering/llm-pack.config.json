@@ -147,6 +147,11 @@
       "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
       "domain": "governance",
       "priority": 100
+    },
+    {
+      "file": "findings/2026-07-05-prefer-machine-checks-over-prose.md",
+      "domain": "governance",
+      "priority": 100
     }
   ],
   "outputs": [

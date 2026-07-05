@@ -5,7 +5,7 @@ citations: `npm run rule -- --id <ID>` (or `--tag`, `--domain`,
 `--strength`, or free-text terms). Regenerate with
 `node scripts/lookup-rule.js --write-index`.
 
-Total rules: 321
+Total rules: 322
 
 | id | strength | domain | summary |
 | --- | --- | --- | --- |
@@ -315,18 +315,19 @@ Total rules: 321
 | GOV-0096 | should | governance | Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list. |
 | GOV-0097 | must | governance | Before presenting any hypothesis, root-cause theory, or proposed lever to the operator, y… |
 | GOV-0098 | must | governance | Before re-deriving an expensive analysis by hand, you MUST first sort the candidate artif… |
-| GOV-0099 | should | governance | Longer work SHOULD use run --keep-alive so the loop survives those gates. |
-| GOV-0100 | should | governance | In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.jso… |
+| GOV-0099 | must | governance | Any steering rule that can be enforced by a machine check (lint rule, ratchet, guard scri… |
+| GOV-0100 | should | governance | Longer work SHOULD use run --keep-alive so the loop survives those gates. |
+| GOV-0101 | should | governance | In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.jso… |
 | ARCH-0113 | may | architecture | Under load, the system may slow down, defer work, or reject new edge work with structured… |
-| GOV-0101 | may | governance | terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately … |
-| GOV-0102 | may | governance | It is git-ignored and may be rebuilt from the Quest plus event log. |
-| GOV-0103 | may | governance | One sanctioned exception: a frontier metric may be sharpened to a strictly harder gradien… |
+| GOV-0102 | may | governance | terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately … |
+| GOV-0103 | may | governance | It is git-ignored and may be rebuilt from the Quest plus event log. |
+| GOV-0104 | may | governance | One sanctioned exception: a frontier metric may be sharpened to a strictly harder gradien… |
 | ARCH-0114 | should | architecture | Classification-only is a valid result only when the causal chain is still explicit, the f… |
-| GOV-0104 | may | governance | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
-| GOV-0105 | may | governance | The archived theory ledger may be imported only as archive memory; imported archive theor… |
-| GOV-0106 | may | governance | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
-| GOV-0107 | may | governance | Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus … |
-| GOV-0108 | should | governance | Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the … |
-| GOV-0109 | may | governance | Illustrative example — may be stale, not policy. The following is a concrete > worked exa… |
-| GOV-0110 | may | governance | Only overridable continuation codes are accepted: BLOCKED_THEORY and BLOCKED_SCOPE. The c… |
-| GOV-0111 | should | governance | When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, own… |
+| GOV-0105 | may | governance | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
+| GOV-0106 | may | governance | The archived theory ledger may be imported only as archive memory; imported archive theor… |
+| GOV-0107 | may | governance | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
+| GOV-0108 | may | governance | Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus … |
+| GOV-0109 | should | governance | Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the … |
+| GOV-0110 | may | governance | Illustrative example — may be stale, not policy. The following is a concrete > worked exa… |
+| GOV-0111 | may | governance | Only overridable continuation codes are accepted: BLOCKED_THEORY and BLOCKED_SCOPE. The c… |
+| GOV-0112 | should | governance | When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, own… |
