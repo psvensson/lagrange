@@ -26,6 +26,42 @@ const {
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+// Bounded memory for the first-attempt dispatch log discrimination; clearing
+// on overflow only means one extra info line per live operation step.
+const SEND_OPERATION_LOG_KEY_CAP = 2048;
+
+/**
+ * The first dispatch attempt per (operation, step) logs at info so run
+ * forensics can distinguish "never dispatched" from "dispatch retrying"
+ * without debug logging (run-22's silence was exactly this ambiguity);
+ * retries stay at debug to avoid retry-loop flood. Module-level on purpose:
+ * this file's methods run `.call(owner)`-delegated, so only exported names
+ * exist on the owner instance.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} payload
+ * @return {void}
+ */
+function logSendOperationAttempt(owner, operation, payload) {
+  const sendOperationLogKey =
+    `${operation.operationId}:${operation.workflowStep || ''}`;
+  if (!owner.sendOperationInfoLoggedKeys) {
+    owner.sendOperationInfoLoggedKeys = new Set();
+  }
+  if (owner.sendOperationInfoLoggedKeys.size > SEND_OPERATION_LOG_KEY_CAP) {
+    owner.sendOperationInfoLoggedKeys.clear();
+  }
+  const firstAttemptForStep =
+    !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
+  owner.sendOperationInfoLoggedKeys.add(sendOperationLogKey);
+  const sendOperationLog = firstAttemptForStep ?
+    owner.logger.info.bind(owner.logger) :
+    owner.logger.debug.bind(owner.logger);
+  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
+    ...payload,
+    firstAttemptForStep,
+  });
+}
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([
     ReplicaStatus.SYNCING,
@@ -393,7 +429,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
-    this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
+    logSendOperationAttempt(this, operation, {
       operationId: operation.operationId,
       target,
       type: messageType,

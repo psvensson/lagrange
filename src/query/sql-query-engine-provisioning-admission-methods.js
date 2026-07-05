@@ -9,6 +9,18 @@ const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
   'control_plane_write_unhealthy',
   'metadata_publication_degraded',
   'routing_not_ready',
+  // Operation-ledger admission holds are short internal formation windows
+  // (a ledger self-move in flight, or the ledger quorum still spreading).
+  // Classifying them transient lowers the provisioning fallback minimum so a
+  // CREATE TABLE that still has SOME admitted targets proceeds under-planned
+  // (the rebalancer fills in afterwards) instead of failing the client.
+  // OWNED RESIDUAL: when EVERY target is hold-deferred the create still fails
+  // fast with insufficient-targets — full wait-and-retry pacing through a
+  // whole-cluster hold window is the recorded DDL-pacing follow-up
+  // (ARCH-0016/0017), not delivered by this set.
+  'operation_ledger_self_move_in_flight',
+  'operation_ledger_self_move_waiting_for_idle_ledger',
+  'operation_ledger_quorum_concentrated',
 ]);
 const AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
   'insufficient_placement_eligible_nodes',

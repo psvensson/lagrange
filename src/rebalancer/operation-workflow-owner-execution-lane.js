@@ -739,15 +739,7 @@ class OperationWorkflowOwnerExecutionLane
       visibility =
         await this.repository.confirmReplicaOperationPersistence(operation);
     } catch (error) {
-      this.logger.warn(
-        OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
-        {
-          operationId: operation?.operationId || null,
-          workflowStep: operation?.workflowStep || null,
-          status: operation?.status || null,
-          error: error?.message || String(error),
-        },
-      );
+      this.warnCommittedTransitionNotVisible(operation, error);
       if (repairOnUnconfirmed) {
         armTerminalTransitionRepair(
           this,
@@ -760,6 +752,36 @@ class OperationWorkflowOwnerExecutionLane
     if (!repairOnUnconfirmed) {
       return;
     }
+    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Error} error
+   * @return {void}
+   * @private
+   */
+  warnCommittedTransitionNotVisible(operation, error) {
+    this.logger.warn(
+      OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
+      {
+        operationId: operation?.operationId || null,
+        workflowStep: operation?.workflowStep || null,
+        status: operation?.status || null,
+        error: error?.message || String(error),
+      },
+    );
+  }
+
+  /**
+   * A positively confirmed terminal transition clears any armed repair; every
+   * other outcome (DEFERRED — the silent class) arms it.
+   * @param {Object} operation
+   * @param {Object|null} visibility
+   * @return {void}
+   * @private
+   */
+  resolveTerminalTransitionConfirmationOutcome(operation, visibility) {
     if (
       visibility?.confirmationState ===
         REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&

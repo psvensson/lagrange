@@ -552,40 +552,12 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       );
     }
 
-    // LoggingService injects the local nodeId into every payload, so the
-    // move target must use a distinct key to survive in the emitted line.
-    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      moveType: move.type,
-      moveTargetNodeId: move.nodeId || null,
-      moveSourceNodeId: move.sourceNodeId || null,
-      moveReplicaId: move.replicaId || null,
-      reason: move.reason,
-      usingCoordinator: !!this.rebalanceCoordinator,
-    });
+    this.logExecuteMove(move);
 
     try {
-      if (
-        move?.nodeId &&
-        this.shouldRequireMoveTargetReadiness(move)
-      ) {
-        const skipDetail = await this.getNodeReadinessSkipReason(move.nodeId);
-        if (skipDetail !== null) {
-          this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
-            entityId: this.entityId,
-            moveTargetNodeId: move.nodeId || null,
-            moveType: move.type,
-            skipDetail,
-          });
-          return this.buildSkippedMoveResult(
-            REBALANCER_SKIP_REASON.NODE_NOT_READY,
-            move,
-            {
-              skipDetail,
-            },
-          );
-        }
+      const readinessSkip = await this.resolveMoveTargetReadinessSkip(move);
+      if (readinessSkip) {
+        return readinessSkip;
       }
 
       if (!this.rebalanceCoordinator) {
@@ -594,27 +566,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
 
       const outcome = await this.executeMoveViaCoordinator(move);
       if (outcome?.skipped === true) {
-        const admissionBlockingReasonCodes = Array.isArray(
-          outcome?.admission?.blockingReasons,
-        ) ?
-          outcome.admission.blockingReasons
-            .map((reason) =>
-              String(reason?.code || reason?.reason || reason || '').trim(),
-            )
-            .filter((reason) => reason.length > 0) :
-          [];
-        this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
-          entityId: this.entityId,
-          entityType: this.entityType,
-          moveType: move.type,
-          moveTargetNodeId: move.nodeId || null,
-          replicaId: move.replicaId || null,
-          reason: outcome.reason || null,
-          error: outcome.error || null,
-          admissionDecisionType: outcome?.admission?.decisionType || null,
-          admissionReason: outcome?.admission?.reason || null,
-          admissionBlockingReasonCodes,
-        });
+        this.logSkippedMoveOutcome(move, outcome);
       }
       return outcome;
     } catch (error) {
@@ -627,6 +579,82 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       throw error;
     }
   }
+
+  // LoggingService injects the local nodeId into every payload, so the
+  // move target must use a distinct key to survive in the emitted line.
+  // entityId is this rebalancer INSTANCE's entity; the move's own partition
+  // must be carried explicitly or forensics misattribute the move (run-22).
+  logExecuteMove(move) {
+    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      ...buildMoveLogFields(move),
+      moveSourceNodeId: move.sourceNodeId || null,
+      moveReplicaId: move.replicaId || null,
+      reason: move.reason,
+      usingCoordinator: !!this.rebalanceCoordinator,
+    });
+  }
+
+  async resolveMoveTargetReadinessSkip(move) {
+    if (!move?.nodeId || !this.shouldRequireMoveTargetReadiness(move)) {
+      return null;
+    }
+    const skipDetail = await this.getNodeReadinessSkipReason(move.nodeId);
+    if (skipDetail === null) {
+      return null;
+    }
+    this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
+      entityId: this.entityId,
+      moveTargetNodeId: move.nodeId || null,
+      moveType: move.type,
+      skipDetail,
+    });
+    return this.buildSkippedMoveResult(
+      REBALANCER_SKIP_REASON.NODE_NOT_READY,
+      move,
+      {
+        skipDetail,
+      },
+    );
+  }
+
+  logSkippedMoveOutcome(move, outcome) {
+    this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      ...buildMoveLogFields(move),
+      reason: outcome.reason || null,
+      error: outcome.error || null,
+      admissionDecisionType: outcome?.admission?.decisionType || null,
+      admissionReason: outcome?.admission?.reason || null,
+      admissionBlockingReasonCodes:
+        normalizeAdmissionBlockingReasonCodes(outcome),
+    });
+  }
+}
+
+// entityId in these payloads is this rebalancer INSTANCE's entity; the move's
+// own partition must be carried explicitly or forensics misattribute the move
+// (run-22).
+function buildMoveLogFields(move) {
+  return {
+    moveType: move.type,
+    movePartitionId: move.partitionId || move.entityId || null,
+    moveTargetNodeId: move.nodeId || null,
+    replicaId: move.replicaId || null,
+  };
+}
+
+function normalizeAdmissionBlockingReasonCodes(outcome) {
+  if (!Array.isArray(outcome?.admission?.blockingReasons)) {
+    return [];
+  }
+  return outcome.admission.blockingReasons
+    .map((reason) =>
+      String(reason?.code || reason?.reason || reason || '').trim(),
+    )
+    .filter((reason) => reason.length > 0);
 }
 
 applyUnifiedRebalancerFollowUpAugmentationMethods(UnifiedRebalancerFollowUpMove);

@@ -498,6 +498,167 @@ function syncInMemoryOperationFromRow(operation, trackedOperations) {
   }
 }
 
+// Planner analogue, in the move planner's own calculation order: excess
+// REMOVEs are computed BEFORE replacement moves, so the surplus drain gets
+// the admission window first when the remove lane frees up.
+async function attemptSurplusRemoves(ctx, cycle) {
+  for (const entry of ctx.surplusRemoves) {
+    if (entry.created) {
+      continue;
+    }
+    const outcome = await attemptCreate({
+      coordinator: ctx.coordinator,
+      move: entry.move,
+      events: ctx.events,
+      cycle,
+      label: entry.label,
+      labels: ctx.labels,
+    });
+    entry.created = outcome.created;
+  }
+}
+
+// The planner analogue re-mints the surplus-drain REPLACE (a fresh learner
+// replica each generation) whenever none is in flight and the source voter
+// still needs draining.
+async function attemptReplanGeneration(ctx, cycle) {
+  const replaceInFlight = ctx.replaceGenerations.some(
+    (generation) =>
+      generation.operation &&
+      !isTerminalStep(
+        OperationType.REPLACE,
+        ctx.trackedOperations.get(generation.operation.operationId)
+          ?.workflow_step || WORKFLOW_STEP.PENDING,
+      ),
+  );
+  const sourceStillPresent = ctx.serviceRows.some(
+    (row) => row.replica_id === REPLICA.SOURCE,
+  );
+  if (replaceInFlight || !sourceStillPresent) {
+    return;
+  }
+  const outcome = await attemptCreate({
+    coordinator: ctx.coordinator,
+    move: buildReplaceMove(learnerReplicaId(ctx.learnerGeneration)),
+    events: ctx.events,
+    cycle,
+    label: `REPLACE:gen${ctx.learnerGeneration}`,
+    labels: ctx.labels,
+  });
+  if (!outcome.created) {
+    return;
+  }
+  if (ctx.lossState.lostWriteOperationId === null) {
+    ctx.lossState.lostWriteOperationId = outcome.operation.operationId;
+  }
+  // The coordinator allocates the canonical learner replica id itself; the
+  // learner replica and its services row must carry THAT id or the guard's
+  // op-owned allowance and the workflow coupling never engage.
+  const replicaId = outcome.operation.replicaId;
+  ctx.serviceRows.push(
+    buildServiceRow({
+      replicaId,
+      nodeId: LEARNER_NODE_ID,
+      raftRole: RAFT_ROLE_ROW.LEARNER,
+    }),
+  );
+  ctx.replaceGenerations.push({
+    replicaId,
+    operation: outcome.operation,
+    learner: createLearnerPartitionService({
+      replicaId,
+      partitionCache: ctx.partitionCache,
+      leaderReplicaId: REPLICA.SOURCE,
+      deferrals:
+        ctx.learnerGeneration === FIRST_LEARNER_GENERATION ?
+          ctx.firstGenerationDeferrals :
+          [],
+    }),
+    syncingSinceMs: null,
+    failReported: false,
+    failReportedAtTick: null,
+  });
+  ctx.learnerGeneration += 1;
+}
+
+// The learner promotion loop (REAL guard, 1 Hz in production).
+function drivePromotionLoop(ctx, tick) {
+  for (const generation of ctx.replaceGenerations) {
+    if (generation.learner.role !== RaftRole.LEARNER) {
+      continue;
+    }
+    if (drivePromotionCheck(generation.learner)) {
+      ctx.promotedByReplicaId.add(generation.replicaId);
+      promoteServiceRow(ctx.serviceRows, generation.replicaId);
+      ctx.events.push(`${tick} PROMOTED ${generation.replicaId}`);
+    }
+  }
+}
+
+// The executor's voter-ready wait (REAL 60s bound, virtual clock): a REPLACE
+// still SYNCING with an unpromoted learner past the bound reports failure, and
+// the coordinator runs the REAL failOperation persistence chain. Applies to
+// EVERY generation. Level-triggered like production's timeout scan: while the
+// durable row stays SYNCING and the in-memory twin has NOT terminalized (an
+// honest uncommitted transition), the failure is re-reported each interval.
+// Once the in-memory twin is terminal, nothing re-reports — that ghost class
+// is exactly what the terminal-transition repair must cover.
+function isVoterReadyFailureReportDue(ctx, generation, tick) {
+  const inMemoryTerminal =
+    generation.operation.workflowStep === WORKFLOW_STEP.FAILED &&
+    generation.operation.completedAt !== null &&
+    generation.operation.completedAt !== undefined;
+  const refailDue =
+    generation.failReportedAtTick === null ||
+    tick - generation.failReportedAtTick >= REFAIL_INTERVAL_TICKS;
+  const syncingElapsedMs = ctx.timeSource.now() - generation.syncingSinceMs;
+  return (
+    syncingElapsedMs >= VOTER_READY_TIMEOUT_MS &&
+    !ctx.promotedByReplicaId.has(generation.replicaId) &&
+    !inMemoryTerminal &&
+    refailDue
+  );
+}
+
+async function reportVoterReadyTimeouts(ctx, tick) {
+  for (const generation of ctx.replaceGenerations) {
+    const row = ctx.trackedOperations.get(generation.operation.operationId);
+    if (!row || row.workflow_step !== WORKFLOW_STEP.SYNCING) {
+      continue;
+    }
+    if (generation.syncingSinceMs === null) {
+      generation.syncingSinceMs = ctx.timeSource.now();
+    }
+    if (!isVoterReadyFailureReportDue(ctx, generation, tick)) {
+      continue;
+    }
+    if (generation.failReportedAtTick === null) {
+      syncInMemoryOperationFromRow(generation.operation, ctx.trackedOperations);
+    }
+    await ctx.coordinator.failOperation(
+      generation.operation,
+      `Replica ${generation.replicaId} did not become voter-ready ` +
+        `within ${VOTER_READY_TIMEOUT_MS}ms`,
+    );
+    generation.failReportedAtTick = tick;
+    generation.failReported = true;
+    removeServiceRow(ctx.serviceRows, generation.replicaId);
+    ctx.events.push(`${tick} REPLACE_FAIL_REPORTED gen:${generation.replicaId}`);
+  }
+}
+
+function isVoterSurplusScenarioSettled(ctx) {
+  const drained =
+    countActiveVoterRows(ctx.serviceRows) === TARGET_REPLICA_COUNT &&
+    ctx.surplusRemoves.every((entry) => entry.created);
+  const sourceDrained = !ctx.serviceRows.some(
+    (row) => row.replica_id === REPLICA.SOURCE,
+  );
+  const nothingInFlight =
+    nonTerminalOperations(ctx.trackedOperations, ctx.labels).length === 0;
+  return drained && sourceDrained && nothingInFlight;
+}
+
 // The run-21 composition, end to end. Returns the measured shape; assertions live
 // in the tests so the same scenario serves the livelock proof, the no-loss control,
 // and the determinism check.
@@ -534,24 +695,33 @@ async function runVoterSurplusScenario({lossMode}) {
     virtualTimers,
   };
 
-  const surplusRemoves = [
-    {
-      move: buildSurplusRemoveMove(REPLICA.SURPLUS_A),
-      label: `REMOVE:${REPLICA.SURPLUS_A}`,
-      created: false,
-    },
-    {
-      move: buildSurplusRemoveMove(REPLICA.SURPLUS_B),
-      label: `REMOVE:${REPLICA.SURPLUS_B}`,
-      created: false,
-    },
-  ];
-  // The planner analogue re-mints the surplus-drain REPLACE (a fresh learner
-  // replica each generation) whenever none is in flight and the source voter
-  // still needs draining.
-  const replaceGenerations = [];
-  const firstGenerationDeferrals = [];
-  let learnerGeneration = FIRST_LEARNER_GENERATION;
+  const ctx = {
+    coordinator,
+    trackedOperations,
+    timeSource,
+    events,
+    labels,
+    serviceRows,
+    lossState,
+    partitionCache,
+    promotedByReplicaId,
+    surplusRemoves: [
+      {
+        move: buildSurplusRemoveMove(REPLICA.SURPLUS_A),
+        label: `REMOVE:${REPLICA.SURPLUS_A}`,
+        created: false,
+      },
+      {
+        move: buildSurplusRemoveMove(REPLICA.SURPLUS_B),
+        label: `REMOVE:${REPLICA.SURPLUS_B}`,
+        created: false,
+      },
+    ],
+    replaceGenerations: [],
+    firstGenerationDeferrals: [],
+    learnerGeneration: FIRST_LEARNER_GENERATION,
+  };
+  const {surplusRemoves, replaceGenerations, firstGenerationDeferrals} = ctx;
 
   const openLearnerTimers = () =>
     replaceGenerations
@@ -561,154 +731,13 @@ async function runVoterSurplusScenario({lossMode}) {
   try {
     let tick = 0;
     for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
-      // Planner analogue, in the move planner's own calculation order: excess
-      // REMOVEs are computed BEFORE replacement moves, so the surplus drain gets
-      // the admission window first when the remove lane frees up.
-      for (const entry of surplusRemoves) {
-        if (entry.created) {
-          continue;
-        }
-        const outcome = await attemptCreate({
-          coordinator,
-          move: entry.move,
-          events,
-          cycle,
-          label: entry.label,
-          labels,
-        });
-        entry.created = outcome.created;
-      }
-
-      const replaceInFlight = replaceGenerations.some(
-        (generation) =>
-          generation.operation &&
-          !isTerminalStep(
-            OperationType.REPLACE,
-            trackedOperations.get(generation.operation.operationId)
-              ?.workflow_step || WORKFLOW_STEP.PENDING,
-          ),
-      );
-      const sourceStillPresent = serviceRows.some(
-        (row) => row.replica_id === REPLICA.SOURCE,
-      );
-      if (!replaceInFlight && sourceStillPresent) {
-        const outcome = await attemptCreate({
-          coordinator,
-          move: buildReplaceMove(learnerReplicaId(learnerGeneration)),
-          events,
-          cycle,
-          label: `REPLACE:gen${learnerGeneration}`,
-          labels,
-        });
-        if (outcome.created) {
-          if (lossState.lostWriteOperationId === null) {
-            lossState.lostWriteOperationId = outcome.operation.operationId;
-          }
-          // The coordinator allocates the canonical learner replica id itself;
-          // the learner replica and its services row must carry THAT id or the
-          // guard's op-owned allowance and the workflow coupling never engage.
-          const replicaId = outcome.operation.replicaId;
-          serviceRows.push(
-            buildServiceRow({
-              replicaId,
-              nodeId: LEARNER_NODE_ID,
-              raftRole: RAFT_ROLE_ROW.LEARNER,
-            }),
-          );
-          replaceGenerations.push({
-            replicaId,
-            operation: outcome.operation,
-            learner: createLearnerPartitionService({
-              replicaId,
-              partitionCache,
-              leaderReplicaId: REPLICA.SOURCE,
-              deferrals:
-                learnerGeneration === FIRST_LEARNER_GENERATION ?
-                  firstGenerationDeferrals :
-                  [],
-            }),
-            syncingSinceMs: null,
-            failReported: false,
-            failReportedAtTick: null,
-          });
-          learnerGeneration += 1;
-        }
-      }
-
-      // The learner promotion loop (REAL guard, 1 Hz in production).
-      for (const generation of replaceGenerations) {
-        if (generation.learner.role !== RaftRole.LEARNER) {
-          continue;
-        }
-        if (drivePromotionCheck(generation.learner)) {
-          promotedByReplicaId.add(generation.replicaId);
-          promoteServiceRow(serviceRows, generation.replicaId);
-          events.push(`${tick} PROMOTED ${generation.replicaId}`);
-        }
-      }
-
+      await attemptSurplusRemoves(ctx, cycle);
+      await attemptReplanGeneration(ctx, cycle);
+      drivePromotionLoop(ctx, tick);
       await driveWorkflowTick({scenario, events, tick});
       tick += 1;
-
-      // The executor's voter-ready wait (REAL 60s bound, virtual clock): a
-      // REPLACE still SYNCING with an unpromoted learner past the bound reports
-      // failure, and the coordinator runs the REAL failOperation persistence
-      // chain. Applies to EVERY generation (run-21's executor did this; later
-      // generations do it too — the production churn that eventually drains).
-      // Level-triggered like production's timeout scan: while the durable row
-      // stays SYNCING and the in-memory twin has NOT terminalized (an honest
-      // uncommitted transition), the failure is re-reported each interval. Once
-      // the in-memory twin is terminal, nothing re-reports — that ghost class
-      // is exactly what the terminal-transition repair must cover.
-      for (const generation of replaceGenerations) {
-        const row = trackedOperations.get(generation.operation.operationId);
-        if (!row || row.workflow_step !== WORKFLOW_STEP.SYNCING) {
-          continue;
-        }
-        if (generation.syncingSinceMs === null) {
-          generation.syncingSinceMs = timeSource.now();
-        }
-        const inMemoryTerminal =
-          generation.operation.workflowStep === WORKFLOW_STEP.FAILED &&
-          generation.operation.completedAt !== null &&
-          generation.operation.completedAt !== undefined;
-        const refailDue =
-          generation.failReportedAtTick === null ||
-          tick - generation.failReportedAtTick >= REFAIL_INTERVAL_TICKS;
-        const syncingElapsedMs = timeSource.now() - generation.syncingSinceMs;
-        if (
-          syncingElapsedMs >= VOTER_READY_TIMEOUT_MS &&
-          !promotedByReplicaId.has(generation.replicaId) &&
-          !inMemoryTerminal &&
-          refailDue
-        ) {
-          if (generation.failReportedAtTick === null) {
-            syncInMemoryOperationFromRow(
-              generation.operation,
-              trackedOperations,
-            );
-          }
-          await coordinator.failOperation(
-            generation.operation,
-            `Replica ${generation.replicaId} did not become voter-ready ` +
-              `within ${VOTER_READY_TIMEOUT_MS}ms`,
-          );
-          generation.failReportedAtTick = tick;
-          generation.failReported = true;
-          removeServiceRow(serviceRows, generation.replicaId);
-          events.push(`${tick} REPLACE_FAIL_REPORTED gen:${generation.replicaId}`);
-        }
-      }
-
-      const drained =
-        countActiveVoterRows(serviceRows) === TARGET_REPLICA_COUNT &&
-        surplusRemoves.every((entry) => entry.created);
-      const sourceDrained = !serviceRows.some(
-        (row) => row.replica_id === REPLICA.SOURCE,
-      );
-      const nothingInFlight =
-        nonTerminalOperations(trackedOperations, labels).length === 0;
-      if (drained && sourceDrained && nothingInFlight) {
+      await reportVoterReadyTimeouts(ctx, tick);
+      if (isVoterSurplusScenarioSettled(ctx)) {
         break;
       }
     }

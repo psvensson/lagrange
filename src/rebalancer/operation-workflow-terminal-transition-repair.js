@@ -73,17 +73,12 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause) {
     return;
   }
   const delayMs = resolveTerminalTransitionRepairDelayMs(attempt);
-  owner.logger.warn(
-    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
-    {
-      operationId,
-      workflowStep: projectedOperation?.workflowStep || null,
-      partitionId: projectedOperation?.partitionId || null,
-      cause,
-      attempt,
-      delayMs,
-    },
-  );
+  logTerminalTransitionRepairArmed(owner, projectedOperation, {
+    operationId,
+    cause,
+    attempt,
+    delayMs,
+  });
   // The callback returns its promise so a deterministic test scheduler can
   // await the attempt; production setTimeout ignores the return value.
   const timerHandle = owner.setTimeoutFn(() => {
@@ -104,6 +99,24 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause) {
   owner.terminalTransitionRepairTimerByOperationId.set(
     operationId,
     timerHandle,
+  );
+}
+
+function logTerminalTransitionRepairArmed(
+  owner,
+  projectedOperation,
+  {operationId, cause, attempt, delayMs},
+) {
+  owner.logger.warn(
+    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
+    {
+      operationId,
+      workflowStep: projectedOperation?.workflowStep || null,
+      partitionId: projectedOperation?.partitionId || null,
+      cause,
+      attempt,
+      delayMs,
+    },
   );
 }
 
@@ -168,37 +181,11 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         },
       );
       if (persisted === false) {
-        // A refused persist is NOT proof a different terminal state won: the
-        // zero-change arm also returns false against a readable-but-stale
-        // NON-terminal row (the CL-017 read/apply divergence family). Abandon
-        // only when the authoritative row is durably terminal (any terminal
-        // state frees the budget and admission lanes); otherwise the ghost
-        // still exists and the repair must keep trying.
-        const authoritativeOperation =
-          await owner.repository.queryAuthoritativeOperationById(operationId, {
-            authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            requireOwnerRpcRead: false,
-          });
-        if (
-          authoritativeOperation &&
-          owner.repository.isAuthoritativeOperationTerminal(
-            authoritativeOperation,
-          )
-        ) {
-          owner.logger.error(
-            REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
-            {
-              operationId,
-              workflowStep: heldState.projectedOperation?.workflowStep || null,
-              partitionId: heldState.projectedOperation?.partitionId || null,
-              attempt: heldState.attempt,
-            },
-          );
-          clearTerminalTransitionRepair(owner, operationId);
-          return;
-        }
-        rearmTerminalTransitionRepairIfHeld(owner, operationId);
+        await resolveRefusedTerminalTransitionRepairPersist(
+          owner,
+          operationId,
+          heldState,
+        );
         return;
       }
       const visibility =
@@ -221,6 +208,48 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       rearmTerminalTransitionRepairIfHeld(owner, operationId);
     },
   );
+}
+
+/**
+ * A refused persist is NOT proof a different terminal state won: the
+ * zero-change arm also returns false against a readable-but-stale
+ * NON-terminal row (the CL-017 read/apply divergence family). Abandon only
+ * when the authoritative row is durably terminal (any terminal state frees
+ * the budget and admission lanes); otherwise the ghost still exists and the
+ * repair must keep trying.
+ * @param {Object} owner
+ * @param {string} operationId
+ * @param {Object} heldState
+ * @return {Promise<void>}
+ */
+async function resolveRefusedTerminalTransitionRepairPersist(
+  owner,
+  operationId,
+  heldState,
+) {
+  const authoritativeOperation =
+    await owner.repository.queryAuthoritativeOperationById(operationId, {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      requireOwnerRpcRead: false,
+    });
+  if (
+    authoritativeOperation &&
+    owner.repository.isAuthoritativeOperationTerminal(authoritativeOperation)
+  ) {
+    owner.logger.error(
+      REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
+      {
+        operationId,
+        workflowStep: heldState.projectedOperation?.workflowStep || null,
+        partitionId: heldState.projectedOperation?.partitionId || null,
+        attempt: heldState.attempt,
+      },
+    );
+    clearTerminalTransitionRepair(owner, operationId);
+    return;
+  }
+  rearmTerminalTransitionRepairIfHeld(owner, operationId);
 }
 
 export {

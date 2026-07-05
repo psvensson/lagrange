@@ -1,7 +1,13 @@
+import {TIME_MS} from '../constants/index.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  evaluateOperationLedgerQuorumConcentration,
+  isConcentratedOperationLedgerPartition,
+} from './operation-ledger-quorum-concentration.js';
 
 const {
   OperationType,
+  REBALANCE_COORDINATOR_LOG_MSG,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
   isOperationLedgerPartitionTable,
@@ -28,6 +34,12 @@ const OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE =
   'operation_ledger_self_move_in_flight';
 const OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE =
   'operation_ledger_self_move_waiting_for_idle_ledger';
+const OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE =
+  'operation_ledger_quorum_concentrated';
+const OPERATION_LEDGER_QUORUM_CONCENTRATED_MESSAGE_SUFFIX =
+  ' quorum is concentrated on one node; operation admission deferred until ' +
+  'the ledger spreads';
+const OPERATION_LEDGER_QUORUM_HOLD_WARN_INTERVAL_MS = TIME_MS.SECOND * 30;
 
 // Interlock rejections must ride the admission channel (error.admissionResult)
 // so the DDL partition-provisioning loop absorbs them as target rejections and
@@ -184,6 +196,17 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       ),
     );
     if (!liveLedgerSelfMove) {
+      // The run-22 release-too-early gap: with no self-move in flight the
+      // run-20 hold is open, but the ledger quorum may STILL be concentrated
+      // (a leadership-only relocation leaves the follower majority on the hot
+      // node). Dependent admission keeps deferring until placement actuals
+      // show the quorum spread — ledger self-moves (the cure, handled in the
+      // disruptive branch above) and emergency quorum-restore ADDs stay
+      // exempt.
+      this.ensureOperationLedgerQuorumSpreadFirst(
+        normalizedMoveType,
+        partitionId,
+      );
       return;
     }
     throw this.createOperationLedgerInterlockError(
@@ -193,6 +216,95 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         OPERATION_LEDGER_SELF_MOVE_BLOCKING_MESSAGE_SUFFIX,
       OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
       liveLedgerSelfMove.operationId,
+    );
+  }
+
+  /**
+   * Defer non-exempt operation creation while any operation-ledger partition's
+   * voter quorum is concentrated AND spreading it is actionable. The
+   * evaluation reads ACTUAL placement rows (services/nodes/partitions caches);
+   * absent actuals or an unspreadable cluster never engage the hold, so small
+   * clusters and cold caches keep admitting normally.
+   * @param {string|null} normalizedMoveType
+   * @param {string|null} partitionId
+   * @return {void}
+   * @private
+   */
+  ensureOperationLedgerQuorumSpreadFirst(normalizedMoveType, partitionId) {
+    const evaluation = evaluateOperationLedgerQuorumConcentration(
+      this.systemTableCache,
+    );
+    if (evaluation.holdEngaged !== true) {
+      return;
+    }
+    const concentratedPartition = evaluation.concentratedPartitions.find(
+      (partition) => partition.spreadActionable,
+    );
+    this.maybeWarnOperationLedgerQuorumSpreadHold(
+      evaluation,
+      normalizedMoveType,
+      partitionId,
+    );
+    throw this.createOperationLedgerInterlockError(
+      normalizedMoveType,
+      OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+        String(concentratedPartition.partitionId) +
+        OPERATION_LEDGER_QUORUM_CONCENTRATED_MESSAGE_SUFFIX,
+      OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE,
+      null,
+    );
+  }
+
+  /**
+   * Quorum-concentration evidence for the PLANNER's priority-recovery gate: a
+   * concentrated operation-ledger partition requires its cure move to be
+   * planned even while local-serve readiness gates would defer planning —
+   * the hold itself sustains those readiness states, so without this evidence
+   * the cure is never planned and the hold never releases (verifier-traced
+   * permanent formation wedge). Feasibility is irrelevant here: planning the
+   * cure is how a target is found.
+   * @param {string|null} partitionId
+   * @return {boolean}
+   */
+  isOperationLedgerQuorumConcentratedForPartition(partitionId) {
+    return isConcentratedOperationLedgerPartition(
+      evaluateOperationLedgerQuorumConcentration(this.systemTableCache),
+      partitionId,
+    );
+  }
+
+  /**
+   * Periodic (not per-rejection) observability while the quorum-spread hold
+   * is engaged: a hold that persists because the cure keeps failing must be
+   * loud, not silent.
+   * @param {Object} evaluation
+   * @param {string|null} normalizedMoveType
+   * @param {string|null} partitionId
+   * @return {void}
+   * @private
+   */
+  maybeWarnOperationLedgerQuorumSpreadHold(
+    evaluation,
+    normalizedMoveType,
+    partitionId,
+  ) {
+    const state = this.getOperationLedgerInterlockAdmissionState();
+    const nowMs = this.timeSource?.now?.() ?? Date.now();
+    if (
+      state.lastQuorumHoldWarnAtMs !== null &&
+      nowMs - state.lastQuorumHoldWarnAtMs <
+        OPERATION_LEDGER_QUORUM_HOLD_WARN_INTERVAL_MS
+    ) {
+      return;
+    }
+    state.lastQuorumHoldWarnAtMs = nowMs;
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_LEDGER_QUORUM_SPREAD_HOLD,
+      {
+        deferredMoveType: normalizedMoveType,
+        deferredPartitionId: partitionId || null,
+        concentratedPartitions: evaluation.concentratedPartitions,
+      },
     );
   }
 
@@ -374,6 +486,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         selfMoveCreateInFlight: false,
         heldSelfMoveOperationId: null,
         otherCreatesInFlight: 0,
+        lastQuorumHoldWarnAtMs: null,
       };
     }
     return this.operationLedgerInterlockAdmission;

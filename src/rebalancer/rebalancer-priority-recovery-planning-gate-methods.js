@@ -121,6 +121,21 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     if (normalizedPartitionId.length === 0) {
       return false;
     }
+    // A concentrated operation-ledger quorum requires its cure move to be
+    // planned NOW: the admission-side quorum-spread hold defers every
+    // dependent move while concentration persists, which can itself sustain
+    // the readiness states this planning gate defers on — without this
+    // evidence the cure is never planned and the hold never releases
+    // (quest formation-ledger-quorum-spread-first, verifier-traced wedge).
+    // The coordinator owns the placement actuals; the planner only asks.
+    if (
+      this.rebalanceCoordinator
+        ?.isOperationLedgerQuorumConcentratedForPartition?.(
+          normalizedPartitionId,
+        ) === true
+    ) {
+      return true;
+    }
     const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
       {partitionId: normalizedPartitionId},
     );

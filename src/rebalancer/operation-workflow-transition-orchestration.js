@@ -209,6 +209,40 @@ class OperationWorkflowTransitionOrchestration
    * @param {Function} [options.afterCommit]
    * @return {Promise<boolean>} True when this call committed the transition.
    */
+  /**
+   * Roll back the (empty) transition transaction after an honest persist
+   * refusal so the transition reports uncommitted instead of minting an
+   * in-memory-terminal/durable-non-terminal ghost.
+   * @param {Object} txCoordinator
+   * @param {string} sessionId
+   * @param {Object} operation
+   * @param {string} step
+   * @return {Promise<void>}
+   * @private
+   */
+  async rollbackRefusedTransitionPersist(
+    txCoordinator,
+    sessionId,
+    operation,
+    step,
+  ) {
+    const rollbackResult = await txCoordinator.rollback(sessionId);
+    if (rollbackResult?.success !== true) {
+      this.logger.warn(
+        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
+        {
+          operationId: operation.operationId,
+          workflowStep: step,
+          error: this.normalizeErrorMessage(
+            rollbackResult?.error,
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          ),
+        },
+      );
+    }
+    this.clearTransitionExecutionAttempt(operation.operationId, step);
+  }
+
   async executeAtomicTransition(
     operation,
     step,
@@ -316,24 +350,14 @@ class OperationWorkflowTransitionOrchestration
           if (persistResult === false) {
             // Honest persist refusal (zero-row update, conflicting durable
             // terminal state, expected-step mismatch): nothing durable
-            // changed, so the transition did NOT commit. Roll the empty
-            // transaction back and report uncommitted — swallowing this
+            // changed, so the transition did NOT commit — swallowing this
             // result is what minted the run-21 immortal SYNCING ghost.
-            const rollbackResult = await txCoordinator.rollback(sessionId);
-            if (rollbackResult?.success !== true) {
-              this.logger.warn(
-                OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
-                {
-                  operationId: operation.operationId,
-                  workflowStep: step,
-                  error: this.normalizeErrorMessage(
-                    rollbackResult?.error,
-                    OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-                  ),
-                },
-              );
-            }
-            this.clearTransitionExecutionAttempt(operation.operationId, step);
+            await this.rollbackRefusedTransitionPersist(
+              txCoordinator,
+              sessionId,
+              operation,
+              step,
+            );
             return false;
           }
           const commitResult = await txCoordinator.commit(sessionId);

@@ -287,6 +287,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   TERMINAL_TRANSITION_REPAIR_ABANDONED:
     'Terminal transition repair abandoned: a different durable terminal ' +
     'state won',
+  OPERATION_LEDGER_QUORUM_SPREAD_HOLD:
+    'Operation-ledger quorum concentrated on one node; deferring dependent ' +
+    'operation admission until the ledger spreads',
   PRIORITY_RECOVERY_DRAIN_SETTLED:
     'Priority recovery drain settled operation',
   BOOTSTRAP_TOPOLOGY_UNRESOLVED:

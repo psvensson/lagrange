@@ -141,12 +141,15 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       );
     }
 
-    async persistOperationUpdate(operation, options = {}) {
-      const expectedWorkflowStep =
-        typeof options.expectedWorkflowStep === 'string' &&
+    normalizeExpectedWorkflowStep(options) {
+      return typeof options.expectedWorkflowStep === 'string' &&
         options.expectedWorkflowStep.length > 0 ?
-          options.expectedWorkflowStep :
-          null;
+        options.expectedWorkflowStep :
+        null;
+    }
+
+    async persistOperationUpdate(operation, options = {}) {
+      const expectedWorkflowStep = this.normalizeExpectedWorkflowStep(options);
       // Terminal-transition writes deliberately carry NO expected-step CAS: the
       // owner's terminal truth must overwrite any lagging non-terminal durable
       // step (a lost progress write would otherwise wedge the CAS forever). The
@@ -203,21 +206,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         },
       );
       if (!result.success) {
-        const recoveredPersistedMutation =
-          await this.recoverPersistedReplicaOperationMutation(
-            operation,
-            result,
-          );
-        if (!recoveredPersistedMutation) {
-          const persistError = this.buildOperationPersistError(result);
-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
-            operationId: operation.operationId,
-            ...buildControlPlaneFailurePayload(this.nodeId, result),
-          });
-          throw persistError;
-        }
-        this.syncIncompleteOperationObservation(operation);
-        return true;
+        return this.resolveFailedOperationUpdateResult(operation, result);
       }
       if (result.recoveredAfterRetryableFailure === true) {
         this.syncIncompleteOperationObservation(operation);
@@ -226,60 +215,19 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       const changeCount = this.extractMutationChangeCount(result);
       if (changeCount !== null && changeCount <= 0) {
         if (expectedWorkflowStep || terminalTransition) {
-          const authoritativeOperation =
-            await this.queryAuthoritativeOperationById(operation.operationId, {
-              authoritativeReadMode:
-                CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-              requireOwnerRpcRead: false,
-            });
-          const visibilitySatisfied =
-            this.isReplicaOperationVisibilitySatisfied(
-              operation,
-              authoritativeOperation,
-            );
-          if (visibilitySatisfied) {
-            this.syncIncompleteOperationObservation(operation);
-            return visibilitySatisfied;
-          }
-          // CL-017(b): the UPDATE committed but affected zero rows AND the
-          // authoritative read cannot see the row the owner created — the
-          // row is MISSING from the partition state that applied the write
-          // (the post-churn divergence witness: 'No row found for CDC
-          // update' 144ms after the row's own insert-CDC). Retrying the
-          // UPDATE no-ops forever and the operation never durably leaves
-          // its step; re-insert the owner's copy instead of looping.
-          if (!authoritativeOperation) {
-            this.logger.error(
-              REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
-              {
-                operationId: operation.operationId,
-                partitionId: operation.partitionId,
-                workflowStep: operation.workflowStep,
-                expectedWorkflowStep,
-              },
-            );
-            try {
-              const reinserted =
-                await this.persistNewOperationUnlocked(operation);
-              if (reinserted) {
-                this.syncIncompleteOperationObservation(operation);
-                return true;
-              }
-            } catch (reinsertError) {
-              this.logger.warn(
-                REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
-                {
-                  operationId: operation.operationId,
-                  phase: 'divergence_reinsert',
-                  error: reinsertError?.message || String(reinsertError),
-                },
-              );
-            }
-          }
-          return visibilitySatisfied;
+          return this.resolveZeroChangeOperationUpdate(
+            operation,
+            expectedWorkflowStep,
+          );
         }
         return false;
       }
+      return this.confirmPersistedOperationUpdate(operation, options);
+    }
+
+    // Post-write witness + (optional) authoritative visibility confirmation
+    // for a persisted update that changed rows.
+    async confirmPersistedOperationUpdate(operation, options) {
       if (options.confirmPersistence === false) {
         this.recordOwnerPersistedTransitionVisibilityWitness(operation);
         this.syncIncompleteOperationObservation(operation);
@@ -301,6 +249,78 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
       this.syncIncompleteOperationObservation(operation);
       return true;
+    }
+
+    // A failed gateway mutation either recovers through the already-applied
+    // witness (the write landed despite the retryable failure) or escalates.
+    async resolveFailedOperationUpdateResult(operation, result) {
+      const recoveredPersistedMutation =
+        await this.recoverPersistedReplicaOperationMutation(
+          operation,
+          result,
+        );
+      if (!recoveredPersistedMutation) {
+        const persistError = this.buildOperationPersistError(result);
+        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+          operationId: operation.operationId,
+          ...buildControlPlaneFailurePayload(this.nodeId, result),
+        });
+        throw persistError;
+      }
+      this.syncIncompleteOperationObservation(operation);
+      return true;
+    }
+
+    // Guarded (expected-step or terminal) update that changed zero rows: the
+    // durable state either already reflects the write (idempotent success), or
+    // the row diverged from the authoritative partition state.
+    async resolveZeroChangeOperationUpdate(operation, expectedWorkflowStep) {
+      const authoritativeOperation =
+        await this.queryAuthoritativeOperationById(operation.operationId, {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          requireOwnerRpcRead: false,
+        });
+      const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
+        operation,
+        authoritativeOperation,
+      );
+      if (visibilitySatisfied) {
+        this.syncIncompleteOperationObservation(operation);
+        return visibilitySatisfied;
+      }
+      // CL-017(b): the UPDATE committed but affected zero rows AND the
+      // authoritative read cannot see the row the owner created — the
+      // row is MISSING from the partition state that applied the write
+      // (the post-churn divergence witness: 'No row found for CDC
+      // update' 144ms after the row's own insert-CDC). Retrying the
+      // UPDATE no-ops forever and the operation never durably leaves
+      // its step; re-insert the owner's copy instead of looping.
+      if (!authoritativeOperation) {
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
+          {
+            operationId: operation.operationId,
+            partitionId: operation.partitionId,
+            workflowStep: operation.workflowStep,
+            expectedWorkflowStep,
+          },
+        );
+        try {
+          const reinserted = await this.persistNewOperationUnlocked(operation);
+          if (reinserted) {
+            this.syncIncompleteOperationObservation(operation);
+            return true;
+          }
+        } catch (reinsertError) {
+          this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+            operationId: operation.operationId,
+            phase: 'divergence_reinsert',
+            error: reinsertError?.message || String(reinsertError),
+          });
+        }
+      }
+      return visibilitySatisfied;
     }
 
     // A terminal write is idempotent against its own durable state and must

@@ -1,0 +1,2288 @@
+diff --git a/src/query/sql-query-engine-provisioning-admission-methods.js b/src/query/sql-query-engine-provisioning-admission-methods.js
+index 385a24ce..083a1c05 100644
+--- a/src/query/sql-query-engine-provisioning-admission-methods.js
++++ b/src/query/sql-query-engine-provisioning-admission-methods.js
+@@ -9,6 +9,18 @@ const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
+   'control_plane_write_unhealthy',
+   'metadata_publication_degraded',
+   'routing_not_ready',
++  // Operation-ledger admission holds are short internal formation windows
++  // (a ledger self-move in flight, or the ledger quorum still spreading).
++  // Classifying them transient lowers the provisioning fallback minimum so a
++  // CREATE TABLE that still has SOME admitted targets proceeds under-planned
++  // (the rebalancer fills in afterwards) instead of failing the client.
++  // OWNED RESIDUAL: when EVERY target is hold-deferred the create still fails
++  // fast with insufficient-targets — full wait-and-retry pacing through a
++  // whole-cluster hold window is the recorded DDL-pacing follow-up
++  // (ARCH-0016/0017), not delivered by this set.
++  'operation_ledger_self_move_in_flight',
++  'operation_ledger_self_move_waiting_for_idle_ledger',
++  'operation_ledger_quorum_concentrated',
+ ]);
+ const AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
+   'insufficient_placement_eligible_nodes',
+diff --git a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+index 6a51e189..efded21a 100644
+--- a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
++++ b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+@@ -26,6 +26,42 @@ const {
+   isDeliveredTransportDeliveryOutcome,
+   isPriorityControlPlanePartition,
+ } = OPERATION_WORKFLOW_OWNER_SHARED;
++// Bounded memory for the first-attempt dispatch log discrimination; clearing
++// on overflow only means one extra info line per live operation step.
++const SEND_OPERATION_LOG_KEY_CAP = 2048;
++
++/**
++ * The first dispatch attempt per (operation, step) logs at info so run
++ * forensics can distinguish "never dispatched" from "dispatch retrying"
++ * without debug logging (run-22's silence was exactly this ambiguity);
++ * retries stay at debug to avoid retry-loop flood. Module-level on purpose:
++ * this file's methods run `.call(owner)`-delegated, so only exported names
++ * exist on the owner instance.
++ * @param {Object} owner
++ * @param {Object} operation
++ * @param {Object} payload
++ * @return {void}
++ */
++function logSendOperationAttempt(owner, operation, payload) {
++  const sendOperationLogKey =
++    `${operation.operationId}:${operation.workflowStep || ''}`;
++  if (!owner.sendOperationInfoLoggedKeys) {
++    owner.sendOperationInfoLoggedKeys = new Set();
++  }
++  if (owner.sendOperationInfoLoggedKeys.size > SEND_OPERATION_LOG_KEY_CAP) {
++    owner.sendOperationInfoLoggedKeys.clear();
++  }
++  const firstAttemptForStep =
++    !owner.sendOperationInfoLoggedKeys.has(sendOperationLogKey);
++  owner.sendOperationInfoLoggedKeys.add(sendOperationLogKey);
++  const sendOperationLog = firstAttemptForStep ?
++    owner.logger.info.bind(owner.logger) :
++    owner.logger.debug.bind(owner.logger);
++  sendOperationLog(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
++    ...payload,
++    firstAttemptForStep,
++  });
++}
+ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
+   new Set([
+     ReplicaStatus.SYNCING,
+@@ -393,7 +429,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
+       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
+     }
+-    this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
++    logSendOperationAttempt(this, operation, {
+       operationId: operation.operationId,
+       target,
+       type: messageType,
+diff --git a/src/rebalancer/operation-workflow-owner-execution-lane.js b/src/rebalancer/operation-workflow-owner-execution-lane.js
+index 69092a61..34f03ce7 100644
+--- a/src/rebalancer/operation-workflow-owner-execution-lane.js
++++ b/src/rebalancer/operation-workflow-owner-execution-lane.js
+@@ -739,15 +739,7 @@ class OperationWorkflowOwnerExecutionLane
+       visibility =
+         await this.repository.confirmReplicaOperationPersistence(operation);
+     } catch (error) {
+-      this.logger.warn(
+-        OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
+-        {
+-          operationId: operation?.operationId || null,
+-          workflowStep: operation?.workflowStep || null,
+-          status: operation?.status || null,
+-          error: error?.message || String(error),
+-        },
+-      );
++      this.warnCommittedTransitionNotVisible(operation, error);
+       if (repairOnUnconfirmed) {
+         armTerminalTransitionRepair(
+           this,
+@@ -760,6 +752,36 @@ class OperationWorkflowOwnerExecutionLane
+     if (!repairOnUnconfirmed) {
+       return;
+     }
++    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility);
++  }
++
++  /**
++   * @param {Object} operation
++   * @param {Error} error
++   * @return {void}
++   * @private
++   */
++  warnCommittedTransitionNotVisible(operation, error) {
++    this.logger.warn(
++      OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
++      {
++        operationId: operation?.operationId || null,
++        workflowStep: operation?.workflowStep || null,
++        status: operation?.status || null,
++        error: error?.message || String(error),
++      },
++    );
++  }
++
++  /**
++   * A positively confirmed terminal transition clears any armed repair; every
++   * other outcome (DEFERRED — the silent class) arms it.
++   * @param {Object} operation
++   * @param {Object|null} visibility
++   * @return {void}
++   * @private
++   */
++  resolveTerminalTransitionConfirmationOutcome(operation, visibility) {
+     if (
+       visibility?.confirmationState ===
+         REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
+diff --git a/src/rebalancer/operation-workflow-terminal-transition-repair.js b/src/rebalancer/operation-workflow-terminal-transition-repair.js
+index eca6f38c..4ed1f1bb 100644
+--- a/src/rebalancer/operation-workflow-terminal-transition-repair.js
++++ b/src/rebalancer/operation-workflow-terminal-transition-repair.js
+@@ -73,17 +73,12 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause) {
+     return;
+   }
+   const delayMs = resolveTerminalTransitionRepairDelayMs(attempt);
+-  owner.logger.warn(
+-    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
+-    {
+-      operationId,
+-      workflowStep: projectedOperation?.workflowStep || null,
+-      partitionId: projectedOperation?.partitionId || null,
+-      cause,
+-      attempt,
+-      delayMs,
+-    },
+-  );
++  logTerminalTransitionRepairArmed(owner, projectedOperation, {
++    operationId,
++    cause,
++    attempt,
++    delayMs,
++  });
+   // The callback returns its promise so a deterministic test scheduler can
+   // await the attempt; production setTimeout ignores the return value.
+   const timerHandle = owner.setTimeoutFn(() => {
+@@ -107,6 +102,24 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause) {
+   );
+ }
+ 
++function logTerminalTransitionRepairArmed(
++  owner,
++  projectedOperation,
++  {operationId, cause, attempt, delayMs},
++) {
++  owner.logger.warn(
++    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
++    {
++      operationId,
++      workflowStep: projectedOperation?.workflowStep || null,
++      partitionId: projectedOperation?.partitionId || null,
++      cause,
++      attempt,
++      delayMs,
++    },
++  );
++}
++
+ function rearmTerminalTransitionRepairIfHeld(owner, operationId) {
+   const state =
+     owner.terminalTransitionRepairStateByOperationId.get(operationId);
+@@ -168,37 +181,11 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
+         },
+       );
+       if (persisted === false) {
+-        // A refused persist is NOT proof a different terminal state won: the
+-        // zero-change arm also returns false against a readable-but-stale
+-        // NON-terminal row (the CL-017 read/apply divergence family). Abandon
+-        // only when the authoritative row is durably terminal (any terminal
+-        // state frees the budget and admission lanes); otherwise the ghost
+-        // still exists and the repair must keep trying.
+-        const authoritativeOperation =
+-          await owner.repository.queryAuthoritativeOperationById(operationId, {
+-            authoritativeReadMode:
+-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+-            requireOwnerRpcRead: false,
+-          });
+-        if (
+-          authoritativeOperation &&
+-          owner.repository.isAuthoritativeOperationTerminal(
+-            authoritativeOperation,
+-          )
+-        ) {
+-          owner.logger.error(
+-            REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
+-            {
+-              operationId,
+-              workflowStep: heldState.projectedOperation?.workflowStep || null,
+-              partitionId: heldState.projectedOperation?.partitionId || null,
+-              attempt: heldState.attempt,
+-            },
+-          );
+-          clearTerminalTransitionRepair(owner, operationId);
+-          return;
+-        }
+-        rearmTerminalTransitionRepairIfHeld(owner, operationId);
++        await resolveRefusedTerminalTransitionRepairPersist(
++          owner,
++          operationId,
++          heldState,
++        );
+         return;
+       }
+       const visibility =
+@@ -223,6 +210,48 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
+   );
+ }
+ 
++/**
++ * A refused persist is NOT proof a different terminal state won: the
++ * zero-change arm also returns false against a readable-but-stale
++ * NON-terminal row (the CL-017 read/apply divergence family). Abandon only
++ * when the authoritative row is durably terminal (any terminal state frees
++ * the budget and admission lanes); otherwise the ghost still exists and the
++ * repair must keep trying.
++ * @param {Object} owner
++ * @param {string} operationId
++ * @param {Object} heldState
++ * @return {Promise<void>}
++ */
++async function resolveRefusedTerminalTransitionRepairPersist(
++  owner,
++  operationId,
++  heldState,
++) {
++  const authoritativeOperation =
++    await owner.repository.queryAuthoritativeOperationById(operationId, {
++      authoritativeReadMode:
++        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
++      requireOwnerRpcRead: false,
++    });
++  if (
++    authoritativeOperation &&
++    owner.repository.isAuthoritativeOperationTerminal(authoritativeOperation)
++  ) {
++    owner.logger.error(
++      REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
++      {
++        operationId,
++        workflowStep: heldState.projectedOperation?.workflowStep || null,
++        partitionId: heldState.projectedOperation?.partitionId || null,
++        attempt: heldState.attempt,
++      },
++    );
++    clearTerminalTransitionRepair(owner, operationId);
++    return;
++  }
++  rearmTerminalTransitionRepairIfHeld(owner, operationId);
++}
++
+ export {
+   TERMINAL_TRANSITION_REPAIR_CAUSE,
+   armTerminalTransitionRepair,
+diff --git a/src/rebalancer/operation-workflow-transition-orchestration.js b/src/rebalancer/operation-workflow-transition-orchestration.js
+index 0e434b40..d8f47b7f 100644
+--- a/src/rebalancer/operation-workflow-transition-orchestration.js
++++ b/src/rebalancer/operation-workflow-transition-orchestration.js
+@@ -209,6 +209,40 @@ class OperationWorkflowTransitionOrchestration
+    * @param {Function} [options.afterCommit]
+    * @return {Promise<boolean>} True when this call committed the transition.
+    */
++  /**
++   * Roll back the (empty) transition transaction after an honest persist
++   * refusal so the transition reports uncommitted instead of minting an
++   * in-memory-terminal/durable-non-terminal ghost.
++   * @param {Object} txCoordinator
++   * @param {string} sessionId
++   * @param {Object} operation
++   * @param {string} step
++   * @return {Promise<void>}
++   * @private
++   */
++  async rollbackRefusedTransitionPersist(
++    txCoordinator,
++    sessionId,
++    operation,
++    step,
++  ) {
++    const rollbackResult = await txCoordinator.rollback(sessionId);
++    if (rollbackResult?.success !== true) {
++      this.logger.warn(
++        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
++        {
++          operationId: operation.operationId,
++          workflowStep: step,
++          error: this.normalizeErrorMessage(
++            rollbackResult?.error,
++            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
++          ),
++        },
++      );
++    }
++    this.clearTransitionExecutionAttempt(operation.operationId, step);
++  }
++
+   async executeAtomicTransition(
+     operation,
+     step,
+@@ -316,24 +350,14 @@ class OperationWorkflowTransitionOrchestration
+           if (persistResult === false) {
+             // Honest persist refusal (zero-row update, conflicting durable
+             // terminal state, expected-step mismatch): nothing durable
+-            // changed, so the transition did NOT commit. Roll the empty
+-            // transaction back and report uncommitted — swallowing this
++            // changed, so the transition did NOT commit — swallowing this
+             // result is what minted the run-21 immortal SYNCING ghost.
+-            const rollbackResult = await txCoordinator.rollback(sessionId);
+-            if (rollbackResult?.success !== true) {
+-              this.logger.warn(
+-                OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
+-                {
+-                  operationId: operation.operationId,
+-                  workflowStep: step,
+-                  error: this.normalizeErrorMessage(
+-                    rollbackResult?.error,
+-                    OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+-                  ),
+-                },
+-              );
+-            }
+-            this.clearTransitionExecutionAttempt(operation.operationId, step);
++            await this.rollbackRefusedTransitionPersist(
++              txCoordinator,
++              sessionId,
++              operation,
++              step,
++            );
+             return false;
+           }
+           const commitResult = await txCoordinator.commit(sessionId);
+diff --git a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+index 5fc9d7ac..c89e4267 100644
+--- a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
++++ b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+@@ -1,7 +1,13 @@
++import {TIME_MS} from '../constants/index.js';
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
++import {
++  evaluateOperationLedgerQuorumConcentration,
++  isConcentratedOperationLedgerPartition,
++} from './operation-ledger-quorum-concentration.js';
+ 
+ const {
+   OperationType,
++  REBALANCE_COORDINATOR_LOG_MSG,
+   SERVICE_TYPE,
+   STORAGE_ADMISSION_DECISION_TYPE,
+   isOperationLedgerPartitionTable,
+@@ -28,6 +34,12 @@ const OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE =
+   'operation_ledger_self_move_in_flight';
+ const OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE =
+   'operation_ledger_self_move_waiting_for_idle_ledger';
++const OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE =
++  'operation_ledger_quorum_concentrated';
++const OPERATION_LEDGER_QUORUM_CONCENTRATED_MESSAGE_SUFFIX =
++  ' quorum is concentrated on one node; operation admission deferred until ' +
++  'the ledger spreads';
++const OPERATION_LEDGER_QUORUM_HOLD_WARN_INTERVAL_MS = TIME_MS.SECOND * 30;
+ 
+ // Interlock rejections must ride the admission channel (error.admissionResult)
+ // so the DDL partition-provisioning loop absorbs them as target rejections and
+@@ -184,6 +196,17 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       ),
+     );
+     if (!liveLedgerSelfMove) {
++      // The run-22 release-too-early gap: with no self-move in flight the
++      // run-20 hold is open, but the ledger quorum may STILL be concentrated
++      // (a leadership-only relocation leaves the follower majority on the hot
++      // node). Dependent admission keeps deferring until placement actuals
++      // show the quorum spread — ledger self-moves (the cure, handled in the
++      // disruptive branch above) and emergency quorum-restore ADDs stay
++      // exempt.
++      this.ensureOperationLedgerQuorumSpreadFirst(
++        normalizedMoveType,
++        partitionId,
++      );
+       return;
+     }
+     throw this.createOperationLedgerInterlockError(
+@@ -196,6 +219,95 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     );
+   }
+ 
++  /**
++   * Defer non-exempt operation creation while any operation-ledger partition's
++   * voter quorum is concentrated AND spreading it is actionable. The
++   * evaluation reads ACTUAL placement rows (services/nodes/partitions caches);
++   * absent actuals or an unspreadable cluster never engage the hold, so small
++   * clusters and cold caches keep admitting normally.
++   * @param {string|null} normalizedMoveType
++   * @param {string|null} partitionId
++   * @return {void}
++   * @private
++   */
++  ensureOperationLedgerQuorumSpreadFirst(normalizedMoveType, partitionId) {
++    const evaluation = evaluateOperationLedgerQuorumConcentration(
++      this.systemTableCache,
++    );
++    if (evaluation.holdEngaged !== true) {
++      return;
++    }
++    const concentratedPartition = evaluation.concentratedPartitions.find(
++      (partition) => partition.spreadActionable,
++    );
++    this.maybeWarnOperationLedgerQuorumSpreadHold(
++      evaluation,
++      normalizedMoveType,
++      partitionId,
++    );
++    throw this.createOperationLedgerInterlockError(
++      normalizedMoveType,
++      OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
++        String(concentratedPartition.partitionId) +
++        OPERATION_LEDGER_QUORUM_CONCENTRATED_MESSAGE_SUFFIX,
++      OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE,
++      null,
++    );
++  }
++
++  /**
++   * Quorum-concentration evidence for the PLANNER's priority-recovery gate: a
++   * concentrated operation-ledger partition requires its cure move to be
++   * planned even while local-serve readiness gates would defer planning —
++   * the hold itself sustains those readiness states, so without this evidence
++   * the cure is never planned and the hold never releases (verifier-traced
++   * permanent formation wedge). Feasibility is irrelevant here: planning the
++   * cure is how a target is found.
++   * @param {string|null} partitionId
++   * @return {boolean}
++   */
++  isOperationLedgerQuorumConcentratedForPartition(partitionId) {
++    return isConcentratedOperationLedgerPartition(
++      evaluateOperationLedgerQuorumConcentration(this.systemTableCache),
++      partitionId,
++    );
++  }
++
++  /**
++   * Periodic (not per-rejection) observability while the quorum-spread hold
++   * is engaged: a hold that persists because the cure keeps failing must be
++   * loud, not silent.
++   * @param {Object} evaluation
++   * @param {string|null} normalizedMoveType
++   * @param {string|null} partitionId
++   * @return {void}
++   * @private
++   */
++  maybeWarnOperationLedgerQuorumSpreadHold(
++    evaluation,
++    normalizedMoveType,
++    partitionId,
++  ) {
++    const state = this.getOperationLedgerInterlockAdmissionState();
++    const nowMs = this.timeSource?.now?.() ?? Date.now();
++    if (
++      state.lastQuorumHoldWarnAtMs !== null &&
++      nowMs - state.lastQuorumHoldWarnAtMs <
++        OPERATION_LEDGER_QUORUM_HOLD_WARN_INTERVAL_MS
++    ) {
++      return;
++    }
++    state.lastQuorumHoldWarnAtMs = nowMs;
++    this.logger.warn(
++      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_LEDGER_QUORUM_SPREAD_HOLD,
++      {
++        deferredMoveType: normalizedMoveType,
++        deferredPartitionId: partitionId || null,
++        concentratedPartitions: evaluation.concentratedPartitions,
++      },
++    );
++  }
++
+   /**
+    * Build one typed interlock rejection that both callers understand: the
+    * rebalance loop reads rebalanceSkipReason (skip + retry next cycle) and the
+@@ -374,6 +486,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+         selfMoveCreateInFlight: false,
+         heldSelfMoveOperationId: null,
+         otherCreatesInFlight: 0,
++        lastQuorumHoldWarnAtMs: null,
+       };
+     }
+     return this.operationLedgerInterlockAdmission;
+diff --git a/src/rebalancer/rebalancer-constants.js b/src/rebalancer/rebalancer-constants.js
+index d4cea223..122cc798 100644
+--- a/src/rebalancer/rebalancer-constants.js
++++ b/src/rebalancer/rebalancer-constants.js
+@@ -287,6 +287,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
+   TERMINAL_TRANSITION_REPAIR_ABANDONED:
+     'Terminal transition repair abandoned: a different durable terminal ' +
+     'state won',
++  OPERATION_LEDGER_QUORUM_SPREAD_HOLD:
++    'Operation-ledger quorum concentrated on one node; deferring dependent ' +
++    'operation admission until the ledger spreads',
+   PRIORITY_RECOVERY_DRAIN_SETTLED:
+     'Priority recovery drain settled operation',
+   BOOTSTRAP_TOPOLOGY_UNRESOLVED:
+diff --git a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+index f49235d7..f528024c 100644
+--- a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
++++ b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+@@ -121,6 +121,21 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     if (normalizedPartitionId.length === 0) {
+       return false;
+     }
++    // A concentrated operation-ledger quorum requires its cure move to be
++    // planned NOW: the admission-side quorum-spread hold defers every
++    // dependent move while concentration persists, which can itself sustain
++    // the readiness states this planning gate defers on — without this
++    // evidence the cure is never planned and the hold never releases
++    // (quest formation-ledger-quorum-spread-first, verifier-traced wedge).
++    // The coordinator owns the placement actuals; the planner only asks.
++    if (
++      this.rebalanceCoordinator
++        ?.isOperationLedgerQuorumConcentratedForPartition?.(
++          normalizedPartitionId,
++        ) === true
++    ) {
++      return true;
++    }
+     const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
+       {partitionId: normalizedPartitionId},
+     );
+diff --git a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+index 6e9e975a..3a83006e 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+@@ -141,12 +141,15 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+       );
+     }
+ 
+-    async persistOperationUpdate(operation, options = {}) {
+-      const expectedWorkflowStep =
+-        typeof options.expectedWorkflowStep === 'string' &&
++    normalizeExpectedWorkflowStep(options) {
++      return typeof options.expectedWorkflowStep === 'string' &&
+         options.expectedWorkflowStep.length > 0 ?
+-          options.expectedWorkflowStep :
+-          null;
++        options.expectedWorkflowStep :
++        null;
++    }
++
++    async persistOperationUpdate(operation, options = {}) {
++      const expectedWorkflowStep = this.normalizeExpectedWorkflowStep(options);
+       // Terminal-transition writes deliberately carry NO expected-step CAS: the
+       // owner's terminal truth must overwrite any lagging non-terminal durable
+       // step (a lost progress write would otherwise wedge the CAS forever). The
+@@ -203,21 +206,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+         },
+       );
+       if (!result.success) {
+-        const recoveredPersistedMutation =
+-          await this.recoverPersistedReplicaOperationMutation(
+-            operation,
+-            result,
+-          );
+-        if (!recoveredPersistedMutation) {
+-          const persistError = this.buildOperationPersistError(result);
+-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+-            operationId: operation.operationId,
+-            ...buildControlPlaneFailurePayload(this.nodeId, result),
+-          });
+-          throw persistError;
+-        }
+-        this.syncIncompleteOperationObservation(operation);
+-        return true;
++        return this.resolveFailedOperationUpdateResult(operation, result);
+       }
+       if (result.recoveredAfterRetryableFailure === true) {
+         this.syncIncompleteOperationObservation(operation);
+@@ -226,60 +215,19 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+       const changeCount = this.extractMutationChangeCount(result);
+       if (changeCount !== null && changeCount <= 0) {
+         if (expectedWorkflowStep || terminalTransition) {
+-          const authoritativeOperation =
+-            await this.queryAuthoritativeOperationById(operation.operationId, {
+-              authoritativeReadMode:
+-                CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+-              requireOwnerRpcRead: false,
+-            });
+-          const visibilitySatisfied =
+-            this.isReplicaOperationVisibilitySatisfied(
+-              operation,
+-              authoritativeOperation,
+-            );
+-          if (visibilitySatisfied) {
+-            this.syncIncompleteOperationObservation(operation);
+-            return visibilitySatisfied;
+-          }
+-          // CL-017(b): the UPDATE committed but affected zero rows AND the
+-          // authoritative read cannot see the row the owner created — the
+-          // row is MISSING from the partition state that applied the write
+-          // (the post-churn divergence witness: 'No row found for CDC
+-          // update' 144ms after the row's own insert-CDC). Retrying the
+-          // UPDATE no-ops forever and the operation never durably leaves
+-          // its step; re-insert the owner's copy instead of looping.
+-          if (!authoritativeOperation) {
+-            this.logger.error(
+-              REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
+-              {
+-                operationId: operation.operationId,
+-                partitionId: operation.partitionId,
+-                workflowStep: operation.workflowStep,
+-                expectedWorkflowStep,
+-              },
+-            );
+-            try {
+-              const reinserted =
+-                await this.persistNewOperationUnlocked(operation);
+-              if (reinserted) {
+-                this.syncIncompleteOperationObservation(operation);
+-                return true;
+-              }
+-            } catch (reinsertError) {
+-              this.logger.warn(
+-                REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
+-                {
+-                  operationId: operation.operationId,
+-                  phase: 'divergence_reinsert',
+-                  error: reinsertError?.message || String(reinsertError),
+-                },
+-              );
+-            }
+-          }
+-          return visibilitySatisfied;
++          return this.resolveZeroChangeOperationUpdate(
++            operation,
++            expectedWorkflowStep,
++          );
+         }
+         return false;
+       }
++      return this.confirmPersistedOperationUpdate(operation, options);
++    }
++
++    // Post-write witness + (optional) authoritative visibility confirmation
++    // for a persisted update that changed rows.
++    async confirmPersistedOperationUpdate(operation, options) {
+       if (options.confirmPersistence === false) {
+         this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+         this.syncIncompleteOperationObservation(operation);
+@@ -303,6 +251,78 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+       return true;
+     }
+ 
++    // A failed gateway mutation either recovers through the already-applied
++    // witness (the write landed despite the retryable failure) or escalates.
++    async resolveFailedOperationUpdateResult(operation, result) {
++      const recoveredPersistedMutation =
++        await this.recoverPersistedReplicaOperationMutation(
++          operation,
++          result,
++        );
++      if (!recoveredPersistedMutation) {
++        const persistError = this.buildOperationPersistError(result);
++        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
++          operationId: operation.operationId,
++          ...buildControlPlaneFailurePayload(this.nodeId, result),
++        });
++        throw persistError;
++      }
++      this.syncIncompleteOperationObservation(operation);
++      return true;
++    }
++
++    // Guarded (expected-step or terminal) update that changed zero rows: the
++    // durable state either already reflects the write (idempotent success), or
++    // the row diverged from the authoritative partition state.
++    async resolveZeroChangeOperationUpdate(operation, expectedWorkflowStep) {
++      const authoritativeOperation =
++        await this.queryAuthoritativeOperationById(operation.operationId, {
++          authoritativeReadMode:
++            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
++          requireOwnerRpcRead: false,
++        });
++      const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
++        operation,
++        authoritativeOperation,
++      );
++      if (visibilitySatisfied) {
++        this.syncIncompleteOperationObservation(operation);
++        return visibilitySatisfied;
++      }
++      // CL-017(b): the UPDATE committed but affected zero rows AND the
++      // authoritative read cannot see the row the owner created — the
++      // row is MISSING from the partition state that applied the write
++      // (the post-churn divergence witness: 'No row found for CDC
++      // update' 144ms after the row's own insert-CDC). Retrying the
++      // UPDATE no-ops forever and the operation never durably leaves
++      // its step; re-insert the owner's copy instead of looping.
++      if (!authoritativeOperation) {
++        this.logger.error(
++          REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
++          {
++            operationId: operation.operationId,
++            partitionId: operation.partitionId,
++            workflowStep: operation.workflowStep,
++            expectedWorkflowStep,
++          },
++        );
++        try {
++          const reinserted = await this.persistNewOperationUnlocked(operation);
++          if (reinserted) {
++            this.syncIncompleteOperationObservation(operation);
++            return true;
++          }
++        } catch (reinsertError) {
++          this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
++            operationId: operation.operationId,
++            phase: 'divergence_reinsert',
++            error: reinsertError?.message || String(reinsertError),
++          });
++        }
++      }
++      return visibilitySatisfied;
++    }
++
+     // A terminal write is idempotent against its own durable state and must
+     // yield only to a DIFFERENT durable terminal state (a concurrent owner
+     // already terminalized this operation another way). A missing row falls
+diff --git a/src/rebalancer/unified-rebalancer-follow-up-move.js b/src/rebalancer/unified-rebalancer-follow-up-move.js
+index db1b6261..cf802057 100644
+--- a/src/rebalancer/unified-rebalancer-follow-up-move.js
++++ b/src/rebalancer/unified-rebalancer-follow-up-move.js
+@@ -552,40 +552,12 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+       );
+     }
+ 
+-    // LoggingService injects the local nodeId into every payload, so the
+-    // move target must use a distinct key to survive in the emitted line.
+-    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
+-      entityId: this.entityId,
+-      entityType: this.entityType,
+-      moveType: move.type,
+-      moveTargetNodeId: move.nodeId || null,
+-      moveSourceNodeId: move.sourceNodeId || null,
+-      moveReplicaId: move.replicaId || null,
+-      reason: move.reason,
+-      usingCoordinator: !!this.rebalanceCoordinator,
+-    });
++    this.logExecuteMove(move);
+ 
+     try {
+-      if (
+-        move?.nodeId &&
+-        this.shouldRequireMoveTargetReadiness(move)
+-      ) {
+-        const skipDetail = await this.getNodeReadinessSkipReason(move.nodeId);
+-        if (skipDetail !== null) {
+-          this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
+-            entityId: this.entityId,
+-            moveTargetNodeId: move.nodeId || null,
+-            moveType: move.type,
+-            skipDetail,
+-          });
+-          return this.buildSkippedMoveResult(
+-            REBALANCER_SKIP_REASON.NODE_NOT_READY,
+-            move,
+-            {
+-              skipDetail,
+-            },
+-          );
+-        }
++      const readinessSkip = await this.resolveMoveTargetReadinessSkip(move);
++      if (readinessSkip) {
++        return readinessSkip;
+       }
+ 
+       if (!this.rebalanceCoordinator) {
+@@ -594,27 +566,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+ 
+       const outcome = await this.executeMoveViaCoordinator(move);
+       if (outcome?.skipped === true) {
+-        const admissionBlockingReasonCodes = Array.isArray(
+-          outcome?.admission?.blockingReasons,
+-        ) ?
+-          outcome.admission.blockingReasons
+-            .map((reason) =>
+-              String(reason?.code || reason?.reason || reason || '').trim(),
+-            )
+-            .filter((reason) => reason.length > 0) :
+-          [];
+-        this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
+-          entityId: this.entityId,
+-          entityType: this.entityType,
+-          moveType: move.type,
+-          moveTargetNodeId: move.nodeId || null,
+-          replicaId: move.replicaId || null,
+-          reason: outcome.reason || null,
+-          error: outcome.error || null,
+-          admissionDecisionType: outcome?.admission?.decisionType || null,
+-          admissionReason: outcome?.admission?.reason || null,
+-          admissionBlockingReasonCodes,
+-        });
++        this.logSkippedMoveOutcome(move, outcome);
+       }
+       return outcome;
+     } catch (error) {
+@@ -627,6 +579,82 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+       throw error;
+     }
+   }
++
++  // LoggingService injects the local nodeId into every payload, so the
++  // move target must use a distinct key to survive in the emitted line.
++  // entityId is this rebalancer INSTANCE's entity; the move's own partition
++  // must be carried explicitly or forensics misattribute the move (run-22).
++  logExecuteMove(move) {
++    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
++      entityId: this.entityId,
++      entityType: this.entityType,
++      ...buildMoveLogFields(move),
++      moveSourceNodeId: move.sourceNodeId || null,
++      moveReplicaId: move.replicaId || null,
++      reason: move.reason,
++      usingCoordinator: !!this.rebalanceCoordinator,
++    });
++  }
++
++  async resolveMoveTargetReadinessSkip(move) {
++    if (!move?.nodeId || !this.shouldRequireMoveTargetReadiness(move)) {
++      return null;
++    }
++    const skipDetail = await this.getNodeReadinessSkipReason(move.nodeId);
++    if (skipDetail === null) {
++      return null;
++    }
++    this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
++      entityId: this.entityId,
++      moveTargetNodeId: move.nodeId || null,
++      moveType: move.type,
++      skipDetail,
++    });
++    return this.buildSkippedMoveResult(
++      REBALANCER_SKIP_REASON.NODE_NOT_READY,
++      move,
++      {
++        skipDetail,
++      },
++    );
++  }
++
++  logSkippedMoveOutcome(move, outcome) {
++    this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
++      entityId: this.entityId,
++      entityType: this.entityType,
++      ...buildMoveLogFields(move),
++      reason: outcome.reason || null,
++      error: outcome.error || null,
++      admissionDecisionType: outcome?.admission?.decisionType || null,
++      admissionReason: outcome?.admission?.reason || null,
++      admissionBlockingReasonCodes:
++        normalizeAdmissionBlockingReasonCodes(outcome),
++    });
++  }
++}
++
++// entityId in these payloads is this rebalancer INSTANCE's entity; the move's
++// own partition must be carried explicitly or forensics misattribute the move
++// (run-22).
++function buildMoveLogFields(move) {
++  return {
++    moveType: move.type,
++    movePartitionId: move.partitionId || move.entityId || null,
++    moveTargetNodeId: move.nodeId || null,
++    replicaId: move.replicaId || null,
++  };
++}
++
++function normalizeAdmissionBlockingReasonCodes(outcome) {
++  if (!Array.isArray(outcome?.admission?.blockingReasons)) {
++    return [];
++  }
++  return outcome.admission.blockingReasons
++    .map((reason) =>
++      String(reason?.code || reason?.reason || reason || '').trim(),
++    )
++    .filter((reason) => reason.length > 0);
+ }
+ 
+ applyUnifiedRebalancerFollowUpAugmentationMethods(UnifiedRebalancerFollowUpMove);
+diff --git a/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js b/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
+index 8531d561..371da677 100644
+--- a/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
++++ b/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
+@@ -498,6 +498,167 @@ function syncInMemoryOperationFromRow(operation, trackedOperations) {
+   }
+ }
+ 
++// Planner analogue, in the move planner's own calculation order: excess
++// REMOVEs are computed BEFORE replacement moves, so the surplus drain gets
++// the admission window first when the remove lane frees up.
++async function attemptSurplusRemoves(ctx, cycle) {
++  for (const entry of ctx.surplusRemoves) {
++    if (entry.created) {
++      continue;
++    }
++    const outcome = await attemptCreate({
++      coordinator: ctx.coordinator,
++      move: entry.move,
++      events: ctx.events,
++      cycle,
++      label: entry.label,
++      labels: ctx.labels,
++    });
++    entry.created = outcome.created;
++  }
++}
++
++// The planner analogue re-mints the surplus-drain REPLACE (a fresh learner
++// replica each generation) whenever none is in flight and the source voter
++// still needs draining.
++async function attemptReplanGeneration(ctx, cycle) {
++  const replaceInFlight = ctx.replaceGenerations.some(
++    (generation) =>
++      generation.operation &&
++      !isTerminalStep(
++        OperationType.REPLACE,
++        ctx.trackedOperations.get(generation.operation.operationId)
++          ?.workflow_step || WORKFLOW_STEP.PENDING,
++      ),
++  );
++  const sourceStillPresent = ctx.serviceRows.some(
++    (row) => row.replica_id === REPLICA.SOURCE,
++  );
++  if (replaceInFlight || !sourceStillPresent) {
++    return;
++  }
++  const outcome = await attemptCreate({
++    coordinator: ctx.coordinator,
++    move: buildReplaceMove(learnerReplicaId(ctx.learnerGeneration)),
++    events: ctx.events,
++    cycle,
++    label: `REPLACE:gen${ctx.learnerGeneration}`,
++    labels: ctx.labels,
++  });
++  if (!outcome.created) {
++    return;
++  }
++  if (ctx.lossState.lostWriteOperationId === null) {
++    ctx.lossState.lostWriteOperationId = outcome.operation.operationId;
++  }
++  // The coordinator allocates the canonical learner replica id itself; the
++  // learner replica and its services row must carry THAT id or the guard's
++  // op-owned allowance and the workflow coupling never engage.
++  const replicaId = outcome.operation.replicaId;
++  ctx.serviceRows.push(
++    buildServiceRow({
++      replicaId,
++      nodeId: LEARNER_NODE_ID,
++      raftRole: RAFT_ROLE_ROW.LEARNER,
++    }),
++  );
++  ctx.replaceGenerations.push({
++    replicaId,
++    operation: outcome.operation,
++    learner: createLearnerPartitionService({
++      replicaId,
++      partitionCache: ctx.partitionCache,
++      leaderReplicaId: REPLICA.SOURCE,
++      deferrals:
++        ctx.learnerGeneration === FIRST_LEARNER_GENERATION ?
++          ctx.firstGenerationDeferrals :
++          [],
++    }),
++    syncingSinceMs: null,
++    failReported: false,
++    failReportedAtTick: null,
++  });
++  ctx.learnerGeneration += 1;
++}
++
++// The learner promotion loop (REAL guard, 1 Hz in production).
++function drivePromotionLoop(ctx, tick) {
++  for (const generation of ctx.replaceGenerations) {
++    if (generation.learner.role !== RaftRole.LEARNER) {
++      continue;
++    }
++    if (drivePromotionCheck(generation.learner)) {
++      ctx.promotedByReplicaId.add(generation.replicaId);
++      promoteServiceRow(ctx.serviceRows, generation.replicaId);
++      ctx.events.push(`${tick} PROMOTED ${generation.replicaId}`);
++    }
++  }
++}
++
++// The executor's voter-ready wait (REAL 60s bound, virtual clock): a REPLACE
++// still SYNCING with an unpromoted learner past the bound reports failure, and
++// the coordinator runs the REAL failOperation persistence chain. Applies to
++// EVERY generation. Level-triggered like production's timeout scan: while the
++// durable row stays SYNCING and the in-memory twin has NOT terminalized (an
++// honest uncommitted transition), the failure is re-reported each interval.
++// Once the in-memory twin is terminal, nothing re-reports — that ghost class
++// is exactly what the terminal-transition repair must cover.
++function isVoterReadyFailureReportDue(ctx, generation, tick) {
++  const inMemoryTerminal =
++    generation.operation.workflowStep === WORKFLOW_STEP.FAILED &&
++    generation.operation.completedAt !== null &&
++    generation.operation.completedAt !== undefined;
++  const refailDue =
++    generation.failReportedAtTick === null ||
++    tick - generation.failReportedAtTick >= REFAIL_INTERVAL_TICKS;
++  const syncingElapsedMs = ctx.timeSource.now() - generation.syncingSinceMs;
++  return (
++    syncingElapsedMs >= VOTER_READY_TIMEOUT_MS &&
++    !ctx.promotedByReplicaId.has(generation.replicaId) &&
++    !inMemoryTerminal &&
++    refailDue
++  );
++}
++
++async function reportVoterReadyTimeouts(ctx, tick) {
++  for (const generation of ctx.replaceGenerations) {
++    const row = ctx.trackedOperations.get(generation.operation.operationId);
++    if (!row || row.workflow_step !== WORKFLOW_STEP.SYNCING) {
++      continue;
++    }
++    if (generation.syncingSinceMs === null) {
++      generation.syncingSinceMs = ctx.timeSource.now();
++    }
++    if (!isVoterReadyFailureReportDue(ctx, generation, tick)) {
++      continue;
++    }
++    if (generation.failReportedAtTick === null) {
++      syncInMemoryOperationFromRow(generation.operation, ctx.trackedOperations);
++    }
++    await ctx.coordinator.failOperation(
++      generation.operation,
++      `Replica ${generation.replicaId} did not become voter-ready ` +
++        `within ${VOTER_READY_TIMEOUT_MS}ms`,
++    );
++    generation.failReportedAtTick = tick;
++    generation.failReported = true;
++    removeServiceRow(ctx.serviceRows, generation.replicaId);
++    ctx.events.push(`${tick} REPLACE_FAIL_REPORTED gen:${generation.replicaId}`);
++  }
++}
++
++function isVoterSurplusScenarioSettled(ctx) {
++  const drained =
++    countActiveVoterRows(ctx.serviceRows) === TARGET_REPLICA_COUNT &&
++    ctx.surplusRemoves.every((entry) => entry.created);
++  const sourceDrained = !ctx.serviceRows.some(
++    (row) => row.replica_id === REPLICA.SOURCE,
++  );
++  const nothingInFlight =
++    nonTerminalOperations(ctx.trackedOperations, ctx.labels).length === 0;
++  return drained && sourceDrained && nothingInFlight;
++}
++
+ // The run-21 composition, end to end. Returns the measured shape; assertions live
+ // in the tests so the same scenario serves the livelock proof, the no-loss control,
+ // and the determinism check.
+@@ -534,24 +695,33 @@ async function runVoterSurplusScenario({lossMode}) {
+     virtualTimers,
+   };
+ 
+-  const surplusRemoves = [
+-    {
+-      move: buildSurplusRemoveMove(REPLICA.SURPLUS_A),
+-      label: `REMOVE:${REPLICA.SURPLUS_A}`,
+-      created: false,
+-    },
+-    {
+-      move: buildSurplusRemoveMove(REPLICA.SURPLUS_B),
+-      label: `REMOVE:${REPLICA.SURPLUS_B}`,
+-      created: false,
+-    },
+-  ];
+-  // The planner analogue re-mints the surplus-drain REPLACE (a fresh learner
+-  // replica each generation) whenever none is in flight and the source voter
+-  // still needs draining.
+-  const replaceGenerations = [];
+-  const firstGenerationDeferrals = [];
+-  let learnerGeneration = FIRST_LEARNER_GENERATION;
++  const ctx = {
++    coordinator,
++    trackedOperations,
++    timeSource,
++    events,
++    labels,
++    serviceRows,
++    lossState,
++    partitionCache,
++    promotedByReplicaId,
++    surplusRemoves: [
++      {
++        move: buildSurplusRemoveMove(REPLICA.SURPLUS_A),
++        label: `REMOVE:${REPLICA.SURPLUS_A}`,
++        created: false,
++      },
++      {
++        move: buildSurplusRemoveMove(REPLICA.SURPLUS_B),
++        label: `REMOVE:${REPLICA.SURPLUS_B}`,
++        created: false,
++      },
++    ],
++    replaceGenerations: [],
++    firstGenerationDeferrals: [],
++    learnerGeneration: FIRST_LEARNER_GENERATION,
++  };
++  const {surplusRemoves, replaceGenerations, firstGenerationDeferrals} = ctx;
+ 
+   const openLearnerTimers = () =>
+     replaceGenerations
+@@ -561,154 +731,13 @@ async function runVoterSurplusScenario({lossMode}) {
+   try {
+     let tick = 0;
+     for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
+-      // Planner analogue, in the move planner's own calculation order: excess
+-      // REMOVEs are computed BEFORE replacement moves, so the surplus drain gets
+-      // the admission window first when the remove lane frees up.
+-      for (const entry of surplusRemoves) {
+-        if (entry.created) {
+-          continue;
+-        }
+-        const outcome = await attemptCreate({
+-          coordinator,
+-          move: entry.move,
+-          events,
+-          cycle,
+-          label: entry.label,
+-          labels,
+-        });
+-        entry.created = outcome.created;
+-      }
+-
+-      const replaceInFlight = replaceGenerations.some(
+-        (generation) =>
+-          generation.operation &&
+-          !isTerminalStep(
+-            OperationType.REPLACE,
+-            trackedOperations.get(generation.operation.operationId)
+-              ?.workflow_step || WORKFLOW_STEP.PENDING,
+-          ),
+-      );
+-      const sourceStillPresent = serviceRows.some(
+-        (row) => row.replica_id === REPLICA.SOURCE,
+-      );
+-      if (!replaceInFlight && sourceStillPresent) {
+-        const outcome = await attemptCreate({
+-          coordinator,
+-          move: buildReplaceMove(learnerReplicaId(learnerGeneration)),
+-          events,
+-          cycle,
+-          label: `REPLACE:gen${learnerGeneration}`,
+-          labels,
+-        });
+-        if (outcome.created) {
+-          if (lossState.lostWriteOperationId === null) {
+-            lossState.lostWriteOperationId = outcome.operation.operationId;
+-          }
+-          // The coordinator allocates the canonical learner replica id itself;
+-          // the learner replica and its services row must carry THAT id or the
+-          // guard's op-owned allowance and the workflow coupling never engage.
+-          const replicaId = outcome.operation.replicaId;
+-          serviceRows.push(
+-            buildServiceRow({
+-              replicaId,
+-              nodeId: LEARNER_NODE_ID,
+-              raftRole: RAFT_ROLE_ROW.LEARNER,
+-            }),
+-          );
+-          replaceGenerations.push({
+-            replicaId,
+-            operation: outcome.operation,
+-            learner: createLearnerPartitionService({
+-              replicaId,
+-              partitionCache,
+-              leaderReplicaId: REPLICA.SOURCE,
+-              deferrals:
+-                learnerGeneration === FIRST_LEARNER_GENERATION ?
+-                  firstGenerationDeferrals :
+-                  [],
+-            }),
+-            syncingSinceMs: null,
+-            failReported: false,
+-            failReportedAtTick: null,
+-          });
+-          learnerGeneration += 1;
+-        }
+-      }
+-
+-      // The learner promotion loop (REAL guard, 1 Hz in production).
+-      for (const generation of replaceGenerations) {
+-        if (generation.learner.role !== RaftRole.LEARNER) {
+-          continue;
+-        }
+-        if (drivePromotionCheck(generation.learner)) {
+-          promotedByReplicaId.add(generation.replicaId);
+-          promoteServiceRow(serviceRows, generation.replicaId);
+-          events.push(`${tick} PROMOTED ${generation.replicaId}`);
+-        }
+-      }
+-
++      await attemptSurplusRemoves(ctx, cycle);
++      await attemptReplanGeneration(ctx, cycle);
++      drivePromotionLoop(ctx, tick);
+       await driveWorkflowTick({scenario, events, tick});
+       tick += 1;
+-
+-      // The executor's voter-ready wait (REAL 60s bound, virtual clock): a
+-      // REPLACE still SYNCING with an unpromoted learner past the bound reports
+-      // failure, and the coordinator runs the REAL failOperation persistence
+-      // chain. Applies to EVERY generation (run-21's executor did this; later
+-      // generations do it too — the production churn that eventually drains).
+-      // Level-triggered like production's timeout scan: while the durable row
+-      // stays SYNCING and the in-memory twin has NOT terminalized (an honest
+-      // uncommitted transition), the failure is re-reported each interval. Once
+-      // the in-memory twin is terminal, nothing re-reports — that ghost class
+-      // is exactly what the terminal-transition repair must cover.
+-      for (const generation of replaceGenerations) {
+-        const row = trackedOperations.get(generation.operation.operationId);
+-        if (!row || row.workflow_step !== WORKFLOW_STEP.SYNCING) {
+-          continue;
+-        }
+-        if (generation.syncingSinceMs === null) {
+-          generation.syncingSinceMs = timeSource.now();
+-        }
+-        const inMemoryTerminal =
+-          generation.operation.workflowStep === WORKFLOW_STEP.FAILED &&
+-          generation.operation.completedAt !== null &&
+-          generation.operation.completedAt !== undefined;
+-        const refailDue =
+-          generation.failReportedAtTick === null ||
+-          tick - generation.failReportedAtTick >= REFAIL_INTERVAL_TICKS;
+-        const syncingElapsedMs = timeSource.now() - generation.syncingSinceMs;
+-        if (
+-          syncingElapsedMs >= VOTER_READY_TIMEOUT_MS &&
+-          !promotedByReplicaId.has(generation.replicaId) &&
+-          !inMemoryTerminal &&
+-          refailDue
+-        ) {
+-          if (generation.failReportedAtTick === null) {
+-            syncInMemoryOperationFromRow(
+-              generation.operation,
+-              trackedOperations,
+-            );
+-          }
+-          await coordinator.failOperation(
+-            generation.operation,
+-            `Replica ${generation.replicaId} did not become voter-ready ` +
+-              `within ${VOTER_READY_TIMEOUT_MS}ms`,
+-          );
+-          generation.failReportedAtTick = tick;
+-          generation.failReported = true;
+-          removeServiceRow(serviceRows, generation.replicaId);
+-          events.push(`${tick} REPLACE_FAIL_REPORTED gen:${generation.replicaId}`);
+-        }
+-      }
+-
+-      const drained =
+-        countActiveVoterRows(serviceRows) === TARGET_REPLICA_COUNT &&
+-        surplusRemoves.every((entry) => entry.created);
+-      const sourceDrained = !serviceRows.some(
+-        (row) => row.replica_id === REPLICA.SOURCE,
+-      );
+-      const nothingInFlight =
+-        nonTerminalOperations(trackedOperations, labels).length === 0;
+-      if (drained && sourceDrained && nothingInFlight) {
++      await reportVoterReadyTimeouts(ctx, tick);
++      if (isVoterSurplusScenarioSettled(ctx)) {
+         break;
+       }
+     }
+diff --git a/src/rebalancer/operation-ledger-quorum-concentration.js b/src/rebalancer/operation-ledger-quorum-concentration.js
+new file mode 100644
+index 00000000..10382f96
+--- /dev/null
++++ b/src/rebalancer/operation-ledger-quorum-concentration.js
+@@ -0,0 +1,231 @@
++import {TABLES, SERVICE_TYPE} from '../constants/index.js';
++import {RAFT_ROLE} from '../raft/constants.js';
++import {ReplicaStatus} from './replica-operation-progress.js';
++import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
++
++const {isOperationLedgerPartitionTable} = REBALANCE_COORDINATOR_SHARED;
++
++// Quest formation-ledger-quorum-spread-first: every operation persists its
++// workflow progress into the replica_operations LEDGER, so a ledger partition
++// whose voter quorum is CONCENTRATED (no majority can be formed without one
++// hot node) makes every commit depend on that node — the affinity-demo run-22
++// wedge: bootstrap left 2/3 of the ledger quorum on the overloaded seed, the
++// run-20 self-move interlock released after a leadership-only relocation, and
++// every dependent control-plane move then wrote its progress into a ledger
++// whose acks needed the slow node. This module is the single shared predicate
++// over ACTUAL placement rows (services / nodes / partitions caches —
++// ARCH-0080/0084 actuals-only) consumed by the admission hold, the emergency
++// budget classification, and observability. It deliberately owns NO policy:
++// callers decide what a concentrated ledger means for them.
++//
++// Voter counting: a REMOVING source is still a raft voter until removal
++// completes (the run-22 intermediate 4-voter REPLACE state genuinely needed
++// the seed's ack), so REMOVING rows count; learners never do.
++const QUORUM_VOTER_STATUSES = Object.freeze(
++  new Set([ReplicaStatus.ACTIVE, ReplicaStatus.REMOVING]),
++);
++const QUORUM_VOTER_RAFT_ROLES = Object.freeze(
++  new Set([RAFT_ROLE.LEADER, RAFT_ROLE.FOLLOWER, RAFT_ROLE.CANDIDATE]),
++);
++const NODE_CONNECTION_STATE_READY = 'ready';
++const EMPTY_EVALUATION = Object.freeze({
++  holdEngaged: false,
++  concentratedPartitions: Object.freeze([]),
++});
++
++function readCacheRows(systemTableCache, tableName, predicate) {
++  if (!systemTableCache || typeof systemTableCache.filter !== 'function') {
++    return [];
++  }
++  const rows = systemTableCache.filter(tableName, predicate);
++  return Array.isArray(rows) ? rows : [];
++}
++
++function normalizedField(row, field) {
++  return String(row?.[field] || '').trim();
++}
++
++function isQuorumVoterRow(row) {
++  return (
++    QUORUM_VOTER_STATUSES.has(normalizedField(row, 'status').toLowerCase()) &&
++    QUORUM_VOTER_RAFT_ROLES.has(
++      normalizedField(row, 'raft_role').toLowerCase(),
++    )
++  );
++}
++
++function readTargetReplicaCount(systemTableCache, partitionId) {
++  if (!systemTableCache || typeof systemTableCache.get !== 'function') {
++    return null;
++  }
++  const partitionRow = systemTableCache.get(TABLES.PARTITIONS, partitionId);
++  const replicaCount = Number(partitionRow?.replica_count);
++  return Number.isInteger(replicaCount) && replicaCount > 0 ?
++    replicaCount :
++    null;
++}
++
++function readReadyNodeIds(systemTableCache) {
++  const readyNodeIds = [];
++  for (const nodeRow of readCacheRows(
++    systemTableCache,
++    TABLES.NODES,
++    (row) =>
++      normalizedField(row, 'connection_state') ===
++      NODE_CONNECTION_STATE_READY,
++  )) {
++    const nodeId = normalizedField(nodeRow, 'node_id');
++    if (nodeId.length > 0 && !readyNodeIds.includes(nodeId)) {
++      readyNodeIds.push(nodeId);
++    }
++  }
++  return readyNodeIds;
++}
++
++function groupRowsByPartitionId(ledgerReplicaRows) {
++  const rowsByPartitionId = new Map();
++  for (const row of ledgerReplicaRows) {
++    const partitionId = normalizedField(row, 'partition_id');
++    if (partitionId.length === 0) {
++      continue;
++    }
++    if (!rowsByPartitionId.has(partitionId)) {
++      rowsByPartitionId.set(partitionId, []);
++    }
++    rowsByPartitionId.get(partitionId).push(row);
++  }
++  return rowsByPartitionId;
++}
++
++function resolveHottestNode(voterRows) {
++  const votersPerNode = new Map();
++  for (const row of voterRows) {
++    const nodeId = normalizedField(row, 'node_id');
++    votersPerNode.set(nodeId, (votersPerNode.get(nodeId) || 0) + 1);
++  }
++  let hottestNodeId = null;
++  let maxVotersOnOneNode = 0;
++  for (const [nodeId, voterCount] of votersPerNode) {
++    if (voterCount > maxVotersOnOneNode) {
++      maxVotersOnOneNode = voterCount;
++      hottestNodeId = nodeId;
++    }
++  }
++  return {hottestNodeId, maxVotersOnOneNode};
++}
++
++function evaluateLedgerPartitionConcentration({
++  systemTableCache,
++  partitionId,
++  partitionRows,
++  readyNodeIds,
++}) {
++  const voterRows = partitionRows.filter(isQuorumVoterRow);
++  const totalVoters = voterRows.length;
++  if (totalVoters === 0) {
++    return null;
++  }
++  const {hottestNodeId, maxVotersOnOneNode} = resolveHottestNode(voterRows);
++  const majority = Math.floor(totalVoters / 2) + 1;
++  if (totalVoters - maxVotersOnOneNode >= majority) {
++    return null;
++  }
++
++  const occupiedNodeIds = new Set(
++    partitionRows
++      .map((row) => normalizedField(row, 'node_id'))
++      .filter((nodeId) => nodeId.length > 0),
++  );
++  const feasibleTargetNodeId =
++    readyNodeIds.find((nodeId) => !occupiedNodeIds.has(nodeId)) || null;
++  const targetReplicaCount = readTargetReplicaCount(
++    systemTableCache,
++    partitionId,
++  );
++  const overTarget =
++    targetReplicaCount !== null && totalVoters > targetReplicaCount;
++  return Object.freeze({
++    partitionId,
++    totalVoters,
++    maxVotersOnOneNode,
++    hottestNodeId,
++    feasibleTargetNodeId,
++    overTarget,
++    spreadActionable: feasibleTargetNodeId !== null || overTarget,
++  });
++}
++
++/**
++ * Evaluate quorum concentration for every operation-ledger partition from the
++ * ACTUAL placement rows. A partition is CONCENTRATED when the voters outside
++ * its hottest node cannot form a majority; the hold is ENGAGED only when a
++ * concentrated partition's spread is actionable — a ready node with no replica
++ * of that partition exists, or the partition is over its target replica count
++ * (a surplus drain also relieves concentration). Absence of actuals (empty or
++ * missing caches) never engages the hold: routine admission must not block on
++ * missing observations, and clusters too small to spread must not deadlock.
++ * @param {Object|null} systemTableCache
++ * @return {{holdEngaged: boolean, concentratedPartitions: Array<Object>}}
++ */
++function evaluateOperationLedgerQuorumConcentration(systemTableCache) {
++  const ledgerReplicaRows = readCacheRows(
++    systemTableCache,
++    TABLES.SERVICES,
++    (row) =>
++      row?.service_type === SERVICE_TYPE.PARTITION &&
++      isOperationLedgerPartitionTable({
++        partitionId: row?.partition_id,
++      }),
++  );
++  if (ledgerReplicaRows.length === 0) {
++    return EMPTY_EVALUATION;
++  }
++
++  const readyNodeIds = readReadyNodeIds(systemTableCache);
++  const concentratedPartitions = [];
++  for (const [partitionId, partitionRows] of groupRowsByPartitionId(
++    ledgerReplicaRows,
++  )) {
++    const concentration = evaluateLedgerPartitionConcentration({
++      systemTableCache,
++      partitionId,
++      partitionRows,
++      readyNodeIds,
++    });
++    if (concentration) {
++      concentratedPartitions.push(concentration);
++    }
++  }
++
++  if (concentratedPartitions.length === 0) {
++    return EMPTY_EVALUATION;
++  }
++  return Object.freeze({
++    holdEngaged: concentratedPartitions.some(
++      (partition) => partition.spreadActionable,
++    ),
++    concentratedPartitions: Object.freeze(concentratedPartitions),
++  });
++}
++
++/**
++ * @param {Object|null} evaluation
++ * @param {string|null} partitionId
++ * @return {boolean}
++ */
++function isConcentratedOperationLedgerPartition(evaluation, partitionId) {
++  const normalizedPartitionId = String(partitionId || '').trim();
++  if (normalizedPartitionId.length === 0) {
++    return false;
++  }
++  return Boolean(
++    evaluation?.concentratedPartitions?.some(
++      (partition) => partition.partitionId === normalizedPartitionId,
++    ),
++  );
++}
++
++export {
++  evaluateOperationLedgerQuorumConcentration,
++  isConcentratedOperationLedgerPartition,
++};
+diff --git a/test/convergence/dt6-formation-ledger-quorum-spread-first.test.js b/test/convergence/dt6-formation-ledger-quorum-spread-first.test.js
+new file mode 100644
+index 00000000..7cbc99cc
+--- /dev/null
++++ b/test/convergence/dt6-formation-ledger-quorum-spread-first.test.js
+@@ -0,0 +1,704 @@
++import t from 'tap';
++import {VirtualTimeSource} from '../../src/time/time-source.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {
++  WORKFLOW_STEP_TO_STATUS,
++  getNextWorkflowStep,
++  isTerminalStep,
++} from '../../src/rebalancer/replica-operation-progress.js';
++import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {SERVICE_TYPE, SERVICE_STATUS} from '../../src/constants/index.js';
++import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
++
++// Quest formation-ledger-quorum-spread-first (P1) — deterministic reproduction of
++// the affinity-demo run-22 ledger-write starvation cascade:
++//
++//   Bootstrap places ALL replicas of the operation ledger (replica_operations-p1)
++//   on the seed. The first ledger self-move relocates ONE replica (run-22: the
++//   leadership move 59697071), the run-20 interlock releases its sibling hold as
++//   soon as that self-move row terminalizes — but the ledger quorum is STILL
++//   CONCENTRATED (a majority of its voters cannot be formed without the seed), so
++//   every dependent control-plane move that now admits writes its workflow
++//   progress into a ledger whose every commit needs the overloaded seed's ack:
++//   step transitions ghost, reconciliation freezes, dedupe and the interlock go
++//   ledger-blind, and the late second spread move (run-22 ca191926) cannot heal
++//   because its own progress rides the wedged ledger.
++//
++// HONEST SCOPE (what is real vs modeled):
++//   - REAL: the full createOperation admission chain on a real
++//     RebalanceCoordinator — the run-20 ledger-interlock (self-move exclusivity +
++//     sibling hold), priority/critical lanes, budget gates, and the NEW
++//     quorum-concentration hold under test, reading ACTUAL placement rows through
++//     the coordinator's systemTableCache seam; the real workflow step chains.
++//   - MODELED (deterministic drive at the layer where the invariant is produced):
++//     workflow progress is folded by a tick driver whose ledger-write
++//     availability encodes the run-22 coupling — a progress write fails exactly
++//     while the ledger quorum is CONCENTRATED and more than one live operation
++//     contends for the ledger (the run-20 fault model with the concentration
++//     dimension; run-22's first self-move completed precisely because it ran
++//     alone before the storm). Membership/placement effects of completed moves
++//     are applied to the shared services rows by the driver (production: CDC).
++//
++// The wedge is an ORDERING defect at the ledger-placement level: the SAME fault
++// model completes everything when dependent admission holds until the ledger
++// quorum is no longer concentrated (spread moves run alone, then dependents),
++// and it wedges when dependents co-admit into the concentrated window — the
++// run-22 release-too-early gap between the first and second ledger spread moves.
++
++const START_MS = 7_000_000;
++const TICK_MS = 1_000;
++const MAX_CYCLES = 120;
++const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
++const SEED_NODE_ID = 'node-0';
++const NODE_1 = 'node-1';
++const NODE_2 = 'node-2';
++const NODE_3 = 'node-3';
++const NODE_4 = 'node-4';
++const ALL_NODE_IDS = Object.freeze([
++  SEED_NODE_ID,
++  NODE_1,
++  NODE_2,
++  NODE_3,
++  NODE_4,
++]);
++const QUORUM_CONCENTRATED_REASON = 'operation_ledger_quorum_concentrated';
++const RETRYABLE_SKIP_REASONS = new Set([
++  'budget_exceeded',
++  'deferred_retry_pending',
++  'conflicting_operation_in_flight',
++]);
++const TABLES_SERVICES = 'services';
++const TABLES_NODES = 'nodes';
++const RAFT_ROLE_ROW = {
++  LEADER: 'leader',
++  FOLLOWER: 'follower',
++};
++
++function buildLedgerServiceRow({replicaId, nodeId, raftRole}) {
++  return {
++    service_id: replicaId,
++    replica_id: replicaId,
++    partition_id: LEDGER_PARTITION_ID,
++    node_id: nodeId,
++    service_type: SERVICE_TYPE.PARTITION,
++    status: SERVICE_STATUS.ACTIVE,
++    raft_role: raftRole,
++  };
++}
++
++// Bootstrap truth: the whole ledger quorum on the seed.
++function buildBootstrapLedgerRows() {
++  return [
++    buildLedgerServiceRow({
++      replicaId: `${LEDGER_PARTITION_ID}-r1`,
++      nodeId: SEED_NODE_ID,
++      raftRole: RAFT_ROLE_ROW.LEADER,
++    }),
++    buildLedgerServiceRow({
++      replicaId: `${LEDGER_PARTITION_ID}-r2`,
++      nodeId: SEED_NODE_ID,
++      raftRole: RAFT_ROLE_ROW.FOLLOWER,
++    }),
++    buildLedgerServiceRow({
++      replicaId: `${LEDGER_PARTITION_ID}-r3`,
++      nodeId: SEED_NODE_ID,
++      raftRole: RAFT_ROLE_ROW.FOLLOWER,
++    }),
++  ];
++}
++
++// The run-22 spread state: one replica relocated, majority still on the seed.
++function buildPartiallySpreadLedgerRows() {
++  const rows = buildBootstrapLedgerRows();
++  rows[0].node_id = NODE_1;
++  return rows;
++}
++
++// Fully spread: no node hosts a majority.
++function buildSpreadLedgerRows() {
++  const rows = buildBootstrapLedgerRows();
++  rows[0].node_id = NODE_1;
++  rows[1].node_id = NODE_2;
++  return rows;
++}
++
++function buildNodeRows(nodeIds) {
++  return nodeIds.map((nodeId) => ({
++    node_id: nodeId,
++    connection_state: 'ready',
++  }));
++}
++
++// The coordinator admission chain reads ACTUAL placement through this seam —
++// the same live rows the driver updates when moves complete (production: CDC).
++function buildPlacementCache({serviceRows, nodeRows}) {
++  return {
++    get: () => null,
++    filter: (tableName, predicate) => {
++      if (tableName === TABLES_SERVICES) {
++        return serviceRows.filter(predicate);
++      }
++      if (tableName === TABLES_NODES) {
++        return nodeRows.filter(predicate);
++      }
++      return [];
++    },
++  };
++}
++
++// The concentration predicate the driver's fault model uses — deliberately the
++// same definition the fix consumes: no majority without the hottest node.
++function ledgerQuorumConcentrated(serviceRows) {
++  const voters = serviceRows.filter(
++    (row) =>
++      row.partition_id === LEDGER_PARTITION_ID &&
++      row.status === SERVICE_STATUS.ACTIVE,
++  );
++  if (voters.length === 0) {
++    return false;
++  }
++  const perNode = new Map();
++  for (const row of voters) {
++    perNode.set(row.node_id, (perNode.get(row.node_id) || 0) + 1);
++  }
++  const maxPerNode = Math.max(...perNode.values());
++  const majority = Math.floor(voters.length / 2) + 1;
++  return voters.length - maxPerNode < majority;
++}
++
++function createOperationLabels() {
++  const byOperationId = new Map();
++  return {
++    register(operationId, label) {
++      if (!byOperationId.has(operationId)) {
++        byOperationId.set(operationId, {label, order: byOperationId.size});
++      }
++    },
++    labelOf(operationId) {
++      return byOperationId.get(operationId)?.label || operationId;
++    },
++    orderOf(operationId) {
++      const entry = byOperationId.get(operationId);
++      return entry ? entry.order : Number.MAX_SAFE_INTEGER;
++    },
++  };
++}
++
++function nonTerminalOperations(trackedOperations, labels) {
++  return Array.from(trackedOperations.values())
++    .filter((op) => !isTerminalStep(op.type, op.workflow_step))
++    .sort(
++      (a, b) =>
++        labels.orderOf(a.operation_id) - labels.orderOf(b.operation_id),
++    );
++}
++
++function buildLedgerSpreadMove({sourceReplicaId, targetNodeId}) {
++  return {
++    type: OperationType.REPLACE,
++    partitionId: LEDGER_PARTITION_ID,
++    entityType: 'partition',
++    entityId: LEDGER_PARTITION_ID,
++    nodeId: targetNodeId,
++    replicaId: sourceReplicaId,
++    sourceNodeId: SEED_NODE_ID,
++    sourceReplicaId,
++    enforceConcurrentOperationBudget: true,
++  };
++}
++
++function buildDependentMove(type, partitionId, targetNodeId) {
++  const move = {
++    type,
++    partitionId,
++    entityType: 'partition',
++    entityId: partitionId,
++    nodeId: targetNodeId,
++    replicaId: `${partitionId}-r9`,
++    enforceConcurrentOperationBudget: true,
++  };
++  if (type === OperationType.REPLACE) {
++    move.sourceNodeId = SEED_NODE_ID;
++  }
++  return move;
++}
++
++// Dedupe/coalescing can hand back ANOTHER move's in-flight operation —
++// including a same-partition sibling (two ledger spread REPLACEs differ
++// only by target). Verify identity by target too; a mismatch is a skip.
++function isCoalescedOperationReturn(operation, move) {
++  return (
++    operation?.partitionId !== move.partitionId ||
++    operation?.type !== move.type ||
++    Boolean(move.nodeId && operation?.targetNodeId !== move.nodeId)
++  );
++}
++
++function classifyCreateRejection(error) {
++  const skipReason = error?.rebalanceSkipReason || null;
++  if (!skipReason || !RETRYABLE_SKIP_REASONS.has(skipReason)) {
++    return null;
++  }
++  return {
++    skipReason,
++    admissionReason: error?.admissionResult?.reason || null,
++  };
++}
++
++async function attemptCreate({coordinator, move, events, cycle, label, labels}) {
++  try {
++    const operation = await coordinator.createOperation(move);
++    if (isCoalescedOperationReturn(operation, move)) {
++      events.push(`${cycle} ${label} coalesced-skip`);
++      return {created: false, operation: null, admissionReason: null};
++    }
++    labels.register(operation.operationId, label);
++    events.push(`${cycle} ${label} created`);
++    return {created: true, operation, admissionReason: null};
++  } catch (error) {
++    const rejection = classifyCreateRejection(error);
++    if (!rejection) {
++      throw error;
++    }
++    events.push(
++      `${cycle} ${label} skipped ` +
++        `${rejection.admissionReason || rejection.skipReason}`,
++    );
++    return {
++      created: false,
++      operation: null,
++      admissionReason: rejection.admissionReason,
++    };
++  }
++}
++
++// The run-22/run-20 fault model with the concentration dimension: a workflow
++// progress write into the ledger fails exactly while the ledger quorum is
++// concentrated AND more than one live operation contends for the ledger.
++function ledgerProgressWriteFails({serviceRows, liveOperationCount}) {
++  return ledgerQuorumConcentrated(serviceRows) && liveOperationCount > 1;
++}
++
++// Placement effect of a completed ledger spread REPLACE (production: CDC —
++// the replacement promotes on the target, the source drains and its row is
++// deleted). The source row is tracked BY REFERENCE from creation time: the
++// coordinator's canonical replica-id allocator can mint names colliding with
++// the synthetic fixture rows, so id-based lookups are ambiguous. The
++// replacement's id is derived from the entry label (unique, deterministic).
++function applyLedgerSpreadCompletion({serviceRows, entry}) {
++  const sourceIndex = serviceRows.indexOf(entry.sourceRow);
++  if (sourceIndex >= 0) {
++    serviceRows.splice(sourceIndex, 1);
++  }
++  serviceRows.push(
++    buildLedgerServiceRow({
++      replicaId: `${LEDGER_PARTITION_ID}-${entry.label}`,
++      nodeId: entry.move.nodeId,
++      raftRole: RAFT_ROLE_ROW.FOLLOWER,
++    }),
++  );
++}
++
++function driveWorkflowTick({scenario, events, tick}) {
++  const {trackedOperations, timeSource, labels, serviceRows, movesByOperationId} =
++    scenario;
++  timeSource.advance(TICK_MS);
++  const live = nonTerminalOperations(trackedOperations, labels);
++  for (const op of live) {
++    const nextStep = getNextWorkflowStep(op.type, op.workflow_step);
++    if (!nextStep) {
++      continue;
++    }
++    if (
++      ledgerProgressWriteFails({
++        serviceRows,
++        liveOperationCount: live.length,
++      })
++    ) {
++      events.push(`${tick} ${labels.labelOf(op.operation_id)} WRITE_FAIL ${op.workflow_step}`);
++      continue;
++    }
++    op.workflow_step = nextStep;
++    op.status = WORKFLOW_STEP_TO_STATUS[nextStep] || op.status;
++    op.updated_at = timeSource.now();
++    if (isTerminalStep(op.type, nextStep)) {
++      op.completed_at = timeSource.now();
++      const moveEntry = movesByOperationId.get(op.operation_id);
++      if (moveEntry?.isLedgerSpread) {
++        applyLedgerSpreadCompletion({serviceRows, entry: moveEntry});
++        events.push(`${tick} LEDGER_SPREAD_APPLIED ${moveEntry.label}`);
++      }
++    }
++    events.push(`${tick} ${labels.labelOf(op.operation_id)} ${nextStep}`);
++  }
++}
++
++function buildPendingEntry(move, label, isLedgerSpread) {
++  return {
++    move,
++    label,
++    isLedgerSpread,
++    created: false,
++    operation: null,
++    admissionReasons: new Set(),
++  };
++}
++
++function buildDependentEntries() {
++  return [
++    buildPendingEntry(
++      buildDependentMove(
++        OperationType.REPLACE,
++        `${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS}-p1`,
++        NODE_2,
++      ),
++      'DEP_REPLACE_SQL_TX',
++      false,
++    ),
++    buildPendingEntry(
++      buildDependentMove(
++        OperationType.REPLACE,
++        `${SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS}-p1`,
++        NODE_3,
++      ),
++      'DEP_REPLACE_SQL_WRITE',
++      false,
++    ),
++    buildPendingEntry(
++      buildDependentMove(OperationType.ADD, 'movies-p1', NODE_4),
++      'CLIENT_ADD',
++      false,
++    ),
++  ];
++}
++
++async function attemptPendingEntry({
++  coordinator,
++  entry,
++  events,
++  cycle,
++  labels,
++  serviceRows,
++  movesByOperationId,
++  concentratedAtCycleStart,
++  dependentHeldWhileConcentrated,
++}) {
++  const outcome = await attemptCreate({
++    coordinator,
++    move: entry.move,
++    events,
++    cycle,
++    label: entry.label,
++    labels,
++  });
++  entry.created = outcome.created;
++  if (outcome.created) {
++    entry.operation = outcome.operation;
++    if (entry.isLedgerSpread) {
++      entry.sourceRow = serviceRows.find(
++        (row) => row.replica_id === entry.move.sourceReplicaId,
++      ) || null;
++    }
++    movesByOperationId.set(outcome.operation.operationId, entry);
++    return;
++  }
++  if (!outcome.admissionReason) {
++    return;
++  }
++  entry.admissionReasons.add(outcome.admissionReason);
++  if (
++    !entry.isLedgerSpread &&
++    concentratedAtCycleStart &&
++    outcome.admissionReason === QUORUM_CONCENTRATED_REASON
++  ) {
++    dependentHeldWhileConcentrated.push(`${cycle} ${entry.label}`);
++  }
++}
++
++// One scenario: a formation storm attempted in the given planner order every
++// cycle. `initialLedgerRows` selects the starting concentration shape;
++// `nodeIds` selects spread feasibility; `pending` is the planner's move order.
++async function runFormationScenario({
++  initialLedgerRows,
++  nodeIds = ALL_NODE_IDS,
++  pending,
++}) {
++  const timeSource = new VirtualTimeSource({startMs: START_MS});
++  const fixture = createTimeoutTestCoordinator({
++    timeSource,
++    nodeId: SEED_NODE_ID,
++  });
++  const {coordinator, trackedOperations} = fixture;
++  const events = [];
++  const labels = createOperationLabels();
++  const serviceRows = initialLedgerRows;
++  const nodeRows = buildNodeRows(nodeIds);
++  coordinator.systemTableCache = buildPlacementCache({serviceRows, nodeRows});
++  const movesByOperationId = new Map();
++  const scenario = {
++    trackedOperations,
++    timeSource,
++    labels,
++    serviceRows,
++    movesByOperationId,
++  };
++
++  const dependentHeldWhileConcentrated = [];
++  try {
++    let tick = 0;
++    for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
++      const concentratedAtCycleStart = ledgerQuorumConcentrated(serviceRows);
++      for (const entry of pending) {
++        if (entry.created) {
++          continue;
++        }
++        await attemptPendingEntry({
++          coordinator,
++          entry,
++          events,
++          cycle,
++          labels,
++          serviceRows,
++          movesByOperationId,
++          concentratedAtCycleStart,
++          dependentHeldWhileConcentrated,
++        });
++      }
++      driveWorkflowTick({scenario, events, tick});
++      tick += 1;
++      const allCreated = pending.every((entry) => entry.created);
++      if (
++        allCreated &&
++        nonTerminalOperations(trackedOperations, labels).length === 0
++      ) {
++        break;
++      }
++    }
++
++    const finalOps = Array.from(trackedOperations.values()).map((op) => ({
++      operationId: op.operation_id,
++      label: labels.labelOf(op.operation_id),
++      type: op.type,
++      workflowStep: op.workflow_step,
++      terminal: isTerminalStep(op.type, op.workflow_step),
++    }));
++    return {
++      events,
++      finalOps,
++      pinnedOps: finalOps.filter((op) => !op.terminal),
++      completions: finalOps.filter((op) => op.terminal).length,
++      allCreated: pending.every((entry) => entry.created),
++      pendingByLabel: new Map(
++        pending.map((entry) => [
++          entry.label,
++          {
++            created: entry.created,
++            admissionReasons: [...entry.admissionReasons],
++          },
++        ]),
++      ),
++      dependentHeldWhileConcentrated,
++      finalConcentrated: ledgerQuorumConcentrated(serviceRows),
++      finalLedgerRows: serviceRows.map((row) => ({
++        replicaId: row.replica_id,
++        nodeId: row.node_id,
++        status: row.status,
++        raftRole: row.raft_role,
++      })),
++      writeFailures: events.filter((line) => line.includes('WRITE_FAIL')).length,
++    };
++  } finally {
++    await coordinator.shutdown();
++  }
++}
++
++// The run-22 gap: the first ledger spread already completed (leadership on
++// NODE_1, both followers still on the seed — concentrated). The planner admits
++// dependents NOW; the second spread is planned only later. On the unfixed head
++// the dependents co-admit into the concentrated window, wedge on ledger writes,
++// and the late spread can never admit into a non-idle ledger.
++function buildRun22GapPending() {
++  return [
++    ...buildDependentEntries(),
++    buildPendingEntry(
++      buildLedgerSpreadMove({
++        sourceReplicaId: `${LEDGER_PARTITION_ID}-r2`,
++        targetNodeId: NODE_2,
++      }),
++      'LEDGER_SPREAD_LATE',
++      true,
++    ),
++  ];
++}
++
++t.test(
++  'run-22 gap: dependents must hold while the ledger quorum is concentrated, ' +
++    'so the LATE spread move can run alone and everything completes ' +
++    '(RED on the unfixed head)',
++  async (t) => {
++    const m = await runFormationScenario({
++      initialLedgerRows: buildPartiallySpreadLedgerRows(),
++      pending: buildRun22GapPending(),
++    });
++    t.ok(
++      m.dependentHeldWhileConcentrated.length > 0,
++      'dependent creates were typed-rejected operation_ledger_quorum_concentrated ' +
++        `while concentration persisted (${m.dependentHeldWhileConcentrated.length}x — ` +
++        'the run-22 release-too-early gap between spread moves is closed)',
++    );
++    t.notOk(
++      m.finalConcentrated,
++      'the ledger quorum ends spread (no node holds a majority)',
++    );
++    t.ok(
++      m.allCreated,
++      'every move — the late spread, dependents, and the client ADD — is eventually admitted',
++    );
++    t.equal(
++      m.pinnedOps.length,
++      0,
++      `no operation stays pinned non-terminal (pinned: ${JSON.stringify(m.pinnedOps)})`,
++    );
++    t.equal(
++      m.completions,
++      4,
++      'the ledger spread, both dependent REPLACEs, and the client ADD all complete',
++    );
++  },
++);
++
++t.test(
++  'bootstrap shape: fully seed-concentrated ledger — both spreads run alone ' +
++    'before any dependent admits (RED on the unfixed head)',
++  async (t) => {
++    const m = await runFormationScenario({
++      initialLedgerRows: buildBootstrapLedgerRows(),
++      pending: [
++        buildPendingEntry(
++          buildLedgerSpreadMove({
++            sourceReplicaId: `${LEDGER_PARTITION_ID}-r2`,
++            targetNodeId: NODE_1,
++          }),
++          'LEDGER_SPREAD_1',
++          true,
++        ),
++        ...buildDependentEntries(),
++        buildPendingEntry(
++          buildLedgerSpreadMove({
++            sourceReplicaId: `${LEDGER_PARTITION_ID}-r3`,
++            targetNodeId: NODE_2,
++          }),
++          'LEDGER_SPREAD_2',
++          true,
++        ),
++      ],
++    });
++    t.ok(
++      m.dependentHeldWhileConcentrated.length > 0,
++      'dependents held during the fully-concentrated bootstrap window',
++    );
++    t.notOk(m.finalConcentrated, 'the ledger quorum ends spread');
++    t.equal(
++      m.pinnedOps.length,
++      0,
++      `nothing stays pinned (pinned: ${JSON.stringify(m.pinnedOps)})`,
++    );
++    t.equal(m.completions, 5, 'both spreads and all three dependents complete');
++  },
++);
++
++t.test(
++  'control: an already-spread ledger never engages the hold and the same ' +
++    'storm completes on any head',
++  async (t) => {
++    const m = await runFormationScenario({
++      initialLedgerRows: buildSpreadLedgerRows(),
++      pending: buildDependentEntries(),
++    });
++    const heldReasons = [...m.pendingByLabel.values()].flatMap(
++      (entry) => entry.admissionReasons,
++    );
++    t.notOk(
++      heldReasons.includes(QUORUM_CONCENTRATED_REASON),
++      'no dependent was ever rejected for quorum concentration',
++    );
++    t.equal(m.pinnedOps.length, 0, 'everything completes');
++    t.equal(m.writeFailures, 0, 'no ledger write ever failed (fault gated on concentration)');
++  },
++);
++
++t.test(
++  'control: concentration WITHOUT a feasible spread target never holds ' +
++    '(single-node-shaped clusters must not deadlock)',
++  async (t) => {
++    // Only the seed exists: the ledger is fully concentrated but no node could
++    // host a spread replica, so the hold must not engage. The fault model is
++    // concentration-gated, so this shape would wedge on writes if dependents
++    // contend — assert only ADMISSION behavior with a single dependent.
++    const m = await runFormationScenario({
++      initialLedgerRows: buildBootstrapLedgerRows(),
++      nodeIds: [SEED_NODE_ID],
++      pending: [buildDependentEntries()[2]],
++    });
++    const heldReasons = [...m.pendingByLabel.values()].flatMap(
++      (entry) => entry.admissionReasons,
++    );
++    t.notOk(
++      heldReasons.includes(QUORUM_CONCENTRATED_REASON),
++      'no quorum-concentration rejection when spread is infeasible',
++    );
++    t.ok(m.allCreated, 'the move admits despite permanent concentration');
++    t.equal(m.pinnedOps.length, 0, 'a lone operation completes (no contention)');
++  },
++);
++
++t.test(
++  'planner gate: a concentrated ledger partition requires operation creation ' +
++    'even when planning-gate readiness would defer (the verifier-traced ' +
++    'permanent-wedge closer)',
++  async (t) => {
++    const {REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS} = await import(
++      '../../src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js'
++    );
++    const gateRequired =
++      REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS
++        .isPriorityRecoveryOperationCreationRequiredForPlanningGate;
++    const stub = (concentrated) => ({
++      rebalanceCoordinator: {
++        isOperationLedgerQuorumConcentratedForPartition: () => concentrated,
++      },
++      // With no planning snapshot the legacy path always answers false, so a
++      // true here can only come from the concentration evidence.
++      getPriorityRecoveryPlanningSnapshotSync: () => null,
++    });
++    t.equal(
++      gateRequired.call(stub(true), LEDGER_PARTITION_ID),
++      true,
++      'concentration evidence forces operation creation through the gate',
++    );
++    t.equal(
++      gateRequired.call(stub(false), LEDGER_PARTITION_ID),
++      false,
++      'without concentration the legacy snapshot path decides (false here)',
++    );
++    t.equal(
++      gateRequired.call(stub(true), ''),
++      false,
++      'an empty partition id never requires creation',
++    );
++  },
++);
++
++t.test('the drive is deterministic across runs', async (t) => {
++  const a = await runFormationScenario({
++    initialLedgerRows: buildPartiallySpreadLedgerRows(),
++    pending: buildRun22GapPending(),
++  });
++  const b = await runFormationScenario({
++    initialLedgerRows: buildPartiallySpreadLedgerRows(),
++    pending: buildRun22GapPending(),
++  });
++  t.same(a.events, b.events, 'identical event sequence across runs');
++  const shape = (ops) => ops.map((op) => ({...op, operationId: null}));
++  t.same(shape(a.finalOps), shape(b.finalOps), 'identical terminal shape');
++});
+diff --git a/scripts/run-formation-ledger-quorum-spread-first-scenarios.js b/scripts/run-formation-ledger-quorum-spread-first-scenarios.js
+new file mode 100644
+index 00000000..4788bfcc
+--- /dev/null
++++ b/scripts/run-formation-ledger-quorum-spread-first-scenarios.js
+@@ -0,0 +1,40 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `formation-ledger-quorum-spread-first` quest scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed proof
++ * of the quest statement) and writes a scenario-harness report for the
++ * Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from affinity-demo run-22
++ * forensics; evidence docs under
++ * solve/changes/formation-replace-dispatch-deferred-retry-hold/):
++ *   formation-ledger-quorum-spread-first
++ *     - test/convergence/dt6-formation-ledger-quorum-spread-first.test.js
++ *       (the run-22 wedge: the operation ledger's quorum stayed concentrated
++ *        on the overloaded seed after a leadership-only self-move, and every
++ *        dependent control-plane move piled onto a ledger whose commits
++ *        needed the slow node. The fix holds dependent operation admission
++ *        while any ledger partition's quorum is concentrated AND spread is
++ *        actionable — ledger self-moves and emergency ADDs exempt — and
++ *        feeds the same concentration evidence into the planner's
++ *        priority-recovery gate so the cure is always planned. Guarded
++ *        shapes: the run-22 release-too-early gap, the fully-concentrated
++ *        bootstrap window, already-spread and infeasible-spread controls,
++ *        the planner-gate evidence arm, determinism.)
++ *
++ * Usage: node scripts/run-formation-ledger-quorum-spread-first-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'formation-ledger-quorum-spread-first': [
++    'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
