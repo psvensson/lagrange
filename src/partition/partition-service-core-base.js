@@ -41,6 +41,7 @@ const {
   getTrafficReadinessSnapshot,
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
+  isPriorityControlPlanePartition,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
@@ -581,15 +582,20 @@ class PartitionServiceCoreBase extends EventEmitter {
       tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_role, context = {}) => {
         const whereClause = {service_id: this.replicaId};
-        const cachedRow = context.cachedRow;
+        // Guard from the authoritative row when the flush observed one: the
+        // merged cache row can carry the CL-035 local voter-ready seed
+        // (newer updated_at, stale-guard protected), and CAS-guarding on it
+        // zero-rows against the durable row forever — the affinity-demo
+        // run-27 lost-promotion class.
+        const guardRow = context.authoritativeRow || context.cachedRow;
         if (
-          typeof cachedRow?.raft_role === 'string' &&
-          cachedRow.raft_role.length > 0
+          typeof guardRow?.raft_role === 'string' &&
+          guardRow.raft_role.length > 0
         ) {
-          whereClause.raft_role = cachedRow.raft_role;
+          whereClause.raft_role = guardRow.raft_role;
         }
-        if (Number.isFinite(cachedRow?.updated_at)) {
-          whereClause.updated_at = cachedRow.updated_at;
+        if (Number.isFinite(guardRow?.updated_at)) {
+          whereClause.updated_at = guardRow.updated_at;
         }
         return whereClause;
       },
@@ -597,13 +603,26 @@ class PartitionServiceCoreBase extends EventEmitter {
         raft_role: role,
         updated_at: updatedAt,
       }),
-      buildUpdateOptions: () => ({
-        deliveryPriority: PARTITION_SERVICE_LITERAL.BACKGROUND,
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDefer: true,
-        routingReadinessDimension:
-          this.getMetadataPublicationReadinessDimension(),
-      }),
+      // Priority control-plane partitions' voter visibility feeds the
+      // quorum-spread admission hold and the spread planner; their role
+      // writes must not be pressure-deferred during exactly the formation
+      // churn they describe (run-27). Everything else stays BACKGROUND.
+      buildUpdateOptions: () => {
+        const priorityPartition = isPriorityControlPlanePartition({
+          partitionId: this.partitionId,
+        });
+        return {
+          deliveryPriority: priorityPartition ?
+            PARTITION_SERVICE_LITERAL.CRITICAL :
+            PARTITION_SERVICE_LITERAL.BACKGROUND,
+          workClass: priorityPartition ?
+            PRESSURE_WORK_CLASS.CRITICAL :
+            PRESSURE_WORK_CLASS.BACKGROUND,
+          allowPressureDefer: !priorityPartition,
+          routingReadinessDimension:
+            this.getMetadataPublicationReadinessDimension(),
+        };
+      },
       buildExpectedCacheFields: (role) => ({raft_role: role}),
       prepareFlush: () => ({
         skip: false,
@@ -624,6 +643,33 @@ class PartitionServiceCoreBase extends EventEmitter {
           SYSTEM_TABLE_NAME.SERVICES,
           this.replicaId,
         ),
+      // READ-ONLY authoritative point read for the helper's honest dedup +
+      // CAS guard (never a cache refresh: the merged cache can hold the
+      // CL-035 local seed, which out-versions the durable row). Capability
+      // reported at call time — transport-shim integrations without the
+      // read fall back to the legacy cache dedup.
+      readAuthoritativeRow: async () => {
+        const cdcIntegrationService = this.cdcIntegrationService;
+        if (
+          typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
+          PARTITION_SERVICE_LITERAL.FUNCTION
+        ) {
+          return {supported: false, available: false, row: null};
+        }
+        const readResult =
+          await cdcIntegrationService.executeAuthoritativeSystemTableRead(
+            SYSTEM_TABLE_NAME.SERVICES,
+            PARTITION_SERVICE_LITERAL.SERVICES_ROW_POINT_READ_SQL,
+            [this.replicaId],
+          );
+        if (readResult?.success !== true) {
+          return {supported: true, available: false, row: null};
+        }
+        const row = Array.isArray(readResult.rows) ?
+          readResult.rows[0] || null :
+          null;
+        return {supported: true, available: true, row};
+      },
       onObservedStateChanged: (context = {}) => {
         this.logger.warn(
           PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,

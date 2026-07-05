@@ -158,6 +158,14 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           // promotion (the durable raft_role write defers through the
           // recovering control plane). No-op for non-priority partitions.
           this.seedLocalPriorityReplicaRaftRole(replicaId, partitionId);
+          // The seed makes the promotion locally visible — but it also makes
+          // the local cache row equal to the durable write the owner still
+          // has pending, which historically dedup-masked that write (run-27:
+          // the cluster read a raft LEADER as a learner forever, the
+          // quorum-spread hold never released). Level-trigger the owner's
+          // durable re-assert; with the helper's authoritative dedup this is
+          // a no-op once the durable row has truly converged.
+          this.getTrackedService(replicaId)?.reassertDurableRaftRole?.();
           this.logger.info(REPLICA_HANDLER_LOG_MSG.VOTER_READY_ACTIVATED, {
             replicaId,
             partitionId,

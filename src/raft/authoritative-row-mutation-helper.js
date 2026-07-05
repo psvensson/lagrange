@@ -10,6 +10,7 @@ import {createControlPlaneRuntimeBundle} from
 const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   APPLIED: 'applied',
+  AUTHORITATIVE_CONFIRM_UNAVAILABLE: 'authoritative-confirm-unavailable',
   AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
   CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
   CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
@@ -88,6 +89,7 @@ class AuthoritativeRowMutationHelper {
       messageRouter = null,
       systemTableCache = null,
       refreshObservedRow = null,
+      readAuthoritativeRow = null,
       onObservedStateChanged = () => {},
       onAsyncError = () => {},
       now = () => Date.now(),
@@ -139,6 +141,8 @@ class AuthoritativeRowMutationHelper {
     this.systemTableCache = systemTableCache;
     this.refreshObservedRow =
       typeof refreshObservedRow === 'function' ? refreshObservedRow : null;
+    this.readAuthoritativeRow =
+      typeof readAuthoritativeRow === 'function' ? readAuthoritativeRow : null;
     this.onObservedStateChanged = onObservedStateChanged;
     this.onAsyncError = onAsyncError;
     this.now = now;
@@ -215,7 +219,17 @@ class AuthoritativeRowMutationHelper {
       });
     }
 
-    const recoveredFromCacheGap = this.syncFromCache();
+    // Cache-equality dedup (syncFromCache) treats a merged-cache row equal to
+    // the pending value as proof of durable persistence. That proof is FALSE
+    // when the row was locally seeded (CL-035 voter-ready seed): the durable
+    // write silently drops and the actual never lands (affinity-demo run-27,
+    // quest formation-ledger-post-spread-voter-visibility-latency). Helpers
+    // that supply readAuthoritativeRow therefore skip the cache dedup here
+    // and confirm against the authoritative row inside the flush instead;
+    // helpers without the capability (e.g. wasm transport shims) keep the
+    // legacy dedup unchanged.
+    const recoveredFromCacheGap =
+      this.readAuthoritativeRow ? false : this.syncFromCache();
     const prepareResult = this.prepareFlush({
       pendingValue: this.pendingValue,
       persistedValue: this.persistedValue,
@@ -263,32 +277,46 @@ class AuthoritativeRowMutationHelper {
     this.inFlight = true;
     let writeSucceeded = false;
     const value = this.pendingValue;
-    const updateData = this.buildUpdateData(value, this.now());
-    const cachedRow = typeof this.readRowFromCache === 'function' ?
-      this.readRowFromCache(this.systemTableCache) :
-      null;
-    const mutationContext = {
-      cachedRow,
-      persistedValue: this.persistedValue,
-    };
-    const whereClause = this.buildWhereClause(value, mutationContext);
-    const updateOptionsCandidate = typeof this.buildUpdateOptions === 'function' ?
-      this.buildUpdateOptions(value, updateData, mutationContext) :
-      null;
-    const updateOptions = updateOptionsCandidate &&
-      typeof updateOptionsCandidate === 'object' ?
-      updateOptionsCandidate :
-      {};
-    const expectedCacheFields =
-      typeof this.buildExpectedCacheFields === 'function' ?
-        this.buildExpectedCacheFields(value, updateData) :
-        null;
-    const writeOptions = {
-      ...updateOptions,
-      ...(expectedCacheFields ? {expectedCacheFields} : {}),
-    };
-
     try {
+      let authoritativeRow = null;
+      if (this.readAuthoritativeRow) {
+        const authoritativeProbe = await this.probeAuthoritativeRow(value);
+        if (authoritativeProbe.settled) {
+          return authoritativeProbe.result;
+        }
+        authoritativeRow = authoritativeProbe.row;
+      }
+      const updateData = this.buildUpdateData(value, this.now());
+      const cachedRow = typeof this.readRowFromCache === 'function' ?
+        this.readRowFromCache(this.systemTableCache) :
+        null;
+      const mutationContext = {
+        cachedRow,
+        // The CAS guard must come from the authoritative row when one was
+        // observed: the merged cache row can be locally seeded NEWER than the
+        // durable row (stale-guard protected), so guarding on it zero-rows
+        // forever — permanent retry spin with the write never landing.
+        authoritativeRow,
+        persistedValue: this.persistedValue,
+      };
+      const whereClause = this.buildWhereClause(value, mutationContext);
+      const updateOptionsCandidate =
+        typeof this.buildUpdateOptions === 'function' ?
+          this.buildUpdateOptions(value, updateData, mutationContext) :
+          null;
+      const updateOptions = updateOptionsCandidate &&
+        typeof updateOptionsCandidate === 'object' ?
+        updateOptionsCandidate :
+        {};
+      const expectedCacheFields =
+        typeof this.buildExpectedCacheFields === 'function' ?
+          this.buildExpectedCacheFields(value, updateData) :
+          null;
+      const writeOptions = {
+        ...updateOptions,
+        ...(expectedCacheFields ? {expectedCacheFields} : {}),
+      };
+
       const partitionResult = await this.getControlPlaneSystemTableGateway()
         .submitMutation({
           operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -361,6 +389,102 @@ class AuthoritativeRowMutationHelper {
         this.scheduleFollowUpFlush();
       }
     }
+  }
+
+  /**
+   * Capability-gated authoritative dedup + CAS-guard acquisition. The
+   * readAuthoritativeRow callback contract:
+   * `async (pendingValue) => {supported?: boolean, available: boolean,
+   * row: Object|null}` — a READ-ONLY point read of the authoritative row
+   * (never a cache refresh: the merged cache can hold a locally seeded row
+   * that out-versions the durable one).
+   *
+   * Outcomes:
+   * - capability absent at runtime (supported === false or the read throws):
+   *   fall back to the legacy cache dedup for this flush;
+   * - authority unreadable or the durable row does not exist yet: defer with
+   *   a scheduled retry (a cache row equal to pending is NOT durability
+   *   evidence, and an UPDATE cannot apply to a missing row);
+   * - durable row already carries the pending value: dedup honestly;
+   * - otherwise: proceed to the CAS write guarded by the authoritative row.
+   * @param {*} value - The pending value being flushed.
+   * @return {Promise<{settled: boolean, result?: Object, row?: Object|null}>}
+   * @private
+   */
+  async probeAuthoritativeRow(value) {
+    let probe = null;
+    try {
+      probe = await this.readAuthoritativeRow(value);
+    } catch (_readError) {
+      probe = null;
+    }
+    if (!probe || probe.supported === false) {
+      const legacyResult = this.resolveLegacyCacheDedupResult();
+      return legacyResult ?
+        {settled: true, result: legacyResult} :
+        {settled: false, row: null};
+    }
+    if (probe.available === false || !probe.row) {
+      this.scheduleRetry();
+      return {
+        settled: true,
+        result: this.buildResult({
+          reason:
+            AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_CONFIRM_UNAVAILABLE,
+        }),
+      };
+    }
+    const expectedFields =
+      typeof this.buildExpectedCacheFields === 'function' ?
+        this.buildExpectedCacheFields(value, null) :
+        null;
+    if (
+      expectedFields &&
+      Object.entries(expectedFields).every(
+        ([field, fieldValue]) => probe.row[field] === fieldValue,
+      )
+    ) {
+      this.persistedValue = value;
+      if (this.pendingValue === value) {
+        this.pendingValue = null;
+      }
+      this.retryAttemptCount = 0;
+      return {
+        settled: true,
+        result: this.buildResult({
+          cacheVisible: true,
+          recoveredFromCacheGap: true,
+          reason:
+            AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED,
+        }),
+      };
+    }
+    return {settled: false, row: probe.row};
+  }
+
+  /**
+   * Legacy cache dedup for flushes whose authoritative-read capability is
+   * absent at runtime: sync from the merged cache and settle when the pending
+   * value drained or already matches the persisted one.
+   * @return {Object|null} A settled flush result, or null to proceed.
+   * @private
+   */
+  resolveLegacyCacheDedupResult() {
+    const recoveredFromCacheGap = this.syncFromCache();
+    if (
+      this.pendingValue !== null &&
+      this.pendingValue !== this.persistedValue
+    ) {
+      return null;
+    }
+    this.retryAttemptCount = 0;
+    return this.buildResult({
+      cacheVisible: this.pendingValue === null,
+      recoveredFromCacheGap,
+      reason: recoveredFromCacheGap ?
+        AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED :
+        AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
+    });
   }
 
   /**

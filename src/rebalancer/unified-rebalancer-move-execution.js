@@ -94,7 +94,16 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
         await this.rebalanceCoordinator.createOperation(operationRequest);
     } catch (error) {
       if (error?.rebalanceSkipReason) {
-        return this.buildSkippedMoveResult(error.rebalanceSkipReason, move);
+        // Ledger-interlock rejections ride the budget skip channel with a
+        // hard-coded limit while the TRUE reason code sits in
+        // error.admissionResult — run-24 and run-27 forensics each chased
+        // the budget_exceeded mislabel. Attach the admission evidence so
+        // MOVE_SKIPPED diagnostics carry the real reason.
+        return this.buildSkippedMoveResult(
+          error.rebalanceSkipReason,
+          move,
+          error.admissionResult ? {admission: error.admissionResult} : {},
+        );
       }
       if (error?.admissionResult) {
         return this.buildSkippedMoveResult(

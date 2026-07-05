@@ -9,6 +9,7 @@ const {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_VALUE,
   PRESSURE_WORK_CLASS,
+  RaftRole,
   SYSTEM_TABLE_NAME,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,
@@ -40,6 +41,24 @@ class PartitionServiceMetadataDeliveryMethods {
    */
   async flushRoleUpdate() {
     return this.roleMutationHelper.flush();
+  }
+  /**
+   * Level-triggered durable re-assert of this replica's CURRENT raft role.
+   * Called by the replica handler's voter-ready seam right after the CL-035
+   * local cache seed: the seed makes the promotion locally visible while the
+   * durable write can still be lost (run-27: a dropped/dedup-masked write
+   * left the whole cluster reading a raft LEADER as a learner forever). The
+   * owner (this service) re-queues from its own state; the helper's
+   * authoritative dedup makes the re-queue a no-op when the durable row
+   * already converged.
+   * @return {boolean} Whether a re-assert was queued.
+   */
+  reassertDurableRaftRole() {
+    if (!this.role || this.role === RaftRole.LEARNER) {
+      return false;
+    }
+    this.queueRoleUpdate(this.role);
+    return true;
   }
   /**
    * Persist the latest pending partition leader update.
