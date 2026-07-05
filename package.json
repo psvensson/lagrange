@@ -71,7 +71,7 @@
     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",
     "test:mutation": "stryker run",
     "test:analysis": "npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics",
-    "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run steering:check && npm run lint:scripts && npm run lint",
+    "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run steering:check && npm run lint:scripts && npm run lint",
     "test:quality": "npm run test:static && npm run test:mutation",
     "test:chart:endpoint-sync": "node scripts/check-endpoint-sync-chart.js",
     "test:gate": "npm run test:fast && npm run test:static && npm run model:contracts",
@@ -173,7 +173,10 @@
     "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
     "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery",
     "analyze:causal-model": "node scripts/analyze-causal-model.js",
-    "analyze:latent-blockers": "node scripts/analyze-latent-blockers.js"
+    "analyze:latent-blockers": "node scripts/analyze-latent-blockers.js",
+    "audit:guideline:silent-catch": "node scripts/check-guideline-silent-catch.js",
+    "audit:guideline:deferred-outcomes": "node scripts/check-guideline-deferred-outcomes.js",
+    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch"
   },
   "keywords": [
     "distributed",

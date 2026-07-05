@@ -59,8 +59,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:file-size:strict` — `node scripts/check-file-size-thresholds.js --strict`
 - `audit:guideline:boundary-mode-contracts` — Check boundary-mode contracts for combinable policy options.
 - `audit:guideline:decision-boundaries` — Check semantic decision boundaries for independent branch piles.
+- `audit:guideline:deferred-outcomes` — `node scripts/check-guideline-deferred-outcomes.js`
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
 - `audit:guideline:literals` — Check write-scope files for new unowned runtime literals.
+- `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
+- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-legacy-naming` — `node scripts/check-no-legacy-naming.js`
 - `audit:no-ordinal-files` — `node scripts/check-no-ordinal-files.js`
@@ -252,4 +255,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-162 scripts indexed; 66 have a curated description, 96 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+165 scripts indexed; 66 have a curated description, 99 fall back to their raw command. Improve coverage in the two sources named in the header comment.

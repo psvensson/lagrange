@@ -137,8 +137,12 @@ export function reflectionPrompt(quest, health, trigger) {
     'Read the whole attempt/finding/theory history and write a short, falsifiable ' +
     'reframing: is the selected theory still the best explanation of the evidence, is ' +
     'this approach actually converging, and what cheaper hypothesis should be abandoned ' +
-    'or tried next? No gate fires during this turn — it is pure reasoning, recorded as a ' +
-    'reflection note.';
+    'or tried next? Two framing tripwires: (a) has live/measured evidence contradicted ' +
+    'the sealed statement more than once — if so the FRAME is suspect, consider ' +
+    'EXHAUST-and-reauthor instead of the next patch; (b) does the current hypothesis ' +
+    'need increasingly exotic preconditions to survive — each rescue clause is evidence ' +
+    'against the framing, not a refinement of it. No gate fires during this turn — it ' +
+    'is pure reasoning, recorded as a reflection note.';
 }
 
 // The instruction handed to a reflection-capable executor for an ALTITUDE (framing)

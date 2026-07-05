@@ -1,8 +1,9 @@
-import fs from 'node:fs/promises';
-
 import {
   FILE_CLASS,
+  applyCountBaseline,
   buildGuidelineViolationReport,
+  loadCountBaseline,
+  writeCountBaseline,
   classifyFilePath,
   formatGuidelineHumanSummary,
   parseSourceFile,
@@ -94,9 +95,7 @@ const LITERAL_BASELINE_FILE_URL = new URL(
   './check-guideline-literals-baseline.json',
   import.meta.url,
 );
-const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
 const NUMERIC_LITERAL_ZERO = 0;
-const NUMERIC_LITERAL_ONE = 1;
 
 function isLiteralNode(node) {
   return node?.type === LOCAL_STR_LITERAL &&
@@ -242,72 +241,16 @@ async function collectMagicLiteralViolations(pathsToScan, options = {}) {
 }
 
 function buildLiteralViolationIdentity(violation) {
+  // Line/column-independent so routine edits do not resurface inherited
+  // literals as new; count-based application still blocks NET growth of the
+  // same literal in the same file.
   return JSON.stringify([
     violation.filePath,
-    violation.line,
-    violation.column,
     violation.value,
     violation.kind,
   ]);
 }
 
-function summarizeLiteralViolationsByFile(violations) {
-  const violationsByFile = new Map();
-  for (const violation of violations) {
-    const existing = violationsByFile.get(violation.filePath) || [];
-    existing.push(violation);
-    violationsByFile.set(violation.filePath, existing);
-  }
-  return [...violationsByFile.entries()]
-    .map(([filePath, fileViolations]) => ({
-      filePath,
-      violationCount: fileViolations.length,
-    }))
-    .sort((left, right) =>
-      right.violationCount - left.violationCount ||
-      left.filePath.localeCompare(right.filePath));
-}
-
-async function loadMagicLiteralBaseline() {
-  try {
-    const rawBaseline = await fs.readFile(
-      LITERAL_BASELINE_FILE_URL,
-      SCRIPT_TEXT.ENCODING_UTF8,
-    );
-    const parsedBaseline = JSON.parse(rawBaseline);
-    return new Set(
-      (Array.isArray(parsedBaseline?.violations) ?
-        parsedBaseline.violations :
-        []).map(buildLiteralViolationIdentity),
-    );
-  } catch (error) {
-    if (error?.code === FILE_NOT_FOUND_ERROR_CODE) {
-      return new Set();
-    }
-    throw error;
-  }
-}
-
-function applyMagicLiteralBaseline(report, baseline) {
-  const newViolations = [];
-  let inheritedViolationCount = NUMERIC_LITERAL_ZERO;
-  for (const violation of report.violations) {
-    if (baseline.has(buildLiteralViolationIdentity(violation))) {
-      inheritedViolationCount += NUMERIC_LITERAL_ONE;
-      continue;
-    }
-    newViolations.push(violation);
-  }
-  return {
-    ...report,
-    rawViolationCount: report.totalViolationCount,
-    inheritedViolationCount,
-    baselineViolationCount: baseline.size,
-    totalViolationCount: newViolations.length,
-    filesWithViolations: summarizeLiteralViolationsByFile(newViolations),
-    violations: newViolations,
-  };
-}
 
 async function collectMagicLiteralViolationsWithBaseline(
   pathsToScan,
@@ -315,9 +258,12 @@ async function collectMagicLiteralViolationsWithBaseline(
 ) {
   const [report, baseline] = await Promise.all([
     collectMagicLiteralViolations(pathsToScan, options),
-    loadMagicLiteralBaseline(),
+    loadCountBaseline(
+      LITERAL_BASELINE_FILE_URL,
+      buildLiteralViolationIdentity,
+    ),
   ]);
-  return applyMagicLiteralBaseline(report, baseline);
+  return applyCountBaseline(report, baseline, buildLiteralViolationIdentity);
 }
 
 function formatHumanSummary(report) {
@@ -331,7 +277,21 @@ function formatHumanSummary(report) {
   ].join(SCRIPT_TEXT.NEWLINE);
 }
 
+const UPDATE_BASELINE_FLAG = '--update-baseline';
+
 async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
+  if (argv.includes(UPDATE_BASELINE_FLAG)) {
+    const report = await collectMagicLiteralViolations(
+      argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
+      {},
+    );
+    await writeCountBaseline(
+      LITERAL_BASELINE_FILE_URL,
+      report,
+      'literal-guideline',
+    );
+    return NUMERIC_LITERAL_ZERO;
+  }
   return runGuidelineCheck(
     argv,
     collectMagicLiteralViolationsWithBaseline,
@@ -344,7 +304,6 @@ runGuidelineCheckWhenDirect(import.meta.url, main);
 export {
   FILE_CLASS,
   RULE_REFERENCE,
-  applyMagicLiteralBaseline,
   buildLiteralViolationIdentity,
   classifyFilePath,
   collectMagicLiteralViolations,

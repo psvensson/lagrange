@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import {
   buildGuidelineViolationReport,
+  getEnclosingFunctionName,
   formatGuidelineHumanSummary,
   parseSourceFile,
   runGuidelineCheck,
@@ -68,12 +69,6 @@ const NODE_TYPE = Object.freeze({
   VARIABLE_DECLARATOR: 'VariableDeclarator',
 });
 
-const FUNCTION_NODE_TYPE = Object.freeze([
-  'ArrowFunctionExpression',
-  'FunctionDeclaration',
-  'FunctionExpression',
-]);
-
 const JSON_OBJECT_NAME = 'JSON';
 const JSON_METHOD = Object.freeze({
   PARSE: 'parse',
@@ -103,7 +98,6 @@ const LOG_EMISSION_FUNCTION_NAME = Object.freeze([
   'logWarn',
 ]);
 
-const ANONYMOUS_FUNCTION_NAME = '<anonymous>';
 const VIOLATION_LABEL = 'hot-path diagnostics';
 const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
 const IDENTITY_SEPARATOR = '|';
@@ -126,30 +120,6 @@ function isHotPathModule(filePath) {
     normalized === modulePath || normalized.endsWith(`/${modulePath}`));
 }
 
-function getEnclosingFunctionName(ancestors) {
-  for (let index = ancestors.length - NUMERIC_LITERAL_ONE;
-    index >= NUMERIC_LITERAL_ZERO; index -= NUMERIC_LITERAL_ONE) {
-    const node = ancestors[index];
-    if (!FUNCTION_NODE_TYPE.includes(node?.type)) {
-      continue;
-    }
-    if (node.id?.type === NODE_TYPE.IDENTIFIER) {
-      return node.id.name;
-    }
-    const parent = ancestors[index - NUMERIC_LITERAL_ONE];
-    if (parent?.type === NODE_TYPE.VARIABLE_DECLARATOR &&
-        parent.id?.type === NODE_TYPE.IDENTIFIER) {
-      return parent.id.name;
-    }
-    if ((parent?.type === NODE_TYPE.PROPERTY ||
-         parent?.type === NODE_TYPE.METHOD_DEFINITION) &&
-        parent.key?.type === NODE_TYPE.IDENTIFIER) {
-      return parent.key.name;
-    }
-    return ANONYMOUS_FUNCTION_NAME;
-  }
-  return ANONYMOUS_FUNCTION_NAME;
-}
 
 function classifyCallViolationKind(node) {
   const callee = node.callee;

@@ -1,8 +1,10 @@
-import fs from 'node:fs/promises';
 import {KEYS} from 'eslint-visitor-keys';
 import {
   FILE_CLASS,
+  applyCountBaseline,
   buildGuidelineViolationReport,
+  loadCountBaseline,
+  writeCountBaseline,
   classifyFilePath,
   formatGuidelineHumanSummary,
   parseSourceFile,
@@ -515,76 +517,19 @@ const DECISION_BASELINE_FILE_URL = new URL(
   './check-guideline-decision-boundaries-baseline.json',
   import.meta.url,
 );
-const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
 const NUMERIC_LITERAL_ZERO = 0;
-const NUMERIC_LITERAL_ONE = 1;
 
 function buildDecisionBoundaryViolationIdentity(violation) {
+  // Line/column-independent so routine edits do not resurface inherited
+  // violations as new; count-based application still blocks NET growth of
+  // the same kind in the same function of the same file.
   return JSON.stringify([
     violation.filePath,
-    violation.line,
-    violation.column,
+    violation.functionName,
     violation.kind,
   ]);
 }
 
-function summarizeDecisionBoundaryViolationsByFile(violations) {
-  const violationsByFile = new Map();
-  for (const violation of violations) {
-    const existing = violationsByFile.get(violation.filePath) || [];
-    existing.push(violation);
-    violationsByFile.set(violation.filePath, existing);
-  }
-  return [...violationsByFile.entries()]
-    .map(([filePath, fileViolations]) => ({
-      filePath,
-      violationCount: fileViolations.length,
-    }))
-    .sort((left, right) =>
-      right.violationCount - left.violationCount ||
-      left.filePath.localeCompare(right.filePath));
-}
-
-async function loadDecisionBoundaryBaseline() {
-  try {
-    const rawBaseline = await fs.readFile(
-      DECISION_BASELINE_FILE_URL,
-      'utf8',
-    );
-    const parsedBaseline = JSON.parse(rawBaseline);
-    return new Set(
-      (Array.isArray(parsedBaseline?.violations) ?
-        parsedBaseline.violations :
-        []).map(buildDecisionBoundaryViolationIdentity),
-    );
-  } catch (error) {
-    if (error?.code === FILE_NOT_FOUND_ERROR_CODE) {
-      return new Set();
-    }
-    throw error;
-  }
-}
-
-function applyDecisionBoundaryBaseline(report, baseline) {
-  const newViolations = [];
-  let inheritedViolationCount = NUMERIC_LITERAL_ZERO;
-  for (const violation of report.violations) {
-    if (baseline.has(buildDecisionBoundaryViolationIdentity(violation))) {
-      inheritedViolationCount += NUMERIC_LITERAL_ONE;
-      continue;
-    }
-    newViolations.push(violation);
-  }
-  return {
-    ...report,
-    rawViolationCount: report.totalViolationCount,
-    inheritedViolationCount,
-    baselineViolationCount: baseline.size,
-    totalViolationCount: newViolations.length,
-    filesWithViolations: summarizeDecisionBoundaryViolationsByFile(newViolations),
-    violations: newViolations,
-  };
-}
 
 async function collectDecisionBoundaryViolationsWithBaseline(
   pathsToScan,
@@ -592,9 +537,16 @@ async function collectDecisionBoundaryViolationsWithBaseline(
 ) {
   const [report, baseline] = await Promise.all([
     collectDecisionBoundaryViolations(pathsToScan, options),
-    loadDecisionBoundaryBaseline(),
+    loadCountBaseline(
+      DECISION_BASELINE_FILE_URL,
+      buildDecisionBoundaryViolationIdentity,
+    ),
   ]);
-  return applyDecisionBoundaryBaseline(report, baseline);
+  return applyCountBaseline(
+    report,
+    baseline,
+    buildDecisionBoundaryViolationIdentity,
+  );
 }
 
 function formatHumanSummary(report) {
@@ -609,31 +561,18 @@ function formatHumanSummary(report) {
 }
 
 const UPDATE_BASELINE_FLAG = '--update-baseline';
-const BASELINE_VERSION = 1;
-const BASELINE_JSON_INDENT = 2;
 
-async function writeDecisionBoundaryBaseline(pathsToScan) {
-  const report = await collectDecisionBoundaryViolations(pathsToScan, {});
-  const baseline = {
-    version: BASELINE_VERSION,
-    generatedAt: new Date().toISOString(),
-    rawViolationCount: report.totalViolationCount,
-    violations: report.violations,
-  };
-  await fs.writeFile(
-    DECISION_BASELINE_FILE_URL,
-    JSON.stringify(baseline, null, BASELINE_JSON_INDENT) + '\n',
-    'utf8',
-  );
-  process.stdout.write(
-    `Wrote ${report.totalViolationCount} decision-boundary baseline entries\n`,
-  );
-}
 
 async function main(argv = process.argv.slice(2)) {
   if (argv.includes(UPDATE_BASELINE_FLAG)) {
-    await writeDecisionBoundaryBaseline(
+    const report = await collectDecisionBoundaryViolations(
       argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
+      {},
+    );
+    await writeCountBaseline(
+      DECISION_BASELINE_FILE_URL,
+      report,
+      'decision-boundary',
     );
     return NUMERIC_LITERAL_ZERO;
   }
@@ -649,7 +588,6 @@ runGuidelineCheckWhenDirect(import.meta.url, main);
 export {
   FILE_CLASS,
   RULE_REFERENCE,
-  applyDecisionBoundaryBaseline,
   buildDecisionBoundaryViolationIdentity,
   classifyFilePath,
   collectDecisionBoundaryViolations,

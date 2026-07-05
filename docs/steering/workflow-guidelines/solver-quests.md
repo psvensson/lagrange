@@ -73,6 +73,23 @@ The file declares:
 Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
 can close the Quest.
 
+### Closure Fidelity (live-visible classes)
+
+Within MEASURED closures there are fidelity tiers: deterministic guard
+reports, live gate/demo reports, and model-checker reports all land in
+`test-output/reports/`. A green deterministic guard with red-on-revert proof
+binds the test to the CODE; it does not bind the fix to the LIVE mechanism —
+affinity-demo runs 25 and 26 each refuted a quest whose guard evidence was
+green (the fixture modeled a healthier seam than reality). Therefore, when
+authoring a quest whose defect class is visible in a live surface (demo,
+gate, operator-facing behavior), the statement MUST name the live binding
+observable ("the demo's CREATE TABLE succeeds", "run-N shows zero X"), and
+the closure claim must record a live-validation finding naming which run and
+which observable — before downstream work relies on the closure. The audit
+surfaces a closure-fidelity warning when a product quest closes on
+non-`live` evidence; answer it in the closing finding rather than ignoring
+it.
+
 ## Closure Of Cutover Vs Building-Block Quests
 
 Two legitimate Quest shapes have different closure bars; do not conflate them.

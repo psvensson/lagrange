@@ -44,6 +44,11 @@ function buildReport(scenario, results, timestamp) {
   return {
     timestamp,
     scenario,
+    // Closure-fidelity stamp: the Solver audit distinguishes deterministic
+    // guard evidence from live-run evidence when weighing a MEASURED
+    // closure (a green DT proves test-code binding, not live binding).
+    producer: 'guard-test-scenario-runner',
+    fidelity: 'deterministic-guard',
     summary: {
       total: results.length,
       passed: results.length - failing.length,

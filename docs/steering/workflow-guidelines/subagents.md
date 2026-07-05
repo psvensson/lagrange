@@ -51,3 +51,16 @@ Use a review worker when the next attempt would benefit from a focused
 freshness check. The review should return findings, candidate risks, or
 suggested frontiers. Durable conclusions must be recorded with
 `node scripts/solve.js finding` before they are relied on by later attempts.
+
+## Verification Templates
+
+Adversarial verification prompts (design vets, implementation verifiers)
+SHOULD include the attack-surface checklist for the change's category from
+[`docs/steering/verification-templates/`](../verification-templates/INDEX.md),
+filled in with the change's specifics. The templates pin the classic failure
+modes per category (admission/gating, retry loops, transport delivery,
+sweeps, recovery, concurrency, formation circularity, harness fidelity) with
+closure-record anchors, so review quality does not depend on the prompt
+author recalling each one. Every checklist item demands an evidence path;
+items that pass review while their class ships twice get promoted to machine
+checks or deleted.

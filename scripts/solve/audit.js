@@ -254,7 +254,43 @@ function closureStrengthWarnings(quest, log) {
       'product goals should be MEASURED against a real artifact, not asserted',
     ];
   }
-  return [];
+  return closureFidelityWarnings(quest, log);
+}
+
+// Within MEASURED closures there are fidelity tiers: test-output/reports/
+// mixes deterministic guard-runner reports, live gate reports, and
+// model-checker reports. A green DT with red-on-revert proves the test binds
+// to the CODE, not that the fix binds to the LIVE mechanism — runs 25/26 of
+// the affinity demo both refuted quests whose DT evidence was green. This
+// warning surfaces the tier so live-visible classes state their live
+// validation explicitly.
+function closureFidelityWarnings(quest, log) {
+  if (questClass(quest) !== 'product') return [];
+  const evidencePath = [...log].reverse().find((event) =>
+    event.type === EVENT_QUEST && event.status === STATUS_SOLVED)?.evidence;
+  if (typeof evidencePath !== 'string' || !evidencePath.endsWith('.json')) {
+    return [];
+  }
+  if (evidencePath.endsWith('.model.report.json')) {
+    return [
+      'product quest closed on MODEL-CHECKER evidence; state why live/DT ' +
+      'validation is not required for this class',
+    ];
+  }
+  let fidelity = null;
+  try {
+    fidelity = JSON.parse(fs.readFileSync(evidencePath, 'utf8'))?.fidelity ??
+      null;
+  } catch {
+    return [];
+  }
+  if (fidelity === 'live') return [];
+  return [
+    `product quest closed on '${fidelity || 'unstamped'}' fidelity ` +
+    'evidence; a green deterministic guard proves test-code binding, not ' +
+    'live binding — for live-visible classes record a live-validation ' +
+    'finding (which run, which observable) before relying on the closure',
+  ];
 }
 
 // Link hygiene (warning only — links are declarative, never gated). A product

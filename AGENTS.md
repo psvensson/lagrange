@@ -55,6 +55,7 @@ active steering path for new work.
 | Rule IDs and source citations | `npm run rule -- --id <ID>` (also `--tag`/`--domain`/free-text); browse [`docs/steering/llm/rules-index.md`](docs/steering/llm/rules-index.md). `rules.json` is generator output, too large to Read whole. |
 | Architecture document tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
 | An npm tool for a task (before any ad-hoc command) | `npm run commands` (curated quickstart) or [`docs/steering/llm/tools-index.md`](docs/steering/llm/tools-index.md) (generated full index of every script) |
+| Attack checklists for adversarial verification (by change category) | [`docs/steering/verification-templates/`](docs/steering/verification-templates/INDEX.md) |
 
 ## Operational Ground Truth (distributed work — don't get fooled)
 

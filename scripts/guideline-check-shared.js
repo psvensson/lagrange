@@ -252,14 +252,149 @@ function runGuidelineCheckWhenDirect(metaUrl, main) {
   });
 }
 
+
+// Count-based baseline machinery shared by guideline checks. Identities are
+// line/column-INDEPENDENT (file + semantic fields) so routine edits do not
+// resurface inherited violations; count-based application still blocks NET
+// growth of the same identity.
+const BASELINE_FILE_NOT_FOUND_CODE = 'ENOENT';
+const BASELINE_ENCODING_UTF8 = 'utf8';
+const BASELINE_VERSION = 1;
+const BASELINE_JSON_INDENT = 2;
+
+async function loadCountBaseline(baselineFileUrl, buildIdentity) {
+  try {
+    const rawBaseline = await fs.readFile(baselineFileUrl, BASELINE_ENCODING_UTF8);
+    const parsedBaseline = JSON.parse(rawBaseline);
+    const allowedCounts = new Map();
+    for (const violation of (Array.isArray(parsedBaseline?.violations) ?
+      parsedBaseline.violations :
+      [])) {
+      const identity = buildIdentity(violation);
+      allowedCounts.set(identity, (allowedCounts.get(identity) || 0) + 1);
+    }
+    return allowedCounts;
+  } catch (error) {
+    if (error?.code === BASELINE_FILE_NOT_FOUND_CODE) {
+      return new Map();
+    }
+    throw error;
+  }
+}
+
+function summarizeBaselineViolationsByFile(violations) {
+  const countsByFile = new Map();
+  for (const violation of violations) {
+    countsByFile.set(
+      violation.filePath,
+      (countsByFile.get(violation.filePath) || 0) + 1,
+    );
+  }
+  return [...countsByFile.entries()]
+    .map(([filePath, violationCount]) => ({filePath, violationCount}))
+    .sort((left, right) =>
+      right.violationCount - left.violationCount ||
+      left.filePath.localeCompare(right.filePath));
+}
+
+function applyCountBaseline(report, baseline, buildIdentity) {
+  const newViolations = [];
+  const remainingAllowances = new Map(baseline);
+  let inheritedViolationCount = 0;
+  for (const violation of report.violations) {
+    const identity = buildIdentity(violation);
+    const allowance = remainingAllowances.get(identity) || 0;
+    if (allowance > 0) {
+      remainingAllowances.set(identity, allowance - 1);
+      inheritedViolationCount += 1;
+      continue;
+    }
+    newViolations.push(violation);
+  }
+  let baselineViolationCount = 0;
+  for (const allowance of baseline.values()) {
+    baselineViolationCount += allowance;
+  }
+  return {
+    ...report,
+    rawViolationCount: report.totalViolationCount,
+    inheritedViolationCount,
+    baselineViolationCount,
+    totalViolationCount: newViolations.length,
+    filesWithViolations: summarizeBaselineViolationsByFile(newViolations),
+    violations: newViolations,
+  };
+}
+
+async function writeCountBaseline(baselineFileUrl, report, label) {
+  const baseline = {
+    version: BASELINE_VERSION,
+    generatedAt: new Date().toISOString(),
+    rawViolationCount: report.totalViolationCount,
+    violations: report.violations,
+  };
+  await fs.writeFile(
+    baselineFileUrl,
+    JSON.stringify(baseline, null, BASELINE_JSON_INDENT) + SCRIPT_TEXT.NEWLINE,
+    BASELINE_ENCODING_UTF8,
+  );
+  process.stdout.write(
+    `Wrote ${report.totalViolationCount} ${label} baseline entries\n`,
+  );
+}
+
+
+// Resolve the nearest enclosing function name for a violation site (used by
+// AST-based guideline checks for line-independent violation identities).
+const ENCLOSING_FUNCTION_NODE_TYPES = Object.freeze([
+  'ArrowFunctionExpression',
+  'FunctionDeclaration',
+  'FunctionExpression',
+]);
+const ENCLOSING_ANONYMOUS_FUNCTION_NAME = '<anonymous>';
+const ENCLOSING_NODE_TYPE = Object.freeze({
+  IDENTIFIER: 'Identifier',
+  VARIABLE_DECLARATOR: 'VariableDeclarator',
+  PROPERTY: 'Property',
+  METHOD_DEFINITION: 'MethodDefinition',
+});
+
+function getEnclosingFunctionName(ancestors) {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const node = ancestors[index];
+    if (!ENCLOSING_FUNCTION_NODE_TYPES.includes(node?.type)) {
+      continue;
+    }
+    if (node.id?.type === ENCLOSING_NODE_TYPE.IDENTIFIER) {
+      return node.id.name;
+    }
+    const parent = ancestors[index - 1];
+    if (parent?.type === ENCLOSING_NODE_TYPE.VARIABLE_DECLARATOR &&
+        parent.id?.type === ENCLOSING_NODE_TYPE.IDENTIFIER) {
+      return parent.id.name;
+    }
+    if ((parent?.type === ENCLOSING_NODE_TYPE.PROPERTY ||
+         parent?.type === ENCLOSING_NODE_TYPE.METHOD_DEFINITION) &&
+        parent.key?.type === ENCLOSING_NODE_TYPE.IDENTIFIER) {
+      return parent.key.name;
+    }
+    return ENCLOSING_ANONYMOUS_FUNCTION_NAME;
+  }
+  return ENCLOSING_ANONYMOUS_FUNCTION_NAME;
+}
+
 export {
   FILE_CLASS,
   OUTPUT_FORMAT,
+  applyCountBaseline,
+  getEnclosingFunctionName,
   buildGuidelineViolationReport,
   classifyFilePath,
   formatGuidelineHumanSummary,
+  loadCountBaseline,
   parseSourceFile,
   runGuidelineCheck,
   runGuidelineCheckWhenDirect,
   walkAst,
+  writeCountBaseline,
 };

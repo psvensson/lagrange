@@ -86,6 +86,22 @@ During any multi-step fix or feature, pause at least once to consider:
 Document these observations in commit messages or PR descriptions so the team
 can evaluate broader changes.
 
+## Two-Strikes Escalation Tripwires
+
+Two mechanical stop-and-reframe rules. They are cheap to check and exist
+because persistence down a wrong path is the most expensive failure mode of
+autonomous work — the tripwire converts it into a bounded cost.
+
+1. **Soft-warning two-strikes.** The SAME soft warning (a load-flake, a
+   tolerated timeout, a "known transient") appearing in two consecutive runs
+   is a failing assertion, not background noise: open a lead or quest for
+   it, or fix it, before relying on the next run's result.
+2. **Live-refutation two-strikes.** When live/measured evidence contradicts
+   a sealed statement or a fix claim TWICE, the framing — not the next patch
+   — is what must change: EXHAUST and re-author, widen the class, or
+   escalate altitude (affinity-demo runs 25/26: two live refutations of
+   green-DT closures exposed a mechanism the framing had missed).
+
 ## Bug-Cluster Escalation Policy
 
 When the second correctness bug appears at the same architectural boundary in

@@ -37,11 +37,13 @@ const RATCHET_TARGETS = [
   {
     // Re-anchored 2026-07-02: the 16/529 baseline had silently gone stale
     // (81/2853 measured at c9d41aae before that day's lint sweep reduced it
-    // to 75/2283). Ratchet DOWN only from here.
+    // to 75/2283). Ratcheted DOWN 2026-07-05 after extracting the shared
+    // count-based baseline machinery + getEnclosingFunctionName into
+    // guideline-check-shared.js. Ratchet DOWN only from here.
     name: 'src+scripts',
     directories: ['src', 'scripts'],
-    baselineCloneGroupCount: 75,
-    baselineDuplicatedLineCount: 2283,
+    baselineCloneGroupCount: 74,
+    baselineDuplicatedLineCount: 2259,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -49,11 +51,14 @@ const RATCHET_TARGETS = [
     // Ratcheted DOWN 2026-07-03 after deduplicating the SQL-fallback
     // services-rows clones in the convergence snapshot test cases
     // (was 842/32222, anchored 2026-07-02 post primitive-alias codemod).
+    // Re-anchored 2026-07-05: 842/32226 was already the measured state at
+    // 2009194a (a pre-2026-07-05 commit landed one group without running
+    // this gate locally — the drift the test:static wiring now prevents).
     // Ratchet DOWN only from here.
     name: 'test',
     directories: ['test'],
-    baselineCloneGroupCount: 841,
-    baselineDuplicatedLineCount: 32182,
+    baselineCloneGroupCount: 842,
+    baselineDuplicatedLineCount: 32226,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

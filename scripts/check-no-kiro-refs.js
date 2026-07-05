@@ -22,6 +22,9 @@ const ALLOWED_PREFIXES = Object.freeze([
   'solve/autonomous/', // autorun state (historical)
   'solve/specs/raft-logic-migration/reports/', // generated benchmark data
   'scripts/check-no-kiro-refs.js', // this guard necessarily names the token
+  // Generated guideline baselines capture violation VALUES verbatim — the
+  // literals baseline includes this guard's own message string.
+  'scripts/check-guideline-literals-baseline.json',
 ]);
 
 const PATH_PATTERN = /\.kiro\//u;

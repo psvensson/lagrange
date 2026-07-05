@@ -29,16 +29,22 @@ const DEFERRED_OUTCOME_HOTSPOT_CONTRACTS = Object.freeze({
     'retryAfterMs,',
     'allowTemporaryOverflowPromotion:',
   ]),
-  'test/distributed/harness/cluster.js': Object.freeze([
+  // cluster.js was sharded into layer files; the structured-outcome
+  // fragments moved with the code (this map went stale while the check was
+  // not wired into any gate — the exact drift the gate now prevents).
+  'test/distributed/harness/cluster-base-layer.js': Object.freeze([
     'reasonCodes:',
     'retryAfterMs:',
+  ]),
+  'test/distributed/harness/cluster-node-handle-layer.js': Object.freeze([
     'runtimeAuthority:',
   ]),
-  'test/distributed/scenarios/table-distribution-helpers.js': Object.freeze([
-    'outcome:',
-    'retryAfterMs:',
-    'visibilityState:',
-  ]),
+  'test/distributed/scenarios/table-distribution-helpers-load-node-planning.js':
+    Object.freeze([
+      'outcome:',
+      'retryAfterMs:',
+      'visibilityState:',
+    ]),
 });
 
 function normalizePath(filePath) {
