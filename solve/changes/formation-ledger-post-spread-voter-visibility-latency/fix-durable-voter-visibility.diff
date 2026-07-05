@@ -1,0 +1,421 @@
+diff --git a/src/node/replica-handler-voter-readiness-methods.js b/src/node/replica-handler-voter-readiness-methods.js
+index faa95cf2..3a8cd312 100644
+--- a/src/node/replica-handler-voter-readiness-methods.js
++++ b/src/node/replica-handler-voter-readiness-methods.js
+@@ -158,6 +158,14 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
+           // promotion (the durable raft_role write defers through the
+           // recovering control plane). No-op for non-priority partitions.
+           this.seedLocalPriorityReplicaRaftRole(replicaId, partitionId);
++          // The seed makes the promotion locally visible — but it also makes
++          // the local cache row equal to the durable write the owner still
++          // has pending, which historically dedup-masked that write (run-27:
++          // the cluster read a raft LEADER as a learner forever, the
++          // quorum-spread hold never released). Level-trigger the owner's
++          // durable re-assert; with the helper's authoritative dedup this is
++          // a no-op once the durable row has truly converged.
++          this.getTrackedService(replicaId)?.reassertDurableRaftRole?.();
+           this.logger.info(REPLICA_HANDLER_LOG_MSG.VOTER_READY_ACTIVATED, {
+             replicaId,
+             partitionId,
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 420dce78..9d1914c6 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -41,6 +41,7 @@ const {
+   getTrafficReadinessSnapshot,
+   isBackgroundWorkLifecycleReady,
+   isMetadataPublicationLifecycleReady,
++  isPriorityControlPlanePartition,
+   normalizePublishedRaftRole,
+ } = PARTITION_SERVICE_SHARED;
+ 
+@@ -581,15 +582,20 @@ class PartitionServiceCoreBase extends EventEmitter {
+       tableName: SYSTEM_TABLE_NAME.SERVICES,
+       buildWhereClause: (_role, context = {}) => {
+         const whereClause = {service_id: this.replicaId};
+-        const cachedRow = context.cachedRow;
++        // Guard from the authoritative row when the flush observed one: the
++        // merged cache row can carry the CL-035 local voter-ready seed
++        // (newer updated_at, stale-guard protected), and CAS-guarding on it
++        // zero-rows against the durable row forever — the affinity-demo
++        // run-27 lost-promotion class.
++        const guardRow = context.authoritativeRow || context.cachedRow;
+         if (
+-          typeof cachedRow?.raft_role === 'string' &&
+-          cachedRow.raft_role.length > 0
++          typeof guardRow?.raft_role === 'string' &&
++          guardRow.raft_role.length > 0
+         ) {
+-          whereClause.raft_role = cachedRow.raft_role;
++          whereClause.raft_role = guardRow.raft_role;
+         }
+-        if (Number.isFinite(cachedRow?.updated_at)) {
+-          whereClause.updated_at = cachedRow.updated_at;
++        if (Number.isFinite(guardRow?.updated_at)) {
++          whereClause.updated_at = guardRow.updated_at;
+         }
+         return whereClause;
+       },
+@@ -597,13 +603,26 @@ class PartitionServiceCoreBase extends EventEmitter {
+         raft_role: role,
+         updated_at: updatedAt,
+       }),
+-      buildUpdateOptions: () => ({
+-        deliveryPriority: PARTITION_SERVICE_LITERAL.BACKGROUND,
+-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-        allowPressureDefer: true,
+-        routingReadinessDimension:
+-          this.getMetadataPublicationReadinessDimension(),
+-      }),
++      // Priority control-plane partitions' voter visibility feeds the
++      // quorum-spread admission hold and the spread planner; their role
++      // writes must not be pressure-deferred during exactly the formation
++      // churn they describe (run-27). Everything else stays BACKGROUND.
++      buildUpdateOptions: () => {
++        const priorityPartition = isPriorityControlPlanePartition({
++          partitionId: this.partitionId,
++        });
++        return {
++          deliveryPriority: priorityPartition ?
++            PARTITION_SERVICE_LITERAL.CRITICAL :
++            PARTITION_SERVICE_LITERAL.BACKGROUND,
++          workClass: priorityPartition ?
++            PRESSURE_WORK_CLASS.CRITICAL :
++            PRESSURE_WORK_CLASS.BACKGROUND,
++          allowPressureDefer: !priorityPartition,
++          routingReadinessDimension:
++            this.getMetadataPublicationReadinessDimension(),
++        };
++      },
+       buildExpectedCacheFields: (role) => ({raft_role: role}),
+       prepareFlush: () => ({
+         skip: false,
+@@ -624,6 +643,33 @@ class PartitionServiceCoreBase extends EventEmitter {
+           SYSTEM_TABLE_NAME.SERVICES,
+           this.replicaId,
+         ),
++      // READ-ONLY authoritative point read for the helper's honest dedup +
++      // CAS guard (never a cache refresh: the merged cache can hold the
++      // CL-035 local seed, which out-versions the durable row). Capability
++      // reported at call time — transport-shim integrations without the
++      // read fall back to the legacy cache dedup.
++      readAuthoritativeRow: async () => {
++        const cdcIntegrationService = this.cdcIntegrationService;
++        if (
++          typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
++          PARTITION_SERVICE_LITERAL.FUNCTION
++        ) {
++          return {supported: false, available: false, row: null};
++        }
++        const readResult =
++          await cdcIntegrationService.executeAuthoritativeSystemTableRead(
++            SYSTEM_TABLE_NAME.SERVICES,
++            PARTITION_SERVICE_LITERAL.SERVICES_ROW_POINT_READ_SQL,
++            [this.replicaId],
++          );
++        if (readResult?.success !== true) {
++          return {supported: true, available: false, row: null};
++        }
++        const row = Array.isArray(readResult.rows) ?
++          readResult.rows[0] || null :
++          null;
++        return {supported: true, available: true, row};
++      },
+       onObservedStateChanged: (context = {}) => {
+         this.logger.warn(
+           PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
+diff --git a/src/partition/partition-service-metadata-delivery-methods.js b/src/partition/partition-service-metadata-delivery-methods.js
+index 09785715..460a8b3b 100644
+--- a/src/partition/partition-service-metadata-delivery-methods.js
++++ b/src/partition/partition-service-metadata-delivery-methods.js
+@@ -9,6 +9,7 @@ const {
+   PARTITION_SERVICE_STATUS,
+   PARTITION_SERVICE_VALUE,
+   PRESSURE_WORK_CLASS,
++  RaftRole,
+   SYSTEM_TABLE_NAME,
+   isSystemTableWriteReady,
+   normalizePublishedRaftRole,
+@@ -41,6 +42,24 @@ class PartitionServiceMetadataDeliveryMethods {
+   async flushRoleUpdate() {
+     return this.roleMutationHelper.flush();
+   }
++  /**
++   * Level-triggered durable re-assert of this replica's CURRENT raft role.
++   * Called by the replica handler's voter-ready seam right after the CL-035
++   * local cache seed: the seed makes the promotion locally visible while the
++   * durable write can still be lost (run-27: a dropped/dedup-masked write
++   * left the whole cluster reading a raft LEADER as a learner forever). The
++   * owner (this service) re-queues from its own state; the helper's
++   * authoritative dedup makes the re-queue a no-op when the durable row
++   * already converged.
++   * @return {boolean} Whether a re-assert was queued.
++   */
++  reassertDurableRaftRole() {
++    if (!this.role || this.role === RaftRole.LEARNER) {
++      return false;
++    }
++    this.queueRoleUpdate(this.role);
++    return true;
++  }
+   /**
+    * Persist the latest pending partition leader update.
+    * @return {Promise<void>}
+diff --git a/src/partition/partition-service-shared.js b/src/partition/partition-service-shared.js
+index f31d9953..69691b22 100644
+--- a/src/partition/partition-service-shared.js
++++ b/src/partition/partition-service-shared.js
+@@ -183,6 +183,9 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
+   SIZEUPDATETIMER: 'sizeUpdateTimer',
+   SIZE_PERSISTENCE_FAILED: 'size persistence failed',
+   CRITICAL: 'critical',
++  FUNCTION: 'function',
++  SERVICES_ROW_POINT_READ_SQL:
++    'SELECT * FROM services WHERE service_id = ?',
+   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
+   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
+   WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',
+diff --git a/src/raft/authoritative-row-mutation-helper.js b/src/raft/authoritative-row-mutation-helper.js
+index 233a84fd..51e492b5 100644
+--- a/src/raft/authoritative-row-mutation-helper.js
++++ b/src/raft/authoritative-row-mutation-helper.js
+@@ -10,6 +10,7 @@ import {createControlPlaneRuntimeBundle} from
+ const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
+ const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
+   APPLIED: 'applied',
++  AUTHORITATIVE_CONFIRM_UNAVAILABLE: 'authoritative-confirm-unavailable',
+   AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
+   CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
+   CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
+@@ -88,6 +89,7 @@ class AuthoritativeRowMutationHelper {
+       messageRouter = null,
+       systemTableCache = null,
+       refreshObservedRow = null,
++      readAuthoritativeRow = null,
+       onObservedStateChanged = () => {},
+       onAsyncError = () => {},
+       now = () => Date.now(),
+@@ -139,6 +141,8 @@ class AuthoritativeRowMutationHelper {
+     this.systemTableCache = systemTableCache;
+     this.refreshObservedRow =
+       typeof refreshObservedRow === 'function' ? refreshObservedRow : null;
++    this.readAuthoritativeRow =
++      typeof readAuthoritativeRow === 'function' ? readAuthoritativeRow : null;
+     this.onObservedStateChanged = onObservedStateChanged;
+     this.onAsyncError = onAsyncError;
+     this.now = now;
+@@ -215,7 +219,17 @@ class AuthoritativeRowMutationHelper {
+       });
+     }
+ 
+-    const recoveredFromCacheGap = this.syncFromCache();
++    // Cache-equality dedup (syncFromCache) treats a merged-cache row equal to
++    // the pending value as proof of durable persistence. That proof is FALSE
++    // when the row was locally seeded (CL-035 voter-ready seed): the durable
++    // write silently drops and the actual never lands (affinity-demo run-27,
++    // quest formation-ledger-post-spread-voter-visibility-latency). Helpers
++    // that supply readAuthoritativeRow therefore skip the cache dedup here
++    // and confirm against the authoritative row inside the flush instead;
++    // helpers without the capability (e.g. wasm transport shims) keep the
++    // legacy dedup unchanged.
++    const recoveredFromCacheGap =
++      this.readAuthoritativeRow ? false : this.syncFromCache();
+     const prepareResult = this.prepareFlush({
+       pendingValue: this.pendingValue,
+       persistedValue: this.persistedValue,
+@@ -263,32 +277,46 @@ class AuthoritativeRowMutationHelper {
+     this.inFlight = true;
+     let writeSucceeded = false;
+     const value = this.pendingValue;
+-    const updateData = this.buildUpdateData(value, this.now());
+-    const cachedRow = typeof this.readRowFromCache === 'function' ?
+-      this.readRowFromCache(this.systemTableCache) :
+-      null;
+-    const mutationContext = {
+-      cachedRow,
+-      persistedValue: this.persistedValue,
+-    };
+-    const whereClause = this.buildWhereClause(value, mutationContext);
+-    const updateOptionsCandidate = typeof this.buildUpdateOptions === 'function' ?
+-      this.buildUpdateOptions(value, updateData, mutationContext) :
+-      null;
+-    const updateOptions = updateOptionsCandidate &&
+-      typeof updateOptionsCandidate === 'object' ?
+-      updateOptionsCandidate :
+-      {};
+-    const expectedCacheFields =
+-      typeof this.buildExpectedCacheFields === 'function' ?
+-        this.buildExpectedCacheFields(value, updateData) :
++    try {
++      let authoritativeRow = null;
++      if (this.readAuthoritativeRow) {
++        const authoritativeProbe = await this.probeAuthoritativeRow(value);
++        if (authoritativeProbe.settled) {
++          return authoritativeProbe.result;
++        }
++        authoritativeRow = authoritativeProbe.row;
++      }
++      const updateData = this.buildUpdateData(value, this.now());
++      const cachedRow = typeof this.readRowFromCache === 'function' ?
++        this.readRowFromCache(this.systemTableCache) :
+         null;
+-    const writeOptions = {
+-      ...updateOptions,
+-      ...(expectedCacheFields ? {expectedCacheFields} : {}),
+-    };
++      const mutationContext = {
++        cachedRow,
++        // The CAS guard must come from the authoritative row when one was
++        // observed: the merged cache row can be locally seeded NEWER than the
++        // durable row (stale-guard protected), so guarding on it zero-rows
++        // forever — permanent retry spin with the write never landing.
++        authoritativeRow,
++        persistedValue: this.persistedValue,
++      };
++      const whereClause = this.buildWhereClause(value, mutationContext);
++      const updateOptionsCandidate =
++        typeof this.buildUpdateOptions === 'function' ?
++          this.buildUpdateOptions(value, updateData, mutationContext) :
++          null;
++      const updateOptions = updateOptionsCandidate &&
++        typeof updateOptionsCandidate === 'object' ?
++        updateOptionsCandidate :
++        {};
++      const expectedCacheFields =
++        typeof this.buildExpectedCacheFields === 'function' ?
++          this.buildExpectedCacheFields(value, updateData) :
++          null;
++      const writeOptions = {
++        ...updateOptions,
++        ...(expectedCacheFields ? {expectedCacheFields} : {}),
++      };
+ 
+-    try {
+       const partitionResult = await this.getControlPlaneSystemTableGateway()
+         .submitMutation({
+           operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+@@ -363,6 +391,102 @@ class AuthoritativeRowMutationHelper {
+     }
+   }
+ 
++  /**
++   * Capability-gated authoritative dedup + CAS-guard acquisition. The
++   * readAuthoritativeRow callback contract:
++   * `async (pendingValue) => {supported?: boolean, available: boolean,
++   * row: Object|null}` — a READ-ONLY point read of the authoritative row
++   * (never a cache refresh: the merged cache can hold a locally seeded row
++   * that out-versions the durable one).
++   *
++   * Outcomes:
++   * - capability absent at runtime (supported === false or the read throws):
++   *   fall back to the legacy cache dedup for this flush;
++   * - authority unreadable or the durable row does not exist yet: defer with
++   *   a scheduled retry (a cache row equal to pending is NOT durability
++   *   evidence, and an UPDATE cannot apply to a missing row);
++   * - durable row already carries the pending value: dedup honestly;
++   * - otherwise: proceed to the CAS write guarded by the authoritative row.
++   * @param {*} value - The pending value being flushed.
++   * @return {Promise<{settled: boolean, result?: Object, row?: Object|null}>}
++   * @private
++   */
++  async probeAuthoritativeRow(value) {
++    let probe = null;
++    try {
++      probe = await this.readAuthoritativeRow(value);
++    } catch (_readError) {
++      probe = null;
++    }
++    if (!probe || probe.supported === false) {
++      const legacyResult = this.resolveLegacyCacheDedupResult();
++      return legacyResult ?
++        {settled: true, result: legacyResult} :
++        {settled: false, row: null};
++    }
++    if (probe.available === false || !probe.row) {
++      this.scheduleRetry();
++      return {
++        settled: true,
++        result: this.buildResult({
++          reason:
++            AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_CONFIRM_UNAVAILABLE,
++        }),
++      };
++    }
++    const expectedFields =
++      typeof this.buildExpectedCacheFields === 'function' ?
++        this.buildExpectedCacheFields(value, null) :
++        null;
++    if (
++      expectedFields &&
++      Object.entries(expectedFields).every(
++        ([field, fieldValue]) => probe.row[field] === fieldValue,
++      )
++    ) {
++      this.persistedValue = value;
++      if (this.pendingValue === value) {
++        this.pendingValue = null;
++      }
++      this.retryAttemptCount = 0;
++      return {
++        settled: true,
++        result: this.buildResult({
++          cacheVisible: true,
++          recoveredFromCacheGap: true,
++          reason:
++            AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED,
++        }),
++      };
++    }
++    return {settled: false, row: probe.row};
++  }
++
++  /**
++   * Legacy cache dedup for flushes whose authoritative-read capability is
++   * absent at runtime: sync from the merged cache and settle when the pending
++   * value drained or already matches the persisted one.
++   * @return {Object|null} A settled flush result, or null to proceed.
++   * @private
++   */
++  resolveLegacyCacheDedupResult() {
++    const recoveredFromCacheGap = this.syncFromCache();
++    if (
++      this.pendingValue !== null &&
++      this.pendingValue !== this.persistedValue
++    ) {
++      return null;
++    }
++    this.retryAttemptCount = 0;
++    return this.buildResult({
++      cacheVisible: this.pendingValue === null,
++      recoveredFromCacheGap,
++      reason: recoveredFromCacheGap ?
++        AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED :
++        AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
++    });
++  }
++
+   /**
+    * A zero-row CAS update means the authoritative row no longer matches the
+    * locally cached guard. Retrying against the same cached row can starve
+diff --git a/src/rebalancer/unified-rebalancer-move-execution.js b/src/rebalancer/unified-rebalancer-move-execution.js
+index 17a8f3f2..a542c04b 100644
+--- a/src/rebalancer/unified-rebalancer-move-execution.js
++++ b/src/rebalancer/unified-rebalancer-move-execution.js
+@@ -94,7 +94,16 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
+         await this.rebalanceCoordinator.createOperation(operationRequest);
+     } catch (error) {
+       if (error?.rebalanceSkipReason) {
+-        return this.buildSkippedMoveResult(error.rebalanceSkipReason, move);
++        // Ledger-interlock rejections ride the budget skip channel with a
++        // hard-coded limit while the TRUE reason code sits in
++        // error.admissionResult — run-24 and run-27 forensics each chased
++        // the budget_exceeded mislabel. Attach the admission evidence so
++        // MOVE_SKIPPED diagnostics carry the real reason.
++        return this.buildSkippedMoveResult(
++          error.rebalanceSkipReason,
++          move,
++          error.admissionResult ? {admission: error.admissionResult} : {},
++        );
+       }
+       if (error?.admissionResult) {
+         return this.buildSkippedMoveResult(

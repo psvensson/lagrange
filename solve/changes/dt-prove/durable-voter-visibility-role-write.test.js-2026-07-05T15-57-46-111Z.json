@@ -1,0 +1,19 @@
+{
+  "test": "test/partition/durable-voter-visibility-role-write.test.js",
+  "src": [
+    "src/raft/authoritative-row-mutation-helper.js",
+    "src/partition/partition-service-core-base.js",
+    "src/partition/partition-service-metadata-delivery-methods.js",
+    "src/node/replica-handler-voter-readiness-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-05T15:57:46.079Z"
+}
