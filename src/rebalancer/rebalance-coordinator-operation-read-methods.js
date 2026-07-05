@@ -31,6 +31,24 @@ class RebalanceCoordinatorOperationReadMethods {
   }
 
   /**
+   * Resolve one operation's visibility from the authoritative owner path,
+   * BYPASSING the cache-first read. Unlike queryOperationById (cache-first, so
+   * it returns a leadership-handoff-frozen ghost verbatim), this issues the
+   * strict owner-RPC read so a bookkeeping-lag ghost resolves to its true
+   * terminal state.
+   * @param {string} operationId
+   * @param {Object} [options]
+   * @return {Promise<{operation: (Object|null), deferredOutcome: (Object|null)}>}
+   * @private
+   */
+  async queryAuthoritativeOperationVisibilityObservation(operationId, options = {}) {
+    return this.repository.queryAuthoritativeOperationVisibilityObservation(
+      operationId,
+      options,
+    );
+  }
+
+  /**
    * Query incomplete operations using SQL engine.
    * @readModel COORDINATOR_TIMEOUT_QUERY — READ_MODEL_SOURCE.RECOVERY_SQL
    * @param {Object} [options={}]

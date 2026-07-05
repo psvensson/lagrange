@@ -158,7 +158,10 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     );
 
     if (isDisruptiveSelfMove) {
-      const conflictingOperation = liveOperations[0] || null;
+      const conflictingOperation = await this.resolveDisruptiveSelfMoveConflict(
+        liveOperations,
+        partitionId,
+      );
       if (conflictingOperation) {
         throw this.createOperationLedgerInterlockError(
           normalizedMoveType,
@@ -217,6 +220,85 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       OPERATION_LEDGER_SELF_MOVE_BLOCKING_REASON_CODE,
       liveLedgerSelfMove.operationId,
     );
+  }
+
+  /**
+   * Resolve the first GENUINE live conflicting operation for a disruptive ledger
+   * self-move, re-verifying same-ledger-partition self-move blockers against the
+   * authoritative owner path first.
+   *
+   * The interlock's live set comes from the CACHE-FIRST incomplete-operation
+   * observation, which after a mid-drain ledger-leadership handoff can hold a
+   * BOOKKEEPING-LAG GHOST of a prior spread self-move (the new leader inherited a
+   * cache frozen at STOPPING microseconds before the source-removal committed and
+   * the row terminalized). That ghost would wedge every subsequent count-neutral
+   * spread REPLACE on `waiting_for_idle_ledger` until the CL-043 step-timeout
+   * (60s) — past the dependent CREATE-TABLE provisioning budget. A cache-bypassing
+   * owner-RPC re-verify distinguishes the ghost (authoritatively terminal → not a
+   * contender) from a genuinely in-flight reconfiguration (authoritatively
+   * non-terminal → still blocks, so two concurrent ledger config changes never
+   * co-admit — run-20 serialization preserved). The re-verify is scoped to a
+   * self-move of the SAME ledger partition; a dependent operation of any other
+   * partition is a genuine ledger-write contender and always blocks.
+   * @param {Array<Object>} liveOperations
+   * @param {string|null} selfMovePartitionId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveDisruptiveSelfMoveConflict(liveOperations, selfMovePartitionId) {
+    const normalizedSelfMovePartitionId = String(
+      selfMovePartitionId || '',
+    ).trim();
+    for (const operation of liveOperations) {
+      const isSamePartitionSelfMove =
+        this.isDisruptiveOperationLedgerSelfMove(
+          operation?.type,
+          operation?.partitionId,
+        ) &&
+        String(operation?.partitionId || '').trim() ===
+          normalizedSelfMovePartitionId &&
+        normalizedSelfMovePartitionId.length > 0;
+      if (
+        isSamePartitionSelfMove &&
+        (await this.isStaleTerminalLedgerSelfMoveGhost(operation))
+      ) {
+        continue;
+      }
+      return operation;
+    }
+    return null;
+  }
+
+  /**
+   * A same-ledger-partition self-move blocker is a stale ghost only when a
+   * CACHE-BYPASSING authoritative owner read confirms it terminal. An unreadable
+   * or deferred authoritative visibility keeps it blocking (conservative: while
+   * the ledger is mid-move its reads failing IS the condition being serialized
+   * against, and the CL-043 staleness bound still releases a truly wedged
+   * self-move once its row is readable).
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async isStaleTerminalLedgerSelfMoveGhost(operation) {
+    const operationId = String(operation?.operationId || '').trim();
+    if (operationId.length === 0) {
+      return false;
+    }
+    let observation = null;
+    try {
+      observation = await this.queryAuthoritativeOperationVisibilityObservation(
+        operationId,
+        {requireOwnerRpcRead: true},
+      );
+    } catch {
+      return false;
+    }
+    const authoritativeOperation = observation?.operation || null;
+    if (!authoritativeOperation) {
+      return false;
+    }
+    return this.isOperationTerminal(authoritativeOperation);
   }
 
   /**
