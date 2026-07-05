@@ -1,0 +1,52 @@
+{
+  "id": "provisioning-admission-ledger-hold-transient-wait",
+  "statement": "The MovieLens affinity demo (5-node local formation) survives a CREATE TABLE that arrives while the run-20 operation-ledger self-move hold (or the run-22 quorum-spread hold) is engaged: provisioning admission absorbs the transient internally with a bounded wait-and-reevaluate loop while every cohort-blocking reason is a transient ledger-interlock reason, and the client receives the provisioned table instead of 'Unable to satisfy minimum routable provisioning cohort ... operation_ledger_self_move_in_flight' (run-24 head: the demo died at its first CREATE TABLE ~6s after formation, provisionable=0/required=2, all three targets deferred). Proven by a deterministic DT reproduction (guard-test scenario-harness, consecutive 3) and the interlock error message embedding the HELD ledger operation's partition id instead of the admitted operation's.",
+  "priority": "P1",
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "movielens-affinity-placement-demo",
+    "planDoc": null
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "provisioning-admission-ledger-hold-transient-wait",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "provisioning-admission-ledger-hold-transient-wait-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "provisioning-admission-ledger-hold-transient-wait",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "c-research-first",
+      "text": "RESEARCH FIRST: map the existing provisioning-admission evaluation loop (sql-query-engine-provisioning-admission-methods.js — TRANSIENT_PROVISIONING_SHORTFALL_REASONS already classifies the 3 ledger reasons; run-22 recorded follow-up), any existing bounded-wait machinery in the provisioning path (provision-partition-waits tests suggest waits exist), and the interlock hold lifecycle (rebalance-coordinator-ledger-interlock-admission.js state.heldSelfMoveOperationId + tryClearHeldOperationLedgerSelfMove). REUSED vs EXTENDED vs NEW required in every finding. NO new caches; NO client-side (demo) retries — internal pacing must not rely on client fidelity; the wait must be bounded by an EXISTING budget (no raised timeouts, TEST-0021)."
+    },
+    {
+      "id": "c-dt-first",
+      "text": "DT-FIRST: deterministic reproduction (unit-level provisioning admission with a held ledger self-move; RED on head = client-visible cohort failure while all blocking reasons are transient) BEFORE src changes; dt:prove red-on-revert; scenario-harness runner x3 for closure."
+    },
+    {
+      "id": "c-vet",
+      "text": "Design + implementation verified by adversarial subagents BEFORE commit. Key attack surfaces: livelock (what if the hold NEVER clears — the wait must be bounded and then fail honestly with the same typed error), starvation fairness across concurrent CREATEs, whether waiting inside admission blocks an event-loop lane (the run-23 lane head-of-line P2 is adjacent), and whether the wait belongs in the engine admission loop vs the coordinator gate."
+    },
+    {
+      "id": "c-class",
+      "text": "One defect class: the transient-hold fail-fast. The mislabeled interlock message (admitted op partition embedded instead of the held ledger op) rides along as an honest-logging fix. Do NOT touch the hold semantics themselves (run-20/22 fixes are validated); do NOT add exemptions for user-table ADDs."
+    }
+  ]
+}
