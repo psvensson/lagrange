@@ -61,11 +61,12 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 19
+## Open quests — 20
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
+| formation-ledger-spread-completion-self-move-interlock-deadlock | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
 | latency-group-zone-affinity-demo | product | 0 | 0 | — |
