@@ -330,7 +330,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       return;
     }
     this.preparedStateHoldTimer = setInterval(() => {
-      this.enforcePreparedStateHoldTimeouts(Date.now());
+      const nowMs = Date.now();
+      this.enforcePreparedStateHoldTimeouts(nowMs);
+      // Leadership durability fitness rides the same sweep cadence: a
+      // connection stuck non-durable (zombie transaction, silent adapter
+      // close) must surface and shed leadership instead of freezing the
+      // cluster silently (run-23).
+      this.enforceLeaderDurabilityFitness?.(nowMs);
     }, this.preparedStateHoldSweepIntervalMs);
     this.preparedStateHoldTimer.unref();
   }

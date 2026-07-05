@@ -7,7 +7,7 @@
  * Requirements: 10.2, 3.1
  */
 import {RAFT_ROLE} from '../raft/constants.js';
-import LifeRaft from '../raft/liferaft.js';
+import {performTrackedLeaderDemotion} from '../raft/tracked-leader-demotion.js';
 import {ReplicaOperationReason} from '../rebalancer/replica-operation-constants.js';
 import {REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 
@@ -17,10 +17,6 @@ const REPLICA_HANDLER_LEADER_HANDOFF_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   NOT_SUPPORTED: 'not_supported',
 });
-const REPLICA_HANDLER_LEADER_HANDOFF_LITERAL = Object.freeze({
-  EMPTY_LEADER_ID: '',
-});
-
 function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
   class ReplicaHandlerLeaderHandoffMethods {
     /**
@@ -88,25 +84,10 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
       ) {
         return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
       }
-      if (
-        typeof service.cancelLeaderOwnedActivation ===
-        REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        service.cancelLeaderOwnedActivation();
-      }
-      // Drain step-down: without reluctance this node's fresh election timer
-      // races the peers' and, holding the longest log, it re-wins the very
-      // leadership being drained (68% of drained-node leadership gains were
-      // undirected timer wins — analyze-leadership-flap census). Defer BEFORE
-      // re-arming so the timer below draws the inflated delay.
-      if (typeof raft.deferCandidacy === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-        raft.deferCandidacy();
-      }
-      raft.change({
-        state: LifeRaft.FOLLOWER,
-        leader: REPLICA_HANDLER_LEADER_HANDOFF_LITERAL.EMPTY_LEADER_ID,
-      });
-      raftProvider.startElectionTimer(raft);
+      // The demotion sequence itself is shared with the partition-level
+      // durability-fitness detector (src/raft/tracked-leader-demotion.js) —
+      // one owner for the flap-safe ordering.
+      performTrackedLeaderDemotion(service);
       return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
     }
   }

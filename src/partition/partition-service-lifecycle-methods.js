@@ -144,6 +144,7 @@ class PartitionServiceLifecycleMethods {
       this.db.close();
       this.db = null;
     }
+    this.closeLeaderDurabilityFitnessWitness?.();
     this.initialized = false;
     this.cdcSubscribers.clear();
     this.cdcSubscriberWrappers.clear();

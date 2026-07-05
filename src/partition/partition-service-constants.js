@@ -246,6 +246,12 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
   LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
   LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred - would cause even voter count',
+  LEADER_DURABILITY_UNFIT:
+    'Replica local durability is unfit for leadership: writes are not ' +
+    'reaching durable storage (stuck transaction or commit/durable ' +
+    'divergence); shedding leadership if a viable successor exists',
+  LEADER_DURABILITY_RECOVERED:
+    'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
   BECAME_LEADER: 'Became leader (liferaft)',

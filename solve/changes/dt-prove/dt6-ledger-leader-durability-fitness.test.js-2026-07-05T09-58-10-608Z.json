@@ -1,0 +1,23 @@
+{
+  "test": "test/convergence/dt6-ledger-leader-durability-fitness.test.js",
+  "src": [
+    "src/partition/partition-service-durability-fitness.js",
+    "src/partition/partition-service-assembly.js",
+    "src/partition/partition-service-constants.js",
+    "src/partition/partition-service-transaction-base.js",
+    "src/partition/partition-service-lifecycle-methods.js",
+    "src/raft/sqlite-log-adapter.js",
+    "src/raft/tracked-leader-demotion.js",
+    "src/node/replica-handler-leader-handoff-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-05T09:58:10.574Z"
+}

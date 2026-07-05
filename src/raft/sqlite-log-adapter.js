@@ -297,6 +297,15 @@ class SQLiteLogAdapter {
   }
 
   /**
+   * Declared commit intent (stamped before persist guards) — the in-memory
+   * side of the durability-fitness divergence witness.
+   * @return {number}
+   */
+  getLastDeclaredCommitIndex() {
+    return this.lastDeclaredCommitIndex || 0;
+  }
+
+  /**
    * Acknowledge a command from a follower.
    * Required by liferaft for quorum tracking.
    * Requirements: 12.2
@@ -305,6 +314,17 @@ class SQLiteLogAdapter {
    * @return {Object} Updated entry
    */
   commandAck(index, address) {
+    // Follower-ack recency actuals for the durability-fitness successor
+    // probe (CL-039: never shed leadership without a viable successor).
+    // Self-acks are stamped at saveCommand, not here, so every commandAck
+    // address is a genuine peer.
+    const ackAddress = String(address || '').trim();
+    if (ackAddress.length > 0 && ackAddress !== this.node?.address) {
+      if (!this.lastFollowerAckAtByAddress) {
+        this.lastFollowerAckAtByAddress = new Map();
+      }
+      this.lastFollowerAckAtByAddress.set(ackAddress, Date.now());
+    }
     if (!this.isOpen()) {
       return {responses: []};
     }
@@ -375,6 +395,16 @@ class SQLiteLogAdapter {
    * @return {Object} Committed entry
    */
   commit(index) {
+    // Durability-fitness witness (quest formation-ledger-leader-local-
+    // persistence-wedge): the DECLARED commit intent is stamped before any
+    // isOpen/persist guard, so a silently-closed or transaction-wedged
+    // adapter still shows intent diverging from the durable watermark.
+    if (
+      Number.isFinite(index) &&
+      index > (this.lastDeclaredCommitIndex || 0)
+    ) {
+      this.lastDeclaredCommitIndex = index;
+    }
     if (!this.isOpen()) {
       return null;
     }
