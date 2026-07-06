@@ -118,5 +118,31 @@ any distributed-harness or convergence work:
      mechanism, and the refuted fixes; a bespoke patch written without that lookup
      re-derives (or contradicts) settled work. The fix write-up must state what it
      reuses or finishes, or why nothing recorded applies.
+- **A SERIES OF REFUTALS is a signal to widen research, not to invent a cleverer
+  variant.** When several candidate fixes have each been adversarially killed for a
+  *different* reason (the whack-a-mole / rotating-dominant-residual / coupled-invariant
+  signature above), the likeliest truth is that the whole fix *class* is wrong — and the
+  phenomenon is almost always one the field (and often this repo) has already named and
+  solved. Before committing effort to the next bespoke variant, STOP and triangulate prior
+  art across THREE sources, in this order, capturing each in the change dir as a cited
+  report:
+  1. **This codebase's own history** — grep `git log`, [`solve/theory-ledger.md`](../../solve/theory-ledger.md),
+     the per-file closure ledger, and external memory for a prior fix to the same *class*
+     (not just the same symptom). Parallel machinery gets built here by accident; a shipped
+     TLA+-modeled fix for the identical oscillation shape may already exist.
+  2. **Comparable production systems** — how do CockroachDB, TiKV/PD, etcd/raft, Consul,
+     KRaft, Kubernetes solve this class? The canonical mechanism usually has a name (a
+     ReadIndex/lease freshness read, a self-revert/undo-simulation deadband, Pre-Vote,
+     learner-first membership, an HPA stabilization window). Adopt the named wheel instead
+     of hand-rolling a worse one.
+  3. **Theory / papers** — reduce the bug to its canonical form (e.g. relay input + lagging
+     sensor + no-deadband discrete decision = a relay-feedback limit cycle) so you can see
+     the *independent cuts* that each break it, and pick the cut with the best precedent —
+     not the first patch that moves a metric.
+  This pass is cheap relative to one live gate run and routinely reveals that the surviving
+  bespoke path (a) reinvents a wheel the repo lacks raw materials for, while a cheaper,
+  better-precedented cut already exists. Fold the result into the coupled-invariant
+  step-back reflection above; the exemplar is
+  [`solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md`](../../solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md).
 - **Independently verify after implementing.** After a change, have a separate
   subagent independently verify it before relying on or reporting it.
