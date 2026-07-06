@@ -1,0 +1,18 @@
+{
+  "test": "test/convergence/dt6-formation-fresh-leader-stale-view-phantom-count-move.test.js",
+  "src": [
+    "src/rebalancer/unified-rebalancer-rebalance-loop.js",
+    "src/rebalancer/unified-rebalancer-replica-state.js",
+    "src/rebalancer/unified-rebalancer-lifecycle-base.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-06T06:29:55.958Z"
+}

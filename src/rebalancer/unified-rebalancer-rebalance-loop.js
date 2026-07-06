@@ -140,7 +140,8 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     }
 
     const effectivePolicy = policy || (await this.getPolicy());
-    const currentReplicas = this.getCurrentReplicas();
+    const currentReplicas =
+      await this.resolveFreshCurrentReplicasForCountDecision();
     const availableNodes = this.getAvailableNodes();
     if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {

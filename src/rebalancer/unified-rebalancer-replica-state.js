@@ -6,6 +6,9 @@ import {
   applyUnifiedRebalancerPriorityReadinessMethods,
 } from './unified-rebalancer-priority-readiness.js';
 import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-nodes.js';
+import {
+  readAuthoritativeControlPlaneRows,
+} from '../control-plane/control-plane-system-table-gateway.js';
 
 // Dispatched runtime-service replicas carry canonical ids
 // `${entityId}-rN`; a bare entityId row (direct lifecycle use) also
@@ -21,6 +24,8 @@ function runtimeServiceReplicaBelongsToEntity(serviceId, entityId) {
 
 const {
   COLUMN,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READINESS_DIMENSION,
   EntityType,
   OperationType,
   READINESS_SKIP_DETAIL,
@@ -50,6 +55,23 @@ const REBALANCE_OPERATION_FIELD = Object.freeze({
   SOURCE_REPLICA_ID_SNAKE: 'source_replica_id',
   STEPS_HISTORY: 'stepsHistory',
   STEPS_HISTORY_SNAKE: 'steps_history',
+});
+
+// The committed SERVICES replica rows for a partition. This SQL mirrors
+// REMOVE_SAFETY_SQL.SELECT_PARTITION_REPLICA_ROWS
+// (operation-workflow-owner-shared.js) — the same rows getCriticalReplicaRowsForSafety
+// reads — but the count decision must issue it with a STRICT owner-RPC
+// (cache-bypassing) read mode. getCriticalReplicaRowsForSafety uses
+// OWNER_RPC_PREFERRED_SQL_FALLBACK, which can route to the frozen local engine and
+// stay stale (commit c7a3bf19: a cache-first read is INERT against the frozen
+// cache); the fresh-leader count path forces OWNER_RPC_REQUIRED.
+const FRESH_LEADER_COUNT_DECISION_REPLICA_ROW_SQL =
+  'SELECT * FROM services WHERE service_type = ? AND partition_id = ?';
+const FRESH_LEADER_COUNT_DECISION_READ_QUERY_OPTIONS = Object.freeze({
+  routingReadinessDimension:
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
 });
 
 class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
@@ -265,17 +287,200 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
 
     // For partitions, get services with matching partition_id
     return this.filterReplicasRetiredByTerminalReplaceOperations(
-      this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          const normalizedService = normalizeServiceRow(service);
-          return (
-            normalizedService.partitionId === this.entityId &&
-            normalizedService.serviceType === EntityType.PARTITION
-          );
-        },
-      ),
+      this.getRawPartitionReplicaCacheRows(),
     );
+  }
+
+  /**
+   * Raw (unfiltered) PARTITION replica service-cache rows for this entity.
+   * Split out of getCurrentReplicas so the authoritative fresh-leader count
+   * read can merge over the SAME cache rows before applying the terminal
+   * REPLACE retirement filter.
+   * @return {Array<Object>}
+   * @private
+   */
+  getRawPartitionReplicaCacheRows() {
+    return this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.SERVICES,
+      (service) => {
+        const normalizedService = normalizeServiceRow(service);
+        return (
+          normalizedService.partitionId === this.entityId &&
+          normalizedService.serviceType === EntityType.PARTITION
+        );
+      },
+    );
+  }
+
+  /**
+   * Resolve the `currentReplicas` the count decision consumes, refreshing the
+   * SERVICES replica rows AUTHORITATIVELY (cache-bypassing owner-RPC) only on
+   * the fresh-leader window of a priority control-plane partition.
+   *
+   * A fresh leader of a priority control-plane partition (e.g.
+   * replica_operations-p1) can inherit a STALE CDC cache of the committed
+   * SERVICES replica rows across a leadership handoff, miscount `activeCount`,
+   * and mint a PHANTOM count-changing move (a spurious REMOVE or an opposing
+   * count-increasing ADD) that fights the in-progress spread REPLACE — the
+   * ledger self-move limit cycle. Reading the SERVICES rows authoritatively at
+   * the count decision refreshes the single `currentReplicas` input the count
+   * legs consume. The authoritative-over-cache UNION corrects the run-5 driver —
+   * the stale-LOW under-count that mints the phantom count-increasing ADD (it
+   * backfills committed voters the frozen cache is missing) — and the soft
+   * over-count where the authoritative row still exists with a non-ACTIVE status
+   * (field overwrite drops it from the count). It does NOT correct a HARD-DELETED
+   * ghost: a voter whose authoritative row is gone but whose stale ACTIVE cache
+   * row has no collision to overwrite survives the union, so a drain-handoff
+   * over-count REMOVE remains possible (the count-path twin of the c7a3bf19
+   * interlock ghost; the complementary fix reads the terminal-REPLACE retirement
+   * ops authoritatively — tracked follow-up, not this change). Union is
+   * deliberate over replace: replica removal is non-atomic on services-p1
+   * (DELETE then a separate new-voter INSERT), so a pure authoritative snapshot
+   * can transiently read target-1 and REINTRODUCE the phantom ADD; the union
+   * backfills that gap from cache and never under-counts. Off that hot path this
+   * returns getCurrentReplicas() unchanged (no behavior change).
+   *
+   * REUSED: readAuthoritativeControlPlaneRows + the OWNER_RPC_REQUIRED read-mode
+   * contract (the commit-c7a3bf19 cache-bypass pattern). getCriticalReplicaRowsForSafety
+   * reads the SAME SERVICES rows through the SAME gateway helper but with
+   * OWNER_RPC_PREFERRED_SQL_FALLBACK, which is inert against a frozen cache; the
+   * count path forces the strict owner-RPC.
+   *
+   * Bounded: an owner defer/failure/empty result (e.g. services-p1 itself still
+   * unconverged in early formation) falls back to the cache read — a rare
+   * residual, never an unbounded stall. Self-releasing: the window disarms once
+   * the authoritative view agrees with the cache, and re-arms on each leadership
+   * gain (the durability flap re-elects leaders).
+   *
+   * @return {Promise<Array<Object>>}
+   */
+  async resolveFreshCurrentReplicasForCountDecision() {
+    if (
+      this.entityType !== EntityType.PARTITION ||
+      this.freshLeaderAuthoritativeCountReadArmed !== true ||
+      !this.isControlPlanePriorityPartition()
+    ) {
+      return this.getCurrentReplicas();
+    }
+    const gateway = this.controlPlaneSystemTableGateway;
+    if (!gateway) {
+      return this.getCurrentReplicas();
+    }
+    const cachedRows = this.getRawPartitionReplicaCacheRows();
+    let authoritativeRows = null;
+    try {
+      const result = await readAuthoritativeControlPlaneRows(
+        gateway,
+        SYSTEM_TABLE_NAME.SERVICES,
+        FRESH_LEADER_COUNT_DECISION_REPLICA_ROW_SQL,
+        [EntityType.PARTITION, this.entityId],
+        FRESH_LEADER_COUNT_DECISION_READ_QUERY_OPTIONS,
+      );
+      if (
+        !result?.success ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return this.getCurrentReplicas();
+      }
+      authoritativeRows = result.rows;
+    } catch {
+      return this.getCurrentReplicas();
+    }
+    if (
+      this.authoritativeReplicaViewAgreesWithCache(authoritativeRows, cachedRows)
+    ) {
+      this.freshLeaderAuthoritativeCountReadArmed = false;
+    }
+    const mergedRows = this.mergeAuthoritativeReplicaRowsOverCache(
+      authoritativeRows,
+      cachedRows,
+    );
+    return this.filterReplicasRetiredByTerminalReplaceOperations(mergedRows);
+  }
+
+  /**
+   * Merge authoritative SERVICES replica rows over the cache rows, preferring
+   * the authoritative field values on identity collisions (same shape/semantics
+   * as mergeReplicaRowsForSafety in priority-publication-safety-rows.js).
+   * @param {Array<Object>} authoritativeRows
+   * @param {Array<Object>} cachedRows
+   * @return {Array<Object>}
+   * @private
+   */
+  mergeAuthoritativeReplicaRowsOverCache(authoritativeRows, cachedRows) {
+    const rowsById = new Map();
+    const unkeyedRows = [];
+    const upsertRow = (row, preferIncoming) => {
+      if (!row || typeof row !== 'object') {
+        return;
+      }
+      const rowId = this.getReplicaIdFromServiceRow(row);
+      if (!rowId) {
+        unkeyedRows.push({...row});
+        return;
+      }
+      if (!rowsById.has(rowId)) {
+        rowsById.set(rowId, {...row});
+        return;
+      }
+      if (!preferIncoming) {
+        return;
+      }
+      const mergedRow = {...rowsById.get(rowId)};
+      for (const [fieldName, fieldValue] of Object.entries(row)) {
+        if (fieldValue === null || fieldValue === undefined) {
+          continue;
+        }
+        mergedRow[fieldName] = fieldValue;
+      }
+      rowsById.set(rowId, mergedRow);
+    };
+    for (const cachedRow of cachedRows) {
+      upsertRow(cachedRow, false);
+    }
+    for (const authoritativeRow of authoritativeRows) {
+      upsertRow(authoritativeRow, true);
+    }
+    return [...rowsById.values(), ...unkeyedRows];
+  }
+
+  /**
+   * True when the authoritative and cached views carry the same set of ACTIVE
+   * replica ids — the stale window has closed and re-reading is unnecessary.
+   * @param {Array<Object>} authoritativeRows
+   * @param {Array<Object>} cachedRows
+   * @return {boolean}
+   * @private
+   */
+  authoritativeReplicaViewAgreesWithCache(authoritativeRows, cachedRows) {
+    const toActiveReplicaIdSet = (rows) => {
+      const ids = new Set();
+      for (const row of rows) {
+        const status = String(
+          row?.status || ReplicaStatus.ACTIVE,
+        ).toLowerCase();
+        if (status !== ReplicaStatus.ACTIVE) {
+          continue;
+        }
+        const replicaId = this.getReplicaIdFromServiceRow(row);
+        if (replicaId) {
+          ids.add(replicaId);
+        }
+      }
+      return ids;
+    };
+    const authoritativeIds = toActiveReplicaIdSet(authoritativeRows);
+    const cachedIds = toActiveReplicaIdSet(cachedRows);
+    if (authoritativeIds.size !== cachedIds.size) {
+      return false;
+    }
+    for (const id of authoritativeIds) {
+      if (!cachedIds.has(id)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

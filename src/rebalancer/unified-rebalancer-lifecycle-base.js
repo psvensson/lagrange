@@ -66,6 +66,9 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       REBALANCER_ERROR_MSG.ROUTER_REQUIRED,
     );
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    // Armed on each fresh leadership gain of a priority control-plane partition;
+    // consumed and self-released by resolveFreshCurrentReplicasForCountDecision.
+    this.freshLeaderAuthoritativeCountReadArmed = false;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
       createControlPlaneRuntimeBundle({
@@ -478,6 +481,11 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
         entityType: this.entityType,
       });
       if (this.isControlPlanePriorityPartition()) {
+        // Arm the fresh-leader authoritative count-read window: this new leader
+        // may hold a stale SERVICES CDC cache from before the handoff, so the
+        // first count decisions must read the committed replica rows
+        // authoritatively to avoid a phantom count-changing move.
+        this.freshLeaderAuthoritativeCountReadArmed = true;
         this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
       }
       this.scheduleNextCheck(this.getLeadershipStartDelayMs());
