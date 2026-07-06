@@ -73,6 +73,21 @@ The file declares:
 Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
 can close the Quest.
 
+A Quest statement is a sealed **result predicate**, not a causal theory. Do
+not embed a diagnosed ROOT narrative in the statement: put causal roots,
+suspected mechanisms, and next-leg rationale in findings, `planDoc`, or
+Quest-native theory records, where they stay falsifiable. When a root is
+falsified mid-Quest, record the superseding finding — never edit the sealed
+statement or `doneWhen`. (Precedent: the
+`formation-ledger-self-move-blocks-cluster-ops` statement sealed a ROOT that
+run-artifact forensics falsified twice while its mechanism-agnostic `doneWhen`
+stayed valid; the sealed root biased two wrong legs.)
+
+Product quests must carry at least one planning link at creation: `planDoc`
+for the epic/spec page they advance, `parentQuest` for quest lineage, or
+`closesCL`/`specRef`/`roadmapRow` where applicable. An unlinked product quest
+is invisible to `trace`/`frontier` and is a defect to backfill before handoff.
+
 ### Closure Fidelity (live-visible classes)
 
 Within MEASURED closures there are fidelity tiers: deterministic guard
@@ -169,6 +184,15 @@ Every evidence ingestion classifies blocker movement:
 - `solved`: the evidence satisfies `doneWhen`.
 - `invalid`: the latest sample did not measure a valid metric.
 - `unknown`: evidence changed, but not along a recognized owner path.
+
+The Current Blocker card is built ONLY from structured evidence-ingestion
+fields and selected theories — `status` does not parse finding prose. A
+resume-critical result (a newly pinned binding head, a decided next move) must
+therefore leave a structured resume surface: ingest evidence carrying
+owner/boundary/reason/mechanism/nextAction, or select/record a frontier theory
+whose owner path names the current head. A binding head recorded only inside a
+prose finding claim leaves the card empty (`movement: no_evidence`) and forces
+the next session to reconstruct state from raw log archaeology.
 
 The movement classification is recorded on evidence, attempts, and theory
 results as `blockerMovement` / `diagnosticMovement`. It gives credit for useful
@@ -472,6 +496,16 @@ but they are not Solver truth. A SHA says where code landed; it does not prove
 which measured attempt moved the metric. The Solver therefore does not accept
 `git:<sha>` as an attempt `changeRef`.
 
+For a source-changing attempt whose proof depends on a live/distributed
+precondition, the attempt evidence must include a **precondition/engagement
+witness** before `step --commit`: an `analyze:fix-engagement` /
+`analyze:precondition-recurrence` result, a red-on-revert directed test
+through the real seam, or a code trace proving the live path reaches the
+changed code. A green DT on an injected seam is not sufficient on its own —
+two wrong legs on this repo (fba0b477/96a0917f, a9344058/066bf78d) shipped on
+green DTs whose precondition never occurs live. Pure refactors and
+building-block DTs without a live-precondition theory are exempt.
+
 ## Source Change Verification
 
 Every Quest that changes source code must spawn a subagent verifier after the
@@ -561,6 +595,15 @@ Use `node scripts/solve.js finding` to record durable knowledge:
 
 Findings are replayed into future dossiers for the same frontier. They replace
 ad-hoc memory and chat-only handoff notes.
+
+When a finding materially falsifies or constrains ANOTHER declared quest's
+premise, route it: record a finding on the affected quest too (until a
+dedicated route command exists, `node scripts/solve.js finding --id
+<affected-quest> ...` works cross-quest), with a backlink to the source
+quest's evidence. Do not edit the sibling's sealed goal in place — the routed
+finding is evidence for the sibling's own next step or exhaustion, decided
+there. Unrouted falsifications rot: the sibling quest starts later on a
+premise this quest already disproved.
 
 Theory result events are likewise durable memory. A measured attempt linked to a
 theory records supported, falsified, or needs-rerun learning so failed attempts

@@ -17,6 +17,16 @@ any distributed-harness or convergence work:
 - **Absence proves nothing.** The playback bundle is a sparse curated sample — a
   missing log line does NOT mean the code did not run. Ground truth is the full
   per-node logs under `test-output/reports/.playback/<run>/.full-logs/`.
+- **Cite immutable artifacts, not mutable active directories.** Findings that
+  cite live/demo logs by `file:line` rot silently when the runner's fixed
+  active directory (e.g. `data/examples/service-data-affinity-demo/`) is wiped
+  by the next run — and bounded archives age out. Every finding that cites a
+  live artifact must name an immutable run identity (the timestamped archive
+  path, a per-run report dir, or a copied excerpt under `solve/changes/<quest>/`);
+  if the runner only has a mutable active dir, archive it (or copy the cited
+  slices) before the next run and cite that. Subagents reading a shared active
+  dir must first confirm the artifact's mtime/run-window matches the run they
+  were asked about.
 - **Deterministic-first; the gate is a LAST RESORT ONLY.** The PRIMARY evidence
   for every convergence fix is a deterministic in-process reproduction — a
   targeted or fault-injected repro at the layer where the invariant is produced,
@@ -118,6 +128,15 @@ any distributed-harness or convergence work:
      mechanism, and the refuted fixes; a bespoke patch written without that lookup
      re-derives (or contradicts) settled work. The fix write-up must state what it
      reuses or finishes, or why nothing recorded applies.
+  3. **Source fix whose theory depends on a live precondition → precondition
+     witness BEFORE commit.** A green DT on an injected seam proves the test,
+     not the fix: two wrong legs (fba0b477/96a0917f, a9344058/066bf78d) each
+     shipped on a green DT whose precondition never occurs on the live path and
+     were reverted after costly live runs. Before committing such a fix, record
+     an engagement/precondition witness — `analyze:fix-engagement`,
+     `analyze:precondition-recurrence`, a red-on-revert directed test through
+     the REAL seam, or a code trace proving the live path reaches the change
+     (see solver-quests.md "Evidence And Change References").
 - **A SERIES OF REFUTALS is a signal to widen research, not to invent a cleverer
   variant.** When several candidate fixes have each been adversarially killed for a
   *different* reason (the whack-a-mole / rotating-dominant-residual / coupled-invariant
