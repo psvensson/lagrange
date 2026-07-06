@@ -31,6 +31,23 @@ import {
 const LEADER_DURABILITY_LEGAL_HOLD_MS =
   TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
 const LEADER_DURABILITY_STRIKE_LIMIT = 3;
+// C3 bounded demotion fallback (quest formation-ledger-self-move-blocks-
+// cluster-ops, live artifact 2026-07-06): a wedged leader starves the very
+// follower-ack evidence hasViableLeaderDurabilitySuccessor needs, so
+// successorViable:false is SELF-SUSTAINING while the group's membership holds
+// perfectly good voters — the demotion never fires, the role-gated heal never
+// opens, and the ledger leader stays wedged for the rest of the run. After
+// this bound of CONTINUOUS successorless-unfit ticks a MULTI-MEMBER leader is
+// demoted anyway: every 1s tick re-checks the 10s ack window first, so any
+// genuinely-acking follower flips the normal viable-successor handoff well
+// inside the bound; a leader this path demotes was not providing durable
+// service to anyone. Solo groups stay structurally exempt (deposing the only
+// replica leaves no leader, and the heal is already permitted in place). This
+// bounds CL-039's never-shed-without-successor to the window where the
+// viability sensor can still be trusted — the guard FINAL-vetted-verdict.md
+// names C3.
+const LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS =
+  TIME_MS.SECOND * 15;
 // Matches the deferCandidacy inflation window: while unfit, deferral must be
 // re-asserted at least once per window or the alive zombie (whose in-memory
 // log matches the followers') is fully electable again.
@@ -54,6 +71,7 @@ class PartitionServiceDurabilityFitnessMethods {
         unfit: false,
         activeReason: null,
         handoffRequestedWhileLeader: false,
+        successorlessUnfitSinceMs: null,
         readonlyWatermarkDb: null,
         readonlyWatermarkUnavailable: false,
         readonlyWatermarkErrorDeclaredIndex: 0,
@@ -100,6 +118,34 @@ class PartitionServiceDurabilityFitnessMethods {
       }
     }
     return false;
+  }
+
+  /**
+   * C3 bounded demotion fallback: true once a MULTI-MEMBER leader has been
+   * continuously successorless-unfit for the full fallback bound. The wedged
+   * leader is the reason no successor can be proven (it starves follower-ack
+   * evidence), so ack-recency viability is a lying sensor here — membership
+   * shape (solo vs multi-member) decides structural exemption instead. The
+   * clock resets whenever fitness recovers, a successor becomes provable, or
+   * the node is no longer the leader.
+   * @param {number} nowMs
+   * @param {Object} state
+   * @param {boolean} isLeader
+   * @return {boolean}
+   * @private
+   */
+  shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader) {
+    if (!isLeader || this.isSoloReplicaGroup?.() !== false) {
+      state.successorlessUnfitSinceMs = null;
+      return false;
+    }
+    if (state.successorlessUnfitSinceMs === null) {
+      state.successorlessUnfitSinceMs = nowMs;
+    }
+    return (
+      nowMs - state.successorlessUnfitSinceMs >=
+      LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS
+    );
   }
 
   /**
@@ -187,6 +233,7 @@ class PartitionServiceDurabilityFitnessMethods {
       state.unfit = false;
       state.activeReason = null;
       state.handoffRequestedWhileLeader = false;
+      state.successorlessUnfitSinceMs = null;
       this.isLeaderDurabilityUnfit = false;
       if (wasUnfit) {
         this.logger.info(
@@ -308,18 +355,48 @@ class PartitionServiceDurabilityFitnessMethods {
     if (!this.isSoloReplicaGroup?.()) {
       this.raft?.deferCandidacy?.();
     }
-    if (!successorViable) {
-      // Surface-only: a single-replica (or successor-less) group must keep
-      // serving — deposing it would leave no leader at all.
+    if (successorViable) {
+      state.successorlessUnfitSinceMs = null;
+    } else if (
+      !this.shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader)
+    ) {
+      // Surface-only: a solo group keeps serving forever (deposing the only
+      // replica leaves no leader, and its heal is already permitted in
+      // place); a multi-member group holds the seat only until the bounded
+      // fallback expires.
       return;
     }
     if (isLeader && !state.handoffRequestedWhileLeader) {
       state.handoffRequestedWhileLeader = true;
-      // The shared flap-safe demotion sequence (one owner with the replica
-      // handler's tracked handoff); the hook is notification/observability.
-      performTrackedLeaderDemotion(this);
-      this.leaderDurabilityUnfitHook?.(evidence);
+      this.demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable);
     }
+  }
+
+  /**
+   * The demotion tail shared by the normal viable-successor handoff and the
+   * C3 successorless bounded fallback; the fallback path is logged LOUD and
+   * distinct before the shared flap-safe demotion sequence (one owner with
+   * the replica handler's tracked handoff). The hook is
+   * notification/observability.
+   * @param {number} nowMs
+   * @param {Object} state
+   * @param {Object} evidence
+   * @param {boolean} successorViable
+   * @private
+   */
+  demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable) {
+    if (!successorViable) {
+      this.logger.error(
+        PARTITION_SERVICE_LOG_MSG
+          .LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK,
+        {
+          ...evidence,
+          successorlessForMs: nowMs - state.successorlessUnfitSinceMs,
+        },
+      );
+    }
+    performTrackedLeaderDemotion(this);
+    this.leaderDurabilityUnfitHook?.(evidence);
   }
 }
 

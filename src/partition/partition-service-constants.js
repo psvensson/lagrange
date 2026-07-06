@@ -250,6 +250,12 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Replica local durability is unfit for leadership: writes are not ' +
     'reaching durable storage (stuck transaction or commit/durable ' +
     'divergence); shedding leadership if a viable successor exists',
+  LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK:
+    'Durability-unfit leader demoted WITHOUT a provable successor: the ' +
+    'bounded fallback expired with no follower ack inside the viability ' +
+    'window. Holding the seat forever starves the very ack evidence the ' +
+    'viability probe needs (self-sustaining unfit-leader deadlock); ' +
+    'demotion opens the role-gated stuck-transaction heal',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',

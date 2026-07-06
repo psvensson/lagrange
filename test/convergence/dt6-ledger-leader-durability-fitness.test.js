@@ -53,6 +53,10 @@ const START_MS = 9_000_000;
 const LEGAL_HOLD_MS = 60_000;
 const SWEEP_TICK_MS = 1_000;
 const STRIKE_TICKS = 3;
+// C3 bounded fallback (quest formation-ledger-self-move-blocks-cluster-ops):
+// a multi-member leader that stays successorless-unfit for this long is
+// demoted anyway. Mirrors LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS.
+const SUCCESSORLESS_FALLBACK_TICKS = 15;
 
 let tmpDirCounter = 0;
 function makeTmpDbPath(t) {
@@ -322,8 +326,9 @@ t.test(
 );
 
 t.test(
-  'control: without a viable successor the detector is SURFACE-ONLY — unfit ' +
-    'and loud, but never deposed (a successor-less group must keep serving)',
+  'control: a SOLO group without a viable successor is SURFACE-ONLY forever ' +
+    '— unfit and loud, but never deposed (deposing the only replica leaves ' +
+    'no leader, and its heal is already permitted in place)',
   async (t) => {
     const unfitEvents = [];
     const partition = await createLeaderPartition(t, {unfitEvents});
@@ -338,11 +343,13 @@ t.test(
       }
       // No successor probe override: the single-replica default is not viable.
       await partition.beginTransaction('tx-zombie-lonely');
-      // Anchor the observation, then cross the legal hold.
+      // Anchor the observation, then cross the legal hold — and keep going
+      // well past the C3 successorless-demotion fallback bound: a SOLO group
+      // is structurally exempt from the fallback, not merely inside it.
       driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 1});
       driveFitnessTicks(partition, {
         fromMs: START_MS + 1_000 + LEGAL_HOLD_MS + SWEEP_TICK_MS,
-        ticks: STRIKE_TICKS + 2,
+        ticks: STRIKE_TICKS + SUCCESSORLESS_FALLBACK_TICKS + 5,
       });
       t.equal(
         partition.isLeaderDurabilityUnfit,
@@ -359,6 +366,158 @@ t.test(
         RaftRole.LEADER,
         'the successor-less leader keeps serving (never deposed)',
       );
+      await partition.rollbackTransaction().catch(() => {});
+    } finally {
+      await partition.shutdown();
+    }
+  },
+);
+
+t.test(
+  'C3 bounded fallback: a MULTI-MEMBER leader that stays successorless-unfit ' +
+    'past the bound is demoted anyway, and demotion opens the shipped heal ' +
+    'gate (RED on the unfixed head: it holds the seat unfit forever)',
+  async (t) => {
+    const unfitEvents = [];
+    const partition = await createLeaderPartition(t, {unfitEvents});
+    try {
+      if (typeof partition.enforceLeaderDurabilityFitness !== 'function') {
+        t.equal(
+          typeof partition.enforceLeaderDurabilityFitness,
+          'function',
+          'detector exists (red on the unfixed head)',
+        );
+        return;
+      }
+      // Multi-member group SHAPE (the same widening as the fitness-contract
+      // subtest): membership has followers, so the group is NOT solo — but
+      // there is NO successor probe override and no follower acks, so the
+      // default 10s-ack-window viability probe reports successorViable:false
+      // on every tick. This is the live r4 mechanism (quest formation-ledger-
+      // self-move-blocks-cluster-ops, 2026-07-06 artifact): the wedged leader
+      // itself starves follower-ack evidence, so ack-recency viability can
+      // never be proven even though membership holds active voters — the
+      // demotion never fires, the role-gated heal never opens, and the ledger
+      // leader stays wedged for the rest of the run.
+      partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
+
+      await partition.beginTransaction('tx-zombie-successorless');
+      // Anchor the observation, then cross the legal hold and strike out.
+      driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 1});
+      const strikeBaseMs = START_MS + 1_000 + LEGAL_HOLD_MS + SWEEP_TICK_MS;
+      driveFitnessTicks(partition, {fromMs: strikeBaseMs, ticks: STRIKE_TICKS});
+      t.equal(
+        partition.isLeaderDurabilityUnfit,
+        true,
+        'the leader is marked durability-unfit',
+      );
+      t.equal(
+        partition.role,
+        RaftRole.LEADER,
+        'inside the fallback bound the successorless leader keeps the seat ' +
+          '(the surface-only window still applies)',
+      );
+
+      // Hold the successorless-unfit condition past the bounded fallback.
+      driveFitnessTicks(partition, {
+        fromMs: strikeBaseMs + STRIKE_TICKS * SWEEP_TICK_MS,
+        ticks: SUCCESSORLESS_FALLBACK_TICKS + 2,
+      });
+      t.equal(
+        partition.role,
+        RaftRole.FOLLOWER,
+        'past the bound the unfit leader is demoted even without a provable ' +
+          'successor (C3: an unfit leader that starves ack evidence must not ' +
+          'hold the seat forever)',
+      );
+      t.ok(
+        unfitEvents.length >= 1,
+        'the demotion hook fired with the fallback evidence',
+      );
+      t.equal(
+        unfitEvents[0]?.successorViable,
+        false,
+        'the evidence records that no successor was provable',
+      );
+
+      // The load-bearing consequence: demotion opens the shipped role-gated
+      // heal, so the zombie rolls back ON this node without any new heal path.
+      const healedCount = partition.enforcePreparedStateHoldTimeouts(
+        Date.now() + LEGAL_HOLD_MS + 2_000,
+      );
+      t.ok(
+        healedCount >= 1,
+        'the ACTIVE-hold sweep heals the zombie once the node is a follower',
+      );
+      t.equal(
+        partition.db.inTransaction,
+        false,
+        'the stuck transaction is rolled back after the fallback demotion',
+      );
+      driveFitnessTicks(partition, {
+        fromMs: strikeBaseMs + 60 * SWEEP_TICK_MS,
+        ticks: 1,
+      });
+      t.notOk(
+        partition.isLeaderDurabilityUnfit === true,
+        'durability fitness recovers once the healed zombie is gone',
+      );
+    } finally {
+      await partition.shutdown();
+    }
+  },
+);
+
+t.test(
+  'C3 control: a successor becoming viable during the fallback wait resets ' +
+    'the successorless clock (the normal viable-successor handoff owns it)',
+  async (t) => {
+    const unfitEvents = [];
+    const partition = await createLeaderPartition(t, {unfitEvents});
+    try {
+      if (typeof partition.enforceLeaderDurabilityFitness !== 'function') {
+        t.equal(
+          typeof partition.enforceLeaderDurabilityFitness,
+          'function',
+          'detector exists (red on the unfixed head)',
+        );
+        return;
+      }
+      partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
+      let probeViable = false;
+      partition.setLeaderDurabilitySuccessorProbe(() => probeViable);
+
+      await partition.beginTransaction('tx-zombie-flicker');
+      driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 1});
+      const strikeBaseMs = START_MS + 1_000 + LEGAL_HOLD_MS + SWEEP_TICK_MS;
+      driveFitnessTicks(partition, {fromMs: strikeBaseMs, ticks: STRIKE_TICKS});
+      t.equal(partition.isLeaderDurabilityUnfit, true, 'unfit detected');
+
+      // Run most of the fallback window successorless...
+      driveFitnessTicks(partition, {
+        fromMs: strikeBaseMs + STRIKE_TICKS * SWEEP_TICK_MS,
+        ticks: SUCCESSORLESS_FALLBACK_TICKS - 5,
+      });
+      t.equal(
+        partition.role,
+        RaftRole.LEADER,
+        'still leader inside the fallback bound',
+      );
+      // ...then a successor becomes provable: the NORMAL demotion path fires
+      // on the next tick (this is the pre-C3 contract, unchanged).
+      probeViable = true;
+      driveFitnessTicks(partition, {
+        fromMs:
+          strikeBaseMs +
+          (STRIKE_TICKS + SUCCESSORLESS_FALLBACK_TICKS - 5) * SWEEP_TICK_MS,
+        ticks: 1,
+      });
+      t.equal(
+        partition.role,
+        RaftRole.FOLLOWER,
+        'the viable-successor handoff demotes immediately (no fallback wait)',
+      );
+      t.ok(unfitEvents.length >= 1, 'the demotion hook fired');
       await partition.rollbackTransaction().catch(() => {});
     } finally {
       await partition.shutdown();
