@@ -198,16 +198,23 @@ t.test(
         };
       }
 
-      await partition.beginTransaction('tx-zombie');
-      // Healthy window: ticks well inside the legal hold must not detect.
+      // The deferral-re-assertion contract is exercised on the commit-durability
+      // DIVERGENCE signal (b), NOT an ACTIVE transaction hold. An ACTIVE-tx
+      // zombie is now HEALED on the demotion edge by the stranded-tx rollback
+      // (quest ledger-participant-tx-stranded-across-stepdown) — so it no longer
+      // stays unfit past the demotion and that immediate heal has its own test.
+      // The divergence signal is one the rollback does NOT clear, so it is the
+      // faithful case for the "stays unfit → keeps deferring" safety property.
+      partition.logAdapter.lastDeclaredCommitIndex = 149;
+      // Healthy window: ticks well inside the legal window must not detect.
       driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 5});
       t.equal(
         unfitEvents.length,
         0,
-        'no detection while the transaction is inside its legal hold',
+        'no detection while the divergence is inside its legal window',
       );
 
-      // Past the legal hold: STRIKE_TICKS consecutive sweep ticks.
+      // Past the legal window: STRIKE_TICKS consecutive sweep ticks.
       driveFitnessTicks(partition, {
         fromMs: START_MS + LEGAL_HOLD_MS + SWEEP_TICK_MS,
         ticks: STRIKE_TICKS,
@@ -215,7 +222,7 @@ t.test(
       t.ok(
         unfitEvents.length >= 1,
         `the unfitness hook fired after ${STRIKE_TICKS} strikes past the ` +
-          `legal hold (events: ${unfitEvents.length})`,
+          `legal window (events: ${unfitEvents.length})`,
       );
       t.match(
         unfitEvents[0] || {},
@@ -241,7 +248,74 @@ t.test(
         'candidacy deferral is re-asserted on ticks while unfit ' +
           `(${deferralsBefore} -> ${deferCandidacyCalls.length})`,
       );
-      await partition.rollbackTransaction().catch(() => {});
+    } finally {
+      await partition.shutdown();
+    }
+  },
+);
+
+t.test(
+  'interaction (quest ledger-participant-tx-stranded-across-stepdown): an ' +
+    'ACTIVE-tx zombie is HEALED on the durability-fitness demotion edge — the ' +
+    'stranded participant BEGIN is rolled back immediately, not left for the ' +
+    '60s sweep',
+  async (t) => {
+    const unfitEvents = [];
+    const partition = await createLeaderPartition(t, {unfitEvents});
+    try {
+      if (
+        typeof partition
+          .rollbackStrandedActiveParticipantTransactionsOnStepDown !== 'function'
+      ) {
+        t.equal(
+          typeof partition
+            .rollbackStrandedActiveParticipantTransactionsOnStepDown,
+          'function',
+          'the step-down rollback seam exists (red on the unfixed head)',
+        );
+        return;
+      }
+      // A viable successor makes the fitness detector demote (performTracked-
+      // LeaderDemotion -> raft.change(FOLLOWER) -> onFollower). That is exactly
+      // the run-6 wedge-clearing edge: the ex-leader's stranded ACTIVE BEGIN
+      // must roll back THERE, collapsing the ~60-78s durability-unfit freeze.
+      partition.setLeaderDurabilitySuccessorProbe(() => true);
+      partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
+
+      await partition.beginTransaction('tx-active-zombie');
+      t.equal(
+        partition.db.inTransaction,
+        true,
+        'precondition: the ACTIVE participant transaction is open',
+      );
+
+      // Drive past the legal hold so the detector demotes on the strike bound.
+      driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 1});
+      driveFitnessTicks(partition, {
+        fromMs: START_MS + LEGAL_HOLD_MS + SWEEP_TICK_MS,
+        ticks: STRIKE_TICKS,
+      });
+      t.ok(
+        unfitEvents.length >= 1,
+        'the detector demoted the leader (successor viable)',
+      );
+      t.equal(
+        partition.db.inTransaction,
+        false,
+        'the stranded ACTIVE transaction was rolled back ON the demotion edge ' +
+          '(not held open for the 60s sweep)',
+      );
+
+      // The next fitness tick observes a fit connection and clears unfitness —
+      // the node genuinely recovered rather than staying a deferring zombie.
+      driveFitnessTicks(partition, {
+        fromMs: START_MS + LEGAL_HOLD_MS + 10 * SWEEP_TICK_MS,
+        ticks: 1,
+      });
+      t.notOk(
+        partition.isLeaderDurabilityUnfit === true,
+        'durability-unfitness clears after the edge heal (recovered)',
+      );
     } finally {
       await partition.shutdown();
     }

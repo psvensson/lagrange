@@ -340,6 +340,29 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       );
       return 0;
     }
+    return this.applyCrashEquivalentTransactionRollback(
+      expiredPreparedSessions,
+      expiredActiveSessions,
+    );
+  }
+
+  /**
+   * The crash-equivalent bare ROLLBACK + local bookkeeping shared by the 60s
+   * hold sweep and the leadership-loss edge (single source of truth so both
+   * paths stay byte-identical). Callers MUST have already confirmed
+   * isStuckTransactionHealPermitted(). Clears the apply dedup and the
+   * committed-index cache (Z1) so post-heal catch-up re-applies what the
+   * rollback evaporated, marks each session lost, and returns the number of
+   * sessions cleared.
+   * @param {Array<Object>} expiredPreparedSessions
+   * @param {Array<Object>} expiredActiveSessions
+   * @return {number}
+   * @private
+   */
+  applyCrashEquivalentTransactionRollback(
+    expiredPreparedSessions,
+    expiredActiveSessions,
+  ) {
     try {
       this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
     } catch (error) {
@@ -383,6 +406,62 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     }
     this.syncLegacyTransactionAliases();
     return expiredPreparedSessions.length + expiredActiveSessions.length;
+  }
+
+  /**
+   * Leg #1 of quest ledger-participant-tx-stranded-across-stepdown: roll back
+   * any open ACTIVE (never-PREPARED) participant transaction on the
+   * leadership-loss EDGE (wired from onFollower), instead of waiting the 60s
+   * hold sweep. A 2PC participant BEGIN is a leader-LOCAL open write; a ledger
+   * self-move churns this partition's own leadership, so without this a BEGIN
+   * opened on the ex-leader is stranded (non-durable) and freezes the partition
+   * until the sweep — the run-6 wedge source.
+   *
+   * SAFETY: only ACTIVE (never-voted) sessions are rolled back — presumed-abort
+   * makes that sound because the coordinator cannot have decided COMMIT without
+   * this participant's PREPARE vote. A PREPARED (in-doubt) session is NEVER
+   * touched (self-abort would violate 2PC; it is recoverable because PREPARE is
+   * raft-replicated). The rollback reuses the crash-equivalent sequence and is
+   * gated on isStuckTransactionHealPermitted() (true once the role has flipped
+   * to FOLLOWER at this edge). The dedup clear only fires when a rollback
+   * actually happened, so repeated flap edges never spuriously re-apply.
+   * @return {number} Count of ACTIVE sessions rolled back (0 = no-op).
+   * @private
+   */
+  rollbackStrandedActiveParticipantTransactionsOnStepDown() {
+    if (!this.isStuckTransactionHealPermitted()) {
+      return 0;
+    }
+    if (!this.db?.open || !this.db.inTransaction) {
+      return 0;
+    }
+    const strandedActiveSessions = [];
+    for (const [sessionId, state] of this.activeTransactions.entries()) {
+      // A PREPARED (voted-yes / in-doubt) session must never be self-aborted.
+      if (this.preparedTransactions.has(sessionId)) {
+        continue;
+      }
+      strandedActiveSessions.push({
+        sessionId,
+        holdDurationMs: 0,
+        startedAt: state?.startTime,
+      });
+    }
+    if (strandedActiveSessions.length === 0) {
+      return 0;
+    }
+    this.logger.warn(
+      PARTITION_SERVICE_LOG_MSG.STRANDED_ACTIVE_TX_ROLLED_BACK_ON_STEP_DOWN,
+      {
+        partitionId: this.partitionId,
+        role: this.role,
+        strandedActiveSessionCount: strandedActiveSessions.length,
+      },
+    );
+    return this.applyCrashEquivalentTransactionRollback(
+      [],
+      strandedActiveSessions,
+    );
   }
 
   /**
