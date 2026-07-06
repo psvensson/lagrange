@@ -276,11 +276,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     // the row diverged from the authoritative partition state.
     async resolveZeroChangeOperationUpdate(operation, expectedWorkflowStep) {
       const authoritativeOperation =
-        await this.queryAuthoritativeOperationById(operation.operationId, {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          requireOwnerRpcRead: false,
-        });
+        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
       const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
         operation,
         authoritativeOperation,
@@ -329,11 +325,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     // through to the zero-change divergence arm, which re-inserts.
     async shouldRejectConflictingTerminalTransitionMutation(operation) {
       const authoritativeOperation =
-        await this.queryAuthoritativeOperationById(operation.operationId, {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          requireOwnerRpcRead: false,
-        });
+        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
       if (!authoritativeOperation) {
         return false;
       }
@@ -386,6 +378,69 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         Number.isFinite(authoritativeOperation?.completedAt) ||
         Number.isFinite(authoritativeOperation?.completed_at)
       );
+    }
+
+    async queryReplicaOperationPersistenceAuthorityOperation(operation, options = {}) {
+      const observation =
+        await this.queryReplicaOperationPersistenceAuthorityObservation(
+          operation,
+          options,
+        );
+      return observation?.operation || null;
+    }
+
+    async queryReplicaOperationPersistenceAuthorityObservation(operation, options = {}) {
+      if (!operation?.operationId) {
+        return Object.freeze({operation: null, deferredOutcome: null});
+      }
+      const observationOptions = {
+        allowPriorityRecoveryDeferredVisibility:
+          options.allowPriorityRecoveryDeferredVisibility === true,
+        allowOwnerPersistedTransitionDeferredVisibility:
+          options.allowOwnerPersistedTransitionDeferredVisibility === true,
+        expectedOperation: operation,
+      };
+      const localObservation =
+        await this.queryAuthoritativeOperationVisibilityObservation(
+          operation.operationId,
+          {
+            ...observationOptions,
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+            requireOwnerRpcRead: false,
+          },
+        );
+      if (
+        this.isReplicaOperationVisibilitySatisfied(
+          operation,
+          localObservation?.operation || null,
+        )
+      ) {
+        return localObservation;
+      }
+      const authorityObservation =
+        await this.queryAuthoritativeOperationVisibilityObservation(
+          operation.operationId,
+          {
+            ...observationOptions,
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+                .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+            requireOwnerRpcRead: false,
+            preferOwnerRpcReadLeader: true,
+          },
+        );
+      if (authorityObservation?.operation) {
+        return authorityObservation;
+      }
+      // A failed/deferred/empty escalated read means "authority unreachable",
+      // not "row absent": keep the local evidence so a locally visible
+      // divergent row still drives terminal-conflict rejection and
+      // zero-change resolution instead of masquerading as a missing row.
+      if (localObservation?.operation) {
+        return localObservation;
+      }
+      return authorityObservation;
     }
 
     async confirmReplicaOperationPersistence(operation) {
@@ -447,7 +502,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       let deferredOutcome = null;
       let sawVisibilityMismatch = false;
       while (true) {
-        const observation =
+        const localObservation =
           await this.queryAuthoritativeOperationVisibilityObservation(
             operation.operationId,
             {
@@ -461,22 +516,55 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         if (
           this.isReplicaOperationVisibilitySatisfied(
             operation,
-            observation.operation,
+            localObservation.operation,
           )
         ) {
           return {
             confirmationState:
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
-            operation: observation.operation,
+            operation: localObservation.operation,
             deferredOutcome: null,
           };
         }
-        if (observation.operation) {
+        if (localObservation.operation) {
           sawVisibilityMismatch = true;
           deferredOutcome = null;
         }
-        if (observation.deferredOutcome) {
-          deferredOutcome = observation.deferredOutcome;
+        if (localObservation.deferredOutcome) {
+          deferredOutcome = localObservation.deferredOutcome;
+        }
+        const authorityObservation =
+          await this.queryAuthoritativeOperationVisibilityObservation(
+            operation.operationId,
+            {
+              authoritativeReadMode:
+                CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+                  .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+              allowPriorityRecoveryDeferredVisibility: true,
+              allowOwnerPersistedTransitionDeferredVisibility: true,
+              expectedOperation: operation,
+              preferOwnerRpcReadLeader: true,
+            },
+          );
+        if (
+          this.isReplicaOperationVisibilitySatisfied(
+            operation,
+            authorityObservation.operation,
+          )
+        ) {
+          return {
+            confirmationState:
+              REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
+            operation: authorityObservation.operation,
+            deferredOutcome: null,
+          };
+        }
+        if (authorityObservation.operation) {
+          sawVisibilityMismatch = true;
+          deferredOutcome = null;
+        }
+        if (authorityObservation.deferredOutcome) {
+          deferredOutcome = authorityObservation.deferredOutcome;
         }
         if (Date.now() >= deadlineMs) {
           if (deferredOutcome && sawVisibilityMismatch !== true) {

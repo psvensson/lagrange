@@ -5,7 +5,6 @@ import {
 } from './replica-operation-repository.js';
 
 const {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   REBALANCE_COORDINATOR_LOG_MSG,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -228,11 +227,9 @@ async function resolveRefusedTerminalTransitionRepairPersist(
   heldState,
 ) {
   const authoritativeOperation =
-    await owner.repository.queryAuthoritativeOperationById(operationId, {
-      authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      requireOwnerRpcRead: false,
-    });
+    await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
+      heldState.projectedOperation,
+    );
   if (
     authoritativeOperation &&
     owner.repository.isAuthoritativeOperationTerminal(authoritativeOperation)

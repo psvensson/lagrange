@@ -315,6 +315,9 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         [operationId],
         {
           ...readQueryOptions,
+          ...(options?.preferOwnerRpcReadLeader === true ?
+            {preferOwnerRpcReadLeader: true} :
+            {}),
           retryOnRetryableFailure: true,
         },
       );
