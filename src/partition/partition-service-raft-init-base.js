@@ -452,11 +452,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       onFollower: ({term}) => {
         this.storage.currentTerm = term;
         this.cancelLeaderOwnedActivation();
-        // Leg #1: the role has already flipped to FOLLOWER (applyReplicaDemotion
-        // runs before this callback), so the heal gate is open — roll back any
-        // open ACTIVE participant BEGIN now, before a ledger self-move can
-        // strand it on this ex-leader for the 60s hold sweep.
-        this.rollbackStrandedActiveParticipantTransactionsOnStepDown?.();
         this.updateRebalancerLeadership();
       },
       onCandidate: ({term}) => {

@@ -322,10 +322,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
     'would re-mint acked raft indices; waiting for durability-fitness ' +
     'demotion',
-  STRANDED_ACTIVE_TX_ROLLED_BACK_ON_STEP_DOWN:
-    'Rolled back an open ACTIVE (never-prepared) participant transaction on ' +
-    'the leadership-loss edge; a ledger self-move would otherwise strand this ' +
-    'BEGIN on the ex-leader until the 60s hold sweep (wedge source)',
   COMMITTING_TRANSACTION: 'Committing transaction',
   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
