@@ -117,13 +117,6 @@ import {buildReplicatedServiceBootstrapTopology} from '../service/replicated-ser
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID:
     'SELECT * FROM replica_operations WHERE operation_id = ?',
-  SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
-    WHERE source_node_id = ?
-    AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
-    AND (
-      workflow_step IN (?, ?, ?, ?, ?)
-      OR (workflow_step = ? AND type = ?)
-    )`,
   SELECT_OPERATIONS_BY_PARTITION:
     'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations

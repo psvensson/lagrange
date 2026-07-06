@@ -154,7 +154,7 @@ const SQL = Object.freeze({
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
     AND (
       workflow_step IN (?, ?, ?, ?, ?)
-      OR (workflow_step = ? AND type = ?)
+      OR (workflow_step = ? AND type IN (?, ?))
     )`,
   SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations

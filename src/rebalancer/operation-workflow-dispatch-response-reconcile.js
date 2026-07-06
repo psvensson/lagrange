@@ -207,9 +207,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     const replaceRemoveDispatchPhase =
       this.repository.isReplaceRemoveDispatchPhase(operation);
-    const removeStoppingReplayPhase =
+    const removeRedriveDispatchPhase =
       operation.type === OperationType.REMOVE &&
-      operation.workflowStep === WORKFLOW_STEP.STOPPING;
+      (
+        operation.workflowStep === WORKFLOW_STEP.ACTIVE ||
+        operation.workflowStep === WORKFLOW_STEP.STOPPING
+      );
     const createRearmDispatchPhase =
       this.isCreateRearmDispatchPhase(operation);
     const replaceSourceReplicaId =
@@ -232,7 +235,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (
       !replaceRemoveDispatchPhase &&
-      !removeStoppingReplayPhase &&
+      !removeRedriveDispatchPhase &&
       !createRearmDispatchPhase
     ) {
       if (operation.workflowStep === WORKFLOW_STEP.PENDING) {

@@ -257,7 +257,11 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         row.workflow_step === WORKFLOW_STEP.CREATING ||
         row.workflow_step === WORKFLOW_STEP.SYNCING ||
         row.workflow_step === WORKFLOW_STEP.STOPPING ||
-        (row.workflow_step === WORKFLOW_STEP.ACTIVE && row.type === OperationType.REPLACE)
+        (
+          row.workflow_step === WORKFLOW_STEP.ACTIVE &&
+          (row.type === OperationType.REPLACE ||
+            row.type === OperationType.REMOVE)
+        )
         );
       });
       if (cachedRows === null) {
@@ -308,6 +312,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
           WORKFLOW_STEP.STOPPING,
           WORKFLOW_STEP.ACTIVE,
           OperationType.REPLACE,
+          OperationType.REMOVE,
         ],
         authoritativeReadOptions,
       );

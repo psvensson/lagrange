@@ -143,8 +143,11 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
     );
   }
   if (
-    operation.type === OperationType.REMOVE &&
-    workflowStep === WORKFLOW_STEP.STOPPING
+    owner.isRemoveInitialDispatchPhase(operation) ||
+    (
+      operation.type === OperationType.REMOVE &&
+      workflowStep === WORKFLOW_STEP.STOPPING
+    )
   ) {
     return true;
   }
@@ -175,7 +178,8 @@ function isRemoveInitialDispatchPhase(operation) {
   return (
     operation?.type === OperationType.REMOVE &&
     (operation?.workflowStep === WORKFLOW_STEP.PENDING ||
-      operation?.workflowStep === WORKFLOW_STEP.SENDING)
+      operation?.workflowStep === WORKFLOW_STEP.SENDING ||
+      operation?.workflowStep === WORKFLOW_STEP.ACTIVE)
   );
 }
 function isSafetyDeferredRetryableOperation(owner, operation) {

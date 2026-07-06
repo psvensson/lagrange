@@ -8,6 +8,7 @@ import {
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
   ReplicaStatus,
   WORKFLOW_STEP,
   isPriorityControlPlanePartition,
@@ -183,8 +184,10 @@ async function reconcileDispatchWakeOperationProgress(context, operation) {
 
 /**
  * PENDING dispatch wakes with target evidence need only persist the target
- * progress transition. A target `pending` row proves the create handler
- * accepted the request, so it advances the durable owner row to CREATING.
+ * progress transition for create-phase operations. A target `pending` row
+ * proves the create handler accepted the request, so it advances the durable
+ * owner row to CREATING. REMOVE uses the existing replica as its source, so an
+ * ACTIVE row is a remove precondition rather than target-create progress.
  * Running the full replace execution path here can turn a duplicate-create
  * guard into a source-removal safety failure.
  *
@@ -196,6 +199,9 @@ async function reconcileDispatchWakePendingTargetProgress(
   context,
   operation,
 ) {
+  if (operation?.type === OperationType.REMOVE) {
+    return false;
+  }
   const statusReconcilerAvailable =
     typeof context.getReconciledReplicaStatus === 'function';
   const actualTargetStatus = statusReconcilerAvailable === true ?
