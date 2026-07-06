@@ -20,6 +20,7 @@ via `npm run model:check` in `test:ci`.
 | CL-001 / CL-036 readiness-starvation (priority inversion) | `readiness-starvation/ReadinessStarvation.tla` | starvation-freedom | reserve query lane / gate spread on self-ready |
 | CL-001 publication convergence (lost wakeup) | `readiness-starvation/PublicationConvergence.tla` | `EventuallySteady` | `ScheduledReconcile` — owner-command independent of the diagnostic probe |
 | **CL-039 publication write-leadership fail-back** | **`leadership-failback/LeadershipFailback.tla`** | **`EventuallyClosed`** | **`FailBack` — leadership transfers back to a reachable seed when stranded on a restarting replica** |
+| Ledger self-move re-mint livelock (formation-ledger-self-move-blocks-cluster-ops) | `ledger-selfmove-remint/LedgerSelfMoveRemint.tla` | `EventuallySettled` | `IdempotentReplan` — a leadership flap carries the in-flight spread self-move over (authoritative in-flight recognition, c7a3bf19) instead of re-minting it, so it terminalizes |
 
 ## Adding a spec for a design-class CL
 

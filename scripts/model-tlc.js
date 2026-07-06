@@ -189,6 +189,45 @@ const CONFIGS = [
     boundary: 'publication_write_leadership',
     expectedFailurePattern: 'Temporal property EventuallyClosed was violated',
   },
+  {
+    id: 'ledger-selfmove-remint-idempotent',
+    mode: 'ledger-selfmove-remint-idempotent',
+    module: path.resolve(
+      'models',
+      'ledger-selfmove-remint',
+      'LedgerSelfMoveRemint.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'ledger-selfmove-remint',
+      'LedgerSelfMoveRemint_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'ledger-selfmove-remint-tlc-idempotent.model.report.json',
+    scenario: 'formation-ledger-self-move-blocks-cluster-ops',
+    owner: 'rebalance_coordinator',
+    boundary: 'ledger_self_move_serialization',
+  },
+  {
+    id: 'ledger-selfmove-remint-flap',
+    mode: 'ledger-selfmove-remint-flap',
+    module: path.resolve(
+      'models',
+      'ledger-selfmove-remint',
+      'LedgerSelfMoveRemint.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'ledger-selfmove-remint',
+      'LedgerSelfMoveRemint_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'ledger-selfmove-remint-tlc-flap.model.report.json',
+    scenario: 'formation-ledger-self-move-blocks-cluster-ops',
+    owner: 'rebalance_coordinator',
+    boundary: 'ledger_self_move_serialization',
+    expectedFailurePattern: 'Temporal property EventuallySettled was violated',
+  },
 ];
 
 function download(url, dest) {
