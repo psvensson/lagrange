@@ -67,7 +67,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
 | formation-ledger-over-target-accounting-drain-phase-replace-blind-spot | product | 0 | 0 | — |
-| formation-ledger-self-move-blocks-cluster-ops | product | 1 | 0 | — |
+| formation-ledger-self-move-blocks-cluster-ops | product | 3 | 0 | — |
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
