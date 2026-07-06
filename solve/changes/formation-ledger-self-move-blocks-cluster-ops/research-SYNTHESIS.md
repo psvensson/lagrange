@@ -101,3 +101,32 @@ services-row read at the fresh-leader's first count-changing move** (reuse `c7a3
 pattern) instead of a full watermark. Evaluate cheapest-correct-form-of-E
 (cache-bypass-read reuse vs. watermark build) BEFORE committing to implementation, then
 implement DT-first with red-on-revert.
+
+---
+
+## UPDATE 2 — E-cheap REVERTED: DT-proven but wrong leg, live regression (run-6)
+
+The E-cheap fix (`fba0b477`) was committed on DT red-on-revert proof, then the live demo
+(run-6) was run to validate. **It did NOT clear [2/4]** and was a measured REGRESSION
+(`diagnose-run6-demo-stall.md`):
+- The `replica_operations-p1` self-move cycle is driven by **count-NEUTRAL `replace_replica`
+  self-moves (44) + `node_not_in_target` REMOVEs (11)** that never terminalize and get
+  RE-MINTED on a severe **leadership flap (term reached 22, ~21 elections)** — plus **219**
+  over-target "Deferring count-increasing ADD / no count-neutral REPLACE pairing" lines. The
+  count is **OVER** target, not stale-LOW.
+- E-cheap only refreshes the count-decision `currentReplicas` input. Its authoritative-over-cache
+  UNION never under-counts → it only RAISES the count → fires the over-target ADD-deferral MORE
+  → starves REPLACE pairing → thrash **5→34 (6.8×)**, completions **38→17 (55% fewer)** vs run-5,
+  same window. Plus a synchronous per-tick owner-RPC on the hottest partition (event-loop gaps).
+
+**Root-cause correction:** the earlier evals (A–H) and this synthesis mis-identified the binding
+driver as a fresh-leader count MISCOUNT (stale-LOW phantom ADD). The LIVE binding observable shows
+the driver is the **count-NEUTRAL REPLACE/REMOVE self-move RE-MINT limit cycle** — the spread
+REPLACE never terminalizes and is re-planned on every leadership-flap election. The count decision
+is downstream noise, not the lever. This is the "DT-proven but binding-observable-unmoved" trap
+(the DT's injected always-fresh gateway proved a mechanism that isn't the driver).
+
+**Reverted** the src + DT (kept the investigation docs + the steering commit). NEXT real lever:
+why the self-move REPLACE never terminalizes, the `node_not_in_target` REMOVE re-mint, and the
+leadership flap (term 2→22) that re-plans/re-mints every election — i.e. the interlock/completion
++ flap-frequency seam, NOT the count-decision input.
