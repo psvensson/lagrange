@@ -314,6 +314,17 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     return expiredActiveSessions;
   }
 
+  // A swept/healed rollback is NOT crash-equivalent for JS memory: the apply
+  // dedup set and the adapter's monotonic committed-index cache survive it and
+  // would make post-heal catch-up skip re-execution and clamp the durable
+  // watermark forever (verifier finding Z1). Both MUST be cleared together so
+  // the replica genuinely re-applies what the rollback evaporated; kept as one
+  // method so the two clears never drift apart.
+  clearPostRollbackApplyState() {
+    this.recentlyAppliedEntryKeys?.clear?.();
+    this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
+  }
+
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
     const expiredPreparedSessions = this.collectExpiredPreparedSessions(nowMs);
     const expiredActiveSessions = this.collectExpiredActiveSessions(nowMs);
@@ -348,13 +359,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         {partitionId: this.partitionId, error: error.message},
       );
     }
-    // A swept rollback is NOT crash-equivalent for JS memory: the apply
-    // dedup set and the adapter's monotonic committed-index cache survive it
-    // and would make post-heal catch-up skip re-execution and clamp the
-    // durable watermark forever (verifier finding Z1). Clear both so the
-    // replica genuinely re-applies what the rollback evaporated.
-    this.recentlyAppliedEntryKeys?.clear?.();
-    this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
+    this.clearPostRollbackApplyState();
     for (const expiredSession of expiredPreparedSessions) {
       this.preparedTransactions.delete(expiredSession.sessionId);
       this.activeTransactions.delete(expiredSession.sessionId);
@@ -764,8 +769,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       if (this.isStuckTransactionHealPermitted()) {
         try {
           this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
-          this.recentlyAppliedEntryKeys?.clear?.();
-          this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
+          this.clearPostRollbackApplyState();
           stuckStateReleased = true;
         } catch {
           // The connection itself is wedged: leave the session visible.
