@@ -1,0 +1,16 @@
+{
+  "test": "test/rebalancer/replica-operation-failed-update-divergence-repair.test.js",
+  "src": [
+    "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-07T07:26:08.280Z"
+}

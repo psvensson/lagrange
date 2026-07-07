@@ -1,0 +1,115 @@
+diff --git a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+index 121ae0be..0aedaade 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+@@ -259,39 +259,78 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+           operation,
+           result,
+         );
+-      if (!recoveredPersistedMutation) {
+-        const persistError = this.buildOperationPersistError(result);
+-        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+-          operationId: operation.operationId,
+-          ...buildControlPlaneFailurePayload(this.nodeId, result),
+-        });
+-        throw persistError;
++      if (recoveredPersistedMutation) {
++        this.syncIncompleteOperationObservation(operation);
++        return true;
+       }
+-      this.syncIncompleteOperationObservation(operation);
+-      return true;
++      // CL-017(b) extended to the failed-mutation arm (quest
++      // formation-ledger-self-move-blocks-cluster-ops, gap ii): a retryable
++      // distributed write can "fail" only because a diverged/lagging
++      // participant replica lacked the row (the live 'No row found for CDC
++      // update' -> 'Distributed operation failed due to participant failures'
++      // shape). recoverPersistedReplicaOperationMutation above reads only the
++      // OWNER_LOCAL_ONLY copy, which on a genuine divergence also lacks the
++      // fresh row, so this arm used to throw and re-arm the deferral forever.
++      // Escalate to the owner-RPC authority the same way the zero-change arm
++      // does: if the write actually landed on the authority (a minority
++      // participant merely lagged) it is durable; if the authority proves the
++      // row genuinely missing, re-materialise the owner's copy so the next
++      // UPDATE matches instead of deferring immortally. A non-retryable hard
++      // failure is NOT eligible and still surfaces below.
++      if (
++        this.isRetryableOperationPersistError(result) &&
++        (await this.recoverDivergedOperationUpdateThroughAuthority(operation))
++      ) {
++        return true;
++      }
++      const persistError = this.buildOperationPersistError(result);
++      this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
++        operationId: operation.operationId,
++        ...buildControlPlaneFailurePayload(this.nodeId, result),
++      });
++      throw persistError;
+     }
+ 
+     // Guarded (expected-step or terminal) update that changed zero rows: the
+     // durable state either already reflects the write (idempotent success), or
+     // the row diverged from the authoritative partition state.
+     async resolveZeroChangeOperationUpdate(operation, expectedWorkflowStep) {
+-      const authoritativeOperation =
+-        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
+-      const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
++      return this.recoverDivergedOperationUpdateThroughAuthority(
+         operation,
+-        authoritativeOperation,
++        expectedWorkflowStep,
+       );
+-      if (visibilitySatisfied) {
++    }
++
++    // Owner-RPC-escalated divergence recovery shared by the zero-change and
++    // failed-mutation arms (CL-017(b)). The local UPDATE did not take — either
++    // it changed zero rows, or a diverged participant failed the distributed
++    // write. Read the authority local-first -> owner-RPC (Leg A's escalation):
++    //   - if the operation is durably visible there, the write landed (a
++    //     minority replica merely lagged) -> treat as durable success;
++    //   - if the authority proves the row genuinely ABSENT, re-insert the
++    //     owner's OR-IGNORE-idempotent copy so a later UPDATE can match, rather
++    //     than no-oping/deferring forever (the post-churn 'No row found for CDC
++    //     update' divergence witness).
++    // The re-insert cannot resurrect a REMOVE-completed row (that row is
++    // present-and-terminal on the authority, so !authoritativeOperation is
++    // false) and cannot clobber a rival terminal (OR-IGNORE idempotent, and the
++    // terminal-conflict gate runs before the write). Returns true when the
++    // operation is recovered, false otherwise.
++    async recoverDivergedOperationUpdateThroughAuthority(
++      operation,
++      expectedWorkflowStep = null,
++    ) {
++      const authoritativeOperation =
++        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
++      if (
++        this.isReplicaOperationVisibilitySatisfied(
++          operation,
++          authoritativeOperation,
++        )
++      ) {
+         this.syncIncompleteOperationObservation(operation);
+-        return visibilitySatisfied;
+-      }
+-      // CL-017(b): the UPDATE committed but affected zero rows AND the
+-      // authoritative read cannot see the row the owner created — the
+-      // row is MISSING from the partition state that applied the write
+-      // (the post-churn divergence witness: 'No row found for CDC
+-      // update' 144ms after the row's own insert-CDC). Retrying the
+-      // UPDATE no-ops forever and the operation never durably leaves
+-      // its step; re-insert the owner's copy instead of looping.
++        return true;
++      }
+       if (!authoritativeOperation) {
+         this.logger.error(
+           REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
+@@ -316,7 +355,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+           });
+         }
+       }
+-      return visibilitySatisfied;
++      return false;
+     }
+ 
+     // A terminal write is idempotent against its own durable state and must
