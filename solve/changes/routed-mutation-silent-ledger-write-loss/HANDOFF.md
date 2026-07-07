@@ -13,13 +13,44 @@ Sibling `formation-reservation-reconcile-premature-orphan-release` is PARKED (wr
   zero regression, completions 43→69. **A1 is necessary-not-sufficient — doneWhen still RED.**
 - `eb7d7702`/`56b5007e`/`e484d771` core-logic simplification wins + audit (separate track).
 
-## The doneWhen is still red — 3 residual modes (each its OWN vetted + live-A/B increment)
-Read first: `postfix-binding-residual-synthesis.md`, `live-ab-A1-validation.md`, `HANDOFF.md` (this).
+## UPDATE s12 (2026-07-07): R1 diagnosed + adversarially vetted — the handoff below is SUPERSEDED
+**Read `R1-diagnosis-cdc-selfheals-real-root-dispatch-visibility-lag.md` (VET-CORRECTED) FIRST.** Two
+post-A1 runs (disk+log) + an adversarial vet that REFUTED 3 of 4 first-pass claims changed the picture:
+- **R1 is a NON-ISSUE — do NOT build CDC read-back re-drive.** `No row found for CDC update` SELF-HEALS
+  (0/114 keys immortal on the full-length run1; ops converge to byte-identical terminal quorum state;
+  run2 same). The "slow convergence overran 900s" framing was wrong — run1's control plane SETTLED
+  ~510s and was quiescent 5 min before shutdown.
+- **A1 discharged this quest's chartered gap-v.** Zero durability flap both runs; all residual ledger
+  ops quorum-consistent; no write-loss divergence. (Minor: r5 carries a benign 3-terminal-row apply lag
+  at equal committedIndex — do not assert "all divergence gone".)
+- **The doneWhen stays red on PROVISIONING-ADMISSION fragility on a DATA table** — different upstream
+  trigger each run, NEITHER is CDC / write-loss / a stuck ledger op:
+  - **run1** (phase-4 fail): a 10s window (18:00:08–18:00:18) with 100× `Provisioning admission denied`,
+    `eligibleNodeIds:[]`, `control_plane_write_unhealthy`+`cluster_member_unhealthy` — driven by
+    control_plane_publications write-leader flux + SWIM membership divergence (only 2 ledger self-moves =
+    NOT thrash) → `tbl-d11e7bb8` stuck under-replicated 1/3 → phase-4 times out.
+  - **run2** ([2/4] fail): a ledger self-move (`ece665d7`, mid-SYNCING during load) trips the interlock
+    (`operation_ledger_self_move_in_flight` ×140) → data-table provisioning cohort rejected
+    (`provisionable=0`) → [2/4] times out. Memory s6/s7; root = the over-target self-move sibling.
+- **REFUTED decoy — do not chase:** the dramatic 137× dispatch-defer loop on ADD `ab83742f` is a
+  REDUNDANT stuck ledger self-move row on an ALREADY-FULLY-PLACED table (tbl-a08a77c7 3/3 on disk); its
+  No-row-found was on `storage_reservations` not replica_operations; it is NOT the phase blocker. A
+  stuck-op reaper would NOT green either run (binding failure = provisioning-admission eligibility).
+
+**Recommended disposition:** treat routed-mutation (gap-v) as SOLVED-for-scope; the binding residual
+belongs to the placement domain. **Next binding work is out-of-quest:** (a) run1's membership /
+control_plane_publications write-leadership health transient (why do ALL nodes go provisioning-ineligible
+for 10s?), and (b) run2's self-move thrash (the over-target `formation-ledger-over-target-accounting-drain-phase-replace-blind-spot`
+sibling). Do NOT narrow the interlock (memory 20/22). The stale R1/R2/R3 framing follows for history only.
+
+---
+## (SUPERSEDED — historical) The doneWhen is still red — 3 residual modes
+Read first: `postfix-binding-residual-synthesis.md`, `live-ab-A1-validation.md`.
 Pre-A1 baseline archived at `data/examples/service-data-affinity-demo-archive/run-2026-07-07T17-30-24-010Z.tar.gz`.
 Repro: `node examples/service-data-affinity/run-affinity-demo.js` (archives prior run, ~10-15min, writes
 `data/examples/service-data-affinity-demo/node-*.log` + on-disk `*/partitions/*/*.db`).
 
-### R1 (recommended next) — slow low-grade `No row found for CDC update` convergence
+### R1 (SUPERSEDED — disproven above) — slow low-grade `No row found for CDC update` convergence
 Post-A1 run1: the hard freeze became SLOW convergence — completions climbed 43→69 but overran the 900s
 cap; residual `No row found for CDC update` spread THINLY (~5× each) across replica_operations/services/
 storage_reservations/partitions. HYPOTHESIS (unproven): now that the durable-watermark freeze is gone,
@@ -30,6 +61,7 @@ guarded-CAS miss (row present, WHERE moved) — see the pre-A1 disk-diagnosis me
 `diagnose-diskstate-run-10-28Z.md` and `postfix-binding-root-durability-fitness-flap.md`. Likely fix =
 level-triggered re-drive / read-escalation on the CDC read-back — but DO NOT add per-failure escalation
 (see traps). Confirm whether it's just SLOW (would settle given more time) before building.
+[s12 verdict: self-heals; NOT the binding blocker; do not build.]
 
 ### R2 — INSERT/create lane (`persistNewOperationUnlocked`) still spurious-2PCs
 The impl-vet flagged: A1 only covers the UPDATE progress-write path (`buildTransitionPersistOptions`
@@ -37,13 +69,14 @@ sets the flag). The create/reinsert lane `persistNewOperationUnlocked` passes no
 single-partition `replica_operations` INSERT still enlists 2PC. It is NO LONGER ORPHANING (the sibling
 now has a leader post-A1) so it's not the binding freeze — but it is still spurious work. Extend the same
 `bypassSingleParticipantSystemWrite` flag to that path IF a fresh run shows it contributes. Low priority.
+[s12 note: ab83742f's PENDING-freeze MAY be a dropped single-partition self-move progress write on this
+lane (unproven, A1-adjacent) — but it lands on an already-placed table, so it is hygiene, not the lever.]
 
 ### R3 — phase-[4/4] placement-never-engages formation stall (A1-INDEPENDENT, pre-existing)
 Post-A1 run2 hit this: phase [4/4] watch showed `replicas=0, onData=0, attributionRows=0` for 300s →
 aborted. Churn was on the `nodes`/membership partition (273 participant-failures), NOT replica_operations
 (2). This is the known high formation variance (memory: participant-failures vary 0/437/896 across runs)
-and predates A1. Separate investigation (placement/attribution chain not engaging). Do not conflate with
-gap-v.
+and predates A1. [s12: this IS the real residual class — provisioning-admission eligibility; see UPDATE.]
 
 ## HARD TRAPS — do NOT do these (each cost a prior session)
 1. **Do NOT ship A2** ("quorum-durable single-write ack"). The RAFT-mode write path ALREADY awaits the
