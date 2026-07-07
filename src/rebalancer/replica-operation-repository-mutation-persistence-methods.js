@@ -108,22 +108,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         this.syncIncompleteOperationObservation(operation);
         return true;
       }
-      this.recordOwnerPersistedTransitionVisibilityWitness(operation);
-      let visibility = null;
-      try {
-        visibility =
-              await this.confirmReplicaOperationPersistence(operation);
-      } finally {
-        if (
-          visibility?.confirmationState !==
-              REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
-        ) {
-          this.clearOwnerPersistedTransitionVisibilityWitness(
-            operation.operationId,
-          );
-        }
-      }
-      this.syncIncompleteOperationObservation(operation);
+      const visibility =
+        await this.confirmPersistenceThroughWitness(operation);
       const changeCount = this.extractMutationChangeCount(result);
       if (changeCount === null || changeCount > 0) {
         return true;
@@ -227,12 +213,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
 
     // Post-write witness + (optional) authoritative visibility confirmation
     // for a persisted update that changed rows.
-    async confirmPersistedOperationUpdate(operation, options) {
-      if (options.confirmPersistence === false) {
-        this.recordOwnerPersistedTransitionVisibilityWitness(operation);
-        this.syncIncompleteOperationObservation(operation);
-        return true;
-      }
+    // Record the owner-persisted-transition witness, confirm persistence
+    // through the authority, and clear the witness unless the confirmation
+    // deferred (a deferred confirm must keep the witness so the retry can
+    // still observe the pending write). Returns the confirmation visibility so
+    // callers that key on CONFIRMED/operation can read it. Shared by the
+    // post-insert confirm in persistNewOperationUnlocked and
+    // confirmPersistedOperationUpdate.
+    async confirmPersistenceThroughWitness(operation) {
       this.recordOwnerPersistedTransitionVisibilityWitness(operation);
       let visibility = null;
       try {
@@ -248,6 +236,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         }
       }
       this.syncIncompleteOperationObservation(operation);
+      return visibility;
+    }
+
+    async confirmPersistedOperationUpdate(operation, options) {
+      if (options.confirmPersistence === false) {
+        this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+        this.syncIncompleteOperationObservation(operation);
+        return true;
+      }
+      await this.confirmPersistenceThroughWitness(operation);
       return true;
     }
 

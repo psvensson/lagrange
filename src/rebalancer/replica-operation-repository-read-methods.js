@@ -441,8 +441,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       options?.allowOwnerPersistedTransitionDeferredVisibility === false ?
         null :
         this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
-      const cacheFallbackOperation =
-      options?.allowFallbackQuery === false ? null : await this.queryOperationById(operationId);
+      const cacheFallbackOperation = await this.queryOperationById(operationId);
       const fallbackOperation =
       ownerPersistedFallbackOperation || cacheFallbackOperation;
       return this.buildOperationVisibilityObservation(
