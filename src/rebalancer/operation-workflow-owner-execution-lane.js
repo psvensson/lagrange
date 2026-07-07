@@ -655,6 +655,12 @@ class OperationWorkflowOwnerExecutionLane
       sessionId,
       confirmPersistence: false,
       timeoutBudget: this.buildTransitionMutationTimeoutBudget(sessionId),
+      // A ledger progress write is single-partition (one durable participant);
+      // it must not open a spurious 2PC participant hold on replica_operations
+      // that orphans on a leaderless sibling and freezes the durable watermark.
+      // The engine honors this only when the post-mirror write is single-
+      // partition, so a SPLIT_CUTOVER (2-participant) write still enlists 2PC.
+      bypassSingleParticipantSystemWrite: true,
     };
     if (typeof sessionId !== 'string' || sessionId.length <= 0) {
       delete persistOptions.sessionId;

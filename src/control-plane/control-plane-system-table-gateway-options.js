@@ -142,6 +142,11 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
   writeOptions = copyOption(
     writeOptions,
     options,
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.BYPASSSINGLEPARTICIPANTSYSTEMWRITE,
+  );
+  writeOptions = copyOption(
+    writeOptions,
+    options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SESSIONID,
   );
   writeOptions = copyOption(

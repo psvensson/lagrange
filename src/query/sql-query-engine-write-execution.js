@@ -245,11 +245,22 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
 
+    // A single-partition ledger progress write does not need 2PC — the
+    // participant BEGIN IMMEDIATE it would open is spurious and, on the
+    // control-plane ledger, orphans on a leaderless sibling partition and
+    // freezes the durable watermark. Skip enlistment when the rebalancer flags
+    // the write AND it resolved to exactly one partition POST-mirror, so a
+    // SPLIT_CUTOVER write (which adds a mirror participant above) still enlists
+    // full 2PC. writePartitions is snapshotted after addTransitionMirrorParticipants.
+    const bypassSingleParticipant =
+      queryOptions?.bypassSingleParticipantSystemWrite === true &&
+      writePartitions.length === 1;
+
     // Execute update on resolved partitions
     let result;
     const executionStartTimeMs = Date.now();
     try {
-      if (txState) {
+      if (txState && !bypassSingleParticipant) {
         const payloadHash = this.createWriteOperationPayloadHash(
           writePlan,
           QUERY_AST_TYPE.UPDATE,

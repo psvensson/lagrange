@@ -457,6 +457,9 @@ class CDCRoutedMutationReadiness {
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       baseQueryOptions.sessionId = sessionId;
     }
+    if (options?.bypassSingleParticipantSystemWrite === true) {
+      baseQueryOptions.bypassSingleParticipantSystemWrite = true;
+    }
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }

@@ -520,6 +520,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           {sessionId} :
           {}),
         disableSystemWriteSession: options.disableSystemWriteSession === true,
+        bypassSingleParticipantSystemWrite:
+          options.bypassSingleParticipantSystemWrite === true,
         deliveryPriority: REPLICA_OPERATION_REPOSITORY_LITERAL.CRITICAL,
         workloadClass:
           REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workloadClass,

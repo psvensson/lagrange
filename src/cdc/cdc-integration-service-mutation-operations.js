@@ -417,6 +417,8 @@ class CDCIntegrationServiceMutationOperations {
             cancellationToken: options?.cancellationToken || null,
             sessionId: options?.sessionId,
             disableSystemWriteSession: options?.disableSystemWriteSession,
+            bypassSingleParticipantSystemWrite:
+              options?.bypassSingleParticipantSystemWrite,
             coalescingKey: options?.coalescingKey,
             recoveryCandidateSelectionKey:
               options?.recoveryCandidateSelectionKey,
