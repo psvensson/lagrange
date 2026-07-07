@@ -1,0 +1,17 @@
+{
+  "test": "test/query/sql-query-engine-single-participant-ledger-bypass.test.js",
+  "src": [
+    "src/query/sql-query-engine-write-execution.js",
+    "src/control-plane/control-plane-system-table-gateway-options.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-07T17:19:07.292Z"
+}
