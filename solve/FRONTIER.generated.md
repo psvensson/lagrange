@@ -61,13 +61,14 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 22
+## Open quests — 24
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
 | formation-ledger-over-target-accounting-drain-phase-replace-blind-spot | product | 0 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 3 | 0 | — |
+| formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
@@ -81,6 +82,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | rolling-restart-run4-join-runtime-activation | product | 2 | 0 | — |
 | rolling-restart-run4-observer-staleness | product | 1 | 0 | — |
 | rolling-restart-run4-publication-visibility-run2 | product | 0 | 0 | — |
+| routed-mutation-silent-ledger-write-loss | product | 0 | 0 | — |
 | runtime-owner-reconcile-alignment | product | 0 | 0 | — |
 | runtime-replica-state-projection | product | 0 | 0 | — |
 | seed-join-gate-authoritative-refresh | product | 0 | 0 | — |
