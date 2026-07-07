@@ -1,0 +1,16 @@
+{
+  "test": "test/raft/sqlite-log-adapter-committed-truncation-guard.test.js",
+  "src": [
+    "src/raft/sqlite-log-adapter.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-07T10:16:44.240Z"
+}

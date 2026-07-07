@@ -33,12 +33,21 @@ class SQLiteLogAdapter {
    * @param {Database} db - better-sqlite3 database instance
    * @param {Object} node - The raft node using this log (optional)
    */
-  constructor(db, node = null) {
+  constructor(db, node = null, logger = null) {
     if (!db) {
       throw new Error(LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED);
     }
     this.db = db;
     this.node = node;
+    // Optional logger so the adapter can SURFACE a raft-safety-invariant breach
+    // (a truncation reaching into the committed prefix) on the live path; the
+    // adapter is constructed without one in reduced harnesses, so all logging
+    // is best-effort and never load-bearing.
+    this.logger = logger || node?.logger || null;
+    // Observability for the committed-prefix truncation guard (below). Counters
+    // are the DT-facing witness; the log line is the live-wedge witness.
+    this.committedTruncationBlockedCount = 0;
+    this.lastCommittedTruncationBlocked = null;
     this.closed = false;
     this.initializeTables();
   }
@@ -556,7 +565,48 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.db.prepare(LOCAL_STR_1JYKG).run(index);
+    // Raft-safety invariant (CL-040/041/042 class): committed entries are
+    // permanent and MUST NEVER be truncated — deleting a committed entry
+    // destroys agreed history and, cluster-wide across a quorum, is the
+    // cardinal Raft safety violation. Base liferaft's conflict truncation
+    // (index.js) calls this UNGUARDED; a truncation whose floor falls below
+    // committedIndex therefore silently deleted committed entries and produced
+    // the replica_operations-p1 log HOLE (committedIndex advanced to 228 while
+    // entries 192-228 were deleted on a quorum), which froze the durable
+    // watermark at the first gap and wedged the ledger leader forever.
+    //
+    // Clamp the deletion floor to committedIndex so only the UNCOMMITTED
+    // conflicting suffix is ever removed. This is a NO-OP on the normal path
+    // (a legitimate conflict is always above the committed prefix, so
+    // index >= committedIndex and the clamp does nothing); it only bites the
+    // anomalous case, where refusing to delete committed history is the correct
+    // Raft response, not obeying it. truncateConflictingSameIndexTail already
+    // guards its own call (liferaft.js), but the invariant belongs at the
+    // adapter so EVERY caller — including base liferaft — is covered.
+    const committedIndex = this.getCommittedIndex();
+    if (Number.isFinite(index) && index < committedIndex) {
+      this.committedTruncationBlockedCount += 1;
+      this.lastCommittedTruncationBlocked = {
+        requestedIndex: index,
+        committedIndex,
+        atMs: Date.now(),
+      };
+      if (this.logger && typeof this.logger.error === 'function') {
+        this.logger.error(
+          'Refused raft log truncation into the committed prefix ' +
+            '(committed-entry-loss prevented)',
+          {
+            requestedIndex: index,
+            committedIndex,
+            address: this.node ? this.node.address : 'unknown',
+          },
+        );
+      }
+    }
+    const safeIndex = Number.isFinite(index) ?
+      Math.max(index, committedIndex) :
+      index;
+    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
   }
 
   /**

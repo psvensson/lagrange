@@ -293,7 +293,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     this.logDb.pragma(LOCAL_STR_JOURNAL_MODE_WAL);
 
     // Create SQLite log adapter for liferaft
-    this.logAdapter = new SQLiteLogAdapter(this.logDb);
+    this.logAdapter = new SQLiteLogAdapter(this.logDb, null, this.logger);
 
     // Create PeerAddressResolver
     this.peerAddressResolver = new PeerAddressResolver({

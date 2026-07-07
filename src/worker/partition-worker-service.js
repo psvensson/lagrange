@@ -242,6 +242,8 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     // Create SQLite log adapter from the store's database
     this.logAdapter = new SQLiteLogAdapter(
       this.sqliteStore.getDatabase(),
+      null,
+      this.logger,
     );
 
     // Create PeerAddressResolver

@@ -366,7 +366,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           .catch((err) => callback(err));
       }
     }
-    this.logAdapter = new SQLiteLogAdapter(this.db);
+    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
     // Restart recovery reloads committed state from the durable DB without
     // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
     // not witness already-committed HLCs and could regress below a value this node
