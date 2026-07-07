@@ -1,5 +1,15 @@
 # Fix: gap (ii) — arm-2 failed-mutation divergence repair
 
+> **REVERTED 2026-07-07 (commit after `1ce80391`).** Unit-correct and DT-proven, but
+> live validation showed it regresses the real cluster: a ~14× participant-failure /
+> persist-throw storm on the `replica_operations` path during cold formation, crashing
+> the [2/4] load in 2/2 runs (pre-fix loads 100k in 2/2). See
+> `live-regression-gapII-reverted.md`. The escalate/reinsert-on-EVERY-participant-failure
+> shape amplifies control-plane load; the redesign must be level-triggered/reap-on-timeout
+> (fire only for genuinely-stuck ops), per the frontier research. The content below is
+> retained as the record of the retracted approach.
+
+
 Quest: `formation-ledger-self-move-blocks-cluster-ops`. Implements the primary,
 in-scope leg from `design-cdc-nontermination-fix.md` (gap ii): the binding `[1/4]`
 blocker `812932a2`.
