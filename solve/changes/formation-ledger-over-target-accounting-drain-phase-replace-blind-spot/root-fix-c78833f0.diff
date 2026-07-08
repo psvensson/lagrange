@@ -1,0 +1,155 @@
+commit c78833f04639f4e341c159038bc868ccd8f2c0f2
+Author: Peter Svensson <psvensson@gmail.com>
+Date:   Sun Jul 5 23:20:04 2026 +0200
+
+    fix(rebalancer): credit a drain-phase REPLACE's replacement in deficit accounting
+    
+    The single in-flight-aware replica accounting computed
+    deficitEffectiveCount = activeCount + inFlightAddCount, deliberately excluding a
+    REPLACE's replacement ("a REPLACE is net-neutral, never fills a deficit"). That
+    holds while the REPLACE's source is still an active voter — but once the source
+    has DRAINED (left activeCount) while the replacement is still a durable non-voting
+    LEARNER (a materialized syncing row, not yet ACTIVE), the replacement's slot is
+    counted NOWHERE. The move planner then reads a false deficit (e.g. 2-of-3), mints
+    a spurious count-increasing ADD, the learner promotes -> 4 voters over a target of
+    3, the group concentrates, and the over-target ADD is deferred forever with no
+    count-neutral REPLACE pairing -> the partition never de-concentrates.
+    
+    Live: this is what stalled cold 5-node formation of the service-data-affinity
+    demo (run-4: replica_operations-p1 stuck 4-voters/2-on-seed the whole window ->
+    quorum_concentrated -> the ledger self-move interlock held all other ops ->
+    control plane never settled -> [2/4] load timed out).
+    
+    Fix (industry pattern: TiKV/PD "projected = current + in-flight operator
+    influence"; CockroachDB counts the learner in atomic replication changes): credit
+    toward deficitEffectiveCount the SPECIFIC replacement row of each drain-phase
+    REPLACE — the non-active occupied replica on the op's target node — ROW-OP-LINKED,
+    excluding replacements already ACTIVE, stale learners unlinked to a REPLACE, and
+    net-neutral (source-still-active) REPLACEs. This is a read-path correctness fix,
+    not a count heuristic, which is why it bounds where 3 prior count-based
+    approximations were refuted.
+    
+    Proven against the four recorded constraint tuples
+    (active/occupied/inFlightAdd/drainPhaseReplace): stale-syncing 1/3/0/0->ADD,
+    serialization 2/2/0/1->ADD, run-28 2/3/0/1->suppress, verifier-starvation
+    1/3/0/1->ADD, plus a net-neutral guard. DT
+    test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js; dt:prove
+    red-on-revert PROVEN; regression 616/616 across the accounting-consumer +
+    move-planner/replace suites; lint + complexity clean.
+    
+    Live effect (demo run-5): replica_operations-p1 over-target deferrals 148->4 (the
+    ledger de-concentrates), formation completions 23->54, no 120s hard stall. Full
+    cold-formation quiescence not yet reached (the other system partitions still
+    spread via glacially-completing serialized REPLACEs) — that residual is the next
+    step; this removes the ledger's over-target deadlock.
+    
+    Research: solve/changes/formation-ledger-over-target-accounting-drain-phase-replace-blind-spot/industry-rebalance-patterns.md
+    
+    Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+diff --git a/src/rebalancer/in-flight-aware-replica-count.js b/src/rebalancer/in-flight-aware-replica-count.js
+index 178e5d34..4ff667d1 100644
+--- a/src/rebalancer/in-flight-aware-replica-count.js
++++ b/src/rebalancer/in-flight-aware-replica-count.js
+@@ -100,6 +100,10 @@ export function computeInFlightAwareReplicaAccounting({
+   const targetPartition = trimmedString(partitionId);
+   const activeReplicaIds = new Set();
+   const occupiedReplicaIds = new Set();
++  // Materialized-but-not-yet-active replica rows (durable learners) indexed by
++  // node, so a drain-phase REPLACE can be row-op-linked to the specific
++  // replacement row sitting on its target node (see the credit pass below).
++  const nonActiveOccupiedByNode = new Map();
+   for (const replica of currentReplicas) {
+     if (!replica?.node_id) {
+       continue;
+@@ -114,6 +118,13 @@ export function computeInFlightAwareReplicaAccounting({
+     }
+     if (OCCUPIED_STATUSES.has(status)) {
+       occupiedReplicaIds.add(replicaId);
++      if (status !== ReplicaStatus.ACTIVE) {
++        const nodeId = trimmedString(replica.node_id);
++        if (!nonActiveOccupiedByNode.has(nodeId)) {
++          nonActiveOccupiedByNode.set(nodeId, new Set());
++        }
++        nonActiveOccupiedByNode.get(nodeId).add(replicaId);
++      }
+     }
+   }
+ 
+@@ -146,16 +157,73 @@ export function computeInFlightAwareReplicaAccounting({
+     }
+   }
+ 
++  // Row-op-linked drain-phase REPLACE credit. A REPLACE is USUALLY net-neutral
++  // (its source is still an active voter, so its slot is already in activeCount).
++  // But once the source has DRAINED (left activeCount) while the replacement is
++  // still a durable non-voting LEARNER (a materialized syncing/creating row, not
++  // yet ACTIVE), that replacement's slot is counted NOWHERE: activeCount dropped
++  // with the source, and deficitEffectiveCount excludes REPLACE replacements. The
++  // planner then reads a false deficit, mints a spurious count-increasing ADD, and
++  // the group overshoots target (4 voters / 3), concentrates, and stalls. Credit
++  // exactly the specific replacement row on the op's target node (industry
++  // pattern: TiKV/PD "current + in-flight operator influence"; CockroachDB counts
++  // the learner). Row-op-linked — NOT an occupied-count heuristic — so stale
++  // learners unlinked to a REPLACE, replacements already ACTIVE, and net-neutral
++  // (source-still-active) REPLACEs are all correctly excluded.
++  let drainPhaseReplacementCredit = 0;
++  const creditedReplacementIds = new Set();
++  for (const operation of inFlightOperations) {
++    if (operationType(operation) !== MoveType.REPLACE) {
++      continue;
++    }
++    const opPartition = operationPartitionId(operation);
++    if (targetPartition && opPartition && opPartition !== targetPartition) {
++      continue;
++    }
++    const sourceReplicaId = trimmedString(
++      operation?.replica_id || operation?.replicaId,
++    );
++    // Net-neutral REPLACE: source still an active voter -> already counted.
++    if (sourceReplicaId && activeReplicaIds.has(sourceReplicaId)) {
++      continue;
++    }
++    const targetNodeId = trimmedString(
++      operation?.target_node_id || operation?.targetNodeId,
++    );
++    const candidates = targetNodeId ?
++      nonActiveOccupiedByNode.get(targetNodeId) :
++      null;
++    if (!candidates) {
++      continue;
++    }
++    // Bind to exactly one materialized non-active replacement row on the target
++    // node, excluding the source and any row already credited to another REPLACE
++    // (two REPLACEs cannot both claim one learner).
++    for (const replicaId of candidates) {
++      if (replicaId === sourceReplicaId ||
++        creditedReplacementIds.has(replicaId)) {
++        continue;
++      }
++      creditedReplacementIds.add(replicaId);
++      drainPhaseReplacementCredit += 1;
++      break;
++    }
++  }
++
+   const activeCount = activeReplicaIds.size;
+   return {
+     activeCount,
+     occupiedCount: occupiedReplicaIds.size,
+     inFlightAddCount,
+     inFlightReplaceInCreationCount,
++    drainPhaseReplacementCredit,
+     // Count-increasing work only: what a genuine replica-count DEFICIT decision
+-    // should compare against the target (a REPLACE is net-neutral, never fills a
+-    // deficit).
+-    deficitEffectiveCount: activeCount + inFlightAddCount,
++    // should compare against the target. A net-neutral REPLACE never fills a
++    // deficit, but a drain-phase REPLACE whose source has left activeCount and
++    // whose replacement is a durable learner DOES occupy the slot — credit it so
++    // the planner does not re-fill an already-filled slot and overshoot target.
++    deficitEffectiveCount:
++      activeCount + inFlightAddCount + drainPhaseReplacementCredit,
+     // All replicas that will exist if every in-flight creation lands before any
+     // blocked source drains — what an OVER-creation cap must bound.
+     creationEffectiveCount:
