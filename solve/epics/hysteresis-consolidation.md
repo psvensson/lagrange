@@ -101,7 +101,27 @@ adversarial verification subagent (verdict: correct & complete; surfaced the DDL
 as an excluded cache-only consumer, now documented + future-work-noted). Stage 1 spec + verification:
 `solve/specs/node-liveness-veto-consolidation/`.
 
-Remaining stages stay at epic level (self-disruption→LHM wiring [C2], P5 formation-blip grace) until scoped.
+**Stage 2 SHIPPED** (commit `dd54c827`): the DDL provision-target connection gate
+(`sql-query-engine-provisioning-methods.js` `resolveProvisionTargetNodeDiagnostics`) — the excluded
+"cache-only consumer" stage 1 deferred — is now routed through `hasLiveTransportEvidence` as a MONOTONE
+OR-rescue (`!hasConnectionState || isConnectionReady || hasLiveTransportEvidence(nodeId, {messageRouter})`).
+This repairs the latent MODE-A shape (a stale-negative `connection_state` column excluding a live node
+from provisioning targets) in the provisioning half, using the live router the SQL engine already holds
+(the stage-1 guard's "no live router in scope" rationale was mistaken; corrected). Behavior change, not a
+no-op DRY: proven by `test/query/provision-target-live-transport-rescue.test.js` (rescue / fail-closed /
+permissive-empty) + `dt:prove` red-on-revert; blast radius = DDL-create/managed-split only (NOT
+steady-state up-replication), so no live A/B gate. Design + adversarial verification (6/6 attacks survive):
+`solve/changes/hysteresis-consolidation/stage2-ddl-provisioning-liveness-repoint-design.md`.
+
+The **C2 self-disruption→LHM bonus was evaluated and REFUTED as low-value** and PARKED: only 1 of the 3
+claimed signals exists+wireable, it does not fix MODE-A's root (SWIM suspicion timing is a different
+layer; `suspect`/`dead` never trims), and the LHM is already self-aware via `recordMissedNack` +
+failed-probe. Record: `solve/changes/hysteresis-consolidation/stage2-lhm-self-disruption-design.md`.
+
+Remaining stage at epic level: **P5 formation-blip grace** (promote `CONVERGENCE_GRACE` beyond
+active-recovery-only — touches MODE-A's provisioning half directly) until scoped. Higher-value non-epic
+target for greening the affinity demo remains **MODE-B** (sibling
+`formation-ledger-over-target-accounting-drain-phase-replace-blind-spot`).
 
 ## (historical) Status
 Design research. **Stage 1 spec written + verified: `solve/specs/node-liveness-veto-consolidation/`**
